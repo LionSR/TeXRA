@@ -71,3 +71,19 @@
   max-height: 12em;
   overflow-y: auto;
 }
+
+/* Relay error styling - distinct visual indicator */
+.retry-request--relay .retry-request__operation {
+  color: var(--vscode-editorWarning-foreground, #ff8c00);
+}
+
+.retry-request--relay::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--vscode-editorWarning-foreground, #ff8c00);
+  border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
+}

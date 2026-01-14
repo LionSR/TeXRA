@@ -56,6 +56,12 @@ export interface ProviderHttpErrorDetails {
    * - User abort, auth errors, bad requests → NOT retryable
    */
   retryable: boolean;
+  /**
+   * Whether this error originated from the relay service.
+   * Relay errors have a `_relay` field in the raw error body and indicate
+   * issues with the proxy/relay infrastructure rather than the upstream provider.
+   */
+  isRelayError: boolean;
   /** Request ID from the provider, useful for debugging with support. */
   requestId?: string;
   /**
@@ -190,6 +196,7 @@ function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
       message: entry.message,
       provider,
       retryable: entry.retryable ?? false,
+      isRelayError: false,
       requestId,
     };
   }
@@ -212,6 +219,7 @@ function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
       message: finalMessage,
       provider,
       retryable: false,
+      isRelayError: false,
       requestId,
     };
   }
@@ -223,6 +231,7 @@ function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
     statusText,
     provider,
     retryable: isRetryableStatusCode(statusCode),
+    isRelayError: false,
     requestId,
   };
 }
@@ -417,6 +426,7 @@ export function formatProviderHttpError(
     return {
       message: 'Request aborted',
       retryable: false,
+      isRelayError: false,
       rawErrorBody,
     };
   }
@@ -425,10 +435,11 @@ export function formatProviderHttpError(
   const sdkMatch = matchSdkError(err);
   if (sdkMatch) {
     // Check if this should be retryable due to relay/overloaded error
+    const isRelay = isRelayError(rawErrorBody);
     const retryable =
       determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
       sdkMatch.retryable;
-    return { ...sdkMatch, retryable, rawErrorBody };
+    return { ...sdkMatch, retryable, isRelayError: isRelay, rawErrorBody };
   }
 
   // Fallback for unrecognized errors
@@ -436,6 +447,7 @@ export function formatProviderHttpError(
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
+  const isRelay = isRelayError(rawErrorBody);
 
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -452,6 +464,7 @@ export function formatProviderHttpError(
       message: finalMessage,
       provider,
       retryable: true,
+      isRelayError: isRelay,
       requestId,
       rawErrorBody,
     };
@@ -464,6 +477,7 @@ export function formatProviderHttpError(
     statusText,
     provider,
     retryable: determineRetryable(err, statusCode, rawErrorBody),
+    isRelayError: isRelay,
     requestId,
     rawErrorBody,
   };

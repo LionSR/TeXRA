@@ -24,6 +24,10 @@ export type ToolEditApprovalPrompt = z.infer<
 export const RetryErrorDetailsSchema = z.strictObject({
   provider: z.string().optional(),
   statusCode: z.int().optional(),
+  /** Whether the error is retryable (user can click retry button). */
+  retryable: z.boolean().optional(),
+  /** Whether the error originated from the relay service. */
+  isRelayError: z.boolean().optional(),
   rawErrorBody: z.unknown().optional(),
 });
 export type RetryErrorDetails = z.infer<typeof RetryErrorDetailsSchema>;
