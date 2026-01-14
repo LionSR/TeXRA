@@ -139,8 +139,6 @@ export {
   arXivCommands,
   compareCommands,
 } from '@commands/latex';
-export { gitCommands } from '@commands/git/gitCommands';
-export { packCommands } from '@commands/housekeeping';
 export {
   mergeCommands,
   runExecuteCommand,
