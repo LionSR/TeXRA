@@ -49,7 +49,6 @@ export const TOOL_ICON_MAP = {
   read_file: 'codicon-file',
   write_file: 'codicon-new-file',
   edit_file: 'codicon-edit',
-  file_op: 'codicon-file-code',
   str_replace_editor: 'codicon-edit',
   apply_path: 'codicon-diff',
 
