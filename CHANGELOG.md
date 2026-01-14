@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - Added a **Lean Proof** tool-use agent for informal-to-formal Lean 4 verification workflows.
 - Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
 - Added expandable error details to retry dialog UI for better debugging.
-- Relay errors are now retryable with clearer error messaging.
+- Relay errors are now retryable with clearer error messaging and distinct UI indicators.
 
 ### Bug Fixes
 
@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - Fixed round pattern extraction in multiple output filenames.
 - Fixed workspace temp file cleanup on approval resolution.
 - Fixed relay error handling and recovery.
+- Fixed status indicator tooltip clipping by positioning it below.
+- Fixed LaTeXdiff dropdowns opening downward and causing overflow.
 
 ### Improvements
 
