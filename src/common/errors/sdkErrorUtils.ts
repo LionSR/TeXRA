@@ -162,10 +162,20 @@ function isRetryableStatusCode(statusCode?: number): boolean {
 }
 
 /**
+ * Partial result from SDK error matching.
+ * Does NOT include isRelayError or rawErrorBody - those are added by
+ * formatProviderHttpError() after relay detection.
+ */
+type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
+
+/**
  * Matches known SDK error types and returns structured error details.
  * Handles both message-only errors (connection/abort) and HTTP errors.
+ *
+ * NOTE: Returns partial result without isRelayError/rawErrorBody.
+ * formatProviderHttpError() adds those fields after relay detection.
  */
-function matchSdkError(err: unknown): ProviderError | undefined {
+function matchSdkError(err: unknown): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -180,7 +190,6 @@ function matchSdkError(err: unknown): ProviderError | undefined {
       message: entry.message,
       provider,
       retryable: entry.retryable ?? false,
-      isRelayError: false,
       requestId,
     };
   }
@@ -203,7 +212,6 @@ function matchSdkError(err: unknown): ProviderError | undefined {
       message: finalMessage,
       provider,
       retryable: false,
-      isRelayError: false,
       requestId,
     };
   }
@@ -215,7 +223,6 @@ function matchSdkError(err: unknown): ProviderError | undefined {
     statusText,
     provider,
     retryable: isRetryableStatusCode(statusCode),
-    isRelayError: false,
     requestId,
   };
 }
