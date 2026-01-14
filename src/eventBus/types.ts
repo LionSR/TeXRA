@@ -4,6 +4,13 @@
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 
+// Import canonical error schema - SINGLE SOURCE OF TRUTH
+// schemas.ts has no internal project imports, so no circular dependency risk
+import {
+  ProviderErrorPartialSchema,
+  type ProviderErrorPartial,
+} from '@common/errors/schemas';
+
 /** Tool edit approval request prompt */
 export const ToolEditApprovalPromptSchema = z.strictObject({
   requestId: z.string(),
@@ -20,13 +27,12 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
-/** Manual retry request prompt */
-export const RetryErrorDetailsSchema = z.strictObject({
-  provider: z.string().optional(),
-  statusCode: z.int().optional(),
-  rawErrorBody: z.unknown().optional(),
-});
-export type RetryErrorDetails = z.infer<typeof RetryErrorDetailsSchema>;
+/**
+ * Error details for retry requests.
+ * Uses ProviderErrorPartialSchema from canonical source - all fields optional for transport.
+ */
+export const RetryErrorDetailsSchema = ProviderErrorPartialSchema;
+export type RetryErrorDetails = ProviderErrorPartial;
 
 export const RetryRequestPromptSchema = z.strictObject({
   streamId: StreamTabIdSchema,
