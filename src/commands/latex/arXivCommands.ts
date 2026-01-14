@@ -105,8 +105,4 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(downloadCommand);
-
-  return {
-    downloadArXivSource: downloadCommand,
-  };
 }

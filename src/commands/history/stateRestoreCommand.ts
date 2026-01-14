@@ -21,7 +21,6 @@ export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
   );
 
   logger.info(CHANNEL, 'Registered state restore command');
-  return { restoreState };
 }
 
 /**

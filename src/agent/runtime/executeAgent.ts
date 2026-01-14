@@ -714,7 +714,9 @@ export async function executeMergeAgent(
   acquireStreamOrThrow(preliminaryStreamId, 'Merge task');
 
   // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
+  // Use finally for cleanup since we just re-throw without transformation
   let ctx: ResolvedAgentBase;
+  let resolutionSucceeded = false;
   try {
     ctx = await resolveAgentBase('merge', {
       agent: 'merge',
@@ -722,9 +724,11 @@ export async function executeMergeAgent(
       inputFile,
       editedFile,
     });
-  } catch (err) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    throw err;
+    resolutionSucceeded = true;
+  } finally {
+    if (!resolutionSucceeded) {
+      StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+    }
   }
 
   const { streamId: streamTabId, config, executionId } = ctx;

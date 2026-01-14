@@ -23,8 +23,4 @@ export function registerHistoryCommands(context: vscode.ExtensionContext) {
 
   // Add subscriptions
   context.subscriptions.push(showHistoryCommand);
-
-  return {
-    historyViewProvider,
-  };
 }
