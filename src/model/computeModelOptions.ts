@@ -119,9 +119,7 @@ export async function computeModelOptions(): Promise<string> {
 
       // Build option tag with data attributes
       const contextStr =
-        config.contextWindow !== undefined
-          ? formatContext(config.contextWindow)
-          : '';
+        config.contextWindow != null ? formatContext(config.contextWindow) : '';
       const costStr = formatCost(config.inputPrice, config.outputPrice);
 
       const attrs = [`value="${model}"`];
