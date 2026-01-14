@@ -25,7 +25,7 @@ import {
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {
-  channelId: string;
+  streamId: string;
   debugMessages: string[];
   warnMessages: string[];
   errorMessages: string[];
@@ -34,7 +34,7 @@ interface LoggerStub extends Partial<AgentLogger> {
 
 function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
   const stub: LoggerStub = {
-    channelId: 'media-test',
+    streamId: 'media-test',
     debugMessages: [],
     warnMessages: [],
     errorMessages: [],
