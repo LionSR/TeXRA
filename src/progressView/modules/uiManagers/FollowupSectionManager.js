@@ -129,7 +129,44 @@ export class FollowupSectionManager {
 
     if (shouldShow) {
       this._requestFollowupOptions();
+      this._updateWorkflowContext(streamData);
     }
+  }
+
+  /**
+   * Update the workflow context display with information about the previous workflow.
+   * @private
+   * @param {Object} streamData - The stream data including agentName, instructionPreview, fileCount
+   */
+  _updateWorkflowContext(streamData) {
+    const contextEl = safeGetElementById(ELEMENT_IDS.FOLLOWUP_CONTEXT);
+    if (!contextEl) return;
+
+    const { agentName, instructionPreview, fileCount } = streamData || {};
+
+    // Build context message parts
+    const parts = [];
+
+    if (fileCount > 0) {
+      const fileWord = fileCount === 1 ? 'file' : 'files';
+      parts.push(`<strong>${fileCount}</strong> ${fileWord} generated`);
+    }
+
+    if (agentName) {
+      parts.push(`by <strong>${agentName}</strong>`);
+    }
+
+    if (instructionPreview) {
+      // Escape HTML in instruction preview
+      const safePreview = instructionPreview
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+      parts.push(`based on: "<em>${safePreview}</em>"`);
+    }
+
+    contextEl.innerHTML = parts.length > 0 ? parts.join(' ') : '';
   }
 
   /**

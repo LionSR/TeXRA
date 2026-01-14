@@ -91,6 +91,19 @@
   display: none;
 }
 
+/* Workflow context - shows previous workflow info, visible only in workflow mode */
+.followup-context {
+  display: none;
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-descriptionForeground);
+  padding: var(--spacing-small, 4px) 0;
+  line-height: 1.4;
+}
+
+.followup-section[data-mode='workflow'] .followup-context {
+  display: block;
+}
+
 .followup-actions {
   display: flex;
   justify-content: flex-end;
