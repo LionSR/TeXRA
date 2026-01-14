@@ -206,9 +206,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
     // storageKey is THE single source of truth
     const targetRunIds =
-      options.storageKey !== undefined && options.storageKey !== null
-        ? [options.storageKey]
-        : [...runs.keys()];
+      options.storageKey != null ? [options.storageKey] : [...runs.keys()];
 
     for (const target of targetRunIds) {
       const runRounds = runs.get(target);
