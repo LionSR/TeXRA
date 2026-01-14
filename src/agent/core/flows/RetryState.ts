@@ -299,7 +299,9 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.getServices();
     const operationName = this.getOperationName();
-    // Format error ONCE and reuse - no redundant calls
+    // Format error for this method's scope (retryable error handling)
+    // Note: getFallbackResult() formats separately for non-retryable errors
+    // to ensure each path logs exactly once at the appropriate point
     const formatted = formatProviderHttpError(error);
 
     // If not retryable, don't show UI - go straight to execFallback
