@@ -17,6 +17,4 @@ export function registerWalkthroughCommands(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(openGettingStartedCommand);
-
-  return { openGettingStartedCommand };
 }
