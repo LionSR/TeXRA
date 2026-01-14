@@ -399,6 +399,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
       [COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
         this.handleUpdateQueuedFollowUps.bind(this),
+      [COMMANDS.SET_FOLLOWUP_OPTIONS]:
+        this.handleSetFollowupOptions.bind(this),
     };
   }
 
@@ -1119,6 +1121,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (stream === state.activeStream) {
       dom.queuedFollowUps.update(messages);
     }
+  }
+
+  /**
+   * Handle SET_FOLLOWUP_OPTIONS command from extension host.
+   * Updates the followup section dropdowns with available agents and models.
+   * @param {{ agents: string[], models: string[], defaultMergeModel: string }} message
+   */
+  handleSetFollowupOptions(message) {
+    const { agents, models, defaultMergeModel } = message;
+    dom.followupSection?.setOptions?.({ agents, models, defaultMergeModel });
   }
 }
 
