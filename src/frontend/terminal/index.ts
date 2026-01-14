@@ -1,14 +1,13 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-let terminal: vscode.Terminal | undefined;
-
+/**
+ * Get an existing terminal by name or create a new one.
+ * Only returns terminals that haven't exited.
+ */
 export function getOrCreateTerminal(name: string): vscode.Terminal {
-  const existingTerminal = vscode.window.terminals.find((t) => t.name === name);
-  if (existingTerminal) {
-    terminal = existingTerminal;
-  } else if (!terminal || terminal.exitStatus !== undefined) {
-    terminal = vscode.window.createTerminal(name);
-  }
-  return terminal;
+  const existing = vscode.window.terminals.find(
+    (t) => t.name === name && t.exitStatus === undefined,
+  );
+  return existing ?? vscode.window.createTerminal(name);
 }
