@@ -19,7 +19,10 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports - domain event handlers
-import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
+import {
+  canUpdateWebview,
+  type EventHandlerContext,
+} from './EventHandlerContext';
 import { registerLogEventHandlers } from './LogEventHandlers';
 import { registerOutputEventHandlers } from './OutputEventHandlers';
 import { registerUsageEventHandlers } from './UsageEventHandlers';
