@@ -1359,10 +1359,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {Object} message - The followup configuration
    * @param {string} message.agent - Agent value (source:name format)
    * @param {string} message.model - Model name
-   * @param {'workflow'|'merge'} message.mode - Followup mode
+   * @param {'chat'|'workflow'|'merge'} message.mode - Followup mode
    * @param {string} [message.instruction] - Optional instruction text
-   * @param {string} [message.inputFile] - Single input file path (workflow mode)
-   * @param {string[]} [message.inputFiles] - Multiple input file paths (workflow mode)
+   * @param {string} [message.inputFile] - Single input file path (workflow/chat mode)
+   * @param {string[]} [message.inputFiles] - Multiple input file paths (workflow/chat mode)
+   * @param {string} [message.referenceFile] - Reference file path (workflow/chat mode)
+   * @param {string[]} [message.referenceFiles] - Multiple reference file paths (workflow/chat mode)
    * @param {string} [message.baseFile] - Base file path (merge mode)
    * @param {string} [message.editedFile] - Edited file path (merge mode)
    */
@@ -1374,6 +1376,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       instruction,
       inputFile,
       inputFiles,
+      referenceFile,
+      referenceFiles,
       baseFile,
       editedFile,
     } = message;
@@ -1410,7 +1414,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       if (mode === 'merge') {
         this._setupMergeFollowupFiles({ baseFile, editedFile, inputFiles });
       } else {
+        // Both workflow and chat modes use the same file setup
         this._setupWorkflowFollowupFiles(inputFile, inputFiles);
+
+        // Set reference file if provided (workflow/chat mode)
+        if (referenceFile) {
+          safeSetElementValue(REFERENCE_FILE, referenceFile);
+        }
       }
 
       // Build and persist state
@@ -1428,6 +1438,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       } else {
         savedState.inputFile = inputFile || '';
         savedState.inputFiles = inputFiles || [];
+        savedState.referenceFile = referenceFile || '';
+        savedState.referenceFiles = referenceFiles || [];
       }
 
       mainViewState.set(savedState);
