@@ -95,7 +95,6 @@ export type TodoItem = z.infer<typeof TodoItemSchema>;
 /** Payload for updating todos in a stream */
 export const UpdateTodosPayloadSchema = z.strictObject({
   stream: StreamTabIdSchema,
-  executionId: ExecutionIdSchema.optional(),
   todos: z.array(TodoItemSchema),
 });
 export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
