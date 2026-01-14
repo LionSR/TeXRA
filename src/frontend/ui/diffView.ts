@@ -41,9 +41,7 @@ export function registerDiffRefresh(
   disposables.forEach((d) => d.dispose());
   disposables = [];
 
-  disposables.push(
-    vscode.window.onDidChangeTextEditorViewColumn(refreshDiff),
-  );
+  disposables.push(vscode.window.onDidChangeTextEditorViewColumn(refreshDiff));
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
 }
 
