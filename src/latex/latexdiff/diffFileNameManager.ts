@@ -10,7 +10,7 @@ import {
 function extractBaseName(filename: string, includeRound: boolean): string {
   const name = path.parse(filename).name;
   const lastMatch = extractLastRoundMatch(name);
-  if (!lastMatch || lastMatch.index === undefined) {
+  if (lastMatch?.index == null) {
     throw new Error(
       `Failed to extract base name from edited file: ${filename}`,
     );
