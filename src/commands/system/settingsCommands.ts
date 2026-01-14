@@ -21,6 +21,4 @@ export function registerSettingsCommands(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(openSettingsCommand);
-
-  return { openSettingsCommand };
 }
