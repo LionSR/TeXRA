@@ -43,7 +43,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing instruction',
     });
-    this.fileManager = new FileManager(context);
+    this.fileManager = new FileManager();
     this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);

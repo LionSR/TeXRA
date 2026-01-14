@@ -26,7 +26,3 @@ async function handleStopAgent(stream: string): Promise<void> {
   // Update the UI status
   StreamStatusService.set(stream, 'stopped');
 }
-
-export const agentCommands = {
-  handleStopAgent,
-};
