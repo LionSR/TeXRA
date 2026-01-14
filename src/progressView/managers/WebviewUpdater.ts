@@ -9,7 +9,6 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 
 // Internal imports
@@ -29,11 +28,7 @@ import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
  * Supports multiple webviews (e.g., sidebar + editor tab panel).
  */
 export class WebviewUpdater {
-  private readonly logger: AgentLogger;
-
-  constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {
-    this.logger = new AgentLogger('WebviewUpdater');
-  }
+  constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
 
   /** Helper to send messages to all registered webviews */
   private sendMessage(message: any): void {
@@ -65,10 +60,6 @@ export class WebviewUpdater {
     activeStream: StreamTabId,
     agentFilter: AgentTypeFilter,
   ): void {
-    // DIAGNOSTIC: Log what we're sending to track reload issues
-    this.logger.debug(
-      `[UPDATE_STREAMS] sending: activeStream="${activeStream}", streams=${streams.length}, filter=${agentFilter}`,
-    );
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAMS,
       streams,
@@ -109,10 +100,6 @@ export class WebviewUpdater {
     },
     action: 'render' | 'clear' = 'render',
   ): void {
-    // DIAGNOSTIC: Log what we're sending to track reload issues
-    this.logger.debug(
-      `[UPDATE_LOGS] sending: stream="${stream}", messages=${messages.length}, groups=${groups.length}, action=${action}`,
-    );
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
       stream,
@@ -396,10 +383,6 @@ export class WebviewUpdater {
     }
 
     this.updateStreams(streams, activeStream, state.agentTypeFilter);
-
-    this.logger.debug(
-      `Updated webview streams (${streams.length}) active: ${activeStream}`,
-    );
 
     return activeStream;
   }
