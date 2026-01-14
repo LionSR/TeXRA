@@ -3,7 +3,11 @@ import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common helpers
-import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
+import {
+  getRadioChangeValue,
+  safeGetElementById,
+  setVisibilityState,
+} from '@common/domUtils.js';
 
 /**
  * Manages the followup section for workflow task continuation.
@@ -23,8 +27,13 @@ export class FollowupSectionManager {
     // Mode toggle
     const modeGroup = safeGetElementById('followupModeGroup');
     if (modeGroup) {
-      // Use modeGroup.value directly as e.target may be the radio element
-      const modeHandler = () => this._setMode(modeGroup.value);
+      // Extract value from the clicked radio element, not the group's .value property
+      const modeHandler = (event) => {
+        const mode = getRadioChangeValue(event, modeGroup);
+        if (mode) {
+          this._setMode(mode);
+        }
+      };
       modeGroup.addEventListener('change', modeHandler);
       this._listeners.push({
         element: modeGroup,
