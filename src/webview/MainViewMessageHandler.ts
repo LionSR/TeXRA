@@ -226,17 +226,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
 
-      // Banner handlers
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
-        this.forwardToWebview(m),
-      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (m) =>
-        this.forwardToWebview(m),
-      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
-        this.forwardToWebview(m),
-      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
-        this.forwardToWebview(m),
+      // Banner handlers - simple forwarding to webview
+      ...this.createBannerForwardHandlers([
+        MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+        MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+        MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+        MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
+        MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+        MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
+      ]),
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await setConfig('ui.showDependencyReminders', m.value);
       },
@@ -352,6 +350,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private forwardToWebview(message: any): void {
     const view = this.getActiveView();
     view?.webview.postMessage(message);
+  }
+
+  /** Create forwarding handlers for multiple banner commands */
+  private createBannerForwardHandlers(
+    commands: string[],
+  ): Record<string, MessageHandler<vscode.WebviewView>> {
+    return Object.fromEntries(
+      commands.map((cmd) => [cmd, (m: any) => this.forwardToWebview(m)]),
+    );
   }
 
   private async handleInfoMessage(message: any): Promise<void> {
