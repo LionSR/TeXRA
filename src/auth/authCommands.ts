@@ -37,6 +37,13 @@ type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 /** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
 
+/** Check if VS Code native GitHub auth is enabled via settings */
+function isVSCodeGitHubEnabled(): boolean {
+  return vscode.workspace
+    .getConfiguration('texra.auth')
+    .get('enableVSCodeGitHub', false);
+}
+
 /** Sign-in option shown to users */
 interface SignInOption {
   label: string;
@@ -67,12 +74,13 @@ function getSignInOptions(): SignInOption[] {
     });
   }
 
-  // VS Code GitHub auth is always last (fallback option)
-  options.push({
-    label: '$(github) GitHub (VS Code)',
-    description: 'Sign in using VS Code GitHub authentication',
-    method: 'github',
-  });
+  if (isVSCodeGitHubEnabled()) {
+    options.push({
+      label: '$(github) GitHub (VS Code)',
+      description: 'Sign in using VS Code GitHub authentication',
+      method: 'github',
+    });
+  }
 
   return options;
 }
