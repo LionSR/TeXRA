@@ -103,9 +103,16 @@ export class ExecutionManager {
   }
 
   handleMultipleOperation(message: any): void {
-    const operation = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
-    const files = Array.isArray(message.outputFiles) ? message.outputFiles.join(', ') : '';
-    logger.info(CHANNEL, `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`);
+    const operation = message.command.startsWith('pack')
+      ? 'Packing'
+      : 'Cleaning';
+    const files = Array.isArray(message.outputFiles)
+      ? message.outputFiles.join(', ')
+      : '';
+    logger.info(
+      CHANNEL,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
+    );
     this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
   }
 
