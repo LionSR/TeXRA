@@ -66,7 +66,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   async waitForFollowUp(
     checkInterruption: () => boolean,
   ): Promise<string | null> {
-    return this.followUps.waitForNext(checkInterruption);
+    // Wait for at least one message, then combine all queued messages
+    return this.followUps.waitAndDrainAll(checkInterruption);
   }
 
   async enterWaitingState(): Promise<void> {
