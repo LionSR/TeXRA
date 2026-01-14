@@ -393,7 +393,6 @@ export class FileManager extends BaseWebviewManager {
     this.postMessage({ command: `set${fileType}`, files: message.files ?? [] });
   }
 
-
   async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
     try {
       const relativePaths = await selectFiles({
