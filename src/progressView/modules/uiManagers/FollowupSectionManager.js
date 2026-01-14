@@ -12,7 +12,7 @@ import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
 export class FollowupSectionManager {
   constructor(vscode) {
     this.vscode = vscode;
-    this._mode = 'workflow';
+    this._mode = 'chat';
     this._currentStreamData = null;
     this._listeners = [];
   }
@@ -70,8 +70,8 @@ export class FollowupSectionManager {
       });
     }
 
-    // Initialize UI state for default mode (workflow)
-    this._setMode('workflow');
+    // Initialize UI state for default mode (chat)
+    this._setMode('chat');
   }
 
   /**
@@ -164,7 +164,7 @@ export class FollowupSectionManager {
   }
 
   /**
-   * Set the mode (workflow or merge) and update UI.
+   * Set the mode (chat, workflow, or merge) and update UI.
    * @private
    */
   _setMode(mode) {
@@ -175,7 +175,7 @@ export class FollowupSectionManager {
       followupSection.dataset.mode = mode;
     }
 
-    // Update agent select visibility
+    // Update agent select visibility (hidden for merge only)
     const agentSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_AGENT);
     const agentGroup = agentSelect?.closest('.followup-select-group');
     if (agentGroup) {
@@ -190,14 +190,22 @@ export class FollowupSectionManager {
       }
     }
 
-    // Update instruction checkbox visibility (hide for merge)
+    // Update initial question visibility (shown for chat only)
+    const initialQuestionDiv = safeGetElementById(
+      ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION,
+    )?.closest('.followup-initial-question');
+    if (initialQuestionDiv) {
+      initialQuestionDiv.style.display = mode === 'chat' ? '' : 'none';
+    }
+
+    // Update instruction checkbox visibility (shown for workflow only)
     const instructionCheckbox = safeGetElementById(
       ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION,
     );
     if (instructionCheckbox) {
       const optionsDiv = instructionCheckbox.closest('.followup-options');
       if (optionsDiv) {
-        optionsDiv.style.display = mode === 'merge' ? 'none' : '';
+        optionsDiv.style.display = mode === 'workflow' ? '' : 'none';
       }
     }
   }
@@ -249,12 +257,16 @@ export class FollowupSectionManager {
     const includeInstructionCheckbox = safeGetElementById(
       ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION,
     );
+    const initialQuestionTextarea = safeGetElementById(
+      ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION,
+    );
 
     const mode = this._mode;
     const agent = mode === 'merge' ? 'merge' : agentSelect?.value;
     const model = modelSelect?.value;
     const includeInstruction =
-      mode !== 'merge' && includeInstructionCheckbox?.checked;
+      mode === 'workflow' && includeInstructionCheckbox?.checked;
+    const initialQuestion = initialQuestionTextarea?.value?.trim() || '';
 
     if (!agent) {
       console.warn('[FollowupSectionManager] No agent selected');
@@ -266,12 +278,21 @@ export class FollowupSectionManager {
       return null;
     }
 
+    // Chat mode requires an initial question
+    if (mode === 'chat' && !initialQuestion) {
+      console.warn(
+        '[FollowupSectionManager] Chat mode requires an initial question',
+      );
+      return null;
+    }
+
     return {
       stream,
       mode,
       agent,
       model,
       includeInstruction,
+      initialQuestion,
     };
   }
 
