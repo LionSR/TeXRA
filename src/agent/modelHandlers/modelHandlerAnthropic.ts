@@ -215,6 +215,8 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
  */
 /** Number of recent tool use/result pairs to keep after context clearing */
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
+/** Number of assistant turns with thinking blocks to keep */
+const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 /**
  * Minimum percentage of context to clear at once for tool uses.
  * This ensures cache invalidation is worthwhile - clearing too few tokens
@@ -458,12 +460,34 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (thresholdPercent / 100) * this.config.contextWindow,
         );
 
-        // NOTE: Thinking clearing is currently disabled to prioritize tool use clearing.
-        // The API requires thinking clearing to be listed first in edits, which means
-        // it runs before tool use clearing and reduces tokens before the tool use
-        // trigger is checked. This prevents tool use clearing from triggering in
-        // many scenarios. The API's default behavior (keep last 1 thinking turn)
-        // still applies even without explicit thinking clearing config.
+        // Thinking clearing is opt-in because the API requires it to be listed
+        // first in edits, which means it runs before tool use clearing and
+        // reduces tokens before the tool use trigger is checked. This can
+        // prevent tool use clearing from triggering in many scenarios.
+        // The API's default behavior (keep last 1 thinking turn) still applies
+        // even without explicit thinking clearing config.
+        const enableThinkingClearing = getConfig<boolean>(
+          'texra.model.enableThinkingClearing',
+          false,
+        );
+
+        if (
+          enableThinkingClearing &&
+          this.capabilities.supportsReasoning &&
+          options.thinking &&
+          !contextManagementEdits.some(
+            (edit) => edit.type === 'clear_thinking_20251015',
+          )
+        ) {
+          // Thinking clearing must come first in the edits array per API requirement
+          contextManagementEdits.unshift({
+            type: 'clear_thinking_20251015' as const,
+            keep: {
+              type: 'thinking_turns' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+            },
+          });
+        }
 
         // Add tool result clearing strategy with server-side trigger.
         // The trigger ensures clearing only activates when input tokens exceed threshold.
