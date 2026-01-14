@@ -15,6 +15,7 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import {
@@ -23,12 +24,13 @@ import {
 } from '@common/constants/streamStatus';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
+import { getDefaultToolRegistry } from '@tools/registry';
 import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';
 import {
-  createToolUseFlowContext,
-  type ToolUseFlowContext,
+  resolveTools,
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
+import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -55,6 +57,14 @@ export interface RunToolUseFlowInput<C = unknown> extends Omit<
 export interface RunToolUseFlowResult {
   /** Status of the flow execution */
   status: EndGroupStatus;
+}
+
+/** Runtime context for tool-use flow execution (created inline, not via factory). */
+export interface ToolUseFlowContext<C = unknown> {
+  services: ToolUseServices<C>;
+  session: ToolUseSessionLifecycle;
+  interrupt(): void;
+  dispose(): void;
 }
 
 /**
@@ -88,13 +98,35 @@ export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, streamId, executionId } = input;
+  const { logger, streamId, executionId, setting, onInterrupt } = input;
+  const resumeSnapshot = input.resumeSnapshot ?? null;
 
-  // Create the flow context (owns all services including session lifecycle)
-  const flowContext = createToolUseFlowContext<C>({
+  // Create session lifecycle and resolve tools inline (no factory indirection)
+  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
+  const toolRegistry = input.toolRegistry ?? getDefaultToolRegistry();
+  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
+  const services: ToolUseServices<C> = {
     ...input,
-    resumeSnapshot: input.resumeSnapshot ?? null,
-  });
+    toolRegistry,
+    session: sessionLifecycle,
+    resolvedTools,
+    snapshot: resumeSnapshot,
+    getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
+  };
+
+  const flowContext: ToolUseFlowContext<C> = {
+    services,
+    session: sessionLifecycle,
+    interrupt(): void {
+      onInterrupt?.();
+      retryCoordinator.clearRequest(streamId);
+      sessionLifecycle.interrupt();
+    },
+    dispose(): void {
+      sessionLifecycle.dispose();
+    },
+  };
+
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
