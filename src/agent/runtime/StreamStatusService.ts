@@ -124,7 +124,9 @@ export const StreamStatusService = {
    */
   isActiveOrResuming(stream: StreamTabId): boolean {
     const status = statusMemory.get(stream);
-    return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
+    return (
+      status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING
+    );
   },
 
   /**
