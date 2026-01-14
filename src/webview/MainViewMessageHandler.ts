@@ -145,10 +145,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleAddOpenedFiles(m.fileType),
 
       // Execution commands
-      [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        this.executionManager.handleFileOperation(m),
+      [MAIN_VIEW_COMMANDS.MERGE]: (m) => this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        this.executionManager.handleFileOperation(m),
+        this.executionManager.handleCommand(m),
 
       // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
@@ -326,25 +325,23 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvcOperation(m),
 
-      // Housekeeping operations
+      // Housekeeping and file operations (consolidated)
       [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
-
-      // Other operations
+        this.executionManager.handleCommand(m),
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        this.executionManager.handleFileOperation(m),
+        this.executionManager.handleCommand(m),
     };
   }
 
