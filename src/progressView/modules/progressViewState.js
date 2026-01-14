@@ -170,7 +170,7 @@ class RunScopedMap {
 
   getStreamMap(streamId) {
     const stream = this._resolveStreamId(streamId);
-    return stream ? this._data.get(stream) ?? null : null;
+    return stream ? (this._data.get(stream) ?? null) : null;
   }
 }
 
@@ -520,7 +520,8 @@ export class ProgressViewState {
     };
 
     // Skip empty usage (all zeros indicates no actual API call)
-    const hasUsage = normalized.inputTokens || normalized.outputTokens || normalized.cost;
+    const hasUsage =
+      normalized.inputTokens || normalized.outputTokens || normalized.cost;
     if (hasUsage) this.runUsage.set(streamId, runId, normalized);
   }
 

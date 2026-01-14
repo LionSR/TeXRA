@@ -40,11 +40,6 @@ export interface ProcessingContext {
   ensureRoundData: (round: number) => { xmlSummary: OutputXmlSummary };
 }
 
-export interface StoragePayload {
-  storageKey: StorageKey;
-  executionId: string | undefined;
-}
-
 /** Handles processing of single and multiple output files. */
 export class OutputFileProcessor {
   constructor(private readonly ctx: ProcessingContext) {}
@@ -127,7 +122,7 @@ export class OutputFileProcessor {
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
-    storagePayload: StoragePayload,
+    storageKey: StorageKey,
     scope: AgentLogStage,
   ): Promise<void> {
     const { agentSetting, logger, xmlManager, baseFiles, channel } = this.ctx;
@@ -202,7 +197,7 @@ export class OutputFileProcessor {
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
         stream: channel,
-        ...storagePayload,
+        storageKey,
         filesByRound: { [currRound]: [] },
       });
       this.ctx.setRoundOutputs(currRound, []);

@@ -11,10 +11,7 @@ export type {
   PrepareStateResult,
 } from './ToolUseServices';
 
-export {
-  ToolUseFlowContext,
-  type ToolUseFlowContextInit,
-} from './ToolUseFlowContext';
+export { type ToolUseFlowContextInit } from './ToolUseFlowContext';
 
 export {
   ToolUseSessionLifecycle,
@@ -23,6 +20,7 @@ export {
 
 export {
   runToolUseFlow,
+  type ToolUseFlowContext,
   type RunToolUseFlowInput,
   type RunToolUseFlowResult,
   type ToolUseFlowSetupCallback,
