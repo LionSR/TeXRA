@@ -327,7 +327,9 @@ export class LaTeXdiffService {
       }
 
       const firstRoundMatch = extractLastRoundMatch(firstLocation.absolutePath);
-      const secondRoundMatch = extractLastRoundMatch(secondLocation.absolutePath);
+      const secondRoundMatch = extractLastRoundMatch(
+        secondLocation.absolutePath,
+      );
 
       if (!firstRoundMatch || !secondRoundMatch) {
         const message = 'Could not extract round numbers from file names';
