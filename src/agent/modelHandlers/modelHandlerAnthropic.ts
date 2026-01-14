@@ -1698,27 +1698,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const thinkingBlocks: BetaThinkingContent[] = [];
     let regularThinkingContent: string | null = null;
 
-    try {
-      if (responseObject.content && Array.isArray(responseObject.content)) {
-        // Collect all thinking and redacted_thinking blocks using type guards
-        for (const item of responseObject.content) {
-          if (isBetaThinkingBlock(item) && item.thinking) {
-            thinkingBlocks.push(item);
-            // Save the first regular thinking content for returning
-            if (regularThinkingContent === null) {
-              regularThinkingContent = item.thinking;
-            }
-          } else if (isBetaRedactedThinkingBlock(item) && item.data) {
-            thinkingBlocks.push(item);
+    if (responseObject.content && Array.isArray(responseObject.content)) {
+      for (const item of responseObject.content) {
+        if (isBetaThinkingBlock(item) && item.thinking) {
+          thinkingBlocks.push(item);
+          if (regularThinkingContent === null) {
+            regularThinkingContent = item.thinking;
           }
+        } else if (isBetaRedactedThinkingBlock(item) && item.data) {
+          thinkingBlocks.push(item);
         }
       }
-    } catch (e) {
-      this.logger.error(
-        `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        { data: e },
-      );
-      return null;
     }
 
     if (thinkingBlocks.length === 0) {
