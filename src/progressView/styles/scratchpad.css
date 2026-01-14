@@ -62,6 +62,26 @@
   word-break: break-word;
 }
 
+/* Relay error styling - distinct orange/warning color to indicate relay origin */
+.banner-details--relay-error {
+  position: relative;
+}
+
+.banner-details--relay-error::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--vscode-editorWarning-foreground, #ff8c00);
+  border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
+}
+
+.banner-details--relay-error > .details-summary .label {
+  color: var(--vscode-editorWarning-foreground, #ff8c00);
+}
+
 /* User feedback styling - distinct from errors */
 .tool-use-user-feedback > .details-summary .tool-use-title,
 .tool-use-user-feedback > .details-summary .codicon {

@@ -94,6 +94,7 @@ const ERROR_DETAIL_FIELDS = [
   'model',
   'provider',
   'statusCode',
+  'isRelayError',
   'retryable',
   'rawMessage',
   'requestId',
@@ -111,16 +112,30 @@ export function formatError(message) {
     new Date(timestamp ?? Date.now()),
   );
 
-  const summaryText =
+  const structured = normalizedPayload.structured ?? {};
+  const isRelayError = structured.isRelayError === true;
+  const retryable = structured.retryable === true;
+
+  // Build summary text with relay/retryable indicators
+  let summaryText =
+    (normalizedPayload.decodedText || message.text || '').trim() ||
+    'Error occurred';
+
+  // Add prefix indicator for relay errors
+  if (isRelayError) {
+    summaryText = `[Relay] ${summaryText}`;
+  }
+
+  // Store original text for duplicate detection (before relay prefix was added)
+  const originalSummaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Error occurred';
 
   // Build error details from structured data
-  const structured = normalizedPayload.structured ?? {};
   const detailLines = ERROR_DETAIL_FIELDS.filter((key) => {
     const value = structured[key];
-    // Skip null/undefined values and message if it duplicates summary
-    return value != null && !(key === 'message' && value === summaryText);
+    // Skip null/undefined values and message if it duplicates the original summary
+    return value != null && !(key === 'message' && value === originalSummaryText);
   }).map((key) => {
     const value = structured[key];
     // Format objects (like rawErrorBody) as indented JSON
@@ -150,6 +165,11 @@ export function formatError(message) {
 
   // Add error class to the banner
   bannerEntry.element.classList.add('banner-details--error');
+
+  // Add relay error class for distinct styling
+  if (isRelayError) {
+    bannerEntry.element.classList.add('banner-details--relay-error');
+  }
 
   // If there are no details, hide the copy button and make it non-expandable
   if (!detailText) {
