@@ -650,29 +650,18 @@ export class ProgressViewState {
   private extractTaskStateEntries(
     raw: Record<string, unknown>,
   ): Array<[string, unknown]> {
-    const isLegacyFormat =
-      typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
+    const isObject = (v: unknown): v is Record<string, unknown> =>
+      v !== null && typeof v === 'object';
 
-    if (!isLegacyFormat) {
-      return Object.entries(raw).filter(
-        ([, value]) => value && typeof value === 'object',
-      );
+    const isLegacy = isObject(raw.workflow) || isObject(raw.toolUse);
+    if (!isLegacy) {
+      return Object.entries(raw).filter(([, v]) => isObject(v));
     }
 
-    // Legacy format: collect from workflow and toolUse sub-objects
-    const entries: Array<[string, unknown]> = [];
-    for (const bucket of [raw.workflow, raw.toolUse]) {
-      if (bucket && typeof bucket === 'object') {
-        for (const [stream, value] of Object.entries(
-          bucket as Record<string, unknown>,
-        )) {
-          if (value && typeof value === 'object') {
-            entries.push([stream, value]);
-          }
-        }
-      }
-    }
-    return entries;
+    // Legacy format: collect entries from workflow and toolUse buckets
+    return [raw.workflow, raw.toolUse]
+      .filter(isObject)
+      .flatMap((bucket) => Object.entries(bucket).filter(([, v]) => isObject(v)));
   }
 
   /**
