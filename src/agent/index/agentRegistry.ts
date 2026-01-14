@@ -121,6 +121,28 @@ export async function loadAgents(): Promise<void> {
   return initPromise;
 }
 
+/**
+ * Check if the agent cache has been initialized.
+ * Use this to avoid redundant loadAgents() calls.
+ */
+export function isAgentCacheInitialized(): boolean {
+  return initialized;
+}
+
+/**
+ * Ensure agents are loaded, without triggering a re-scan if already loaded.
+ * Prefer this over loadAgents() when you just need to access the cache.
+ */
+export async function ensureAgentsLoaded(): Promise<void> {
+  if (initialized) {
+    return;
+  }
+  if (initPromise) {
+    return initPromise;
+  }
+  return loadAgents();
+}
+
 async function doLoad(): Promise<void> {
   const startTime = Date.now();
   cache.clear();
