@@ -98,6 +98,10 @@ export function executionToEndStatus(
 /**
  * Terminal statuses - stream execution has ended and won't resume automatically.
  * Used by status bar to determine running vs idle state.
+ *
+ * Note: INITIALIZING is intentionally excluded - it's a brief transitional state
+ * during workflow launch that will quickly become RUNNING or fail. It's neither
+ * terminal (execution hasn't ended) nor actively processing (no model calls yet).
  */
 export const TERMINAL_STATUSES: readonly StreamStatus[] = [
   STREAM_STATUS.STOPPED,
@@ -108,6 +112,12 @@ export const TERMINAL_STATUSES: readonly StreamStatus[] = [
 
 /**
  * Check if a status indicates active execution (running or resuming).
+ * This is the single source of truth for "active" status checks.
+ *
+ * Note: INITIALIZING is not considered active - it's a transitional state
+ * before execution actually begins. Use StreamStatusService.tryAcquire()
+ * to check for both INITIALIZING and active states when guarding against
+ * concurrent operations.
  */
 export function isActiveStatus(status: StreamStatus | undefined): boolean {
   return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
