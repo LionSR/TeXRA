@@ -51,6 +51,7 @@ import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
   ApprovalActionMessageSchema,
+  FollowupTaskMessageSchema,
 } from '@webview/types/messages';
 
 // Type imports
@@ -731,43 +732,61 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Handle request for followup options (agents, models).
    * Returns the available workflow agents and models to populate the followup UI.
    */
-  private async handleGetFollowupOptions(_message: any): Promise<void> {
+  private async handleGetFollowupOptions(_message: unknown): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
-    // Get workflow agents from the agent registry
-    const workflowAgents = getWorkflowAgents();
-    const agentNames = workflowAgents.map((a) => a.name);
+    try {
+      // Get workflow agents from the agent registry
+      const workflowAgents = getWorkflowAgents();
+      const agentNames = workflowAgents.map((a) => a.name);
 
-    // Get models from config
-    const models = getConfig<string[]>('texra.models', []);
-    const defaultMergeModel = getConfig<string>(
-      'texra.merge.defaultModel',
-      'sonnet37',
-    );
+      // Get models from config
+      const models = getConfig<string[]>('texra.models', []);
+      const defaultMergeModel = getConfig<string>(
+        'texra.merge.defaultModel',
+        'sonnet37',
+      );
 
-    view.webview.postMessage({
-      command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-      agents: agentNames,
-      models,
-      defaultMergeModel,
-    });
+      view.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+        agents: agentNames,
+        models,
+        defaultMergeModel,
+      });
+    } catch (error) {
+      this.logger.error(
+        this.channel,
+        'Failed to get followup options',
+        toErrorMessage(error),
+      );
+    }
   }
 
   /**
    * Handle setup followup task request.
    * Sends the followup configuration to the main view for review.
    */
-  private async handleSetupFollowup(message: any): Promise<void> {
-    await this.processFollowup(message, false);
+  private async handleSetupFollowup(message: unknown): Promise<void> {
+    await this.withValidatedMessage(
+      FollowupTaskMessageSchema,
+      message,
+      'setupFollowup',
+      async (data) => this.processFollowup(data, false),
+    );
   }
 
   /**
    * Handle run followup task request.
    * Sets up and immediately executes the followup task.
    */
-  private async handleRunFollowup(message: any): Promise<void> {
-    await this.processFollowup(message, true);
+  private async handleRunFollowup(message: unknown): Promise<void> {
+    await this.withValidatedMessage(
+      FollowupTaskMessageSchema,
+      message,
+      'runFollowup',
+      async (data) => this.processFollowup(data, true),
+    );
   }
 
   /**
@@ -775,10 +794,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Calculates file mappings and sends the configuration to main view.
    */
   private async processFollowup(
-    message: any,
+    data: {
+      stream: string;
+      mode: 'workflow' | 'merge';
+      agent: string;
+      model: string;
+      includeInstruction?: boolean;
+    },
     executeImmediately: boolean,
   ): Promise<void> {
-    const { stream, mode, agent, model, includeInstruction } = message;
+    const { stream, mode, agent, model, includeInstruction } = data;
 
     const streamId = stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
@@ -786,6 +811,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       this.logger.warn(this.channel, 'Followup: No workflow task state found', {
         data: { stream },
       });
+      await vscode.window.showWarningMessage(
+        'No task state found for this stream. Cannot set up followup.',
+      );
       return;
     }
 
@@ -800,6 +828,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Build the followup configuration
     const originalConfig = taskState.agentConfig;
     const outputFiles = this.extractOutputFilePaths(runOutputs);
+
+    if (outputFiles.length === 0) {
+      this.logger.warn(this.channel, 'Followup: No output files found', {
+        data: { stream },
+      });
+      await vscode.window.showWarningMessage(
+        'No output files found. Cannot set up followup.',
+      );
+      return;
+    }
 
     // Build payload for main view
     const followupPayload: Record<string, unknown> = {
@@ -820,11 +858,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       instruction: includeInstruction ? originalConfig.instruction : '',
     };
 
-    // Send to main view
-    await vscode.commands.executeCommand(
-      'texra.setupFollowupTask',
-      followupPayload,
-    );
+    try {
+      // Send to main view
+      await vscode.commands.executeCommand(
+        'texra.setupFollowupTask',
+        followupPayload,
+      );
+    } catch (error) {
+      this.logger.error(
+        this.channel,
+        'Failed to set up followup task',
+        toErrorMessage(error),
+      );
+      await vscode.window.showErrorMessage(
+        `Failed to set up followup task: ${toErrorMessage(error)}`,
+      );
+    }
   }
 
   /**

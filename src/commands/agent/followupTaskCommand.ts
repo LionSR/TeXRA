@@ -100,6 +100,7 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
 
 /**
  * Build the followup configuration from payload and file mapping.
+ * @throws Error if merge mode has no mapped edited file
  */
 function buildFollowupConfig(
   payload: FollowupPayload,
@@ -110,12 +111,21 @@ function buildFollowupConfig(
   if (mode === 'merge') {
     // Merge mode: inputFile = original, editedFile = output
     const outputForInput = fileMapping.get(payload.originalInputFile);
+    const editedFile = outputForInput?.absolutePath;
+
+    if (!editedFile) {
+      throw new Error(
+        `Cannot set up merge: no output file found for "${payload.originalInputFile}". ` +
+          'The workflow may not have generated an output file for this input.',
+      );
+    }
+
     return {
       mode: 'merge',
       agent: 'merge',
       model,
       inputFile: payload.originalInputFile,
-      editedFile: outputForInput?.absolutePath ?? '',
+      editedFile,
       instruction: '',
     };
   }
@@ -128,6 +138,13 @@ function buildFollowupConfig(
   const newInputFiles = (payload.originalInputFiles ?? []).map(
     (f) => fileMapping.get(f)?.absolutePath ?? f,
   );
+
+  // Log if any files fell back to originals (no mapping found)
+  if (newInputFile === payload.originalInputFile && fileMapping.size > 0) {
+    logger.warn(CHANNEL, 'No output mapping found for primary input file', {
+      data: { originalInputFile: payload.originalInputFile },
+    });
+  }
 
   return {
     mode: 'workflow',
