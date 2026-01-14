@@ -42,6 +42,19 @@ export class TikzPictureManager {
   ) {}
 
   /**
+   * Create a FileLocation, using fileService if available (run-storage aware),
+   * otherwise falling back to a simple path-based location.
+   */
+  private createLocation(
+    relativePath: string,
+    absoluteFallback: string,
+  ): FileLocation {
+    return this.fileService
+      ? this.fileService.createLocation(relativePath)
+      : pathToLocation(absoluteFallback);
+  }
+
+  /**
    * Get the TikZ template from configuration or use default
    * @returns The TikZ template string
    */
@@ -135,10 +148,10 @@ export class TikzPictureManager {
       const buildDir = getLocationPath(buildDirLocation);
       const fileRelativePath = path.join(buildDir, filename);
 
-      // Use fileService if available (run-storage aware), otherwise create workspace location
-      const texLocation = this.fileService
-        ? this.fileService.createLocation(fileRelativePath)
-        : pathToLocation(path.join(buildDirLocation.absolutePath, filename)); // Fallback: create proper file location
+      const texLocation = this.createLocation(
+        fileRelativePath,
+        path.join(buildDirLocation.absolutePath, filename),
+      );
 
       await flexibleFS.write(texLocation, standaloneContent);
       logger.debug(
@@ -171,12 +184,10 @@ export class TikzPictureManager {
       const inputDir = path.dirname(getLocationPath(latexFile));
       const buildRelativePath = path.join(inputDir, 'build', inputName);
 
-      // Create build directory location (run-storage aware if fileService available)
-      const buildDirLocation = this.fileService
-        ? this.fileService.createLocation(buildRelativePath)
-        : pathToLocation(
-            path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
-          ); // Fallback: construct proper build directory path
+      const buildDirLocation = this.createLocation(
+        buildRelativePath,
+        path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
+      );
 
       await flexibleFS.ensureDir(buildDirLocation);
 
@@ -218,11 +229,10 @@ export class TikzPictureManager {
           const texDir = path.dirname(getLocationPath(texLocation));
           const pdfRelativePath = path.join(texDir, pdfFilename);
 
-          const pdfLocation = this.fileService
-            ? this.fileService.createLocation(pdfRelativePath)
-            : pathToLocation(
-                path.join(path.dirname(texLocation.absolutePath), pdfFilename),
-              ); // Fallback: create proper PDF location
+          const pdfLocation = this.createLocation(
+            pdfRelativePath,
+            path.join(path.dirname(texLocation.absolutePath), pdfFilename),
+          );
 
           if (await flexibleFS.exists(pdfLocation)) {
             compiledFiles.push(pdfLocation);
