@@ -21,15 +21,18 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import {
+  RetryErrorInfoSchema,
+  type RetryErrorInfo,
+} from '@common/errors/schemas';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
-import { getSystemPromptWithRules } from '@utils/prompt';
 import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
-import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 
 import { FlowTransition } from './FlowTransitions';
 import {

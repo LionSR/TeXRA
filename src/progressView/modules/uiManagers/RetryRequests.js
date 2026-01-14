@@ -115,7 +115,8 @@ export class RetryRequests extends BaseUIRequestManager {
 
   /**
    * Formats error details into a displayable string.
-   * @param {Object|undefined} details - Error details object
+   * Uses all fields from ProviderError schema (single source of truth).
+   * @param {Object|undefined} details - Error details object (ProviderError)
    * @returns {string|null} Formatted details string, or null if no details
    */
   _formatErrorDetails(details) {
@@ -125,12 +126,17 @@ export class RetryRequests extends BaseUIRequestManager {
 
     const lines = [];
 
+    // Display fields in logical order matching ProviderError schema
     if (details.provider) {
       lines.push(`provider: ${details.provider}`);
     }
 
     if (details.statusCode != null) {
       lines.push(`statusCode: ${details.statusCode}`);
+    }
+
+    if (details.statusText) {
+      lines.push(`statusText: ${details.statusText}`);
     }
 
     // Show relay error indicator prominently
@@ -141,6 +147,11 @@ export class RetryRequests extends BaseUIRequestManager {
     // Show retryable status
     if (details.retryable != null) {
       lines.push(`retryable: ${details.retryable}`);
+    }
+
+    // Request ID for provider support debugging
+    if (details.requestId) {
+      lines.push(`requestId: ${details.requestId}`);
     }
 
     if (details.rawErrorBody != null) {
