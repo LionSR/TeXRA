@@ -201,9 +201,3 @@ export function registerPackCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('texra.packMultiple', handlePackMultiple),
   );
 }
-
-export const packCommands = {
-  handlePack,
-  handlePackSingle,
-  handlePackMultiple,
-};
