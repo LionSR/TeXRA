@@ -269,10 +269,7 @@ export class UsageStatsManager extends PersistentMapManager<
     return mapToRecord(value);
   }
 
-  protected override async deserialize(
-    data: unknown,
-    _key: StreamTabId,
-  ): Promise<RunUsageMap> {
+  protected override deserialize(data: unknown, _key: StreamTabId): RunUsageMap {
     return UsageDataSchema.parse(data);
   }
 }
