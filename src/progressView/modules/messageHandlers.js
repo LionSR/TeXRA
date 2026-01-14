@@ -1157,11 +1157,36 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const sessionKind = state.activeSessionKind || 'workflow';
     const hasOutputFiles = this._hasOutputFilesForActiveStream();
 
+    // Extract agent name from stream ID (format: "agentName@timestamp")
+    const agentName = activeStream.split('@')[0] || activeStream;
+
+    // Get instruction text for workflow context
+    const runId = state.resolveActiveRunId(activeStream);
+    const instruction = runId
+      ? state.getRunInstruction(activeStream, runId)
+      : null;
+    const instructionPreview = instruction?.text
+      ? instruction.text.slice(0, 100) + (instruction.text.length > 100 ? '...' : '')
+      : null;
+
+    // Count output files
+    const files = runId ? state.getRunFiles(activeStream, runId) : null;
+    const fileCount = files
+      ? Object.values(files).reduce(
+          (sum, roundFiles) =>
+            sum + (Array.isArray(roundFiles) ? roundFiles.length : 0),
+          0,
+        )
+      : 0;
+
     dom.followupSection?.updateForStream?.({
       agentCategory: sessionKind,
       status: streamStatus,
       hasOutputFiles,
       model: state.activeStreamModel,
+      agentName,
+      instructionPreview,
+      fileCount,
     });
   }
 
