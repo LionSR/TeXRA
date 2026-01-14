@@ -12,34 +12,19 @@ export class ExplorerCommands {
   ) {}
 
   register() {
+    const commands: Array<[string, (arg: FileItem | vscode.Uri) => unknown]> = [
+      ['newFile', (node) => this.operations.create(node as FileItem, false)],
+      ['newFolder', (node) => this.operations.create(node as FileItem, true)],
+      ['rename', (node) => this.operations.rename(node as FileItem)],
+      ['delete', (node) => this.operations.delete(node as FileItem)],
+      ['openFile', (uri) => this.operations.open(uri as vscode.Uri)],
+      ['addToList', (node) => this.operations.addToList(node as FileItem)],
+      ['revealInOS', (node) => this.operations.reveal((node as FileItem).resourceUri)],
+    ];
+
     this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.newFile',
-        (node: FileItem) => this.operations.create(node, false),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.newFolder',
-        (node: FileItem) => this.operations.create(node, true),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.rename',
-        (node: FileItem) => this.operations.rename(node),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.delete',
-        (node: FileItem) => this.operations.delete(node),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.openFile',
-        (uri: vscode.Uri) => this.operations.open(uri),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.addToList',
-        (node: FileItem) => this.operations.addToList(node),
-      ),
-      vscode.commands.registerCommand(
-        'texra.folderExplorer.revealInOS',
-        (node: FileItem) => this.operations.reveal(node.resourceUri),
+      ...commands.map(([name, handler]) =>
+        vscode.commands.registerCommand(`texra.folderExplorer.${name}`, handler),
       ),
     );
   }
