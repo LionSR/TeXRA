@@ -101,3 +101,8 @@
 .followup-actions vscode-button {
   min-width: 80px;
 }
+
+/* Hide Setup button in merge mode (merge executes directly) */
+.followup-section[data-mode='merge'] #followupSetupBtn {
+  display: none;
+}
