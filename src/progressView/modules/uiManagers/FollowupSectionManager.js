@@ -42,9 +42,6 @@ export class FollowupSectionManager {
           event: 'change',
           handler: modeHandler,
         });
-
-        // Initialize default mode after listener is attached
-        this._setMode('chat');
       };
 
       // Wait for Lit web component to be ready if needed
@@ -53,6 +50,13 @@ export class FollowupSectionManager {
       } else {
         attachModeListener();
       }
+    }
+
+    // Initialize data-mode attribute (don't touch radio group yet - HTML has checked attribute)
+    const section = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
+    const followupSection = section?.querySelector('.followup-section');
+    if (followupSection) {
+      followupSection.dataset.mode = 'chat';
     }
 
     // Setup button
@@ -85,6 +89,8 @@ export class FollowupSectionManager {
       const toggleHandler = (e) => {
         if (e.target.open) {
           this._requestFollowupOptions();
+          // Sync radio group when first opened (ensures visual state matches)
+          this._syncRadioGroup();
         }
       };
       collapsible.addEventListener('toggle', toggleHandler);
@@ -92,6 +98,21 @@ export class FollowupSectionManager {
         element: collapsible,
         event: 'toggle',
         handler: toggleHandler,
+      });
+    }
+  }
+
+  /**
+   * Sync the radio group visual state with internal mode.
+   * Called when section becomes visible to ensure proper rendering.
+   * @private
+   */
+  _syncRadioGroup() {
+    const modeGroup = safeGetElementById('followupModeGroup');
+    if (modeGroup) {
+      // Use requestAnimationFrame to ensure DOM has rendered
+      requestAnimationFrame(() => {
+        setRadioGroupValue(modeGroup, this._mode);
       });
     }
   }
@@ -129,44 +150,7 @@ export class FollowupSectionManager {
 
     if (shouldShow) {
       this._requestFollowupOptions();
-      this._updateWorkflowContext(streamData);
     }
-  }
-
-  /**
-   * Update the workflow context display with information about the previous workflow.
-   * @private
-   * @param {Object} streamData - The stream data including agentName, instructionPreview, fileCount
-   */
-  _updateWorkflowContext(streamData) {
-    const contextEl = safeGetElementById(ELEMENT_IDS.FOLLOWUP_CONTEXT);
-    if (!contextEl) return;
-
-    const { agentName, instructionPreview, fileCount } = streamData || {};
-
-    // Build context message parts
-    const parts = [];
-
-    if (fileCount > 0) {
-      const fileWord = fileCount === 1 ? 'file' : 'files';
-      parts.push(`<strong>${fileCount}</strong> ${fileWord} generated`);
-    }
-
-    if (agentName) {
-      parts.push(`by <strong>${agentName}</strong>`);
-    }
-
-    if (instructionPreview) {
-      // Escape HTML in instruction preview
-      const safePreview = instructionPreview
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-      parts.push(`based on: "<em>${safePreview}</em>"`);
-    }
-
-    contextEl.innerHTML = parts.length > 0 ? parts.join(' ') : '';
   }
 
   /**
@@ -360,6 +344,10 @@ export class FollowupSectionManager {
       return null;
     }
 
+    // Include workflow context for display in main webview instruction
+    const { agentName, instructionPreview, fileCount } =
+      this._currentStreamData || {};
+
     return {
       stream,
       mode,
@@ -367,6 +355,12 @@ export class FollowupSectionManager {
       model,
       includeInstruction,
       initialQuestion,
+      // Workflow context - passed to main webview for instruction display
+      workflowContext: {
+        agentName,
+        instructionPreview,
+        fileCount,
+      },
     };
   }
 
