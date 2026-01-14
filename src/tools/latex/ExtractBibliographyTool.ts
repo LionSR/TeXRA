@@ -106,17 +106,15 @@ export class ExtractBibliographyTool extends defineTool({
 
     const entryCount = entries.size;
     const citationCount = citationKeys.length;
+    const keyPlural = citationCount === 1 ? '' : 's';
+    const entryWord = entryCount === 1 ? 'entry' : 'entries';
 
-    const summary =
-      entryCount === 0
-        ? `No matching bibliography entries found for ${citationCount} citation key${
-            citationCount === 1 ? '' : 's'
-          } in ${display}.`
-        : `Resolved ${entryCount} bibliography entr${
-            entryCount === 1 ? 'y' : 'ies'
-          } for ${citationCount} citation key${
-            citationCount === 1 ? '' : 's'
-          } in ${display}.`;
+    let summary: string;
+    if (entryCount === 0) {
+      summary = `No matching bibliography entries found for ${citationCount} citation key${keyPlural} in ${display}.`;
+    } else {
+      summary = `Resolved ${entryCount} bibliography ${entryWord} for ${citationCount} citation key${keyPlural} in ${display}.`;
+    }
 
     const instructions: string[] = [];
     if (missingBibliographyFiles.length > 0) {
