@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Fixed relay error recovery.
 - Fixed tooltip and dropdown clipping issues.
 - Fixed bash tool error messages to include stdout.
+- Fixed queued follow-up messages not being combined.
 
 ### Improvements
 
