@@ -500,6 +500,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._refreshActiveRunPanels();
+    this._updateFollowupSection();
   }
 
   handleUpdateLogs(message) {
@@ -805,6 +806,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (stream === state.activeStream) {
       dom.status.update(status || STREAM_STATUS.STOPPED);
       this._focusFollowUpIfWaiting(status);
+      // Update followup section when status changes (may become visible when stopped)
+      this._updateFollowupSection();
     }
   }
 
@@ -882,6 +885,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (targetStream === state.activeStream) {
       this._refreshOutputsForActiveRun();
+      // Update followup section when files change (affects visibility)
+      this._updateFollowupSection();
     }
   }
 
@@ -1131,6 +1136,48 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleSetFollowupOptions(message) {
     const { agents, models, defaultMergeModel } = message;
     dom.followupSection?.setOptions?.({ agents, models, defaultMergeModel });
+  }
+
+  /**
+   * Update followup section visibility based on current stream state.
+   * Called when stream status changes or streams are updated.
+   */
+  _updateFollowupSection() {
+    const activeStream = state.activeStream;
+    if (!activeStream) {
+      dom.followupSection?.updateForStream?.(null);
+      return;
+    }
+
+    const streamStatus = state.streamStatuses.get(activeStream);
+    const sessionKind = state.activeSessionKind || 'workflow';
+    const hasOutputFiles = this._hasOutputFilesForActiveStream();
+
+    dom.followupSection?.updateForStream?.({
+      agentCategory: sessionKind,
+      status: streamStatus,
+      hasOutputFiles,
+      model: state.activeStreamModel,
+    });
+  }
+
+  /**
+   * Check if the active stream has output files.
+   */
+  _hasOutputFilesForActiveStream() {
+    const activeStream = state.activeStream;
+    if (!activeStream) return false;
+
+    const runId = state.resolveActiveRunId(activeStream);
+    if (!runId) return false;
+
+    const files = state.getRunFiles(activeStream, runId);
+    if (!files) return false;
+
+    // Check if any round has files
+    return Object.values(files).some(
+      (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
+    );
   }
 }
 
