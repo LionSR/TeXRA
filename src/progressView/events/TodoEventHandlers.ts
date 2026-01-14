@@ -3,8 +3,10 @@
  *
  * Handles todo events: updateTodos.
  */
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
-import type { TodoItem } from '@eventBus/schemas';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
 
@@ -24,7 +26,7 @@ export function registerTodoEventHandlers(
 }
 
 function handleUpdateTodos(ctx: EventHandlerContext) {
-  return ({ stream, todos }: { stream: string; todos: TodoItem[] }): void => {
+  return ({ stream, todos }: ProgressEventPayloads['updateTodos']): void => {
     withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
       ctx.state.setTodos(stream, todos);
       if (canUpdateWebview(ctx, stream)) {
