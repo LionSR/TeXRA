@@ -13,7 +13,7 @@ const MEMORY_VIEW_MODULES = [
 
 export class MemoryViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
-    super(context, 'MemoryView', [...MEMORY_VIEW_MODULES]);
+    super(context, 'MemoryView', MEMORY_VIEW_MODULES);
   }
 
   protected getViewPath(): string {
