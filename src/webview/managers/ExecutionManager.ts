@@ -78,6 +78,7 @@ export class ExecutionManager {
       mediaFile: this.mapMediaPath(message.mediaFile ?? null),
       mediaFiles,
       editedFile: null,
+      editedFiles: [],
       agentType: session.agentType,
       session,
       toolConfig,
