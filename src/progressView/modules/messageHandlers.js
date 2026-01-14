@@ -1173,10 +1173,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const files = state.getRunFiles(activeStream, runId);
     if (!files) return false;
 
-    // Check if any round has files
-    return Object.values(files).some(
+    // Check if any round has files with actual content
+    const hasFiles = Object.values(files).some(
       (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
     );
+
+    console.log('[ProgressView] _hasOutputFilesForActiveStream:', {
+      activeStream,
+      runId,
+      hasFiles,
+      fileRounds: Object.keys(files).length,
+    });
+
+    return hasFiles;
   }
 }
 

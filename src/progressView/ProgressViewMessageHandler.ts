@@ -45,6 +45,7 @@ import {
   getVisibleToolUseAgents,
   getAgent,
   createKey,
+  loadAgents,
 } from '@agent/index/agentRegistry';
 import { getConfig } from '@utils/config';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
@@ -742,6 +743,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!view) return;
 
     try {
+      // Ensure agent cache is initialized before accessing
+      await loadAgents();
+
       // Get visible agents matching main webview (filtered, deduplicated)
       const workflowAgents = getVisibleWorkflowAgents();
       const toolUseAgents = getVisibleToolUseAgents();

@@ -48,6 +48,17 @@
   min-width: 0;
 }
 
+/* Position dropdowns to open upward since section is at bottom of view */
+.followup-select-group {
+  position: relative;
+}
+
+.followup-agent-select::part(listbox),
+.followup-model-select::part(listbox) {
+  bottom: 100%;
+  top: auto;
+}
+
 /* Hide agent select group in merge mode (merge always uses 'merge' agent) */
 .followup-section[data-mode='merge']
   .followup-select-group:has(.followup-agent-select) {
