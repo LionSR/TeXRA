@@ -309,7 +309,7 @@ export class ProgressViewState {
       const candidates = this.collectRunCandidates(stream);
       if (!candidates.has(requested)) return null;
       const normalized = normalizeRunId(requested);
-      if (options?.persist ?? true) this.setActiveRunId(stream, requested);
+      if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
       return normalized;
     }
 
@@ -324,7 +324,7 @@ export class ProgressViewState {
 
     if (!selected) return null;
     const normalized = normalizeRunId(selected);
-    if (options?.persist ?? true) this.setActiveRunId(stream, selected);
+    if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
     return normalized;
   }
 
