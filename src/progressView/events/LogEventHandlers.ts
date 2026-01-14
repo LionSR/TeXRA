@@ -3,7 +3,10 @@
  *
  * Handles log message events: addLogMessage, updateLogMessage.
  */
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { withEventErrorHandling } from './errorHandling';
 import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
@@ -25,17 +28,17 @@ export function registerLogEventHandlers(
 }
 
 function handleAddLogMessage(ctx: EventHandlerContext) {
-  return ({ stream, logMessage }: { stream: string; logMessage: unknown }): void => {
+  return ({
+    stream,
+    logMessage,
+  }: ProgressEventPayloads['addLogMessage']): void => {
     withEventErrorHandling(
       'LogEvents',
       'failed to handle addLogMessage',
       async () => {
-        const isNew = await ctx.state.streamTabs.addMessage(
-          stream,
-          logMessage as any,
-        );
+        const isNew = await ctx.state.streamTabs.addMessage(stream, logMessage);
         if (isNew && ctx.webviewUpdater.isAvailable()) {
-          ctx.webviewUpdater.appendLogMessage(stream, logMessage as any);
+          ctx.webviewUpdater.appendLogMessage(stream, logMessage);
         }
       },
     );
@@ -43,7 +46,10 @@ function handleAddLogMessage(ctx: EventHandlerContext) {
 }
 
 function handleUpdateLogMessage(ctx: EventHandlerContext) {
-  return ({ stream, logMessage }: { stream: string; logMessage: unknown }): void => {
+  return ({
+    stream,
+    logMessage,
+  }: ProgressEventPayloads['updateLogMessage']): void => {
     withEventErrorHandling(
       'LogEvents',
       'failed to handle updateLogMessage',
@@ -51,19 +57,19 @@ function handleUpdateLogMessage(ctx: EventHandlerContext) {
         if (!ctx.state.streamTabs.has(stream)) return;
 
         const messages = ctx.state.streamTabs.getMessages(stream);
-        const existing = messages.find((m) => m.id === (logMessage as any).id);
+        const existing = messages.find((m) => m.id === logMessage.id);
         if (!existing) return;
 
         // Skip INTERNAL message updates
         if (
           existing.messageType === MESSAGE_TYPES.INTERNAL ||
-          (logMessage as any).messageType === MESSAGE_TYPES.INTERNAL
+          logMessage.messageType === MESSAGE_TYPES.INTERNAL
         ) {
           return;
         }
 
         // Update fields from logMessage, preserving existing values for undefined fields
-        const { id: _id, ...updates } = logMessage as any;
+        const { id: _id, ...updates } = logMessage;
         Object.assign(existing, updates);
 
         await ctx.state.streamTabs.save();

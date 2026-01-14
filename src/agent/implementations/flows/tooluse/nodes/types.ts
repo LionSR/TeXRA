@@ -84,3 +84,62 @@ export function assertPreparedShared(
     throw new Error('PrepareNode must run before CycleNode');
   }
 }
+
+// ============================================================================
+// State Migration (Legacy Support)
+// ============================================================================
+
+/**
+ * Legacy shared state format (pre-flattening).
+ * Used for migration from persisted sessions created before the flat structure.
+ */
+interface LegacyToolUseRunShared {
+  state: {
+    conversation: ProviderMessage[];
+    shouldSkipCycle: boolean;
+    stateSlices: StateSlicesSnapshot | null;
+    userCancelledRetry?: boolean;
+  };
+}
+
+/**
+ * Check if shared state is in legacy format (wrapped in `state` property).
+ */
+function isLegacyFormat(shared: unknown): shared is LegacyToolUseRunShared {
+  return (
+    typeof shared === 'object' &&
+    shared !== null &&
+    'state' in shared &&
+    typeof (shared as LegacyToolUseRunShared).state === 'object' &&
+    (shared as LegacyToolUseRunShared).state !== null &&
+    'conversation' in (shared as LegacyToolUseRunShared).state
+  );
+}
+
+/**
+ * Migrate legacy shared state to current flat format.
+ *
+ * PersistedFlow loads shared state from disk on resume. If a user upgrades
+ * with an in-progress tool-use session, the stored shared still has the old
+ * `{ state: { conversation, stateSlices, ... } }` structure.
+ *
+ * This function detects and migrates legacy format to prevent failures when
+ * the cycle node tries to read `shared.stateSlices` (which would be undefined
+ * in legacy format).
+ *
+ * @param shared - The shared state loaded from persistence (may be legacy format)
+ * @returns Shared state in current flat format
+ */
+export function migrateSharedState(shared: unknown): ToolUseRunShared {
+  if (isLegacyFormat(shared)) {
+    return {
+      conversation: shared.state.conversation,
+      shouldSkipCycle: shared.state.shouldSkipCycle,
+      stateSlices: shared.state.stateSlices,
+      userCancelledRetry: shared.state.userCancelledRetry,
+    };
+  }
+
+  // Already in current format or fresh start
+  return shared as ToolUseRunShared;
+}
