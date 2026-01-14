@@ -439,16 +439,6 @@ function createUsageRecorder(
   };
 }
 
-/**
- * Setup UI state for flow execution.
- *
- * Sets the stream status to RUNNING. Note: setActiveStream is emitted
- * in resolveAgentBase BEFORE Init stage creation to ensure correct
- * ordering of task group events.
- */
-function setupFlowUIState(ctx: ResolvedAgentBase): void {
-  StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
-}
 
 type FlowRunner = () => Promise<EndGroupStatus>;
 
@@ -626,8 +616,8 @@ export async function executeAgent(
 
     const runStorage = getRunStorageService();
 
-    // Setup UI state
-    setupFlowUIState(ctx);
+    // Set stream status to running
+    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 
     logger.info(`Starting task execution for ${streamTabId}`);
     logger.info(`Input file: ${config.inputFile}`);
@@ -737,7 +727,7 @@ export async function executeMergeAgent(
   ensureSessionMetadata(config, preliminaryStreamId, 'Merge agent');
 
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
-    setupFlowUIState(ctx);
+    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 
     return logger.withScope(`Task: merge@${model}`, async () => {
       logger.info(`Executing merge with model ${model}`);
@@ -787,7 +777,6 @@ export async function resumeToolUseFromSnapshot(
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
   const snapshotConfig = snapshot.agentConfig;
-  const executionId = snapshot.executionId as ExecutionId;
 
   // Resolve agent base with snapshot's stream ID for correct UI state
   // The streamTabIdOverride ensures ctx.streamId matches the snapshot
@@ -795,8 +784,8 @@ export async function resumeToolUseFromSnapshot(
   const ctx = await resolveAgentBase(
     snapshotConfig.agent,
     snapshotConfig,
-    executionId,
-    { streamTabIdOverride: snapshot.streamId as StreamTabId },
+    snapshot.executionId,
+    { streamTabIdOverride: snapshot.streamId },
   );
   const { setting, streamId: streamTabId, config } = ctx;
 
@@ -818,7 +807,7 @@ export async function resumeToolUseFromSnapshot(
     streamTabId,
     snapshotConfig.agent,
     async () => {
-      setupFlowUIState(ctx);
+      StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 
       // Run the flow with resume snapshot
       const result = await runToolUseFlow(
