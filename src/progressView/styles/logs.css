@@ -206,9 +206,9 @@
   content: attr(data-status);
   position: absolute;
   left: 50%;
-  bottom: 100%;
+  top: 100%;
   transform: translateX(-50%);
-  margin-bottom: var(--spacing-tiny);
+  margin-top: var(--spacing-tiny);
   padding: var(--spacing-small) var(--spacing-medium);
   background: var(--background-color);
   border: var(--border-thin) solid var(--color-border);
