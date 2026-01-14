@@ -32,13 +32,6 @@ function refreshDiff() {
   logger.debug(CHANNEL, 'Refreshed diff view');
 }
 
-// Note: Configuration change listener removed as editor.action.toggleWordWrap
-// command doesn't update the configuration that can be read via Configuration API
-
-function onViewColumnChange() {
-  refreshDiff();
-}
-
 export function registerDiffRefresh(
   left: vscode.Uri,
   right: vscode.Uri,
@@ -49,7 +42,7 @@ export function registerDiffRefresh(
   disposables = [];
 
   disposables.push(
-    vscode.window.onDidChangeTextEditorViewColumn(onViewColumnChange),
+    vscode.window.onDidChangeTextEditorViewColumn(refreshDiff),
   );
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
 }

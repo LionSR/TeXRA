@@ -83,38 +83,40 @@ export async function extractFigurePathsFromLatex(
     // Find all matches in the processed content for both patterns
     const discovered = new Set<string>();
 
+    // Helper to find the first existing file path
+    async function findExistingPath(
+      figPath: string,
+      basePaths: string[],
+    ): Promise<string | null> {
+      const extensions = figPath.includes('.')
+        ? ['']
+        : ['.pdf', '.png', '.jpg', '.jpeg'];
+
+      for (const basePath of basePaths) {
+        const normPath = path.normalize(path.join(basePath, figPath));
+        for (const ext of extensions) {
+          const pathToCheck = normPath + ext;
+          if (
+            await flexibleFS.exists({
+              kind: 'external',
+              absolutePath: pathToCheck,
+            })
+          ) {
+            return pathToCheck;
+          }
+        }
+      }
+      return null;
+    }
+
     for (const pattern of figurePatterns) {
       for (const match of processedLines.matchAll(pattern)) {
-        const figPath = match[1];
-        let found = false;
-        for (const basePath of graphicspaths) {
-          const normPath = path.normalize(path.join(basePath, figPath));
-          // Try with common extensions if no extension is provided
-          const extensions = figPath.includes('.')
-            ? ['']
-            : ['.pdf', '.png', '.jpg', '.jpeg'];
-
-          for (const ext of extensions) {
-            const pathToCheck = normPath + ext;
-
-            if (
-              await flexibleFS.exists({
-                kind: 'external',
-                absolutePath: pathToCheck,
-              })
-            ) {
-              const relative = path.relative(latexDir, pathToCheck);
-              if (!discovered.has(relative)) {
-                figurePaths.push(relative);
-                discovered.add(relative);
-              }
-              found = true;
-              break;
-            }
-          }
-
-          if (found) {
-            break;
+        const existingPath = await findExistingPath(match[1], graphicspaths);
+        if (existingPath) {
+          const relative = path.relative(latexDir, existingPath);
+          if (!discovered.has(relative)) {
+            figurePaths.push(relative);
+            discovered.add(relative);
           }
         }
       }
