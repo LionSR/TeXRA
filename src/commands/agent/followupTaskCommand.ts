@@ -219,20 +219,19 @@ async function executeFollowupImmediately(
       | undefined;
 
     if (filePairs && filePairs.length > 1) {
-      // Execute merge agent with multiple file pairs
-      // The merge agent should handle inputFiles and editedFiles arrays
+      // Execute merge_multiple agent for batch processing
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
       await safeExecuteCommand('texra.execute', [
         {
           config: {
-            agent: 'merge',
+            agent: 'merge_multiple',
             model: config.model,
             inputFile: baseFiles[0],
-            inputFiles: baseFiles,
+            inputFiles: baseFiles.slice(1), // Additional inputs beyond the primary
             editedFile: editedFiles[0],
-            editedFiles, // Array of edited files for batch merge
+            editedFiles: editedFiles.slice(1), // Additional editeds beyond the primary
             instruction: '',
           },
         },
