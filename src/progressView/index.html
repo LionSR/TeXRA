@@ -198,17 +198,17 @@
             class="progress-collapsible followup-collapsible"
             hidden
           >
-            <div class="followup-section">
+            <div class="followup-section" data-mode="chat">
               <div class="followup-mode-toggle">
                 <vscode-radio-group
                   id="followupModeGroup"
                   orientation="horizontal"
-                  value="workflow"
+                  value="chat"
                 >
-                  <vscode-radio
-                    id="followupModeWorkflow"
-                    value="workflow"
-                    checked
+                  <vscode-radio id="followupModeChat" value="chat" checked
+                    >Chat</vscode-radio
+                  >
+                  <vscode-radio id="followupModeWorkflow" value="workflow"
                     >Workflow</vscode-radio
                   >
                   <vscode-radio id="followupModeMerge" value="merge"
@@ -235,6 +235,13 @@
                     <vscode-option value="">Select model</vscode-option>
                   </vscode-single-select>
                 </div>
+              </div>
+              <div class="followup-initial-question">
+                <vscode-text-area
+                  id="followupInitialQuestion"
+                  placeholder="What would you like to discuss about the results?"
+                  rows="2"
+                ></vscode-text-area>
               </div>
               <div class="followup-options">
                 <vscode-checkbox id="followupIncludeInstruction" checked
