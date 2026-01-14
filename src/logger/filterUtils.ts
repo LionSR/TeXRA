@@ -14,11 +14,6 @@ export interface FilterResult {
   debugMode: boolean;
 }
 
-/** Get the current debug mode setting. */
-function getDebugMode(): boolean {
-  return getConfig<boolean>('texra.logger.debugMode', false);
-}
-
 /**
  * Determines whether a log message should be emitted to the progress view
  * and returns the debug mode state for setting the verbose flag.
@@ -28,7 +23,7 @@ function getDebugMode(): boolean {
  * - AgentLogger.createStream() (stream-based logging path)
  */
 export function getEmitFilter(options: FilterOptions): FilterResult {
-  const debugMode = getDebugMode();
+  const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
   // Filter: INTERNAL messages always hidden; debug-level messages hidden unless debugMode
   const shouldEmit =
     options.messageType !== MESSAGE_TYPES.INTERNAL &&
