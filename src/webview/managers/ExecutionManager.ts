@@ -20,11 +20,6 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-/** Normalize nullish file arrays to empty arrays */
-function toArray<T>(files: T[] | undefined | null): T[] {
-  return files ?? [];
-}
-
 export class ExecutionManager {
   async handleExecute(message: any): Promise<void> {
     const isToolUseAgent = Boolean(message.isToolUseAgent);
@@ -51,7 +46,9 @@ export class ExecutionManager {
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
       : { agentCategory: AgentCategory.Workflow };
 
-    const outputFiles = isToolUse ? [] : toArray<string>(message.outputFiles);
+    const outputFiles: string[] = isToolUse
+      ? []
+      : (message.outputFiles ?? []);
     const useMultipleOutputs = isToolUse
       ? false
       : Boolean(message.outputFilesActive) || outputFiles.length > 1;
@@ -66,22 +63,22 @@ export class ExecutionManager {
           autoCompileInputPdf: message.autoCompileInputPdf,
         };
 
+    const mediaFiles = (message.mediaFiles ?? [])
+      .map((f: string | null) => this.mapMediaPath(f))
+      .filter((f: string | null): f is string => f !== null);
+
     return {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile ?? '',
-      inputFiles: toArray<string>(message.inputFiles),
+      inputFiles: message.inputFiles ?? [],
       referenceFile: message.referenceFile ?? null,
-      referenceFiles: toArray<string>(message.referenceFiles),
+      referenceFiles: message.referenceFiles ?? [],
       auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: toArray<string>(message.auxiliaryFiles),
+      auxiliaryFiles: message.auxiliaryFiles ?? [],
       mediaFile: this.mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: toArray<string>(
-        (message.mediaFiles ?? [])
-          .map((f: string | null) => this.mapMediaPath(f))
-          .filter((f: string | null): f is string => f !== null),
-      ),
+      mediaFiles,
       editedFile: null,
       agentType: session.agentType,
       session,
