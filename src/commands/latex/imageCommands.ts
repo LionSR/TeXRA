@@ -15,6 +15,16 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
+const PDF_FILTERS = { 'PDF files': ['pdf'] };
+
+function logTruncatedBase64(base64String: string): void {
+  const truncated = base64String.substring(0, 100);
+  logger.debug(
+    CHANNEL,
+    `Truncated base64 string (first 100 chars): ${truncated}...`,
+  );
+}
+
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.countPdfPages', handleCountPdfPages),
@@ -37,9 +47,7 @@ async function handleCountPdfPages(): Promise<void> {
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
+      filters: PDF_FILTERS,
     });
     if (!selection) {
       return;
@@ -82,14 +90,7 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
     );
 
     const base64String = await getBase64EncodedMedia(selection.relativePath);
-
-    // Also show a truncated version in the debug log for quick verification
-    const truncatedString = `${base64String.substring(0, 100)}...`;
-    logger.debug(
-      CHANNEL,
-      `Truncated base64 string (first 100 chars): ${truncatedString}`,
-    );
-
+    logTruncatedBase64(base64String);
     return base64String;
   } catch (err) {
     await showLoggedErrorMessage(
@@ -107,9 +108,7 @@ async function handleConvertPdfToImages(): Promise<
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
+      filters: PDF_FILTERS,
     });
     if (!selection) {
       return undefined;
@@ -177,9 +176,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
+      filters: PDF_FILTERS,
     });
     if (!selection) {
       return undefined;
@@ -204,25 +201,17 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
       return undefined;
     }
 
-    // Convert single page
     const base64String = await singlePagePdf2Png(
       selection.relativePath,
       parseInt(pageNum),
       300,
       [1024, 1024],
     );
-
-    // Show truncated result in debug log
-    const truncatedString = `${base64String.substring(0, 100)}...`;
-    logger.debug(
-      CHANNEL,
-      `Truncated base64 string (first 100 chars): ${truncatedString}`,
-    );
+    logTruncatedBase64(base64String);
 
     vscode.window.showInformationMessage(
       `Successfully converted page ${pageNum} of ${selection.relativePath} to PNG`,
     );
-
     return base64String;
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'testPdfToImage command failed', err);

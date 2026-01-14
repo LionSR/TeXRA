@@ -123,11 +123,9 @@ const SDK_ERRORS: SdkErrorEntry[] = [
   ...createErrorPair(OpenAIBadRequestError, AnthropicBadRequestError, {
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
   }),
-  ...createErrorPair(
-    OpenAIAuthenticationError,
-    AnthropicAuthenticationError,
-    { fallbackStatusCode: StatusCodes.UNAUTHORIZED },
-  ),
+  ...createErrorPair(OpenAIAuthenticationError, AnthropicAuthenticationError, {
+    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
+  }),
   ...createErrorPair(
     OpenAIPermissionDeniedError,
     AnthropicPermissionDeniedError,
@@ -147,11 +145,9 @@ const SDK_ERRORS: SdkErrorEntry[] = [
   ...createErrorPair(OpenAIRateLimitError, AnthropicRateLimitError, {
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
   }),
-  ...createErrorPair(
-    OpenAIInternalServerError,
-    AnthropicInternalServerError,
-    { fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR },
-  ),
+  ...createErrorPair(OpenAIInternalServerError, AnthropicInternalServerError, {
+    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+  }),
   // Generic API errors (no fallback)
   { ctor: OpenAIAPIError },
   { ctor: AnthropicAPIError },
