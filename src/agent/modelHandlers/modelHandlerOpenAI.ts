@@ -49,6 +49,10 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { extractScratchpad } from '@utils/text/xmlUtils';
+import {
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -981,31 +985,23 @@ export class ModelHandlerOpenAI<
     }
 
     const inputTokens = rawUsage.prompt_tokens ?? 0;
-    const outputTokens = rawUsage.completion_tokens ?? 0;
-
-    // Extract cached tokens (OpenAI style or DeepSeek style)
+    // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
     const cachedTokens =
       rawUsage.prompt_tokens_details?.cached_tokens ??
-      rawUsage.prompt_cache_hit_tokens ?? // DeepSeek
+      rawUsage.prompt_cache_hit_tokens ??
       0;
-
-    // Extract reasoning tokens
-    const reasoningTokens =
-      rawUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-
-    // Calculate percentage cached
-    const percentageCached =
-      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
 
     return {
       inputTokens,
-      outputTokens,
+      outputTokens: rawUsage.completion_tokens ?? 0,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: this.usageProvider,
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      reasoningTokens: reasoningTokens || undefined,
+      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
+      reasoningTokens: nonZeroOrUndefined(
+        rawUsage.completion_tokens_details?.reasoning_tokens,
+      ),
       _native: rawUsage,
     };
   }
