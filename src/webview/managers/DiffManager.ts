@@ -13,31 +13,19 @@ export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   handleLatexdiff(message: any): void {
-    void vscode.commands.executeCommand(
-      'texra.latexdiff',
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    );
+    this.runDiffCommand('latexdiff', message, ['inputFile', 'baseFile', 'editedFile']);
   }
 
   handleLatexdiffvc(message: any): void {
-    void vscode.commands.executeCommand(
-      'texra.latexdiffvc',
-      message.inputFile,
-      message.baseFile,
-      message.commitHash,
-    );
+    this.runDiffCommand('latexdiffvc', message, ['inputFile', 'baseFile', 'commitHash']);
   }
 
   handleLatexdiffvcOperation(message: any): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.baseFile,
-      message.commitHash,
-      message.clean,
-    );
+    this.runDiffCommand(message.command, message, ['inputFile', 'baseFile', 'commitHash', 'clean']);
+  }
+
+  private runDiffCommand(command: string, message: any, paramKeys: string[]): void {
+    void vscode.commands.executeCommand(`texra.${command}`, ...paramKeys.map((k) => message[k]));
   }
 
   private async _fetchRecentCommits(): Promise<{
