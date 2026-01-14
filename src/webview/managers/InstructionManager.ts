@@ -72,10 +72,16 @@ export class InstructionManager extends BaseWebviewManager {
         ...(hasFiles(!!message.inputFilesActive, message.inputFiles) && {
           inputFiles: message.inputFiles,
         }),
-        ...(hasFiles(!!message.referenceFilesActive, message.referenceFiles) && {
+        ...(hasFiles(
+          !!message.referenceFilesActive,
+          message.referenceFiles,
+        ) && {
           referenceFiles: message.referenceFiles,
         }),
-        ...(hasFiles(!!message.auxiliaryFilesActive, message.auxiliaryFiles) && {
+        ...(hasFiles(
+          !!message.auxiliaryFilesActive,
+          message.auxiliaryFiles,
+        ) && {
           auxiliaryFiles: message.auxiliaryFiles,
         }),
         ...(hasFiles(!!message.mediaFilesActive, message.mediaFiles) && {
