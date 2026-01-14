@@ -19,7 +19,7 @@ export const sampleProjectCommands = {
 
 export function registerSampleProjectCommands(
   context: vscode.ExtensionContext,
-) {
+): void {
   const createSampleProjectCommand = vscode.commands.registerCommand(
     sampleProjectCommands.createSampleProject,
     async () => {
