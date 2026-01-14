@@ -222,6 +222,7 @@
                   <vscode-single-select
                     id="followupAgent"
                     class="followup-agent-select"
+                    position="above"
                   >
                     <vscode-option value="">Select agent</vscode-option>
                   </vscode-single-select>
@@ -231,6 +232,7 @@
                   <vscode-single-select
                     id="followupModel"
                     class="followup-model-select"
+                    position="above"
                   >
                     <vscode-option value="">Select model</vscode-option>
                   </vscode-single-select>
@@ -242,6 +244,9 @@
                   placeholder="What would you like to discuss about the results?"
                   rows="2"
                 ></vscode-text-area>
+              </div>
+              <div class="followup-context" id="followupContext">
+                <!-- Populated dynamically with workflow context -->
               </div>
               <div class="followup-options">
                 <vscode-checkbox id="followupIncludeInstruction" checked
