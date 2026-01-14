@@ -616,7 +616,7 @@ function filterVisible(
     true,
   );
 
-  function isVisible(entry: AgentEntry): boolean {
+  return entries.filter((entry) => {
     // Remote agents auto-show when setting is enabled
     if (entry.source === 'remote' && autoShowRemote) return true;
     // Check if explicitly configured by source:name or just name
@@ -624,9 +624,7 @@ function filterVisible(
       configured.has(createKey(entry.source, entry.name)) ||
       configured.has(entry.name)
     );
-  }
-
-  return entries.filter(isVisible);
+  });
 }
 
 function renderOptions(
@@ -686,22 +684,24 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
  * Sync version - returns placeholders from config if not loaded.
  */
 export function computeAgentOptionsSync(): AgentOptionsPayload {
-  if (!initialized) {
-    const buildPlaceholder = (configKey: string, defaultAgent: string) => {
-      const configured = getConfig<string[]>(configKey, []);
-      const agents = configured.length > 0 ? configured : [defaultAgent];
-      return agents
-        .map(
-          (name) =>
-            `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
-        )
-        .join('\n');
-    };
-
-    return {
-      workflow: buildPlaceholder('texra.agents', DEFAULT_WORKFLOW_AGENT),
-      toolUse: buildPlaceholder('texra.toolUseAgents', DEFAULT_TOOL_USE_AGENT),
-    };
+  if (initialized) {
+    return buildAgentOptions();
   }
-  return buildAgentOptions();
+
+  // Build placeholder options from config when cache isn't ready
+  function buildPlaceholder(configKey: string, defaultAgent: string): string {
+    const agents = getConfig<string[]>(configKey, []);
+    const names = agents.length > 0 ? agents : [defaultAgent];
+    return names
+      .map(
+        (name) =>
+          `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
+      )
+      .join('\n');
+  }
+
+  return {
+    workflow: buildPlaceholder('texra.agents', DEFAULT_WORKFLOW_AGENT),
+    toolUse: buildPlaceholder('texra.toolUseAgents', DEFAULT_TOOL_USE_AGENT),
+  };
 }
