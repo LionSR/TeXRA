@@ -22,6 +22,27 @@ import type {
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 /**
+ * Extra content to include with log updates.
+ * All fields are optional to support incremental updates.
+ */
+export interface LogContentExtras {
+  /** Instructions by run ID */
+  runInstructions?: Record<string, InstructionUpdate>;
+  /** Currently active run ID */
+  activeRunId?: string | null;
+  /** Usage stats by run ID */
+  runUsage?: Record<string, TokenUsageStats>;
+  /** Output files by run ID and round */
+  runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+  /** Context window utilization state */
+  contextState?: {
+    inputTokens: number;
+    contextWindow: number;
+    utilizationPercent: number;
+  };
+}
+
+/**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
@@ -87,17 +108,7 @@ export class WebviewUpdater {
     stream: StreamTabId,
     messages: LogMessageData[],
     groups: any[] = [],
-    extras?: {
-      runInstructions?: Record<string, InstructionUpdate>;
-      activeRunId?: string | null;
-      runUsage?: Record<string, TokenUsageStats>;
-      runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
-      contextState?: {
-        inputTokens: number;
-        contextWindow: number;
-        utilizationPercent: number;
-      };
-    },
+    extras?: LogContentExtras,
     action: 'render' | 'clear' = 'render',
   ): void {
     this.sendMessage({
@@ -105,11 +116,7 @@ export class WebviewUpdater {
       stream,
       messages,
       groups,
-      runInstructions: extras?.runInstructions,
-      activeRunId: extras?.activeRunId,
-      runUsage: extras?.runUsage,
-      runFiles: extras?.runFiles,
-      contextState: extras?.contextState,
+      ...extras,
       action,
     });
   }
