@@ -210,7 +210,10 @@ export class ProgressEventHandler {
         }
 
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
         }
       },
     );
