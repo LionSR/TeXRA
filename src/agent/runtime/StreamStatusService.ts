@@ -3,7 +3,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 
 // Internal imports
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS, isActiveStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
@@ -33,17 +33,18 @@ export const StreamStatusService = {
 
   /**
    * Attempt to acquire a stream for execution.
-   * Returns true if acquired (sets INITIALIZING), false if already running/initializing.
+   * Returns true if acquired (sets INITIALIZING), false if already active.
    *
    * This is an atomic check-and-set to prevent race conditions when launching
-   * workflows concurrently.
+   * workflows concurrently. Blocks on RUNNING, RESUMING, and INITIALIZING.
    */
   tryAcquire(stream: StreamTabId): boolean {
     const current = statusMemory.get(stream);
 
-    // Block if already running or initializing
+    // Block if already active (running/resuming) or initializing
     if (
       current === STREAM_STATUS.RUNNING ||
+      current === STREAM_STATUS.RESUMING ||
       current === STREAM_STATUS.INITIALIZING
     ) {
       return false;
@@ -121,10 +122,10 @@ export const StreamStatusService = {
   /**
    * Check if stream is actively processing (RUNNING or RESUMING).
    * Use to guard against concurrent operations.
+   * Delegates to isActiveStatus() for the actual status check.
    */
   isActiveOrResuming(stream: StreamTabId): boolean {
-    const status = statusMemory.get(stream);
-    return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
+    return isActiveStatus(statusMemory.get(stream));
   },
 
   /**
@@ -134,5 +135,24 @@ export const StreamStatusService = {
   shouldPreserveOnCompletion(stream: StreamTabId): boolean {
     const status = statusMemory.get(stream);
     return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
+  },
+
+  /**
+   * Check if a status transition might affect stream tab ordering.
+   * First status assignment or transitions TO running may result in new log
+   * activity that changes the stream's position in time-sorted order.
+   */
+  mightAffectTabOrder(
+    previous: StreamStatus | undefined,
+    current: StreamStatus,
+  ): boolean {
+    // First status assignment should always trigger refresh
+    if (previous === undefined) {
+      return true;
+    }
+    // Transitioning TO running may result in new log activity
+    return (
+      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
+    );
   },
 };
