@@ -1367,7 +1367,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string} [message.editedFile] - Edited file path (merge mode)
    */
   _handleSetupFollowupTask(message) {
-    const { agent, model, mode, instruction, inputFile, inputFiles } = message;
+    const {
+      agent,
+      model,
+      mode,
+      instruction,
+      inputFile,
+      inputFiles,
+      baseFile,
+      editedFile,
+    } = message;
 
     // Block saves during setup to avoid partial state persistence
     mainViewState.blockSave();
@@ -1399,7 +1408,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
       // Set file inputs based on mode
       if (mode === 'merge') {
-        this._setupMergeFollowupFiles(message);
+        this._setupMergeFollowupFiles({ baseFile, editedFile, inputFiles });
       } else {
         this._setupWorkflowFollowupFiles(inputFile, inputFiles);
       }
@@ -1414,8 +1423,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       };
 
       if (mode === 'merge') {
-        savedState.inputFile = message.baseFile || '';
-        savedState.editedFile = message.editedFile || '';
+        savedState.inputFile = baseFile || '';
+        savedState.editedFile = editedFile || '';
       } else {
         savedState.inputFile = inputFile || '';
         savedState.inputFiles = inputFiles || [];
