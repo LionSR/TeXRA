@@ -57,7 +57,6 @@ export class ToolUseCycleNode<C> extends Node<
       if (recoveredTodos.length > 0) {
         bus.emit('updateTodos', {
           stream: this.services.streamId,
-          executionId: this.services.executionId,
           todos: recoveredTodos,
         });
       }
@@ -95,7 +94,6 @@ export class ToolUseCycleNode<C> extends Node<
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
         stream: this.services.streamId,
-        executionId: this.services.executionId,
         todos,
       });
     });
