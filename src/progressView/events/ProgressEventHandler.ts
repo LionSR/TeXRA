@@ -2,14 +2,13 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { StreamStatus } from '@common/constants/streamStatus';
-import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { TaskGroup } from '@logger/LogTypes';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -514,7 +513,7 @@ export class ProgressEventHandler {
    */
   private sendInstructionUpdate(
     stream: StreamTabId | '',
-    runIdHint?: string | null,
+    runIdHint?: StorageKey | null,
   ): void {
     if (!this.webviewUpdater.isAvailable()) {
       return;
@@ -539,13 +538,14 @@ export class ProgressEventHandler {
         : runIdHint;
 
     if (runId && instructionUpdate) {
+      // runId is already StorageKey from resolveRunId() - no normalization needed
       void this.state.runInstructions.setInstruction(
         stream,
-        normalizeRunId(runId),
+        runId,
         instructionUpdate,
       );
     } else if (runId) {
-      void this.state.runInstructions.deleteRun(stream, normalizeRunId(runId));
+      void this.state.runInstructions.deleteRun(stream, runId);
     }
 
     this.webviewUpdater.updateInstruction(
@@ -569,7 +569,7 @@ export class ProgressEventHandler {
   public refreshStreamSurface(
     stream: string,
     options: { updateInstruction?: boolean } = {},
-  ): string | null {
+  ): StorageKey | null {
     if (!this.webviewUpdater.isAvailable()) return null;
 
     const { updateInstruction = true } = options;

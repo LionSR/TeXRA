@@ -154,9 +154,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
       added > 0 && `+${added}`,
       removed > 0 && `-${removed}`,
     ].filter(Boolean);
-    const tooltip = diffParts.length > 0
-      ? `${diffParts.join(' / ')} ${lineLabel} changed`
-      : 'No line changes';
+    const tooltip =
+      diffParts.length > 0
+        ? `${diffParts.join(' / ')} ${lineLabel} changed`
+        : 'No line changes';
 
     const diffContainer = document.createElement('span');
     diffContainer.className = 'approval-request__diff';
@@ -170,7 +171,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
     };
 
     if (added > 0) appendSpan('approval-request__diff-added', `+${added}`);
-    if (removed > 0) appendSpan('approval-request__diff-removed', `-${removed}`);
+    if (removed > 0)
+      appendSpan('approval-request__diff-removed', `-${removed}`);
     appendSpan('approval-request__diff-label', `${total} ${lineLabel}`);
 
     // Build final meta content

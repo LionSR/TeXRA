@@ -134,7 +134,8 @@ export class RetryRequests extends BaseUIRequestManager {
       details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
       details.retryable != null && `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null && `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
+      details.rawErrorBody != null &&
+        `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 
     return lines.length > 0 ? lines.join('\n') : null;
