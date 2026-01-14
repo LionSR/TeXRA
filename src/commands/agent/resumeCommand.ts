@@ -46,14 +46,6 @@ interface ResumeAgentCommandPayload {
 
 const CHANNEL = 'resumeCommand';
 
-function formatLostFollowUpSuffix(count: number): string {
-  if (count === 0) {
-    return '';
-  }
-  const label = count === 1 ? 'follow-up was' : 'follow-ups were';
-  return ` ${count} queued ${label} lost.`;
-}
-
 /**
  * Resume a tool-use session from a snapshot.
  *
@@ -117,9 +109,12 @@ async function resumeFromSnapshot(
       'Failed to resume tool-use session',
       error,
     );
-    await vscode.window.showWarningMessage(
-      `${baseMessage}${formatLostFollowUpSuffix(lostCount)}`,
-    );
+    let lostSuffix = '';
+    if (lostCount > 0) {
+      const label = lostCount === 1 ? 'follow-up was' : 'follow-ups were';
+      lostSuffix = ` ${lostCount} queued ${label} lost.`;
+    }
+    await vscode.window.showWarningMessage(`${baseMessage}${lostSuffix}`);
 
     return { success: false, lostFollowUps: lostCount };
   } finally {
