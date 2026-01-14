@@ -23,12 +23,16 @@ import {
   formatProviderHttpError,
   type ProviderError,
 } from '@common/errors/sdkErrorUtils';
+import { type RetryErrorInfo } from '@common/errors/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
 } from '@utils/config';
+
+// Re-export from canonical source for backward compatibility
+export { RetryErrorInfoSchema, type RetryErrorInfo } from '@common/errors/schemas';
 
 /**
  * Minimum retry count for background mode (at least 3 attempts before manual retry UI).
@@ -40,19 +44,13 @@ export const BACKGROUND_MODE_MIN_RETRIES = 3;
 // Error State Types (using canonical schema)
 // ============================================================================
 
-// Re-export from canonical source for backward compatibility
-export {
-  RetryErrorInfoSchema,
-  type RetryErrorInfo,
-} from '@common/errors/schemas';
-
 /**
  * Retry state for tracking errors across the retry flow.
  * Used to communicate error details to callers and UI.
  */
 export interface RetryState {
   /** Information about the last error, if any. */
-  lastError?: { message: string; retryable: boolean };
+  lastError?: RetryErrorInfo;
 }
 
 // ============================================================================
