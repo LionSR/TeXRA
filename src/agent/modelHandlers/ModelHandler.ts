@@ -213,10 +213,7 @@ export abstract class ModelHandler<
     if (!this.progressViewEnabled) {
       return;
     }
-    this.logger.info('', {
-      messageType: MESSAGE_TYPES.WEB_SEARCH,
-      data: result,
-    });
+    this.logger.logWebSearch(result);
   }
 
   /**
