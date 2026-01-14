@@ -3,7 +3,6 @@ import * as assert from 'assert';
 
 // Local imports - tools
 import { WriteFileTool } from '@tools/WriteTool';
-import { FileOpTool } from '@tools/fileOp';
 import {
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
@@ -65,14 +64,14 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(result.output, 'written');
   });
 
-  it('file_op append aborts when change is rejected', async () => {
-    const tool = new FileOpTool();
-    let appendCalled = false;
+  it('write_file rejects when user denies approval', async () => {
+    const tool = new WriteFileTool();
+    let writeCalled = false;
 
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'base';
-    WorkspaceFS.appendFile = async () => {
-      appendCalled = true;
+    WorkspaceFS.write = async () => {
+      writeCalled = true;
     };
 
     setToolEditApprovalHandler(async () => ({
@@ -81,16 +80,16 @@ describe('Tool edit approval gating', () => {
     }));
 
     const result = await tool.call({
-      command: 'append',
       path: 'summary.txt',
-      content: ' new text',
+      content: 'new content',
     });
 
-    assert.strictEqual(appendCalled, false);
+    assert.strictEqual(writeCalled, false);
     assert.strictEqual(result.isError, true);
-    // Rejection message is explicit; user feedback goes to userInstruction
-    assert.strictEqual(result.error, 'User rejected file_op for summary.txt.');
-    assert.strictEqual(result.output, 'User rejected file_op for summary.txt.');
+    assert.strictEqual(
+      result.error,
+      'User rejected write_file for summary.txt.',
+    );
     assert.strictEqual(result.userInstruction, 'Rejected by user');
   });
 
