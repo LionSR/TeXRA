@@ -35,11 +35,6 @@ function getStore(): Map<ChannelKey, ChannelContext> {
   return store;
 }
 
-function getContextByKey(key: ChannelKey): ChannelContext | undefined {
-  const store = getStore();
-  return store.get(key);
-}
-
 function pushGroupContext(
   channel: string,
   groupId: string,
@@ -86,7 +81,7 @@ function resolveActiveGroupByKey(
   groupId: string | undefined,
 ): string | undefined {
   if (groupId) return groupId;
-  return getContextByKey(key)?.stack.at(-1);
+  return getStore().get(key)?.stack.at(-1);
 }
 
 /**
