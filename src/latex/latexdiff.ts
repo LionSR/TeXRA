@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -16,7 +17,6 @@ import { runLatexFormatter } from './texFormatter';
 import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
-import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 
 // Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';

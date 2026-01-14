@@ -99,7 +99,6 @@ export class RunUsageAccumulator {
 
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
     if (this.totals.firstInputTokens === 0) {
-      // inputTokens already includes cached tokens (total context measurement)
       this.totals.firstInputTokens = usage.inputTokens;
     }
 
@@ -116,22 +115,20 @@ export class RunUsageAccumulator {
   }
 
   merge(other: RunUsageAccumulator): void {
-    const otherTotals = other.totals;
+    const src = other.totals;
     if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens = otherTotals.firstInputTokens;
+      this.totals.firstInputTokens = src.firstInputTokens;
     }
 
-    this.totals.totalInputTokens += otherTotals.totalInputTokens;
-    this.totals.totalOutputTokens += otherTotals.totalOutputTokens;
-    this.totals.totalCost += otherTotals.totalCost;
-    this.totals.totalCacheReadInputTokens +=
-      otherTotals.totalCacheReadInputTokens;
+    this.totals.totalInputTokens += src.totalInputTokens;
+    this.totals.totalOutputTokens += src.totalOutputTokens;
+    this.totals.totalCost += src.totalCost;
+    this.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
     this.totals.totalCacheCreationInputTokens +=
-      otherTotals.totalCacheCreationInputTokens;
-    this.totals.totalReasoningTokens += otherTotals.totalReasoningTokens;
-    this.totals.totalToolUsePromptTokens +=
-      otherTotals.totalToolUsePromptTokens;
-    this.totals.totalServerToolRequests += otherTotals.totalServerToolRequests;
+      src.totalCacheCreationInputTokens;
+    this.totals.totalReasoningTokens += src.totalReasoningTokens;
+    this.totals.totalToolUsePromptTokens += src.totalToolUsePromptTokens;
+    this.totals.totalServerToolRequests += src.totalServerToolRequests;
 
     this.normalizedSnapshots.push(...other.normalizedSnapshots);
   }
