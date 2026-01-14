@@ -82,15 +82,15 @@ export class FlexibleFS {
     }
   }
 
-  async ensureDir(target: FileLocation): Promise<void> {
-    await AbsoluteFS.ensureDir(target.absolutePath);
+  ensureDir(target: FileLocation): Promise<void> {
+    return AbsoluteFS.ensureDir(target.absolutePath);
   }
 
-  async delete(
+  delete(
     target: FileLocation,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    await AbsoluteFS.delete(target.absolutePath, options);
+    return AbsoluteFS.delete(target.absolutePath, options);
   }
 
   stat(target: FileLocation) {

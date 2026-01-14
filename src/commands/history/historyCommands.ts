@@ -18,9 +18,7 @@ export function registerHistoryCommands(context: vscode.ExtensionContext) {
   // Register show history command
   const showHistoryCommand = vscode.commands.registerCommand(
     historyCommands.showHistory,
-    async () => {
-      await historyViewProvider.showHistoryView();
-    },
+    () => historyViewProvider.showHistoryView(),
   );
 
   // Add subscriptions

@@ -41,20 +41,13 @@ function getMajorityChoice(choices: string[]): ConnectionResult {
     counts.set(choice, (counts.get(choice) ?? 0) + 1);
   }
 
-  let majorityChoice = '';
-  let maxCount = 0;
-  for (const [choice, count] of counts) {
-    if (count > maxCount) {
-      maxCount = count;
-      majorityChoice = choice;
-    }
-  }
+  const majorityChoice = [...counts.entries()].reduce((a, b) =>
+    b[1] > a[1] ? b : a,
+  )[0];
 
-  if (majorityChoice in CASE_CONNECTORS) {
-    return {
-      connector: CASE_CONNECTORS[majorityChoice],
-      choice: majorityChoice,
-    };
+  const connector = CASE_CONNECTORS[majorityChoice];
+  if (connector !== undefined) {
+    return { connector, choice: majorityChoice };
   }
 
   logger.debug(
