@@ -90,6 +90,14 @@ export class ExecutionManager {
     return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
   }
 
+  /** Commands that use file-based args (inputFile, baseFile, editedFile) */
+  private static readonly FILE_OP_COMMANDS = new Set([
+    'merge',
+    'compare',
+    'latexdiff',
+    'acceptEdited',
+  ]);
+
   /**
    * Execute a command with arguments extracted from message.
    * Consolidates handleFileOperation, handleHousekeeping, handleSingleOperation, handleMultipleOperation.
@@ -105,7 +113,7 @@ export class ExecutionManager {
     }
 
     // Build args based on command type (file ops use different args than agent ops)
-    const isFileOp = command.includes('Diff') || command.includes('Compare');
+    const isFileOp = ExecutionManager.FILE_OP_COMMANDS.has(command);
     const args = isFileOp
       ? [inputFile, baseFile, editedFile].filter((a) => a !== undefined)
       : [inputFile, agent, model, outputFiles].filter((a) => a !== undefined);
