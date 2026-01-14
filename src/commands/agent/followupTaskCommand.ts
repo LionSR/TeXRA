@@ -3,7 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { getMainWebview, safeExecuteCommand } from '@frontend/system/commandUtils';
+import {
+  getMainWebview,
+  safeExecuteCommand,
+} from '@frontend/system/commandUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { createFileMapping } from '@utils/files/fileMappingUtils';
 import { pathToLocation } from '@utils/files';
@@ -67,7 +70,11 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
     const inputLocations = originalInputs.map((p) => pathToLocation(p));
 
     // Create mapping: comparable path → output file location
-    const pathMapping = createFileMapping(inputLocations, outputLocations, 'contains');
+    const pathMapping = createFileMapping(
+      inputLocations,
+      outputLocations,
+      'contains',
+    );
 
     // Build absolute path lookup: absolute path → output file location
     // pathMapping keys are relative paths, so we need to map absolute → relative → output
@@ -77,7 +84,9 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
       const location = inputLocations[i];
       // Get the comparable path (relative for workspace files)
       const comparablePath =
-        location.kind !== 'external' ? location.relativePath : location.absolutePath;
+        location.kind !== 'external'
+          ? location.relativePath
+          : location.absolutePath;
       const output = pathMapping.get(comparablePath);
       if (output) {
         fileMapping.set(absolutePath, output);
