@@ -21,6 +21,10 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  ExecutionIdSchema,
+  StreamTabIdSchema,
+} from '@agent/types/IdentifierTypes';
 
 // ============================================================================
 // Snapshot Schema & Types
@@ -39,8 +43,8 @@ export const TOOL_USE_SNAPSHOT_VERSION = 2;
  */
 export const ToolUseSessionSnapshotSchema = z.object({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
-  executionId: z.string(),
-  streamId: z.string(),
+  executionId: ExecutionIdSchema,
+  streamId: StreamTabIdSchema,
   agentConfig: AgentConfigSchema,
   messages: z.array(ProviderMessageSchema),
   // State slices stored directly (no wrapper)
