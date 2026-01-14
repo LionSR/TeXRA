@@ -387,7 +387,7 @@ async function resolveAgentBase(
  *
  * @param streamId - The stream ID to acquire
  * @param taskType - Type descriptor for error message (e.g., "Task", "Merge task")
- * @throws Error if stream is already initializing or running
+ * @throws Error if stream is already initializing, running, or resuming
  */
 function acquireStreamOrThrow(
   streamId: StreamTabId,
@@ -395,10 +395,17 @@ function acquireStreamOrThrow(
 ): void {
   if (!StreamStatusService.tryAcquire(streamId)) {
     const currentStatus = StreamStatusService.get(streamId);
-    const statusMsg =
-      currentStatus === STREAM_STATUS.INITIALIZING
-        ? 'already launching'
-        : 'already running';
+    let statusMsg: string;
+    switch (currentStatus) {
+      case STREAM_STATUS.INITIALIZING:
+        statusMsg = 'already launching';
+        break;
+      case STREAM_STATUS.RESUMING:
+        statusMsg = 'resuming';
+        break;
+      default:
+        statusMsg = 'already running';
+    }
     throw new Error(
       `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
     );
