@@ -135,4 +135,23 @@ export const StreamStatusService = {
     const status = statusMemory.get(stream);
     return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
   },
+
+  /**
+   * Check if a status transition might affect stream tab ordering.
+   * First status assignment or transitions TO running may result in new log
+   * activity that changes the stream's position in time-sorted order.
+   */
+  mightAffectTabOrder(
+    previous: StreamStatus | undefined,
+    current: StreamStatus,
+  ): boolean {
+    // First status assignment should always trigger refresh
+    if (previous === undefined) {
+      return true;
+    }
+    // Transitioning TO running may result in new log activity
+    return (
+      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
+    );
+  },
 };
