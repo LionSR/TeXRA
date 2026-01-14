@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
 
@@ -51,13 +52,9 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     await executeAgent(config, executionId);
   } catch (error) {
     if (error instanceof ZodError) {
-      const detail = error.issues.map((i) => i.message).join('; ');
-      logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, {
-        data: error,
-      });
-      void vscode.window.showErrorMessage(
-        `Invalid agent configuration. ${detail}`,
-      );
+      const message = `Invalid agent configuration. ${formatZodError(error)}`;
+      logger.warn(CHANNEL, message, { data: error });
+      void vscode.window.showErrorMessage(message);
       return;
     }
 

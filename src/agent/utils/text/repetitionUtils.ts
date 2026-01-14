@@ -2,7 +2,6 @@
 import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports - logging
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   REPETITION_DETECTION_THRESHOLD,
@@ -26,46 +25,38 @@ export function checkForMassiveRepetition(
   lastResponse: string,
   newResponse: string,
 ): RepetitionResult {
-  try {
-    const dmp = new diff_match_patch();
-    const diffs = dmp.diff_main(lastResponse, newResponse);
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(lastResponse, newResponse);
 
-    // Find longest common substring
-    let longestMatch = '';
-    for (const [type, text] of diffs) {
-      if (type === 0 && text.length > longestMatch.length) {
-        longestMatch = text;
-      }
+  // Find longest common substring
+  let longestMatch = '';
+  for (const [type, text] of diffs) {
+    if (type === 0 && text.length > longestMatch.length) {
+      longestMatch = text;
     }
+  }
 
-    // Calculate similarity ratio
-    const matchLength = diffs.reduce(
-      (sum, [type, text]) => (type === 0 ? sum + text.length : sum),
-      0,
-    );
-    const ratio =
-      (2.0 * matchLength) / (lastResponse.length + newResponse.length);
-    const massiveRepetitionDetected =
-      longestMatch.length > REPETITION_DETECTION_THRESHOLD;
+  // Calculate similarity ratio
+  const matchLength = diffs.reduce(
+    (sum, [type, text]) => (type === 0 ? sum + text.length : sum),
+    0,
+  );
+  const ratio =
+    (2.0 * matchLength) / (lastResponse.length + newResponse.length);
+  const massiveRepetitionDetected =
+    longestMatch.length > REPETITION_DETECTION_THRESHOLD;
 
-    if (massiveRepetitionDetected) {
-      const preview = longestMatch.slice(0, REPETITION_PREVIEW_LENGTH);
-      logger.error(
-        CHANNEL,
-        `Massive repetition detected - ratio: ${ratio}, preview: ${preview}. Stopping process.`,
-      );
-    }
-
-    return {
-      massiveRepetitionDetected,
-      ratio,
-      longestMatch,
-    };
-  } catch (err) {
+  if (massiveRepetitionDetected) {
+    const preview = longestMatch.slice(0, REPETITION_PREVIEW_LENGTH);
     logger.error(
       CHANNEL,
-      `Error checking repetition with DMP: ${toErrorMessage(err)}`,
+      `Massive repetition detected - ratio: ${ratio}, preview: ${preview}. Stopping process.`,
     );
-    throw err;
   }
+
+  return {
+    massiveRepetitionDetected,
+    ratio,
+    longestMatch,
+  };
 }
