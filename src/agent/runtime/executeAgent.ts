@@ -284,8 +284,9 @@ async function resolveAgentBase(
   });
 
   // 5. Define mutable storage key with callbacks
-  // Initial value is executionId (normalized); updated to runStage.id after stage creation
-  const initialStorageKey = normalizeRunId(executionId);
+  // Initial value is executionId (always UUID, no normalization per runIds.ts:9-10)
+  // Updated to runStage.id after stage creation for workflow agents
+  const initialStorageKey = executionId as StorageKey;
   let storageKey: StorageKey = initialStorageKey;
   const getStorageKey = () => storageKey;
   const hasInitialStorageKey = () => storageKey === initialStorageKey;
