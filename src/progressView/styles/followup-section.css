@@ -57,10 +57,32 @@
   display: none;
 }
 
+/* Initial question textarea for chat mode */
+.followup-initial-question {
+  display: flex;
+  flex-direction: column;
+}
+
+.followup-initial-question vscode-text-area {
+  width: 100%;
+}
+
+/* Hide initial question in workflow/merge modes */
+.followup-section[data-mode='workflow'] .followup-initial-question,
+.followup-section[data-mode='merge'] .followup-initial-question {
+  display: none;
+}
+
 .followup-options {
   display: flex;
   align-items: center;
   gap: var(--spacing-medium, 8px);
+}
+
+/* Hide options in chat/merge modes */
+.followup-section[data-mode='chat'] .followup-options,
+.followup-section[data-mode='merge'] .followup-options {
+  display: none;
 }
 
 .followup-actions {

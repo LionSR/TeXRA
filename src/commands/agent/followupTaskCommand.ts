@@ -19,7 +19,7 @@ logger.initialize(CHANNEL);
  * Payload from Progress View for setting up a followup task.
  */
 interface FollowupPayload {
-  mode: 'workflow' | 'merge';
+  mode: 'chat' | 'workflow' | 'merge';
   agent: string;
   model: string;
   executeImmediately: boolean;
@@ -31,6 +31,11 @@ interface FollowupPayload {
   originalAuxiliaryFiles?: string[];
   outputFiles: string[];
   instruction?: string;
+  // Chat mode specific
+  initialQuestion?: string;
+  originalAgent?: string;
+  originalAgentDescription?: string;
+  originalModel?: string;
 }
 
 /**
@@ -131,6 +136,10 @@ function buildFollowupConfig(
   fileMapping: Map<string, { absolutePath: string }>,
 ): Record<string, unknown> {
   const { mode, agent, model, instruction } = payload;
+
+  if (mode === 'chat') {
+    return buildChatConfig(payload, fileMapping);
+  }
 
   if (mode === 'merge') {
     // Build list of all file pairs to merge
@@ -253,6 +262,21 @@ async function executeFollowupImmediately(
         config.editedFile,
       ]);
     }
+  } else if (payload.mode === 'chat') {
+    // Execute chat agent with context
+    await safeExecuteCommand('texra.execute', [
+      {
+        config: {
+          agent: config.agent,
+          model: config.model,
+          inputFile: config.inputFile,
+          inputFiles: config.inputFiles,
+          referenceFile: config.referenceFile,
+          referenceFiles: config.referenceFiles,
+          instruction: config.instruction,
+        },
+      },
+    ]);
   } else {
     // Execute workflow agent
     await safeExecuteCommand('texra.execute', [
@@ -271,4 +295,93 @@ async function executeFollowupImmediately(
       },
     ]);
   }
+}
+
+/**
+ * Build configuration for chat mode.
+ * Creates an instruction with workflow context prepended to the user's question.
+ */
+function buildChatConfig(
+  payload: FollowupPayload,
+  fileMapping: Map<string, { absolutePath: string }>,
+): Record<string, unknown> {
+  const { agent, model, initialQuestion } = payload;
+
+  // Build context sections
+  const contextSections: string[] = [];
+
+  // Workflow context
+  contextSections.push('## Previous Workflow Context');
+  if (payload.originalAgent) {
+    const agentInfo = payload.originalAgentDescription
+      ? `${payload.originalAgent} - ${payload.originalAgentDescription}`
+      : payload.originalAgent;
+    contextSections.push(`- **Agent**: ${agentInfo}`);
+  }
+  if (payload.originalModel) {
+    contextSections.push(`- **Model**: ${payload.originalModel}`);
+  }
+  if (payload.instruction) {
+    contextSections.push(`- **Instruction**: "${payload.instruction}"`);
+  }
+
+  // Files context - use workspace-relative paths when possible
+  contextSections.push('');
+  contextSections.push('## Files');
+
+  const inputFiles = [
+    payload.originalInputFile,
+    ...(payload.originalInputFiles ?? []),
+  ].filter(Boolean);
+
+  if (inputFiles.length > 0) {
+    const inputPaths = inputFiles.map((f) => toWorkspaceRelative(f));
+    contextSections.push(`- **Input files**: ${inputPaths.join(', ')}`);
+  }
+
+  if (payload.outputFiles.length > 0) {
+    const outputPaths = payload.outputFiles.map((f) => toWorkspaceRelative(f));
+    contextSections.push(`- **Generated outputs**: ${outputPaths.join(', ')}`);
+  }
+
+  // User's question
+  contextSections.push('');
+  contextSections.push('## Question');
+  contextSections.push(initialQuestion ?? '');
+
+  const fullInstruction = contextSections.join('\n');
+
+  // Map output files back to inputs (use outputs as new inputs for the chat)
+  const newInputFile =
+    fileMapping.get(payload.originalInputFile)?.absolutePath ??
+    payload.originalInputFile;
+
+  const newInputFiles = (payload.originalInputFiles ?? []).map(
+    (f) => fileMapping.get(f)?.absolutePath ?? f,
+  );
+
+  return {
+    mode: 'chat',
+    agent,
+    model,
+    inputFile: newInputFile,
+    inputFiles: newInputFiles,
+    referenceFile: payload.originalReferenceFile,
+    referenceFiles: payload.originalReferenceFiles,
+    instruction: fullInstruction,
+  };
+}
+
+/**
+ * Convert an absolute path to workspace-relative if possible.
+ */
+function toWorkspaceRelative(absolutePath: string): string {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (workspaceFolder) {
+    const workspaceRoot = workspaceFolder.uri.fsPath;
+    if (absolutePath.startsWith(workspaceRoot)) {
+      return absolutePath.slice(workspaceRoot.length + 1); // +1 for the separator
+    }
+  }
+  return absolutePath;
 }
