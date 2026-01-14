@@ -64,6 +64,10 @@ import { K_SLICE } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
+import {
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Local file imports
 import {
@@ -918,10 +922,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const { inputTokens, outputTokens, reasoningTokens } =
       this.computeTokenCounts(rawUsage);
-
     const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
-    const percentageCached =
-      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
 
     return {
       inputTokens,
@@ -929,10 +930,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'google',
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      reasoningTokens: reasoningTokens || undefined,
-      toolUsePromptTokens: rawUsage.toolUsePromptTokenCount || undefined,
+      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
+      reasoningTokens: nonZeroOrUndefined(reasoningTokens),
+      toolUsePromptTokens: nonZeroOrUndefined(rawUsage.toolUsePromptTokenCount),
       _native: rawUsage,
     };
   }
