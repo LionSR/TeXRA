@@ -29,7 +29,6 @@ import {
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
-
 /**
  * Minimum retry count for background mode (at least 3 attempts before manual retry UI).
  * Background jobs may fail due to timeouts and need more automatic recovery attempts.

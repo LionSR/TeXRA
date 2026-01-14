@@ -85,4 +85,3 @@ export type ResponseCycleParams<C = unknown> = CycleParams<
 export type ToolUseCycleParams<C = unknown> = CycleParams<
   ToolUseCycleServices<C>
 >;
-
