@@ -9,8 +9,19 @@ import {
 } from '@frontend/system/commandUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { createFileMapping } from '@utils/files/fileMappingUtils';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation, WorkspaceFS } from '@utils/files';
 import * as logger from '@logger/logUtils';
+
+/**
+ * Convert an absolute path to a relative workspace path if possible.
+ * Returns the relative path if the file is within the workspace, otherwise returns the absolute path.
+ */
+function preferRelativePath(absolutePath: string): string {
+  if (!absolutePath) return absolutePath;
+  const relativePath = WorkspaceFS.relativePath(absolutePath);
+  // relativePath returns the absolute path if not in workspace
+  return relativePath;
+}
 
 const CHANNEL = 'followupTaskCommand';
 logger.initialize(CHANNEL);
@@ -214,16 +225,21 @@ function buildFollowupConfig(
     });
   }
 
+  // Convert to relative paths for better display in the UI
   return {
     mode: 'workflow',
     agent,
     model,
-    inputFile: newInputFile,
-    inputFiles: newInputFiles,
-    referenceFile: payload.originalReferenceFile,
-    referenceFiles: payload.originalReferenceFiles,
-    auxiliaryFile: payload.originalAuxiliaryFile,
-    auxiliaryFiles: payload.originalAuxiliaryFiles,
+    inputFile: preferRelativePath(newInputFile),
+    inputFiles: newInputFiles.map(preferRelativePath),
+    referenceFile: payload.originalReferenceFile
+      ? preferRelativePath(payload.originalReferenceFile)
+      : undefined,
+    referenceFiles: payload.originalReferenceFiles?.map(preferRelativePath),
+    auxiliaryFile: payload.originalAuxiliaryFile
+      ? preferRelativePath(payload.originalAuxiliaryFile)
+      : undefined,
+    auxiliaryFiles: payload.originalAuxiliaryFiles?.map(preferRelativePath),
     instruction: instruction ?? '',
   };
 }
@@ -379,14 +395,17 @@ function buildChatConfig(
     (f) => fileMapping.get(f)?.absolutePath ?? f,
   );
 
+  // Convert to relative paths for better display in the UI
   return {
     mode: 'chat',
     agent,
     model,
-    inputFile: newInputFile,
-    inputFiles: newInputFiles,
-    referenceFile: payload.originalReferenceFile,
-    referenceFiles: payload.originalReferenceFiles,
+    inputFile: preferRelativePath(newInputFile),
+    inputFiles: newInputFiles.map(preferRelativePath),
+    referenceFile: payload.originalReferenceFile
+      ? preferRelativePath(payload.originalReferenceFile)
+      : undefined,
+    referenceFiles: payload.originalReferenceFiles?.map(preferRelativePath),
     instruction: fullInstruction,
   };
 }
