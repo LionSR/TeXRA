@@ -668,7 +668,7 @@ export async function executeAgent(
 
       const interruptManager = new InterruptManager();
 
-      if (setting.agentType === 'toolUse') {
+      if (setting.agentType === AgentType.ToolUse) {
         // Tool-use flow execution
         const result = await runToolUseFlow({
           ...ctx,
