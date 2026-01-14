@@ -119,22 +119,6 @@ function parseMetadataRow(row: {
 }
 
 /**
- * Creates default metadata when database lookup fails.
- */
-function createFallbackMetadata(
-  agentName: string,
-  description?: string,
-): RemoteAgentMetadata {
-  return {
-    id: '',
-    name: agentName,
-    description: description || undefined,
-    visibility: ['public'],
-    agentCategory: undefined,
-  };
-}
-
-/**
  * Loader for remote agents stored in Supabase.
  * Fetches agent configurations via Edge Function with authentication.
  */
@@ -235,7 +219,13 @@ export class RemoteAgentLoader {
         }
 
         const responseData = await response.json();
-        const { config: yamlContent, name: _name, description } = responseData;
+        const {
+          config: yamlContent,
+          name: responseName,
+          description,
+          visibility,
+          agentCategory,
+        } = responseData;
 
         if (!yamlContent) {
           throw new Error(
@@ -270,19 +260,24 @@ export class RemoteAgentLoader {
         const validatedSettings = parseAgentSetting(settings);
         const validatedPrompts = AgentPromptSchema.parse(prompts);
 
-        // Fetch metadata for the original agent name (not the candidate variant)
-        const metadata = await this.getAgentMetadata(agentName);
-
         logger.info(
           CHANNEL,
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
 
+        // Build metadata directly from edge function response (avoids extra DB roundtrip)
+        // The edge function already returns all metadata fields from the database
         return {
-          name: validated.name || agentName,
+          name: validated.name || responseName || agentName,
           settings: validatedSettings,
           prompts: validatedPrompts,
-          metadata: metadata || createFallbackMetadata(agentName, description),
+          metadata: {
+            id: '', // Not returned by edge function, not used by consumers
+            name: responseName || agentName,
+            description: description || undefined,
+            visibility: visibility || ['public'],
+            agentCategory: agentCategory || undefined,
+          },
         };
       } catch (error) {
         // If this is the last candidate, throw the error
