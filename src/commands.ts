@@ -141,7 +141,6 @@ export {
   agentCreatorCommands,
 } from '@commands/agent';
 export {
-  testCommands,
   xmlCommands,
   yamlCommands,
   textEditorCommands,
