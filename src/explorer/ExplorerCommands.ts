@@ -24,7 +24,10 @@ export class ExplorerCommands {
 
     this.context.subscriptions.push(
       ...fileItemCommands.map(([name, handler]) =>
-        vscode.commands.registerCommand(`texra.folderExplorer.${name}`, handler),
+        vscode.commands.registerCommand(
+          `texra.folderExplorer.${name}`,
+          handler,
+        ),
       ),
       vscode.commands.registerCommand(
         'texra.folderExplorer.openFile',
