@@ -11,13 +11,11 @@ export const settingsCommands = {
 export function registerSettingsCommands(context: vscode.ExtensionContext) {
   const openSettingsCommand = vscode.commands.registerCommand(
     settingsCommands.openSettings,
-    async () => {
-      // Open VS Code settings with TeXRA filter
-      await vscode.commands.executeCommand(
+    () =>
+      vscode.commands.executeCommand(
         'workbench.action.openSettings',
         SETTINGS_QUERY.EXTENSION,
-      );
-    },
+      ),
   );
 
   context.subscriptions.push(openSettingsCommand);
