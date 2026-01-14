@@ -127,7 +127,7 @@ export function assertCycleFieldsPopulated<T extends object>(
     }
   }
 
-  if (obj['outputLocation'] === undefined || obj['outputLocation'] === null) {
+  if (obj['outputLocation'] == null) {
     throw new Error(
       `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
     );
