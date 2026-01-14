@@ -24,22 +24,31 @@ export class FollowupSectionManager {
   }
 
   setup() {
-    // Mode toggle
+    // Mode toggle - must wait for web component to be ready
     const modeGroup = safeGetElementById('followupModeGroup');
     if (modeGroup) {
-      // Extract value from the clicked radio element, not the group's .value property
-      const modeHandler = (event) => {
-        const mode = getRadioChangeValue(event, modeGroup);
-        if (mode) {
-          this._setMode(mode);
-        }
+      const attachModeListener = () => {
+        // Extract value from the clicked radio element, not the group's .value property
+        const modeHandler = (event) => {
+          const mode = getRadioChangeValue(event, modeGroup);
+          if (mode) {
+            this._setMode(mode);
+          }
+        };
+        modeGroup.addEventListener('change', modeHandler);
+        this._listeners.push({
+          element: modeGroup,
+          event: 'change',
+          handler: modeHandler,
+        });
       };
-      modeGroup.addEventListener('change', modeHandler);
-      this._listeners.push({
-        element: modeGroup,
-        event: 'change',
-        handler: modeHandler,
-      });
+
+      // Wait for Lit web component to be ready if needed
+      if (modeGroup.updateComplete) {
+        modeGroup.updateComplete.then(attachModeListener);
+      } else {
+        attachModeListener();
+      }
     }
 
     // Setup button
