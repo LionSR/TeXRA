@@ -60,25 +60,21 @@ export class MainViewProvider
   }
 
   private registerCommandHandlers() {
-    // Only register commands if they haven't been registered yet
-    if (!MainViewProvider.commandsRegistered) {
-      // Create a promise to check if the command exists and register if it doesn't
-      vscode.commands.getCommands(true).then((commands) => {
-        if (!commands.includes('texra.getWebviewView')) {
-          this.context.subscriptions.push(
-            vscode.commands.registerCommand('texra.getWebviewView', () => {
-              return this._view as vscode.WebviewView;
-            }),
-          );
-          MainViewProvider.commandsRegistered = true;
-          return true;
-        }
-        MainViewProvider.commandsRegistered = true;
-        return false;
-      });
-
-      // Command registration is handled asynchronously
+    if (MainViewProvider.commandsRegistered) {
+      return;
     }
+    MainViewProvider.commandsRegistered = true;
+
+    // Register command asynchronously only if it doesn't already exist
+    void vscode.commands.getCommands(true).then((commands) => {
+      if (!commands.includes('texra.getWebviewView')) {
+        this.context.subscriptions.push(
+          vscode.commands.registerCommand('texra.getWebviewView', () => {
+            return this._view as vscode.WebviewView;
+          }),
+        );
+      }
+    });
   }
 
   private setupConfigurationWatcher() {

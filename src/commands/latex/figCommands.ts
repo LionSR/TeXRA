@@ -15,6 +15,11 @@ import { tikzPictureManager } from '@latex/TikzPictureManager';
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
+/** Simple pluralization helper */
+function pluralize(count: number, singular: string): string {
+  return count === 1 ? singular : `${singular}s`;
+}
+
 export function registerFigureCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -94,7 +99,7 @@ async function handleExtractTikzFigures(): Promise<void> {
           // Create QuickPick items from the labels
           const items = labeledTikzPictures.map(
             ([label, tikzpicturess]: [string, string[]]) => ({
-              label: `${label} (${tikzpicturess.length} TikZ picture${tikzpicturess.length > 1 ? 's' : ''})`,
+              label: `${label} (${tikzpicturess.length} TikZ ${pluralize(tikzpicturess.length, 'picture')})`,
               description: `Figure with label: ${label}`,
               detail: `${tikzpicturess[0].substring(0, 100)}...`, // Show first 100 chars of first TikZ picture
             }),
@@ -180,7 +185,7 @@ async function handleCompileTikzFigures(): Promise<void> {
 
               await showLoggedInfoMessage(
                 CHANNEL,
-                `Successfully compiled ${compiledFiles.length} TikZ figure${compiledFiles.length > 1 ? 's' : ''}`,
+                `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
               );
             } else {
               await showLoggedInfoMessage(
