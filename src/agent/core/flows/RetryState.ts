@@ -22,8 +22,8 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import {
   formatProviderHttpError,
   type ProviderError,
-} from '@common/errors/sdkErrorUtils';
-import { type RetryErrorInfo } from '@common/errors/schemas';
+  type RetryErrorInfo,
+} from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
@@ -32,7 +32,7 @@ import {
 } from '@utils/config';
 
 // Re-export from canonical source for backward compatibility
-export { RetryErrorInfoSchema, type RetryErrorInfo } from '@common/errors/schemas';
+export { RetryErrorInfoSchema, type RetryErrorInfo } from '@common/errors';
 
 /**
  * Minimum retry count for background mode (at least 3 attempts before manual retry UI).

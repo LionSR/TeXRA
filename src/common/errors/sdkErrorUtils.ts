@@ -37,23 +37,9 @@ import { toErrorMessage } from './errorHandlingUtils';
 // Import canonical schemas - SINGLE SOURCE OF TRUTH
 import {
   type ProviderError,
-  type ErrorLogData as SchemaErrorLogData,
+  type ErrorLogData,
   type ErrorContext,
 } from './schemas';
-
-// Re-export canonical types for consumers
-export type { ProviderError, ErrorContext };
-export {
-  ProviderErrorSchema,
-  ErrorLogDataSchema,
-  ErrorContextSchema,
-} from './schemas';
-
-/**
- * @deprecated Use ProviderError from './schemas' instead.
- * Kept for backward compatibility.
- */
-export type ProviderHttpErrorDetails = ProviderError;
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -568,25 +554,13 @@ export function isPreviousResponseIdError(err: unknown): boolean {
 }
 
 /**
- * @deprecated Use ErrorContext from './schemas' instead.
- * Kept for backward compatibility.
- */
-export type ErrorLogContext = ErrorContext;
-
-/**
- * @deprecated Use ErrorLogData from './schemas' instead.
- * Kept for backward compatibility.
- */
-export type ErrorLogData = SchemaErrorLogData;
-
-/**
  * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
  * Ensures all error logs have the same structure for DRY display formatting.
  */
 export function buildErrorLogData(
   err: unknown,
   context?: ErrorContext,
-): SchemaErrorLogData {
+): ErrorLogData {
   const formatted = formatProviderHttpError(err);
   const rawMessage = toErrorMessage(err);
 
