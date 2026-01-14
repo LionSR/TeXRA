@@ -37,13 +37,13 @@ import type {
 } from '@google/genai';
 
 interface LoggerStub extends Partial<AgentLogger> {
-  channelId: string;
+  streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
 function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
   const stub: LoggerStub = {
-    channelId: 'test-channel',
+    streamId: 'test-channel',
     fileListEntries: [],
     debug: () => {
       /* no-op for tests */
