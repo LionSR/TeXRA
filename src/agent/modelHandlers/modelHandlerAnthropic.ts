@@ -217,6 +217,13 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
 /** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
 const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
+/**
+ * Minimum percentage of context to clear at once for tool uses.
+ * This ensures cache invalidation is worthwhile - clearing too few tokens
+ * causes frequent cache misses without meaningful benefit.
+ * 10% is a reasonable balance between cache efficiency and context retention.
+ */
+const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 10;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -611,6 +618,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
             (edit) => edit.type === 'clear_tool_uses_20250919',
           )
         ) {
+          // clear_at_least ensures cache invalidation is worthwhile:
+          // Without it, the API may clear too few tokens, causing frequent
+          // cache misses without meaningful benefit.
+          const clearAtLeastTokens = Math.floor(
+            (CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT / 100) *
+              this.config.contextWindow,
+          );
+
           contextManagementEdits.push({
             type: 'clear_tool_uses_20250919' as const,
             trigger: {
@@ -620,6 +635,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
             keep: {
               type: 'tool_uses' as const,
               value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+            },
+            clear_at_least: {
+              type: 'input_tokens' as const,
+              value: clearAtLeastTokens,
             },
           });
         }
