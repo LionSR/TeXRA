@@ -49,9 +49,9 @@ export class RecordingManager {
         this.notifyError(webviewView.webview, result.error);
       }
     } catch (error) {
-      const message = `Error starting recording: ${toErrorMessage(error)}`;
-      logger.error(CHANNEL, message);
-      this.notifyError(webviewView.webview, message);
+      const errorMsg = toErrorMessage(error);
+      logger.error(CHANNEL, `Error starting recording: ${errorMsg}`);
+      this.notifyError(webviewView.webview, errorMsg);
     }
   }
 
@@ -89,9 +89,9 @@ export class RecordingManager {
         },
       );
     } catch (error) {
-      const message = `Error stopping recording: ${toErrorMessage(error)}`;
-      logger.error(CHANNEL, message);
-      this.notifyError(webviewView.webview, message);
+      const errorMsg = toErrorMessage(error);
+      logger.error(CHANNEL, `Error stopping recording: ${errorMsg}`);
+      this.notifyError(webviewView.webview, errorMsg);
       acknowledgeStop();
     }
   }
