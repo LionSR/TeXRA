@@ -222,13 +222,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Clear run-scoped state for a specific stream.
-   * Shared between handleDeleteStream (single stream) and handleDeleteAll (all streams).
-   * @param {string} stream - The stream to clear, or null to clear all
+   * Clear run-scoped state for a specific stream or all streams.
+   * @param {string|null} stream - The stream to clear, or null to clear all
    */
   _clearRunScopedState(stream) {
     if (stream) {
-      // Clear stream-specific state
       state.clearExecutionIdAvailability(stream);
       state.clearActiveRun(stream);
       state.clearRunInstructions(stream);
@@ -240,7 +238,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearContextState(stream);
       state.clearFollowUpText(stream);
     } else {
-      // Clear all state
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
       state.clearRunInstructions();
@@ -434,27 +431,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.followUpInput.saveTextForStream(previousStream);
     }
 
-    try {
-      state.activeStream = message.activeStream;
-      if (
-        !state.pendingFilterUpdate &&
-        message.agentFilter !== undefined &&
-        message.agentFilter !== state.agentTypeFilter
-      ) {
-        state.agentTypeFilter = message.agentFilter;
-      }
-    } finally {
-      state.pendingFilterUpdate = false;
-    }
+    state.activeStream = message.activeStream;
+    const shouldUpdateFilter = !state.pendingFilterUpdate &&
+      message.agentFilter !== undefined &&
+      message.agentFilter !== state.agentTypeFilter;
+    if (shouldUpdateFilter) state.agentTypeFilter = message.agentFilter;
+    state.pendingFilterUpdate = false;
     state.resetExecutionIdAvailability();
 
     // Process streams - preserve ERROR status when omitted
     const streams = (message.streams ?? []).map((s) => {
-      // Only preserve ERROR status; undefined means completed
       const cachedError = state.streamStatuses.get(s.name);
-      const status =
-        s.status ??
-        (cachedError === STREAM_STATUS.ERROR ? cachedError : undefined);
+      const status = s.status ?? (cachedError === STREAM_STATUS.ERROR ? cachedError : undefined);
       state.streamStatuses.set(s.name, status);
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
@@ -505,17 +493,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STREAM_STATUS.READY);
-      dom.instructionPanel.hide();
-      dom.runSelector.clear();
-      dom.todoList.clear();
-      dom.queuedFollowUps.clear();
-      dom.fileList.clear();
-      // Clear log content when no stream is active to avoid stale content
+      this._clearActivePanels();
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        logContent.innerHTML = '';
-      }
-      // Reset lastRenderedStream since we cleared content
+      if (logContent) logContent.innerHTML = '';
       state.lastRenderedStream = '';
       state.clearRunInstructions();
       state.clearAllActiveRuns();
@@ -526,12 +506,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
-      // Refresh todos for the active stream
-      const todos = state.getTodos(message.activeStream);
-      dom.todoList.update(todos ?? []);
-      // Refresh queued follow-ups for the active stream
-      const queuedFollowUps = state.getQueuedFollowUps(message.activeStream);
-      dom.queuedFollowUps.update(queuedFollowUps ?? []);
+      dom.todoList.update(state.getTodos(message.activeStream) ?? []);
+      dom.queuedFollowUps.update(state.getQueuedFollowUps(message.activeStream) ?? []);
       this._focusFollowUpIfWaiting(streamStatus);
     }
 

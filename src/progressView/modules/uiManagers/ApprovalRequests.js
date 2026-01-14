@@ -150,52 +150,34 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const total = added + removed;
     const lineLabel = total === 1 ? 'line' : 'lines';
 
-    const parts = [];
-    if (request.sourceTool) {
-      parts.push(`Requested by ${request.sourceTool}`);
-    }
-
     const diffParts = [
-      ...(added > 0 ? [`+${added}`] : []),
-      ...(removed > 0 ? [`-${removed}`] : []),
-    ];
-    const tooltip =
-      diffParts.length > 0
-        ? `${diffParts.join(' / ')} ${lineLabel} changed`
-        : 'No line changes';
+      added > 0 && `+${added}`,
+      removed > 0 && `-${removed}`,
+    ].filter(Boolean);
+    const tooltip = diffParts.length > 0
+      ? `${diffParts.join(' / ')} ${lineLabel} changed`
+      : 'No line changes';
 
     const diffContainer = document.createElement('span');
     diffContainer.className = 'approval-request__diff';
     diffContainer.title = tooltip;
 
-    const createDiffSpan = (className, text) => {
+    const appendSpan = (className, text) => {
       const span = document.createElement('span');
       span.className = className;
       span.textContent = text;
-      return span;
+      diffContainer.appendChild(span);
     };
 
-    if (added > 0) {
-      diffContainer.appendChild(
-        createDiffSpan('approval-request__diff-added', `+${added}`),
-      );
-    }
-    if (removed > 0) {
-      diffContainer.appendChild(
-        createDiffSpan('approval-request__diff-removed', `-${removed}`),
-      );
-    }
-    diffContainer.appendChild(
-      createDiffSpan('approval-request__diff-label', `${total} ${lineLabel}`),
-    );
+    if (added > 0) appendSpan('approval-request__diff-added', `+${added}`);
+    if (removed > 0) appendSpan('approval-request__diff-removed', `-${removed}`);
+    appendSpan('approval-request__diff-label', `${total} ${lineLabel}`);
 
     // Build final meta content
     metaElem.textContent = '';
-    if (parts.length > 0) {
-      metaElem.append(parts.join(' • '));
-      if (diffContainer.childElementCount > 0) {
-        metaElem.append(' • ');
-      }
+    if (request.sourceTool) {
+      metaElem.append(`Requested by ${request.sourceTool}`);
+      if (diffContainer.childElementCount > 0) metaElem.append(' • ');
     }
     metaElem.appendChild(diffContainer);
   }
