@@ -53,45 +53,7 @@ export class InstructionManager extends BaseWebviewManager {
       return;
     }
     try {
-      // Build file context, filtering out empty/placeholder values
-      const isValid = (f?: string): f is string =>
-        !!f && f !== 'None' && f !== '';
-      const hasFiles = (active: boolean, files?: string[]) =>
-        active && Array.isArray(files) && files.length > 0;
-
-      const fileContext: FileContext = {
-        agent: message.agent,
-        ...(isValid(message.inputFile) && { inputFile: message.inputFile }),
-        ...(isValid(message.referenceFile) && {
-          referenceFile: message.referenceFile,
-        }),
-        ...(isValid(message.auxiliaryFile) && {
-          auxiliaryFile: message.auxiliaryFile,
-        }),
-        ...(isValid(message.mediaFile) && { mediaFile: message.mediaFile }),
-        ...(hasFiles(!!message.inputFilesActive, message.inputFiles) && {
-          inputFiles: message.inputFiles,
-        }),
-        ...(hasFiles(
-          !!message.referenceFilesActive,
-          message.referenceFiles,
-        ) && {
-          referenceFiles: message.referenceFiles,
-        }),
-        ...(hasFiles(
-          !!message.auxiliaryFilesActive,
-          message.auxiliaryFiles,
-        ) && {
-          auxiliaryFiles: message.auxiliaryFiles,
-        }),
-        ...(hasFiles(!!message.mediaFilesActive, message.mediaFiles) && {
-          mediaFiles: message.mediaFiles,
-        }),
-        ...(hasFiles(!!message.outputFilesActive, message.outputFiles) && {
-          outputFiles: message.outputFiles,
-        }),
-      };
-
+      const fileContext = this.buildFileContext(message);
       const result = await polishTextWithAI(message.text, fileContext);
       if (result.success) {
         this.postMessage({
@@ -114,6 +76,43 @@ export class InstructionManager extends BaseWebviewManager {
         `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
       );
     }
+  }
+
+  /** Build file context for AI text polishing, filtering empty/placeholder values */
+  private buildFileContext(message: PolishInstructionMessage): FileContext {
+    const isValid = (f?: string): f is string =>
+      !!f && f !== 'None' && f !== '';
+    const context: FileContext = { agent: message.agent };
+
+    // Single file fields
+    const singleFields = [
+      'inputFile',
+      'referenceFile',
+      'auxiliaryFile',
+      'mediaFile',
+    ] as const;
+    for (const field of singleFields) {
+      if (isValid(message[field])) {
+        context[field] = message[field];
+      }
+    }
+
+    // Multi-file fields (check active flag and array content)
+    const multiFields = [
+      ['inputFiles', 'inputFilesActive'],
+      ['referenceFiles', 'referenceFilesActive'],
+      ['auxiliaryFiles', 'auxiliaryFilesActive'],
+      ['mediaFiles', 'mediaFilesActive'],
+      ['outputFiles', 'outputFilesActive'],
+    ] as const;
+    for (const [field, activeField] of multiFields) {
+      const files = message[field];
+      if (message[activeField] && Array.isArray(files) && files.length > 0) {
+        context[field] = files;
+      }
+    }
+
+    return context;
   }
 
   handleTranscribeInstruction(): void {

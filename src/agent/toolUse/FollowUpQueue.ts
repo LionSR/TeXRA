@@ -47,6 +47,25 @@ export class FollowUpQueue {
     });
   }
 
+  /**
+   * Wait for at least one message, then drain and combine all available.
+   * Returns all queued messages joined with double newlines.
+   */
+  async waitAndDrainAll(
+    checkInterruption: () => boolean,
+  ): Promise<string | null> {
+    const first = await this.waitForNext(checkInterruption);
+    if (first === null) {
+      return null;
+    }
+    // Drain any additional messages that arrived while waiting
+    const rest = this.drain();
+    if (rest.length === 0) {
+      return first;
+    }
+    return [first, ...rest].join('\n\n');
+  }
+
   cancelWait(): void {
     this.resolveWait(null);
   }
