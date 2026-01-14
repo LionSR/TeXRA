@@ -42,6 +42,9 @@ export class FollowupSectionManager {
           event: 'change',
           handler: modeHandler,
         });
+
+        // Initialize default mode after listener is attached
+        this._setMode('chat');
       };
 
       // Wait for Lit web component to be ready if needed
@@ -91,9 +94,6 @@ export class FollowupSectionManager {
         handler: toggleHandler,
       });
     }
-
-    // Initialize UI state for default mode (chat)
-    this._setMode('chat');
   }
 
   /**
