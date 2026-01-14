@@ -7,13 +7,16 @@ export const helpCommands = {
 
 export function registerHelpCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(helpCommands.openDoc, async (page: string) => {
-      if (!page) {
-        return;
-      }
-      const baseUrl = 'https://texra.ai/guide/';
-      const url = `${baseUrl}${page}.html`;
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-    }),
+    vscode.commands.registerCommand(
+      helpCommands.openDoc,
+      async (page: string) => {
+        if (!page) {
+          return;
+        }
+        const baseUrl = 'https://texra.ai/guide/';
+        const url = `${baseUrl}${page}.html`;
+        await vscode.env.openExternal(vscode.Uri.parse(url));
+      },
+    ),
   );
 }

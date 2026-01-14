@@ -12,13 +12,11 @@ export function registerSettingsCommands(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      settingsCommands.openSettings,
-      () =>
-        vscode.commands.executeCommand(
-          'workbench.action.openSettings',
-          SETTINGS_QUERY.EXTENSION,
-        ),
+    vscode.commands.registerCommand(settingsCommands.openSettings, () =>
+      vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        SETTINGS_QUERY.EXTENSION,
+      ),
     ),
   );
 }
