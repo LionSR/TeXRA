@@ -15,4 +15,4 @@ export type {
   CyclePrepResult,
   PreparedShared,
 } from './types';
-export { assertPreparedShared } from './types';
+export { assertPreparedShared, migrateSharedState } from './types';

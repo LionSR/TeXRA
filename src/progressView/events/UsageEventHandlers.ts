@@ -4,8 +4,10 @@
  * Handles usage events: updateStreamUsage, updateContextState.
  */
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
-import type { ContextStateData } from '@logger/AgentLogger';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
 
@@ -26,11 +28,11 @@ export function registerUsageEventHandlers(
 }
 
 function handleUpdateStreamUsage(ctx: EventHandlerContext) {
-  return ({ stream, usage, storageKey }: {
-    stream: string;
-    usage: Partial<TokenUsageStats>;
-    storageKey: string;
-  }): void => {
+  return ({
+    stream,
+    usage,
+    storageKey,
+  }: ProgressEventPayloads['updateStreamUsage']): void => {
     withEventErrorHandling(
       'UsageEvents',
       'failed to handle updateStreamUsage',
@@ -74,10 +76,10 @@ function handleUpdateStreamUsage(ctx: EventHandlerContext) {
 }
 
 function handleUpdateContextState(ctx: EventHandlerContext) {
-  return ({ stream, contextState }: {
-    stream: string;
-    contextState: ContextStateData;
-  }): void => {
+  return ({
+    stream,
+    contextState,
+  }: ProgressEventPayloads['updateContextState']): void => {
     withEventErrorHandling(
       'UsageEvents',
       'failed to handle updateContextState',
