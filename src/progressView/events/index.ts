@@ -7,3 +7,10 @@ export {
   type ApprovalCallbacks,
 } from './UIEvents';
 export { type ProgressEventBusLike } from './types';
+
+// Domain-specific event handlers (modular, focused files)
+export { type EventHandlerContext, canUpdateWebview } from './EventHandlerContext';
+export { registerLogEventHandlers } from './LogEventHandlers';
+export { registerOutputEventHandlers } from './OutputEventHandlers';
+export { registerUsageEventHandlers } from './UsageEventHandlers';
+export { registerTodoEventHandlers } from './TodoEventHandlers';
