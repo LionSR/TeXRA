@@ -62,12 +62,9 @@ async function resumeFromSnapshot(
   }
 
   const { streamId } = snapshot;
-  const existingStatus = StreamStatusService.get(streamId);
 
-  if (
-    existingStatus === STREAM_STATUS.RUNNING ||
-    existingStatus === STREAM_STATUS.RESUMING
-  ) {
+  // Guard against concurrent resume attempts
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
     return { success: false };
   }
 

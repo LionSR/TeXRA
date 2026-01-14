@@ -73,14 +73,8 @@ async function lazyDetectWaitingStatus(
  */
 async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   // Guard against concurrent resume attempts
-  const currentStatus = StreamStatusService.get(streamId);
-  if (
-    currentStatus === STREAM_STATUS.RESUMING ||
-    currentStatus === STREAM_STATUS.RUNNING
-  ) {
-    logger.debug(
-      `Stream ${streamId} already ${currentStatus}, skipping auto-resume`,
-    );
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
+    logger.debug(`Stream ${streamId} is active/resuming, skipping auto-resume`);
     return false;
   }
 
