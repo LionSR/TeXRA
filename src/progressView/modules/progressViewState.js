@@ -133,25 +133,25 @@ class RunScopedMap {
     this._data = new Map();
   }
 
-  _getStream(streamId) {
-    return this._resolveStreamId(streamId) ?? null;
-  }
-
   set(streamId, runId, value) {
-    const stream = runId ? this._getStream(streamId) : null;
+    const stream = runId ? this._resolveStreamId(streamId) : null;
     if (!stream) return;
 
-    const runs = this._data.get(stream) ?? new Map();
-    if (!this._data.has(stream)) this._data.set(stream, runs);
+    let runs = this._data.get(stream);
+    if (!runs) {
+      runs = new Map();
+      this._data.set(stream, runs);
+    }
     runs.set(runId, value);
   }
 
   get(streamId, runId) {
-    return runId ? (this.getStreamMap(streamId)?.get(runId) ?? null) : null;
+    if (!runId) return null;
+    return this.getStreamMap(streamId)?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
-    const stream = runId ? this._getStream(streamId) : null;
+    const stream = runId ? this._resolveStreamId(streamId) : null;
     const runs = stream ? this._data.get(stream) : null;
     if (!runs) return;
 
@@ -160,7 +160,7 @@ class RunScopedMap {
   }
 
   clearStream(streamId) {
-    const stream = this._getStream(streamId);
+    const stream = this._resolveStreamId(streamId);
     if (stream) this._data.delete(stream);
   }
 
@@ -169,12 +169,8 @@ class RunScopedMap {
   }
 
   getStreamMap(streamId) {
-    const stream = this._getStream(streamId);
-    return stream ? (this._data.get(stream) ?? null) : null;
-  }
-
-  streamEntries() {
-    return this._data.entries();
+    const stream = this._resolveStreamId(streamId);
+    return stream ? this._data.get(stream) ?? null : null;
   }
 }
 
@@ -223,19 +219,7 @@ export class ProgressViewState {
   }
 
   _resolveStreamId(streamId) {
-    return streamId ?? this.activeStream ?? null;
-  }
-
-  /**
-   * Resolve stream and validate runId for run-scoped operations.
-   * Returns null if either stream cannot be resolved or runId is missing.
-   * @param {string} streamId - Stream ID to resolve
-   * @param {string} runId - Run ID to validate
-   * @returns {string|null} Resolved stream or null if validation fails
-   */
-  _resolveRunContext(streamId, runId) {
-    if (!runId) return null;
-    return this._resolveStreamId(streamId);
+    return streamId || this.activeStream || null;
   }
 
   setExecutionIdAvailable(stream, hasExecutionId) {
@@ -486,9 +470,8 @@ export class ProgressViewState {
   }
 
   setRunFiles(streamId, runId, filesByRound) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
-    this.runFiles.set(targetStream, runId, filesByRound ?? {});
+    if (!runId) return;
+    this.runFiles.set(streamId, runId, filesByRound ?? {});
   }
 
   getRunFiles(streamId, runId) {
@@ -508,9 +491,8 @@ export class ProgressViewState {
   }
 
   setRunMissingOutputs(streamId, runId, filesByRound) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
-    this.runMissingOutputs.set(targetStream, runId, filesByRound ?? {});
+    if (!runId) return;
+    this.runMissingOutputs.set(streamId, runId, filesByRound ?? {});
   }
 
   getRunMissingOutputs(streamId, runId) {
@@ -526,8 +508,7 @@ export class ProgressViewState {
   }
 
   setRunUsage(streamId, runId, usage) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
+    if (!runId) return;
 
     const num = (v) => Number(v ?? 0);
     const normalized = {
@@ -540,7 +521,7 @@ export class ProgressViewState {
 
     // Skip empty usage (all zeros indicates no actual API call)
     const hasUsage = normalized.inputTokens || normalized.outputTokens || normalized.cost;
-    if (hasUsage) this.runUsage.set(targetStream, runId, normalized);
+    if (hasUsage) this.runUsage.set(streamId, runId, normalized);
   }
 
   getRunUsage(streamId, runId) {
