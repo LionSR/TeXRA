@@ -316,13 +316,21 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  // Try property names, then headers
-  return (
-    (isString(candidate.request_id) && candidate.request_id) ||
-    (isString(candidate.requestId) && candidate.requestId) ||
-    candidate.headers?.get?.('x-request-id') ||
-    undefined
-  );
+  // Try property names first
+  if (isString(candidate.request_id) && candidate.request_id) {
+    return candidate.request_id;
+  }
+  if (isString(candidate.requestId) && candidate.requestId) {
+    return candidate.requestId;
+  }
+
+  // Try headers (Anthropic stores request ID here)
+  const headerValue = candidate.headers?.get?.('x-request-id');
+  if (headerValue) {
+    return headerValue;
+  }
+
+  return undefined;
 }
 
 /**
