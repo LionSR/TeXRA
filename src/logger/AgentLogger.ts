@@ -225,11 +225,12 @@ export class AgentLogger {
   public readonly isAgentLogger: boolean;
 
   constructor(
-    public channelId: string,
+    /** The stream identifier used for routing log messages. */
+    public readonly streamId: string,
     isAgentLogger = false,
   ) {
     this.isAgentLogger = isAgentLogger;
-    logger.initialize(this.channelId, this.isAgentLogger);
+    logger.initialize(this.streamId, this.isAgentLogger);
   }
 
   /** Internal helper to log at any level with consistent options handling. */
@@ -238,7 +239,7 @@ export class AgentLogger {
     message: string,
     options: LogOptions = {},
   ): void {
-    logger[level](this.channelId, message, {
+    logger[level](this.streamId, message, {
       groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
@@ -526,7 +527,7 @@ export class AgentLogger {
     }
 
     return logger.runWithGroupContext(
-      this.channelId,
+      this.streamId,
       groupId,
       this.isAgentLogger,
       fn,
@@ -589,7 +590,7 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const streamId = this.channelId;
+    const emitStreamId = this.streamId;
     const id = randomUUID();
     let buffer = '';
     let isFirstUpdate = true;
@@ -607,7 +608,7 @@ export class AgentLogger {
     const emitMessage = (isNew: boolean, text: string): void => {
       if (isNew) {
         bus.emit('addLogMessage', {
-          stream: streamId,
+          stream: emitStreamId,
           logMessage: {
             id,
             text,
@@ -620,7 +621,7 @@ export class AgentLogger {
         });
       } else {
         bus.emit('updateLogMessage', {
-          stream: streamId,
+          stream: emitStreamId,
           logMessage: { id, text, groupId, messageType: type },
         });
       }
@@ -655,7 +656,7 @@ export class AgentLogger {
   ): Promise<string> {
     await sleep(SHORT_SLEEP_MS);
     return logger.startGroup(
-      this.channelId,
+      this.streamId,
       groupName,
       id,
       parentGroupId,
@@ -667,10 +668,10 @@ export class AgentLogger {
     groupId: string,
     status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   ): void {
-    logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
+    logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
   }
 
   private resolveActiveGroupId(): string | undefined {
-    return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
+    return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
   }
 }

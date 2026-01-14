@@ -53,6 +53,11 @@ function pushGroupContext(
   contextStorage.enterWith(store);
 }
 
+/**
+ * Removes the specified groupId from the context stack.
+ * Uses lastIndexOf to find and remove only the most recent occurrence,
+ * supporting both LIFO (normal) and non-LIFO (out-of-order) group endings.
+ */
 function popGroupContext(
   channel: string,
   groupId: string,
@@ -62,29 +67,17 @@ function popGroupContext(
   const key = getChannelKey(channel, isAgent);
   const context = store.get(key);
 
-  // No context or empty stack - nothing to pop
-  if (!context?.stack.length) {
-    return;
-  }
+  if (!context?.stack.length) return;
 
-  // Remove only the LAST occurrence of groupId from stack.
-  // This supports:
-  // 1. Non-LIFO group endings (different group IDs can end out of order)
-  // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
   const lastIndex = context.stack.lastIndexOf(groupId);
-  if (lastIndex === -1) {
-    return;
-  }
+  if (lastIndex === -1) return;
 
-  // Create new stack without the removed element
   const newStack = context.stack.toSpliced(lastIndex, 1);
-
   if (newStack.length === 0) {
     store.delete(key);
   } else {
     store.set(key, { stack: newStack });
   }
-
   contextStorage.enterWith(store);
 }
 
