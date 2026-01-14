@@ -14,8 +14,7 @@ For details on the underlying structure and execution flow common to all agents,
 
 The `chat` agent acts as a friendly scientist focused on careful reasoning during conversation.
 It can execute `bash` commands and manipulate files using the `read_file`,
-`write_file`, and `edit_file` tools (with `file_op` still available for legacy
-workflows).
+`write_file`, and `edit_file` tools.
 Whenever an agent proposes a workspace edit, TeXRA opens VS Code's native diff
 view so you can review and approve (or reject with feedback) before the change
 touches disk.
