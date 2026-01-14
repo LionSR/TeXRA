@@ -399,8 +399,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
       [COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
         this.handleUpdateQueuedFollowUps.bind(this),
-      [COMMANDS.SET_FOLLOWUP_OPTIONS]:
-        this.handleSetFollowupOptions.bind(this),
+      [COMMANDS.SET_FOLLOWUP_OPTIONS]: this.handleSetFollowupOptions.bind(this),
     };
   }
 

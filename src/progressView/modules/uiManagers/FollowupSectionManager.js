@@ -23,7 +23,11 @@ export class FollowupSectionManager {
     if (modeGroup) {
       const modeHandler = (e) => this._setMode(e.target.value);
       modeGroup.addEventListener('change', modeHandler);
-      this._listeners.push({ element: modeGroup, event: 'change', handler: modeHandler });
+      this._listeners.push({
+        element: modeGroup,
+        event: 'change',
+        handler: modeHandler,
+      });
     }
 
     // Setup button
@@ -31,7 +35,11 @@ export class FollowupSectionManager {
     if (setupBtn) {
       const setupHandler = () => this._handleSetup();
       setupBtn.addEventListener('click', setupHandler);
-      this._listeners.push({ element: setupBtn, event: 'click', handler: setupHandler });
+      this._listeners.push({
+        element: setupBtn,
+        event: 'click',
+        handler: setupHandler,
+      });
     }
 
     // Run button
@@ -39,7 +47,11 @@ export class FollowupSectionManager {
     if (runBtn) {
       const runHandler = () => this._handleRun();
       runBtn.addEventListener('click', runHandler);
-      this._listeners.push({ element: runBtn, event: 'click', handler: runHandler });
+      this._listeners.push({
+        element: runBtn,
+        event: 'click',
+        handler: runHandler,
+      });
     }
 
     // Request followup options when section becomes visible
@@ -51,7 +63,11 @@ export class FollowupSectionManager {
         }
       };
       collapsible.addEventListener('toggle', toggleHandler);
-      this._listeners.push({ element: collapsible, event: 'toggle', handler: toggleHandler });
+      this._listeners.push({
+        element: collapsible,
+        event: 'toggle',
+        handler: toggleHandler,
+      });
     }
   }
 
@@ -117,7 +133,7 @@ export class FollowupSectionManager {
       const defaultModel =
         this._mode === 'merge'
           ? defaultMergeModel
-          : (this._currentStreamData?.model || currentValue);
+          : this._currentStreamData?.model || currentValue;
 
       modelSelect.innerHTML = models
         .map(
