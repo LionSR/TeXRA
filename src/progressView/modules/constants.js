@@ -60,6 +60,15 @@ export const ELEMENT_IDS = {
   FILTER_ALL_BTN: 'filterAllBtn',
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
   FILTER_TOOL_BTN: 'filterToolBtn',
+  // Followup section
+  FOLLOWUP_COLLAPSIBLE: 'followupCollapsible',
+  FOLLOWUP_MODE_WORKFLOW: 'followupModeWorkflow',
+  FOLLOWUP_MODE_MERGE: 'followupModeMerge',
+  FOLLOWUP_AGENT: 'followupAgent',
+  FOLLOWUP_MODEL: 'followupModel',
+  FOLLOWUP_INCLUDE_INSTRUCTION: 'followupIncludeInstruction',
+  FOLLOWUP_SETUP_BTN: 'followupSetupBtn',
+  FOLLOWUP_RUN_BTN: 'followupRunBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({
