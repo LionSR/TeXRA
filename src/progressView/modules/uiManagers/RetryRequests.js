@@ -127,6 +127,10 @@ export class RetryRequests extends BaseUIRequestManager {
     const lines = [];
 
     // Display fields in logical order matching ProviderError schema
+    if (details.message) {
+      lines.push(`message: ${details.message}`);
+    }
+
     if (details.provider) {
       lines.push(`provider: ${details.provider}`);
     }

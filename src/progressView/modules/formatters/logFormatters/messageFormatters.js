@@ -116,20 +116,13 @@ export function formatError(message) {
   const structured = normalizedPayload.structured ?? {};
   const isRelayError = structured.isRelayError === true;
 
-  // Build summary text with relay indicator
-  let summaryText =
-    (normalizedPayload.decodedText || message.text || '').trim() ||
-    'Error occurred';
-
-  // Add prefix indicator for relay errors
-  if (isRelayError) {
-    summaryText = `[Relay] ${summaryText}`;
-  }
-
-  // Store original text for duplicate detection (before relay prefix was added)
+  // Build summary text (used for display and duplicate detection)
   const originalSummaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Error occurred';
+  const summaryText = isRelayError
+    ? `[Relay] ${originalSummaryText}`
+    : originalSummaryText;
 
   // Build error details from structured data
   const detailLines = ERROR_DETAIL_FIELDS.filter((key) => {
