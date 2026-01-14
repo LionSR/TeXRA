@@ -1378,6 +1378,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       inputFiles,
       referenceFile,
       referenceFiles,
+      auxiliaryFile,
+      auxiliaryFiles,
       baseFile,
       editedFile,
     } = message;
@@ -1421,6 +1423,21 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         if (referenceFile) {
           safeSetElementValue(REFERENCE_FILE, referenceFile);
         }
+
+        // Set reference files list if provided
+        if (referenceFiles && referenceFiles.length > 0) {
+          this._setupFileList('referenceFiles', referenceFiles);
+        }
+
+        // Set auxiliary (media) file if provided
+        if (auxiliaryFile) {
+          safeSetElementValue(AUXILIARY_FILE, auxiliaryFile);
+        }
+
+        // Set auxiliary files list if provided
+        if (auxiliaryFiles && auxiliaryFiles.length > 0) {
+          this._setupFileList('auxiliaryFiles', auxiliaryFiles);
+        }
       }
 
       // Build and persist state
@@ -1440,6 +1457,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         savedState.inputFiles = inputFiles || [];
         savedState.referenceFile = referenceFile || '';
         savedState.referenceFiles = referenceFiles || [];
+        savedState.auxiliaryFile = auxiliaryFile || '';
+        savedState.auxiliaryFiles = auxiliaryFiles || [];
       }
 
       mainViewState.set(savedState);
@@ -1515,6 +1534,34 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         `Merge followup: ${inputFiles.length} files to merge. Using first as primary edited file.`,
       );
     }
+  }
+
+  /**
+   * Setup a file list element with multiple files.
+   * Clears existing files and adds new ones, expanding the container.
+   * @param {string} listId - The ID of the file list element (e.g., 'referenceFiles')
+   */
+  _setupFileList(listId, files) {
+    if (!files || files.length === 0) return;
+
+    const listElement = this._getElement(listId);
+    const containerId = `${listId}Container`;
+    const container = this._getElement(containerId);
+    const toggleId = `toggle${listId.charAt(0).toUpperCase() + listId.slice(1)}`;
+
+    // Clear existing and add new files
+    if (listElement) {
+      listElement.innerHTML = '';
+      fileList._batchMode = true;
+      files.forEach((file) => fileList.add(listId, file));
+      fileList._batchMode = false;
+    }
+
+    // Show the container
+    if (container) {
+      container.style.display = 'block';
+    }
+    this._setToggleIcon(this._getElement(toggleId), true);
   }
 }
 
