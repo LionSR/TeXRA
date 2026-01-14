@@ -35,8 +35,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     // Support both raw config and wrapped { config, executionId? } format
     const wrapped = isWrappedConfig(input) ? input : null;
-    const rawConfig = wrapped ? wrapped.config : input;
-    const config = AgentConfigSchema.parse(rawConfig);
+    const config = AgentConfigSchema.parse(wrapped?.config ?? input);
 
     // Use provided executionId (resume) or create new one (fresh)
     const executionId =
