@@ -40,7 +40,12 @@ import {
   createExternalLocation,
 } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import { getWorkflowAgents, getAgent } from '@agent/index/agentRegistry';
+import {
+  getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
+  getAgent,
+  createKey,
+} from '@agent/index/agentRegistry';
 import { getConfig } from '@utils/config';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -730,16 +735,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Handle request for followup options (agents, models).
-   * Returns the available workflow agents and models to populate the followup UI.
+   * Returns separate workflow and tool-use agent lists to match main webview.
    */
   private async handleGetFollowupOptions(_message: unknown): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
     try {
-      // Get workflow agents from the agent registry
-      const workflowAgents = getWorkflowAgents();
-      const agentNames = workflowAgents.map((a) => a.name);
+      // Get visible agents matching main webview (filtered, deduplicated)
+      const workflowAgents = getVisibleWorkflowAgents();
+      const toolUseAgents = getVisibleToolUseAgents();
+
+      // Format as source:name for consistent handling with main view
+      const workflowAgentKeys = workflowAgents.map((a) =>
+        createKey(a.source, a.name),
+      );
+      const toolUseAgentKeys = toolUseAgents.map((a) =>
+        createKey(a.source, a.name),
+      );
 
       // Get models from config
       const models = getConfig<string[]>('texra.models', []);
@@ -750,7 +763,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        agents: agentNames,
+        workflowAgents: workflowAgentKeys,
+        toolUseAgents: toolUseAgentKeys,
         models,
         defaultMergeModel,
       });

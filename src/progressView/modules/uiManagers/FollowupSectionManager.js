@@ -15,6 +15,8 @@ export class FollowupSectionManager {
     this._mode = 'chat';
     this._currentStreamData = null;
     this._listeners = [];
+    this._workflowAgents = [];
+    this._toolUseAgents = [];
   }
 
   setup() {
@@ -88,16 +90,19 @@ export class FollowupSectionManager {
 
   /**
    * Update the followup section visibility based on stream data.
-   * Shows the section only for completed workflow streams with output files.
+   * Shows the section for completed workflow or tool-use streams with output files.
    * @param {Object} streamData - The stream data
    */
   updateForStream(streamData) {
     this._currentStreamData = streamData;
     const collapsible = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
 
-    // Only show for workflow streams that have generated files
+    // Show for both workflow and tool-use streams that have generated files
+    const isValidCategory =
+      streamData?.agentCategory === 'workflow' ||
+      streamData?.agentCategory === 'toolUse';
     const shouldShow =
-      streamData?.agentCategory === 'workflow' &&
+      isValidCategory &&
       streamData?.status === 'stopped' &&
       streamData?.hasOutputFiles;
 
@@ -111,23 +116,22 @@ export class FollowupSectionManager {
   /**
    * Set the available agent and model options.
    * Called when receiving options from the extension.
-   * @param {Object} options - { agents: string[], models: string[], defaultMergeModel: string }
+   * @param {Object} options - { workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }
    */
   setOptions(options) {
-    const { agents = [], models = [], defaultMergeModel } = options;
+    const {
+      workflowAgents = [],
+      toolUseAgents = [],
+      models = [],
+      defaultMergeModel,
+    } = options;
 
-    // Update agent dropdown
-    const agentSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_AGENT);
-    if (agentSelect) {
-      // Preserve current selection if valid
-      const currentValue = agentSelect.value;
-      agentSelect.innerHTML = agents
-        .map(
-          (agent) =>
-            `<vscode-option value="${agent}"${agent === currentValue ? ' selected' : ''}>${agent}</vscode-option>`,
-        )
-        .join('');
-    }
+    // Store both agent lists for mode switching
+    this._workflowAgents = workflowAgents;
+    this._toolUseAgents = toolUseAgents;
+
+    // Update agent dropdown based on current mode
+    this._updateAgentDropdown();
 
     // Update model dropdown
     const modelSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_MODEL);
@@ -148,6 +152,37 @@ export class FollowupSectionManager {
     }
 
     this._defaultMergeModel = defaultMergeModel;
+  }
+
+  /**
+   * Update the agent dropdown based on the current mode.
+   * Chat mode shows tool-use agents; workflow mode shows workflow agents.
+   * @private
+   */
+  _updateAgentDropdown() {
+    const agentSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_AGENT);
+    if (!agentSelect) return;
+
+    // Select the appropriate agent list based on mode
+    const agents =
+      this._mode === 'chat' ? this._toolUseAgents : this._workflowAgents;
+
+    if (!agents || agents.length === 0) return;
+
+    // Preserve current selection if valid in the new list
+    const currentValue = agentSelect.value;
+    const isCurrentValid = agents.includes(currentValue);
+
+    agentSelect.innerHTML = agents
+      .map((agent) => {
+        // Extract display name from source:name format
+        const displayName = agent.includes(':')
+          ? agent.split(':')[1]
+          : agent;
+        const isSelected = isCurrentValid && agent === currentValue;
+        return `<vscode-option value="${agent}"${isSelected ? ' selected' : ''}>${displayName}</vscode-option>`;
+      })
+      .join('');
   }
 
   /**
@@ -178,6 +213,9 @@ export class FollowupSectionManager {
     if (followupSection) {
       followupSection.dataset.mode = mode;
     }
+
+    // Update agent dropdown to show appropriate agents for this mode
+    this._updateAgentDropdown();
 
     // Update model default for merge mode
     if (mode === 'merge' && this._defaultMergeModel) {
