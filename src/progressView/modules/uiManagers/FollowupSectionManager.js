@@ -185,7 +185,11 @@ export class FollowupSectionManager {
     const agents =
       this._mode === 'chat' ? this._toolUseAgents : this._workflowAgents;
 
-    if (!agents || agents.length === 0) return;
+    // Clear dropdown if no agents available for this mode
+    if (!agents || agents.length === 0) {
+      agentSelect.innerHTML = '';
+      return;
+    }
 
     // Preserve current selection if valid in the new list
     const currentValue = agentSelect.value;
@@ -301,14 +305,6 @@ export class FollowupSectionManager {
     const includeInstruction =
       mode === 'workflow' && includeInstructionCheckbox?.checked;
     const initialQuestion = initialQuestionTextarea?.value?.trim() || '';
-
-    console.log('[FollowupSectionManager] Building payload:', {
-      mode,
-      agent,
-      model,
-      includeInstruction,
-      initialQuestion: initialQuestion.slice(0, 50),
-    });
 
     if (!agent) {
       console.warn('[FollowupSectionManager] No agent selected');
