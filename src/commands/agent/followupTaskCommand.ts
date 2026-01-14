@@ -124,7 +124,7 @@ function buildFollowupConfig(
       mode: 'merge',
       agent: 'merge',
       model,
-      inputFile: payload.originalInputFile,
+      baseFile: payload.originalInputFile,
       editedFile,
       instruction: '',
     };
@@ -174,7 +174,7 @@ async function executeFollowupImmediately(
     // Execute merge directly
     await safeExecuteCommand('texra.merge', [
       undefined, // inputFile (unused)
-      config.inputFile,
+      config.baseFile,
       config.editedFile,
     ]);
   } else {
