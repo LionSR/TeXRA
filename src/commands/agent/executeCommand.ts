@@ -34,7 +34,11 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     // Support both raw config and wrapped { config, executionId? } format
-    const wrapped = isWrappedConfig(input) ? input : null;
+    const isWrappedInput =
+      input !== null && typeof input === 'object' && 'config' in input;
+    const wrapped = isWrappedInput
+      ? (input as { config: unknown; executionId?: unknown })
+      : null;
     // Parse wrapped.config when wrapped (allows Zod to fail on undefined),
     // otherwise parse input directly
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
@@ -66,11 +70,4 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     });
     throw error;
   }
-}
-
-/** Check if input is wrapped in { config, executionId? } format */
-function isWrappedConfig(
-  input: unknown,
-): input is { config: unknown; executionId?: unknown } {
-  return input !== null && typeof input === 'object' && 'config' in input;
 }

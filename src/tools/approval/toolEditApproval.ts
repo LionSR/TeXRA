@@ -443,8 +443,9 @@ async function nativeRequestApproval(
     added > 0 && `+${added}`,
     removed > 0 && `-${removed}`,
   ].filter(Boolean);
+  const lineWord = totalChanged === 1 ? 'line' : 'lines';
   const changeSuffix = changeParts.length
-    ? ` · ${changeParts.join(' / ')} ${totalChanged === 1 ? 'line' : 'lines'}`
+    ? ` · ${changeParts.join(' / ')} ${lineWord}`
     : '';
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
