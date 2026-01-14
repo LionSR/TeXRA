@@ -34,36 +34,12 @@ import {
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 import { toErrorMessage } from './errorHandlingUtils';
 
-/**
- * Structured representation of a provider HTTP failure.
- */
-export interface ProviderHttpErrorDetails {
-  /**
-   * Human readable description of the provider failure. Includes HTTP prefix when
-   * a status code is available.
-   */
-  message: string;
-  /** HTTP status code reported by the provider, when present. */
-  statusCode?: number;
-  /** HTTP status text reported by the provider or derived from the status code. */
-  statusText?: string;
-  /** Identifier for the provider that produced the error, when known. */
-  provider?: string;
-  /**
-   * Whether the error is retryable. Based on native SDK error types:
-   * - Connection errors (timeout, network) → retryable
-   * - Server errors (5xx) and rate limits (429) → retryable
-   * - User abort, auth errors, bad requests → NOT retryable
-   */
-  retryable: boolean;
-  /** Request ID from the provider, useful for debugging with support. */
-  requestId?: string;
-  /**
-   * Raw error body from the provider API response.
-   * Useful for debugging relay errors where the error contains additional context.
-   */
-  rawErrorBody?: unknown;
-}
+// Import canonical schemas - SINGLE SOURCE OF TRUTH
+import {
+  type ProviderError,
+  type ErrorLogData,
+  type ErrorContext,
+} from './schemas';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -172,10 +148,20 @@ function isRetryableStatusCode(statusCode?: number): boolean {
 }
 
 /**
+ * Partial result from SDK error matching.
+ * Does NOT include isRelayError or rawErrorBody - those are added by
+ * formatProviderHttpError() after relay detection.
+ */
+type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
+
+/**
  * Matches known SDK error types and returns structured error details.
  * Handles both message-only errors (connection/abort) and HTTP errors.
+ *
+ * NOTE: Returns partial result without isRelayError/rawErrorBody.
+ * formatProviderHttpError() adds those fields after relay detection.
  */
-function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
+function matchSdkError(err: unknown): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -405,9 +391,7 @@ function determineRetryable(
   return isRetryableStatusCode(statusCode);
 }
 
-export function formatProviderHttpError(
-  err: unknown,
-): ProviderHttpErrorDetails {
+export function formatProviderHttpError(err: unknown): ProviderError {
   // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
 
@@ -417,6 +401,7 @@ export function formatProviderHttpError(
     return {
       message: 'Request aborted',
       retryable: false,
+      isRelayError: false,
       rawErrorBody,
     };
   }
@@ -425,10 +410,11 @@ export function formatProviderHttpError(
   const sdkMatch = matchSdkError(err);
   if (sdkMatch) {
     // Check if this should be retryable due to relay/overloaded error
+    const isRelay = isRelayError(rawErrorBody);
     const retryable =
       determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
       sdkMatch.retryable;
-    return { ...sdkMatch, retryable, rawErrorBody };
+    return { ...sdkMatch, retryable, isRelayError: isRelay, rawErrorBody };
   }
 
   // Fallback for unrecognized errors
@@ -436,6 +422,7 @@ export function formatProviderHttpError(
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
+  const isRelay = isRelayError(rawErrorBody);
 
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -452,6 +439,7 @@ export function formatProviderHttpError(
       message: finalMessage,
       provider,
       retryable: true,
+      isRelayError: isRelay,
       requestId,
       rawErrorBody,
     };
@@ -464,6 +452,7 @@ export function formatProviderHttpError(
     statusText,
     provider,
     retryable: determineRetryable(err, statusCode, rawErrorBody),
+    isRelayError: isRelay,
     requestId,
     rawErrorBody,
   };
@@ -565,35 +554,12 @@ export function isPreviousResponseIdError(err: unknown): boolean {
 }
 
 /**
- * Context for building error log data.
- */
-export interface ErrorLogContext {
-  /** The operation that failed (e.g., 'API request', 'manual retry'). */
-  operation?: string;
-  /** The model being used when the error occurred. */
-  model?: string;
-}
-
-/**
- * Structured data for error log messages.
- * Used by progressView formatters to display error details.
- */
-export interface ErrorLogData extends ProviderHttpErrorDetails {
-  /** Raw error message before formatting. */
-  rawMessage?: string;
-  /** The operation that failed. */
-  operation?: string;
-  /** The model being used. */
-  model?: string;
-}
-
-/**
  * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
  * Ensures all error logs have the same structure for DRY display formatting.
  */
 export function buildErrorLogData(
   err: unknown,
-  context?: ErrorLogContext,
+  context?: ErrorContext,
 ): ErrorLogData {
   const formatted = formatProviderHttpError(err);
   const rawMessage = toErrorMessage(err);

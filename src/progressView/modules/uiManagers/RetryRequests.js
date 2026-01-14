@@ -57,10 +57,19 @@ export class RetryRequests extends BaseUIRequestManager {
     const errorElem = element.querySelector('.retry-request__error');
     element.dataset.streamId = request.streamId || '';
 
+    // Check if this is a relay error
+    const isRelayError = request.errorDetails?.isRelayError === true;
+    const retryable = request.errorDetails?.retryable !== false; // Default to true for retry requests
+
+    // Update element class for styling
+    element.classList.toggle('retry-request--relay', isRelayError);
+
     if (operationElem) {
+      // Add [Relay] prefix for relay errors
+      const prefix = isRelayError ? '[Relay] ' : '';
       operationElem.textContent = request.operation
-        ? `Failed: ${request.operation}`
-        : 'Request failed';
+        ? `${prefix}Failed: ${request.operation}`
+        : `${prefix}Request failed`;
     }
 
     if (metaElem) {
@@ -68,6 +77,12 @@ export class RetryRequests extends BaseUIRequestManager {
       if (request.model) {
         parts.push(`Model: ${request.model}`);
       }
+      // Add source indicator
+      if (isRelayError) {
+        parts.push('Source: Relay');
+      }
+      // Add retryable status
+      parts.push(retryable ? 'Retryable: Yes' : 'Retryable: No');
       metaElem.textContent = parts.join(' \u2022 ');
     }
 
@@ -100,7 +115,8 @@ export class RetryRequests extends BaseUIRequestManager {
 
   /**
    * Formats error details into a displayable string.
-   * @param {Object|undefined} details - Error details object
+   * Uses all fields from ProviderError schema (single source of truth).
+   * @param {Object|undefined} details - Error details object (ProviderError)
    * @returns {string|null} Formatted details string, or null if no details
    */
   _formatErrorDetails(details) {
@@ -110,12 +126,36 @@ export class RetryRequests extends BaseUIRequestManager {
 
     const lines = [];
 
+    // Display fields in logical order matching ProviderError schema
+    if (details.message) {
+      lines.push(`message: ${details.message}`);
+    }
+
     if (details.provider) {
       lines.push(`provider: ${details.provider}`);
     }
 
     if (details.statusCode != null) {
       lines.push(`statusCode: ${details.statusCode}`);
+    }
+
+    if (details.statusText) {
+      lines.push(`statusText: ${details.statusText}`);
+    }
+
+    // Show relay error indicator prominently
+    if (details.isRelayError != null) {
+      lines.push(`isRelayError: ${details.isRelayError}`);
+    }
+
+    // Show retryable status
+    if (details.retryable != null) {
+      lines.push(`retryable: ${details.retryable}`);
+    }
+
+    // Request ID for provider support debugging
+    if (details.requestId) {
+      lines.push(`requestId: ${details.requestId}`);
     }
 
     if (details.rawErrorBody != null) {
