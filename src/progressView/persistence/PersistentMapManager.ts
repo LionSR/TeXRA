@@ -75,7 +75,7 @@ export abstract class PersistentMapManager<K extends string, V> {
   }
 
   /** Deserialize a persisted value. Override for custom deserialization. */
-  protected async deserialize(data: unknown, _key: K): Promise<V> {
+  protected deserialize(data: unknown, _key: K): V | Promise<V> {
     return data as V;
   }
 
@@ -107,6 +107,7 @@ export abstract class PersistentMapManager<K extends string, V> {
   ): Promise<void> {
     const entries: [K, V][] = [];
     for (const [key, value] of Object.entries(record)) {
+      // await handles both sync and async deserialize implementations
       const deserialized = await this.deserialize(value, key as K);
       entries.push([key as K, deserialized]);
     }
