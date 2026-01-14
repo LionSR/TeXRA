@@ -46,46 +46,6 @@ export class InstructionManager extends BaseWebviewManager {
     }, 100);
   }
 
-  /**
-   * Validate that the given file path is a non-empty value.
-   * Type guard to ensure file is a string.
-   */
-  private isValidFile(file?: string): file is string {
-    return !!file && file !== 'None' && file !== '';
-  }
-
-  /**
-   * Add a single file to the context when it passes validation.
-   */
-  private addSingleFileIfValid(
-    context: FileContext,
-    contextKey: 'inputFile' | 'referenceFile' | 'auxiliaryFile' | 'mediaFile',
-    file?: string,
-  ): void {
-    if (this.isValidFile(file)) {
-      context[contextKey] = file;
-    }
-  }
-
-  /**
-   * Add a list of files to the context when they are enabled and present.
-   */
-  private addMultipleFilesIfValid(
-    context: FileContext,
-    contextKey:
-      | 'inputFiles'
-      | 'referenceFiles'
-      | 'auxiliaryFiles'
-      | 'mediaFiles'
-      | 'outputFiles',
-    active: boolean,
-    files?: string[],
-  ): void {
-    if (active && Array.isArray(files) && files.length > 0) {
-      context[contextKey] = files;
-    }
-  }
-
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
@@ -93,53 +53,38 @@ export class InstructionManager extends BaseWebviewManager {
       return;
     }
     try {
-      const fileContext: FileContext = { agent: message.agent };
+      // Build file context, filtering out empty/placeholder values
+      const isValid = (f?: string): f is string =>
+        !!f && f !== 'None' && f !== '';
+      const hasFiles = (active: boolean, files?: string[]) =>
+        active && Array.isArray(files) && files.length > 0;
 
-      // Add single files
-      this.addSingleFileIfValid(fileContext, 'inputFile', message.inputFile);
-      this.addSingleFileIfValid(
-        fileContext,
-        'referenceFile',
-        message.referenceFile,
-      );
-      this.addSingleFileIfValid(
-        fileContext,
-        'auxiliaryFile',
-        message.auxiliaryFile,
-      );
-      this.addSingleFileIfValid(fileContext, 'mediaFile', message.mediaFile);
-
-      // Add multiple files
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'inputFiles',
-        !!message.inputFilesActive,
-        message.inputFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'referenceFiles',
-        !!message.referenceFilesActive,
-        message.referenceFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'auxiliaryFiles',
-        !!message.auxiliaryFilesActive,
-        message.auxiliaryFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'mediaFiles',
-        !!message.mediaFilesActive,
-        message.mediaFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'outputFiles',
-        !!message.outputFilesActive,
-        message.outputFiles,
-      );
+      const fileContext: FileContext = {
+        agent: message.agent,
+        ...(isValid(message.inputFile) && { inputFile: message.inputFile }),
+        ...(isValid(message.referenceFile) && {
+          referenceFile: message.referenceFile,
+        }),
+        ...(isValid(message.auxiliaryFile) && {
+          auxiliaryFile: message.auxiliaryFile,
+        }),
+        ...(isValid(message.mediaFile) && { mediaFile: message.mediaFile }),
+        ...(hasFiles(!!message.inputFilesActive, message.inputFiles) && {
+          inputFiles: message.inputFiles,
+        }),
+        ...(hasFiles(!!message.referenceFilesActive, message.referenceFiles) && {
+          referenceFiles: message.referenceFiles,
+        }),
+        ...(hasFiles(!!message.auxiliaryFilesActive, message.auxiliaryFiles) && {
+          auxiliaryFiles: message.auxiliaryFiles,
+        }),
+        ...(hasFiles(!!message.mediaFilesActive, message.mediaFiles) && {
+          mediaFiles: message.mediaFiles,
+        }),
+        ...(hasFiles(!!message.outputFilesActive, message.outputFiles) && {
+          outputFiles: message.outputFiles,
+        }),
+      };
 
       const result = await polishTextWithAI(message.text, fileContext);
       if (result.success) {
