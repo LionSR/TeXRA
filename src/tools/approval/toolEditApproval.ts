@@ -225,7 +225,7 @@ function countChangedLines(text: string): number {
 function createSemanticDiffs(
   original: string,
   proposed: string,
-): ReturnType<diff_match_patch['diff_main']> {
+): ReturnType<InstanceType<typeof diff_match_patch>['diff_main']> {
   const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(original, proposed);
   dmp.diff_cleanupSemantic(diffs);
@@ -678,74 +678,70 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
-  // Handle non-settling actions (preview/diff operations)
-  if (payload.action === 'openDiff') {
-    if (entry.isSettled()) return;
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      entry.originalUri,
-      entry.proposedUri,
-      entry.title,
-    );
-    await revealFirstChange(
-      entry.proposedUri,
-      entry.originalContent,
-      entry.proposedContent,
-    );
-    return;
-  }
-
-  if (payload.action === 'showLatexdiff') {
-    if (entry.isSettled()) return;
-    await runLatexdiff(entry);
-    return;
-  }
-
-  if (payload.action === 'previewProposed') {
-    if (entry.isSettled()) return;
-    await previewProposedLatex(entry);
-    return;
-  }
-
-  // Handle state modification action
+  // State modification action - no isSettled check needed
   if (payload.action === 'resumeApprovals') {
     resetToolEditApprovalSessionBypass();
     return;
   }
 
-  // Handle settling actions (require isSettled check)
+  // All other actions require the entry to not be settled
   if (entry.isSettled()) {
     return;
   }
 
-  if (payload.action === 'approve' || payload.action === 'approveAll') {
-    if (payload.action === 'approveAll') {
-      enableSessionApprovalBypass();
-    }
-    const appliedContent = await fs
-      .readFile(entry.proposedUri.fsPath, 'utf-8')
-      .catch(() => entry.proposedContent);
-    entry.settle({ accepted: true, appliedContent });
-    return;
-  }
+  switch (payload.action) {
+    case 'openDiff':
+      await vscode.commands.executeCommand(
+        'vscode.diff',
+        entry.originalUri,
+        entry.proposedUri,
+        entry.title,
+      );
+      await revealFirstChange(
+        entry.proposedUri,
+        entry.originalContent,
+        entry.proposedContent,
+      );
+      break;
 
-  if (payload.action === 'reject') {
-    let userMessage = payload.note?.trim();
-    if (!userMessage) {
-      const note = await vscode.window.showInputBox({
-        prompt: 'Optionally share why the change was rejected',
-        placeHolder: 'Add guidance for the assistant (press Enter to skip)',
-      });
-      if (note === undefined) {
-        return;
+    case 'showLatexdiff':
+      await runLatexdiff(entry);
+      break;
+
+    case 'previewProposed':
+      await previewProposedLatex(entry);
+      break;
+
+    case 'approve':
+    case 'approveAll': {
+      if (payload.action === 'approveAll') {
+        enableSessionApprovalBypass();
       }
-      userMessage = note.trim();
+      const appliedContent = await fs
+        .readFile(entry.proposedUri.fsPath, 'utf-8')
+        .catch(() => entry.proposedContent);
+      entry.settle({ accepted: true, appliedContent });
+      break;
     }
 
-    entry.settle({
-      accepted: false,
-      userMessage: userMessage || undefined,
-    });
+    case 'reject': {
+      let userMessage = payload.note?.trim();
+      if (!userMessage) {
+        const note = await vscode.window.showInputBox({
+          prompt: 'Optionally share why the change was rejected',
+          placeHolder: 'Add guidance for the assistant (press Enter to skip)',
+        });
+        if (note === undefined) {
+          return;
+        }
+        userMessage = note.trim();
+      }
+      entry.settle({
+        accepted: false,
+        userMessage: userMessage || undefined,
+      });
+      break;
+    }
   }
 }
 
