@@ -21,7 +21,8 @@ export class FollowupSectionManager {
     // Mode toggle
     const modeGroup = safeGetElementById('followupModeGroup');
     if (modeGroup) {
-      const modeHandler = (e) => this._setMode(e.target.value);
+      // Use modeGroup.value directly as e.target may be the radio element
+      const modeHandler = () => this._setMode(modeGroup.value);
       modeGroup.addEventListener('change', modeHandler);
       this._listeners.push({
         element: modeGroup,
@@ -165,21 +166,17 @@ export class FollowupSectionManager {
 
   /**
    * Set the mode (chat, workflow, or merge) and update UI.
+   * CSS handles visibility based on data-mode attribute.
    * @private
    */
   _setMode(mode) {
     this._mode = mode;
+
+    // Set data-mode attribute on the section - CSS uses this for visibility
     const section = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
     const followupSection = section?.querySelector('.followup-section');
     if (followupSection) {
       followupSection.dataset.mode = mode;
-    }
-
-    // Update agent select visibility (hidden for merge only)
-    const agentSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_AGENT);
-    const agentGroup = agentSelect?.closest('.followup-select-group');
-    if (agentGroup) {
-      agentGroup.style.display = mode === 'merge' ? 'none' : '';
     }
 
     // Update model default for merge mode
@@ -187,25 +184,6 @@ export class FollowupSectionManager {
       const modelSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_MODEL);
       if (modelSelect) {
         modelSelect.value = this._defaultMergeModel;
-      }
-    }
-
-    // Update initial question visibility (shown for chat only)
-    const initialQuestionDiv = safeGetElementById(
-      ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION,
-    )?.closest('.followup-initial-question');
-    if (initialQuestionDiv) {
-      initialQuestionDiv.style.display = mode === 'chat' ? '' : 'none';
-    }
-
-    // Update instruction checkbox visibility (shown for workflow only)
-    const instructionCheckbox = safeGetElementById(
-      ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION,
-    );
-    if (instructionCheckbox) {
-      const optionsDiv = instructionCheckbox.closest('.followup-options');
-      if (optionsDiv) {
-        optionsDiv.style.display = mode === 'workflow' ? '' : 'none';
       }
     }
   }
@@ -268,6 +246,14 @@ export class FollowupSectionManager {
       mode === 'workflow' && includeInstructionCheckbox?.checked;
     const initialQuestion = initialQuestionTextarea?.value?.trim() || '';
 
+    console.log('[FollowupSectionManager] Building payload:', {
+      mode,
+      agent,
+      model,
+      includeInstruction,
+      initialQuestion: initialQuestion.slice(0, 50),
+    });
+
     if (!agent) {
       console.warn('[FollowupSectionManager] No agent selected');
       return null;
@@ -275,14 +261,6 @@ export class FollowupSectionManager {
 
     if (!model) {
       console.warn('[FollowupSectionManager] No model selected');
-      return null;
-    }
-
-    // Chat mode requires an initial question
-    if (mode === 'chat' && !initialQuestion) {
-      console.warn(
-        '[FollowupSectionManager] Chat mode requires an initial question',
-      );
       return null;
     }
 
