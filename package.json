@@ -176,6 +176,12 @@
             "default": true,
             "description": "Show login banner prompting users to sign in for access to remote agents",
             "scope": "resource"
+          },
+          "texra.auth.enableVSCodeGitHub": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable VS Code native GitHub authentication (experimental)",
+            "scope": "resource"
           }
         }
       },
