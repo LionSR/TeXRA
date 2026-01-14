@@ -215,8 +215,6 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
  */
 /** Number of recent tool use/result pairs to keep after context clearing */
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
-/** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
-const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 /**
  * Minimum percentage of context to clear at once for tool uses.
  * This ensures cache invalidation is worthwhile - clearing too few tokens
@@ -441,10 +439,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Set up context management BEFORE token counting so countTokens can
-    // return accurate post-clearing token counts. This ensures:
-    // 1. Both clearing strategies work together (thinking + tool uses)
-    // 2. max_tokens is adjusted based on post-clearing token count
-    // 3. Server-side tool use clearing triggers correctly after thinking is cleared
+    // return accurate post-clearing token counts.
     if (this.agentType === AgentType.ToolUse) {
       const thresholdPercent = getConfig<number>(
         'texra.model.compactionThresholdPercent',
@@ -463,28 +458,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (thresholdPercent / 100) * this.config.contextWindow,
         );
 
-        // Add thinking block clearing strategy if reasoning is enabled.
-        // We always include this for ToolUse agents with reasoning because:
-        // 1. The API doesn't support a trigger field for thinking clearing
-        // 2. keep: { thinking_turns: 3 } only clears turns beyond 3, so it's
-        //    a no-op when there are few thinking turns
-        // 3. Including it allows countTokens to return accurate post-clearing counts
-        if (
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          !contextManagementEdits.some(
-            (edit) => edit.type === 'clear_thinking_20251015',
-          )
-        ) {
-          // Thinking clearing must come first in the edits array
-          contextManagementEdits.unshift({
-            type: 'clear_thinking_20251015' as const,
-            keep: {
-              type: 'thinking_turns' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-            },
-          });
-        }
+        // NOTE: Thinking clearing is currently disabled to prioritize tool use clearing.
+        // The API requires thinking clearing to be listed first in edits, which means
+        // it runs before tool use clearing and reduces tokens before the tool use
+        // trigger is checked. This prevents tool use clearing from triggering in
+        // many scenarios. The API's default behavior (keep last 1 thinking turn)
+        // still applies even without explicit thinking clearing config.
 
         // Add tool result clearing strategy with server-side trigger.
         // The trigger ensures clearing only activates when input tokens exceed threshold.
