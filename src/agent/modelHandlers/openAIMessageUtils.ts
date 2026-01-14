@@ -45,11 +45,7 @@ function mergeMessageContent(
       return;
     }
 
-    if (
-      prevContent === null ||
-      prevContent === undefined ||
-      prevContent === ''
-    ) {
+    if (prevContent == null || prevContent === '') {
       previous.content = clonedCurrent;
     }
     return;
@@ -66,7 +62,7 @@ function mergeMessageContent(
     return;
   }
 
-  if (prevContent === null || prevContent === undefined) {
+  if (prevContent == null) {
     previous.content = currContent;
   }
 }

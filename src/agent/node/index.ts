@@ -191,7 +191,7 @@ class Node<
         } catch (e) {
           // If abort signal is set and aborted, skip retries and go to fallback
           // This prevents unnecessary retries when the user intentionally cancelled
-          const isAborted = this.signal?.aborted === true;
+          const isAborted = this.signal?.aborted;
           const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
 
           if (isLastAutoRetry || isAborted) {
