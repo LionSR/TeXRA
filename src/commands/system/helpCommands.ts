@@ -19,6 +19,4 @@ export function registerHelpCommands(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(openDocCommand);
-
-  return { openDocCommand };
 }
