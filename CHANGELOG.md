@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.5] - 2026-01-14
+
+### Features
+
+- Added a **Lean Proof** tool-use agent for informal-to-formal Lean 4 verification workflows.
+- Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
+- Added expandable error details to retry dialog UI for better debugging.
+- Relay errors are now retryable with clearer error messaging.
+
+### Bug Fixes
+
+- Fixed race condition in workflow launch deduplication.
+- Fixed cancellation propagation for more responsive agent stopping.
+- Fixed round pattern extraction in multiple output filenames.
+- Fixed workspace temp file cleanup on approval resolution.
+- Fixed relay error handling and recovery.
+
+### Improvements
+
+- Internal refactoring to simplify code patterns and improve consistency across command handlers.
+
 ## [0.35.4] - 2026-01-10
 
 ### Features
@@ -17,7 +38,6 @@ All notable changes to this project will be documented in this file.
 - Added cache token display (read and creation) in usage statistics.
 - Token counts now format as millions (M) when >= 100K for readability.
 - Model is now informed when users modify or reject suggested edits.
-- Added a `lean_proof` tool-use agent for informal-to-formal Lean verification workflows.
 
 ### Bug Fixes
 
