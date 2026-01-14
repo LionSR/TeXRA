@@ -650,18 +650,19 @@ export class ProgressViewState {
   private extractTaskStateEntries(
     raw: Record<string, unknown>,
   ): Array<[string, unknown]> {
-    const isObject = (v: unknown): v is Record<string, unknown> =>
-      v !== null && typeof v === 'object';
+    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+      v !== null && typeof v === 'object' && !Array.isArray(v);
 
-    const isLegacy = isObject(raw.workflow) || isObject(raw.toolUse);
-    if (!isLegacy) {
-      return Object.entries(raw).filter(([, v]) => isObject(v));
+    // Legacy format: collect from workflow/toolUse buckets
+    const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
+    if (legacyBuckets.length > 0) {
+      return legacyBuckets.flatMap((bucket) =>
+        Object.entries(bucket).filter(([, v]) => isPlainObject(v)),
+      );
     }
 
-    // Legacy format: collect entries from workflow and toolUse buckets
-    return [raw.workflow, raw.toolUse]
-      .filter(isObject)
-      .flatMap((bucket) => Object.entries(bucket).filter(([, v]) => isObject(v)));
+    // Flat format: direct entries
+    return Object.entries(raw).filter(([, v]) => isPlainObject(v));
   }
 
   /**
@@ -684,10 +685,10 @@ export class ProgressViewState {
   }
 
   private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
-    const current = this.storage.get<unknown>(key);
-    // Return as record only if it's a plain object (not array or null)
-    return current && typeof current === 'object' && !Array.isArray(current)
-      ? (current as Record<string, unknown>)
+    const value = this.storage.get<Record<string, unknown>>(key, {});
+    // Guard against non-object values (arrays, primitives)
+    return typeof value === 'object' && value && !Array.isArray(value)
+      ? value
       : {};
   }
 

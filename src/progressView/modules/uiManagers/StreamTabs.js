@@ -100,17 +100,14 @@ export class StreamTabs {
 
     if (includeLastActivity && info.lastTimestamp) {
       const lastSeen = formatRelativeTime(info.lastTimestamp);
-      if (lastSeen) {
-        parts.push(`Last activity ${lastSeen}`);
-      }
+      if (lastSeen) parts.push(`Last activity ${lastSeen}`);
     }
 
-    // Use bullet separator for inline parts, newline for last activity
+    // Use newline before last activity when present and multiple parts
     if (includeLastActivity && parts.length > 1) {
       const lastPart = parts.pop();
       return `${parts.join(' • ')}\n${lastPart}`;
     }
-
     return parts.join(' • ');
   }
 
@@ -223,19 +220,12 @@ export class StreamTabs {
 
   /**
    * Apply or remove a property-based decorator icon.
-   * @param {HTMLElement} tabEl - The tab element
-   * @param {string} selector - CSS selector for the icon element
-   * @param {boolean} condition - Whether to show the decorator
-   * @param {string} property - Property key in AGENT_DECORATORS.properties
    */
   _applyPropertyDecorator(tabEl, selector, condition, property) {
     const iconEl = tabEl.querySelector(selector);
     if (!iconEl) return;
 
-    if (!condition) {
-      iconEl.remove();
-      return;
-    }
+    if (!condition) return iconEl.remove();
 
     const { icon, hint } = AGENT_DECORATORS.properties[property];
     applyCodiconClass(iconEl, icon);
