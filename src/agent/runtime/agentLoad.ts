@@ -164,14 +164,7 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    const validatedSettings = parseAgentSetting(settings);
-    const validatedPrompts = AgentPromptSchema.parse(prompts);
-    settings = validatedSettings;
-    prompts = validatedPrompts;
-
-    // The function returns the validated settings block and prompts.
-    // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
-    return [settings as AgentSetting, prompts as AgentPrompt];
+    return [parseAgentSetting(settings), AgentPromptSchema.parse(prompts)];
   } catch (err) {
     // Log error context, then rethrow original to preserve error type (e.g., ZodError)
     // for proper handling by callers like executeCommand.ts
