@@ -117,17 +117,6 @@
   min-width: 0;
 }
 
-/* YOLO mode reset button - shown when approval bypass is active */
-.yolo-reset-button {
-  --vscode-button-background: var(--vscode-statusBarItem-warningBackground, #c9a21a);
-  --vscode-button-foreground: var(--vscode-statusBarItem-warningForeground, #000);
-  flex-shrink: 0;
-}
-
-.yolo-reset-button[hidden] {
-  display: none;
-}
-
 .stream-header {
   display: flex;
   align-items: center;
