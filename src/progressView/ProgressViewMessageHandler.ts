@@ -4,22 +4,25 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-
-// Local imports - progress view
+// Local imports
+import {
+  getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
+  getAgent,
+  createKey,
+  ensureAgentsLoaded,
+} from '@agent/index/agentRegistry';
+import type { OutputFileInfo } from '@agent/output/types';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-// Type imports
 import type {
   ExecutionId,
   StorageKey,
   StreamTabId,
 } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-// Internal imports
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -34,20 +37,13 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
+import { getConfig } from '@utils/config';
+import { isNonEmptyString } from '@utils/core';
 import {
   pathToLocation,
   flexibleFS,
   createExternalLocation,
 } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
-import {
-  getVisibleWorkflowAgents,
-  getVisibleToolUseAgents,
-  getAgent,
-  createKey,
-  ensureAgentsLoaded,
-} from '@agent/index/agentRegistry';
-import { getConfig } from '@utils/config';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
   buildFileContextFromTaskState,
