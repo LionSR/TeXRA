@@ -148,6 +148,9 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
+
+  // Followup task (receives from progress view)
+  SETUP_FOLLOWUP_TASK: 'setupFollowupTask',
 };
 
 // Progress view specific commands

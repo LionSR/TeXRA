@@ -57,14 +57,12 @@ export function registerFollowupTaskCommand(
 /**
  * Set up a followup task in the main webview.
  * Maps output files back to input files and sends the configuration to the main view.
+ * For merge mode, directly executes the merge without going to main view.
  */
 async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
   logger.debug(CHANNEL, 'Setting up followup task', { data: { payload } });
 
   try {
-    // Focus the main view first
-    await vscode.commands.executeCommand('texra.mainView.focus');
-
     // Build file mapping from original inputs to outputs
     const originalInputs = [
       payload.originalInputFile,
@@ -98,8 +96,17 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
       }
     }
 
-    // Build the followup configuration for main view
+    // Build the followup configuration
     const followupConfig = buildFollowupConfig(payload, fileMapping);
+
+    // For merge mode, directly execute without going to main view
+    if (payload.mode === 'merge') {
+      await executeMergeDirectly(payload, followupConfig);
+      return;
+    }
+
+    // For workflow/chat mode, focus the main view and send config
+    await vscode.commands.executeCommand('texra.mainView.focus');
 
     // Get the main webview and send the message
     const webviewView = await getMainWebview(CHANNEL);
@@ -222,6 +229,48 @@ function buildFollowupConfig(
 }
 
 /**
+ * Execute merge directly without going to main view.
+ * Handles both single file and multiple file merge scenarios.
+ */
+async function executeMergeDirectly(
+  _payload: FollowupPayload,
+  config: Record<string, unknown>,
+): Promise<void> {
+  logger.info(CHANNEL, 'Executing merge directly');
+
+  const filePairs = config.filePairs as
+    | Array<{ baseFile: string; editedFile: string }>
+    | undefined;
+
+  if (filePairs && filePairs.length > 1) {
+    // Execute merge_multiple agent for batch processing
+    const baseFiles = filePairs.map((p) => p.baseFile);
+    const editedFiles = filePairs.map((p) => p.editedFile);
+
+    await safeExecuteCommand('texra.execute', [
+      {
+        config: {
+          agent: 'merge_multiple',
+          model: config.model,
+          inputFile: baseFiles[0],
+          inputFiles: baseFiles.slice(1),
+          editedFile: editedFiles[0],
+          editedFiles: editedFiles.slice(1),
+          instruction: '',
+        },
+      },
+    ]);
+  } else {
+    // Single file merge
+    await safeExecuteCommand('texra.merge', [
+      undefined,
+      config.baseFile,
+      config.editedFile,
+    ]);
+  }
+}
+
+/**
  * Execute the followup task immediately after setup.
  */
 async function executeFollowupImmediately(
@@ -232,36 +281,7 @@ async function executeFollowupImmediately(
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   if (payload.mode === 'merge') {
-    const filePairs = config.filePairs as
-      | Array<{ baseFile: string; editedFile: string }>
-      | undefined;
-
-    if (filePairs && filePairs.length > 1) {
-      // Execute merge_multiple agent for batch processing
-      const baseFiles = filePairs.map((p) => p.baseFile);
-      const editedFiles = filePairs.map((p) => p.editedFile);
-
-      await safeExecuteCommand('texra.execute', [
-        {
-          config: {
-            agent: 'merge_multiple',
-            model: config.model,
-            inputFile: baseFiles[0],
-            inputFiles: baseFiles.slice(1), // Additional inputs beyond the primary
-            editedFile: editedFiles[0],
-            editedFiles: editedFiles.slice(1), // Additional editeds beyond the primary
-            instruction: '',
-          },
-        },
-      ]);
-    } else {
-      // Single file merge
-      await safeExecuteCommand('texra.merge', [
-        undefined,
-        config.baseFile,
-        config.editedFile,
-      ]);
-    }
+    await executeMergeDirectly(payload, config);
   } else if (payload.mode === 'chat') {
     // Execute chat agent with context
     await safeExecuteCommand('texra.execute', [
