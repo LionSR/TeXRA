@@ -242,6 +242,7 @@ interface ContextManagementSetupOptions {
   options: MessageCreateParams;
   contextWindow: number;
   supportsReasoning: boolean;
+  thresholdPercent: number;
 }
 
 /**
@@ -330,15 +331,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     options,
     contextWindow,
     supportsReasoning,
+    thresholdPercent,
   }: ContextManagementSetupOptions): void {
     if (this.agentType !== AgentType.ToolUse) {
       return;
     }
-
-    const thresholdPercent = getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
 
     // Only enable context management if threshold is configured (> 0)
     if (thresholdPercent <= 0) {
@@ -351,9 +348,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ...(options.context_management?.edits ?? []),
     ];
 
-    const triggerTokens = Math.floor(
-      (thresholdPercent / 100) * contextWindow,
-    );
+    const triggerTokens = Math.floor((thresholdPercent / 100) * contextWindow);
 
     // Thinking clearing is opt-in because the API requires it to be listed
     // first in edits, which means it runs before tool use clearing and
@@ -558,10 +553,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Set up context management BEFORE token counting so countTokens can
     // return accurate post-clearing token counts.
+    const compactionThresholdPercent = getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
     this.setupContextManagement({
       options,
       contextWindow: effectiveContextWindow,
       supportsReasoning: this.capabilities.supportsReasoning,
+      thresholdPercent: compactionThresholdPercent,
     });
 
     if (this.capabilities.supportsTokenCounting) {
