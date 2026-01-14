@@ -66,8 +66,23 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
     const outputLocations = payload.outputFiles.map((p) => pathToLocation(p));
     const inputLocations = originalInputs.map((p) => pathToLocation(p));
 
-    // Create mapping: original input path → output file location
-    const fileMapping = createFileMapping(inputLocations, outputLocations, 'contains');
+    // Create mapping: comparable path → output file location
+    const pathMapping = createFileMapping(inputLocations, outputLocations, 'contains');
+
+    // Build absolute path lookup: absolute path → output file location
+    // pathMapping keys are relative paths, so we need to map absolute → relative → output
+    const fileMapping = new Map<string, { absolutePath: string }>();
+    for (let i = 0; i < originalInputs.length; i++) {
+      const absolutePath = originalInputs[i];
+      const location = inputLocations[i];
+      // Get the comparable path (relative for workspace files)
+      const comparablePath =
+        location.kind !== 'external' ? location.relativePath : location.absolutePath;
+      const output = pathMapping.get(comparablePath);
+      if (output) {
+        fileMapping.set(absolutePath, output);
+      }
+    }
 
     // Build the followup configuration for main view
     const followupConfig = buildFollowupConfig(payload, fileMapping);
@@ -109,23 +124,51 @@ function buildFollowupConfig(
   const { mode, agent, model, instruction } = payload;
 
   if (mode === 'merge') {
-    // Merge mode: inputFile = original, editedFile = output
-    const outputForInput = fileMapping.get(payload.originalInputFile);
-    const editedFile = outputForInput?.absolutePath;
+    // Build list of all file pairs to merge
+    const allInputFiles = [
+      payload.originalInputFile,
+      ...(payload.originalInputFiles ?? []),
+    ].filter(Boolean);
 
-    if (!editedFile) {
+    const filePairs: Array<{ baseFile: string; editedFile: string }> = [];
+    for (const inputFile of allInputFiles) {
+      const outputForInput = fileMapping.get(inputFile);
+      if (outputForInput?.absolutePath) {
+        filePairs.push({
+          baseFile: inputFile,
+          editedFile: outputForInput.absolutePath,
+        });
+      }
+    }
+
+    if (filePairs.length === 0) {
       throw new Error(
-        `Cannot set up merge: no output file found for "${payload.originalInputFile}". ` +
-          'The workflow may not have generated an output file for this input.',
+        `Cannot set up merge: no output files found for any input files. ` +
+          'The workflow may not have generated output files.',
       );
     }
 
+    // For single file, use simple merge config
+    // For multiple files, include filePairs array for batch processing
+    if (filePairs.length === 1) {
+      return {
+        mode: 'merge',
+        agent: 'merge',
+        model,
+        baseFile: filePairs[0].baseFile,
+        editedFile: filePairs[0].editedFile,
+        instruction: '',
+      };
+    }
+
+    // Multiple files: include all pairs
     return {
       mode: 'merge',
       agent: 'merge',
       model,
-      baseFile: payload.originalInputFile,
-      editedFile,
+      baseFile: filePairs[0].baseFile,
+      editedFile: filePairs[0].editedFile,
+      filePairs, // Array of all file pairs for batch merge
       instruction: '',
     };
   }
@@ -171,12 +214,37 @@ async function executeFollowupImmediately(
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   if (payload.mode === 'merge') {
-    // Execute merge directly
-    await safeExecuteCommand('texra.merge', [
-      undefined, // inputFile (unused)
-      config.baseFile,
-      config.editedFile,
-    ]);
+    const filePairs = config.filePairs as
+      | Array<{ baseFile: string; editedFile: string }>
+      | undefined;
+
+    if (filePairs && filePairs.length > 1) {
+      // Execute merge agent with multiple file pairs
+      // The merge agent should handle inputFiles and editedFiles arrays
+      const baseFiles = filePairs.map((p) => p.baseFile);
+      const editedFiles = filePairs.map((p) => p.editedFile);
+
+      await safeExecuteCommand('texra.execute', [
+        {
+          config: {
+            agent: 'merge',
+            model: config.model,
+            inputFile: baseFiles[0],
+            inputFiles: baseFiles,
+            editedFile: editedFiles[0],
+            editedFiles, // Array of edited files for batch merge
+            instruction: '',
+          },
+        },
+      ]);
+    } else {
+      // Single file merge
+      await safeExecuteCommand('texra.merge', [
+        undefined,
+        config.baseFile,
+        config.editedFile,
+      ]);
+    }
   } else {
     // Execute workflow agent
     await safeExecuteCommand('texra.execute', [
