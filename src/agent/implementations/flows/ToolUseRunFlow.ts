@@ -44,16 +44,19 @@ interface StateSlicesSnapshot {
   userChannels: UserVariableChannels;
 }
 
-/** Runtime state stored as serializable snapshots for PersistedFlow. */
-export interface ToolUseRunState {
+/**
+ * Runtime shared state for tool-use flows.
+ * Stored as serializable snapshots for PersistedFlow.
+ *
+ * Uses flat structure (like reflection) for consistent access patterns:
+ * - shared.conversation (not shared.state.conversation)
+ * - shared.stateSlices (not shared.state.stateSlices)
+ */
+export interface ToolUseRunShared {
   conversation: ProviderMessage[];
   shouldSkipCycle: boolean;
   stateSlices: StateSlicesSnapshot | null;
   userCancelledRetry?: boolean;
-}
-
-export interface ToolUseRunShared {
-  state: ToolUseRunState;
 }
 
 // ============================================================================
@@ -88,12 +91,12 @@ interface CyclePrepResult {
 // State Guards
 // ============================================================================
 
-type PreparedState = ToolUseRunState & { stateSlices: StateSlicesSnapshot };
+type PreparedShared = ToolUseRunShared & { stateSlices: StateSlicesSnapshot };
 
-function assertPreparedState(
-  state: ToolUseRunState,
-): asserts state is PreparedState {
-  if (state.stateSlices === null) {
+function assertPreparedShared(
+  shared: ToolUseRunShared,
+): asserts shared is PreparedShared {
+  if (shared.stateSlices === null) {
     throw new Error('PrepareNode must run before CycleNode');
   }
 }
@@ -197,9 +200,9 @@ class ToolUsePrepareNode<C> extends Node<
       userChannels,
       shouldSkipCycle,
     } = execRes.result;
-    shared.state.conversation = [...messages];
-    shared.state.shouldSkipCycle = shouldSkipCycle;
-    shared.state.stateSlices = {
+    shared.conversation = [...messages];
+    shared.shouldSkipCycle = shouldSkipCycle;
+    shared.stateSlices = {
       runStateSnapshot: runState.toSnapshot(),
       workspaceSnapshot: workspaceState.toSnapshot(),
       userChannels,
@@ -219,12 +222,12 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
-    assertPreparedState(shared.state);
+    assertPreparedShared(shared);
 
-    const { stateSlices } = shared.state;
+    const { stateSlices } = shared;
     return {
-      shouldSkip: shared.state.shouldSkipCycle,
-      conversation: shared.state.conversation,
+      shouldSkip: shared.shouldSkipCycle,
+      conversation: shared.conversation,
       runState: AgentRunState.fromSnapshot(stateSlices.runStateSnapshot),
       workspaceState: AgentWorkspaceState.fromSnapshot(
         stateSlices.workspaceSnapshot,
@@ -312,10 +315,10 @@ class ToolUseCycleNode<C> extends Node<
     execRes: CycleExecResult,
   ): Promise<string | undefined> {
     if (prepRes.shouldSkip) {
-      shared.state.shouldSkipCycle = false;
+      shared.shouldSkipCycle = false;
     }
 
-    shared.state.stateSlices = {
+    shared.stateSlices = {
       runStateSnapshot: prepRes.runState.toSnapshot(),
       workspaceSnapshot: prepRes.workspaceState.toSnapshot(),
       userChannels: prepRes.userChannels,
@@ -323,7 +326,7 @@ class ToolUseCycleNode<C> extends Node<
 
     switch (execRes.kind) {
       case 'success':
-        shared.state.conversation = execRes.messages;
+        shared.conversation = execRes.messages;
         return FlowTransition.DEFAULT;
 
       case 'skipped':
@@ -333,7 +336,7 @@ class ToolUseCycleNode<C> extends Node<
         throw new Error(execRes.message);
 
       case 'cancelled':
-        shared.state.userCancelledRetry = true;
+        shared.userCancelledRetry = true;
         return FlowTransition.FINALIZE;
     }
   }
@@ -394,9 +397,9 @@ class ToolUseWaitNode<C> extends Node<
     const session = this.services.session;
     await session.markRunning();
     this.services.logger.userMessage(execRes.followUp);
-    shared.state.conversation =
+    shared.conversation =
       await this.services.modelHandler.createUserFollowUpMessages(
-        shared.state.conversation,
+        shared.conversation,
         execRes.followUp,
       );
 

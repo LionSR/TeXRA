@@ -153,9 +153,11 @@ export async function runToolUseFlow<C = unknown>(
       logger.debug('Resuming tool-use flow from persistence');
     }
 
-    // Create shared state
+    // Create shared state (flat structure for consistency with reflection flows)
     const shared: ToolUseRunShared = {
-      state: { conversation: [], shouldSkipCycle: false, stateSlices: null },
+      conversation: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
     };
 
     // Create PersistedFlow with the start node
@@ -194,10 +196,9 @@ export async function runToolUseFlow<C = unknown>(
       const kv = getExecutionStore(executionId);
       const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
       const sharedState = flowRecord?.shared as
-        | { state?: { userCancelledRetry?: boolean } }
+        | { userCancelledRetry?: boolean }
         | undefined;
-      const userCancelledRetry =
-        sharedState?.state?.userCancelledRetry === true;
+      const userCancelledRetry = sharedState?.userCancelledRetry === true;
 
       if (userCancelledRetry) {
         // Preserve flow record for resume - user can continue from last successful breakpoint
