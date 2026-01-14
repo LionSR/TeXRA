@@ -4,7 +4,6 @@ export * from './result';
 export * from './bash';
 export * from './glob';
 export * from './grep';
-export * from './fileOp';
 export * from './ReadTool';
 export * from './WriteTool';
 export * from './EditTool';
