@@ -149,6 +149,24 @@ export class MemoryTool extends defineTool({
     }
   }
 
+  /**
+   * Validates that the path exists and is a file (not a directory).
+   * Throws ToolError if validation fails.
+   */
+  private async requireEditableFile(
+    resolvedPath: string,
+    inputPath: string,
+  ): Promise<void> {
+    const exists = await StorageFS.exists(resolvedPath);
+    if (!exists) {
+      throw new ToolError(`Error: The path ${inputPath} does not exist`);
+    }
+    const isDir = await StorageFS.isDir(resolvedPath);
+    if (isDir) {
+      throw new ToolError(`Error: The path ${inputPath} does not exist`);
+    }
+  }
+
   private async view(
     inputPath: string,
     viewRange?: number[],
@@ -230,19 +248,7 @@ export class MemoryTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await StorageFS.exists(resolvedPath);
-    if (!exists) {
-      throw new ToolError(
-        `Error: The path ${inputPath} does not exist. Please provide a valid path.`,
-      );
-    }
-
-    const isDir = await StorageFS.isDir(resolvedPath);
-    if (isDir) {
-      throw new ToolError(
-        `Error: The path ${inputPath} does not exist. Please provide a valid path.`,
-      );
-    }
+    await this.requireEditableFile(resolvedPath, inputPath);
 
     const content = await StorageFS.read(resolvedPath);
     const occurrences = content.split(oldStr).length - 1;
@@ -252,11 +258,14 @@ export class MemoryTool extends defineTool({
       );
     }
 
-    const lines = content.split(/\r?\n/);
     if (occurrences > 1) {
-      const lineNumbers = lines
-        .map((line, index) => (line.includes(oldStr) ? index + 1 : null))
-        .filter((lineNumber): lineNumber is number => lineNumber !== null);
+      const lines = content.split(/\r?\n/);
+      const lineNumbers: number[] = [];
+      lines.forEach((line, index) => {
+        if (line.includes(oldStr)) {
+          lineNumbers.push(index + 1);
+        }
+      });
       throw new ToolError(
         `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines: ${lineNumbers.join(
           ', ',
@@ -285,15 +294,7 @@ export class MemoryTool extends defineTool({
     insertText: string,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await StorageFS.exists(resolvedPath);
-    if (!exists) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
-    }
-
-    const isDir = await StorageFS.isDir(resolvedPath);
-    if (isDir) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
-    }
+    await this.requireEditableFile(resolvedPath, inputPath);
 
     const content = await StorageFS.read(resolvedPath);
     const lines = content.split(/\r?\n/);
