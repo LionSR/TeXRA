@@ -1,0 +1,75 @@
+/**
+ * Followup section styles for workflow continuation
+ */
+
+.followup-collapsible {
+  margin-top: var(--spacing-medium, 8px);
+}
+
+.followup-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium, 8px);
+  padding: var(--spacing-small, 4px) 0;
+}
+
+.followup-mode-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.followup-mode-toggle vscode-radio-group {
+  display: flex;
+  gap: var(--spacing-large, 16px);
+}
+
+.followup-selects {
+  display: flex;
+  gap: var(--spacing-medium, 8px);
+  flex-wrap: wrap;
+}
+
+.followup-select-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small, 4px);
+  flex: 1;
+  min-width: 120px;
+}
+
+.followup-select-group .codicon {
+  color: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+}
+
+.followup-agent-select,
+.followup-model-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Hide agent select in merge mode */
+.followup-section[data-mode='merge'] .followup-agent-select {
+  display: none;
+}
+
+.followup-section[data-mode='merge'] .followup-select-group:first-child {
+  display: none;
+}
+
+.followup-options {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium, 8px);
+}
+
+.followup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-small, 4px);
+  margin-top: var(--spacing-small, 4px);
+}
+
+.followup-actions vscode-button {
+  min-width: 80px;
+}
