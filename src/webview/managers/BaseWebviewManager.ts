@@ -1,9 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import * as logger from '@logger/logUtils';
-
 /**
  * Base class for webview managers that need to post messages to the webview.
  * Provides common webview attachment and message posting patterns.
@@ -16,21 +13,16 @@ export abstract class BaseWebviewManager {
     this.webview = webviewView;
   }
 
+  /** Get the attached webview, or undefined if not attached */
   protected getWebview(): vscode.WebviewView | undefined {
-    if (!this.webview) {
-      logger.warn(this.channel, `Webview not attached for ${this.channel}`);
-      return undefined;
-    }
     return this.webview;
   }
 
+  /** Post a message to the webview if attached */
   protected postMessage(message: {
     command: string;
     [key: string]: unknown;
   }): void {
-    const webviewView = this.getWebview();
-    if (webviewView) {
-      webviewView.webview.postMessage(message);
-    }
+    this.webview?.webview.postMessage(message);
   }
 }
