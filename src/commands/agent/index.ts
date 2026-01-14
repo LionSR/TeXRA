@@ -6,5 +6,6 @@ export {
 } from './agentCreatorCommands';
 export { runExecuteCommand, registerExecuteCommand } from './executeCommand';
 export { registerFollowUpCommand } from './followUpCommand';
+export { registerFollowupTaskCommand } from './followupTaskCommand';
 export { mergeCommands, registerMergeCommands } from './mergeCommands';
 export { registerResumeAgentCommand } from './resumeCommand';

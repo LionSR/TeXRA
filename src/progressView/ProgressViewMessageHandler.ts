@@ -40,6 +40,8 @@ import {
   createExternalLocation,
 } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import { getWorkflowAgents } from '@agent/index/agentRegistry';
+import { getConfig } from '@utils/config';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
   buildFileContextFromTaskState,
@@ -153,6 +155,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // Memory
       [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]:
         this.handleOpenMemoryView.bind(this),
+
+      // Followup task
+      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]:
+        this.handleGetFollowupOptions.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]:
+        this.handleSetupFollowup.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: this.handleRunFollowup.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -714,5 +723,126 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
     return undefined;
+  }
+
+  // ===== Followup Task Handlers =====
+
+  /**
+   * Handle request for followup options (agents, models).
+   * Returns the available workflow agents and models to populate the followup UI.
+   */
+  private async handleGetFollowupOptions(_message: any): Promise<void> {
+    const view = this.getActiveView();
+    if (!view) return;
+
+    // Get workflow agents from the agent registry
+    const workflowAgents = getWorkflowAgents();
+    const agentNames = workflowAgents.map((a) => a.name);
+
+    // Get models from config
+    const models = getConfig<string[]>('texra.models', []);
+    const defaultMergeModel = getConfig<string>(
+      'texra.merge.defaultModel',
+      'sonnet37',
+    );
+
+    view.webview.postMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+      agents: agentNames,
+      models,
+      defaultMergeModel,
+    });
+  }
+
+  /**
+   * Handle setup followup task request.
+   * Sends the followup configuration to the main view for review.
+   */
+  private async handleSetupFollowup(message: any): Promise<void> {
+    await this.processFollowup(message, false);
+  }
+
+  /**
+   * Handle run followup task request.
+   * Sets up and immediately executes the followup task.
+   */
+  private async handleRunFollowup(message: any): Promise<void> {
+    await this.processFollowup(message, true);
+  }
+
+  /**
+   * Process a followup request (setup or run).
+   * Calculates file mappings and sends the configuration to main view.
+   */
+  private async processFollowup(
+    message: any,
+    executeImmediately: boolean,
+  ): Promise<void> {
+    const { stream, mode, agent, model, includeInstruction } = message;
+
+    const streamId = stream as StreamTabId;
+    const taskState = this.provider.state.getTaskState(streamId);
+    if (!taskState || !isWorkflowTaskState(taskState)) {
+      this.logger.warn(this.channel, 'Followup: No workflow task state found', {
+        data: { stream },
+      });
+      return;
+    }
+
+    // Get output files for file mapping
+    const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
+      persist: false,
+    }) as StorageKey | null;
+    const runOutputs = storageKey
+      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+      : null;
+
+    // Build the followup configuration
+    const originalConfig = taskState.agentConfig;
+    const outputFiles = this.extractOutputFilePaths(runOutputs);
+
+    // Build payload for main view
+    const followupPayload: Record<string, unknown> = {
+      mode,
+      agent,
+      model,
+      executeImmediately,
+      // Original config for reference
+      originalInputFile: originalConfig.inputFile,
+      originalInputFiles: originalConfig.inputFiles,
+      originalReferenceFile: originalConfig.referenceFile,
+      originalReferenceFiles: originalConfig.referenceFiles,
+      originalAuxiliaryFile: originalConfig.auxiliaryFile,
+      originalAuxiliaryFiles: originalConfig.auxiliaryFiles,
+      // Output files to use for mapping
+      outputFiles,
+      // Instruction handling
+      instruction: includeInstruction ? originalConfig.instruction : '',
+    };
+
+    // Send to main view
+    await vscode.commands.executeCommand(
+      'texra.setupFollowupTask',
+      followupPayload,
+    );
+  }
+
+  /**
+   * Extract absolute file paths from run output files.
+   */
+  private extractOutputFilePaths(
+    runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
+  ): string[] {
+    if (!runOutputs) return [];
+
+    const paths: string[] = [];
+    for (const infos of runOutputs.values()) {
+      for (const info of infos) {
+        if (info.location?.absolutePath) {
+          paths.push(info.location.absolutePath);
+        }
+      }
+    }
+    return paths;
   }
 }
