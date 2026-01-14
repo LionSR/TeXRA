@@ -297,36 +297,35 @@ export class ProgressViewState {
    * @param stream - The stream to resolve for
    * @param requested - Optional specific runId to use
    * @param options.persist - Whether to save the resolved runId (default: true)
-   * @returns The resolved runId, or null if none found
+   * @returns The resolved StorageKey, or null if none found
    */
   resolveRunId(
     stream: StreamTabId,
     requested?: string | null,
     options?: { persist?: boolean },
-  ): string | null {
+  ): StorageKey | null {
     // 1. Specific runId requested - validate it exists
     if (requested) {
       const candidates = this.collectRunCandidates(stream);
       if (!candidates.has(requested)) return null;
+      const normalized = normalizeRunId(requested);
       if (options?.persist ?? true) this.setActiveRunId(stream, requested);
-      return requested;
+      return normalized;
     }
 
-    // 2. Use existing active run if already set
+    // 2. Use existing active run if already set (already normalized)
     const current = this.getActiveRunId(stream);
     if (current) return current;
 
     // 3. Auto-select from candidates
     const candidates = this.collectRunCandidates(stream);
     const selected =
-      candidates.size === 1
-        ? [...candidates][0]
-        : this.findLatestRunId(stream);
+      candidates.size === 1 ? [...candidates][0] : this.findLatestRunId(stream);
 
-    if (selected && (options?.persist ?? true)) {
-      this.setActiveRunId(stream, selected);
-    }
-    return selected;
+    if (!selected) return null;
+    const normalized = normalizeRunId(selected);
+    if (options?.persist ?? true) this.setActiveRunId(stream, selected);
+    return normalized;
   }
 
   private collectRunCandidates(stream: StreamTabId): Set<string> {
