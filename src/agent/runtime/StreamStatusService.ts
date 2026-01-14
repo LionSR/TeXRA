@@ -3,7 +3,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 
 // Internal imports
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS, isActiveStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
@@ -121,12 +121,10 @@ export const StreamStatusService = {
   /**
    * Check if stream is actively processing (RUNNING or RESUMING).
    * Use to guard against concurrent operations.
+   * Delegates to isActiveStatus() for the actual status check.
    */
   isActiveOrResuming(stream: StreamTabId): boolean {
-    const status = statusMemory.get(stream);
-    return (
-      status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING
-    );
+    return isActiveStatus(statusMemory.get(stream));
   },
 
   /**
