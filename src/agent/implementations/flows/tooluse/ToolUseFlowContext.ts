@@ -10,7 +10,6 @@ import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
@@ -35,15 +34,15 @@ export interface ToolUseFlowContextInit<
  * Optionally injects the memory tool if enabled in user settings.
  *
  * @param tools - Tool configuration from agent settings
- * @param registry - Optional tool registry (defaults to global registry)
+ * @param registry - Tool registry to resolve tools from
  * @param logger - Logger for warnings about missing tools
  */
 export function resolveTools(
   tools: AgentToolUseSetting['tools'],
-  registry: IToolRegistry | undefined,
+  registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
 ): ToolDefinition[] {
-  const toolRegistry = registry ?? getDefaultToolRegistry();
+  const toolRegistry = registry;
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
   const resolved: ToolDefinition[] = [];
