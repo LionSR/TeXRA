@@ -231,10 +231,7 @@ export class ProgressViewState {
 
   /** Clear stream hints (resets to empty) */
   clearStreamHints(streamTabId: StreamTabId): void {
-    const state = this._ephemeral.get(streamTabId);
-    if (state) {
-      state.hints = {};
-    }
+    this.clearEphemeralField(streamTabId, 'hints', {});
   }
 
   /** Set todos for a stream */
@@ -250,10 +247,7 @@ export class ProgressViewState {
 
   /** Clear todos for a stream */
   clearTodos(stream: StreamTabId): void {
-    const state = this._ephemeral.get(stream);
-    if (state) {
-      state.todos = [];
-    }
+    this.clearEphemeralField(stream, 'todos', []);
   }
 
   /** Clear all todos across all streams */
@@ -275,9 +269,18 @@ export class ProgressViewState {
 
   /** Clear context state for a stream */
   clearContextState(stream: StreamTabId): void {
+    this.clearEphemeralField(stream, 'contextState', null);
+  }
+
+  /** Helper to clear a specific ephemeral field */
+  private clearEphemeralField<K extends keyof StreamEphemeralState>(
+    stream: StreamTabId,
+    field: K,
+    emptyValue: StreamEphemeralState[K],
+  ): void {
     const state = this._ephemeral.get(stream);
     if (state) {
-      state.contextState = null;
+      state[field] = emptyValue;
     }
   }
 
