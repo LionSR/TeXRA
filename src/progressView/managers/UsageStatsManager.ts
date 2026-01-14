@@ -245,13 +245,9 @@ export class UsageStatsManager extends PersistentMapManager<
    * Calculate total usage across all streams
    */
   getTotalUsage(): TokenUsageStats {
-    // Flatten all run usage maps into a single iterable
-    const allUsage = (function* (items: Map<StreamTabId, RunUsageMap>) {
-      for (const runMap of items.values()) {
-        yield* runMap.values();
-      }
-    })(this.items);
-
+    const allUsage = [...this.items.values()].flatMap((runMap) => [
+      ...runMap.values(),
+    ]);
     return sumUsageStats(allUsage);
   }
 

@@ -184,16 +184,14 @@ const extractTextFromContent = (
   content: BetaContentBlock[] | undefined,
   trim = false,
 ): string => {
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  let text = '';
-  for (const block of content) {
-    if (block.type === 'text') {
-      text += trim ? block.text.trim() : block.text;
-    }
-  }
-  return text;
+  if (!content) return '';
+  return content
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
+    )
+    .map((block) => (trim ? block.text.trim() : block.text))
+    .join('');
 };
 
 /**
