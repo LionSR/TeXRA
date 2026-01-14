@@ -109,7 +109,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _refreshInstructionForActiveRun(runId) {
     // Tool-use agents don't use instruction panel
-    if (state.activeSessionKind === 'toolUse') return dom.instructionPanel.hide();
+    if (state.activeSessionKind === 'toolUse')
+      return dom.instructionPanel.hide();
 
     const ctx = this._getActiveRunContext(runId);
     if (!ctx) return dom.instructionPanel.hide();
@@ -410,7 +411,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     state.activeStream = message.activeStream;
     // Update filter if message specifies a different value (and not a pending local change)
-    if (!state.pendingFilterUpdate && message.agentFilter !== undefined && message.agentFilter !== state.agentTypeFilter) {
+    if (
+      !state.pendingFilterUpdate &&
+      message.agentFilter !== undefined &&
+      message.agentFilter !== state.agentTypeFilter
+    ) {
       state.agentTypeFilter = message.agentFilter;
     }
     state.pendingFilterUpdate = false;
@@ -419,7 +424,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Process streams - preserve ERROR status when omitted
     const streams = (message.streams ?? []).map((s) => {
       const cachedError = state.streamStatuses.get(s.name);
-      const status = s.status ?? (cachedError === STREAM_STATUS.ERROR ? cachedError : undefined);
+      const status =
+        s.status ??
+        (cachedError === STREAM_STATUS.ERROR ? cachedError : undefined);
       state.streamStatuses.set(s.name, status);
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
@@ -484,7 +491,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
       dom.todoList.update(state.getTodos(message.activeStream) ?? []);
-      dom.queuedFollowUps.update(state.getQueuedFollowUps(message.activeStream) ?? []);
+      dom.queuedFollowUps.update(
+        state.getQueuedFollowUps(message.activeStream) ?? [],
+      );
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
@@ -780,7 +789,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Validate status against known values
     if (status && !Object.values(STREAM_STATUS).includes(status)) {
-      console.debug(`[updateStreamStatus] Invalid status "${status}" for stream: ${stream}`);
+      console.debug(
+        `[updateStreamStatus] Invalid status "${status}" for stream: ${stream}`,
+      );
       return;
     }
 
@@ -860,7 +871,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.reset) {
       state.clearRunFiles(targetStream);
     } else if (message.runId) {
-      const hasRounds = message.rounds && Object.keys(message.rounds).length > 0;
+      const hasRounds =
+        message.rounds && Object.keys(message.rounds).length > 0;
       hasRounds
         ? state.setRunFiles(targetStream, message.runId, message.rounds)
         : state.deleteRunFiles(targetStream, message.runId);
