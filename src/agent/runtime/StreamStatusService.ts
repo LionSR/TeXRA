@@ -33,17 +33,18 @@ export const StreamStatusService = {
 
   /**
    * Attempt to acquire a stream for execution.
-   * Returns true if acquired (sets INITIALIZING), false if already running/initializing.
+   * Returns true if acquired (sets INITIALIZING), false if already active.
    *
    * This is an atomic check-and-set to prevent race conditions when launching
-   * workflows concurrently.
+   * workflows concurrently. Blocks on RUNNING, RESUMING, and INITIALIZING.
    */
   tryAcquire(stream: StreamTabId): boolean {
     const current = statusMemory.get(stream);
 
-    // Block if already running or initializing
+    // Block if already active (running/resuming) or initializing
     if (
       current === STREAM_STATUS.RUNNING ||
+      current === STREAM_STATUS.RESUMING ||
       current === STREAM_STATUS.INITIALIZING
     ) {
       return false;
