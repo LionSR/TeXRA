@@ -98,13 +98,29 @@ export class OutputFileProcessor {
       await cleanupLatexBackups(rawLocation, logger);
       await this.captureXmlSummary(currRound, rawLocation, [], scope);
     } catch (err) {
-      logger.debug(`Error processing output files: ${toErrorMessage(err)}`, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-      this.ctx.setRoundOutputs(currRound, []);
-      await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.handleOutputProcessingError(
+        err,
+        currRound,
+        rawLocation,
+        scope,
+      );
     }
+  }
+
+  /** Handle errors during output processing with consistent cleanup. */
+  private async handleOutputProcessingError(
+    err: unknown,
+    currRound: number,
+    rawLocation: FileLocation,
+    scope: AgentLogStage,
+  ): Promise<void> {
+    this.ctx.logger.debug(
+      `Error processing output file: ${toErrorMessage(err)}`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
+    this.ctx.setRoundOutputs(currRound, []);
+    await cleanupLatexBackups(rawLocation, this.ctx.logger);
+    await this.captureXmlSummary(currRound, rawLocation, [], scope);
   }
 
   async processSingleOutput(

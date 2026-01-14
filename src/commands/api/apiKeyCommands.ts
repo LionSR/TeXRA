@@ -151,9 +151,4 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(setApiKeyCommand, removeApiKeyCommand);
-
-  return {
-    setApiKeyCommand,
-    removeApiKeyCommand,
-  };
 }
