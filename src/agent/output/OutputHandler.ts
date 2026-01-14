@@ -44,7 +44,6 @@ interface RoundData {
 export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
-  public logId: number;
   private rounds: Map<number, RoundData>;
 
   public get outputFiles(): { [key: number]: OutputFileInfo[] } {
@@ -70,7 +69,6 @@ export class OutputHandler implements IOutputHandler {
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
-    logId: number,
     baseFiles: FileLocation[],
     logger: AgentLogger,
     fileService: TaskRunFileService,
@@ -78,11 +76,10 @@ export class OutputHandler implements IOutputHandler {
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
-    this.logId = logId;
     this.rounds = new Map();
     this.baseFiles = baseFiles;
     this.logger = logger;
-    this.channel = this.logger.channelId;
+    this.channel = this.logger.streamId;
     this.fileService = fileService;
     this.executionId = executionId;
 
