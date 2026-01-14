@@ -24,44 +24,39 @@ const inFlightDetections = new Set<StreamTabId>();
 /**
  * Lazily detect if a stream has a persisted flow record and set WAITING status.
  *
- * This enables lazy loading of session state - instead of checking all streams
- * at startup, we only check when the user actually sends a follow-up.
+ * Enables lazy loading - we only check for persisted flows when user sends a follow-up,
+ * avoiding startup iteration through all streams.
  *
  * @returns true if a persisted flow was detected and status was set to WAITING
  */
 async function lazyDetectWaitingStatus(
   streamId: StreamTabId,
 ): Promise<boolean> {
-  // Skip if status is already set (active, resuming, waiting, etc.)
+  // Skip if status already set or detection in progress
   const currentStatus = StreamStatusService.get(streamId);
   if (currentStatus) {
     return currentStatus === STREAM_STATUS.WAITING;
   }
-
-  // Skip if detection is already in progress for this stream
   if (inFlightDetections.has(streamId)) {
     return false;
   }
 
   // Get execution ID to check for persisted flow
-  const progressState = ProgressViewProvider.getInstance()?.state;
-  const executionId = progressState?.getExecutionId(streamId);
+  const executionId =
+    ProgressViewProvider.getInstance()?.state?.getExecutionId(streamId);
   if (!executionId) {
     return false;
   }
 
-  // Mark as in-flight to prevent duplicate checks
+  // Check for persisted flow (with in-flight guard)
   inFlightDetections.add(streamId);
   try {
-    // Check if a persisted flow record exists
     const hasFlow = await hasPersistedFlowRecord(executionId);
     if (hasFlow) {
-      // Set WAITING status so sendFollowUp will queue the message
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
       logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
-      return true;
     }
-    return false;
+    return hasFlow;
   } finally {
     inFlightDetections.delete(streamId);
   }
@@ -77,8 +72,7 @@ async function lazyDetectWaitingStatus(
  * @returns true if resume was triggered, false otherwise
  */
 async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
-  // Guard against concurrent resume attempts.
-  // If already resuming or running, don't trigger another resume.
+  // Guard against concurrent resume attempts
   const currentStatus = StreamStatusService.get(streamId);
   if (
     currentStatus === STREAM_STATUS.RESUMING ||
@@ -90,24 +84,18 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     return false;
   }
 
-  // Use ProgressViewState for task state and execution ID access.
-  // This handles legacy storage structure (workflow/toolUse buckets) and
-  // provides already-validated task states, avoiding parallel access patterns.
+  // Get state dependencies - ProgressViewState handles legacy storage structure
   const progressState = ProgressViewProvider.getInstance()?.state;
-  if (!progressState) {
-    logger.warn(`ProgressViewProvider not available for stream: ${streamId}`);
-    return false;
-  }
+  const executionId = progressState?.getExecutionId(streamId);
+  const taskState = progressState?.getTaskState(streamId);
 
-  const executionId = progressState.getExecutionId(streamId);
-  if (!executionId) {
-    logger.warn(`No execution ID found for stream: ${streamId}`);
-    return false;
-  }
-
-  const taskState = progressState.getTaskState(streamId);
-  if (!taskState) {
-    logger.warn(`No task state found for stream: ${streamId}`);
+  if (!progressState || !executionId || !taskState) {
+    const missing = !progressState
+      ? 'ProgressViewProvider'
+      : !executionId
+        ? 'execution ID'
+        : 'task state';
+    logger.warn(`No ${missing} found for stream: ${streamId}`);
     return false;
   }
 
@@ -117,39 +105,29 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     executionId,
     taskState,
   );
-
   if (!resumeData) {
-    // retrieveSessionResumeData logs specific failure reason
     return false;
   }
 
-  // Trigger resume based on session type.
-  // Note: Tool-use and workflow have different resume semantics:
-  // - Tool-use: resumeAgent returns { success: boolean } for explicit result checking
-  // - Workflow: execute returns void and throws on failure (async fire-and-forget)
+  // Trigger resume based on session type
   logger.info(
     `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,
   );
   try {
     if (resumeData.type === 'toolUse') {
-      // Tool-use: pass snapshot to resumeAgent command, validate result with schema
       const rawResult = await vscode.commands.executeCommand(
         'texra.resumeAgent',
-        {
-          snapshot: resumeData.snapshot,
-        },
+        { snapshot: resumeData.snapshot },
       );
       const parseResult = ResumeAgentResultSchema.safeParse(rawResult);
       return parseResult.success && parseResult.data.success;
-    } else {
-      // Workflow: pass config and executionId to execute command.
-      // Execute returns void - success if no exception thrown.
-      await vscode.commands.executeCommand('texra.execute', {
-        config: resumeData.agentConfig,
-        executionId: resumeData.executionId,
-      });
-      return true;
     }
+    // Workflow: execute returns void - success if no exception thrown
+    await vscode.commands.executeCommand('texra.execute', {
+      config: resumeData.agentConfig,
+      executionId: resumeData.executionId,
+    });
+    return true;
   } catch (error) {
     logger.error(`Failed to execute resume command for stream: ${streamId}`, {
       data: error,
