@@ -40,7 +40,7 @@ import {
   createExternalLocation,
 } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import { getWorkflowAgents } from '@agent/index/agentRegistry';
+import { getWorkflowAgents, getAgent } from '@agent/index/agentRegistry';
 import { getConfig } from '@utils/config';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -796,14 +796,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async processFollowup(
     data: {
       stream: string;
-      mode: 'workflow' | 'merge';
+      mode: 'chat' | 'workflow' | 'merge';
       agent: string;
       model: string;
       includeInstruction?: boolean;
+      initialQuestion?: string;
     },
     executeImmediately: boolean,
   ): Promise<void> {
-    const { stream, mode, agent, model, includeInstruction } = data;
+    const { stream, mode, agent, model, includeInstruction, initialQuestion } =
+      data;
 
     const streamId = stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
@@ -839,6 +841,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    // Get original agent info for chat mode
+    const originalAgentEntry = getAgent(originalConfig.agent);
+
     // Build payload for main view
     const followupPayload: Record<string, unknown> = {
       mode,
@@ -854,8 +859,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       originalAuxiliaryFiles: originalConfig.auxiliaryFiles,
       // Output files to use for mapping
       outputFiles,
-      // Instruction handling
-      instruction: includeInstruction ? originalConfig.instruction : '',
+      // Instruction handling (for workflow mode or chat context)
+      instruction:
+        mode === 'chat' || includeInstruction ? originalConfig.instruction : '',
+      // Chat mode specific
+      initialQuestion,
+      originalAgent: originalConfig.agent,
+      originalAgentDescription: originalAgentEntry?.description,
+      originalModel: originalConfig.model,
     };
 
     try {
