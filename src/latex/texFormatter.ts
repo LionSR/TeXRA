@@ -7,11 +7,13 @@ import { runTexFmt } from './formatter/texfmt';
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
   const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
-  if (formatter === 'none') {
-    return true;
+
+  switch (formatter) {
+    case 'none':
+      return true;
+    case 'tex-fmt':
+      return runTexFmt(filePath);
+    default:
+      return runLatexIndent(filePath);
   }
-  if (formatter === 'tex-fmt') {
-    return runTexFmt(filePath);
-  }
-  return runLatexIndent(filePath);
 }
