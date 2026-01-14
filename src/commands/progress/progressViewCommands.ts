@@ -12,17 +12,15 @@ const logger = new AgentLogger(CHANNEL);
 /**
  * Show the Progress View panel
  */
-async function showProgressView() {
-  // Focus the progress view
+async function showProgressView(): Promise<void> {
   await safeExecuteCommand('texra.progressView.focus', [], CHANNEL);
-
   logger.info('ProgressView panel shown');
 }
 
 /**
  * Open the Progress View in a separate editor tab
  */
-function openProgressViewInTab() {
+function openProgressViewInTab(): void {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
     logger.error('ProgressViewProvider not initialized');
@@ -39,7 +37,9 @@ function openProgressViewInTab() {
 /**
  * Register all progress view related commands
  */
-export function registerProgressViewCommands(context: vscode.ExtensionContext) {
+export function registerProgressViewCommands(
+  context: vscode.ExtensionContext,
+): void {
   logger.debug('Registering progress view commands');
 
   context.subscriptions.push(
@@ -49,9 +49,4 @@ export function registerProgressViewCommands(context: vscode.ExtensionContext) {
       openProgressViewInTab,
     ),
   );
-
-  return {
-    showProgressView,
-    openProgressViewInTab,
-  };
 }
