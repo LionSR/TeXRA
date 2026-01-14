@@ -94,23 +94,12 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
           );
         }
       } catch (error) {
-        if (error instanceof Error) {
-          vscode.window.showErrorMessage(
-            `Failed to download arXiv source: ${error.message}`,
-          );
-          logger.error(
-            CHANNEL,
-            `Error downloading arXiv source: ${error.message}`,
-          );
-        } else {
-          vscode.window.showErrorMessage(
-            'An unknown error occurred while downloading arXiv source',
-          );
-          logger.error(
-            CHANNEL,
-            `Unknown error downloading arXiv source: ${error}`,
-          );
-        }
+        const message =
+          error instanceof Error ? error.message : 'An unknown error occurred';
+        vscode.window.showErrorMessage(
+          `Failed to download arXiv source: ${message}`,
+        );
+        logger.error(CHANNEL, `Error downloading arXiv source: ${message}`);
       }
     },
   );
