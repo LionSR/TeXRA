@@ -3,7 +3,10 @@
  *
  * Handles output events: addOutputFiles, updateMissingOutputs, clearMissingOutputs.
  */
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
 
@@ -32,21 +35,19 @@ function toRoundRecord<T>(
 }
 
 function handleAddOutputFiles(ctx: EventHandlerContext) {
-  return ({ stream, storageKey, filesByRound }: {
-    stream: string;
-    storageKey: string;
-    filesByRound: Map<number, unknown[]>;
-  }): void => {
+  return ({
+    stream,
+    storageKey,
+    filesByRound,
+  }: ProgressEventPayloads['addOutputFiles']): void => {
     withEventErrorHandling(
       'OutputEvents',
       'failed to handle addOutputFiles',
       async () => {
-        await ctx.state.outputFiles.addFiles(stream, storageKey, filesByRound as any);
+        await ctx.state.outputFiles.addFiles(stream, storageKey, filesByRound);
         if (!ctx.webviewUpdater.isAvailable()) return;
 
-        const runFiles = ctx.state.outputFiles
-          .getFiles(stream)
-          .get(storageKey);
+        const runFiles = ctx.state.outputFiles.getFiles(stream).get(storageKey);
         const rounds = toRoundRecord(runFiles);
         ctx.webviewUpdater.updateFiles(stream, {
           runId: storageKey,
@@ -58,11 +59,11 @@ function handleAddOutputFiles(ctx: EventHandlerContext) {
 }
 
 function handleUpdateMissingOutputs(ctx: EventHandlerContext) {
-  return ({ stream, storageKey, filesByRound }: {
-    stream: string;
-    storageKey: string;
-    filesByRound: Map<number, unknown[]>;
-  }): void => {
+  return ({
+    stream,
+    storageKey,
+    filesByRound,
+  }: ProgressEventPayloads['updateMissingOutputs']): void => {
     withEventErrorHandling(
       'OutputEvents',
       'failed to handle updateMissingOutputs',
@@ -70,7 +71,7 @@ function handleUpdateMissingOutputs(ctx: EventHandlerContext) {
         await ctx.state.outputFiles.updateMissingOutputs(
           stream,
           storageKey,
-          filesByRound as any,
+          filesByRound,
         );
         if (!ctx.webviewUpdater.isAvailable()) return;
 
@@ -88,7 +89,9 @@ function handleUpdateMissingOutputs(ctx: EventHandlerContext) {
 }
 
 function handleClearMissingOutputs(ctx: EventHandlerContext) {
-  return ({ stream }: { stream: string }): void => {
+  return ({
+    stream,
+  }: ProgressEventPayloads['clearMissingOutputs']): void => {
     withEventErrorHandling(
       'OutputEvents',
       'failed to handle clearMissingOutputs',
