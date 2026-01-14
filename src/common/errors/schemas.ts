@@ -29,7 +29,7 @@ export const ProviderErrorSchema = z.object({
   /** Human-readable error message (includes HTTP prefix when applicable) */
   message: z.string(),
   /** HTTP status code reported by the provider, when present */
-  statusCode: z.number().int().optional(),
+  statusCode: z.int().optional(),
   /** HTTP status text (e.g., "Not Found", "Too Many Requests") */
   statusText: z.string().optional(),
   /** Provider identifier (openai, anthropic, google, kimi) */
