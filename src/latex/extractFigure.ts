@@ -19,34 +19,36 @@ function normalizePath(latexDir: string, relativePath: string): string {
 }
 
 /**
- * Parse graphicspath commands supporting both single and multiple path formats
+ * Normalize a path to ensure it has a trailing slash.
+ */
+function ensureTrailingSlash(p: string): string {
+  const trimmed = p.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+}
+
+/**
+ * Parse graphicspath commands supporting both single and multiple path formats.
  * @param content LaTeX file content
  * @returns Array of paths found in graphicspath commands
  */
 function parseGraphicspath(content: string): string[] {
-  const paths: string[] = [];
-  // Match both single and multiple path formats
   const graphicspathPattern = /\\graphicspath\s*\{((?:\s*\{[^{}]+\}\s*)+)\}/g;
-  // Pattern to extract individual paths from nested braces
   const pathPattern = /\{([^{}]+)\}/g;
 
-  // Use flatMap to process outer matches and extract inner paths
-  const extractedPaths = [...content.matchAll(graphicspathPattern)].flatMap(
-    (outerMatch) =>
-      [...outerMatch[1].matchAll(pathPattern)]
-        .map((pathMatch) => {
-          let p = pathMatch[1].trim();
-          // Ensure path has trailing slash
-          if (p && !p.endsWith('/')) {
-            p += '/';
-          }
-          return p;
-        })
-        .filter(Boolean),
-  );
+  const extractedPaths: string[] = [];
+  for (const outerMatch of content.matchAll(graphicspathPattern)) {
+    for (const pathMatch of outerMatch[1].matchAll(pathPattern)) {
+      const normalized = ensureTrailingSlash(pathMatch[1]);
+      if (normalized) {
+        extractedPaths.push(normalized);
+      }
+    }
+  }
 
-  paths.push(...extractedPaths);
-  return paths;
+  return extractedPaths;
 }
 
 /**
