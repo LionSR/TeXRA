@@ -715,7 +715,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
       data: toolUseLog,
     });
 
-    const mediaLocations = await this.collectValidMediaLocations(result.files);
+    const mediaLocations = await this.collectValidMediaLocations(
+      result.files,
+      options.logger,
+    );
     if (mediaLocations.length > 0) {
       workspace.media.addMediaFiles(mediaLocations);
     }
@@ -724,6 +727,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
   /** Collect valid file locations from tool result attachments. */
   private async collectValidMediaLocations(
     files: ToolResult['files'],
+    logger: AgentLogger,
   ): Promise<FileLocation[]> {
     if (!files || files.length === 0) {
       return [];
@@ -740,8 +744,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
         if (await AbsoluteFS.exists(location.absolutePath)) {
           validLocations.push(location);
         }
-      } catch {
-        // Ignore files that can't be accessed
+      } catch (err) {
+        logger.debug(
+          `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
+        );
       }
     }
     return validLocations;
