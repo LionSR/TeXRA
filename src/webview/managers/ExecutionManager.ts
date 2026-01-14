@@ -91,46 +91,28 @@ export class ExecutionManager {
   }
 
   handleFileOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    ]);
+    this.runCommand(message, ['inputFile', 'baseFile', 'editedFile']);
   }
 
   handleHousekeeping(message: any): void {
-    this.executeCommand(message.command);
+    this.runCommand(message, []);
   }
 
   handleSingleOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-    ]);
+    this.runCommand(message, ['inputFile', 'agent', 'model']);
   }
 
   handleMultipleOperation(message: any): void {
-    const operation = message.command.startsWith('pack')
-      ? 'Packing'
-      : 'Cleaning';
-    const outputFilesStr = Array.isArray(message.outputFiles)
-      ? message.outputFiles.join(', ')
-      : '';
-    logger.info(
-      CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
-    );
-
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-      message.outputFiles,
-    ]);
+    const operation = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
+    const files = Array.isArray(message.outputFiles) ? message.outputFiles.join(', ') : '';
+    logger.info(CHANNEL, `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`);
+    this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
   }
 
-  private executeCommand(command: string, args: unknown[] = []): void {
-    void vscode.commands.executeCommand(`texra.${command}`, ...args);
+  private runCommand(message: any, paramKeys: string[]): void {
+    void vscode.commands.executeCommand(
+      `texra.${message.command}`,
+      ...paramKeys.map((k) => message[k]),
+    );
   }
 }
