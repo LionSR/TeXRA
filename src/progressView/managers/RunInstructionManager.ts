@@ -84,10 +84,10 @@ export class RunInstructionManager extends PersistentMapManager<
     return mapToRecord(value);
   }
 
-  protected override async deserialize(
+  protected override deserialize(
     data: unknown,
     _stream: StreamTabId,
-  ): Promise<InstructionMap> {
+  ): InstructionMap {
     return recordToMap<InstructionUpdate>(data);
   }
 }

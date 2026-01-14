@@ -573,7 +573,7 @@ export class ProgressViewState {
    * Load all state from persistence
    */
   async load(): Promise<void> {
-    // Load basic state first
+    // Load basic state first (async managers)
     await Promise.all([
       this._streamTabs.load(),
       this._taskGroups.load(),
@@ -582,21 +582,19 @@ export class ProgressViewState {
       this._runInstructions.load(),
     ]);
 
-    // Load dependent state after basic state is loaded
-    await Promise.all([
-      this.loadActiveStream(), // Depends on stream tabs being loaded
-      this.loadTaskStates(),
-      this.loadExecutionIds(),
-      this.loadStreamSortOrder(),
-      this.loadAgentTypeFilter(),
-      this.loadActiveRunIds(),
-    ]);
+    // Load dependent state after basic state is loaded (synchronous operations)
+    this.loadActiveStream(); // Depends on stream tabs being loaded
+    this.loadTaskStates();
+    this.loadExecutionIds();
+    this.loadStreamSortOrder();
+    this.loadAgentTypeFilter();
+    this.loadActiveRunIds();
   }
 
   /**
    * Load active stream from persistence
    */
-  private async loadActiveStream(): Promise<void> {
+  private loadActiveStream(): void {
     const savedActiveStream = this.storage.get<string>(
       WorkspaceStateKey.ACTIVE_STREAM_TAB,
       '',
@@ -613,7 +611,7 @@ export class ProgressViewState {
    * Load task states from persistence.
    * Handles both current flat format and legacy workflow/toolUse format.
    */
-  private async loadTaskStates(): Promise<void> {
+  private loadTaskStates(): void {
     const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
     this.taskStates.clear();
 
@@ -680,7 +678,7 @@ export class ProgressViewState {
   /**
    * Load execution IDs from persistence
    */
-  private async loadExecutionIds(): Promise<void> {
+  private loadExecutionIds(): void {
     const savedIdsRecord = this.loadRecord(WorkspaceStateKey.EXECUTION_IDS);
 
     const entries = Object.entries(savedIdsRecord).filter(
@@ -740,7 +738,7 @@ export class ProgressViewState {
     void this.storage.update(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
   }
 
-  private async loadStreamSortOrder(): Promise<void> {
+  private loadStreamSortOrder(): void {
     const configDefault = getConfig(
       'texra.progressBoard.streamSortOrder',
       'time',
@@ -758,7 +756,7 @@ export class ProgressViewState {
     );
   }
 
-  private async loadAgentTypeFilter(): Promise<void> {
+  private loadAgentTypeFilter(): void {
     const savedFilter = this.storage.get<string>(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       'all',
