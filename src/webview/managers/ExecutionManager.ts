@@ -90,47 +90,26 @@ export class ExecutionManager {
     return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
   }
 
-  handleFileOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    ]);
-  }
+  /**
+   * Execute a command with arguments extracted from message.
+   * Consolidates handleFileOperation, handleHousekeeping, handleSingleOperation, handleMultipleOperation.
+   */
+  handleCommand(message: any): void {
+    const { command, inputFile, baseFile, editedFile, agent, model, outputFiles } = message;
 
-  handleHousekeeping(message: any): void {
-    this.executeCommand(message.command);
-  }
+    // Log pack/clean operations
+    if (outputFiles && (command.startsWith('pack') || command.startsWith('clean'))) {
+      const operation = command.startsWith('pack') ? 'Packing' : 'Cleaning';
+      const outputFilesStr = Array.isArray(outputFiles) ? outputFiles.join(', ') : '';
+      logger.info(CHANNEL, `${capitalize(operation)} multiple files: ${inputFile}, ${outputFilesStr}`);
+    }
 
-  handleSingleOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-    ]);
-  }
+    // Build args based on command type (file ops use different args than agent ops)
+    const isFileOp = command.includes('Diff') || command.includes('Compare');
+    const args = isFileOp
+      ? [inputFile, baseFile, editedFile].filter((a) => a !== undefined)
+      : [inputFile, agent, model, outputFiles].filter((a) => a !== undefined);
 
-  handleMultipleOperation(message: any): void {
-    const operation = message.command.startsWith('pack')
-      ? 'Packing'
-      : 'Cleaning';
-    const outputFilesStr = Array.isArray(message.outputFiles)
-      ? message.outputFiles.join(', ')
-      : '';
-    logger.info(
-      CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
-    );
-
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-      message.outputFiles,
-    ]);
-  }
-
-  private executeCommand(command: string, args: unknown[] = []): void {
     void vscode.commands.executeCommand(`texra.${command}`, ...args);
   }
 }
