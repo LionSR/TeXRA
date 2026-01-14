@@ -48,29 +48,24 @@
   min-width: 0;
 }
 
-/* Hide agent select in merge mode */
-.followup-section[data-mode='merge'] .followup-agent-select {
+/* Hide agent select group in merge mode (merge always uses 'merge' agent) */
+.followup-section[data-mode='merge']
+  .followup-select-group:has(.followup-agent-select) {
   display: none;
 }
 
-.followup-section[data-mode='merge'] .followup-select-group:first-child {
-  display: none;
-}
-
-/* Initial question textarea for chat mode */
+/* Initial question textarea - hidden by default, shown in chat mode */
 .followup-initial-question {
-  display: flex;
+  display: none;
   flex-direction: column;
+}
+
+.followup-section[data-mode='chat'] .followup-initial-question {
+  display: flex;
 }
 
 .followup-initial-question vscode-text-area {
   width: 100%;
-}
-
-/* Hide initial question in workflow/merge modes */
-.followup-section[data-mode='workflow'] .followup-initial-question,
-.followup-section[data-mode='merge'] .followup-initial-question {
-  display: none;
 }
 
 .followup-options {
