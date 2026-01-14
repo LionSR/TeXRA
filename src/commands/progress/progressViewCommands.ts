@@ -49,9 +49,4 @@ export function registerProgressViewCommands(context: vscode.ExtensionContext) {
       openProgressViewInTab,
     ),
   );
-
-  return {
-    showProgressView,
-    openProgressViewInTab,
-  };
 }
