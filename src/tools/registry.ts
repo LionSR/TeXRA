@@ -13,7 +13,6 @@ import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
-import { FileOpTool } from './fileOp';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
 import { LsTool } from './ls';
@@ -50,7 +49,6 @@ export function getDefaultToolRegistry(): IToolRegistry {
       read_file: new ReadFileTool(),
       write_file: new WriteFileTool(),
       edit_file: new EditFileTool(),
-      file_op: new FileOpTool(),
       apply_path: new ApplyPathTool(),
       glob: new GlobTool(),
       grep: new GrepTool(),
