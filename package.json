@@ -1712,7 +1712,7 @@
     "@google/genai": "^1.35.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
-    "@openrouter/sdk": "^0.3.12",
+    "@openrouter/sdk": "^0.3.14",
     "@supabase/supabase-js": "^2.90.1",
     "@vscode-elements/elements": "^2.4.0",
     "@vscode/codicons": "^0.0.44",
