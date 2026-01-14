@@ -19,6 +19,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports - domain event handlers
+import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
 import { registerLogEventHandlers } from './LogEventHandlers';
 import { registerOutputEventHandlers } from './OutputEventHandlers';
 import { registerUsageEventHandlers } from './UsageEventHandlers';
@@ -43,23 +44,16 @@ export class ProgressEventHandler {
    */
   private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
 
+  /** Shared context for domain handlers - used for canUpdateWebview checks */
+  private readonly ctx: EventHandlerContext;
+
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
     private readonly uiCallbacks: UICallbacks,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
-  }
-
-  /**
-   * Check if webview is available and the stream is active.
-   * Common guard condition for event handlers that should only update
-   * the webview when it's visible and showing the relevant stream.
-   */
-  private canUpdateWebview(stream: StreamTabId): boolean {
-    return (
-      this.webviewUpdater.isAvailable() && stream === this.state.activeStream
-    );
+    this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
   }
 
   /**
@@ -94,9 +88,6 @@ export class ProgressEventHandler {
     const controller = new AbortController();
     const { signal } = controller;
 
-    // Build shared context for domain handlers
-    const ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
-
     // Core stream/task events (handled inline - stream lifecycle)
     bus.on('setActiveStream', this.handleSetActiveStream, { signal });
     bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
@@ -108,10 +99,10 @@ export class ProgressEventHandler {
     });
 
     // Domain-specific event handlers (modular, focused files)
-    registerLogEventHandlers(bus, ctx, signal);
-    registerOutputEventHandlers(bus, ctx, signal);
-    registerUsageEventHandlers(bus, ctx, signal);
-    registerTodoEventHandlers(bus, ctx, signal);
+    registerLogEventHandlers(bus, this.ctx, signal);
+    registerOutputEventHandlers(bus, this.ctx, signal);
+    registerUsageEventHandlers(bus, this.ctx, signal);
+    registerTodoEventHandlers(bus, this.ctx, signal);
     registerUIEvents(bus, this.uiCallbacks, signal);
 
     // Single disposable that cleans up everything
@@ -270,7 +261,7 @@ export class ProgressEventHandler {
       async () => {
         await this.state.taskGroups.updateGroup(data);
 
-        if (this.canUpdateWebview(data.stream)) {
+        if (canUpdateWebview(this.ctx, data.stream)) {
           this.webviewUpdater.updateTaskGroup(data);
         }
       },
