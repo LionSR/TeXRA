@@ -228,6 +228,23 @@ const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 10;
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
+ * Extended response type for countTokens with context_management.
+ * The SDK doesn't export this, so we define it here for type safety.
+ */
+interface CountTokensContextManagementResponse {
+  original_input_tokens: number;
+}
+
+/**
+ * Options for setting up context management configuration.
+ */
+interface ContextManagementSetupOptions {
+  options: MessageCreateParams;
+  contextWindow: number;
+  supportsReasoning: boolean;
+}
+
+/**
  * Block types that support cache_control for prompt caching.
  * Uses SDK's ContentBlockParam with Extract to get text and tool_result types.
  */
@@ -303,6 +320,105 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!options.betas.includes(beta)) {
       options.betas.push(beta);
     }
+  }
+
+  /**
+   * Sets up context management configuration for Anthropic's server-side editing.
+   * Must be called BEFORE token counting so countTokens returns accurate post-clearing counts.
+   */
+  private setupContextManagement({
+    options,
+    contextWindow,
+    supportsReasoning,
+  }: ContextManagementSetupOptions): void {
+    if (this.agentType !== AgentType.ToolUse) {
+      return;
+    }
+
+    const thresholdPercent = getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+
+    // Only enable context management if threshold is configured (> 0)
+    if (thresholdPercent <= 0) {
+      return;
+    }
+
+    this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
+
+    const contextManagementEdits = [
+      ...(options.context_management?.edits ?? []),
+    ];
+
+    const triggerTokens = Math.floor(
+      (thresholdPercent / 100) * contextWindow,
+    );
+
+    // Thinking clearing is opt-in because the API requires it to be listed
+    // first in edits, which means it runs before tool use clearing and
+    // reduces tokens before the tool use trigger is checked. This can
+    // prevent tool use clearing from triggering in many scenarios.
+    // The API's default behavior (keep last 1 thinking turn) still applies
+    // even without explicit thinking clearing config.
+    const enableThinkingClearing = getConfig<boolean>(
+      'texra.model.enableThinkingClearing',
+      false,
+    );
+
+    if (
+      enableThinkingClearing &&
+      supportsReasoning &&
+      options.thinking &&
+      !contextManagementEdits.some(
+        (edit) => edit.type === 'clear_thinking_20251015',
+      )
+    ) {
+      // Thinking clearing must come first in the edits array per API requirement
+      contextManagementEdits.unshift({
+        type: 'clear_thinking_20251015' as const,
+        keep: {
+          type: 'thinking_turns' as const,
+          value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+        },
+      });
+    }
+
+    // Add tool result clearing strategy with server-side trigger.
+    // The trigger ensures clearing only activates when input tokens exceed threshold.
+    if (
+      !contextManagementEdits.some(
+        (edit) => edit.type === 'clear_tool_uses_20250919',
+      )
+    ) {
+      // clear_at_least ensures cache invalidation is worthwhile:
+      // Without it, the API may clear too few tokens, causing frequent
+      // cache misses without meaningful benefit.
+      const clearAtLeastTokens = Math.floor(
+        (CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT / 100) * contextWindow,
+      );
+
+      contextManagementEdits.push({
+        type: 'clear_tool_uses_20250919' as const,
+        trigger: {
+          type: 'input_tokens' as const,
+          value: triggerTokens,
+        },
+        keep: {
+          type: 'tool_uses' as const,
+          value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+        },
+        clear_at_least: {
+          type: 'input_tokens' as const,
+          value: clearAtLeastTokens,
+        },
+      });
+    }
+
+    options.context_management = {
+      ...(options.context_management ?? {}),
+      edits: contextManagementEdits,
+    } satisfies BetaContextManagementConfig;
   }
 
   private assignCacheControlToLatest(
@@ -442,91 +558,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Set up context management BEFORE token counting so countTokens can
     // return accurate post-clearing token counts.
-    if (this.agentType === AgentType.ToolUse) {
-      const thresholdPercent = getConfig<number>(
-        'texra.model.compactionThresholdPercent',
-        DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-      );
-
-      // Only enable context management if threshold is configured (> 0)
-      if (thresholdPercent > 0) {
-        this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
-
-        const contextManagementEdits = [
-          ...(options.context_management?.edits ?? []),
-        ];
-
-        const triggerTokens = Math.floor(
-          (thresholdPercent / 100) * this.config.contextWindow,
-        );
-
-        // Thinking clearing is opt-in because the API requires it to be listed
-        // first in edits, which means it runs before tool use clearing and
-        // reduces tokens before the tool use trigger is checked. This can
-        // prevent tool use clearing from triggering in many scenarios.
-        // The API's default behavior (keep last 1 thinking turn) still applies
-        // even without explicit thinking clearing config.
-        const enableThinkingClearing = getConfig<boolean>(
-          'texra.model.enableThinkingClearing',
-          false,
-        );
-
-        if (
-          enableThinkingClearing &&
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          !contextManagementEdits.some(
-            (edit) => edit.type === 'clear_thinking_20251015',
-          )
-        ) {
-          // Thinking clearing must come first in the edits array per API requirement
-          contextManagementEdits.unshift({
-            type: 'clear_thinking_20251015' as const,
-            keep: {
-              type: 'thinking_turns' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-            },
-          });
-        }
-
-        // Add tool result clearing strategy with server-side trigger.
-        // The trigger ensures clearing only activates when input tokens exceed threshold.
-        if (
-          !contextManagementEdits.some(
-            (edit) => edit.type === 'clear_tool_uses_20250919',
-          )
-        ) {
-          // clear_at_least ensures cache invalidation is worthwhile:
-          // Without it, the API may clear too few tokens, causing frequent
-          // cache misses without meaningful benefit.
-          const clearAtLeastTokens = Math.floor(
-            (CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT / 100) *
-              this.config.contextWindow,
-          );
-
-          contextManagementEdits.push({
-            type: 'clear_tool_uses_20250919' as const,
-            trigger: {
-              type: 'input_tokens' as const,
-              value: triggerTokens,
-            },
-            keep: {
-              type: 'tool_uses' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
-            },
-            clear_at_least: {
-              type: 'input_tokens' as const,
-              value: clearAtLeastTokens,
-            },
-          });
-        }
-
-        options.context_management = {
-          ...(options.context_management ?? {}),
-          edits: contextManagementEdits,
-        } satisfies BetaContextManagementConfig;
-      }
-    }
+    this.setupContextManagement({
+      options,
+      contextWindow: effectiveContextWindow,
+      supportsReasoning: this.capabilities.supportsReasoning,
+    });
 
     if (this.capabilities.supportsTokenCounting) {
       if (documentAnalysis.hasFileSource) {
@@ -588,7 +624,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // Log both original and post-clearing token counts if available
           const contextMgmtResponse = (
             responseTokenCount as typeof responseTokenCount & {
-              context_management?: { original_input_tokens?: number };
+              context_management?: CountTokensContextManagementResponse;
             }
           ).context_management;
           if (contextMgmtResponse?.original_input_tokens) {
