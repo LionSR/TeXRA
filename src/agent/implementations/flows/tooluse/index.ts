@@ -25,3 +25,12 @@ export {
   type RunToolUseFlowResult,
   type ToolUseFlowSetupCallback,
 } from './runToolUseFlow';
+
+// Node implementations (exported for testing and extensibility)
+export {
+  ToolUsePrepareNode,
+  ToolUseCycleNode,
+  ToolUseWaitNode,
+  type ToolUseRunShared,
+  type StateSlicesSnapshot,
+} from './nodes';

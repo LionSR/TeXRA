@@ -31,6 +31,7 @@ import {
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
+import { migrateSharedState } from './nodes';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -151,11 +152,24 @@ export async function runToolUseFlow<C = unknown>(
     const isResume = Boolean(flowRecord?.shared);
     if (isResume) {
       logger.debug('Resuming tool-use flow from persistence');
+
+      // Migrate legacy shared state format if needed.
+      // Pre-flattening sessions stored shared as { state: { conversation, ... } }
+      // which would cause failures when cycle node reads shared.stateSlices.
+      const migratedShared = migrateSharedState(flowRecord!.shared);
+      if (migratedShared !== flowRecord!.shared) {
+        logger.debug('Migrated legacy shared state to flat format');
+        flowRecord!.shared = migratedShared;
+        // Persist the migrated format so future resumes use the new structure
+        await kv.write(`flow:${executionId}`, flowRecord);
+      }
     }
 
-    // Create shared state
+    // Create shared state (flat structure for consistency with reflection flows)
     const shared: ToolUseRunShared = {
-      state: { conversation: [], shouldSkipCycle: false, stateSlices: null },
+      conversation: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
     };
 
     // Create PersistedFlow with the start node
@@ -193,11 +207,11 @@ export async function runToolUseFlow<C = unknown>(
     try {
       const kv = getExecutionStore(executionId);
       const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      const sharedState = flowRecord?.shared as
-        | { state?: { userCancelledRetry?: boolean } }
-        | undefined;
-      const userCancelledRetry =
-        sharedState?.state?.userCancelledRetry === true;
+      // Handle both legacy { state: { userCancelledRetry } } and new flat format
+      const migratedShared = flowRecord?.shared
+        ? migrateSharedState(flowRecord.shared)
+        : undefined;
+      const userCancelledRetry = migratedShared?.userCancelledRetry === true;
 
       if (userCancelledRetry) {
         // Preserve flow record for resume - user can continue from last successful breakpoint
