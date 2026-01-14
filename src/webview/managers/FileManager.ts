@@ -198,12 +198,13 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const refreshedFiles = {
-      input: await fileLister.list('input'),
-      reference: await fileLister.list('reference'),
-      auxiliary: await fileLister.list('auxiliary'),
-      media: await fileLister.list('media'),
-    };
+    const [input, reference, auxiliary, media] = await Promise.all([
+      fileLister.list('input'),
+      fileLister.list('reference'),
+      fileLister.list('auxiliary'),
+      fileLister.list('media'),
+    ]);
+    const refreshedFiles = { input, reference, auxiliary, media };
 
     // Send all single file updates in a single batch message
     // This allows the webview to wrap all updates in a single blockSave()
