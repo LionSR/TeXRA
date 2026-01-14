@@ -1130,11 +1130,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Handle SET_FOLLOWUP_OPTIONS command from extension host.
    * Updates the followup section dropdowns with available agents and models.
-   * @param {{ agents: string[], models: string[], defaultMergeModel: string }} message
+   * @param {{ workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }} message
    */
   handleSetFollowupOptions(message) {
-    const { agents, models, defaultMergeModel } = message;
-    dom.followupSection?.setOptions?.({ agents, models, defaultMergeModel });
+    const { workflowAgents, toolUseAgents, models, defaultMergeModel } = message;
+    dom.followupSection?.setOptions?.({
+      workflowAgents,
+      toolUseAgents,
+      models,
+      defaultMergeModel,
+    });
   }
 
   /**
