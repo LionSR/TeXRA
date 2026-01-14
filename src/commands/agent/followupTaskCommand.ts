@@ -101,7 +101,7 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
 
     // For merge mode, directly execute without going to main view
     if (payload.mode === 'merge') {
-      await executeMergeDirectly(payload, followupConfig);
+      await executeMergeDirectly(followupConfig);
       return;
     }
 
@@ -233,7 +233,6 @@ function buildFollowupConfig(
  * Handles both single file and multiple file merge scenarios.
  */
 async function executeMergeDirectly(
-  _payload: FollowupPayload,
   config: Record<string, unknown>,
 ): Promise<void> {
   logger.info(CHANNEL, 'Executing merge directly');
@@ -281,7 +280,7 @@ async function executeFollowupImmediately(
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   if (payload.mode === 'merge') {
-    await executeMergeDirectly(payload, config);
+    await executeMergeDirectly(config);
   } else if (payload.mode === 'chat') {
     // Execute chat agent with context
     await safeExecuteCommand('texra.execute', [
