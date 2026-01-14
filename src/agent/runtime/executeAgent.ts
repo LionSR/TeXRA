@@ -491,15 +491,15 @@ function showAgentNotification(config: AgentConfig): void {
     ? path.basename(config.inputFile)
     : 'selected input';
 
-  const outputCount = config.outputFiles?.length ?? 0;
-  const outputInfo =
-    config.useMultipleOutputs && outputCount > 1
-      ? `to ${outputCount} files`
-      : config.outputFiles?.[0]
-        ? `to ${path.basename(config.outputFiles[0])}`
-        : '';
+  const outputFiles = config.outputFiles ?? [];
+  let outputInfo = '';
+  if (config.useMultipleOutputs && outputFiles.length > 1) {
+    outputInfo = `to ${outputFiles.length} files`;
+  } else if (outputFiles[0]) {
+    outputInfo = `to ${path.basename(outputFiles[0])}`;
+  }
 
-  vscode.window
+  void vscode.window
     .showInformationMessage(
       `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
       {
@@ -509,7 +509,7 @@ function showAgentNotification(config: AgentConfig): void {
       },
       'Show ProgressBoard',
     )
-    .then((sel: string | undefined) => {
+    .then((sel) => {
       if (sel) void vscode.commands.executeCommand('texra.showProgressView');
     });
 }

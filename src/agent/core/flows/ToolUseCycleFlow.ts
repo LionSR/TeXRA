@@ -47,17 +47,17 @@ import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import type {
-  ToolUseCycleOptions,
-  ToolUseCycleServices,
-  ToolUseCycleParams,
-} from './CycleServices';
 import {
   type InvocationResult,
   type RetryState,
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleServices,
+  ToolUseCycleParams,
+} from './CycleServices';
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(

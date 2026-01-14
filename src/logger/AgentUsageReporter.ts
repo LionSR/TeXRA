@@ -38,7 +38,6 @@ export class AgentUsageReporter {
    * @param storageKey - THE key for storage (from context.storageKey) - REQUIRED
    */
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
-    // storageKey is THE single source of truth - no fallbacks, no round-trips
     bus.emit('updateStreamUsage', {
       stream: this.streamId,
       storageKey,
@@ -46,16 +45,11 @@ export class AgentUsageReporter {
         inputTokens: stats.inputTokens,
         outputTokens: stats.outputTokens,
         cost: stats.cost,
-        ...(stats.cacheReadInputTokens && {
-          cacheReadInputTokens: stats.cacheReadInputTokens,
-        }),
-        ...(stats.cacheCreationInputTokens && {
-          cacheCreationInputTokens: stats.cacheCreationInputTokens,
-        }),
+        cacheReadInputTokens: stats.cacheReadInputTokens,
+        cacheCreationInputTokens: stats.cacheCreationInputTokens,
       },
     });
 
-    // Log detailed statistics for workflow agents
     if (this.agentCategory === AgentCategory.Workflow) {
       this.logger.statistics(stats, storageKey);
     }

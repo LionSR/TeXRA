@@ -37,6 +37,10 @@ import { sleepWithAbort } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { extractScratchpad } from '@utils/text/xmlUtils';
+import {
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Local file imports
 import {
@@ -1109,24 +1113,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const inputTokens = rawUsage.input_tokens ?? 0;
-    const outputTokens = rawUsage.output_tokens ?? 0;
     const cachedTokens = rawUsage.input_tokens_details?.cached_tokens ?? 0;
-    const reasoningTokens =
-      rawUsage.output_tokens_details?.reasoning_tokens ?? 0;
-
-    // Calculate percentage cached
-    const percentageCached =
-      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
 
     return {
       inputTokens,
-      outputTokens,
+      outputTokens: rawUsage.output_tokens ?? 0,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'openai-response',
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      reasoningTokens: reasoningTokens || undefined,
+      cachedInputTokens: nonZeroOrUndefined(cachedTokens),
+      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
+      reasoningTokens: nonZeroOrUndefined(
+        rawUsage.output_tokens_details?.reasoning_tokens,
+      ),
       _native: rawUsage,
     };
   }
