@@ -223,6 +223,12 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
 
+  // Followup task
+  GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
+  SETUP_FOLLOWUP: 'setupFollowup',
+  RUN_FOLLOWUP: 'runFollowup',
+  SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
+
   // File operations
   OPEN_FILE: 'openFile',
   OPEN_FILE_COMPILE: 'openFileCompile',
