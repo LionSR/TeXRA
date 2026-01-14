@@ -118,10 +118,7 @@ async function handleExtractTikzFigures(): Promise<void> {
         if (selected) {
           const label = selected.label.split(' (')[0];
           await vscode.env.clipboard.writeText(label);
-          await showLoggedInfoMessage(
-            CHANNEL,
-            `Copied figure label: ${label}`,
-          );
+          await showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`);
         }
       } else {
         await showLoggedInfoMessage(
