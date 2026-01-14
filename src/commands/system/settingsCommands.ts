@@ -8,15 +8,17 @@ export const settingsCommands = {
   openSettings: 'texra.openSettings',
 };
 
-export function registerSettingsCommands(context: vscode.ExtensionContext) {
-  const openSettingsCommand = vscode.commands.registerCommand(
-    settingsCommands.openSettings,
-    () =>
-      vscode.commands.executeCommand(
-        'workbench.action.openSettings',
-        SETTINGS_QUERY.EXTENSION,
-      ),
+export function registerSettingsCommands(
+  context: vscode.ExtensionContext,
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      settingsCommands.openSettings,
+      () =>
+        vscode.commands.executeCommand(
+          'workbench.action.openSettings',
+          SETTINGS_QUERY.EXTENSION,
+        ),
+    ),
   );
-
-  context.subscriptions.push(openSettingsCommand);
 }
