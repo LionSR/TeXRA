@@ -34,8 +34,9 @@ export class BashTool extends defineTool({
         output: result.stdout || '',
       };
     }
-    throw new ToolError(
-      `Bash command failed: ${result.stderr || 'No error output available'}`,
-    );
+    // Many CLI tools (including latexmk) write errors to stdout, not stderr
+    const outputs = [result.stderr, result.stdout].filter(Boolean);
+    const errorOutput = outputs.join('\n') || 'No error output available';
+    throw new ToolError(`Bash command failed: ${errorOutput}`);
   }
 }
