@@ -736,12 +736,10 @@ export class ProgressEventHandler {
    * Returns undefined if category cannot be determined.
    */
   private getStreamCategory(stream: string): AgentCategory | undefined {
-    const taskState = this.state.getTaskState(stream);
-    if (taskState?.agentConfig?.session?.agentCategory) {
-      return taskState.agentConfig.session.agentCategory;
-    }
-    const hints = this.state.getStreamHints(stream);
-    return hints.sessionCategory;
+    return (
+      this.state.getTaskState(stream)?.agentConfig?.session?.agentCategory ??
+      this.state.getStreamHints(stream).sessionCategory
+    );
   }
 
   /**

@@ -85,21 +85,21 @@ export class TaskGroupManager extends PersistentMapManager<
     const affected: StreamTabId[] = [];
 
     for (const [streamId, groups] of this.items.entries()) {
-      const runningGroups = [...groups.values()].filter(
-        (g) => g.status === STREAM_STATUS.RUNNING,
-      );
-
-      if (runningGroups.length === 0) continue;
-
-      for (const group of runningGroups) {
-        group.status = STREAM_STATUS.ERROR;
-        group.endTime = now;
+      let count = 0;
+      for (const group of groups.values()) {
+        if (group.status === STREAM_STATUS.RUNNING) {
+          group.status = STREAM_STATUS.ERROR;
+          group.endTime = now;
+          count++;
+        }
       }
 
-      affected.push(streamId);
-      this.logger.debug(
-        `Marked ${runningGroups.length} running task groups in stream ${streamId} as ERROR after reload`,
-      );
+      if (count > 0) {
+        affected.push(streamId);
+        this.logger.debug(
+          `Marked ${count} running task groups in stream ${streamId} as ERROR after reload`,
+        );
+      }
     }
 
     if (affected.length > 0) {
@@ -143,10 +143,10 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /** Normalize loaded groups */
-  protected override async deserialize(
+  protected override deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<Map<string, TaskGroup>> {
+  ): Map<string, TaskGroup> {
     return recordToMap<TaskGroup>(data);
   }
 }
