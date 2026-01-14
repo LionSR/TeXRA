@@ -62,6 +62,18 @@ export class ExplorerOperations {
     void this.loadBuiltInPaths();
   }
 
+  /**
+   * Check if a path is within the built-in agents or tool-use directories.
+   */
+  private isBuiltInPath(targetPath: string): boolean {
+    return (
+      (this.builtInAgentsPath !== '' &&
+        targetPath.startsWith(this.builtInAgentsPath)) ||
+      (this.builtInToolUsePath !== '' &&
+        targetPath.startsWith(this.builtInToolUsePath))
+    );
+  }
+
   private async loadBuiltInPaths(): Promise<void> {
     try {
       const [builtInAgentsPath, builtInToolUsePath] = await Promise.all([
@@ -79,16 +91,13 @@ export class ExplorerOperations {
   }
 
   private resolveCustomPath(targetPath: string, customBase: string): string {
-    const isBuiltInAgents = this.builtInAgentsPath
-      ? targetPath.startsWith(this.builtInAgentsPath)
-      : false;
-    const isBuiltInToolUse = this.builtInToolUsePath
-      ? targetPath.startsWith(this.builtInToolUsePath)
-      : false;
-    if (!isBuiltInAgents && !isBuiltInToolUse) {
+    if (!this.isBuiltInPath(targetPath)) {
       return targetPath;
     }
 
+    const isBuiltInToolUse =
+      this.builtInToolUsePath !== '' &&
+      targetPath.startsWith(this.builtInToolUsePath);
     const base = isBuiltInToolUse
       ? this.builtInToolUsePath
       : this.builtInAgentsPath;
@@ -98,11 +107,7 @@ export class ExplorerOperations {
 
   async open(uri: vscode.Uri) {
     try {
-      const isBuiltIn =
-        (this.builtInAgentsPath &&
-          uri.fsPath.startsWith(this.builtInAgentsPath)) ||
-        (this.builtInToolUsePath &&
-          uri.fsPath.startsWith(this.builtInToolUsePath));
+      const isBuiltIn = this.isBuiltInPath(uri.fsPath);
 
       const document = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(document);
