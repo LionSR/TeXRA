@@ -13,7 +13,6 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -62,13 +61,10 @@ async function resumeFromSnapshot(
     return { success: false };
   }
 
-  const streamId = snapshot.streamId as StreamTabId;
-  const existingStatus = StreamStatusService.get(streamId);
+  const { streamId } = snapshot;
 
-  if (
-    existingStatus === STREAM_STATUS.RUNNING ||
-    existingStatus === STREAM_STATUS.RESUMING
-  ) {
+  // Guard against concurrent resume attempts
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
     return { success: false };
   }
 
