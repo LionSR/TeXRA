@@ -53,8 +53,8 @@
   position: relative;
 }
 
-.followup-agent-select::part(listbox),
-.followup-model-select::part(listbox) {
+#followupAgent::part(listbox),
+#followupModel::part(listbox) {
   bottom: 100%;
   top: auto;
 }
