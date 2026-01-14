@@ -505,6 +505,30 @@ export class AgentLogger {
     });
   }
 
+  /**
+   * Log a tool use event for display in the progress view.
+   * Single source of truth for TOOL_USE message type.
+   */
+  logToolUse(data: unknown, groupId?: string): void {
+    this.info('', {
+      groupId,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data,
+    });
+  }
+
+  /**
+   * Log a web search result for display in the progress view.
+   * Single source of truth for WEB_SEARCH message type.
+   */
+  logWebSearch(data: unknown, groupId?: string): void {
+    this.info('', {
+      groupId,
+      messageType: MESSAGE_TYPES.WEB_SEARCH,
+      data,
+    });
+  }
+
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
     if (!groupId) {
@@ -532,15 +556,6 @@ export class AgentLogger {
       this.isAgentLogger,
       fn,
     );
-  }
-
-  async withScope<T>(
-    groupName: string,
-    fn: () => Promise<T>,
-    options: LoggerScopeOptions = {},
-  ): Promise<T> {
-    const stage = await this.createStageHandle(groupName, options);
-    return stage.run(fn);
   }
 
   async stage(
