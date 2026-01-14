@@ -251,8 +251,10 @@ export class OutputHandler implements IOutputHandler {
         const originalIsDifferentFile =
           originalLocation &&
           getComparablePath(originalLocation) !== locationPath;
-        const diffBaseLocation =
-          baseLocation ?? (originalIsDifferentFile ? originalLocation : null);
+        let diffBaseLocation = baseLocation;
+        if (!diffBaseLocation && originalIsDifferentFile) {
+          diffBaseLocation = originalLocation;
+        }
 
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
