@@ -109,6 +109,19 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.LOGIN_BANNER),
       /**
+       * Handles SETUP_FOLLOWUP_TASK command from Progress View.
+       * Sets up the main view for a followup task (workflow or merge).
+       */
+      [MAIN_VIEW_COMMANDS.SETUP_FOLLOWUP_TASK]: (m) =>
+        this._handleSetupFollowupTask(m),
+      /**
+       * Handles FOCUS_MAIN_VIEW command to reveal the main view panel.
+       * Used after setting up followup to bring the main view into focus.
+       */
+      [MAIN_VIEW_COMMANDS.FOCUS_MAIN_VIEW]: () => {
+        // This command is handled by the extension host, nothing to do in webview
+      },
+      /**
        * Handles SET_MODEL_OPTIONS command to update the model dropdown.
        *
        * Waits for the #model select element to appear in the DOM before applying options.
@@ -1337,6 +1350,150 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     recordingManager.setRecording(false);
     this._postHandle();
+  }
+
+  /**
+   * Handle followup task setup from Progress View.
+   * Configures the main view form with the followup configuration.
+   *
+   * @param {Object} message - The followup configuration
+   * @param {string} message.agent - Agent value (source:name format)
+   * @param {string} message.model - Model name
+   * @param {'workflow'|'merge'} message.mode - Followup mode
+   * @param {string} [message.instruction] - Optional instruction text
+   * @param {string} [message.inputFile] - Single input file path (workflow mode)
+   * @param {string[]} [message.inputFiles] - Multiple input file paths (workflow mode)
+   * @param {string} [message.baseFile] - Base file path (merge mode)
+   * @param {string} [message.editedFile] - Edited file path (merge mode)
+   */
+  _handleSetupFollowupTask(message) {
+    const { agent, model, mode, instruction, inputFile, inputFiles } = message;
+
+    // Block saves during setup to avoid partial state persistence
+    mainViewState.blockSave();
+    try {
+      // Session type is always 'workflow' for both workflow and merge modes
+      // (merge agents are workflow agents that take base + edited files)
+      const sessionType = SESSION_TYPES.WORKFLOW;
+
+      // Set the agent dropdown
+      if (agent) {
+        this._setAgentValue(AGENT_SELECT_IDS[sessionType], agent);
+      }
+
+      // Set the model dropdown
+      if (model) {
+        safeSetElementValue('model', model);
+      }
+
+      // Set instruction if provided
+      if (instruction) {
+        const instructionEl =
+          this._instructionEl ||
+          (this._instructionEl = this._getElement('instruction'));
+        if (instructionEl) {
+          instructionEl.value = instruction;
+          instructionEl.dispatchEvent(new Event('input'));
+        }
+      }
+
+      // Set file inputs based on mode
+      if (mode === 'merge') {
+        this._setupMergeFollowupFiles(message);
+      } else {
+        this._setupWorkflowFollowupFiles(inputFile, inputFiles);
+      }
+
+      // Build and persist state
+      const savedState = {
+        sessionType,
+        workflowAgent: agent || '',
+        agent: agent || '',
+        model: model || '',
+        instruction: instruction || '',
+      };
+
+      if (mode === 'merge') {
+        savedState.inputFile = message.baseFile || '';
+        savedState.editedFile = message.editedFile || '';
+      } else {
+        savedState.inputFile = inputFile || '';
+        savedState.inputFiles = inputFiles || [];
+      }
+
+      mainViewState.set(savedState);
+
+      // Apply session type UI (shows workflow dropdown, updates radio buttons)
+      mainViewState.applySessionType(sessionType, { skipSave: true });
+    } finally {
+      mainViewState.unblockSave();
+    }
+
+    this._postHandle();
+  }
+
+  /**
+   * Setup file inputs for workflow mode followup.
+   * Sets the primary input file and optionally expands the multiple inputs list.
+   */
+  _setupWorkflowFollowupFiles(inputFile, inputFiles) {
+    // Set primary input file
+    if (inputFile) {
+      safeSetElementValue(INPUT_FILE, inputFile);
+    }
+
+    // Handle multiple input files
+    if (inputFiles && inputFiles.length > 0) {
+      const listId = 'inputFiles';
+      const listElement = this._getElement(listId);
+      const containerId = 'inputFilesContainer';
+      const container = this._getElement(containerId);
+      const toggleId = 'toggleInputFiles';
+
+      // Clear existing and add new files
+      if (listElement) {
+        listElement.innerHTML = '';
+        fileList._batchMode = true;
+        inputFiles.forEach((file) => fileList.add(listId, file));
+        fileList._batchMode = false;
+      }
+
+      // Show the container
+      if (container) {
+        container.style.display = 'block';
+      }
+      this._setToggleIcon(this._getElement(toggleId), true);
+    }
+  }
+
+  /**
+   * Setup file inputs for merge mode followup.
+   * Sets both base file and edited file for the merge operation.
+   */
+  _setupMergeFollowupFiles(message) {
+    const { baseFile, editedFile, inputFiles } = message;
+
+    // For merge mode, baseFile goes to INPUT_FILE (the original document)
+    if (baseFile) {
+      safeSetElementValue(INPUT_FILE, baseFile);
+    }
+
+    // editedFile goes to EDITED_FILE dropdown
+    if (editedFile) {
+      safeSetElementValue(EDITED_FILE, editedFile);
+      // Trigger the file select update to show edited file options
+      fileSelect.updateEdited(baseFile || '');
+    }
+
+    // If there are multiple outputs (inputFiles array for merge),
+    // we handle them as multiple edited files scenario
+    if (inputFiles && inputFiles.length > 1) {
+      // For now, use first as edited, but the merge agent should handle multiple
+      // The UI shows the first edited file; the agent config will include all
+      console.info(
+        `Merge followup: ${inputFiles.length} files to merge. Using first as primary edited file.`,
+      );
+    }
   }
 }
 
