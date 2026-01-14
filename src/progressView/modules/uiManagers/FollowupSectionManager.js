@@ -69,6 +69,9 @@ export class FollowupSectionManager {
         handler: toggleHandler,
       });
     }
+
+    // Initialize UI state for default mode (workflow)
+    this._setMode('workflow');
   }
 
   /**
