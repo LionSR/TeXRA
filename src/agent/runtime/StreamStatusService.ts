@@ -113,4 +113,26 @@ export const StreamStatusService = {
   has(stream: StreamTabId): boolean {
     return statusMemory.has(stream);
   },
+
+  // ============================================================================
+  // Guard Helpers - Centralized status checks for consistency
+  // ============================================================================
+
+  /**
+   * Check if stream is actively processing (RUNNING or RESUMING).
+   * Use to guard against concurrent operations.
+   */
+  isActiveOrResuming(stream: StreamTabId): boolean {
+    const status = statusMemory.get(stream);
+    return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
+  },
+
+  /**
+   * Check if stream status should be preserved on flow completion.
+   * WAITING and STOPPED states shouldn't be overwritten by flow end status.
+   */
+  shouldPreserveOnCompletion(stream: StreamTabId): boolean {
+    const status = statusMemory.get(stream);
+    return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
+  },
 };
