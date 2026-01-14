@@ -827,8 +827,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const streamId = stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      this.logger.warn(this.channel, 'Followup: No workflow task state found', {
+    if (!taskState) {
+      this.logger.warn(this.channel, 'Followup: No task state found', {
         data: { stream },
       });
       await vscode.window.showWarningMessage(
