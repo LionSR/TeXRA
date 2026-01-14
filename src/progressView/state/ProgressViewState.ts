@@ -286,12 +286,10 @@ export class ProgressViewState {
   /**
    * Resolve and optionally persist the active run ID for a stream.
    *
-   * This method determines which run (task group) should be active for display
-   * in the progress view. The resolution strategy:
-   * 1. If a specific runId is requested, validate it exists and use it
-   * 2. Otherwise, check for a previously active runId
-   * 3. If only one run exists, use that
-   * 4. Otherwise, find the most recent run
+   * Resolution strategy (in order):
+   * 1. If specific runId requested → validate it exists, return it or null
+   * 2. If previously active runId exists → return it (already persisted)
+   * 3. Auto-select: single candidate or most recent run
    *
    * For tool-use agents: The runId will be the executionId (same UUID)
    * For workflow agents: The runId will be a task group ID
@@ -299,41 +297,35 @@ export class ProgressViewState {
    * @param stream - The stream to resolve for
    * @param requested - Optional specific runId to use
    * @param options.persist - Whether to save the resolved runId (default: true)
-   * @returns The resolved runId, or null if none found
+   * @returns The resolved StorageKey, or null if none found
    */
   resolveRunId(
     stream: StreamTabId,
     requested?: string | null,
     options?: { persist?: boolean },
-  ): string | null {
-    const persist = options?.persist ?? true;
-
-    // Helper to persist and return a resolved runId
-    const resolve = (runId: string | null): string | null => {
-      if (runId && persist) {
-        this.setActiveRunId(stream, runId);
-      }
-      return runId;
-    };
-
-    // 1. If specific runId requested, validate it exists
+  ): StorageKey | null {
+    // 1. Specific runId requested - validate it exists
     if (requested) {
       const candidates = this.collectRunCandidates(stream);
-      return candidates.has(requested) ? resolve(requested) : null;
+      if (!candidates.has(requested)) return null;
+      const normalized = normalizeRunId(requested);
+      if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
+      return normalized;
     }
 
-    // 2. Use existing active run if set
+    // 2. Use existing active run if already set (already normalized)
     const current = this.getActiveRunId(stream);
     if (current) return current;
 
-    // 3. Auto-select: single candidate or latest
+    // 3. Auto-select from candidates
     const candidates = this.collectRunCandidates(stream);
-    if (candidates.size === 1) {
-      const [only] = candidates;
-      return resolve(only);
-    }
+    const selected =
+      candidates.size === 1 ? [...candidates][0] : this.findLatestRunId(stream);
 
-    return resolve(this.findLatestRunId(stream));
+    if (!selected) return null;
+    const normalized = normalizeRunId(selected);
+    if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
+    return normalized;
   }
 
   private collectRunCandidates(stream: StreamTabId): Set<string> {

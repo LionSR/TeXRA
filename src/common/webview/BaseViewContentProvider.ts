@@ -192,26 +192,34 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
-  /**
-   * Common URIs used by all views
-   */
+  /** Build URI record using a resolver function */
+  private buildUrisWithResolver(
+    webview: vscode.Webview,
+    descriptors: readonly ModuleDescriptor[],
+    resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
+  ): Record<string, vscode.Uri> {
+    const uris: Record<string, vscode.Uri> = {};
+    for (const { key, path } of descriptors) {
+      uris[key] = resolver.call(this, webview, path);
+    }
+    return uris;
+  }
+
+  /** Common URIs used by all views (from src/common and node_modules) */
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
-    const commonUris = BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS.reduce<
-      Record<string, vscode.Uri>
-    >((acc, d) => {
-      acc[d.key] = this.getCommonUri(webview, d.path);
-      return acc;
-    }, {});
-
-    const nodeUris = BaseViewContentProvider.NODE_MODULE_DESCRIPTORS.reduce<
-      Record<string, vscode.Uri>
-    >((acc, d) => {
-      acc[d.key] = this.getNodeModulesUri(webview, d.path);
-      return acc;
-    }, {});
-
-    return { ...commonUris, ...nodeUris };
+    return {
+      ...this.buildUrisWithResolver(
+        webview,
+        BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
+        this.getCommonUri,
+      ),
+      ...this.buildUrisWithResolver(
+        webview,
+        BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
+        this.getNodeModulesUri,
+      ),
+    };
   }
 }
