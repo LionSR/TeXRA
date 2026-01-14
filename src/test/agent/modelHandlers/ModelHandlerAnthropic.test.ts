@@ -405,7 +405,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('uploads base64 PDF documents before creating responses', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -492,7 +492,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('sanitizes uploaded PDF filenames to strip directories and forbidden characters', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -568,7 +568,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('opts into the Files API when messages already reference uploaded PDFs', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -652,7 +652,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       supportsTokenCounting: true,
     });
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -732,7 +732,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       supportsTokenCounting: true,
     });
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: () => {},
@@ -810,7 +810,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     const warnMessages: string[] = [];
     const loggerStub = {
-      channelId: 'test',
+      streamId: 'test',
       debug: () => {},
       info: () => {},
       warn: (message: string) => {

@@ -406,10 +406,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        services.logger.info('', {
-          messageType: MESSAGE_TYPES.WEB_SEARCH,
-          data: searchResult,
-        });
+        services.logger.logWebSearch(searchResult);
       }
     }
 
@@ -654,7 +651,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           {
             tracker,
             todoState,
-            streamId: options.logger.channelId,
+            streamId: options.logger.streamId,
             executionId: options.executionId,
             toolCallId: call.callId,
           },
@@ -710,10 +707,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
-    options.logger.info('', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: toolUseLog,
-    });
+    options.logger.logToolUse(toolUseLog);
 
     const mediaLocations = await this.collectValidMediaLocations(
       result.files,
