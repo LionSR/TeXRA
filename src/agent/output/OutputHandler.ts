@@ -157,16 +157,6 @@ export class OutputHandler implements IOutputHandler {
     return this._storageKey ?? normalizeRunId(null);
   }
 
-  private createStoragePayload(): {
-    storageKey: StorageKey;
-    executionId: string | undefined;
-  } {
-    return {
-      storageKey: this.getStorageKey(),
-      executionId: this.executionId,
-    };
-  }
-
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
     if (!this.runPreparation) return;
 
@@ -295,16 +285,16 @@ export class OutputHandler implements IOutputHandler {
       `Validate expected r${currRound}`,
       stage,
       async () => {
-        const storagePayload = this.createStoragePayload();
+        const storageKey = this.getStorageKey();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
-            ...storagePayload,
+            storageKey,
             filesByRound: { [currRound]: [] },
           });
           this.logger.debug(
-            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} storageKey=${storagePayload.storageKey}`,
+            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} storageKey=${storageKey}`,
             { messageType: MESSAGE_TYPES.INTERNAL },
           );
           return;
@@ -345,11 +335,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          ...storagePayload,
+          storageKey,
           filesByRound: { [currRound]: missing },
         });
         this.logger.debug(
-          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} storageKey=${storagePayload.storageKey}`,
+          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} storageKey=${storageKey}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
       },
@@ -371,7 +361,7 @@ export class OutputHandler implements IOutputHandler {
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
-        const storagePayload = this.createStoragePayload();
+        const storageKey = this.getStorageKey();
 
         if (endTurn) {
           try {
@@ -388,11 +378,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
-          ...storagePayload,
+          storageKey,
           filesByRound: { [currRound]: fileInfos },
         });
         this.logger.debug(
-          `addOutputFiles emitted for round ${currRound} storageKey=${storagePayload.storageKey} files=${fileInfos.length}`,
+          `addOutputFiles emitted for round ${currRound} storageKey=${storageKey} files=${fileInfos.length}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
 
@@ -442,12 +432,11 @@ export class OutputHandler implements IOutputHandler {
           return;
         }
 
-        const storagePayload = this.createStoragePayload();
         await this.fileProcessor.processSingleOutput(
           outputLocation,
           currRound,
           rawLocation,
-          storagePayload,
+          this.getStorageKey(),
           scope,
         );
       },
