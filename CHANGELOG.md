@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
 - Added expandable error details to retry dialog UI for better debugging.
 - Relay errors are now retryable with clearer error messaging and distinct UI indicators.
+- Added setting to control thinking block clearing (`texra.model.enableThinkingClearing`).
+- VS Code GitHub login is now hidden behind a config flag.
 
 ### Bug Fixes
 
@@ -19,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Fixed temp file cleanup.
 - Fixed relay error recovery.
 - Fixed tooltip and dropdown clipping issues.
+- Fixed bash tool error messages to include stdout.
 
 ### Improvements
 
