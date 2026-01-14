@@ -52,10 +52,6 @@ type FileUpdateOptions = {
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  constructor(_context: vscode.ExtensionContext) {
-    super();
-  }
-
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
     const singleFileType = message.command.replace('select', '');
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
