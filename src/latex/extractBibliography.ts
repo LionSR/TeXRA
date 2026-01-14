@@ -148,11 +148,8 @@ function formatFieldValue(value: unknown): string {
       if (candidate.type === 'quotedstringwrapper') {
         return `"${rendered}"`;
       }
-
       return `{${rendered}}`;
     }
-
-    return `{${String(value)}}`;
   }
 
   return `{${String(value)}}`;
