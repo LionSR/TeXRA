@@ -5,7 +5,10 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
+import {
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';

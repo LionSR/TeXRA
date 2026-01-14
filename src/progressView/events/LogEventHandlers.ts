@@ -9,7 +9,10 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { withEventErrorHandling } from './errorHandling';
-import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
+import {
+  canUpdateWebview,
+  type EventHandlerContext,
+} from './EventHandlerContext';
 
 /**
  * Register log event handlers on the event bus.
