@@ -265,19 +265,21 @@ export class RemoteAgentLoader {
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
 
-        // Build metadata directly from edge function response (avoids extra DB roundtrip)
-        // The edge function already returns all metadata fields from the database
+        // Build metadata from edge function response with schema validation
+        // The edge function returns camelCase fields, which matches the schema directly
+        const metadata = RemoteAgentMetadataSchema.parse({
+          id: '', // Not returned by edge function, not used by consumers
+          name: responseName || agentName,
+          description: description,
+          visibility: visibility,
+          agentCategory: agentCategory,
+        });
+
         return {
           name: validated.name || responseName || agentName,
           settings: validatedSettings,
           prompts: validatedPrompts,
-          metadata: {
-            id: '', // Not returned by edge function, not used by consumers
-            name: responseName || agentName,
-            description: description || undefined,
-            visibility: visibility || ['public'],
-            agentCategory: agentCategory || undefined,
-          },
+          metadata,
         };
       } catch (error) {
         // If this is the last candidate, throw the error
