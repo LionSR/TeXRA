@@ -13,7 +13,6 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { TaskGroup } from '@logger/LogTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -193,11 +192,12 @@ export class ProgressEventHandler {
       'failed to handle setTaskState',
       () => {
         const { streamTabId, executionId, taskState } = data;
-
-        this.state.setTaskState(streamTabId, taskState);
+        const isActiveStream = this.state.activeStream === streamTabId;
         const sessionKind = taskState.agentConfig.session.agentCategory;
 
-        if (this.state.activeStream === streamTabId) {
+        this.state.setTaskState(streamTabId, taskState);
+
+        if (isActiveStream) {
           this.maybeUpdateFilterForCategory(sessionKind);
         }
 
@@ -205,21 +205,12 @@ export class ProgressEventHandler {
           this.state.setExecutionId(streamTabId, executionId);
         }
 
-        if (this.state.activeStream === streamTabId) {
+        if (isActiveStream) {
           this.sendInstructionUpdate(streamTabId);
         }
 
         if (this.webviewUpdater.isAvailable()) {
-          const infos = buildStreamInfos(
-            this.state,
-            StreamStatusService.getAll(),
-            this.state.agentTypeFilter,
-          );
-          this.webviewUpdater.updateStreams(
-            infos,
-            this.state.activeStream,
-            this.state.agentTypeFilter,
-          );
+          this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
         }
       },
     );
@@ -296,7 +287,8 @@ export class ProgressEventHandler {
   // ============================================================================
 
   /**
-   * Send instruction updates for the provided stream
+   * Send instruction updates for the provided stream.
+   * @param runIdHint - Use undefined to auto-resolve, null to skip persistence
    */
   private sendInstructionUpdate(
     stream: StreamTabId | '',
@@ -313,26 +305,25 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
-    const { sessionCategory: sessionKindHint } =
-      this.state.getStreamHints(stream);
-    const sessionKind =
-      taskState?.agentConfig?.session?.agentCategory ?? sessionKindHint;
+    const sessionKind = this.getStreamCategory(stream);
+
+    // Resolve runId: auto-resolve if undefined, use provided value otherwise
     const runId =
       runIdHint === undefined
-        ? this.state.resolveRunId(stream, undefined, {
-            persist: false,
-          })
+        ? this.state.resolveRunId(stream, undefined, { persist: false })
         : runIdHint;
 
-    if (runId && instructionUpdate) {
-      // runId is already StorageKey from resolveRunId() - no normalization needed
-      void this.state.runInstructions.setInstruction(
-        stream,
-        runId,
-        instructionUpdate,
-      );
-    } else if (runId) {
-      void this.state.runInstructions.deleteRun(stream, runId);
+    // Persist instruction if both runId and instruction exist
+    if (runId) {
+      if (instructionUpdate) {
+        void this.state.runInstructions.setInstruction(
+          stream,
+          runId,
+          instructionUpdate,
+        );
+      } else {
+        void this.state.runInstructions.deleteRun(stream, runId);
+      }
     }
 
     this.webviewUpdater.updateInstruction(
@@ -456,98 +447,65 @@ export class ProgressEventHandler {
   /**
    * Set the status for a specific stream synchronously.
    * Updates StreamStatusService (single source of truth) and triggers webview updates.
-   * Note: StreamStatusService.set() already emits the event, so this method is for
-   * webview update logic only - called from handleUpdateStreamStatus event handler.
    *
    * @param stream - Stream identifier
    * @param status - New status to set
-   * @param previousStatus - Previous status from event payload (avoids race condition)
+   * @param previousStatus - Previous status from event payload (undefined for direct calls)
    */
   setStreamStatus(
     stream: string,
     status: StreamStatus,
     previousStatus?: StreamStatus,
   ): void {
-    // Use previousStatus from event payload (avoids race condition) or read from service
-    // for direct calls. Treat both undefined and READY as "no meaningful previous status".
-    const prevStatus = previousStatus ?? StreamStatusService.get(stream);
-    const hadPreviousStatus =
-      prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
-
-    // Only update service for direct calls - event-triggered calls already mutated the service
-    // before emitting (previousStatus is defined when coming from event payload)
-    if (previousStatus === undefined) {
+    // For direct calls (no previousStatus), update service without emitting.
+    // Event-triggered calls already mutated the service before emitting.
+    const isDirectCall = previousStatus === undefined;
+    if (isDirectCall) {
       StreamStatusService.set(stream, status, { emit: false });
     }
 
-    if (this.webviewUpdater.isAvailable()) {
-      const streamExists = this.state.streamTabs.has(stream);
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
+    }
 
-      // Determine if full refresh is needed:
-      // - New stream (not in tabs yet) always needs full refresh
-      // - When time-sorted, only refresh if status change might affect order
-      const needsFullRefresh =
-        !streamExists ||
-        (this.state.streamSortOrder === 'time' &&
-          this.mightAffectTabOrder(
-            hadPreviousStatus ? prevStatus : undefined,
-            status,
-          ));
+    // Resolve previous status: from event payload or read current (for direct calls).
+    // Treat READY as "no previous status" for ordering purposes.
+    const prevStatus = previousStatus ?? StreamStatusService.get(stream);
+    const effectivePrevious =
+      prevStatus === STREAM_STATUS.READY ? undefined : prevStatus;
 
-      if (needsFullRefresh) {
-        // Ensure filter matches the stream's category to prevent it from being filtered out.
-        // This is important when resuming from WAITING state - the stream must remain visible.
-        const streamCategory = this.getStreamCategory(stream);
-        if (streamCategory) {
-          this.maybeUpdateFilterForCategory(streamCategory);
-        }
+    const streamExists = this.state.streamTabs.has(stream);
+    const needsFullRefresh =
+      !streamExists ||
+      (this.state.streamSortOrder === 'time' &&
+        StreamStatusService.mightAffectTabOrder(effectivePrevious, status));
 
-        // Include current status in refresh map so frontend displays it correctly.
-        const statusesForRefresh = StreamStatusService.getAll();
-        statusesForRefresh.set(stream, status);
-        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
-      } else {
-        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
-        const logs = this.state.streamTabs.getMessages(stream);
-        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
-        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
-        const lastTimestamp =
-          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
+    if (needsFullRefresh) {
+      // Ensure filter matches stream's category to keep it visible (e.g., when resuming)
+      const streamCategory = this.getStreamCategory(stream);
+      if (streamCategory) {
+        this.maybeUpdateFilterForCategory(streamCategory);
       }
+
+      const statusesForRefresh = StreamStatusService.getAll();
+      statusesForRefresh.set(stream, status);
+      this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+    } else {
+      // Targeted update - send only status change for this stream
+      const logs = this.state.streamTabs.getMessages(stream);
+      const lastTimestamp = logs.at(-1)?.timestamp;
+      this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
     }
   }
 
   /**
    * Get the session category for a stream from taskState or hints.
-   * Returns undefined if category cannot be determined.
    */
   private getStreamCategory(stream: string): AgentCategory | undefined {
+    const taskState = this.state.getTaskState(stream);
     return (
-      this.state.getTaskState(stream)?.agentConfig?.session?.agentCategory ??
+      taskState?.agentConfig?.session?.agentCategory ??
       this.state.getStreamHints(stream).sessionCategory
-    );
-  }
-
-  /**
-   * Determine if a status transition might affect stream tab ordering.
-   * First status assignment or transitions TO running may result in new log
-   * activity that changes the stream's position in time-sorted order.
-   * Other transitions (RUNNING→STOPPED, etc.) don't require re-sorting because
-   * all log timestamps were already captured while the stream was RUNNING.
-   */
-  private mightAffectTabOrder(
-    previous: StreamStatus | undefined,
-    current: StreamStatus,
-  ): boolean {
-    // First status assignment should always trigger refresh
-    if (previous === undefined) {
-      return true;
-    }
-
-    // Transitioning TO running may result in new log activity
-    return (
-      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
     );
   }
 
@@ -592,40 +550,30 @@ export class ProgressEventHandler {
    * status or activation events, preserving any existing status metadata.
    */
   private async initializeStreamForTaskGroup(stream: string): Promise<void> {
-    const existingStatus = StreamStatusService.get(stream);
-
     await this.state.streamTabs.ensureStream(stream);
 
-    // Set status directly without triggering webview update - we do a single
-    // coordinated updateAll below to avoid multiple redundant updates.
-    if (existingStatus === undefined) {
+    // Set status to RUNNING if not already set (without emitting to avoid redundant updates)
+    if (!StreamStatusService.has(stream)) {
       StreamStatusService.set(stream, STREAM_STATUS.RUNNING, { emit: false });
     }
 
     this.state.updateStreamHints(stream, {
       sessionCategory: AgentCategory.Workflow,
     });
-
-    const currentFilter = this.state.agentTypeFilter;
-    if (currentFilter !== 'all' && currentFilter !== AgentCategory.Workflow) {
-      this.state.agentTypeFilter = AgentCategory.Workflow;
-    }
-
+    this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
     this.state.activeStream = stream;
 
-    if (this.webviewUpdater.isAvailable()) {
-      // Single coordinated update - send UPDATE_STREAMS first so frontend
-      // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
-      this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-
-      // The new task group must be added to state BEFORE this call (in TaskGroupEvents)
-      // so UPDATE_LOGS includes it and the frontend renders it correctly.
-      // Frontend detects stream switches using lastRenderedStream tracking.
-      const activeRunId = this.refreshStreamSurface(stream, {
-        updateInstruction: false,
-      });
-      this.sendInstructionUpdate(stream, activeRunId);
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
     }
+
+    // Coordinated update: UPDATE_STREAMS first (sets frontend activeStream),
+    // then UPDATE_LOGS (requires activeStream to be set)
+    this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+    const activeRunId = this.refreshStreamSurface(stream, {
+      updateInstruction: false,
+    });
+    this.sendInstructionUpdate(stream, activeRunId);
   }
 
   /**

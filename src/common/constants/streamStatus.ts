@@ -90,3 +90,32 @@ export function executionToEndStatus(
 ): 'error' | 'stopped' {
   return status === EXECUTION_STATUS.COMPLETED ? 'stopped' : 'error';
 }
+
+// ============================================================================
+// Status Helper Functions
+// ============================================================================
+
+/**
+ * Terminal statuses - stream execution has ended and won't resume automatically.
+ * Used by status bar to determine running vs idle state.
+ */
+export const TERMINAL_STATUSES: readonly StreamStatus[] = [
+  STREAM_STATUS.STOPPED,
+  STREAM_STATUS.ERROR,
+  STREAM_STATUS.WAITING,
+  STREAM_STATUS.READY,
+] as const;
+
+/**
+ * Check if a status indicates active execution (running or resuming).
+ */
+export function isActiveStatus(status: StreamStatus | undefined): boolean {
+  return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
+}
+
+/**
+ * Check if a status is terminal (execution ended).
+ */
+export function isTerminalStatus(status: StreamStatus | undefined): boolean {
+  return status !== undefined && TERMINAL_STATUSES.includes(status);
+}

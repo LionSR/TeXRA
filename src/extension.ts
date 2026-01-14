@@ -25,6 +25,11 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
+import {
+  STREAM_STATUS,
+  isTerminalStatus,
+  type StreamStatus,
+} from '@common/constants/streamStatus';
 import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 
@@ -238,14 +243,13 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const runningStreams = new Set<string>();
-  const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];
 
   disposeStatusListener = bus.on(
     'updateStreamStatus',
-    ({ stream, status }: { stream: string; status: string }) => {
-      if (status === 'running') {
+    ({ stream, status }: { stream: string; status: StreamStatus }) => {
+      if (status === STREAM_STATUS.RUNNING) {
         runningStreams.add(stream);
-      } else if (NON_RUNNING_STATUSES.includes(status)) {
+      } else if (isTerminalStatus(status)) {
         runningStreams.delete(stream);
       }
       statusBarItem!.text =
