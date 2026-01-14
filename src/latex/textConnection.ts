@@ -17,74 +17,51 @@ export interface ConnectionResult {
   choice: string;
 }
 
-interface TestStrings {
-  A: string;
-  B: string;
-  C: string;
-}
-
-const caseDict: { [key: string]: string } = {
+const CASE_CONNECTORS: Record<string, string> = {
   A: '',
   B: ' ',
   C: '\n',
 };
 
-/**
- * Prepares test strings and prompt for both implementations
- */
-function preparePrompt(
-  str1: string,
-  str2: string,
-): { strings: TestStrings; prompt: string } {
-  const strings = {
-    A: `${str1}${str2}`,
-    B: `${str1} ${str2}`,
-    C: `${str1}\n${str2}`,
-  };
+const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
 
-  const prompt =
+function buildPrompt(str1: string, str2: string): string {
+  return (
     `Given three strings from a LaTeX document:\n` +
-    `A: ${strings.A}\n` +
-    `B: ${strings.B}\n` +
-    `C: ${strings.C}\n` +
-    `Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason.`;
-
-  return { strings, prompt };
+    `A: ${str1}${str2}\n` +
+    `B: ${str1} ${str2}\n` +
+    `C: ${str1}\n${str2}\n` +
+    `Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason.`
+  );
 }
 
-/**
- * Processes choices to determine the majority vote
- */
-function processMajorityChoice(choices: string[]): ConnectionResult {
-  const choiceCounts = new Map<string, number>();
-  choices.forEach((choice) => {
-    choiceCounts.set(choice, (choiceCounts.get(choice) ?? 0) + 1);
-  });
+function getMajorityChoice(choices: string[]): ConnectionResult {
+  const counts = new Map<string, number>();
+  for (const choice of choices) {
+    counts.set(choice, (counts.get(choice) ?? 0) + 1);
+  }
 
   let majorityChoice = '';
   let maxCount = 0;
-  choiceCounts.forEach((count, choice) => {
+  for (const [choice, count] of counts) {
     if (count > maxCount) {
       maxCount = count;
       majorityChoice = choice;
     }
-  });
+  }
 
-  if (majorityChoice in caseDict) {
+  if (majorityChoice in CASE_CONNECTORS) {
     return {
-      connector: caseDict[majorityChoice],
+      connector: CASE_CONNECTORS[majorityChoice],
       choice: majorityChoice,
     };
-  } else {
-    logger.debug(
-      CHANNEL,
-      `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`,
-    );
-    return {
-      connector: ' ',
-      choice: 'B',
-    };
   }
+
+  logger.debug(
+    CHANNEL,
+    `Invalid choice: ${majorityChoice}. Defaulting to space.`,
+  );
+  return DEFAULT_RESULT;
 }
 
 /**
@@ -97,7 +74,7 @@ export async function bestConnectionMethod(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const { prompt } = preparePrompt(str1, str2);
+    const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
     const baseURL = handler.getBaseUrl() || undefined;
     const client = openaiApiKey
@@ -105,7 +82,7 @@ export async function bestConnectionMethod(
       : await handler.getClient();
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-4.1', //'gpt-4-turbo',
+      model: 'gpt-4.1',
       temperature: 0,
       n,
       messages: [
@@ -114,27 +91,20 @@ export async function bestConnectionMethod(
           content:
             'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
         },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: 'user', content: prompt },
       ],
     });
 
     const choices = completion.choices.map(
       (choice) => choice.message.content?.trim() ?? '',
     );
-
-    return processMajorityChoice(choices);
+    return getMajorityChoice(choices);
   } catch (err) {
     logger.error(
       CHANNEL,
       `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`,
     );
-    return {
-      connector: ' ',
-      choice: 'B',
-    };
+    return DEFAULT_RESULT;
   }
 }
 
@@ -148,48 +118,34 @@ export async function bestConnectionMethodAnthropic(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const { prompt } = preparePrompt(str1, str2);
+    const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
     const baseURL = handler.getBaseUrl() || undefined;
     const client = anthropicApiKey
       ? new Anthropic({ apiKey: anthropicApiKey, baseURL })
       : await handler.getClient();
 
-    // Make multiple API calls since Anthropic doesn't support n parameter
     const choices = await Promise.all(
-      Array(n)
-        .fill(null)
-        .map(() =>
-          client.messages
-            .create({
-              model: 'claude-3-7-sonnet-20250219',
-              max_tokens: 128,
-              messages: [
-                {
-                  role: 'user',
-                  content: prompt,
-                },
-              ],
-            })
-            .then((response) => {
-              const content = response.content[0];
-              if ('text' in content) {
-                return content.text.trim();
-              }
-              return 'B';
-            }),
-        ),
+      Array.from({ length: n }, () =>
+        client.messages
+          .create({
+            model: 'claude-3-7-sonnet-20250219',
+            max_tokens: 128,
+            messages: [{ role: 'user', content: prompt }],
+          })
+          .then((response) => {
+            const content = response.content[0];
+            return 'text' in content ? content.text.trim() : 'B';
+          }),
+      ),
     );
 
-    return processMajorityChoice(choices);
+    return getMajorityChoice(choices);
   } catch (err) {
     logger.error(
       CHANNEL,
       `Error in bestConnectionMethodAnthropic: ${getSdkErrorMessage(err)}`,
     );
-    return {
-      connector: ' ',
-      choice: 'B',
-    };
+    return DEFAULT_RESULT;
   }
 }

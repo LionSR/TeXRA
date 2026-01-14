@@ -11,11 +11,14 @@ function extractBaseName(filename: string, includeRound: boolean): string {
   const name = path.parse(filename).name;
   const lastMatch = extractLastRoundMatch(name);
   if (!lastMatch || lastMatch.index === undefined) {
-    throw new Error(`Failed to extract base name from edited file: ${filename}`);
+    throw new Error(
+      `Failed to extract base name from edited file: ${filename}`,
+    );
   }
   // Return everything up to (or including) the last _rN
   // The -1 excludes the trailing underscore from _rN_ when includeRound is true
-  const endIndex = lastMatch.index + (includeRound ? lastMatch[0].length - 1 : 0);
+  const endIndex =
+    lastMatch.index + (includeRound ? lastMatch[0].length - 1 : 0);
   return name.slice(0, endIndex);
 }
 
@@ -26,7 +29,9 @@ export class DiffFileNameManager {
     suffix: string,
   ): string {
     const editedFileName = path.basename(editedFile);
-    const inputRoundMatch = extractLastRoundModelMatch(path.basename(inputFile));
+    const inputRoundMatch = extractLastRoundModelMatch(
+      path.basename(inputFile),
+    );
     const editedRoundMatch = extractLastRoundModelMatch(editedFileName);
 
     if (inputRoundMatch && editedRoundMatch) {

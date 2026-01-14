@@ -6,7 +6,10 @@
 /**
  * Helper to extract the last match of a pattern from text.
  */
-function extractLastMatch(text: string, pattern: RegExp): RegExpMatchArray | null {
+function extractLastMatch(
+  text: string,
+  pattern: RegExp,
+): RegExpMatchArray | null {
   return [...text.matchAll(pattern)].at(-1) ?? null;
 }
 
@@ -21,7 +24,9 @@ function extractLastMatch(text: string, pattern: RegExp): RegExpMatchArray | nul
  * extractLastRoundMatch('main_enhance_r1_gpt52_criticize_r0_gpt52.tex')
  * // Returns match for '_r0_' (the last occurrence), not '_r1_'
  */
-export function extractLastRoundMatch(filename: string): RegExpMatchArray | null {
+export function extractLastRoundMatch(
+  filename: string,
+): RegExpMatchArray | null {
   return extractLastMatch(filename, /_r(\d+)_/g);
 }
 
