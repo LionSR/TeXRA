@@ -50,6 +50,23 @@ export const StreamHintsSchema = z.object({
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
 /**
+ * Consolidated ephemeral state for a single stream.
+ *
+ * Groups all session-only, non-persisted state that needs to be tracked per-stream.
+ * This eliminates the scattered Maps pattern (5 separate Maps → 1 Map with structured values).
+ */
+interface StreamEphemeralState {
+  /** UI hints before TaskState is fully populated */
+  hints: StreamHints;
+  /** Todos from agent, replayed on stream switch */
+  todos: TodoItem[];
+  /** Context utilization (input tokens vs context window) */
+  contextState: ContextStateData | null;
+  /** Most recently viewed run for this stream */
+  activeRunId: StorageKey | null;
+}
+
+/**
  * Core state management for the progress view.
  * Composes focused manager classes and provides a clean interface
  * for state operations while hiding implementation details.
@@ -65,28 +82,18 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+
   /**
-   * Ephemeral stream metadata hints keyed by stream ID.
+   * Consolidated ephemeral state per stream.
    *
-   * When a stream becomes active before its {@link TaskState} is persisted,
-   * progress events populate this map so the UI can immediately show correct
-   * indicators (session category, remote status, multiple outputs).
-   * Once canonical metadata is stored via setTaskState, the entry is cleared.
+   * Groups all non-persisted, session-only data:
+   * - hints: UI indicators before TaskState is populated
+   * - todos: Agent todos for replay on stream switch
+   * - contextState: Token utilization display
+   * - activeRunId: Most recently viewed run
    */
-  private _streamHints = new Map<StreamTabId, StreamHints>();
-  private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
-  /**
-   * Ephemeral todos storage keyed by stream ID.
-   * Todos are stored here so they can be replayed when switching streams.
-   * Not persisted - session-only state that's also stored in AgentWorkspaceState.
-   */
-  private _todos: Map<StreamTabId, TodoItem[]> = new Map();
-  /**
-   * Ephemeral context state storage keyed by stream ID.
-   * Stores context utilization (input tokens vs context window) for replay
-   * when switching streams.
-   */
-  private _contextState: Map<StreamTabId, ContextStateData> = new Map();
+  private _ephemeral = new Map<StreamTabId, StreamEphemeralState>();
+
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -197,90 +204,102 @@ export class ProgressViewState {
     this.saveAgentTypeFilter();
   }
 
-  // Stream metadata hint management (ephemeral, non-persistent)
-  // Provides UI hints before TaskState is fully populated
-  updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
-    const existing = this._streamHints.get(streamTabId) ?? {};
-    this._streamHints.set(streamTabId, { ...existing, ...hints });
-  }
+  // ============================================================================
+  // Ephemeral State Management (consolidated)
+  // ============================================================================
 
-  getStreamHints(streamTabId: StreamTabId): StreamHints {
-    return this._streamHints.get(streamTabId) ?? {};
-  }
-
-  clearStreamHints(streamTabId: StreamTabId): void {
-    this._streamHints.delete(streamTabId);
-  }
-
-  // Todo management (ephemeral, non-persistent)
-  /**
-   * Set todos for a stream.
-   * Stores todos so they can be replayed when switching streams.
-   */
-  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    this._todos.set(stream, todos);
-  }
-
-  /**
-   * Get todos for a stream.
-   */
-  getTodos(stream: StreamTabId): TodoItem[] | undefined {
-    return this._todos.get(stream);
-  }
-
-  /**
-   * Clear todos for a stream.
-   */
-  clearTodos(stream: StreamTabId): void {
-    this._todos.delete(stream);
-  }
-
-  /**
-   * Clear all todos across all streams.
-   */
-  clearAllTodos(): void {
-    this._todos.clear();
-  }
-
-  // Context state management (ephemeral, non-persistent)
-  /**
-   * Set context state for a stream.
-   * Stores context utilization so it can be replayed when switching streams.
-   */
-  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
-    this._contextState.set(stream, contextState);
-  }
-
-  /**
-   * Get context state for a stream.
-   */
-  getContextState(stream: StreamTabId): ContextStateData | undefined {
-    return this._contextState.get(stream);
-  }
-
-  /**
-   * Clear context state for a stream.
-   */
-  clearContextState(stream: StreamTabId): void {
-    this._contextState.delete(stream);
-  }
-
-  setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    // Normalize at boundary to ensure branded StorageKey storage
-    const storageKey = runId ? normalizeRunId(runId) : null;
-    this._activeRunIds.set(stream, storageKey);
-    this.saveActiveRunIds();
-  }
-
-  getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this._activeRunIds.get(stream) ?? null;
-  }
-
-  clearActiveRun(stream: StreamTabId): void {
-    if (!this._activeRunIds.delete(stream)) {
-      return;
+  /** Get or create ephemeral state for a stream */
+  private getOrCreateEphemeral(stream: StreamTabId): StreamEphemeralState {
+    let state = this._ephemeral.get(stream);
+    if (!state) {
+      state = { hints: {}, todos: [], contextState: null, activeRunId: null };
+      this._ephemeral.set(stream, state);
     }
+    return state;
+  }
+
+  /** Update stream hints (merges with existing) */
+  updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
+    const state = this.getOrCreateEphemeral(streamTabId);
+    state.hints = { ...state.hints, ...hints };
+  }
+
+  /** Get stream hints */
+  getStreamHints(streamTabId: StreamTabId): StreamHints {
+    return this._ephemeral.get(streamTabId)?.hints ?? {};
+  }
+
+  /** Clear stream hints (resets to empty) */
+  clearStreamHints(streamTabId: StreamTabId): void {
+    const state = this._ephemeral.get(streamTabId);
+    if (state) {
+      state.hints = {};
+    }
+  }
+
+  /** Set todos for a stream */
+  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
+    this.getOrCreateEphemeral(stream).todos = todos;
+  }
+
+  /** Get todos for a stream */
+  getTodos(stream: StreamTabId): TodoItem[] | undefined {
+    const todos = this._ephemeral.get(stream)?.todos;
+    return todos?.length ? todos : undefined;
+  }
+
+  /** Clear todos for a stream */
+  clearTodos(stream: StreamTabId): void {
+    const state = this._ephemeral.get(stream);
+    if (state) {
+      state.todos = [];
+    }
+  }
+
+  /** Clear all todos across all streams */
+  clearAllTodos(): void {
+    for (const state of this._ephemeral.values()) {
+      state.todos = [];
+    }
+  }
+
+  /** Set context state for a stream */
+  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
+    this.getOrCreateEphemeral(stream).contextState = contextState;
+  }
+
+  /** Get context state for a stream */
+  getContextState(stream: StreamTabId): ContextStateData | undefined {
+    return this._ephemeral.get(stream)?.contextState ?? undefined;
+  }
+
+  /** Clear context state for a stream */
+  clearContextState(stream: StreamTabId): void {
+    const state = this._ephemeral.get(stream);
+    if (state) {
+      state.contextState = null;
+    }
+  }
+
+  /** Set active run ID for a stream (persisted) */
+  setActiveRunId(stream: StreamTabId, runId: string | null): void {
+    const storageKey = runId ? normalizeRunId(runId) : null;
+    this.getOrCreateEphemeral(stream).activeRunId = storageKey;
     this.saveActiveRunIds();
+  }
+
+  /** Get active run ID for a stream */
+  getActiveRunId(stream: StreamTabId): StorageKey | null {
+    return this._ephemeral.get(stream)?.activeRunId ?? null;
+  }
+
+  /** Clear active run for a stream */
+  clearActiveRun(stream: StreamTabId): void {
+    const state = this._ephemeral.get(stream);
+    if (state && state.activeRunId !== null) {
+      state.activeRunId = null;
+      this.saveActiveRunIds();
+    }
   }
 
   /**
@@ -387,18 +406,24 @@ export class ProgressViewState {
       {},
     );
 
-    // Normalize at boundary to ensure branded StorageKey storage
-    this._activeRunIds = new Map(
-      Object.entries(stored).map(([stream, runId]) => [
-        stream,
-        runId ? normalizeRunId(runId) : null,
-      ]),
-    );
+    // Restore active run IDs into consolidated ephemeral state
+    for (const [stream, runId] of Object.entries(stored)) {
+      if (runId) {
+        this.getOrCreateEphemeral(stream as StreamTabId).activeRunId =
+          normalizeRunId(runId);
+      }
+    }
   }
 
   private saveActiveRunIds(): void {
-    const serialized = mapToRecord(this._activeRunIds);
-    void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, serialized);
+    // Extract active run IDs from consolidated ephemeral state
+    const record: Record<string, string | null> = {};
+    for (const [stream, state] of this._ephemeral.entries()) {
+      if (state.activeRunId !== null) {
+        record[stream] = state.activeRunId;
+      }
+    }
+    void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, record);
   }
 
   /**
@@ -516,13 +541,10 @@ export class ProgressViewState {
       this._runInstructions.clearStream(stream),
     ]);
 
-    // Clear ephemeral state
+    // Clear ephemeral state (consolidated Map)
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
-    this._streamHints.delete(stream);
-    this._activeRunIds.delete(stream);
-    this._todos.delete(stream);
-    this._contextState.delete(stream);
+    this._ephemeral.delete(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -549,10 +571,7 @@ export class ProgressViewState {
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
-    this._streamHints.clear();
-    this._todos.clear();
-    this._contextState.clear();
-    this._activeRunIds.clear();
+    this._ephemeral.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
