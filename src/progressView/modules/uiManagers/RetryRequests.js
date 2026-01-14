@@ -120,51 +120,22 @@ export class RetryRequests extends BaseUIRequestManager {
    * @returns {string|null} Formatted details string, or null if no details
    */
   _formatErrorDetails(details) {
-    if (!details) {
-      return null;
-    }
+    if (!details) return null;
 
-    const lines = [];
+    // Fields to display in order (strings/numbers shown as-is, booleans explicitly)
+    const formatBody = (body) =>
+      typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
 
-    // Display fields in logical order matching ProviderError schema
-    if (details.message) {
-      lines.push(`message: ${details.message}`);
-    }
-
-    if (details.provider) {
-      lines.push(`provider: ${details.provider}`);
-    }
-
-    if (details.statusCode != null) {
-      lines.push(`statusCode: ${details.statusCode}`);
-    }
-
-    if (details.statusText) {
-      lines.push(`statusText: ${details.statusText}`);
-    }
-
-    // Show relay error indicator prominently
-    if (details.isRelayError != null) {
-      lines.push(`isRelayError: ${details.isRelayError}`);
-    }
-
-    // Show retryable status
-    if (details.retryable != null) {
-      lines.push(`retryable: ${details.retryable}`);
-    }
-
-    // Request ID for provider support debugging
-    if (details.requestId) {
-      lines.push(`requestId: ${details.requestId}`);
-    }
-
-    if (details.rawErrorBody != null) {
-      const bodyStr =
-        typeof details.rawErrorBody === 'object'
-          ? JSON.stringify(details.rawErrorBody, null, 2)
-          : String(details.rawErrorBody);
-      lines.push(`rawErrorBody: ${bodyStr}`);
-    }
+    const lines = [
+      details.message && `message: ${details.message}`,
+      details.provider && `provider: ${details.provider}`,
+      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusText && `statusText: ${details.statusText}`,
+      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
+      details.retryable != null && `retryable: ${details.retryable}`,
+      details.requestId && `requestId: ${details.requestId}`,
+      details.rawErrorBody != null && `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
+    ].filter(Boolean);
 
     return lines.length > 0 ? lines.join('\n') : null;
   }
