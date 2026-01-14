@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentCommands';
@@ -24,5 +25,5 @@ async function handleStopAgent(stream: string): Promise<void> {
   }
 
   // Update the UI status
-  StreamStatusService.set(stream, 'stopped');
+  StreamStatusService.set(stream, STREAM_STATUS.STOPPED);
 }
