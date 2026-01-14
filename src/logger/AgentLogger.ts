@@ -297,11 +297,7 @@ export class AgentLogger {
    * @param context - Optional context (operation, model)
    * @param groupId - Optional group ID for progress view
    */
-  logProgress(
-    message: string,
-    context?: ErrorContext,
-    groupId?: string,
-  ): void {
+  logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
