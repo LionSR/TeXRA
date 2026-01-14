@@ -71,45 +71,43 @@ export function getMainViewProvider(): MainViewProvider | null {
  * Register all extension commands
  * Commands are organized into logical groups in separate modules
  */
-export function registerCommands(context: vscode.ExtensionContext) {
+export function registerCommands(context: vscode.ExtensionContext): void {
   // Register command groups from separate modules
-  const registeredCommands = {
-    fileSelection: registerFileSelectionCommands(context),
-    latexdiff: registerLatexdiffCommands(context),
-    git: registerGitCommands(context),
-    pack: registerPackCommands(context),
-    clean: registerCleanCommands(context),
-    merge: registerMergeCommands(context),
-    execute: registerExecuteCommand(context),
-    latex: registerLatexCommands(context),
-    image: registerImageCommands(context),
-    figure: registerFigureCommands(context),
-    test: registerTestCommands(context),
-    xml: registerXmlCommands(context),
-    yaml: registerYamlCommands(context),
-    agent: registerAgentCommands(context),
-    agentCreator: registerAgentCreatorCommands(context),
-    apiKey: registerApiKeyCommands(context),
-    auth: registerAuthCommands(context),
-    stateRestore: registerStateRestoreCommand(context),
-    textEditor: registerTextEditorCommands(context),
-    linter: registerLinterCommands(context),
-    wolframTool: registerWolframToolCommands(context),
-    wolframScript: registerWolframScriptCommands(context),
-    history: registerHistoryCommands(context),
-    memory: registerMemoryCommands(context),
-    arXiv: registerArXivCommands(context),
-    compare: registerCompareCommands(context),
-    progressView: registerProgressViewCommands(context),
-    followUp: registerFollowUpCommand(context),
-    resumeAgent: registerResumeAgentCommand(context),
-    openFile: registerOpenFileCommands(context),
-    help: registerHelpCommands(context),
-    mainView: registerMainViewCommands(context),
-    settings: registerSettingsCommands(context),
-    sampleProject: registerSampleProjectCommands(context),
-    walkthrough: registerWalkthroughCommands(context),
-  };
+  registerFileSelectionCommands(context);
+  registerLatexdiffCommands(context);
+  registerGitCommands(context);
+  registerPackCommands(context);
+  registerCleanCommands(context);
+  registerMergeCommands(context);
+  registerExecuteCommand(context);
+  registerLatexCommands(context);
+  registerImageCommands(context);
+  registerFigureCommands(context);
+  registerTestCommands(context);
+  registerXmlCommands(context);
+  registerYamlCommands(context);
+  registerAgentCommands(context);
+  registerAgentCreatorCommands(context);
+  registerApiKeyCommands(context);
+  registerAuthCommands(context);
+  registerStateRestoreCommand(context);
+  registerTextEditorCommands(context);
+  registerLinterCommands(context);
+  registerWolframToolCommands(context);
+  registerWolframScriptCommands(context);
+  registerHistoryCommands(context);
+  registerMemoryCommands(context);
+  registerArXivCommands(context);
+  registerCompareCommands(context);
+  registerProgressViewCommands(context);
+  registerFollowUpCommand(context);
+  registerResumeAgentCommand(context);
+  registerOpenFileCommands(context);
+  registerHelpCommands(context);
+  registerMainViewCommands(context);
+  registerSettingsCommands(context);
+  registerSampleProjectCommands(context);
+  registerWalkthroughCommands(context);
 
   // Register webview provider and store instance for external access
   mainViewProviderInstance = new MainViewProvider(context);
@@ -124,8 +122,6 @@ export function registerCommands(context: vscode.ExtensionContext) {
       },
     ),
   );
-
-  return registeredCommands;
 }
 
 // Add exports for the command modules

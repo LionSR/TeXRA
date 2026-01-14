@@ -46,5 +46,4 @@ export function registerWolframToolCommands(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push(testCommand);
-  return { testCommand };
 }

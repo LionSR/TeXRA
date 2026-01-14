@@ -42,7 +42,9 @@ export class DiffStatsManager {
         }
       }
       return { added, removed };
-    } catch {
+    } catch (error) {
+      // File read errors are expected (e.g., file not found during processing)
+      // Return empty stats rather than propagating the error
       return {};
     }
   }
