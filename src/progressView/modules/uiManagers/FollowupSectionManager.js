@@ -6,6 +6,7 @@ import { progressViewState } from '../progressViewState.js';
 import {
   getRadioChangeValue,
   safeGetElementById,
+  setRadioGroupValue,
   setVisibilityState,
 } from '@common/domUtils.js';
 
@@ -228,6 +229,12 @@ export class FollowupSectionManager {
    */
   _setMode(mode) {
     this._mode = mode;
+
+    // Sync radio group visual state
+    const modeGroup = safeGetElementById('followupModeGroup');
+    if (modeGroup) {
+      setRadioGroupValue(modeGroup, mode);
+    }
 
     // Set data-mode attribute on the section - CSS uses this for visibility
     const section = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
