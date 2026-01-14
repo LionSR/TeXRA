@@ -31,8 +31,8 @@ import {
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { RetryErrorInfoSchema } from '@common/errors/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
-import { RetryErrorInfoSchema } from './RetryState';
 
 // ============================================================================
 // Base Cycle Schema (Single Source of Truth)

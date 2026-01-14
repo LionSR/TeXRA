@@ -87,17 +87,18 @@ export function formatProgressStatus(message) {
   return container;
 }
 
-// Error detail fields in display order
+// Error detail fields in display order (matches ProviderError schema)
 const ERROR_DETAIL_FIELDS = [
   'message',
   'operation',
   'model',
   'provider',
   'statusCode',
+  'statusText',
   'isRelayError',
   'retryable',
-  'rawMessage',
   'requestId',
+  'rawMessage',
   'rawErrorBody',
 ];
 

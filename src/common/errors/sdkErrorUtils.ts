@@ -34,42 +34,26 @@ import {
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 import { toErrorMessage } from './errorHandlingUtils';
 
+// Import canonical schemas - SINGLE SOURCE OF TRUTH
+import {
+  type ProviderError,
+  type ErrorLogData as SchemaErrorLogData,
+  type ErrorContext,
+} from './schemas';
+
+// Re-export canonical types for consumers
+export type { ProviderError, ErrorContext };
+export {
+  ProviderErrorSchema,
+  ErrorLogDataSchema,
+  ErrorContextSchema,
+} from './schemas';
+
 /**
- * Structured representation of a provider HTTP failure.
+ * @deprecated Use ProviderError from './schemas' instead.
+ * Kept for backward compatibility.
  */
-export interface ProviderHttpErrorDetails {
-  /**
-   * Human readable description of the provider failure. Includes HTTP prefix when
-   * a status code is available.
-   */
-  message: string;
-  /** HTTP status code reported by the provider, when present. */
-  statusCode?: number;
-  /** HTTP status text reported by the provider or derived from the status code. */
-  statusText?: string;
-  /** Identifier for the provider that produced the error, when known. */
-  provider?: string;
-  /**
-   * Whether the error is retryable. Based on native SDK error types:
-   * - Connection errors (timeout, network) → retryable
-   * - Server errors (5xx) and rate limits (429) → retryable
-   * - User abort, auth errors, bad requests → NOT retryable
-   */
-  retryable: boolean;
-  /**
-   * Whether this error originated from the relay service.
-   * Relay errors have a `_relay` field in the raw error body and indicate
-   * issues with the proxy/relay infrastructure rather than the upstream provider.
-   */
-  isRelayError: boolean;
-  /** Request ID from the provider, useful for debugging with support. */
-  requestId?: string;
-  /**
-   * Raw error body from the provider API response.
-   * Useful for debugging relay errors where the error contains additional context.
-   */
-  rawErrorBody?: unknown;
-}
+export type ProviderHttpErrorDetails = ProviderError;
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -579,27 +563,16 @@ export function isPreviousResponseIdError(err: unknown): boolean {
 }
 
 /**
- * Context for building error log data.
+ * @deprecated Use ErrorContext from './schemas' instead.
+ * Kept for backward compatibility.
  */
-export interface ErrorLogContext {
-  /** The operation that failed (e.g., 'API request', 'manual retry'). */
-  operation?: string;
-  /** The model being used when the error occurred. */
-  model?: string;
-}
+export type ErrorLogContext = ErrorContext;
 
 /**
- * Structured data for error log messages.
- * Used by progressView formatters to display error details.
+ * @deprecated Use ErrorLogData from './schemas' instead.
+ * Kept for backward compatibility.
  */
-export interface ErrorLogData extends ProviderHttpErrorDetails {
-  /** Raw error message before formatting. */
-  rawMessage?: string;
-  /** The operation that failed. */
-  operation?: string;
-  /** The model being used. */
-  model?: string;
-}
+export type ErrorLogData = SchemaErrorLogData;
 
 /**
  * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
@@ -607,8 +580,8 @@ export interface ErrorLogData extends ProviderHttpErrorDetails {
  */
 export function buildErrorLogData(
   err: unknown,
-  context?: ErrorLogContext,
-): ErrorLogData {
+  context?: ErrorContext,
+): SchemaErrorLogData {
   const formatted = formatProviderHttpError(err);
   const rawMessage = toErrorMessage(err);
 

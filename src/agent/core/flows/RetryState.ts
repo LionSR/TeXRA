@@ -12,8 +12,6 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
-import { z } from 'zod';
-
 import { Node } from '@agent/node';
 import {
   retryCoordinator,
@@ -21,7 +19,10 @@ import {
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  type ProviderError,
+} from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
@@ -36,20 +37,14 @@ import {
 export const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 // ============================================================================
-// Schemas (Single Source of Truth)
+// Error State Types (using canonical schema)
 // ============================================================================
 
-/**
- * Error information for retry handling.
- * Schema-first: used for persistence validation and type derivation.
- */
-export const RetryErrorInfoSchema = z.object({
-  message: z.string(),
-  retryable: z.boolean(),
-});
-
-/** Derived type from schema */
-export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
+// Re-export from canonical source for backward compatibility
+export {
+  RetryErrorInfoSchema,
+  type RetryErrorInfo,
+} from '@common/errors/schemas';
 
 /**
  * Retry state for tracking errors across the retry flow.
@@ -57,7 +52,7 @@ export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
  */
 export interface RetryState {
   /** Information about the last error, if any. */
-  lastError?: RetryErrorInfo;
+  lastError?: { message: string; retryable: boolean };
 }
 
 // ============================================================================
@@ -306,6 +301,7 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.getServices();
     const operationName = this.getOperationName();
+    // Format error ONCE and reuse - no redundant calls
     const formatted = formatProviderHttpError(error);
 
     // If not retryable, don't show UI - go straight to execFallback
@@ -313,15 +309,11 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    // Log the error before showing retry UI
-    logger.logErrorData(`${operationName} failed: ${formatted.message}`, {
-      message: formatted.message,
-      statusCode: formatted.statusCode,
-      retryable: formatted.retryable,
-      ...(formatted.rawErrorBody !== undefined && {
-        rawErrorBody: formatted.rawErrorBody,
-      }),
-    });
+    // Log the error before showing retry UI - pass FULL formatted error
+    logger.logErrorData(
+      `${operationName} failed: ${formatted.message}`,
+      formatted, // Pass complete ProviderError - no field loss
+    );
 
     // Emit waiting status and wait for user action
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
@@ -331,7 +323,7 @@ export abstract class RetryableInvocationNode<
         operation: operationName,
         errorMessage: formatted.message,
         logger,
-        errorDetails: formatted,
+        errorDetails: formatted, // Pass complete ProviderError - no field loss
       },
     );
 
@@ -368,14 +360,7 @@ export abstract class RetryableInvocationNode<
     if (!formatted.retryable) {
       this.getServices().logger.logErrorData(
         `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
-        {
-          message: formatted.message,
-          statusCode: formatted.statusCode,
-          retryable: formatted.retryable,
-          ...(formatted.rawErrorBody !== undefined && {
-            rawErrorBody: formatted.rawErrorBody,
-          }),
-        },
+        formatted, // Pass complete ProviderError - no field loss
       );
     }
     return { kind: 'failed', message: formatted.message };
