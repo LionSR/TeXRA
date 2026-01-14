@@ -1,21 +1,18 @@
 /**
- * ToolUseFlowContext - Factory for tool-use flow services.
+ * ToolUseFlowContext - Types and utilities for tool-use flow services.
+ *
+ * The flow context is created inline in runToolUseFlow.ts - no factory function.
+ * This module provides the type definitions and tool resolution utility.
  */
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
-import {
-  ToolUseSessionLifecycle,
-  type IToolUseSession,
-} from './ToolUseSessionLifecycle';
 
-import type { ToolUseServices } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 /** Configuration for creating tool-use flow services. */
@@ -29,14 +26,6 @@ export interface ToolUseFlowContextInit<
   onFollowUpConsumed?: () => void;
 }
 
-/** Tool-use flow context returned by factory function. */
-export interface ToolUseFlowContext<C = unknown> {
-  services: ToolUseServices<C>;
-  session: ToolUseSessionLifecycle;
-  interrupt(): void;
-  dispose(): void;
-}
-
 // ============================================================================
 // Tool Resolution
 // ============================================================================
@@ -44,12 +33,17 @@ export interface ToolUseFlowContext<C = unknown> {
 /**
  * Resolve tool definitions from agent settings, validating against registry.
  * Optionally injects the memory tool if enabled in user settings.
+ *
+ * @param tools - Tool configuration from agent settings
+ * @param registry - Optional tool registry (defaults to global registry)
+ * @param logger - Logger for warnings about missing tools
  */
-function resolveTools(
+export function resolveTools(
   tools: AgentToolUseSetting['tools'],
-  toolRegistry: IToolRegistry,
+  registry: IToolRegistry | undefined,
   logger: { warn: (msg: string) => void },
 ): ToolDefinition[] {
+  const toolRegistry = registry ?? getDefaultToolRegistry();
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
   const resolved: ToolDefinition[] = [];
@@ -78,44 +72,4 @@ function resolveTools(
   }
 
   return resolved;
-}
-
-// ============================================================================
-// Factory Function
-// ============================================================================
-
-/** Creates a ToolUseFlowContext with services and lifecycle methods. */
-export function createToolUseFlowContext<C = unknown>(
-  init: ToolUseFlowContextInit<C>,
-): ToolUseFlowContext<C> {
-  const { setting, logger, streamId, resumeSnapshot } = init;
-
-  const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
-  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
-
-  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
-
-  const services: ToolUseServices<C> = {
-    ...init,
-    toolRegistry,
-    session: sessionLifecycle,
-    resolvedTools,
-    snapshot: resumeSnapshot ?? null,
-    getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
-  };
-
-  return {
-    services,
-    session: sessionLifecycle,
-
-    interrupt(): void {
-      init.onInterrupt?.();
-      retryCoordinator.clearRequest(streamId);
-      sessionLifecycle.interrupt();
-    },
-
-    dispose(): void {
-      sessionLifecycle.dispose();
-    },
-  };
 }
