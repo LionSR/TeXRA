@@ -654,7 +654,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           {
             tracker,
             todoState,
-            streamId: options.logger.channelId,
+            streamId: options.logger.streamId,
             executionId: options.executionId,
             toolCallId: call.callId,
           },
