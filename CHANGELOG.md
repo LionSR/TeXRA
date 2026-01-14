@@ -13,13 +13,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Fixed race condition in workflow launch deduplication.
-- Fixed cancellation propagation for more responsive agent stopping.
-- Fixed round pattern extraction in multiple output filenames.
-- Fixed workspace temp file cleanup on approval resolution.
-- Fixed relay error handling and recovery.
-- Fixed status indicator tooltip clipping by positioning it below.
-- Fixed LaTeXdiff dropdowns opening downward and causing overflow.
+- Fixed duplicate workflow launches.
+- Fixed agent cancellation responsiveness.
+- Fixed multiple output filename handling.
+- Fixed temp file cleanup.
+- Fixed relay error recovery.
+- Fixed tooltip and dropdown clipping issues.
 
 ### Improvements
 
