@@ -100,11 +100,9 @@ export class WatcherManager {
         watcher.onDidDelete(this.triggerRefresh);
 
         if (isCustomPath(watchPath)) {
-          watcher.onDidChange(async (uri) => {
+          watcher.onDidChange((uri) => {
             this.triggerRefresh();
-            if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
-              await validateYamlAndPromptAdd(uri.fsPath);
-            }
+            scheduleYamlValidation(uri);
           });
         } else {
           watcher.onDidChange(this.triggerRefresh);
