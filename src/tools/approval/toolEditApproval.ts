@@ -217,10 +217,19 @@ function countChangedLines(text: string): number {
 
   const normalized = text.replaceAll('\r\n', '\n');
   const segments = normalized.split('\n');
-  if (normalized.endsWith('\n')) {
-    return Math.max(segments.length - 1, 0);
-  }
-  return segments.length;
+  return normalized.endsWith('\n')
+    ? Math.max(segments.length - 1, 0)
+    : segments.length;
+}
+
+function createSemanticDiffs(
+  original: string,
+  proposed: string,
+): ReturnType<diff_match_patch['diff_main']> {
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(original, proposed);
+  dmp.diff_cleanupSemantic(diffs);
+  return diffs;
 }
 
 function computeLineChangeSummary(
@@ -231,18 +240,12 @@ function computeLineChangeSummary(
     return { added: 0, removed: 0 };
   }
 
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
+  const diffs = createSemanticDiffs(original, proposed);
 
   let added = 0;
   let removed = 0;
 
   for (const [type, text] of diffs) {
-    if (!text) {
-      continue;
-    }
-
     if (type === DIFF_INSERT) {
       added += countChangedLines(text);
     } else if (type === DIFF_DELETE) {
@@ -258,27 +261,18 @@ function firstChangedLine(original: string, proposed: string): number | null {
     return null;
   }
 
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
-
-  let originalLine = 0;
+  const diffs = createSemanticDiffs(original, proposed);
   let proposedLine = 0;
 
   for (const [type, text] of diffs) {
     switch (type) {
-      case DIFF_EQUAL: {
-        const newlineCount = countNewlines(text);
-        originalLine += newlineCount;
-        proposedLine += newlineCount;
+      case DIFF_EQUAL:
+        proposedLine += countNewlines(text);
         break;
-      }
       case DIFF_INSERT:
         return proposedLine;
       case DIFF_DELETE:
         return Math.max(proposedLine - 1, 0);
-      default:
-        break;
     }
   }
 
@@ -316,11 +310,7 @@ function computeUserPatch(
     diffOptions,
   );
 
-  if (!diffLines || diffLines.length === 0) {
-    return undefined;
-  }
-
-  return diffLines.join('\n');
+  return diffLines.length ? diffLines.join('\n') : undefined;
 }
 
 async function revealFirstChange(
@@ -450,13 +440,12 @@ async function nativeRequestApproval(
   const { added, removed } = lineChanges;
   const totalChanged = added + removed;
   const changeParts = [
-    ...(added > 0 ? [`+${added}`] : []),
-    ...(removed > 0 ? [`-${removed}`] : []),
-  ];
-  const changeSuffix =
-    changeParts.length > 0
-      ? ` · ${changeParts.join(' / ')} ${totalChanged === 1 ? 'line' : 'lines'}`
-      : '';
+    added > 0 && `+${added}`,
+    removed > 0 && `-${removed}`,
+  ].filter(Boolean);
+  const changeSuffix = changeParts.length
+    ? ` · ${changeParts.join(' / ')} ${totalChanged === 1 ? 'line' : 'lines'}`
+    : '';
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   try {
@@ -597,9 +586,8 @@ function finalizeApprovalResult(
 
   const appliedContent = result.appliedContent ?? request.proposedContent;
   const userPatch =
-    result.userPatch !== undefined
-      ? result.userPatch
-      : computeUserPatch(request.path, request.proposedContent, appliedContent);
+    result.userPatch ??
+    computeUserPatch(request.path, request.proposedContent, appliedContent);
 
   return {
     ...result,
@@ -690,11 +678,9 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
+  // Handle non-settling actions (preview/diff operations)
   if (payload.action === 'openDiff') {
-    if (entry.isSettled()) {
-      return;
-    }
-
+    if (entry.isSettled()) return;
     await vscode.commands.executeCommand(
       'vscode.diff',
       entry.originalUri,
@@ -710,25 +696,24 @@ export async function handleProgressViewToolEditApprovalAction(
   }
 
   if (payload.action === 'showLatexdiff') {
-    if (entry.isSettled()) {
-      return;
-    }
-
-    // Run latexdiff on the original and proposed temp files
+    if (entry.isSettled()) return;
     await runLatexdiff(entry);
     return;
   }
 
   if (payload.action === 'previewProposed') {
-    if (entry.isSettled()) {
-      return;
-    }
-
-    // Compile and preview the proposed LaTeX document in workspace context
+    if (entry.isSettled()) return;
     await previewProposedLatex(entry);
     return;
   }
 
+  // Handle state modification action
+  if (payload.action === 'resumeApprovals') {
+    resetToolEditApprovalSessionBypass();
+    return;
+  }
+
+  // Handle settling actions (require isSettled check)
   if (entry.isSettled()) {
     return;
   }
@@ -744,11 +729,6 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
-  if (payload.action === 'resumeApprovals') {
-    resetToolEditApprovalSessionBypass();
-    return;
-  }
-
   if (payload.action === 'reject') {
     let userMessage = payload.note?.trim();
     if (!userMessage) {
@@ -756,7 +736,6 @@ export async function handleProgressViewToolEditApprovalAction(
         prompt: 'Optionally share why the change was rejected',
         placeHolder: 'Add guidance for the assistant (press Enter to skip)',
       });
-      // If user pressed Escape, cancel the rejection and keep waiting
       if (note === undefined) {
         return;
       }
