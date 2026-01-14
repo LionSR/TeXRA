@@ -128,7 +128,9 @@ export function formatError(message) {
   const detailLines = ERROR_DETAIL_FIELDS.filter((key) => {
     const value = structured[key];
     // Skip null/undefined values and message if it duplicates the original summary
-    return value != null && !(key === 'message' && value === originalSummaryText);
+    return (
+      value != null && !(key === 'message' && value === originalSummaryText)
+    );
   }).map((key) => {
     const value = structured[key];
     // Format objects (like rawErrorBody) as indented JSON

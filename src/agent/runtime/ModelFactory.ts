@@ -51,11 +51,16 @@ export class ModelFactory {
       config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false);
     if (useOpenRouter) {
-      config.openrouterFullName ||= `${config.provider}/${config.fullName}`;
+      // Create new config with openrouterFullName to avoid mutating input
+      const openRouterConfig = {
+        ...config,
+        openrouterFullName:
+          config.openrouterFullName || `${config.provider}/${config.fullName}`,
+      };
       if (config.provider === ModelProvider.ANTHROPIC) {
-        return new ModelHandlerAnthropicViaOpenRouter(config);
+        return new ModelHandlerAnthropicViaOpenRouter(openRouterConfig);
       }
-      return new ModelHandlerOpenRouter(config);
+      return new ModelHandlerOpenRouter(openRouterConfig);
     }
 
     // OpenAI models with optional Responses API
