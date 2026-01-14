@@ -3,11 +3,7 @@ import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common helpers
-import {
-  addEventListenerSafely,
-  safeGetElementById,
-  setVisibilityState,
-} from '@common/domUtils.js';
+import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
 
 /**
  * Manages the followup section for workflow task continuation.
@@ -18,36 +14,56 @@ export class FollowupSectionManager {
     this.vscode = vscode;
     this._mode = 'workflow';
     this._currentStreamData = null;
+    this._listeners = [];
   }
 
   setup() {
     // Mode toggle
     const modeGroup = safeGetElementById('followupModeGroup');
     if (modeGroup) {
-      modeGroup.addEventListener('change', (e) => {
-        this._setMode(e.target.value);
-      });
+      const modeHandler = (e) => this._setMode(e.target.value);
+      modeGroup.addEventListener('change', modeHandler);
+      this._listeners.push({ element: modeGroup, event: 'change', handler: modeHandler });
     }
 
     // Setup button
-    addEventListenerSafely(ELEMENT_IDS.FOLLOWUP_SETUP_BTN, 'click', () => {
-      this._handleSetup();
-    });
+    const setupBtn = safeGetElementById(ELEMENT_IDS.FOLLOWUP_SETUP_BTN);
+    if (setupBtn) {
+      const setupHandler = () => this._handleSetup();
+      setupBtn.addEventListener('click', setupHandler);
+      this._listeners.push({ element: setupBtn, event: 'click', handler: setupHandler });
+    }
 
     // Run button
-    addEventListenerSafely(ELEMENT_IDS.FOLLOWUP_RUN_BTN, 'click', () => {
-      this._handleRun();
-    });
+    const runBtn = safeGetElementById(ELEMENT_IDS.FOLLOWUP_RUN_BTN);
+    if (runBtn) {
+      const runHandler = () => this._handleRun();
+      runBtn.addEventListener('click', runHandler);
+      this._listeners.push({ element: runBtn, event: 'click', handler: runHandler });
+    }
 
     // Request followup options when section becomes visible
     const collapsible = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
     if (collapsible) {
-      collapsible.addEventListener('toggle', (e) => {
+      const toggleHandler = (e) => {
         if (e.target.open) {
           this._requestFollowupOptions();
         }
-      });
+      };
+      collapsible.addEventListener('toggle', toggleHandler);
+      this._listeners.push({ element: collapsible, event: 'toggle', handler: toggleHandler });
     }
+  }
+
+  /**
+   * Clean up event listeners to prevent memory leaks.
+   */
+  dispose() {
+    for (const { element, event, handler } of this._listeners) {
+      element.removeEventListener(event, handler);
+    }
+    this._listeners = [];
+    this._currentStreamData = null;
   }
 
   /**
