@@ -8,7 +8,10 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
-import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
+import {
+  canUpdateWebview,
+  type EventHandlerContext,
+} from './EventHandlerContext';
 
 /**
  * Register output event handlers on the event bus.
@@ -89,9 +92,7 @@ function handleUpdateMissingOutputs(ctx: EventHandlerContext) {
 }
 
 function handleClearMissingOutputs(ctx: EventHandlerContext) {
-  return ({
-    stream,
-  }: ProgressEventPayloads['clearMissingOutputs']): void => {
+  return ({ stream }: ProgressEventPayloads['clearMissingOutputs']): void => {
     withEventErrorHandling(
       'OutputEvents',
       'failed to handle clearMissingOutputs',

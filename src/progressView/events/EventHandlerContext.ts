@@ -28,7 +28,5 @@ export function canUpdateWebview(
   ctx: EventHandlerContext,
   stream: StreamTabId,
 ): boolean {
-  return (
-    ctx.webviewUpdater.isAvailable() && stream === ctx.state.activeStream
-  );
+  return ctx.webviewUpdater.isAvailable() && stream === ctx.state.activeStream;
 }
