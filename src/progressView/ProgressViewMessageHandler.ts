@@ -96,11 +96,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async deleteSessionSnapshot(_stream: StreamTabId): Promise<void> {
-    // PersistedFlow handles state cleanup automatically.
-    // ExecutionKVStore cleanup is managed by the flow lifecycle.
-  }
-
   protected createHandlers(): Record<
     string,
     MessageHandler<vscode.WebviewView | vscode.WebviewPanel>
@@ -194,8 +189,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleDeleteStream(message: any): Promise<void> {
-    // Delete persisted session data if any
-    await this.deleteSessionSnapshot(message.stream);
     // Clear pending task groups to prevent memory leaks
     this.provider.eventHandler.clearPendingTaskGroups(message.stream);
     await this.provider.state.clearStream(message.stream);
@@ -214,12 +207,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     if (confirmation !== 'Delete All') {
       return;
-    }
-
-    // Delete all persisted session data
-    const allStates = this.provider.state.getAllTaskStates();
-    for (const [stream] of allStates) {
-      await this.deleteSessionSnapshot(stream);
     }
 
     // Clear all pending task groups to prevent memory leaks
