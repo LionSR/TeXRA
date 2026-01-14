@@ -73,6 +73,10 @@ import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { extractScratchpad } from '@utils/text/xmlUtils';
+import {
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Local file imports
 import {
@@ -184,16 +188,14 @@ const extractTextFromContent = (
   content: BetaContentBlock[] | undefined,
   trim = false,
 ): string => {
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  let text = '';
-  for (const block of content) {
-    if (block.type === 'text') {
-      text += trim ? block.text.trim() : block.text;
-    }
-  }
-  return text;
+  if (!content) return '';
+  return content
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
+    )
+    .map((block) => (trim ? block.text.trim() : block.text))
+    .join('');
 };
 
 /**
@@ -1468,33 +1470,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
     }
 
-    // Anthropic SDK docs: "Total input tokens in a request is the summation
-    // of `input_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`."
-    const baseInputTokens = rawUsage.input_tokens ?? 0;
-    const outputTokens = rawUsage.output_tokens ?? 0;
-    const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
-    const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
-
-    // Total input tokens for context measurement (includes all cached tokens)
-    const totalInputTokens =
-      baseInputTokens + cacheReadTokens + cacheCreationTokens;
-
-    // Calculate percentage cached (relative to total)
-    const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
-    const percentageCached =
-      totalInputTokens > 0 ? (totalCacheTokens / totalInputTokens) * 100 : 0;
+    // Anthropic: total = input_tokens + cache_read + cache_creation
+    const baseInput = rawUsage.input_tokens ?? 0;
+    const cacheRead = rawUsage.cache_read_input_tokens ?? 0;
+    const cacheCreation = rawUsage.cache_creation_input_tokens ?? 0;
+    const totalInput = baseInput + cacheRead + cacheCreation;
 
     return {
-      inputTokens: totalInputTokens,
-      outputTokens,
+      inputTokens: totalInput,
+      outputTokens: rawUsage.output_tokens ?? 0,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'anthropic',
-      cachedInputTokens: cacheReadTokens || undefined,
-      cacheCreationTokens: cacheCreationTokens || undefined,
-      percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      serverToolRequests:
-        rawUsage.server_tool_use?.web_search_requests || undefined,
+      cachedInputTokens: nonZeroOrUndefined(cacheRead),
+      cacheCreationTokens: nonZeroOrUndefined(cacheCreation),
+      percentageCached: computeCachePercentage(
+        cacheRead + cacheCreation,
+        totalInput,
+      ),
+      serverToolRequests: nonZeroOrUndefined(
+        rawUsage.server_tool_use?.web_search_requests,
+      ),
       _native: rawUsage,
     };
   }
