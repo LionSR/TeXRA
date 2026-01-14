@@ -9,7 +9,10 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
-import { canUpdateWebview, type EventHandlerContext } from './EventHandlerContext';
+import {
+  canUpdateWebview,
+  type EventHandlerContext,
+} from './EventHandlerContext';
 
 /**
  * Register usage event handlers on the event bus.
