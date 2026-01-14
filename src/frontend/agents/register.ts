@@ -80,42 +80,25 @@ export async function promptToAddAgentToConfig(
     current,
     variant,
   );
-  if (skipReason === 'alreadyRegistered') {
-    logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
-    return;
-  }
-  if (skipReason === 'baseRegistered' && variant.baseAgentName) {
-    logger.debug(
-      CHANNEL,
-      `Base agent "${variant.baseAgentName}" already in configuration, skipping "${agentName}"`,
-    );
-    return;
-  }
-  if (skipReason === 'multipleRegistered' && variant.multipleAgentName) {
-    logger.debug(
-      CHANNEL,
-      `Multiple variant "${variant.multipleAgentName}" already in configuration, skipping "${agentName}"`,
-    );
+  if (skipReason) {
+    const messages: Record<AgentRegistrationSkipReason, string> = {
+      alreadyRegistered: `Agent "${agentName}" already in configuration`,
+      baseRegistered: `Base agent "${variant.baseAgentName}" already in configuration, skipping "${agentName}"`,
+      multipleRegistered: `Multiple variant "${variant.multipleAgentName}" already in configuration, skipping "${agentName}"`,
+    };
+    logger.debug(CHANNEL, messages[skipReason]);
     return;
   }
 
-  if (autoAdd) {
-    current.push(agentName);
-    await updateConfig('texra.agents', current, { prefix: false });
-    vscode.window.showInformationMessage(
-      `Added "${agentName}" to texra.agents`,
-    );
-    return;
-  }
+  const shouldAdd =
+    autoAdd ||
+    (await vscode.window.showInformationMessage(
+      `Agent "${agentName}" was created or modified. Add it to 'texra.agents'?`,
+      'Add Agent',
+      'Cancel',
+    )) === 'Add Agent';
 
-  const addButton = 'Add Agent';
-  const choice = await vscode.window.showInformationMessage(
-    `Agent "${agentName}" was created or modified. Add it to 'texra.agents'?`,
-    addButton,
-    'Cancel',
-  );
-
-  if (choice === addButton) {
+  if (shouldAdd) {
     current.push(agentName);
     await updateConfig('texra.agents', current, { prefix: false });
     vscode.window.showInformationMessage(
@@ -158,25 +141,26 @@ export async function validateYamlAndPromptAdd(
   }
 
   const configuredAgents = getConfig<string[]>('texra.agents', []);
-  if (!configuredAgents.includes(filenameBase)) {
-    const settings = validationResult.settings;
-    const workflowSettings = asWorkflowSetting(settings);
-    const defaultOutputs = settings.defaultOutputFiles ?? [];
-    const hasMultipleDefaults = defaultOutputs.length > 1;
-    const isMultipleOutput = Boolean(
-      workflowSettings?.isMultipleOutput ??
-      (workflowSettings ? hasMultipleDefaults : false),
-    );
-    const metadata: AgentVariantMetadata = {
-      isMultipleOutput,
-    };
-
-    if (isMultipleOutput) {
-      metadata.baseAgentName = getBaseName(internalName);
-    } else {
-      metadata.multipleAgentName = getMultipleName(internalName);
-    }
-
-    await promptToAddAgentToConfig(filenameBase, !prompt, metadata);
+  if (configuredAgents.includes(filenameBase)) {
+    return;
   }
+
+  const settings = validationResult.settings;
+  const workflowSettings = asWorkflowSetting(settings);
+  const defaultOutputs = settings.defaultOutputFiles ?? [];
+  const hasMultipleDefaults = defaultOutputs.length > 1;
+  const isMultipleOutput = Boolean(
+    workflowSettings?.isMultipleOutput ??
+    (workflowSettings && hasMultipleDefaults),
+  );
+
+  const metadata: AgentVariantMetadata = {
+    isMultipleOutput,
+    baseAgentName: isMultipleOutput ? getBaseName(internalName) : undefined,
+    multipleAgentName: isMultipleOutput
+      ? undefined
+      : getMultipleName(internalName),
+  };
+
+  await promptToAddAgentToConfig(filenameBase, !prompt, metadata);
 }

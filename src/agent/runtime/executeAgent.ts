@@ -245,10 +245,7 @@ async function resolveAgentBase(
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
-  const modelHandler = ModelFactory.createHandler({
-    ...MODEL_CONFIGS[fullConfig.model],
-    toolConfig: config.toolConfig,
-  });
+  const modelHandler = ModelFactory.createHandler(MODEL_CONFIGS[fullConfig.model]);
 
   // 3. Create execution context
   // Compute stream ID, applying override for resume scenarios

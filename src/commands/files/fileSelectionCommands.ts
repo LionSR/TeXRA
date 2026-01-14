@@ -152,51 +152,17 @@ const selectMediaFile = createPicker({
   }),
 });
 
-async function selectOutputFiles(
-  currentInputFile: string,
-): Promise<string[] | null> {
-  try {
-    const relativePaths = await selectFiles({
-      currentFile: currentInputFile,
-      allowMany: true,
-      openLabel: 'Select Output Files',
-      filters: {
-        'Text files': ['tex', 'txt', 'md'],
-      },
-    });
+const selectOutputFiles = createPicker({
+  allowMany: true,
+  openLabel: 'Select Output Files',
+  filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
+});
 
-    if (!relativePaths) {
-      return null;
-    }
-
-    logger.info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
-    vscode.window.showInformationMessage(
-      `Selected output files: ${relativePaths.join(', ')}`,
-    );
-    return relativePaths;
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
-    return null;
-  }
-}
-
-async function selectEditedFile(): Promise<string | null> {
-  try {
-    const result = await selectFile({
-      openLabel: 'Select Edited File',
-      filters: {},
-    });
-    if (result) {
-      const message = `Selected edited file: ${result}`;
-      vscode.window.showInformationMessage(message);
-      logger.info(CHANNEL, message);
-    }
-    return result;
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error selecting edited file', err);
-    return null;
-  }
-}
+const selectEditedFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Edited File',
+  filters: () => ({}),
+});
 
 async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)
@@ -219,27 +185,15 @@ async function getCurrentFile(): Promise<string | null> {
   return null;
 }
 
-async function selectBaseFile(): Promise<string | null> {
-  try {
-    const result = await selectFile({
-      openLabel: 'Select Base File',
-      filters: {
-        'Text files': getIncludedExtensions('input').map((ext) =>
-          ext.replace('.', ''),
-        ),
-      },
-    });
-    if (result) {
-      const message = `Selected base file: ${result}`;
-      vscode.window.showInformationMessage(message);
-      logger.info(CHANNEL, message);
-    }
-    return result ?? null;
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error selecting base file', err);
-    return null;
-  }
-}
+const selectBaseFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Base File',
+  filters: () => ({
+    'Text files': getIncludedExtensions('input').map((ext) =>
+      ext.replace('.', ''),
+    ),
+  }),
+});
 
 export const fileSelectionCommands = {
   selectInputFile,
