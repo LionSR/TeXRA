@@ -56,6 +56,12 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import { renderPrompt } from '@utils/prompt/promptUtils';
+import {
+  CHAT_INSTRUCTION_TEMPLATE,
+  WORKFLOW_CONTEXT_TEMPLATE,
+  type FollowupInstructionVars,
+} from '@progressView/templates/followupInstructionTemplates';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
@@ -959,7 +965,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Build a TaskState for followup by mapping output files to inputs.
    * Returns WorkflowTaskState for workflow mode, ToolUseTaskState for chat mode.
    */
-  private buildFollowupTaskState(
+  private async buildFollowupTaskState(
     originalTaskState: WorkflowTaskState,
     originalConfig: AgentConfig,
     fileMapping: Map<string, string>,
@@ -970,7 +976,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       includeInstruction?: boolean;
       initialQuestion?: string;
     },
-  ): TaskState {
+  ): Promise<TaskState> {
     const { mode, agent, model, includeInstruction, initialQuestion } = options;
 
     // Get new agent info for session descriptor
@@ -987,7 +993,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Build instruction based on mode
     let instruction: string;
     if (mode === 'chat') {
-      instruction = this.buildChatInstruction(
+      instruction = await this.buildChatInstruction(
         originalConfig,
         originalAgentEntry,
         fileMapping,
@@ -995,7 +1001,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       );
     } else if (includeInstruction) {
       // Workflow mode with instruction: prepend context to original instruction
-      const context = this.buildWorkflowContext(
+      const context = await this.buildWorkflowContext(
         originalConfig,
         originalAgentEntry,
         fileMapping,
@@ -1003,7 +1009,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       instruction = context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '');
     } else {
       // Workflow mode without instruction: just add context, no original instruction
-      instruction = this.buildWorkflowContext(
+      instruction = await this.buildWorkflowContext(
         originalConfig,
         originalAgentEntry,
         fileMapping,
@@ -1050,142 +1056,71 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Build workflow context for instruction (similar to chat but without question).
+   * Build workflow context for instruction using Nunjucks template.
    */
-  private buildWorkflowContext(
+  private async buildWorkflowContext(
     originalConfig: AgentConfig,
     originalAgentEntry: ReturnType<typeof getAgent>,
     fileMapping: Map<string, string>,
-  ): string {
-    const sections: string[] = [];
-
-    // Workflow context
-    sections.push('Previous Workflow Context:');
-    if (originalConfig.agent) {
-      const agentInfo = originalAgentEntry?.description
-        ? `${originalConfig.agent} - ${originalAgentEntry.description}`
-        : originalConfig.agent;
-      sections.push(`- Agent: ${agentInfo}`);
-    }
-    if (originalConfig.model) {
-      sections.push(`- Model: ${originalConfig.model}`);
-    }
-
-    // Files context
-    sections.push('');
-    sections.push('Files:');
-
-    const originalInputs = [
-      originalConfig.inputFile,
-      ...originalConfig.inputFiles,
-    ].filter(Boolean);
-    if (originalInputs.length > 0) {
-      const inputPaths = originalInputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Input files: ${inputPaths.join(', ')}`);
-    }
-
-    // Reference files
-    const referenceFiles = originalConfig.referenceFiles?.filter(Boolean) ?? [];
-    if (referenceFiles.length > 0) {
-      const refPaths = referenceFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Reference files: ${refPaths.join(', ')}`);
-    }
-
-    // Auxiliary files
-    const auxiliaryFiles = originalConfig.auxiliaryFiles?.filter(Boolean) ?? [];
-    if (auxiliaryFiles.length > 0) {
-      const auxPaths = auxiliaryFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Auxiliary files: ${auxPaths.join(', ')}`);
-    }
-
-    // Media files
-    const mediaFiles = originalConfig.mediaFiles?.filter(Boolean) ?? [];
-    if (mediaFiles.length > 0) {
-      const mediaPaths = mediaFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Media files: ${mediaPaths.join(', ')}`);
-    }
-
-    const outputs = [...fileMapping.values()];
-    if (outputs.length > 0) {
-      const outputPaths = outputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Generated outputs: ${outputPaths.join(', ')}`);
-    }
-
-    return sections.join('\n');
+  ): Promise<string> {
+    const vars = this.buildFollowupTemplateVars(
+      originalConfig,
+      originalAgentEntry,
+      fileMapping,
+    );
+    return renderPrompt(WORKFLOW_CONTEXT_TEMPLATE, vars as Record<string, unknown>);
   }
 
   /**
-   * Build instruction for chat mode with workflow context.
+   * Build template variables for followup instructions.
    */
-  private buildChatInstruction(
+  private buildFollowupTemplateVars(
     originalConfig: AgentConfig,
     originalAgentEntry: ReturnType<typeof getAgent>,
     fileMapping: Map<string, string>,
     initialQuestion?: string,
-  ): string {
-    const sections: string[] = [];
-
-    // Workflow context
-    sections.push('Previous Workflow Context:');
-    if (originalConfig.agent) {
-      const agentInfo = originalAgentEntry?.description
-        ? `${originalConfig.agent} - ${originalAgentEntry.description}`
-        : originalConfig.agent;
-      sections.push(`- Agent: ${agentInfo}`);
-    }
-    if (originalConfig.model) {
-      sections.push(`- Model: ${originalConfig.model}`);
-    }
-    if (originalConfig.instruction) {
-      sections.push(`- Instruction: "${originalConfig.instruction}"`);
-    }
-
-    // Files context
-    sections.push('');
-    sections.push('Files:');
+  ): FollowupInstructionVars {
+    const toRelativePaths = (files: string[] | undefined) =>
+      files?.filter(Boolean).map((p) => WorkspaceFS.relativePath(p)).join(', ') || undefined;
 
     const originalInputs = [
       originalConfig.inputFile,
       ...originalConfig.inputFiles,
     ].filter(Boolean);
-    if (originalInputs.length > 0) {
-      const inputPaths = originalInputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Input files: ${inputPaths.join(', ')}`);
-    }
 
-    // Reference files
-    const referenceFiles = originalConfig.referenceFiles?.filter(Boolean) ?? [];
-    if (referenceFiles.length > 0) {
-      const refPaths = referenceFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Reference files: ${refPaths.join(', ')}`);
-    }
+    const agentInfo = originalAgentEntry?.description
+      ? `${originalConfig.agent} - ${originalAgentEntry.description}`
+      : originalConfig.agent;
 
-    // Auxiliary files
-    const auxiliaryFiles = originalConfig.auxiliaryFiles?.filter(Boolean) ?? [];
-    if (auxiliaryFiles.length > 0) {
-      const auxPaths = auxiliaryFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Auxiliary files: ${auxPaths.join(', ')}`);
-    }
+    return {
+      agentInfo,
+      model: originalConfig.model || undefined,
+      instruction: originalConfig.instruction || undefined,
+      inputFiles: toRelativePaths(originalInputs),
+      referenceFiles: toRelativePaths(originalConfig.referenceFiles),
+      auxiliaryFiles: toRelativePaths(originalConfig.auxiliaryFiles),
+      mediaFiles: toRelativePaths(originalConfig.mediaFiles),
+      outputFiles: toRelativePaths([...fileMapping.values()]),
+      question: initialQuestion,
+    };
+  }
 
-    // Media files
-    const mediaFiles = originalConfig.mediaFiles?.filter(Boolean) ?? [];
-    if (mediaFiles.length > 0) {
-      const mediaPaths = mediaFiles.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Media files: ${mediaPaths.join(', ')}`);
-    }
-
-    const outputs = [...fileMapping.values()];
-    if (outputs.length > 0) {
-      const outputPaths = outputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- Generated outputs: ${outputPaths.join(', ')}`);
-    }
-
-    // User's question
-    sections.push('');
-    sections.push('Question:');
-    sections.push(initialQuestion ?? '');
-
-    return sections.join('\n');
+  /**
+   * Build instruction for chat mode with workflow context using Nunjucks template.
+   */
+  private async buildChatInstruction(
+    originalConfig: AgentConfig,
+    originalAgentEntry: ReturnType<typeof getAgent>,
+    fileMapping: Map<string, string>,
+    initialQuestion?: string,
+  ): Promise<string> {
+    const vars = this.buildFollowupTemplateVars(
+      originalConfig,
+      originalAgentEntry,
+      fileMapping,
+      initialQuestion,
+    );
+    return renderPrompt(CHAT_INSTRUCTION_TEMPLATE, vars as Record<string, unknown>);
   }
 
   /**
