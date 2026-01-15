@@ -191,10 +191,11 @@ export class FollowupSectionManager {
     if (modelSelect) {
       const currentValue = modelSelect.value;
       // Use current stream's model as default, or defaultMergeModel for merge mode
+      // Fall back to first available model if no default is set
       const defaultModel =
         this._getMode() === 'merge'
-          ? defaultMergeModel
-          : this._currentStreamData?.model || currentValue;
+          ? defaultMergeModel || models[0]
+          : this._currentStreamData?.model || currentValue || models[0];
 
       modelSelect.innerHTML = models
         .map(
