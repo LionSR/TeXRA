@@ -36,6 +36,11 @@ import {
   type TaskState,
 } from '@logger/TaskState';
 import {
+  CHAT_INSTRUCTION_TEMPLATE,
+  WORKFLOW_CONTEXT_TEMPLATE,
+  type FollowupInstructionVars,
+} from '@progressView/templates/followupInstructionTemplates';
+import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
@@ -49,16 +54,11 @@ import {
   WorkspaceFS,
 } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import { renderPrompt } from '@utils/prompt/promptUtils';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { renderPrompt } from '@utils/prompt/promptUtils';
-import {
-  CHAT_INSTRUCTION_TEMPLATE,
-  WORKFLOW_CONTEXT_TEMPLATE,
-  type FollowupInstructionVars,
-} from '@progressView/templates/followupInstructionTemplates';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
@@ -816,7 +816,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   /**
    * Process a followup request (setup or run).
    * Builds a TaskState directly and sends via restoreState for code reuse.
-   * This eliminates the intermediate followupTaskCommand layer.
    */
   private async processFollowup(
     data: {
@@ -831,81 +830,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const { stream, mode, agent, model, includeInstruction, initialQuestion } =
       data;
-
     const streamId = stream as StreamTabId;
-    const taskState = this.provider.state.getTaskState(streamId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      this.logger.warn(this.channel, 'Followup: No task state found', {
-        data: { stream },
-      });
-      await vscode.window.showWarningMessage(
-        'No task state found for this stream. Cannot set up followup.',
-      );
-      return;
-    }
 
-    // Validate that the selected agent exists in registry
-    const agentEntry = getAgent(agent);
-    if (!agentEntry) {
-      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
-        data: { agent },
-      });
-      await vscode.window.showWarningMessage(
-        `Agent "${agent}" not found. Please select a valid agent.`,
-      );
-      return;
-    }
+    // Validate prerequisites
+    const prereq = await this.validateFollowupPrerequisites(streamId, agent);
+    if (!prereq) return;
 
-    // Get output files for file mapping
-    const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
-      persist: false,
-    }) as StorageKey | null;
-    const runOutputs = storageKey
-      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
-      : null;
-
+    const { taskState, outputFiles } = prereq;
     const originalConfig = taskState.agentConfig;
-    const outputFiles = this.extractOutputFilePaths(runOutputs);
-
-    if (outputFiles.length === 0) {
-      this.logger.warn(this.channel, 'Followup: No output files found', {
-        data: { stream },
-      });
-      await vscode.window.showWarningMessage(
-        'No output files found. Cannot set up followup.',
-      );
-      return;
-    }
-
-    // Build file mapping: original inputs → output files
     const originalInputs = [
       originalConfig.inputFile,
       ...originalConfig.inputFiles,
     ].filter(Boolean);
-    const outputLocations = outputFiles.map((p) => pathToLocation(p));
-    const inputLocations = originalInputs.map((p) => pathToLocation(p));
-    const pathMapping = createFileMapping(
-      inputLocations,
-      outputLocations,
-      'contains',
+
+    // Build file mapping: original inputs → output files
+    const fileMapping = this.buildFollowupFileMapping(
+      originalInputs,
+      outputFiles,
     );
-
-    // Build absolute path → output absolute path lookup
-    const fileMapping = new Map<string, string>();
-    for (let i = 0; i < originalInputs.length; i++) {
-      const absolutePath = originalInputs[i];
-      const location = inputLocations[i];
-      const comparablePath =
-        location.kind !== 'external'
-          ? location.relativePath
-          : location.absolutePath;
-      const output = pathMapping.get(comparablePath);
-      if (output?.absolutePath) {
-        fileMapping.set(absolutePath, output.absolutePath);
-      }
-    }
-
-    // Validate that at least one file was mapped
     if (fileMapping.size === 0) {
       this.logger.warn(this.channel, 'Followup: No file mappings found', {
         data: {
@@ -932,16 +874,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         taskState,
         originalConfig,
         fileMapping,
-        {
-          mode,
-          agent,
-          model,
-          includeInstruction,
-          initialQuestion,
-        },
+        { mode, agent, model, includeInstruction, initialQuestion },
       );
 
-      // Focus main view and send restore message with executeImmediately flag
       await vscode.commands.executeCommand('texra.mainView.focus');
       await vscode.commands.executeCommand(
         'texra.restoreState',
@@ -966,6 +901,88 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
+   * Validate followup prerequisites: task state, agent, and output files.
+   * Returns null if validation fails (with user notification).
+   */
+  private async validateFollowupPrerequisites(
+    streamId: StreamTabId,
+    agent: string,
+  ): Promise<{ taskState: WorkflowTaskState; outputFiles: string[] } | null> {
+    const taskState = this.provider.state.getTaskState(streamId);
+    if (!taskState || !isWorkflowTaskState(taskState)) {
+      this.logger.warn(this.channel, 'Followup: No task state found', {
+        data: { stream: streamId },
+      });
+      await vscode.window.showWarningMessage(
+        'No task state found for this stream. Cannot set up followup.',
+      );
+      return null;
+    }
+
+    const agentEntry = getAgent(agent);
+    if (!agentEntry) {
+      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
+        data: { agent },
+      });
+      await vscode.window.showWarningMessage(
+        `Agent "${agent}" not found. Please select a valid agent.`,
+      );
+      return null;
+    }
+
+    const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
+      persist: false,
+    }) as StorageKey | null;
+    const runOutputs = storageKey
+      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+      : null;
+    const outputFiles = this.extractOutputFilePaths(runOutputs);
+
+    if (outputFiles.length === 0) {
+      this.logger.warn(this.channel, 'Followup: No output files found', {
+        data: { stream: streamId },
+      });
+      await vscode.window.showWarningMessage(
+        'No output files found. Cannot set up followup.',
+      );
+      return null;
+    }
+
+    return { taskState, outputFiles };
+  }
+
+  /**
+   * Build a mapping from original input paths to output file paths.
+   */
+  private buildFollowupFileMapping(
+    originalInputs: string[],
+    outputFiles: string[],
+  ): Map<string, string> {
+    const outputLocations = outputFiles.map((p) => pathToLocation(p));
+    const inputLocations = originalInputs.map((p) => pathToLocation(p));
+    const pathMapping = createFileMapping(
+      inputLocations,
+      outputLocations,
+      'contains',
+    );
+
+    const fileMapping = new Map<string, string>();
+    for (let i = 0; i < originalInputs.length; i++) {
+      const absolutePath = originalInputs[i];
+      const location = inputLocations[i];
+      const comparablePath =
+        location.kind !== 'external'
+          ? location.relativePath
+          : location.absolutePath;
+      const output = pathMapping.get(comparablePath);
+      if (output?.absolutePath) {
+        fileMapping.set(absolutePath, output.absolutePath);
+      }
+    }
+    return fileMapping;
+  }
+
+  /**
    * Build a TaskState for followup by mapping output files to inputs.
    * Returns WorkflowTaskState for workflow mode, ToolUseTaskState for chat mode.
    */
@@ -982,46 +999,42 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     },
   ): Promise<TaskState> {
     const { mode, agent, model, includeInstruction, initialQuestion } = options;
-
-    // Get new agent info for session descriptor
-    const newAgentEntry = getAgent(agent);
-    const originalAgentEntry = getAgent(originalConfig.agent);
+    const isChat = mode === 'chat';
 
     // Map input files: outputs become new inputs
-    const toRelative = (p: string) => (p ? WorkspaceFS.relativePath(p) : p);
-    const mapFile = (f: string) => toRelative(fileMapping.get(f) ?? f);
+    const mapToRelative = (p: string): string =>
+      WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
+    const newInputFile = mapToRelative(originalConfig.inputFile);
+    const newInputFiles = originalConfig.inputFiles.map(mapToRelative);
 
-    const newInputFile = mapFile(originalConfig.inputFile);
-    const newInputFiles = originalConfig.inputFiles.map(mapFile);
-
-    // Build instruction based on mode
-    const template =
-      mode === 'chat' ? CHAT_INSTRUCTION_TEMPLATE : WORKFLOW_CONTEXT_TEMPLATE;
+    // Build instruction from template
+    const template = isChat
+      ? CHAT_INSTRUCTION_TEMPLATE
+      : WORKFLOW_CONTEXT_TEMPLATE;
+    const originalAgentEntry = getAgent(originalConfig.agent);
     const context = await this.renderFollowupInstruction(
       template,
       originalConfig,
       originalAgentEntry,
       fileMapping,
-      mode === 'chat' ? initialQuestion : undefined,
+      isChat ? initialQuestion : undefined,
     );
 
-    // For workflow mode with includeInstruction, append original instruction
-    const instruction =
-      mode === 'workflow' && includeInstruction && originalConfig.instruction
-        ? context + '\n\n' + originalConfig.instruction
-        : context;
+    // Workflow mode can optionally append original instruction
+    const shouldAppendOriginal =
+      !isChat && includeInstruction && originalConfig.instruction;
+    const instruction = shouldAppendOriginal
+      ? `${context}\n\n${originalConfig.instruction}`
+      : context;
 
-    // Determine category based on mode (chat = toolUse, workflow = workflow)
-    const agentCategory =
-      mode === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow;
+    // Build session with category based on mode
+    const newAgentEntry = getAgent(agent);
+    const agentCategory = isChat
+      ? AgentCategory.ToolUse
+      : AgentCategory.Workflow;
+    const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
-    // Build session descriptor with correct category
-    const session = {
-      agentType: newAgentEntry?.agentType,
-      agentCategory,
-    };
-
-    // Create new config preserving toolConfig, reference/auxiliary files
+    // Build config preserving toolConfig, reference/auxiliary files
     const newConfig = {
       ...originalConfig,
       agent,
@@ -1031,22 +1044,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       instruction,
       session,
       agentType: session.agentType,
-    };
+    } as AgentConfig;
 
-    // Return appropriate TaskState type based on mode
-    if (mode === 'chat') {
-      return {
-        agentConfig: newConfig as AgentConfig & {
-          session: { agentCategory: AgentCategory.ToolUse };
-        },
-      };
+    // Chat mode returns minimal TaskState, workflow preserves activeFiles
+    if (isChat) {
+      return { agentConfig: newConfig } as TaskState;
     }
     return {
-      agentConfig: newConfig as AgentConfig & {
-        session: { agentCategory: AgentCategory.Workflow };
-      },
+      agentConfig: newConfig,
       activeFiles: originalTaskState.activeFiles,
-    };
+    } as TaskState;
   }
 
   /**

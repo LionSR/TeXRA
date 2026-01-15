@@ -304,43 +304,41 @@ export class ProgressViewProvider
 
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.pendingApprovalPrompts.set(prompt.requestId, prompt);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.showToolEditApprovalPrompt(prompt);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.showToolEditApprovalPrompt(prompt),
+    );
   }
 
   public resolveToolEditApprovalPrompt(requestId: string): void {
     this.pendingApprovalPrompts.delete(requestId);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId),
+    );
   }
 
   public updateToolEditApprovalBypassState(bypassActive: boolean): void {
     this.approvalBypassActive = bypassActive;
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.updateToolEditApprovalState(bypassActive);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.updateToolEditApprovalState(bypassActive),
+    );
   }
 
   public showRetryRequest(
     payload: ProgressEventPayloads['showRetryRequest'],
   ): void {
     this.pendingRetryRequests.set(payload.streamId, payload);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.showRetryRequest(payload);
-    }
+    this.sendIfReady(() => this.webviewUpdater.showRetryRequest(payload));
   }
 
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
+    this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
+  }
 
+  /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
+  private sendIfReady(send: () => void): void {
     if (this.canSendToWebview()) {
-      this.webviewUpdater.resolveRetryRequest(streamId);
+      send();
     }
   }
 
