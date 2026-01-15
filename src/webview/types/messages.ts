@@ -242,14 +242,8 @@ export const FollowupTaskMessageSchema = z.object({
   model: z.string().min(1),
   includeInstruction: z.boolean().optional(),
   initialQuestion: z.string().optional(),
-  // Workflow context for display in main webview instruction
-  workflowContext: z
-    .object({
-      agentName: z.string().optional(),
-      instructionPreview: z.string().optional(),
-      fileCount: z.number().optional(),
-    })
-    .optional(),
+  // Note: workflowContext is computed in backend (ProgressViewMessageHandler)
+  // from originalConfig, not passed from frontend
 });
 
 export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;

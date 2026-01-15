@@ -353,10 +353,8 @@ export class FollowupSectionManager {
       return null;
     }
 
-    // Include workflow context for display in main webview instruction
-    const { agentName, instructionPreview, fileCount } =
-      this._currentStreamData || {};
-
+    // Note: workflowContext is computed in backend (ProgressViewMessageHandler)
+    // from originalConfig - no need to pass from frontend
     return {
       stream,
       mode,
@@ -364,12 +362,6 @@ export class FollowupSectionManager {
       model,
       includeInstruction,
       initialQuestion,
-      // Workflow context - passed to main webview for instruction display
-      workflowContext: {
-        agentName,
-        instructionPreview,
-        fileCount,
-      },
     };
   }
 

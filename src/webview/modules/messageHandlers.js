@@ -18,6 +18,7 @@ import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
 import { createRecordingHandlers } from './handlers/recordingHandlers.js';
 import { recordingManager } from './domHandlers.js';
+import { collectCurrentContext } from './state/currentContext.js';
 
 // Handler submodules
 import { createThemeHandlers } from './handlers/themeHandlers.js';
@@ -36,6 +37,7 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   safeGetElementById,
+  safeGetElementValue,
   setChevronIcon,
   waitForElement,
   isSelectLikeElement,
@@ -1386,6 +1388,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       filePairs,
       workflowContext,
       useMultipleOutputs,
+      executeImmediately,
     } = message;
 
     // Block saves during setup to avoid partial state persistence
@@ -1512,6 +1515,52 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._postHandle();
+
+    // Auto-execute after setup completes (event-based, no setTimeout needed)
+    if (executeImmediately) {
+      this._executeFollowupTask(mode);
+    }
+  }
+
+  /**
+   * Execute the followup task after setup is complete.
+   * Called when executeImmediately flag is set.
+   * @param {'chat'|'workflow'|'merge'} mode - The followup mode
+   */
+  _executeFollowupTask(mode) {
+    if (mode === 'merge') {
+      // Merge mode - trigger merge command
+      const inputFile = safeGetElementValue(INPUT_FILE);
+      const editedFile = safeGetElementValue(EDITED_FILE);
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.MERGE,
+        inputFile,
+        editedFile,
+      });
+      return;
+    }
+
+    // Workflow/chat mode - collect context and execute
+    const {
+      agent,
+      isToolUseAgent,
+      singleFileSelections,
+      multipleFileSelections,
+      checkboxValues,
+    } = collectCurrentContext({ fileList });
+    const modelValue = safeGetElementValue('model');
+    const instructionValue = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
+
+    vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.EXECUTE,
+      agent,
+      model: modelValue,
+      instruction: instructionValue,
+      isToolUseAgent,
+      ...singleFileSelections,
+      ...multipleFileSelections,
+      ...checkboxValues,
+    });
   }
 
   /**
