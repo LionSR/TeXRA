@@ -24,10 +24,14 @@ export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
 }
 
 /**
- * Restore the main webview state with configuration from a log tab
+ * Restore the main webview state with configuration from a log tab.
+ * @param state - The TaskState to restore
+ * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
-async function restoreState(state: TaskState) {
-  logger.debug(CHANNEL, 'Restoring main webview state');
+async function restoreState(state: TaskState, executeImmediately?: boolean) {
+  logger.debug(CHANNEL, 'Restoring main webview state', {
+    data: { executeImmediately },
+  });
 
   try {
     // Focus the webview panel first to make sure it's visible
@@ -39,7 +43,11 @@ async function restoreState(state: TaskState) {
       const webviewView = await getMainWebview(CHANNEL);
 
       if (webviewView) {
-        webviewView.webview.postMessage({ command: 'restoreState', state });
+        webviewView.webview.postMessage({
+          command: 'restoreState',
+          state,
+          executeImmediately,
+        });
         logger.info(CHANNEL, 'State restored via direct webview access');
         return;
       }

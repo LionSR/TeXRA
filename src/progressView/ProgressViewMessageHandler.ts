@@ -12,6 +12,11 @@ import {
   createKey,
   ensureAgentsLoaded,
 } from '@agent/index/agentRegistry';
+import {
+  AgentCategory,
+  resolveAgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import {
@@ -43,6 +48,8 @@ import {
   pathToLocation,
   flexibleFS,
   createExternalLocation,
+  createFileMapping,
+  WorkspaceFS,
 } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -805,8 +812,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Process a followup request (setup or run).
-   * Calculates file mappings and sends the configuration to main view.
-   * Workflow context is computed here from originalConfig (single source of truth).
+   * Builds a TaskState directly and sends via restoreState for code reuse.
+   * This eliminates the intermediate followupTaskCommand layer.
    */
   private async processFollowup(
     data: {
@@ -842,7 +849,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
       : null;
 
-    // Build the followup configuration
     const originalConfig = taskState.agentConfig;
     const outputFiles = this.extractOutputFilePaths(runOutputs);
 
@@ -856,55 +862,64 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Get original agent info for chat mode
-    const originalAgentEntry = getAgent(originalConfig.agent);
+    // Build file mapping: original inputs → output files
+    const originalInputs = [
+      originalConfig.inputFile,
+      ...originalConfig.inputFiles,
+    ].filter(Boolean);
+    const outputLocations = outputFiles.map((p) => pathToLocation(p));
+    const inputLocations = originalInputs.map((p) => pathToLocation(p));
+    const pathMapping = createFileMapping(
+      inputLocations,
+      outputLocations,
+      'contains',
+    );
 
-    // Compute workflow context once here (single source of truth)
-    // This avoids passing context through multiple layers from frontend
-    const computedWorkflowContext = {
-      agentName: originalAgentEntry?.name ?? originalConfig.agent,
-      instructionPreview: originalConfig.instruction
-        ? originalConfig.instruction.slice(0, 100) +
-          (originalConfig.instruction.length > 100 ? '...' : '')
-        : undefined,
-      fileCount: outputFiles.length,
-    };
+    // Build absolute path → output absolute path lookup
+    const fileMapping = new Map<string, string>();
+    for (let i = 0; i < originalInputs.length; i++) {
+      const absolutePath = originalInputs[i];
+      const location = inputLocations[i];
+      const comparablePath =
+        location.kind !== 'external'
+          ? location.relativePath
+          : location.absolutePath;
+      const output = pathMapping.get(comparablePath);
+      if (output?.absolutePath) {
+        fileMapping.set(absolutePath, output.absolutePath);
+      }
+    }
 
-    // Build payload for main view
-    const followupPayload: Record<string, unknown> = {
-      mode,
-      agent,
-      model,
-      executeImmediately,
-      // Original config for reference
-      originalInputFile: originalConfig.inputFile,
-      originalInputFiles: originalConfig.inputFiles,
-      originalReferenceFile: originalConfig.referenceFile,
-      originalReferenceFiles: originalConfig.referenceFiles,
-      originalAuxiliaryFile: originalConfig.auxiliaryFile,
-      originalAuxiliaryFiles: originalConfig.auxiliaryFiles,
-      // Output files to use for mapping
-      outputFiles,
-      // Instruction handling (for workflow mode or chat context)
-      instruction:
-        mode === 'chat' || includeInstruction ? originalConfig.instruction : '',
-      // Chat mode specific
-      initialQuestion,
-      originalAgent: originalConfig.agent,
-      originalAgentDescription: originalAgentEntry?.description,
-      originalModel: originalConfig.model,
-      // Multiple outputs flag from original config
-      useMultipleOutputs: originalConfig.useMultipleOutputs,
-      // Workflow context computed from original config (not passed from frontend)
-      workflowContext: computedWorkflowContext,
-    };
+    // Handle merge mode directly (bypasses main view)
+    if (mode === 'merge') {
+      await this.executeMergeDirectly(originalInputs, fileMapping, model);
+      return;
+    }
 
+    // For workflow/chat mode, build TaskState and use restoreState
     try {
-      // Send to main view
-      await vscode.commands.executeCommand(
-        'texra.setupFollowupTask',
-        followupPayload,
+      const newTaskState = this.buildFollowupTaskState(
+        taskState,
+        originalConfig,
+        fileMapping,
+        {
+          mode,
+          agent,
+          model,
+          includeInstruction,
+          initialQuestion,
+        },
       );
+
+      // Focus main view and send restore message with executeImmediately flag
+      await vscode.commands.executeCommand('texra.mainView.focus');
+      await vscode.commands.executeCommand(
+        'texra.restoreState',
+        newTaskState,
+        executeImmediately,
+      );
+
+      this.logger.info(this.channel, 'Followup task configured via restoreState');
     } catch (error) {
       this.logger.error(
         this.channel,
@@ -914,6 +929,231 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       await vscode.window.showErrorMessage(
         `Failed to set up followup task: ${toErrorMessage(error)}`,
       );
+    }
+  }
+
+  /**
+   * Build a TaskState for followup by mapping output files to inputs.
+   * Returns WorkflowTaskState for workflow mode, ToolUseTaskState for chat mode.
+   */
+  private buildFollowupTaskState(
+    originalTaskState: WorkflowTaskState,
+    originalConfig: AgentConfig,
+    fileMapping: Map<string, string>,
+    options: {
+      mode: 'chat' | 'workflow';
+      agent: string;
+      model: string;
+      includeInstruction?: boolean;
+      initialQuestion?: string;
+    },
+  ): TaskState {
+    const { mode, agent, model, includeInstruction, initialQuestion } = options;
+
+    // Get new agent info for session descriptor
+    const newAgentEntry = getAgent(agent);
+    const originalAgentEntry = getAgent(originalConfig.agent);
+
+    // Map input files: outputs become new inputs
+    const toRelative = (p: string) => (p ? WorkspaceFS.relativePath(p) : p);
+    const mapFile = (f: string) => toRelative(fileMapping.get(f) ?? f);
+
+    const newInputFile = mapFile(originalConfig.inputFile);
+    const newInputFiles = originalConfig.inputFiles.map(mapFile);
+
+    // Build instruction based on mode
+    let instruction = '';
+    if (mode === 'chat') {
+      instruction = this.buildChatInstruction(
+        originalConfig,
+        originalAgentEntry,
+        fileMapping,
+        initialQuestion,
+      );
+    } else if (includeInstruction) {
+      // Workflow mode: prepend context to instruction
+      const context = this.buildWorkflowContextLine(
+        originalAgentEntry?.name ?? originalConfig.agent,
+        originalConfig.instruction,
+        fileMapping.size,
+      );
+      instruction = context
+        ? context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '')
+        : originalConfig.instruction;
+    }
+
+    // Determine category based on mode (chat = toolUse, workflow = workflow)
+    const agentCategory =
+      mode === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow;
+
+    // Build session descriptor with correct category
+    const session = {
+      agentType: newAgentEntry?.agentType,
+      agentCategory,
+    };
+
+    // Create new config preserving toolConfig, reference/auxiliary files
+    const newConfig = {
+      ...originalConfig,
+      agent,
+      model,
+      inputFile: newInputFile,
+      inputFiles: newInputFiles,
+      instruction,
+      session,
+      agentType: session.agentType,
+    };
+
+    // Return appropriate TaskState type based on mode
+    if (mode === 'chat') {
+      return {
+        agentConfig: newConfig as AgentConfig & {
+          session: { agentCategory: AgentCategory.ToolUse };
+        },
+      };
+    }
+
+    return {
+      agentConfig: newConfig as AgentConfig & {
+        session: { agentCategory: AgentCategory.Workflow };
+      },
+      activeFiles: originalTaskState.activeFiles,
+    };
+  }
+
+  /**
+   * Build workflow context line for instruction.
+   */
+  private buildWorkflowContextLine(
+    agentName: string,
+    instruction: string | undefined,
+    fileCount: number,
+  ): string {
+    const parts: string[] = [];
+    if (fileCount > 0) {
+      const fileWord = fileCount === 1 ? 'file' : 'files';
+      parts.push(`${fileCount} ${fileWord} generated`);
+    }
+    if (agentName) {
+      parts.push(`by ${agentName}`);
+    }
+    if (instruction) {
+      const preview =
+        instruction.length > 100
+          ? instruction.slice(0, 100) + '...'
+          : instruction;
+      parts.push(`based on: "${preview}"`);
+    }
+    return parts.join(' ');
+  }
+
+  /**
+   * Build instruction for chat mode with workflow context.
+   */
+  private buildChatInstruction(
+    originalConfig: AgentConfig,
+    originalAgentEntry: ReturnType<typeof getAgent>,
+    fileMapping: Map<string, string>,
+    initialQuestion?: string,
+  ): string {
+    const sections: string[] = [];
+
+    // Workflow context
+    sections.push('## Previous Workflow Context');
+    if (originalConfig.agent) {
+      const agentInfo = originalAgentEntry?.description
+        ? `${originalConfig.agent} - ${originalAgentEntry.description}`
+        : originalConfig.agent;
+      sections.push(`- **Agent**: ${agentInfo}`);
+    }
+    if (originalConfig.model) {
+      sections.push(`- **Model**: ${originalConfig.model}`);
+    }
+    if (originalConfig.instruction) {
+      sections.push(`- **Instruction**: "${originalConfig.instruction}"`);
+    }
+
+    // Files context
+    sections.push('');
+    sections.push('## Files');
+
+    const originalInputs = [
+      originalConfig.inputFile,
+      ...originalConfig.inputFiles,
+    ].filter(Boolean);
+    if (originalInputs.length > 0) {
+      const inputPaths = originalInputs.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- **Input files**: ${inputPaths.join(', ')}`);
+    }
+
+    const outputs = [...fileMapping.values()];
+    if (outputs.length > 0) {
+      const outputPaths = outputs.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- **Generated outputs**: ${outputPaths.join(', ')}`);
+    }
+
+    // User's question
+    sections.push('');
+    sections.push('## Question');
+    sections.push(initialQuestion ?? '');
+
+    return sections.join('\n');
+  }
+
+  /**
+   * Execute merge directly without going to main view.
+   */
+  private async executeMergeDirectly(
+    originalInputs: string[],
+    fileMapping: Map<string, string>,
+    model: string,
+  ): Promise<void> {
+    // Build file pairs for merge
+    const filePairs: Array<{ baseFile: string; editedFile: string }> = [];
+    for (const inputFile of originalInputs) {
+      const outputFile = fileMapping.get(inputFile);
+      if (outputFile) {
+        filePairs.push({
+          baseFile: inputFile,
+          editedFile: outputFile,
+        });
+      }
+    }
+
+    if (filePairs.length === 0) {
+      await vscode.window.showErrorMessage(
+        'Cannot set up merge: no output files found for any input files.',
+      );
+      return;
+    }
+
+    this.logger.info(this.channel, 'Executing merge directly');
+
+    if (filePairs.length === 1) {
+      // Single file merge
+      await safeExecuteCommand('texra.merge', [
+        undefined,
+        filePairs[0].baseFile,
+        filePairs[0].editedFile,
+      ]);
+    } else {
+      // Multiple file merge
+      const baseFiles = filePairs.map((p) => p.baseFile);
+      const editedFiles = filePairs.map((p) => p.editedFile);
+
+      await safeExecuteCommand('texra.execute', [
+        {
+          config: {
+            agent: 'merge_multiple',
+            model,
+            inputFile: baseFiles[0],
+            inputFiles: baseFiles.slice(1),
+            editedFile: editedFiles[0],
+            editedFiles: editedFiles.slice(1),
+            instruction: '',
+          },
+        },
+      ]);
     }
   }
 
