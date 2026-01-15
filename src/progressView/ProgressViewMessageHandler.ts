@@ -931,7 +931,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // For workflow/chat mode, build TaskState and use restoreState
     try {
-      const newTaskState = this.buildFollowupTaskState(
+      const newTaskState = await this.buildFollowupTaskState(
         taskState,
         originalConfig,
         fileMapping,
