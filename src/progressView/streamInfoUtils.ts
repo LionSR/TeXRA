@@ -74,9 +74,10 @@ function buildStreamInfo(
   const isToolAgent = sessionCategory === AgentCategory.ToolUse;
 
   // Build display label
-  const label = !isToolAgent && inputFile
-    ? `${agentName}: ${path.basename(inputFile)}`
-    : agentName;
+  const label =
+    !isToolAgent && inputFile
+      ? `${agentName}: ${path.basename(inputFile)}`
+      : agentName;
 
   return {
     name: id,
@@ -86,8 +87,11 @@ function buildStreamInfo(
     agentType: config?.session?.agentType ?? config?.agentType,
     agentSessionKind: sessionCategory,
     uiTraits: { sessionKind: sessionCategory, isToolAgent },
-    hasMultipleOutputs: config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
-    isRemote: taskState ? isRemoteAgent(rawAgentName) : (hints.isRemote ?? false),
+    hasMultipleOutputs:
+      config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
+    isRemote: taskState
+      ? isRemoteAgent(rawAgentName)
+      : (hints.isRemote ?? false),
     lastTimestamp,
     inputFile,
     creationTimestamp,
