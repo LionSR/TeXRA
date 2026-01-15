@@ -612,6 +612,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.lastRenderedStream = message.stream;
 
     this._updatePlaceholderVisibility();
+    // Update followup section - files may have been loaded via runFiles
+    this._updateFollowupSection();
   }
 
   /**
@@ -664,6 +666,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Refresh display panels - use validated run ID from state
     const activeRunId = state.resolveActiveRunId(message.stream);
     this._refreshActiveRunPanels(activeRunId);
+    // Update followup section - files may have changed
+    this._updateFollowupSection();
   }
 
   handleAppendLog(message) {
