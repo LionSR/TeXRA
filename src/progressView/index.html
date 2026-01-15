@@ -50,6 +50,7 @@
           "./modules/uiManagers/RetryRequests.js": "${retryRequestsUri}",
           "./modules/uiManagers/TodoList.js": "${todoListUri}",
           "./modules/uiManagers/BaseUIRequestManager.js": "${baseUIRequestManagerUri}",
+          "./modules/uiManagers/FollowupSectionManager.js": "${followupSectionManagerUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -190,6 +191,76 @@
             hidden
           >
             <div id="generatedFiles" class="files-container"></div>
+          </vscode-collapsible>
+          <vscode-collapsible
+            id="followupCollapsible"
+            title="Followup"
+            class="progress-collapsible followup-collapsible"
+            hidden
+          >
+            <div class="followup-section" data-mode="chat">
+              <div class="followup-mode-toggle">
+                <vscode-radio-group
+                  id="followupModeGroup"
+                  orientation="horizontal"
+                  value="chat"
+                >
+                  <vscode-radio id="followupModeChat" value="chat" checked
+                    >Chat</vscode-radio
+                  >
+                  <vscode-radio id="followupModeWorkflow" value="workflow"
+                    >Workflow</vscode-radio
+                  >
+                  <vscode-radio id="followupModeMerge" value="merge"
+                    >Merge</vscode-radio
+                  >
+                </vscode-radio-group>
+              </div>
+              <div class="followup-selects">
+                <div class="followup-select-group">
+                  <i class="codicon codicon-sparkle"></i>
+                  <vscode-single-select
+                    id="followupAgent"
+                    class="followup-agent-select"
+                    position="above"
+                  >
+                    <vscode-option value="">Select agent</vscode-option>
+                  </vscode-single-select>
+                </div>
+                <div class="followup-select-group">
+                  <i class="codicon codicon-robot"></i>
+                  <vscode-single-select
+                    id="followupModel"
+                    class="followup-model-select"
+                    position="above"
+                  >
+                    <vscode-option value="">Select model</vscode-option>
+                  </vscode-single-select>
+                </div>
+              </div>
+              <div class="followup-initial-question">
+                <vscode-text-area
+                  id="followupInitialQuestion"
+                  placeholder="What would you like to discuss about the results?"
+                  rows="2"
+                ></vscode-text-area>
+              </div>
+              <div class="followup-options">
+                <vscode-checkbox id="followupIncludeInstruction" checked
+                  >Include previous instruction</vscode-checkbox
+                >
+              </div>
+              <div class="followup-actions">
+                <vscode-button id="followupSetupBtn" appearance="secondary">
+                  <span slot="start" class="codicon codicon-reply"></span>
+                  Setup
+                </vscode-button>
+                <vscode-button id="followupRunBtn" appearance="primary">
+                  <span slot="start" class="codicon codicon-play"></span>
+                  Run
+                </vscode-button>
+              </div>
+            </div>
           </vscode-collapsible>
           <vscode-collapsible
             id="todoListContainer"

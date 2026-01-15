@@ -24,10 +24,14 @@ export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
 }
 
 /**
- * Restore the main webview state with configuration from a log tab
+ * Restore the main webview state with configuration from a log tab.
+ * @param state - The TaskState to restore
+ * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
-async function restoreState(state: TaskState) {
-  logger.debug(CHANNEL, 'Restoring main webview state');
+async function restoreState(state: TaskState, executeImmediately?: boolean) {
+  logger.debug(CHANNEL, 'Restoring main webview state', {
+    data: { executeImmediately },
+  });
 
   try {
     // Focus the webview panel first to make sure it's visible
@@ -39,17 +43,21 @@ async function restoreState(state: TaskState) {
       const webviewView = await getMainWebview(CHANNEL);
 
       if (webviewView) {
-        webviewView.webview.postMessage({ command: 'restoreState', state });
+        webviewView.webview.postMessage({
+          command: 'restoreState',
+          state,
+          executeImmediately,
+        });
         logger.info(CHANNEL, 'State restored via direct webview access');
         return;
       }
-      await storeStateForLater(state);
+      await storeStateForLater(state, executeImmediately);
     } catch (error) {
       logger.warn(
         CHANNEL,
         `Could not access webview: ${toErrorMessage(error)}`,
       );
-      await storeStateForLater(state);
+      await storeStateForLater(state, executeImmediately);
     }
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
@@ -60,9 +68,14 @@ export const stateRestoreCommand = {
   restoreState,
 };
 
-async function storeStateForLater(state: TaskState): Promise<void> {
+async function storeStateForLater(
+  state: TaskState,
+  executeImmediately?: boolean,
+): Promise<void> {
   // Store the state in memory for the MainViewProvider to pick up
-  setPendingState(state);
+  setPendingState(state, executeImmediately);
   await vscode.commands.executeCommand('texra.mainView.focus');
-  logger.info(CHANNEL, 'State stored for later restoration');
+  logger.info(CHANNEL, 'State stored for later restoration', {
+    data: { executeImmediately },
+  });
 }

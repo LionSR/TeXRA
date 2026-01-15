@@ -48,14 +48,10 @@ function expandGitignorePattern(
     return [basePattern];
   }
 
-  const patterns: string[] = [basePattern];
-  const directoryPattern = basePattern.endsWith('/**')
-    ? basePattern
-    : `${basePattern}/**`;
-  if (!patterns.includes(directoryPattern)) {
-    patterns.push(directoryPattern);
-  }
-  return patterns;
+  // For directory-only patterns, match both the dir and its contents
+  return basePattern.endsWith('/**')
+    ? [basePattern]
+    : [basePattern, `${basePattern}/**`];
 }
 
 function parseGitignore(content: string): GitignoreRule[] {
@@ -63,16 +59,8 @@ function parseGitignore(content: string): GitignoreRule[] {
   const lines = content.split(/\r?\n/);
 
   for (const rawLine of lines) {
-    if (!rawLine) {
-      continue;
-    }
-
     let line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    if (line.startsWith('#')) {
+    if (!line || line.startsWith('#')) {
       continue;
     }
 
@@ -151,16 +139,11 @@ async function readGlobalGitignore(): Promise<GitignoreSource[]> {
     if (!homeDirectory) {
       return [];
     }
-
-    const candidates = [path.join(homeDirectory, '.gitignore_global')];
-
-    const sources = await Promise.all(
-      candidates.map((candidate) => readAbsoluteGitignore(candidate)),
+    const source = await readAbsoluteGitignore(
+      path.join(homeDirectory, '.gitignore_global'),
     );
-    return sources.filter(
-      (source): source is GitignoreSource => source !== null,
-    );
-  } catch (_err) {
+    return source ? [source] : [];
+  } catch {
     return [];
   }
 }
