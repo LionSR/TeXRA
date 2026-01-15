@@ -1282,16 +1282,22 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   // State restoration
   handleRestoreState(message) {
-    this._handleStateRestoration(message.state);
-    this._postHandle();
+    try {
+      this._handleStateRestoration(message.state);
+      this._postHandle();
 
-    // Support executeImmediately for followup tasks (reuses restore flow)
-    if (message.executeImmediately) {
-      // Determine mode from session type
-      const sessionType = this._getSessionTypeValue();
-      const mode =
-        sessionType === SESSION_TYPES.TOOL_USE ? 'chat' : 'workflow';
-      this._executeFollowupTask(mode);
+      // Support executeImmediately for followup tasks (reuses restore flow)
+      if (message.executeImmediately) {
+        // Determine mode from session type
+        const sessionType = this._getSessionTypeValue();
+        const mode =
+          sessionType === SESSION_TYPES.TOOL_USE ? 'chat' : 'workflow';
+        this._executeFollowupTask(mode);
+      }
+    } catch (error) {
+      console.error('Failed to restore state:', error);
+      // Show error to user via status or notification
+      this._showError?.('Failed to restore state. Please try again.');
     }
   }
 

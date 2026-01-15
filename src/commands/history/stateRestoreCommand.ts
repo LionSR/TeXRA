@@ -51,13 +51,13 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
         logger.info(CHANNEL, 'State restored via direct webview access');
         return;
       }
-      await storeStateForLater(state);
+      await storeStateForLater(state, executeImmediately);
     } catch (error) {
       logger.warn(
         CHANNEL,
         `Could not access webview: ${toErrorMessage(error)}`,
       );
-      await storeStateForLater(state);
+      await storeStateForLater(state, executeImmediately);
     }
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
@@ -68,9 +68,14 @@ export const stateRestoreCommand = {
   restoreState,
 };
 
-async function storeStateForLater(state: TaskState): Promise<void> {
+async function storeStateForLater(
+  state: TaskState,
+  executeImmediately?: boolean,
+): Promise<void> {
   // Store the state in memory for the MainViewProvider to pick up
-  setPendingState(state);
+  setPendingState(state, executeImmediately);
   await vscode.commands.executeCommand('texra.mainView.focus');
-  logger.info(CHANNEL, 'State stored for later restoration');
+  logger.info(CHANNEL, 'State stored for later restoration', {
+    data: { executeImmediately },
+  });
 }
