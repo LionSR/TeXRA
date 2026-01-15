@@ -855,19 +855,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Handle context state update (input tokens vs context window).
    * Updates the context utilization display in the footer.
+   *
+   * Always saves state to frontend cache regardless of active stream.
+   * This prevents race conditions where UPDATE_CONTEXT_STATE arrives
+   * before UPDATE_STREAMS has set state.activeStream.
    */
   handleUpdateContextState(message) {
-    if (message.stream && !this._isActiveStream(message)) {
-      return;
-    }
-
     const targetStream = this._getTargetStream(message);
     if (!targetStream || !message.contextState) {
       return;
     }
 
+    // Always save to state cache - ensures data is available when
+    // switching streams even if display update was skipped
     state.setContextState(targetStream, message.contextState);
-    // Update the context display if this is the active stream
+
+    // Update the context display only for the active stream
     if (targetStream === state.activeStream) {
       dom.usageSummary.updateContextDisplay(message.contextState);
     }
