@@ -48,6 +48,7 @@ const AgentConfigBaseSchema = z
     mediaFiles: stringArrayField(),
     outputFiles: stringArrayField(),
     editedFile: z.string().nullable().prefault(null),
+    editedFiles: stringArrayField(),
 
     // Defaults to all-false for tool-use agents; workflow agents populate from UI
     toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),

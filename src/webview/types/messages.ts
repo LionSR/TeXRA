@@ -234,6 +234,20 @@ export const ApprovalActionMessageSchema = z.object({
 
 export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
 
+/** Followup task message from progress view */
+export const FollowupTaskMessageSchema = z.object({
+  stream: z.string().min(1),
+  mode: z.enum(['chat', 'workflow', 'merge']),
+  agent: z.string().min(1),
+  model: z.string().min(1),
+  includeInstruction: z.boolean().optional(),
+  initialQuestion: z.string().optional(),
+  // Note: workflowContext is computed in backend (ProgressViewMessageHandler)
+  // from originalConfig, not passed from frontend
+});
+
+export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;
+
 // --- History View Schemas ---
 
 /** History ID message for history operations */

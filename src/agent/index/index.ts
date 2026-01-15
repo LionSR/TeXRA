@@ -13,10 +13,14 @@ export {
   type AgentOptionsPayload,
   // Core functions
   loadAgents,
+  ensureAgentsLoaded,
+  isAgentCacheInitialized,
   getAgent,
   resolveAgent,
   getWorkflowAgents,
   getToolUseAgents,
+  getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
   getAgentsBySource,
   refresh,
   // HTML options
