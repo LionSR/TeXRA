@@ -196,12 +196,13 @@ function buildFollowupConfig(
     // For single file, use simple merge config
     // For multiple files, include filePairs array for batch processing
     if (filePairs.length === 1) {
+      const [pair] = filePairs;
       return {
         mode: 'merge',
         agent: 'merge',
         model,
-        baseFile: filePairs[0].baseFile,
-        editedFile: filePairs[0].editedFile,
+        baseFile: toRelativePath(pair.baseFile),
+        editedFile: toRelativePath(pair.editedFile),
         instruction: '',
       };
     }
@@ -211,9 +212,12 @@ function buildFollowupConfig(
       mode: 'merge',
       agent: 'merge',
       model,
-      baseFile: filePairs[0].baseFile,
-      editedFile: filePairs[0].editedFile,
-      filePairs, // Array of all file pairs for batch merge
+      baseFile: toRelativePath(filePairs[0].baseFile),
+      editedFile: toRelativePath(filePairs[0].editedFile),
+      filePairs: filePairs.map((pair) => ({
+        baseFile: toRelativePath(pair.baseFile),
+        editedFile: toRelativePath(pair.editedFile),
+      })), // Array of all file pairs for batch merge
       instruction: '',
     };
   }
