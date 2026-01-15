@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Added **Followup Task** feature for workflow continuation directly in the Progress View, with chat mode for discussing results and support for multiple file merges.
 - Added a **Lean Proof** tool-use agent for informal-to-formal Lean 4 verification workflows.
+- Added a **Merge Multiple** agent for batch merge operations.
 - Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
 - Added expandable error details to retry dialog UI for better debugging.
 - Relay errors are now retryable with clearer error messaging and distinct UI indicators.
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - Fixed tooltip and dropdown clipping issues.
 - Fixed bash tool error messages to include stdout.
 - Fixed queued follow-up messages not being combined.
+- Fixed context state display to use only actual API tokens.
 
 ### Improvements
 
