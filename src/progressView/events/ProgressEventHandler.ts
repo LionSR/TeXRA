@@ -156,7 +156,9 @@ export class ProgressEventHandler {
     }
 
     // Refresh stream surface and instruction panel
-    const activeRunId = this.refreshStreamSurface(stream, { updateInstruction: false });
+    const activeRunId = this.refreshStreamSurface(stream, {
+      updateInstruction: false,
+    });
     this.sendInstructionUpdate(stream, activeRunId);
   }
 

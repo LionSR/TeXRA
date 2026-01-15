@@ -850,7 +850,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
     if (fileMapping.size === 0) {
       this.logger.warn(this.channel, 'Followup: No file mappings found', {
-        data: { stream, originalInputs: originalInputs.length, outputs: outputFiles.length },
+        data: {
+          stream,
+          originalInputs: originalInputs.length,
+          outputs: outputFiles.length,
+        },
       });
       await vscode.window.showWarningMessage(
         'Could not map output files to original inputs. File names may not match.',
@@ -880,9 +884,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         executeImmediately,
       );
 
-      this.logger.info(this.channel, 'Followup task configured via restoreState');
+      this.logger.info(
+        this.channel,
+        'Followup task configured via restoreState',
+      );
     } catch (error) {
-      this.logger.error(this.channel, 'Failed to set up followup task', toErrorMessage(error));
+      this.logger.error(
+        this.channel,
+        'Failed to set up followup task',
+        toErrorMessage(error),
+      );
       await vscode.window.showErrorMessage(
         `Failed to set up followup task: ${toErrorMessage(error)}`,
       );
@@ -899,7 +910,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<{ taskState: WorkflowTaskState; outputFiles: string[] } | null> {
     const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
-      this.logger.warn(this.channel, 'Followup: No task state found', { data: { stream: streamId } });
+      this.logger.warn(this.channel, 'Followup: No task state found', {
+        data: { stream: streamId },
+      });
       await vscode.window.showWarningMessage(
         'No task state found for this stream. Cannot set up followup.',
       );
@@ -908,20 +921,30 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const agentEntry = getAgent(agent);
     if (!agentEntry) {
-      this.logger.warn(this.channel, 'Followup: Agent not found in registry', { data: { agent } });
-      await vscode.window.showWarningMessage(`Agent "${agent}" not found. Please select a valid agent.`);
+      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
+        data: { agent },
+      });
+      await vscode.window.showWarningMessage(
+        `Agent "${agent}" not found. Please select a valid agent.`,
+      );
       return null;
     }
 
-    const storageKey = this.provider.state.resolveRunId(streamId, undefined, { persist: false }) as StorageKey | null;
+    const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
+      persist: false,
+    }) as StorageKey | null;
     const runOutputs = storageKey
       ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
       : null;
     const outputFiles = this.extractOutputFilePaths(runOutputs);
 
     if (outputFiles.length === 0) {
-      this.logger.warn(this.channel, 'Followup: No output files found', { data: { stream: streamId } });
-      await vscode.window.showWarningMessage('No output files found. Cannot set up followup.');
+      this.logger.warn(this.channel, 'Followup: No output files found', {
+        data: { stream: streamId },
+      });
+      await vscode.window.showWarningMessage(
+        'No output files found. Cannot set up followup.',
+      );
       return null;
     }
 
@@ -937,15 +960,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Map<string, string> {
     const outputLocations = outputFiles.map((p) => pathToLocation(p));
     const inputLocations = originalInputs.map((p) => pathToLocation(p));
-    const pathMapping = createFileMapping(inputLocations, outputLocations, 'contains');
+    const pathMapping = createFileMapping(
+      inputLocations,
+      outputLocations,
+      'contains',
+    );
 
     const fileMapping = new Map<string, string>();
     for (let i = 0; i < originalInputs.length; i++) {
       const absolutePath = originalInputs[i];
       const location = inputLocations[i];
-      const comparablePath = location.kind !== 'external'
-        ? location.relativePath
-        : location.absolutePath;
+      const comparablePath =
+        location.kind !== 'external'
+          ? location.relativePath
+          : location.absolutePath;
       const output = pathMapping.get(comparablePath);
       if (output?.absolutePath) {
         fileMapping.set(absolutePath, output.absolutePath);
@@ -980,7 +1008,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const newInputFiles = originalConfig.inputFiles.map(mapToRelative);
 
     // Build instruction from template
-    const template = isChat ? CHAT_INSTRUCTION_TEMPLATE : WORKFLOW_CONTEXT_TEMPLATE;
+    const template = isChat
+      ? CHAT_INSTRUCTION_TEMPLATE
+      : WORKFLOW_CONTEXT_TEMPLATE;
     const originalAgentEntry = getAgent(originalConfig.agent);
     const context = await this.renderFollowupInstruction(
       template,
@@ -991,14 +1021,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     // Workflow mode can optionally append original instruction
-    const shouldAppendOriginal = !isChat && includeInstruction && originalConfig.instruction;
+    const shouldAppendOriginal =
+      !isChat && includeInstruction && originalConfig.instruction;
     const instruction = shouldAppendOriginal
       ? `${context}\n\n${originalConfig.instruction}`
       : context;
 
     // Build session with category based on mode
     const newAgentEntry = getAgent(agent);
-    const agentCategory = isChat ? AgentCategory.ToolUse : AgentCategory.Workflow;
+    const agentCategory = isChat
+      ? AgentCategory.ToolUse
+      : AgentCategory.Workflow;
     const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
@@ -1017,7 +1050,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;
     }
-    return { agentConfig: newConfig, activeFiles: originalTaskState.activeFiles } as TaskState;
+    return {
+      agentConfig: newConfig,
+      activeFiles: originalTaskState.activeFiles,
+    } as TaskState;
   }
 
   /**
