@@ -210,6 +210,8 @@ export class ProgressViewState {
     this.streamQueuedFollowUps = new StreamScopedMap(streamResolver);
     // Follow-up textarea text storage by stream ID (persists draft text per tab)
     this.streamFollowUpText = new StreamScopedMap(streamResolver);
+    // Followup section mode per stream (chat/workflow/merge)
+    this.streamFollowupMode = new StreamScopedMap(streamResolver);
 
     // Initialize managers
     this.taskGroups = new TaskGroups();

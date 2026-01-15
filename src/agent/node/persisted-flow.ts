@@ -20,7 +20,7 @@ interface NodeRecord {
 export interface FlowRecord {
   flowName: string;
   params: Record<string, unknown>;
-  shared: Record<string, unknown>;
+  shared: unknown;
   createdAt: string;
   nodes: NodeRecord[];
 }
