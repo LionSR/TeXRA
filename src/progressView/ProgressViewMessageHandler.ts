@@ -806,6 +806,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   /**
    * Process a followup request (setup or run).
    * Calculates file mappings and sends the configuration to main view.
+   * Workflow context is computed here from originalConfig (single source of truth).
    */
   private async processFollowup(
     data: {
@@ -815,23 +816,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       model: string;
       includeInstruction?: boolean;
       initialQuestion?: string;
-      workflowContext?: {
-        agentName?: string;
-        instructionPreview?: string;
-        fileCount?: number;
-      };
     },
     executeImmediately: boolean,
   ): Promise<void> {
-    const {
-      stream,
-      mode,
-      agent,
-      model,
-      includeInstruction,
-      initialQuestion,
-      workflowContext,
-    } = data;
+    const { stream, mode, agent, model, includeInstruction, initialQuestion } =
+      data;
 
     const streamId = stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
@@ -870,6 +859,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Get original agent info for chat mode
     const originalAgentEntry = getAgent(originalConfig.agent);
 
+    // Compute workflow context once here (single source of truth)
+    // This avoids passing context through multiple layers from frontend
+    const computedWorkflowContext = {
+      agentName: originalAgentEntry?.name ?? originalConfig.agent,
+      instructionPreview: originalConfig.instruction
+        ? originalConfig.instruction.slice(0, 100) +
+          (originalConfig.instruction.length > 100 ? '...' : '')
+        : undefined,
+      fileCount: outputFiles.length,
+    };
+
     // Build payload for main view
     const followupPayload: Record<string, unknown> = {
       mode,
@@ -895,8 +895,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       originalModel: originalConfig.model,
       // Multiple outputs flag from original config
       useMultipleOutputs: originalConfig.useMultipleOutputs,
-      // Workflow context for display in main webview instruction
-      workflowContext,
+      // Workflow context computed from original config (not passed from frontend)
+      workflowContext: computedWorkflowContext,
     };
 
     try {

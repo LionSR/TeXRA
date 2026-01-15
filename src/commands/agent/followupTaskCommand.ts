@@ -138,12 +138,9 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SETUP_FOLLOWUP_TASK,
         ...followupConfig,
+        // Pass flag to webview - it will trigger execution after setup completes
+        executeImmediately: payload.executeImmediately,
       });
-
-      // If executeImmediately, trigger execution after a short delay
-      if (payload.executeImmediately) {
-        await executeFollowupImmediately(payload, followupConfig);
-      }
 
       logger.info(CHANNEL, 'Followup task configured in main view');
     } else {
@@ -300,40 +297,6 @@ async function executeMergeDirectly(
       config.editedFile,
     ]);
   }
-}
-
-/**
- * Execute the followup task immediately after setup.
- */
-async function executeFollowupImmediately(
-  payload: FollowupPayload,
-  config: Record<string, unknown>,
-): Promise<void> {
-  // Small delay to allow UI to update
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  if (payload.mode === 'merge') {
-    await executeMergeDirectly(config);
-    return;
-  }
-
-  // Chat and workflow modes share the same execution pattern
-  // (chat mode simply omits auxiliary files)
-  await safeExecuteCommand('texra.execute', [
-    {
-      config: {
-        agent: config.agent,
-        model: config.model,
-        inputFile: config.inputFile,
-        inputFiles: config.inputFiles,
-        referenceFile: config.referenceFile,
-        referenceFiles: config.referenceFiles,
-        auxiliaryFile: config.auxiliaryFile,
-        auxiliaryFiles: config.auxiliaryFiles,
-        instruction: config.instruction,
-      },
-    },
-  ]);
 }
 
 /**
