@@ -264,7 +264,7 @@ export class ProgressViewState {
 
   /** Get context state for a stream */
   getContextState(stream: StreamTabId): ContextStateData | undefined {
-    return this._ephemeral.get(stream)?.contextState ?? undefined;
+    return this._ephemeral.get(stream)?.contextState ?? undefined; // null → undefined
   }
 
   /** Clear context state for a stream */
