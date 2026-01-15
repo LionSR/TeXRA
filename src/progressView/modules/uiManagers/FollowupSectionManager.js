@@ -17,11 +17,23 @@ import {
 export class FollowupSectionManager {
   constructor(vscode) {
     this.vscode = vscode;
-    this._mode = 'chat';
+    // Mode is stored in progressViewState.streamFollowupMode (single source of truth)
     this._currentStreamData = null;
     this._listeners = [];
     this._workflowAgents = [];
     this._toolUseAgents = [];
+  }
+
+  /**
+   * Get the current mode from the single source of truth.
+   * @private
+   * @returns {'chat' | 'workflow' | 'merge'} The current mode
+   */
+  _getMode() {
+    const activeStream = progressViewState.activeStream;
+    return activeStream
+      ? progressViewState.streamFollowupMode.get(activeStream) || 'chat'
+      : 'chat';
   }
 
   setup() {
@@ -59,10 +71,10 @@ export class FollowupSectionManager {
       followupSection.dataset.mode = 'chat';
     }
 
-    // Setup button
+    // Setup button - sends config to main view for review
     const setupBtn = safeGetElementById(ELEMENT_IDS.FOLLOWUP_SETUP_BTN);
     if (setupBtn) {
-      const setupHandler = () => this._handleSetup();
+      const setupHandler = () => this._sendFollowup(COMMANDS.SETUP_FOLLOWUP);
       setupBtn.addEventListener('click', setupHandler);
       this._listeners.push({
         element: setupBtn,
@@ -71,10 +83,10 @@ export class FollowupSectionManager {
       });
     }
 
-    // Run button
+    // Run button - executes followup immediately
     const runBtn = safeGetElementById(ELEMENT_IDS.FOLLOWUP_RUN_BTN);
     if (runBtn) {
-      const runHandler = () => this._handleRun();
+      const runHandler = () => this._sendFollowup(COMMANDS.RUN_FOLLOWUP);
       runBtn.addEventListener('click', runHandler);
       this._listeners.push({
         element: runBtn,
@@ -103,7 +115,7 @@ export class FollowupSectionManager {
   }
 
   /**
-   * Sync the radio group visual state with internal mode.
+   * Sync the radio group visual state with the stored mode.
    * Called when section becomes visible to ensure proper rendering.
    * @private
    */
@@ -112,7 +124,7 @@ export class FollowupSectionManager {
     if (modeGroup) {
       // Use requestAnimationFrame to ensure DOM has rendered
       requestAnimationFrame(() => {
-        setRadioGroupValue(modeGroup, this._mode);
+        setRadioGroupValue(modeGroup, this._getMode());
       });
     }
   }
@@ -148,17 +160,8 @@ export class FollowupSectionManager {
 
     if (shouldShow) {
       this._requestFollowupOptions();
-
-      // Restore the saved mode for this stream, or use default
-      const activeStream = progressViewState.activeStream;
-      const savedMode = activeStream
-        ? progressViewState.streamFollowupMode.get(activeStream)
-        : null;
-      const modeToSet = savedMode || 'chat';
-      if (this._mode !== modeToSet) {
-        this._setMode(modeToSet, { persist: false });
-      }
-      // Sync radio group visual state
+      // Update UI to match the stored mode (reads from single source of truth)
+      this._applyModeToUI(this._getMode());
       this._syncRadioGroup();
     }
   }
@@ -189,7 +192,7 @@ export class FollowupSectionManager {
       const currentValue = modelSelect.value;
       // Use current stream's model as default, or defaultMergeModel for merge mode
       const defaultModel =
-        this._mode === 'merge'
+        this._getMode() === 'merge'
           ? defaultMergeModel
           : this._currentStreamData?.model || currentValue;
 
@@ -215,7 +218,7 @@ export class FollowupSectionManager {
 
     // Select the appropriate agent list based on mode
     const agents =
-      this._mode === 'chat' ? this._toolUseAgents : this._workflowAgents;
+      this._getMode() === 'chat' ? this._toolUseAgents : this._workflowAgents;
 
     // Clear dropdown if no agents available for this mode
     if (!agents || agents.length === 0) {
@@ -253,24 +256,28 @@ export class FollowupSectionManager {
 
   /**
    * Set the mode (chat, workflow, or merge) and update UI.
-   * CSS handles visibility based on data-mode attribute.
+   * Stores mode in progressViewState (single source of truth) and updates UI.
    * @private
    * @param {string} mode - The mode to set
-   * @param {Object} [options] - Optional configuration
-   * @param {boolean} [options.persist=true] - Whether to persist the mode for this stream
    */
-  _setMode(mode, options = {}) {
-    const { persist = true } = options;
-    this._mode = mode;
-
-    // Persist mode for this stream
-    if (persist) {
-      const activeStream = progressViewState.activeStream;
-      if (activeStream) {
-        progressViewState.streamFollowupMode.set(activeStream, mode);
-      }
+  _setMode(mode) {
+    // Store in single source of truth
+    const activeStream = progressViewState.activeStream;
+    if (activeStream) {
+      progressViewState.streamFollowupMode.set(activeStream, mode);
     }
 
+    // Update UI to reflect the new mode
+    this._applyModeToUI(mode);
+  }
+
+  /**
+   * Apply mode to UI elements without modifying state.
+   * Used both when setting a new mode and when restoring from state.
+   * @private
+   * @param {string} mode - The mode to apply
+   */
+  _applyModeToUI(mode) {
     // Sync radio group visual state
     const modeGroup = safeGetElementById('followupModeGroup');
     if (modeGroup) {
@@ -297,32 +304,15 @@ export class FollowupSectionManager {
   }
 
   /**
-   * Handle the Setup button click.
-   * Sends message to set up the followup task in the main view.
-   * @private
-   */
-  _handleSetup() {
-    this._sendFollowupCommand(COMMANDS.SETUP_FOLLOWUP);
-  }
-
-  /**
-   * Handle the Run button click.
-   * Sends message to run the followup task immediately.
-   * @private
-   */
-  _handleRun() {
-    this._sendFollowupCommand(COMMANDS.RUN_FOLLOWUP);
-  }
-
-  /**
    * Send a followup command with the current payload.
    * @private
+   * @param {string} command - The command to send (SETUP_FOLLOWUP or RUN_FOLLOWUP)
    */
-  _sendFollowupCommand(command) {
+  _sendFollowup(command) {
     const payload = this._buildFollowupPayload();
-    if (!payload) return;
-
-    this.vscode.postMessage({ command, ...payload });
+    if (payload) {
+      this.vscode.postMessage({ command, ...payload });
+    }
   }
 
   /**
@@ -346,7 +336,7 @@ export class FollowupSectionManager {
       ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION,
     );
 
-    const mode = this._mode;
+    const mode = this._getMode();
     const agent = mode === 'merge' ? 'merge' : agentSelect?.value;
     const model = modelSelect?.value;
     const includeInstruction =
