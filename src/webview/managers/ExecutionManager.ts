@@ -50,7 +50,8 @@ export class ExecutionManager {
     // Tool-use agents don't produce output files
     const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
     const useMultipleOutputs =
-      !isToolUse && (Boolean(message.outputFilesActive) || outputFiles.length > 1);
+      !isToolUse &&
+      (Boolean(message.outputFilesActive) || outputFiles.length > 1);
 
     // Tool config: workflow agents use message values, tool-use uses defaults
     const toolConfig: ToolConfig = isToolUse
