@@ -234,7 +234,6 @@ export async function runReflectionFlow<C = unknown>(
   const outputHandler: IOutputHandler = new OutputHandler(
     setting,
     config,
-    0, // logId
     baseFiles,
     logger,
     fileService,

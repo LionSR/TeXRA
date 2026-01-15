@@ -28,14 +28,8 @@ export class RecordingManager {
     private readonly commandConfig: RecordingManagerConfig,
   ) {}
 
-  private handleError(
-    webview: vscode.Webview,
-    error: unknown,
-    operation: string,
-  ): void {
-    const message = toErrorMessage(error);
-    vscode.window.showErrorMessage(`Error ${operation}: ${message}`);
-    logger.error(CHANNEL, `Error in ${operation}: ${message}`);
+  private notifyError(webview: vscode.Webview, message: string): void {
+    vscode.window.showErrorMessage(message);
     webview.postMessage({
       command: this.commandConfig.recordingErrorCommand,
       error: message,
@@ -52,14 +46,12 @@ export class RecordingManager {
           command: this.commandConfig.recordingStartedCommand,
         });
       } else if (result.error) {
-        vscode.window.showErrorMessage(result.error);
-        webviewView.webview.postMessage({
-          command: this.commandConfig.recordingErrorCommand,
-          error: result.error,
-        });
+        this.notifyError(webviewView.webview, result.error);
       }
     } catch (error) {
-      this.handleError(webviewView.webview, error, 'starting recording');
+      const errorMsg = toErrorMessage(error);
+      logger.error(CHANNEL, `Error starting recording: ${errorMsg}`);
+      this.notifyError(webviewView.webview, errorMsg);
     }
   }
 
@@ -67,10 +59,8 @@ export class RecordingManager {
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     let stopAcknowledged = false;
-    const acknowledgeStop = () => {
-      if (stopAcknowledged) {
-        return;
-      }
+    const acknowledgeStop = (): void => {
+      if (stopAcknowledged) return;
       stopAcknowledged = true;
       webviewView.webview.postMessage({
         command: this.commandConfig.recordingStoppedCommand,
@@ -94,16 +84,14 @@ export class RecordingManager {
               text: result.text,
             });
           } else if (result.error) {
-            vscode.window.showErrorMessage(result.error);
-            webviewView.webview.postMessage({
-              command: this.commandConfig.recordingErrorCommand,
-              error: result.error,
-            });
+            this.notifyError(webviewView.webview, result.error);
           }
         },
       );
     } catch (error) {
-      this.handleError(webviewView.webview, error, 'stopping recording');
+      const errorMsg = toErrorMessage(error);
+      logger.error(CHANNEL, `Error stopping recording: ${errorMsg}`);
+      this.notifyError(webviewView.webview, errorMsg);
       acknowledgeStop();
     }
   }

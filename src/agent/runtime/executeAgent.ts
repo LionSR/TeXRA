@@ -653,7 +653,8 @@ export async function executeAgent(
     }
 
     // Execute the appropriate flow based on agent type
-    return logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
+    const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
+    return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
       const interruptManager = new InterruptManager();
@@ -728,7 +729,8 @@ export async function executeMergeAgent(
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
     StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 
-    return logger.withScope(`Task: merge@${model}`, async () => {
+    const taskStage = await logger.stage(`Task: merge@${model}`);
+    return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
       const interruptManager = new InterruptManager();
