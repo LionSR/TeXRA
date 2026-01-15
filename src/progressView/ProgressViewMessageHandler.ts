@@ -841,6 +841,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    // Validate that the selected agent exists in registry
+    const agentEntry = getAgent(agent);
+    if (!agentEntry) {
+      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
+        data: { agent },
+      });
+      await vscode.window.showWarningMessage(
+        `Agent "${agent}" not found. Please select a valid agent.`,
+      );
+      return;
+    }
+
     // Get output files for file mapping
     const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
       persist: false,
@@ -888,6 +900,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       if (output?.absolutePath) {
         fileMapping.set(absolutePath, output.absolutePath);
       }
+    }
+
+    // Validate that at least one file was mapped
+    if (fileMapping.size === 0) {
+      this.logger.warn(this.channel, 'Followup: No file mappings found', {
+        data: { stream, originalInputs: originalInputs.length, outputs: outputFiles.length },
+      });
+      await vscode.window.showWarningMessage(
+        'Could not map output files to original inputs. File names may not match.',
+      );
+      return;
     }
 
     // Handle merge mode directly (bypasses main view)
@@ -962,7 +985,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const newInputFiles = originalConfig.inputFiles.map(mapFile);
 
     // Build instruction based on mode
-    let instruction = '';
+    let instruction: string;
     if (mode === 'chat') {
       instruction = this.buildChatInstruction(
         originalConfig,
@@ -971,7 +994,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         initialQuestion,
       );
     } else if (includeInstruction) {
-      // Workflow mode: prepend context to instruction
+      // Workflow mode with instruction: prepend context to original instruction
       const context = this.buildWorkflowContextLine(
         originalAgentEntry?.name ?? originalConfig.agent,
         originalConfig.instruction,
@@ -980,6 +1003,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       instruction = context
         ? context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '')
         : originalConfig.instruction;
+    } else {
+      // Workflow mode without instruction: just add context, no original instruction
+      const context = this.buildWorkflowContextLine(
+        originalAgentEntry?.name ?? originalConfig.agent,
+        undefined,
+        fileMapping.size,
+      );
+      instruction = context ?? '';
     }
 
     // Determine category based on mode (chat = toolUse, workflow = workflow)
