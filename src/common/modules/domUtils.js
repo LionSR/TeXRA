@@ -119,6 +119,27 @@ export function setRadioGroupValue(
   }
 }
 
+/**
+ * Extract the selected value from a vscode-radio-group change event.
+ * The event.target may be the radio element itself or a child, so we need to
+ * find the closest vscode-radio element and get its value.
+ * @param {Event} event - The change event from vscode-radio-group
+ * @param {HTMLElement} radioGroup - The radio group container (fallback)
+ * @returns {string} The selected value, or empty string if not found
+ */
+export function getRadioChangeValue(event, radioGroup) {
+  if (event?.target instanceof Element) {
+    const selectedRadio =
+      event.target.closest('vscode-radio') ||
+      radioGroup?.querySelector('vscode-radio[checked]');
+    if (selectedRadio) {
+      return selectedRadio.value || selectedRadio.getAttribute('value') || '';
+    }
+  }
+  // Fallback to radio group value
+  return radioGroup?.value || '';
+}
+
 export function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {
