@@ -35,30 +35,20 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
 
   try {
     // Focus the webview panel first to make sure it's visible
-    // Use the specific view ID instead of the extension to avoid sidebar switching issues
     await vscode.commands.executeCommand('texra.mainView.focus');
 
-    // Try to get the webview directly using our safe command
-    try {
-      const webviewView = await getMainWebview(CHANNEL);
-
-      if (webviewView) {
-        webviewView.webview.postMessage({
-          command: 'restoreState',
-          state,
-          executeImmediately,
-        });
-        logger.info(CHANNEL, 'State restored via direct webview access');
-        return;
-      }
-      await storeStateForLater(state, executeImmediately);
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Could not access webview: ${toErrorMessage(error)}`,
-      );
-      await storeStateForLater(state, executeImmediately);
+    const webviewView = await getMainWebview(CHANNEL);
+    if (webviewView) {
+      webviewView.webview.postMessage({
+        command: 'restoreState',
+        state,
+        executeImmediately,
+      });
+      logger.info(CHANNEL, 'State restored via direct webview access');
+      return;
     }
+
+    await storeStateForLater(state, executeImmediately);
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }
