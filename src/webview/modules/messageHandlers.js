@@ -112,12 +112,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.LOGIN_BANNER),
       /**
-       * Handles SETUP_FOLLOWUP_TASK command from Progress View.
-       * Sets up the main view for a followup task (workflow or merge).
-       */
-      [MAIN_VIEW_COMMANDS.SETUP_FOLLOWUP_TASK]: (m) =>
-        this._handleSetupFollowupTask(m),
-      /**
        * Handles FOCUS_MAIN_VIEW command to reveal the main view panel.
        * Used after setting up followup to bring the main view into focus.
        */
@@ -1290,6 +1284,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   handleRestoreState(message) {
     this._handleStateRestoration(message.state);
     this._postHandle();
+
+    // Support executeImmediately for followup tasks (reuses restore flow)
+    if (message.executeImmediately) {
+      // Determine mode from session type
+      const sessionType = this._getSessionTypeValue();
+      const mode =
+        sessionType === SESSION_TYPES.TOOL_USE ? 'chat' : 'workflow';
+      this._executeFollowupTask(mode);
+    }
   }
 
   handleCheckRestoredBaseFile() {
@@ -1356,173 +1359,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Handle followup task setup from Progress View.
-   * Configures the main view form with the followup configuration.
-   *
-   * @param {Object} message - The followup configuration
-   * @param {string} message.agent - Agent value (source:name format)
-   * @param {string} message.model - Model name
-   * @param {'chat'|'workflow'|'merge'} message.mode - Followup mode
-   * @param {string} [message.instruction] - Optional instruction text
-   * @param {string} [message.inputFile] - Single input file path (workflow/chat mode)
-   * @param {string[]} [message.inputFiles] - Multiple input file paths (workflow/chat mode)
-   * @param {string} [message.referenceFile] - Reference file path (workflow/chat mode)
-   * @param {string[]} [message.referenceFiles] - Multiple reference file paths (workflow/chat mode)
-   * @param {string} [message.baseFile] - Base file path (merge mode)
-   * @param {string} [message.editedFile] - Edited file path (merge mode)
-   */
-  _handleSetupFollowupTask(message) {
-    const {
-      agent,
-      model,
-      mode,
-      instruction,
-      inputFile,
-      inputFiles,
-      referenceFile,
-      referenceFiles,
-      auxiliaryFile,
-      auxiliaryFiles,
-      baseFile,
-      editedFile,
-      filePairs,
-      workflowContext,
-      useMultipleOutputs,
-      executeImmediately,
-    } = message;
-
-    // Block saves during setup to avoid partial state persistence
-    mainViewState.blockSave();
-    try {
-      const sessionType =
-        mode === 'chat' ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
-
-      // Set the agent dropdown
-      if (agent) {
-        this._setAgentValue(AGENT_SELECT_IDS[sessionType], agent);
-      }
-
-      // Set the model dropdown
-      if (model) {
-        safeSetElementValue('model', model);
-      }
-
-      // Build instruction with workflow context if available
-      let fullInstruction = instruction || '';
-      if (workflowContext && (mode === 'workflow' || mode === 'chat')) {
-        const contextLine = this._buildWorkflowContextLine(workflowContext);
-        if (contextLine) {
-          // Prepend context to instruction
-          fullInstruction =
-            contextLine + (fullInstruction ? '\n\n' + fullInstruction : '');
-        }
-      }
-
-      // Set instruction if provided
-      if (fullInstruction) {
-        const instructionEl =
-          this._instructionEl ||
-          (this._instructionEl = this._getElement('instruction'));
-        if (instructionEl) {
-          instructionEl.value = fullInstruction;
-          instructionEl.dispatchEvent(new Event('input'));
-        }
-      }
-
-      // Set file inputs based on mode
-      if (mode === 'merge') {
-        this._setupMergeFollowupFiles({
-          baseFile,
-          editedFile,
-          filePairs,
-        });
-      } else {
-        // Both workflow and chat modes use the same file setup
-        this._setupWorkflowFollowupFiles(inputFile, inputFiles);
-
-        // Set reference file if provided (workflow/chat mode)
-        if (referenceFile) {
-          safeSetElementValue(REFERENCE_FILE, referenceFile);
-        }
-
-        // Set reference files list if provided
-        if (referenceFiles && referenceFiles.length > 0) {
-          this._setupFileList('referenceFiles', referenceFiles);
-        }
-
-        // Set auxiliary (media) file if provided
-        if (auxiliaryFile) {
-          safeSetElementValue(AUXILIARY_FILE, auxiliaryFile);
-        }
-
-        // Set auxiliary files list if provided
-        if (auxiliaryFiles && auxiliaryFiles.length > 0) {
-          this._setupFileList('auxiliaryFiles', auxiliaryFiles);
-        }
-      }
-
-      // Build and persist state
-      const savedState = {
-        sessionType,
-        workflowAgent:
-          sessionType === SESSION_TYPES.WORKFLOW ? agent || '' : '',
-        toolUseAgent: sessionType === SESSION_TYPES.TOOL_USE ? agent || '' : '',
-        agent: agent || '',
-        model: model || '',
-        instruction: fullInstruction || '',
-      };
-
-      if (mode === 'merge') {
-        const primaryPair = filePairs?.at(0);
-        savedState.inputFile =
-          baseFile || primaryPair?.baseFile || inputFile || '';
-        savedState.editedFile = editedFile || primaryPair?.editedFile || '';
-        if (filePairs && filePairs.length > 1) {
-          savedState.inputFiles = filePairs
-            .slice(1)
-            .map((pair) => pair.baseFile)
-            .filter(Boolean);
-          savedState.editedFiles = filePairs
-            .slice(1)
-            .map((pair) => pair.editedFile)
-            .filter(Boolean);
-        }
-      } else {
-        savedState.inputFile = inputFile || '';
-        savedState.inputFiles = inputFiles || [];
-        savedState.referenceFile = referenceFile || '';
-        savedState.referenceFiles = referenceFiles || [];
-        savedState.auxiliaryFile = auxiliaryFile || '';
-        savedState.auxiliaryFiles = auxiliaryFiles || [];
-        // Preserve multiple outputs setting from previous workflow
-        if (useMultipleOutputs !== undefined) {
-          savedState.outputFilesActive = useMultipleOutputs;
-        }
-      }
-
-      mainViewState.set(savedState);
-
-      // Apply session type UI (shows workflow dropdown, updates radio buttons)
-      mainViewState.applySessionType(sessionType, { skipSave: true });
-
-      // Initialize output files container based on state (for Multiple Outputs)
-      if (mode !== 'merge' && useMultipleOutputs !== undefined) {
-        // Import is at module level, access via outputFilesManager
-        outputFilesManager.initializeOutputContainer();
-      }
-    } finally {
-      mainViewState.unblockSave();
-    }
-
-    this._postHandle();
-
-    // Auto-execute after setup completes (event-based, no setTimeout needed)
-    if (executeImmediately) {
-      this._executeFollowupTask(mode);
-    }
-  }
-
-  /**
    * Execute the followup task after setup is complete.
    * Called when executeImmediately flag is set.
    * @param {'chat'|'workflow'|'merge'} mode - The followup mode
@@ -1561,98 +1397,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       ...multipleFileSelections,
       ...checkboxValues,
     });
-  }
-
-  /**
-   * Setup file inputs for workflow mode followup.
-   * Sets the primary input file and optionally expands the multiple inputs list.
-   */
-  _setupWorkflowFollowupFiles(inputFile, inputFiles) {
-    if (inputFile) {
-      safeSetElementValue(INPUT_FILE, inputFile);
-    }
-    if (inputFiles && inputFiles.length > 0) {
-      this._setupFileList('inputFiles', inputFiles);
-    }
-  }
-
-  /**
-   * Setup file inputs for merge mode followup.
-   * Sets both base file and edited file for the merge operation.
-   */
-  _setupMergeFollowupFiles(message) {
-    const { baseFile, editedFile, filePairs } = message;
-    const primaryPair = filePairs?.at(0);
-    const resolvedBaseFile = baseFile || primaryPair?.baseFile;
-    const resolvedEditedFile = editedFile || primaryPair?.editedFile;
-
-    if (resolvedBaseFile) {
-      safeSetElementValue(INPUT_FILE, resolvedBaseFile);
-    }
-
-    if (resolvedEditedFile) {
-      safeSetElementValue(EDITED_FILE, resolvedEditedFile);
-      fileSelect.updateEdited(resolvedBaseFile || '');
-    }
-
-    if (filePairs && filePairs.length > 1) {
-      const additionalBaseFiles = filePairs
-        .slice(1)
-        .map((pair) => pair.baseFile)
-        .filter(Boolean);
-      if (additionalBaseFiles.length > 0) {
-        this._setupFileList('inputFiles', additionalBaseFiles);
-      }
-    }
-  }
-
-  /**
-   * Build a workflow context line for the instruction field.
-   * Format: "N files generated by AgentName based on: 'instruction preview...'"
-   */
-  _buildWorkflowContextLine(workflowContext) {
-    if (!workflowContext) return '';
-
-    const { agentName, instructionPreview, fileCount } = workflowContext;
-    const parts = [];
-
-    if (fileCount > 0) {
-      const fileWord = fileCount === 1 ? 'file' : 'files';
-      parts.push(`${fileCount} ${fileWord} generated`);
-    }
-    if (agentName) {
-      parts.push(`by ${agentName}`);
-    }
-    if (instructionPreview) {
-      parts.push(`based on: "${instructionPreview}"`);
-    }
-
-    return parts.join(' ');
-  }
-
-  /**
-   * Setup a file list element with multiple files.
-   * Clears existing files and adds new ones, expanding the container.
-   */
-  _setupFileList(listId, files) {
-    if (!files || files.length === 0) return;
-
-    const listElement = this._getElement(listId);
-    if (listElement) {
-      listElement.innerHTML = '';
-      fileList._batchMode = true;
-      files.forEach((file) => fileList.add(listId, file));
-      fileList._batchMode = false;
-    }
-
-    const containerId = `${listId}Container`;
-    const container = this._getElement(containerId);
-    if (container) {
-      container.style.display = 'block';
-    }
-
-    const toggleId = `toggle${listId.charAt(0).toUpperCase() + listId.slice(1)}`;
-    this._setToggleIcon(this._getElement(toggleId), true);
   }
 }
 
