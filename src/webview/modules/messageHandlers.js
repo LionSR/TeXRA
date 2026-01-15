@@ -32,7 +32,6 @@ import {
   updateModelApiKeyBanner,
 } from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
-import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import {
   safeSetElementValue,
   safeSetElementChecked,
@@ -1360,22 +1359,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Execute the followup task after setup is complete.
    * Called when executeImmediately flag is set.
-   * @param {'chat'|'workflow'|'merge'} mode - The followup mode
+   * Note: merge mode is handled directly in ProgressViewMessageHandler.executeMergeDirectly
+   * @param {'chat'|'workflow'} mode - The followup mode
    */
   _executeFollowupTask(mode) {
-    if (mode === 'merge') {
-      // Merge mode - trigger merge command
-      const inputFile = safeGetElementValue(INPUT_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
-      vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.MERGE,
-        inputFile,
-        editedFile,
-      });
-      return;
-    }
-
-    // Workflow/chat mode - collect context and execute
     const {
       agent,
       isToolUseAgent,
