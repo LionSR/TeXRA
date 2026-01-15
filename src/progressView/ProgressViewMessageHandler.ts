@@ -911,7 +911,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Validate that at least one file was mapped
     if (fileMapping.size === 0) {
       this.logger.warn(this.channel, 'Followup: No file mappings found', {
-        data: { stream, originalInputs: originalInputs.length, outputs: outputFiles.length },
+        data: {
+          stream,
+          originalInputs: originalInputs.length,
+          outputs: outputFiles.length,
+        },
       });
       await vscode.window.showWarningMessage(
         'Could not map output files to original inputs. File names may not match.',
@@ -948,7 +952,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         executeImmediately,
       );
 
-      this.logger.info(this.channel, 'Followup task configured via restoreState');
+      this.logger.info(
+        this.channel,
+        'Followup task configured via restoreState',
+      );
     } catch (error) {
       this.logger.error(
         this.channel,
@@ -1006,7 +1013,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         originalAgentEntry,
         fileMapping,
       );
-      instruction = context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '');
+      instruction =
+        context +
+        (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '');
     } else {
       // Workflow mode without instruction: just add context, no original instruction
       instruction = await this.buildWorkflowContext(
@@ -1068,7 +1077,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       originalAgentEntry,
       fileMapping,
     );
-    return renderPrompt(WORKFLOW_CONTEXT_TEMPLATE, vars as Record<string, unknown>);
+    return renderPrompt(
+      WORKFLOW_CONTEXT_TEMPLATE,
+      vars as Record<string, unknown>,
+    );
   }
 
   /**
@@ -1081,7 +1093,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     initialQuestion?: string,
   ): FollowupInstructionVars {
     const toRelativePaths = (files: string[] | undefined) =>
-      files?.filter(Boolean).map((p) => WorkspaceFS.relativePath(p)).join(', ') || undefined;
+      files
+        ?.filter(Boolean)
+        .map((p) => WorkspaceFS.relativePath(p))
+        .join(', ') || undefined;
 
     const originalInputs = [
       originalConfig.inputFile,
@@ -1120,7 +1135,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       fileMapping,
       initialQuestion,
     );
-    return renderPrompt(CHAT_INSTRUCTION_TEMPLATE, vars as Record<string, unknown>);
+    return renderPrompt(
+      CHAT_INSTRUCTION_TEMPLATE,
+      vars as Record<string, unknown>,
+    );
   }
 
   /**
