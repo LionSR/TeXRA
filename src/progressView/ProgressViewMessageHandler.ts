@@ -1161,11 +1161,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.logger.info(this.channel, 'Executing merge directly');
 
     if (filePairs.length === 1) {
-      // Single file merge
+      // Single file merge - pass model as 4th parameter
       await safeExecuteCommand('texra.merge', [
         undefined,
         filePairs[0].baseFile,
         filePairs[0].editedFile,
+        model,
       ]);
     } else {
       // Multiple file merge
