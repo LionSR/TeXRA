@@ -995,22 +995,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       );
     } else if (includeInstruction) {
       // Workflow mode with instruction: prepend context to original instruction
-      const context = this.buildWorkflowContextLine(
-        originalAgentEntry?.name ?? originalConfig.agent,
-        originalConfig.instruction,
-        fileMapping.size,
+      const context = this.buildWorkflowContext(
+        originalConfig,
+        originalAgentEntry,
+        fileMapping,
       );
-      instruction = context
-        ? context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '')
-        : originalConfig.instruction;
+      instruction = context + (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '');
     } else {
       // Workflow mode without instruction: just add context, no original instruction
-      const context = this.buildWorkflowContextLine(
-        originalAgentEntry?.name ?? originalConfig.agent,
-        undefined,
-        fileMapping.size,
+      instruction = this.buildWorkflowContext(
+        originalConfig,
+        originalAgentEntry,
+        fileMapping,
       );
-      instruction = context ?? '';
     }
 
     // Determine category based on mode (chat = toolUse, workflow = workflow)
@@ -1053,29 +1050,68 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Build workflow context line for instruction.
+   * Build workflow context for instruction (similar to chat but without question).
    */
-  private buildWorkflowContextLine(
-    agentName: string,
-    instruction: string | undefined,
-    fileCount: number,
+  private buildWorkflowContext(
+    originalConfig: AgentConfig,
+    originalAgentEntry: ReturnType<typeof getAgent>,
+    fileMapping: Map<string, string>,
   ): string {
-    const parts: string[] = [];
-    if (fileCount > 0) {
-      const fileWord = fileCount === 1 ? 'file' : 'files';
-      parts.push(`${fileCount} ${fileWord} generated`);
+    const sections: string[] = [];
+
+    // Workflow context
+    sections.push('Previous Workflow Context:');
+    if (originalConfig.agent) {
+      const agentInfo = originalAgentEntry?.description
+        ? `${originalConfig.agent} - ${originalAgentEntry.description}`
+        : originalConfig.agent;
+      sections.push(`- Agent: ${agentInfo}`);
     }
-    if (agentName) {
-      parts.push(`by ${agentName}`);
+    if (originalConfig.model) {
+      sections.push(`- Model: ${originalConfig.model}`);
     }
-    if (instruction) {
-      const preview =
-        instruction.length > 100
-          ? instruction.slice(0, 100) + '...'
-          : instruction;
-      parts.push(`based on: "${preview}"`);
+
+    // Files context
+    sections.push('');
+    sections.push('Files:');
+
+    const originalInputs = [
+      originalConfig.inputFile,
+      ...originalConfig.inputFiles,
+    ].filter(Boolean);
+    if (originalInputs.length > 0) {
+      const inputPaths = originalInputs.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Input files: ${inputPaths.join(', ')}`);
     }
-    return parts.join(' ');
+
+    // Reference files
+    const referenceFiles = originalConfig.referenceFiles?.filter(Boolean) ?? [];
+    if (referenceFiles.length > 0) {
+      const refPaths = referenceFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Reference files: ${refPaths.join(', ')}`);
+    }
+
+    // Auxiliary files
+    const auxiliaryFiles = originalConfig.auxiliaryFiles?.filter(Boolean) ?? [];
+    if (auxiliaryFiles.length > 0) {
+      const auxPaths = auxiliaryFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Auxiliary files: ${auxPaths.join(', ')}`);
+    }
+
+    // Media files
+    const mediaFiles = originalConfig.mediaFiles?.filter(Boolean) ?? [];
+    if (mediaFiles.length > 0) {
+      const mediaPaths = mediaFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Media files: ${mediaPaths.join(', ')}`);
+    }
+
+    const outputs = [...fileMapping.values()];
+    if (outputs.length > 0) {
+      const outputPaths = outputs.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Generated outputs: ${outputPaths.join(', ')}`);
+    }
+
+    return sections.join('\n');
   }
 
   /**
@@ -1090,23 +1126,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const sections: string[] = [];
 
     // Workflow context
-    sections.push('## Previous Workflow Context');
+    sections.push('Previous Workflow Context:');
     if (originalConfig.agent) {
       const agentInfo = originalAgentEntry?.description
         ? `${originalConfig.agent} - ${originalAgentEntry.description}`
         : originalConfig.agent;
-      sections.push(`- **Agent**: ${agentInfo}`);
+      sections.push(`- Agent: ${agentInfo}`);
     }
     if (originalConfig.model) {
-      sections.push(`- **Model**: ${originalConfig.model}`);
+      sections.push(`- Model: ${originalConfig.model}`);
     }
     if (originalConfig.instruction) {
-      sections.push(`- **Instruction**: "${originalConfig.instruction}"`);
+      sections.push(`- Instruction: "${originalConfig.instruction}"`);
     }
 
     // Files context
     sections.push('');
-    sections.push('## Files');
+    sections.push('Files:');
 
     const originalInputs = [
       originalConfig.inputFile,
@@ -1114,18 +1150,39 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     ].filter(Boolean);
     if (originalInputs.length > 0) {
       const inputPaths = originalInputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- **Input files**: ${inputPaths.join(', ')}`);
+      sections.push(`- Input files: ${inputPaths.join(', ')}`);
+    }
+
+    // Reference files
+    const referenceFiles = originalConfig.referenceFiles?.filter(Boolean) ?? [];
+    if (referenceFiles.length > 0) {
+      const refPaths = referenceFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Reference files: ${refPaths.join(', ')}`);
+    }
+
+    // Auxiliary files
+    const auxiliaryFiles = originalConfig.auxiliaryFiles?.filter(Boolean) ?? [];
+    if (auxiliaryFiles.length > 0) {
+      const auxPaths = auxiliaryFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Auxiliary files: ${auxPaths.join(', ')}`);
+    }
+
+    // Media files
+    const mediaFiles = originalConfig.mediaFiles?.filter(Boolean) ?? [];
+    if (mediaFiles.length > 0) {
+      const mediaPaths = mediaFiles.map((p) => WorkspaceFS.relativePath(p));
+      sections.push(`- Media files: ${mediaPaths.join(', ')}`);
     }
 
     const outputs = [...fileMapping.values()];
     if (outputs.length > 0) {
       const outputPaths = outputs.map((p) => WorkspaceFS.relativePath(p));
-      sections.push(`- **Generated outputs**: ${outputPaths.join(', ')}`);
+      sections.push(`- Generated outputs: ${outputPaths.join(', ')}`);
     }
 
     // User's question
     sections.push('');
-    sections.push('## Question');
+    sections.push('Question:');
     sections.push(initialQuestion ?? '');
 
     return sections.join('\n');
