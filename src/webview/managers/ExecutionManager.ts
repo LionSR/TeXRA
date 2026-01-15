@@ -42,15 +42,17 @@ export class ExecutionManager {
   }
 
   private composeAgentConfig(message: any, isToolUse: boolean): AgentConfig {
+    // Session descriptor depends on agent type
     const session: AgentSessionDescriptor = isToolUse
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
       : { agentCategory: AgentCategory.Workflow };
 
+    // Tool-use agents don't produce output files
     const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
-    const useMultipleOutputs = isToolUse
-      ? false
-      : Boolean(message.outputFilesActive) || outputFiles.length > 1;
+    const useMultipleOutputs =
+      !isToolUse && (Boolean(message.outputFilesActive) || outputFiles.length > 1);
 
+    // Tool config: workflow agents use message values, tool-use uses defaults
     const toolConfig: ToolConfig = isToolUse
       ? DEFAULT_TOOL_CONFIG
       : {
@@ -61,8 +63,10 @@ export class ExecutionManager {
           autoCompileInputPdf: message.autoCompileInputPdf,
         };
 
+    // Map media file paths, filtering out null values
+    const mapMedia = (f: string | null): string | null => this.mapMediaPath(f);
     const mediaFiles = (message.mediaFiles ?? [])
-      .map((f: string | null) => this.mapMediaPath(f))
+      .map(mapMedia)
       .filter((f: string | null): f is string => f !== null);
 
     return {
@@ -75,7 +79,7 @@ export class ExecutionManager {
       referenceFiles: message.referenceFiles ?? [],
       auxiliaryFile: message.auxiliaryFile ?? null,
       auxiliaryFiles: message.auxiliaryFiles ?? [],
-      mediaFile: this.mapMediaPath(message.mediaFile ?? null),
+      mediaFile: mapMedia(message.mediaFile ?? null),
       mediaFiles,
       editedFile: null,
       editedFiles: message.editedFiles ?? [],
