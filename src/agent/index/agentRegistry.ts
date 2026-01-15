@@ -121,6 +121,28 @@ export async function loadAgents(): Promise<void> {
   return initPromise;
 }
 
+/**
+ * Check if the agent cache has been initialized.
+ * Use this to avoid redundant loadAgents() calls.
+ */
+export function isAgentCacheInitialized(): boolean {
+  return initialized;
+}
+
+/**
+ * Ensure agents are loaded, without triggering a re-scan if already loaded.
+ * Prefer this over loadAgents() when you just need to access the cache.
+ */
+export async function ensureAgentsLoaded(): Promise<void> {
+  if (initialized) {
+    return;
+  }
+  if (initPromise) {
+    return initPromise;
+  }
+  return loadAgents();
+}
+
 async function doLoad(): Promise<void> {
   const startTime = Date.now();
   cache.clear();
@@ -534,23 +556,29 @@ export interface AgentOptionsPayload {
  * in the webview, which uses DOMParser to add the 'selected' attribute based
  * on the current dropdown value before setting innerHTML.
  */
+/**
+ * Get visible workflow agents (filtered and deduplicated).
+ * Returns the same agents shown in the main webview dropdown.
+ */
+export function getVisibleWorkflowAgents(): AgentEntry[] {
+  const entries = getWorkflowAgents();
+  const configured = new Set(getConfig<string[]>('texra.agents', []));
+  return deduplicateByName(filterVisible(entries, configured));
+}
+
+/**
+ * Get visible tool-use agents (filtered and deduplicated).
+ * Returns the same agents shown in the main webview dropdown.
+ */
+export function getVisibleToolUseAgents(): AgentEntry[] {
+  const entries = getToolUseAgents();
+  const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
+  return deduplicateByName(filterVisible(entries, configured));
+}
+
 export function buildAgentOptions(): AgentOptionsPayload {
-  const workflowEntries = getWorkflowAgents();
-  const toolUseEntries = getToolUseAgents();
-
-  // Get configured agent filters
-  const configuredWorkflow = new Set(getConfig<string[]>('texra.agents', []));
-  const configuredToolUse = new Set(
-    getConfig<string[]>('texra.toolUseAgents', []),
-  );
-
-  // Filter visible entries and deduplicate by name (priority: custom > builtIn > remote)
-  const visibleWorkflow = deduplicateByName(
-    filterVisible(workflowEntries, configuredWorkflow),
-  );
-  const visibleToolUse = deduplicateByName(
-    filterVisible(toolUseEntries, configuredToolUse),
-  );
+  const visibleWorkflow = getVisibleWorkflowAgents();
+  const visibleToolUse = getVisibleToolUseAgents();
 
   return {
     workflow: renderOptions(

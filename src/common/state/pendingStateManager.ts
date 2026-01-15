@@ -6,21 +6,31 @@
 
 import type { TaskState } from '@logger/TaskState';
 
-let pendingState: TaskState | undefined = undefined;
+interface PendingStateData {
+  state: TaskState;
+  executeImmediately?: boolean;
+}
+
+let pendingStateData: PendingStateData | undefined = undefined;
 
 /**
  * Store state for later restoration.
+ * @param state - The TaskState to restore
+ * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
-export function setPendingState(state: TaskState): void {
-  pendingState = state;
+export function setPendingState(
+  state: TaskState,
+  executeImmediately?: boolean,
+): void {
+  pendingStateData = { state, executeImmediately };
 }
 
 /**
  * Get and clear the pending state.
- * @returns The pending state if any, undefined otherwise
+ * @returns The pending state data if any, undefined otherwise
  */
-export function consumePendingState(): TaskState | undefined {
-  const state = pendingState;
-  pendingState = undefined;
-  return state;
+export function consumePendingState(): PendingStateData | undefined {
+  const data = pendingStateData;
+  pendingStateData = undefined;
+  return data;
 }
