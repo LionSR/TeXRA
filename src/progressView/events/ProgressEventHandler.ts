@@ -119,49 +119,48 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'StreamStatus',
       'failed to handle setActiveStream',
-      async () => {
-        const { stream, session, isRemote, hasMultipleOutputs } = payload;
-        if (!stream) return;
-
-        await this.state.streamTabs.ensureStream(stream);
-        this.state.updateStreamHints(stream, {
-          sessionCategory: session?.agentCategory,
-          isRemote,
-          hasMultipleOutputs,
-        });
-        this.maybeUpdateFilterForCategory(session?.agentCategory);
-        this.state.activeStream = stream;
-        this.replayPendingTaskGroups(stream);
-
-        // Get current status without defaulting to RUNNING.
-        // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
-        // not here. Defaulting to RUNNING here causes a race condition where the
-        // "already running" check in executeAgent fails because this event handler
-        // runs synchronously before the check.
-        const status = StreamStatusService.get(stream);
-
-        if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
-        }
-
-        // Only update stream status if explicitly set (not for new streams)
-        if (status !== undefined) {
-          this.setStreamStatus(stream, status);
-        }
-
-        if (this.webviewUpdater.isAvailable()) {
-          // Frontend detects stream switches using lastRenderedStream tracking.
-          const activeRunId = this.refreshStreamSurface(stream, {
-            updateInstruction: false,
-          });
-          this.sendInstructionUpdate(stream, activeRunId);
-        }
-      },
+      () => this.processSetActiveStream(payload),
     );
   };
+
+  /** Core logic for setActiveStream event, separated for clarity */
+  private async processSetActiveStream(
+    payload: ProgressEventPayloads['setActiveStream'],
+  ): Promise<void> {
+    const { stream, session, isRemote, hasMultipleOutputs } = payload;
+    if (!stream) return;
+
+    // Initialize stream state
+    await this.state.streamTabs.ensureStream(stream);
+    this.state.updateStreamHints(stream, {
+      sessionCategory: session?.agentCategory,
+      isRemote,
+      hasMultipleOutputs,
+    });
+    this.maybeUpdateFilterForCategory(session?.agentCategory);
+    this.state.activeStream = stream;
+    this.replayPendingTaskGroups(stream);
+
+    // Get current status without defaulting to RUNNING.
+    // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
+    // not here. Defaulting to RUNNING here causes a race condition.
+    const status = StreamStatusService.get(stream);
+
+    if (!this.webviewUpdater.isAvailable()) return;
+
+    // Update webview with stream data
+    this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+
+    if (status !== undefined) {
+      this.setStreamStatus(stream, status);
+    }
+
+    // Refresh stream surface and instruction panel
+    const activeRunId = this.refreshStreamSurface(stream, {
+      updateInstruction: false,
+    });
+    this.sendInstructionUpdate(stream, activeRunId);
+  }
 
   private handleUpdateStreamStatus = (
     payload: ProgressEventPayloads['updateStreamStatus'],
