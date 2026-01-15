@@ -12,10 +12,7 @@ import {
   createKey,
   ensureAgentsLoaded,
 } from '@agent/index/agentRegistry';
-import {
-  AgentCategory,
-  resolveAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -998,32 +995,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const newInputFiles = originalConfig.inputFiles.map(mapFile);
 
     // Build instruction based on mode
-    let instruction: string;
-    if (mode === 'chat') {
-      instruction = await this.buildChatInstruction(
-        originalConfig,
-        originalAgentEntry,
-        fileMapping,
-        initialQuestion,
-      );
-    } else if (includeInstruction) {
-      // Workflow mode with instruction: prepend context to original instruction
-      const context = await this.buildWorkflowContext(
-        originalConfig,
-        originalAgentEntry,
-        fileMapping,
-      );
-      instruction =
-        context +
-        (originalConfig.instruction ? '\n\n' + originalConfig.instruction : '');
-    } else {
-      // Workflow mode without instruction: just add context, no original instruction
-      instruction = await this.buildWorkflowContext(
-        originalConfig,
-        originalAgentEntry,
-        fileMapping,
-      );
-    }
+    const template =
+      mode === 'chat' ? CHAT_INSTRUCTION_TEMPLATE : WORKFLOW_CONTEXT_TEMPLATE;
+    const context = await this.renderFollowupInstruction(
+      template,
+      originalConfig,
+      originalAgentEntry,
+      fileMapping,
+      mode === 'chat' ? initialQuestion : undefined,
+    );
+
+    // For workflow mode with includeInstruction, append original instruction
+    const instruction =
+      mode === 'workflow' && includeInstruction && originalConfig.instruction
+        ? context + '\n\n' + originalConfig.instruction
+        : context;
 
     // Determine category based on mode (chat = toolUse, workflow = workflow)
     const agentCategory =
@@ -1055,7 +1041,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       };
     }
-
     return {
       agentConfig: newConfig as AgentConfig & {
         session: { agentCategory: AgentCategory.Workflow };
@@ -1065,33 +1050,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Build workflow context for instruction using Nunjucks template.
+   * Render a followup instruction using a Nunjucks template.
+   * Unifies buildWorkflowContext and buildChatInstruction into one method.
    */
-  private async buildWorkflowContext(
-    originalConfig: AgentConfig,
-    originalAgentEntry: ReturnType<typeof getAgent>,
-    fileMapping: Map<string, string>,
-  ): Promise<string> {
-    const vars = this.buildFollowupTemplateVars(
-      originalConfig,
-      originalAgentEntry,
-      fileMapping,
-    );
-    return renderPrompt(
-      WORKFLOW_CONTEXT_TEMPLATE,
-      vars as Record<string, unknown>,
-    );
-  }
-
-  /**
-   * Build template variables for followup instructions.
-   */
-  private buildFollowupTemplateVars(
+  private async renderFollowupInstruction(
+    template: string,
     originalConfig: AgentConfig,
     originalAgentEntry: ReturnType<typeof getAgent>,
     fileMapping: Map<string, string>,
     initialQuestion?: string,
-  ): FollowupInstructionVars {
+  ): Promise<string> {
     const toRelativePaths = (files: string[] | undefined) =>
       files
         ?.filter(Boolean)
@@ -1107,7 +1075,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? `${originalConfig.agent} - ${originalAgentEntry.description}`
       : originalConfig.agent;
 
-    return {
+    const vars: FollowupInstructionVars = {
       agentInfo,
       model: originalConfig.model || undefined,
       instruction: originalConfig.instruction || undefined,
@@ -1118,27 +1086,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       outputFiles: toRelativePaths([...fileMapping.values()]),
       question: initialQuestion,
     };
-  }
 
-  /**
-   * Build instruction for chat mode with workflow context using Nunjucks template.
-   */
-  private async buildChatInstruction(
-    originalConfig: AgentConfig,
-    originalAgentEntry: ReturnType<typeof getAgent>,
-    fileMapping: Map<string, string>,
-    initialQuestion?: string,
-  ): Promise<string> {
-    const vars = this.buildFollowupTemplateVars(
-      originalConfig,
-      originalAgentEntry,
-      fileMapping,
-      initialQuestion,
-    );
-    return renderPrompt(
-      CHAT_INSTRUCTION_TEMPLATE,
-      vars as Record<string, unknown>,
-    );
+    return renderPrompt(template, vars as Record<string, unknown>);
   }
 
   /**
@@ -1206,15 +1155,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
   ): string[] {
     if (!runOutputs) return [];
-
-    const paths: string[] = [];
-    for (const infos of runOutputs.values()) {
-      for (const info of infos) {
-        if (info.location?.absolutePath) {
-          paths.push(info.location.absolutePath);
-        }
-      }
-    }
-    return paths;
+    return [...runOutputs.values()].flatMap((infos) =>
+      infos
+        .filter((info) => info.location?.absolutePath)
+        .map((info) => info.location!.absolutePath),
+    );
   }
 }
