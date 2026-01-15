@@ -112,13 +112,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.LOGIN_BANNER),
       /**
-       * Handles FOCUS_MAIN_VIEW command to reveal the main view panel.
-       * Used after setting up followup to bring the main view into focus.
-       */
-      [MAIN_VIEW_COMMANDS.FOCUS_MAIN_VIEW]: () => {
-        // This command is handled by the extension host, nothing to do in webview
-      },
-      /**
        * Handles SET_MODEL_OPTIONS command to update the model dropdown.
        *
        * Waits for the #model select element to appear in the DOM before applying options.
