@@ -137,10 +137,8 @@ export class FollowupSectionManager {
     this._currentStreamData = streamData;
     const collapsible = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
 
-    // Show for both workflow and tool-use streams that have generated files
-    const isValidCategory =
-      streamData?.agentCategory === 'workflow' ||
-      streamData?.agentCategory === 'toolUse';
+    // Show for workflow streams that have generated files
+    const isValidCategory = streamData?.agentCategory === 'workflow';
     const shouldShow =
       isValidCategory &&
       streamData?.status === 'stopped' &&
@@ -176,7 +174,7 @@ export class FollowupSectionManager {
       toolUseAgents = [],
       models = [],
       defaultMergeModel,
-    } = options;
+    } = options ?? {};
 
     // Store both agent lists for mode switching
     this._workflowAgents = workflowAgents;
