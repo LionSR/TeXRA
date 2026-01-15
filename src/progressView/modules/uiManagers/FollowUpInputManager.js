@@ -205,7 +205,11 @@ export class FollowUpInputManager {
   }
 
   setApprovalBypassState(isBypassed) {
-    const button = this.approvalBypassButton;
+    // Always get a fresh reference to handle cases where setup() hasn't run yet
+    // or the button reference became stale
+    const button =
+      this.approvalBypassButton ||
+      safeGetElementById(ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN);
     if (!button) {
       return;
     }

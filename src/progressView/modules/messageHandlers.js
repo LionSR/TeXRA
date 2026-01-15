@@ -211,6 +211,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.queuedFollowUps.clear();
     dom.fileList.clear();
     dom.usageSummary.clearContextDisplay();
+    dom.followupSection.clear();
   }
 
   /**
@@ -399,6 +400,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
       [COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
         this.handleUpdateQueuedFollowUps.bind(this),
+      [COMMANDS.SET_FOLLOWUP_OPTIONS]: this.handleSetFollowupOptions.bind(this),
     };
   }
 
@@ -498,6 +500,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._refreshActiveRunPanels();
+    this._updateFollowupSection();
   }
 
   handleUpdateLogs(message) {
@@ -609,6 +612,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.lastRenderedStream = message.stream;
 
     this._updatePlaceholderVisibility();
+    // Update followup section - files may have been loaded via runFiles
+    this._updateFollowupSection();
   }
 
   /**
@@ -661,6 +666,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Refresh display panels - use validated run ID from state
     const activeRunId = state.resolveActiveRunId(message.stream);
     this._refreshActiveRunPanels(activeRunId);
+    // Update followup section - files may have changed
+    this._updateFollowupSection();
   }
 
   handleAppendLog(message) {
@@ -803,6 +810,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (stream === state.activeStream) {
       dom.status.update(status || STREAM_STATUS.STOPPED);
       this._focusFollowUpIfWaiting(status);
+      // Update followup section when status changes (may become visible when stopped)
+      this._updateFollowupSection();
     }
   }
 
@@ -880,6 +889,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (targetStream === state.activeStream) {
       this._refreshOutputsForActiveRun();
+      // Update followup section when files change (affects visibility)
+      this._updateFollowupSection();
     }
   }
 
@@ -1119,6 +1130,88 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (stream === state.activeStream) {
       dom.queuedFollowUps.update(messages);
     }
+  }
+
+  /**
+   * Handle SET_FOLLOWUP_OPTIONS command from extension host.
+   * Updates the followup section dropdowns with available agents and models.
+   * @param {{ workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }} message
+   */
+  handleSetFollowupOptions(message) {
+    const { workflowAgents, toolUseAgents, models, defaultMergeModel } =
+      message;
+    dom.followupSection?.setOptions?.({
+      workflowAgents,
+      toolUseAgents,
+      models,
+      defaultMergeModel,
+    });
+  }
+
+  /**
+   * Update followup section visibility based on current stream state.
+   * Called when stream status changes or streams are updated.
+   */
+  _updateFollowupSection() {
+    const activeStream = state.activeStream;
+    if (!activeStream) {
+      dom.followupSection?.updateForStream?.(null);
+      return;
+    }
+
+    const streamStatus = state.streamStatuses.get(activeStream);
+    const sessionKind = state.activeSessionKind || 'workflow';
+    const hasOutputFiles = this._hasOutputFilesForActiveStream();
+
+    // Extract agent name from stream ID (format: "agentName@timestamp")
+    const agentName = activeStream.split('@')[0] || activeStream;
+
+    // Get instruction text for workflow context
+    const runId = state.resolveActiveRunId(activeStream);
+    const instruction = runId
+      ? state.getRunInstruction(activeStream, runId)
+      : null;
+    const instructionPreview = instruction?.text
+      ? instruction.text.slice(0, 100) +
+        (instruction.text.length > 100 ? '...' : '')
+      : null;
+
+    // Count output files
+    const files = runId ? state.getRunFiles(activeStream, runId) : null;
+    const fileCount = files
+      ? Object.values(files).reduce(
+          (sum, roundFiles) =>
+            sum + (Array.isArray(roundFiles) ? roundFiles.length : 0),
+          0,
+        )
+      : 0;
+
+    dom.followupSection?.updateForStream?.({
+      agentCategory: sessionKind,
+      status: streamStatus,
+      hasOutputFiles,
+      agentName,
+      instructionPreview,
+      fileCount,
+    });
+  }
+
+  /**
+   * Check if the active stream has output files.
+   */
+  _hasOutputFilesForActiveStream() {
+    const activeStream = state.activeStream;
+    if (!activeStream) return false;
+
+    const runId = state.resolveActiveRunId(activeStream);
+    if (!runId) return false;
+
+    const files = state.getRunFiles(activeStream, runId);
+    if (!files) return false;
+
+    return Object.values(files).some(
+      (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
+    );
   }
 }
 

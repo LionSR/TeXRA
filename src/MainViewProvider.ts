@@ -266,12 +266,13 @@ export class MainViewProvider
     });
 
     // Check if there's state to restore (consume it from pending state)
-    const state = consumePendingState();
+    const pendingData = consumePendingState();
 
-    if (state) {
+    if (pendingData) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state,
+        state: pendingData.state,
+        executeImmediately: pendingData.executeImmediately,
       });
     }
   }
