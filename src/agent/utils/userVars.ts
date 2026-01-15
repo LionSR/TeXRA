@@ -161,10 +161,17 @@ async function getFileVars(
   const filterStrings = (arr: string[]): string[] =>
     arr.filter((s): s is string => Boolean(s));
 
+  // Build all edited files list (editedFile + editedFiles)
+  const allEditedFiles = [
+    agentConfig.editedFile,
+    ...filterStrings(agentConfig.editedFiles ?? []),
+  ].filter((f): f is string => Boolean(f));
+
   const collectionMappings: Record<string, [string[], string[]]> = {
     INPUT: [filterStrings(agentConfig.inputFiles), allInputFiles],
     REFERENCE: [filterStrings(agentConfig.referenceFiles), allReferenceFiles],
     AUXILIARY: [filterStrings(agentConfig.auxiliaryFiles), allAuxiliaryFiles],
+    EDITED: [filterStrings(agentConfig.editedFiles ?? []), allEditedFiles],
   };
 
   for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
