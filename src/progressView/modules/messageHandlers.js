@@ -211,6 +211,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.queuedFollowUps.clear();
     dom.fileList.clear();
     dom.usageSummary.clearContextDisplay();
+    dom.followupSection.clear();
   }
 
   /**
@@ -1185,7 +1186,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       agentCategory: sessionKind,
       status: streamStatus,
       hasOutputFiles,
-      model: state.activeStreamModel,
       agentName,
       instructionPreview,
       fileCount,
