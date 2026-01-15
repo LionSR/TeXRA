@@ -4,38 +4,41 @@
  */
 
 /**
- * Template for chat mode instruction.
- * Includes full workflow context and user's question.
+ * Shared template for workflow context.
+ * Chat mode includes instruction in context and adds question section.
+ * Workflow mode excludes instruction (appended separately if needed).
  */
-export const CHAT_INSTRUCTION_TEMPLATE = `Previous Workflow Context:
+const WORKFLOW_CONTEXT_BASE = `Previous Workflow Context:
 - Agent: {{ agentInfo }}
-{% if model %}- Model: {{ model }}{% endif %}
-{% if instruction %}- Instruction: "{{ instruction }}"{% endif %}
+{% if model %}- Model: {{ model }}{% endif %}`;
 
-Files:
-{% if inputFiles %}- Input files: {{ inputFiles }}{% endif %}
-{% if referenceFiles %}- Reference files: {{ referenceFiles }}{% endif %}
-{% if auxiliaryFiles %}- Auxiliary files: {{ auxiliaryFiles }}{% endif %}
-{% if mediaFiles %}- Media files: {{ mediaFiles }}{% endif %}
-{% if outputFiles %}- Generated outputs: {{ outputFiles }}{% endif %}
-
-Question:
-{{ question }}`;
-
-/**
- * Template for workflow mode context.
- * Similar to chat but without the question section.
- */
-export const WORKFLOW_CONTEXT_TEMPLATE = `Previous Workflow Context:
-- Agent: {{ agentInfo }}
-{% if model %}- Model: {{ model }}{% endif %}
-
+const FILES_SECTION = `
 Files:
 {% if inputFiles %}- Input files: {{ inputFiles }}{% endif %}
 {% if referenceFiles %}- Reference files: {{ referenceFiles }}{% endif %}
 {% if auxiliaryFiles %}- Auxiliary files: {{ auxiliaryFiles }}{% endif %}
 {% if mediaFiles %}- Media files: {{ mediaFiles }}{% endif %}
 {% if outputFiles %}- Generated outputs: {{ outputFiles }}{% endif %}`;
+
+/**
+ * Template for chat mode instruction.
+ * Includes instruction in context and user's question.
+ */
+export const CHAT_INSTRUCTION_TEMPLATE =
+  WORKFLOW_CONTEXT_BASE +
+  `
+{% if instruction %}- Instruction: "{{ instruction }}"{% endif %}` +
+  FILES_SECTION +
+  `
+
+Question:
+{{ question }}`;
+
+/**
+ * Template for workflow mode context.
+ * Excludes instruction (may be appended separately).
+ */
+export const WORKFLOW_CONTEXT_TEMPLATE = WORKFLOW_CONTEXT_BASE + FILES_SECTION;
 
 /**
  * Variables for rendering followup instruction templates.
