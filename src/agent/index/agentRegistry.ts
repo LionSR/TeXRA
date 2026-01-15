@@ -700,11 +700,7 @@ function renderOption(entry: AgentEntry): string {
  * on the current dropdown value before setting innerHTML.
  */
 export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
-  if (!initialized) {
-    await loadAgents();
-  } else if (initPromise) {
-    await initPromise;
-  }
+  await ensureAgentsLoaded();
   return buildAgentOptions();
 }
 
