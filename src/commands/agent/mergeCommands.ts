@@ -14,8 +14,12 @@ export function registerMergeCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.merge',
-      (inputFile: string, baseFile: string, editedFile: string) =>
-        handleMerge(inputFile, baseFile, editedFile),
+      (
+        inputFile: string,
+        baseFile: string,
+        editedFile: string,
+        model?: string,
+      ) => handleMerge(inputFile, baseFile, editedFile, model),
     ),
   );
 }
@@ -24,6 +28,7 @@ async function handleMerge(
   inputFile: string,
   baseFile: string,
   editedFile: string,
+  model?: string,
 ): Promise<void> {
   if (!editedFile || (!baseFile && !inputFile)) {
     await showLoggedMessageWithDocs(
@@ -35,10 +40,10 @@ async function handleMerge(
     return;
   }
 
-  const model = getConfig('texra.merge.defaultModel', 'sonnet37');
+  const modelToUse = model ?? getConfig('texra.merge.defaultModel', 'sonnet37');
   const fileToUse = baseFile ?? inputFile;
 
-  await executeMergeAgent(model, fileToUse, editedFile);
+  await executeMergeAgent(modelToUse, fileToUse, editedFile);
 }
 
 export const mergeCommands = {

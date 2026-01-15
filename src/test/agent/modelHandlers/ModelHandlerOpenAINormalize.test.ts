@@ -19,7 +19,7 @@ import {
 } from '@model/ModelConfig';
 
 type LoggerStub = Partial<AgentLogger> & {
-  channelId: string;
+  streamId: string;
   debugMessages: string[];
   infoMessages: string[];
 };
@@ -28,7 +28,7 @@ function createLoggerStub(): LoggerStub {
   const debugMessages: string[] = [];
   const infoMessages: string[] = [];
   return {
-    channelId: 'test-channel',
+    streamId: 'test-channel',
     debugMessages,
     infoMessages,
     debug: (message: string) => {

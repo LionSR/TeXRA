@@ -352,9 +352,6 @@ export class AnthropicStreamHandler {
     if (!this.config.progressViewEnabled) {
       return;
     }
-    this.logger.info('', {
-      messageType: MESSAGE_TYPES.WEB_SEARCH,
-      data: result,
-    });
+    this.logger.logWebSearch(result);
   }
 }
