@@ -1383,6 +1383,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       auxiliaryFiles,
       baseFile,
       editedFile,
+      filePairs,
       workflowContext,
       useMultipleOutputs,
     } = message;
@@ -1390,9 +1391,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Block saves during setup to avoid partial state persistence
     mainViewState.blockSave();
     try {
-      // Session type is always 'workflow' for both workflow and merge modes
-      // (merge agents are workflow agents that take base + edited files)
-      const sessionType = SESSION_TYPES.WORKFLOW;
+      const sessionType =
+        mode === 'chat' ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
 
       // Set the agent dropdown
       if (agent) {
@@ -1428,7 +1428,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
       // Set file inputs based on mode
       if (mode === 'merge') {
-        this._setupMergeFollowupFiles({ baseFile, editedFile, inputFiles });
+        this._setupMergeFollowupFiles({
+          baseFile,
+          editedFile,
+          filePairs,
+        });
       } else {
         // Both workflow and chat modes use the same file setup
         this._setupWorkflowFollowupFiles(inputFile, inputFiles);
@@ -1457,15 +1461,29 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       // Build and persist state
       const savedState = {
         sessionType,
-        workflowAgent: agent || '',
+        workflowAgent:
+          sessionType === SESSION_TYPES.WORKFLOW ? agent || '' : '',
+        toolUseAgent: sessionType === SESSION_TYPES.TOOL_USE ? agent || '' : '',
         agent: agent || '',
         model: model || '',
-        instruction: instruction || '',
+        instruction: fullInstruction || '',
       };
 
       if (mode === 'merge') {
-        savedState.inputFile = baseFile || '';
-        savedState.editedFile = editedFile || '';
+        const primaryPair = filePairs?.at(0);
+        savedState.inputFile =
+          baseFile || primaryPair?.baseFile || inputFile || '';
+        savedState.editedFile = editedFile || primaryPair?.editedFile || '';
+        if (filePairs && filePairs.length > 1) {
+          savedState.inputFiles = filePairs
+            .slice(1)
+            .map((pair) => pair.baseFile)
+            .filter(Boolean);
+          savedState.editedFiles = filePairs
+            .slice(1)
+            .map((pair) => pair.editedFile)
+            .filter(Boolean);
+        }
       } else {
         savedState.inputFile = inputFile || '';
         savedState.inputFiles = inputFiles || [];
@@ -1514,21 +1532,28 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * Sets both base file and edited file for the merge operation.
    */
   _setupMergeFollowupFiles(message) {
-    const { baseFile, editedFile, inputFiles } = message;
+    const { baseFile, editedFile, filePairs } = message;
+    const primaryPair = filePairs?.at(0);
+    const resolvedBaseFile = baseFile || primaryPair?.baseFile;
+    const resolvedEditedFile = editedFile || primaryPair?.editedFile;
 
-    if (baseFile) {
-      safeSetElementValue(INPUT_FILE, baseFile);
+    if (resolvedBaseFile) {
+      safeSetElementValue(INPUT_FILE, resolvedBaseFile);
     }
 
-    if (editedFile) {
-      safeSetElementValue(EDITED_FILE, editedFile);
-      fileSelect.updateEdited(baseFile || '');
+    if (resolvedEditedFile) {
+      safeSetElementValue(EDITED_FILE, resolvedEditedFile);
+      fileSelect.updateEdited(resolvedBaseFile || '');
     }
 
-    if (inputFiles && inputFiles.length > 1) {
-      console.info(
-        `Merge followup: ${inputFiles.length} files to merge. Using first as primary edited file.`,
-      );
+    if (filePairs && filePairs.length > 1) {
+      const additionalBaseFiles = filePairs
+        .slice(1)
+        .map((pair) => pair.baseFile)
+        .filter(Boolean);
+      if (additionalBaseFiles.length > 0) {
+        this._setupFileList('inputFiles', additionalBaseFiles);
+      }
     }
   }
 
