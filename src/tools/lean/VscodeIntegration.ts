@@ -10,49 +10,6 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
-// Types
-// ============================================================================
-
-/** Position with line and character. */
-interface Position {
-  line: number;
-  character: number;
-}
-
-/** Range with start and end positions. */
-interface Range {
-  start: Position;
-  end: Position;
-}
-
-/** Diagnostic severity levels */
-export enum DiagnosticSeverity {
-  Error = 0,
-  Warning = 1,
-  Information = 2,
-  Hint = 3,
-}
-
-/** Structured diagnostic info */
-export interface LeanDiagnostic {
-  range: Range;
-  message: string;
-  severity: DiagnosticSeverity;
-  source?: string;
-}
-
-// ============================================================================
-// Utilities
-// ============================================================================
-
-/**
- * Resolve file path and create VS Code URI.
- */
-function resolveFileUri(filePath: string): vscode.Uri {
-  return vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-}
-
-// ============================================================================
 // Public API
 // ============================================================================
 
@@ -60,9 +17,9 @@ function resolveFileUri(filePath: string): vscode.Uri {
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-export function getDiagnostics(filePath: string): LeanDiagnostic[] {
+export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
   try {
-    const uri = resolveFileUri(filePath);
+    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     let diagnostics = vscode.languages.getDiagnostics(uri);
 
     // If no diagnostics found, try to find by matching path in all diagnostics
@@ -94,15 +51,7 @@ export function getDiagnostics(filePath: string): LeanDiagnostic[] {
       }
     }
 
-    return diagnostics.map((d) => ({
-      range: {
-        start: { line: d.range.start.line, character: d.range.start.character },
-        end: { line: d.range.end.line, character: d.range.end.character },
-      },
-      message: d.message,
-      severity: d.severity as DiagnosticSeverity,
-      source: d.source,
-    }));
+    return diagnostics;
   } catch (error) {
     logger.debug('Lean4', `Failed to get diagnostics: ${error}`);
     return [];
@@ -115,7 +64,7 @@ export function getDiagnostics(filePath: string): LeanDiagnostic[] {
  */
 export async function restartFileServer(filePath: string): Promise<boolean> {
   try {
-    const uri = resolveFileUri(filePath);
+    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
     await vscode.commands.executeCommand('lean4.restartFile');
