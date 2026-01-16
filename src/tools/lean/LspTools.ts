@@ -82,11 +82,13 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      // Check if diagnostics already available, otherwise wait for Lean to process
+      // Get diagnostics - wait for Lean to process if needed
       const uri = vscode.Uri.file(openedPath);
       let diagnostics = vscodeIntegration.getDiagnostics(openedPath);
+
+      // If no diagnostics yet, wait for Lean to publish them (event-based)
       if (diagnostics.length === 0) {
-        await waitForDiagnosticsChange(uri, 3000);
+        await waitForDiagnosticsChange(uri, 10000);
         diagnostics = vscodeIntegration.getDiagnostics(openedPath);
       }
 
@@ -107,8 +109,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
           summary: '✓ No diagnostics',
           output:
             'No errors, warnings, or hints for this file.\n\n' +
-            'Note: If you see errors in VS Code, they may be in the Lean 4 output panel ' +
-            '(import/dependency errors are shown there instead of as LSP diagnostics).',
+            'If you expected errors:\n' +
+            '1. Check the Lean 4 output panel (import/dependency errors appear there)\n' +
+            '2. Make sure the file is saved\n' +
+            '3. Try `lean_restart` to refresh the Lean server\n' +
+            '4. Verify the Lean 4 extension is active (look for goal state in the infoview)',
         };
       }
 
