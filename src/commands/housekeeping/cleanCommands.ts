@@ -96,7 +96,12 @@ async function handleCleanSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const data = await validateCleanParams(inputFile, agent, model, 'cleanSingle');
+  const data = await validateCleanParams(
+    inputFile,
+    agent,
+    model,
+    'cleanSingle',
+  );
   if (!data) return;
 
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
