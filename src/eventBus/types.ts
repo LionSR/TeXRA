@@ -42,3 +42,37 @@ export const RetryRequestPromptSchema = z.strictObject({
   errorDetails: RetryErrorDetailsSchema.optional(),
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
+
+/**
+ * Workflow agent proposal details (without UI-specific fields).
+ * Used by the tool to build proposals.
+ */
+export const WorkflowAgentProposalSchema = z.strictObject({
+  agent: z.string(),
+  model: z.string(),
+  instruction: z.string(),
+  inputFile: z.string(),
+  inputFiles: z.array(z.string()),
+  referenceFile: z.string().nullable(),
+  referenceFiles: z.array(z.string()),
+  auxiliaryFile: z.string().nullable(),
+  auxiliaryFiles: z.array(z.string()),
+  mediaFile: z.string().nullable(),
+  mediaFiles: z.array(z.string()),
+  outputFiles: z.array(z.string()),
+  useMultipleOutputs: z.boolean(),
+});
+export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
+
+/**
+ * Workflow agent proposal prompt for UI display.
+ * Includes proposal details plus UI-specific fields.
+ */
+export const WorkflowAgentProposalPromptSchema = z.strictObject({
+  proposalId: z.string(),
+  streamId: StreamTabIdSchema,
+  ...WorkflowAgentProposalSchema.shape,
+});
+export type WorkflowAgentProposalPrompt = z.infer<
+  typeof WorkflowAgentProposalPromptSchema
+>;
