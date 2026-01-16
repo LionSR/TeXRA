@@ -31,6 +31,13 @@ const LeanDiagnosticsInputSchema = z.strictObject({
 
 export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
+const LeanRestartInputSchema = z.strictObject({
+  /** Path to the Lean file to restart */
+  file: z.string().describe('Path to the .lean file to restart'),
+});
+
+export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -243,6 +250,50 @@ Requires: Lean 4 VS Code extension installed and active.`,
       return {
         summary: 'Failed to get diagnostics',
         output: `Error: ${error instanceof Error ? error.message : String(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
+        isError: true,
+      };
+    }
+  }
+}
+
+/**
+ * Restart the Lean file server to pick up changes in imports/dependencies.
+ */
+export class LeanRestartTool extends defineTool({
+  name: 'lean_restart',
+  description: `Restart the Lean server for a file to pick up changes in imports or dependencies.
+
+Use this when:
+- You edited an imported file and want the changes visible in the importing file
+- You changed lakefile.lean or lake-manifest.json
+- Diagnostics seem stale or incorrect
+
+This triggers the Lean 4 extension's "Restart File" command.`,
+  schema: LeanRestartInputSchema,
+}) {
+  protected async execute(input: LeanRestartInput): Promise<ToolResult> {
+    const { file } = input;
+
+    try {
+      const success = await vscodeIntegration.restartFileServer(file);
+
+      if (success) {
+        return {
+          summary: `Restarted Lean server for ${file}`,
+          output:
+            'File server restarted. Lean will re-process the file and update diagnostics.',
+        };
+      }
+
+      return {
+        summary: 'Failed to restart',
+        output: 'Could not restart the Lean server. Is the file open?',
+        isError: true,
+      };
+    } catch (error) {
+      return {
+        summary: 'Failed to restart',
+        output: `Error: ${error instanceof Error ? error.message : String(error)}`,
         isError: true,
       };
     }
