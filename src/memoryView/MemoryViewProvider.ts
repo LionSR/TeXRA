@@ -2,10 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import {
-  BaseWebviewProvider,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
+import { BaseWebviewProvider } from '@common/webview';
 
 // Local imports - memory view components
 import { MemoryViewContentProvider } from './MemoryViewContentProvider';
@@ -25,19 +22,8 @@ export class MemoryViewProvider
     this.messageHandler = new MemoryViewMessageHandler(context);
   }
 
-  /**
-   * Resolve webview for potential sidebar integration.
-   */
-  public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: getSharedLocalResourceRoots(
-        this.context,
-        'memoryView',
-      ),
-    };
-
-    super.resolveWebviewViewInternal(webviewView);
+  protected override getViewPath(): string {
+    return 'memoryView';
   }
 
   /**

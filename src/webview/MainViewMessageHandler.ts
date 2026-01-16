@@ -87,38 +87,42 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.handleShowAgentHistory.bind(this),
 
       // File selection commands - delegated to FileManager
-      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
+          MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
+          MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
+          MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
+        ],
+        (m) => this.fileManager.handleFileSelection(m),
+      ),
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
 
       // File selected commands
       [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
         this.fileManager.handleInputFileSelected(m),
-      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
+          MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+          MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
+          MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
+        ],
+        (m) => this.fileManager.handleGenericFileSelected(m),
+      ),
 
       // Request file commands
       [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
         this.fileManager.handleRequestInputFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
+          MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
+          MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+        ],
+        (m) => this.fileManager.handleRequestFile(m),
+      ),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
         this.fileManager.handleRequestEditedFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
@@ -127,14 +131,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRequestDefaultOutputFiles(m),
 
       // Multiple file operations
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+          MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
+          MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
+          MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+        ],
+        (m) => this.fileManager.handleSetMultipleFiles(m),
+      ),
       [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
         this.fileManager.handleSelectMultipleFiles(m),
 
@@ -145,10 +150,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleAddOpenedFiles(m.fileType),
 
       // Execution commands
-      [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        this.executionManager.handleFileOperation(m),
-      [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        this.executionManager.handleFileOperation(m),
+      ...this.createDelegateHandlers(
+        [MAIN_VIEW_COMMANDS.MERGE, MAIN_VIEW_COMMANDS.COMPARE],
+        (m) => this.executionManager.handleFileOperation(m),
+      ),
 
       // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
@@ -299,16 +304,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // File refresh and update operations
       [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
         this.fileManager.handleRefreshAllFiles(),
-      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
+          MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
+          MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
+          MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
+          MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
+        ],
+        (m) => this.fileManager.handleUpdateFiles(m),
+      ),
 
       // Git/diff operations
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
@@ -319,26 +324,31 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.diffManager.handleLatexdiff(m),
       [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvc(m),
-      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: (m) =>
-        this.diffManager.handleLatexdiffvcOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: (m) =>
-        this.diffManager.handleLatexdiffvcOperation(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
+          MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
+        ],
+        (m) => this.diffManager.handleLatexdiffvcOperation(m),
+      ),
 
       // Housekeeping operations
-      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
-        this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
-        this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
-        this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.CLEAN_OUTPUT,
+          MAIN_VIEW_COMMANDS.CLEAN_BUILD,
+          MAIN_VIEW_COMMANDS.INDENT_TEX,
+        ],
+        (m) => this.executionManager.handleHousekeeping(m),
+      ),
+      ...this.createDelegateHandlers(
+        [MAIN_VIEW_COMMANDS.PACK_SINGLE, MAIN_VIEW_COMMANDS.CLEAN_SINGLE],
+        (m) => this.executionManager.handleSingleOperation(m),
+      ),
+      ...this.createDelegateHandlers(
+        [MAIN_VIEW_COMMANDS.PACK_MULTIPLE, MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE],
+        (m) => this.executionManager.handleMultipleOperation(m),
+      ),
 
       // Other operations
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
@@ -356,9 +366,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private createBannerForwardHandlers(
     commands: string[],
   ): Record<string, MessageHandler<vscode.WebviewView>> {
-    return Object.fromEntries(
-      commands.map((cmd) => [cmd, (m: any) => this.forwardToWebview(m)]),
+    return this.createDelegateHandlers(commands, (m) =>
+      this.forwardToWebview(m),
     );
+  }
+
+  /** Create handlers that delegate to the same handler function */
+  private createDelegateHandlers(
+    commands: string[],
+    handler: (m: any) => void | Promise<void>,
+  ): Record<string, MessageHandler<vscode.WebviewView>> {
+    return Object.fromEntries(commands.map((cmd) => [cmd, handler]));
   }
 
   private async handleInfoMessage(message: any): Promise<void> {
