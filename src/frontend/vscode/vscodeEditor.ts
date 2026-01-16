@@ -8,6 +8,11 @@ import * as vscode from 'vscode';
 
 import { WorkspaceFS } from '@utils/files';
 
+/** Convert a file path to a VS Code URI */
+function toFileUri(filePath: string): vscode.Uri {
+  return vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+}
+
 /**
  * Open a file in VS Code editor, optionally positioning cursor at a line.
  * Reuses existing editor if file is already open.
@@ -23,12 +28,12 @@ export async function openFileInEditor(
   column?: number,
 ): Promise<string | undefined> {
   try {
-    const absolutePath = WorkspaceFS.toAbsolute(filePath);
-    const uri = vscode.Uri.file(absolutePath);
+    const uri = toFileUri(filePath);
+    const absolutePath = uri.fsPath;
 
     // Check if file is already open in an editor
     const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
+      (e) => e.document.uri.fsPath === absolutePath,
     );
 
     let editor: vscode.TextEditor;
@@ -78,8 +83,8 @@ export async function ensureFileOpen(
   options: { preserveFocus?: boolean; save?: boolean } = {},
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
-    const absolutePath = WorkspaceFS.toAbsolute(filePath);
-    const uri = vscode.Uri.file(absolutePath);
+    const uri = toFileUri(filePath);
+    const absolutePath = uri.fsPath;
 
     // Check if file is already open
     const existingEditor = vscode.window.visibleTextEditors.find(
