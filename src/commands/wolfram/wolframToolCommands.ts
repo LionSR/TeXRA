@@ -13,38 +13,40 @@ export const wolframToolCommands = {
   testWolframTool: 'texra.testWolframTool',
 };
 
-export function registerWolframToolCommands(context: vscode.ExtensionContext) {
-  const testCommand = vscode.commands.registerCommand(
-    wolframToolCommands.testWolframTool,
-    async () => {
-      try {
-        const code = await vscode.window.showInputBox({
-          prompt: 'Enter Wolfram Language code to run with the tool',
-          placeHolder: 'N[Pi,20]',
-        });
-        if (!code) {
-          return;
-        }
-        const tool = new WolframTool();
-        const result = await tool.call({ code });
-        if (result.isError) {
+export function registerWolframToolCommands(
+  context: vscode.ExtensionContext,
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      wolframToolCommands.testWolframTool,
+      async () => {
+        try {
+          const code = await vscode.window.showInputBox({
+            prompt: 'Enter Wolfram Language code to run with the tool',
+            placeHolder: 'N[Pi,20]',
+          });
+          if (!code) {
+            return;
+          }
+          const tool = new WolframTool();
+          const result = await tool.call({ code });
+          if (result.isError) {
+            await showLoggedErrorMessage(
+              CHANNEL,
+              'Wolfram tool error',
+              result.error,
+            );
+          } else {
+            vscode.window.showInformationMessage(result.output ?? 'No output');
+          }
+        } catch (err) {
           await showLoggedErrorMessage(
             CHANNEL,
-            'Wolfram tool error',
-            result.error,
+            'Error running Wolfram tool',
+            err,
           );
-        } else {
-          vscode.window.showInformationMessage(result.output ?? 'No output');
         }
-      } catch (err) {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          'Error running Wolfram tool',
-          err,
-        );
-      }
-    },
+      },
+    ),
   );
-  context.subscriptions.push(testCommand);
-  return { testCommand };
 }

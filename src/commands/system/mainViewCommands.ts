@@ -143,11 +143,4 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
     refreshAgentOptionsCommand,
     refreshAllOptionsCommand,
   );
-
-  return {
-    resetCommand,
-    refreshModelOptionsCommand,
-    refreshAgentOptionsCommand,
-    refreshAllOptionsCommand,
-  };
 }

@@ -34,36 +34,12 @@ import {
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 import { toErrorMessage } from './errorHandlingUtils';
 
-/**
- * Structured representation of a provider HTTP failure.
- */
-export interface ProviderHttpErrorDetails {
-  /**
-   * Human readable description of the provider failure. Includes HTTP prefix when
-   * a status code is available.
-   */
-  message: string;
-  /** HTTP status code reported by the provider, when present. */
-  statusCode?: number;
-  /** HTTP status text reported by the provider or derived from the status code. */
-  statusText?: string;
-  /** Identifier for the provider that produced the error, when known. */
-  provider?: string;
-  /**
-   * Whether the error is retryable. Based on native SDK error types:
-   * - Connection errors (timeout, network) → retryable
-   * - Server errors (5xx) and rate limits (429) → retryable
-   * - User abort, auth errors, bad requests → NOT retryable
-   */
-  retryable: boolean;
-  /** Request ID from the provider, useful for debugging with support. */
-  requestId?: string;
-  /**
-   * Raw error body from the provider API response.
-   * Useful for debugging relay errors where the error contains additional context.
-   */
-  rawErrorBody?: unknown;
-}
+// Import canonical schemas - SINGLE SOURCE OF TRUTH
+import {
+  type ProviderError,
+  type ErrorLogData,
+  type ErrorContext,
+} from './schemas';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -91,81 +67,63 @@ interface SdkErrorEntry {
   retryable?: boolean;
 }
 
+/** Creates SDK error entry pairs for OpenAI and Anthropic error classes. */
+function createErrorPair(
+  openAiCtor: ErrorConstructor,
+  anthropicCtor: ErrorConstructor,
+  config: Omit<SdkErrorEntry, 'ctor'>,
+): SdkErrorEntry[] {
+  return [
+    { ctor: openAiCtor, ...config },
+    { ctor: anthropicCtor, ...config },
+  ];
+}
+
 const SDK_ERRORS: SdkErrorEntry[] = [
   // Connection errors (retryable)
-  {
-    ctor: OpenAIConnectionTimeoutError,
-    message: 'Connection timed out',
-    retryable: true,
-  },
-  {
-    ctor: AnthropicConnectionTimeoutError,
-    message: 'Connection timed out',
-    retryable: true,
-  },
-  { ctor: OpenAIConnectionError, message: 'Connection error', retryable: true },
-  {
-    ctor: AnthropicConnectionError,
+  ...createErrorPair(
+    OpenAIConnectionTimeoutError,
+    AnthropicConnectionTimeoutError,
+    { message: 'Connection timed out', retryable: true },
+  ),
+  ...createErrorPair(OpenAIConnectionError, AnthropicConnectionError, {
     message: 'Connection error',
     retryable: true,
-  },
+  }),
   // Abort errors (not retryable)
-  { ctor: OpenAIUserAbortError, message: 'Request aborted', retryable: false },
-  {
-    ctor: AnthropicUserAbortError,
+  ...createErrorPair(OpenAIUserAbortError, AnthropicUserAbortError, {
     message: 'Request aborted',
     retryable: false,
-  },
+  }),
   // HTTP errors (retryable derived from status code)
-  { ctor: OpenAIBadRequestError, fallbackStatusCode: StatusCodes.BAD_REQUEST },
-  {
-    ctor: AnthropicBadRequestError,
+  ...createErrorPair(OpenAIBadRequestError, AnthropicBadRequestError, {
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
-  },
-  {
-    ctor: OpenAIAuthenticationError,
+  }),
+  ...createErrorPair(OpenAIAuthenticationError, AnthropicAuthenticationError, {
     fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  },
-  {
-    ctor: AnthropicAuthenticationError,
-    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  },
-  {
-    ctor: OpenAIPermissionDeniedError,
-    fallbackStatusCode: StatusCodes.FORBIDDEN,
-  },
-  {
-    ctor: AnthropicPermissionDeniedError,
-    fallbackStatusCode: StatusCodes.FORBIDDEN,
-  },
-  { ctor: OpenAINotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
-  { ctor: AnthropicNotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
-  { ctor: OpenAIConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
-  { ctor: AnthropicConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
-  {
-    ctor: OpenAIUnprocessableEntityError,
-    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
-  },
-  {
-    ctor: AnthropicUnprocessableEntityError,
-    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
-  },
-  {
-    ctor: OpenAIRateLimitError,
+  }),
+  ...createErrorPair(
+    OpenAIPermissionDeniedError,
+    AnthropicPermissionDeniedError,
+    { fallbackStatusCode: StatusCodes.FORBIDDEN },
+  ),
+  ...createErrorPair(OpenAINotFoundError, AnthropicNotFoundError, {
+    fallbackStatusCode: StatusCodes.NOT_FOUND,
+  }),
+  ...createErrorPair(OpenAIConflictError, AnthropicConflictError, {
+    fallbackStatusCode: StatusCodes.CONFLICT,
+  }),
+  ...createErrorPair(
+    OpenAIUnprocessableEntityError,
+    AnthropicUnprocessableEntityError,
+    { fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY },
+  ),
+  ...createErrorPair(OpenAIRateLimitError, AnthropicRateLimitError, {
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  },
-  {
-    ctor: AnthropicRateLimitError,
-    fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  },
-  {
-    ctor: OpenAIInternalServerError,
+  }),
+  ...createErrorPair(OpenAIInternalServerError, AnthropicInternalServerError, {
     fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  },
-  {
-    ctor: AnthropicInternalServerError,
-    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  },
+  }),
   // Generic API errors (no fallback)
   { ctor: OpenAIAPIError },
   { ctor: AnthropicAPIError },
@@ -190,10 +148,20 @@ function isRetryableStatusCode(statusCode?: number): boolean {
 }
 
 /**
+ * Partial result from SDK error matching.
+ * Does NOT include isRelayError or rawErrorBody - those are added by
+ * formatProviderHttpError() after relay detection.
+ */
+type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
+
+/**
  * Matches known SDK error types and returns structured error details.
  * Handles both message-only errors (connection/abort) and HTTP errors.
+ *
+ * NOTE: Returns partial result without isRelayError/rawErrorBody.
+ * formatProviderHttpError() adds those fields after relay detection.
  */
-function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
+function matchSdkError(err: unknown): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -315,20 +283,8 @@ function detectProvider(err: unknown): string | undefined {
   }
 
   const lowered = name.toLowerCase();
-  if (lowered.includes('openai')) {
-    return 'openai';
-  }
-  if (lowered.includes('anthropic')) {
-    return 'anthropic';
-  }
-  if (lowered.includes('google')) {
-    return 'google';
-  }
-  if (lowered.includes('kimi')) {
-    return 'kimi';
-  }
-
-  return undefined;
+  const providers = ['openai', 'anthropic', 'google', 'kimi'] as const;
+  return providers.find((p) => lowered.includes(p));
 }
 
 /**
@@ -346,13 +302,21 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  // Try property names, then headers
-  return (
-    (isString(candidate.request_id) && candidate.request_id) ||
-    (isString(candidate.requestId) && candidate.requestId) ||
-    candidate.headers?.get?.('x-request-id') ||
-    undefined
-  );
+  // Try property names first
+  if (isString(candidate.request_id) && candidate.request_id) {
+    return candidate.request_id;
+  }
+  if (isString(candidate.requestId) && candidate.requestId) {
+    return candidate.requestId;
+  }
+
+  // Try headers (Anthropic stores request ID here)
+  const headerValue = candidate.headers?.get?.('x-request-id');
+  if (headerValue) {
+    return headerValue;
+  }
+
+  return undefined;
 }
 
 /**
@@ -427,9 +391,7 @@ function determineRetryable(
   return isRetryableStatusCode(statusCode);
 }
 
-export function formatProviderHttpError(
-  err: unknown,
-): ProviderHttpErrorDetails {
+export function formatProviderHttpError(err: unknown): ProviderError {
   // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
 
@@ -439,6 +401,7 @@ export function formatProviderHttpError(
     return {
       message: 'Request aborted',
       retryable: false,
+      isRelayError: false,
       rawErrorBody,
     };
   }
@@ -447,10 +410,11 @@ export function formatProviderHttpError(
   const sdkMatch = matchSdkError(err);
   if (sdkMatch) {
     // Check if this should be retryable due to relay/overloaded error
+    const isRelay = isRelayError(rawErrorBody);
     const retryable =
       determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
       sdkMatch.retryable;
-    return { ...sdkMatch, retryable, rawErrorBody };
+    return { ...sdkMatch, retryable, isRelayError: isRelay, rawErrorBody };
   }
 
   // Fallback for unrecognized errors
@@ -458,6 +422,7 @@ export function formatProviderHttpError(
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
+  const isRelay = isRelayError(rawErrorBody);
 
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -474,6 +439,7 @@ export function formatProviderHttpError(
       message: finalMessage,
       provider,
       retryable: true,
+      isRelayError: isRelay,
       requestId,
       rawErrorBody,
     };
@@ -486,6 +452,7 @@ export function formatProviderHttpError(
     statusText,
     provider,
     retryable: determineRetryable(err, statusCode, rawErrorBody),
+    isRelayError: isRelay,
     requestId,
     rawErrorBody,
   };
@@ -587,35 +554,12 @@ export function isPreviousResponseIdError(err: unknown): boolean {
 }
 
 /**
- * Context for building error log data.
- */
-export interface ErrorLogContext {
-  /** The operation that failed (e.g., 'API request', 'manual retry'). */
-  operation?: string;
-  /** The model being used when the error occurred. */
-  model?: string;
-}
-
-/**
- * Structured data for error log messages.
- * Used by progressView formatters to display error details.
- */
-export interface ErrorLogData extends ProviderHttpErrorDetails {
-  /** Raw error message before formatting. */
-  rawMessage?: string;
-  /** The operation that failed. */
-  operation?: string;
-  /** The model being used. */
-  model?: string;
-}
-
-/**
  * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
  * Ensures all error logs have the same structure for DRY display formatting.
  */
 export function buildErrorLogData(
   err: unknown,
-  context?: ErrorLogContext,
+  context?: ErrorContext,
 ): ErrorLogData {
   const formatted = formatProviderHttpError(err);
   const rawMessage = toErrorMessage(err);

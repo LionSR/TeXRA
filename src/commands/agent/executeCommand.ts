@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
 
@@ -34,9 +35,14 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     // Support both raw config and wrapped { config, executionId? } format
-    const wrapped = isWrappedConfig(input) ? input : null;
-    const rawConfig = wrapped ? wrapped.config : input;
-    const config = AgentConfigSchema.parse(rawConfig);
+    const isWrappedInput =
+      input !== null && typeof input === 'object' && 'config' in input;
+    const wrapped = isWrappedInput
+      ? (input as { config: unknown; executionId?: unknown })
+      : null;
+    // Parse wrapped.config when wrapped (allows Zod to fail on undefined),
+    // otherwise parse input directly
+    const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
     // Use provided executionId (resume) or create new one (fresh)
     const executionId =
@@ -50,13 +56,9 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     await executeAgent(config, executionId);
   } catch (error) {
     if (error instanceof ZodError) {
-      const detail = error.issues.map((i) => i.message).join('; ');
-      logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, {
-        data: error,
-      });
-      void vscode.window.showErrorMessage(
-        `Invalid agent configuration. ${detail}`,
-      );
+      const message = `Invalid agent configuration. ${formatZodError(error)}`;
+      logger.warn(CHANNEL, message, { data: error });
+      void vscode.window.showErrorMessage(message);
       return;
     }
 
@@ -65,11 +67,4 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     });
     throw error;
   }
-}
-
-/** Check if input is wrapped in { config, executionId? } format */
-function isWrappedConfig(
-  input: unknown,
-): input is { config: unknown; executionId?: unknown } {
-  return input !== null && typeof input === 'object' && 'config' in input;
 }

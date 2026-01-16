@@ -28,19 +28,12 @@ export async function getXmlFormatFromFiles(
     return null;
   }
 
-  const xmlPromises = files.map(async (file) => {
-    try {
+  const xmlContents = await Promise.all(
+    files.map(async (file) => {
       const content = await WorkspaceFS.read(file);
       return `<document name="${file}">\n${content}\n</document>`;
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error formatting file as XML: ${toErrorMessage(err)}`,
-      );
-      throw err;
-    }
-  });
-  const xmlContents = await Promise.all(xmlPromises);
+    }),
+  );
   return xmlContents.join('\n');
 }
 
@@ -56,6 +49,19 @@ export function getListOfFiles(files: string[] | null | undefined): string {
   return files.filter((f) => f.trim() !== '').join(', ');
 }
 
+async function resolveValue(value: unknown): Promise<unknown> {
+  if (value instanceof Promise) {
+    return value;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const entries = await Promise.all(
+      Object.entries(value).map(async ([k, v]) => [k, await resolveValue(v)]),
+    );
+    return Object.fromEntries(entries);
+  }
+  return value;
+}
+
 /**
  * Render a prompt string using nunjucks templating
  * @param prompt The prompt template string
@@ -64,33 +70,11 @@ export function getListOfFiles(files: string[] | null | undefined): string {
  */
 export async function renderPrompt(
   prompt: string,
-  variables: { [key: string]: any },
+  variables: Record<string, unknown>,
 ): Promise<string> {
-  try {
-    // Resolve any Promise values in variables (including nested objects)
-    const resolvedVariables: { [key: string]: any } = {};
-    for (const [key, value] of Object.entries(variables)) {
-      if (value instanceof Promise) {
-        resolvedVariables[key] = await value;
-      } else if (typeof value === 'object' && value !== null) {
-        // Handle nested objects that might contain promises
-        const resolved: { [key: string]: any } = {};
-        for (const [nestedKey, nestedValue] of Object.entries(value)) {
-          resolved[nestedKey] =
-            nestedValue instanceof Promise ? await nestedValue : nestedValue;
-        }
-        resolvedVariables[key] = resolved;
-      } else {
-        resolvedVariables[key] = value;
-      }
-    }
-
-    const env = nunjucks.configure({ autoescape: false });
-    return env.renderString(prompt, resolvedVariables);
-  } catch (err) {
-    logger.error(CHANNEL, `Error rendering prompt: ${toErrorMessage(err)}`);
-    throw err;
-  }
+  const resolvedVariables = await resolveValue(variables);
+  const env = nunjucks.configure({ autoescape: false });
+  return env.renderString(prompt, resolvedVariables as Record<string, unknown>);
 }
 
 /**

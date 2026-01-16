@@ -209,10 +209,8 @@ async function handleAcceptEdited(
     const editedContent = await flexibleFS.read(editedLocation);
     await flexibleFS.write(targetLocation, editedContent);
 
-    const successMessage =
-      isNewFile && !targetExists
-        ? `Successfully created '${targetFileName}' with content from '${editedFileName}'`
-        : `Successfully replaced '${targetFileName}' with content from '${editedFileName}'`;
+    const operation = isNewFile && !targetExists ? 'created' : 'replaced';
+    const successMessage = `Successfully ${operation} '${targetFileName}' with content from '${editedFileName}'`;
 
     vscode.window.showInformationMessage(successMessage);
     logger.info(CHANNEL, successMessage);

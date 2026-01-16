@@ -60,6 +60,27 @@ export class WatcherManager {
         pathsToWatch.push(customAgentsPath);
       }
 
+      const isCustomPath = (watchPath: string): boolean =>
+        path.resolve(watchPath) === path.resolve(customAgentsPath ?? '');
+
+      const scheduleYamlValidation = (uri: vscode.Uri) => {
+        if (path.extname(uri.fsPath).toLowerCase() !== '.yaml') {
+          return;
+        }
+        const handle = setTimeout(async () => {
+          try {
+            await validateYamlAndPromptAdd(uri.fsPath);
+          } catch (error) {
+            logger.error(CHANNEL, `Error validating YAML: ${error}`);
+          } finally {
+            this.validationHandles = this.validationHandles.filter(
+              (h) => h !== handle,
+            );
+          }
+        }, WatcherManager.VALIDATION_DELAY);
+        this.validationHandles.push(handle);
+      };
+
       for (const watchPath of pathsToWatch) {
         if (!watchPath) continue;
 
@@ -74,32 +95,14 @@ export class WatcherManager {
 
         watcher.onDidCreate((uri) => {
           this.triggerRefresh();
-          if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
-            const handle = setTimeout(async () => {
-              try {
-                await validateYamlAndPromptAdd(uri.fsPath);
-              } catch (error) {
-                logger.error(CHANNEL, `Error validating YAML: ${error}`);
-              } finally {
-                this.validationHandles = this.validationHandles.filter(
-                  (h) => h !== handle,
-                );
-              }
-            }, WatcherManager.VALIDATION_DELAY);
-
-            this.validationHandles.push(handle);
-          }
+          scheduleYamlValidation(uri);
         });
-        // triggerRefresh can be passed directly because it's a debounced closure
-        // that already captures `this` in its constructor initialization
         watcher.onDidDelete(this.triggerRefresh);
 
-        if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
-          watcher.onDidChange(async (uri) => {
+        if (isCustomPath(watchPath)) {
+          watcher.onDidChange((uri) => {
             this.triggerRefresh();
-            if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
-              await validateYamlAndPromptAdd(uri.fsPath);
-            }
+            scheduleYamlValidation(uri);
           });
         } else {
           watcher.onDidChange(this.triggerRefresh);

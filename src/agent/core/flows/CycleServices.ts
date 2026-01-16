@@ -14,7 +14,6 @@ import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TaskRunFileService } from '@utils/files';
 
 // ============================================================================
@@ -86,30 +85,3 @@ export type ResponseCycleParams<C = unknown> = CycleParams<
 export type ToolUseCycleParams<C = unknown> = CycleParams<
   ToolUseCycleServices<C>
 >;
-
-// ============================================================================
-// ROUND FINALIZATION
-// ============================================================================
-
-/** Finalize a round by recording statistics and invoking callback. */
-export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
-  const { round, run, onRoundFinalized } = slices;
-  run.recordRound(round);
-  if (onRoundFinalized) {
-    await onRoundFinalized(run);
-  }
-}
-
-/** Finalize a tool-use cycle by recording metrics directly. */
-export async function finalizeToolUseCycle(
-  cycleIndex: number,
-  responseTimeMs: number,
-  normalizedUsage: NormalizedUsage | null,
-  run: AgentRunState,
-  onRoundFinalized?: RoundFinalizedCallback,
-): Promise<void> {
-  run.recordCycleMetrics(cycleIndex, responseTimeMs, normalizedUsage);
-  if (onRoundFinalized) {
-    await onRoundFinalized(run);
-  }
-}

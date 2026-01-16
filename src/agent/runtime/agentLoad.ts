@@ -90,8 +90,8 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   settings: T,
   source: AgentSource,
 ): T {
-  if (source === 'builtInToolUse' && settings.agentType === undefined) {
-    settings.agentType = AgentType.ToolUse;
+  if (source === 'builtInToolUse' && !settings.agentType) {
+    return { ...settings, agentType: AgentType.ToolUse };
   }
   return settings;
 }
@@ -152,7 +152,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    ensureAgentTypeForSource(settings, entry.source);
+    settings = ensureAgentTypeForSource(settings, entry.source);
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {
@@ -164,14 +164,7 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    const validatedSettings = parseAgentSetting(settings);
-    const validatedPrompts = AgentPromptSchema.parse(prompts);
-    settings = validatedSettings;
-    prompts = validatedPrompts;
-
-    // The function returns the validated settings block and prompts.
-    // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
-    return [settings as AgentSetting, prompts as AgentPrompt];
+    return [parseAgentSetting(settings), AgentPromptSchema.parse(prompts)];
   } catch (err) {
     // Log error context, then rethrow original to preserve error type (e.g., ZodError)
     // for proper handling by callers like executeCommand.ts

@@ -106,7 +106,7 @@ function combineFiles(
   single: string | undefined,
   multiple: string[],
 ): string[] {
-  return [single, ...multiple].filter(Boolean) as string[];
+  return [single, ...multiple].filter((f): f is string => Boolean(f));
 }
 
 async function getFileVars(
@@ -158,16 +158,20 @@ async function getFileVars(
       : null;
   }
 
+  const filterStrings = (arr: string[]): string[] =>
+    arr.filter((s): s is string => Boolean(s));
+
+  // Build all edited files list (editedFile + editedFiles)
+  const allEditedFiles = [
+    agentConfig.editedFile,
+    ...filterStrings(agentConfig.editedFiles ?? []),
+  ].filter((f): f is string => Boolean(f));
+
   const collectionMappings: Record<string, [string[], string[]]> = {
-    INPUT: [agentConfig.inputFiles.filter(Boolean) as string[], allInputFiles],
-    REFERENCE: [
-      agentConfig.referenceFiles.filter(Boolean) as string[],
-      allReferenceFiles,
-    ],
-    AUXILIARY: [
-      agentConfig.auxiliaryFiles.filter(Boolean) as string[],
-      allAuxiliaryFiles,
-    ],
+    INPUT: [filterStrings(agentConfig.inputFiles), allInputFiles],
+    REFERENCE: [filterStrings(agentConfig.referenceFiles), allReferenceFiles],
+    AUXILIARY: [filterStrings(agentConfig.auxiliaryFiles), allAuxiliaryFiles],
+    EDITED: [filterStrings(agentConfig.editedFiles ?? []), allEditedFiles],
   };
 
   for (const [prefix, [additionalFiles, allFiles]] of Object.entries(

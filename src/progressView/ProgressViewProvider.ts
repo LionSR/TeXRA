@@ -224,16 +224,6 @@ export class ProgressViewProvider
    * @param options.forceRebuild - Force full DOM rebuild in frontend
    */
   public updateWebview(options?: { forceRebuild?: boolean }): void {
-    // DIAGNOSTIC: Track updateWebview calls
-    const stack = new Error().stack
-      ?.split('\n')
-      .slice(2, 5)
-      .map((s) => s.trim())
-      .join(' <- ');
-    this.logger.debug(
-      `[updateWebview] forceRebuild=${options?.forceRebuild}, caller: ${stack}`,
-    );
-
     if (!this._view && !this._panelView) return;
 
     if (!this.isAnyViewReady()) {
@@ -285,11 +275,6 @@ export class ProgressViewProvider
       this._sidebarReady = true;
     }
 
-    // DIAGNOSTIC: Log reload flow
-    this.logger.debug(
-      `[markWebviewReady] activeStream="${this.state.activeStream}", streamTabs=${this.state.streamTabs.keys().length}`,
-    );
-
     // Clear pending options - we always force rebuild on first load anyway,
     // and that takes precedence over any pending options.
     this._pendingUpdateOptions = null;
@@ -319,43 +304,41 @@ export class ProgressViewProvider
 
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.pendingApprovalPrompts.set(prompt.requestId, prompt);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.showToolEditApprovalPrompt(prompt);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.showToolEditApprovalPrompt(prompt),
+    );
   }
 
   public resolveToolEditApprovalPrompt(requestId: string): void {
     this.pendingApprovalPrompts.delete(requestId);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId),
+    );
   }
 
   public updateToolEditApprovalBypassState(bypassActive: boolean): void {
     this.approvalBypassActive = bypassActive;
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.updateToolEditApprovalState(bypassActive);
-    }
+    this.sendIfReady(() =>
+      this.webviewUpdater.updateToolEditApprovalState(bypassActive),
+    );
   }
 
   public showRetryRequest(
     payload: ProgressEventPayloads['showRetryRequest'],
   ): void {
     this.pendingRetryRequests.set(payload.streamId, payload);
-
-    if (this.canSendToWebview()) {
-      this.webviewUpdater.showRetryRequest(payload);
-    }
+    this.sendIfReady(() => this.webviewUpdater.showRetryRequest(payload));
   }
 
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
+    this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
+  }
 
+  /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
+  private sendIfReady(send: () => void): void {
     if (this.canSendToWebview()) {
-      this.webviewUpdater.resolveRetryRequest(streamId);
+      send();
     }
   }
 

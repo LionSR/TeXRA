@@ -8,7 +8,7 @@ import { handleTestConnection } from '@commands/tests/connectionTests';
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
-export function registerTestCommands(context: vscode.ExtensionContext) {
+export function registerTestCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.testConnection',
@@ -16,7 +16,3 @@ export function registerTestCommands(context: vscode.ExtensionContext) {
     ),
   );
 }
-
-export const testCommands = {
-  handleTestConnection,
-};

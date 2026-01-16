@@ -48,28 +48,24 @@ import { formatContent } from '@utils/text/xmlUtils';
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
-  finalizeToolUseCycle,
-  type ToolUseCycleOptions,
-  type ToolUseCycleServices,
-  type ToolUseCycleParams,
-} from './CycleServices';
-import {
   type InvocationResult,
   type RetryState,
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleServices,
+  ToolUseCycleParams,
+} from './CycleServices';
 
-/**
- * Parse tool input, handling various input formats from different model providers.
- * Returns parsed JSON if input is a JSON string, otherwise returns input as-is.
- */
+/** Parse tool input, handling JSON strings and other formats from model providers. */
 function parseToolInput(
   raw: unknown,
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw === null || raw === undefined) {
+  if (raw == null) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
@@ -88,10 +84,7 @@ function parseToolInput(
   }
 }
 
-/**
- * Check if an error has Zod-like issues array (duck typing).
- * Handles both real ZodError and error-like objects with issues.
- */
+/** Check if an error has Zod-like issues array (duck typing). */
 function hasZodIssues(
   error: unknown,
 ): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
@@ -103,10 +96,7 @@ function hasZodIssues(
   );
 }
 
-/**
- * Normalize a tool call error into a user-friendly message with optional diagnostics.
- * Uses shared formatting utilities from @tools/result for consistency.
- */
+/** Normalize a tool call error into a user-friendly message with optional diagnostics. */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
@@ -195,12 +185,7 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
   cycleNormalizedUsage?: NormalizedUsage;
 }
 
-/**
- * Prepares a tool-use cycle by checking interruptions.
- *
- * Services accessed via `this.services` (ToolUseCycleServices).
- * All debug options are derived at maybeSaveDebugObject call sites.
- */
+/** Prepares a tool-use cycle by checking interruptions. */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
@@ -217,12 +202,10 @@ class ToolUsePrepNode<C> extends BaseNode<
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;
-      shared.endTurn = false; // Interrupted, not a normal completion
+      shared.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    // Reset at the start of each cycle so downstream nodes observe a clean
-    // runtime state before enriching it with model responses.
     resetCycleState(shared, [
       'response',
       'toolCalls',
@@ -249,31 +232,15 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/**
- * Success data for tool-use call.
- * All debug options are derived at maybeSaveDebugObject call sites.
- */
+/** Success data for tool-use call. */
 type ToolUseCallSuccessData = BaseInvocationSuccessData;
 
-/**
- * Result type for tool-use call (uses shared InvocationResult).
- */
+/** Result type for tool-use call. */
 type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
 
 /**
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
- *
- * Extends RetryableInvocationNode for shared retry logic:
- * - maxRetries and wait configured from user settings
- * - exec() throws on error, Node retries automatically
- * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
- * - execFallback() called only when user cancels or error is non-retryable
- *
- * Flow transitions:
- * - default: Continue to next node on success
- * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
- *
- * Services accessed via `_params.services`: options, store
+ * Uses RetryableInvocationNode for automatic retry logic with user prompts.
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
   ToolUseCycleShared,
@@ -284,10 +251,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     return 'Tool-use call';
   }
 
-  /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: exec() should only use prepRes, not shared.
-   */
   async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -304,7 +267,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
     const start = Date.now();
 
-    // Use base class helper for abort controller lifecycle
     return this.withAbortController(async (signal) => {
       services.modelHandler.setOutputStreaming(true);
       const response = await services.modelHandler.createResponse({
@@ -319,14 +281,8 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
       return { kind: 'success', response, responseTimeMs };
     });
-    // Note: Errors from createResponse() are caught by PocketFlow Node's
-    // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
 
-  /**
-   * Called by PocketFlow Node when retryPrompt returns false.
-   * Uses base class getFallbackResult() for shared logic.
-   */
   async execFallback(
     _prepRes: BaseInvocationPrepResult,
     error: Error,
@@ -341,8 +297,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   ): Promise<string | undefined> {
     const services = this.services;
 
-    // Handle non-success cases (returns null) or get narrowed success result
-    // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
     const successRes = handleInvocationResult(
       execRes,
       shared,
@@ -379,20 +333,14 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   }
 }
 
-/**
- * Data extracted by prep() for tool-use process.
- * PocketFlow compliance: exec() should only use prepRes, not shared.
- */
+/** Data extracted by prep() for tool-use process. */
 interface ToolUseProcessPrepResult {
   shouldStop: boolean;
   response?: unknown;
   responseTimeMs?: number;
 }
 
-/**
- * Result of exec() containing extracted data and all values needed for post() side effects.
- * PocketFlow compliance: exec() returns computation results, post() applies side effects.
- */
+/** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
   | { kind: 'skipped' }
   | {
@@ -407,25 +355,12 @@ type ToolUseProcessExecResult =
       responseTimeMs?: number;
     };
 
-/**
- * Processes the model response to extract tool calls and usage data.
- *
- * PocketFlow compliance:
- * - prep(): Extracts data from shared for exec()
- * - exec(): Pure computation using prepRes and services (no side effects)
- * - post(): Applies all side effects to shared/store
- *
- * Services accessed via `_params.services`: options, store
- */
+/** Processes the model response to extract tool calls and usage data. */
 class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: Only extract what exec() needs.
-   */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -434,11 +369,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  /**
-   * Process response and extract tool calls.
-   * PocketFlow compliance: Pure computation, no side effects on shared state.
-   * Logging is allowed as it doesn't affect flow state.
-   */
   async exec(
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
@@ -449,7 +379,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     const services = this.services;
     const { workspace } = services;
 
-    // Process thinking block (logging only, state stored in workspace)
     const thinking = services.modelHandler.processThinkingBlock(
       prepRes.response,
       workspace,
@@ -464,7 +393,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    // Extract response data
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
     const {
       response: text,
@@ -472,27 +400,20 @@ class ToolUseProcessNode<C> extends BaseNode<
       stopReason,
     } = services.modelHandler.extractResponse(prepRes.response, '');
 
-    // Single extraction for all server tool data (single source of truth)
     const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
     );
 
-    // Log web search results (logging doesn't affect flow state)
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        services.logger.info('', {
-          messageType: MESSAGE_TYPES.WEB_SEARCH,
-          data: searchResult,
-        });
+        services.logger.logWebSearch(searchResult);
       }
     }
 
-    // Extract assistant content for follow-up messages
     const lastAssistantContent = services.modelHandler.extractAssistantContent(
       prepRes.response,
     );
 
-    // Log response text
     if (text) {
       services.logger.debug(`Model response: ${text.slice(0, 100)}`);
       if (!useStreaming) {
@@ -503,14 +424,12 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    // Normalize usage if present
     let normalizedUsage: NormalizedUsage | undefined;
     if (usage) {
       normalizedUsage = services.modelHandler.normalizeUsage(
         usage,
         prepRes.responseTimeMs ?? 0,
       );
-      // Emit context state for UI display (centralized for all model handlers)
       const { inputTokens } = normalizedUsage;
       const { contextWindow } = services.modelHandler.config;
       if (inputTokens > 0 && contextWindow > 0) {
@@ -546,10 +465,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  /**
-   * Apply all side effects to shared state and slices.
-   * PocketFlow compliance: All mutations happen here.
-   */
   async post(
     shared: ToolUseCycleShared,
     _prepRes: ToolUseProcessPrepResult,
@@ -562,13 +477,11 @@ class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    // Apply side effects: server tool content
     workspace.serverToolContent.contentBlocks =
       execRes.serverToolContentBlocks ?? [];
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    // Accumulate cycle metrics in shared (flat pattern)
     if (execRes.responseTimeMs !== undefined) {
       shared.cycleResponseTimeMs += execRes.responseTimeMs;
     }
@@ -576,14 +489,14 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    // Finalize cycle using direct values (no round object needed)
-    await finalizeToolUseCycle(
+    run.recordCycleMetrics(
       shared.cycleIndex,
       shared.cycleResponseTimeMs,
       shared.cycleNormalizedUsage ?? null,
-      run,
-      onRoundFinalized,
     );
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
     run.incrementRounds();
 
     shared.stopReason = execRes.stopReason;
@@ -603,7 +516,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    // Continue with tool calls
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
     shared.cycleIndex += 1;
@@ -630,10 +542,7 @@ interface ToolExecutionResult {
   }>;
 }
 
-/**
- * Data extracted by prep() for tool dispatch.
- * PocketFlow compliance: exec() should only use prepRes, not shared.
- */
+/** Data extracted by prep() for tool dispatch. */
 interface ToolUseDispatchPrepResult {
   shouldSkip: boolean;
   interrupted: boolean;
@@ -641,10 +550,7 @@ interface ToolUseDispatchPrepResult {
   text?: string;
 }
 
-/**
- * Result of exec() for tool dispatch.
- * PocketFlow compliance: exec() executes tools and returns results, post() applies side effects.
- */
+/** Result of exec() for tool dispatch. */
 type ToolUseDispatchExecResult =
   | { kind: 'skipped'; interrupted: boolean }
   | {
@@ -655,32 +561,17 @@ type ToolUseDispatchExecResult =
 
 /**
  * Dispatches tool calls and processes their results.
- *
- * For Google handlers with multiple parallel calls, this node batches all
- * function calls into a single model message to properly preserve thought
- * signatures (required for Gemini 3 models).
- *
- * PocketFlow compliance:
- * - prep(): Extracts data from shared for exec()
- * - exec(): Pure computation using prepRes (no side effects)
- * - post(): Applies all side effects to shared/store
- *
- * Services accessed via `_params.services`: options, store
+ * Batches multiple parallel calls for Google/DeepSeek handlers to preserve thought signatures.
  */
 class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  /**
-   * Extract data from shared and check interruption.
-   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
-   */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
     const services = this.services;
     const toolCalls = shared.toolCalls ?? [];
 
-    // Check skip conditions (including interruption) in prep
     const shouldSkip = shared.shouldStop || toolCalls.length === 0;
     const interrupted = shouldSkip
       ? false
@@ -694,14 +585,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
     };
   }
 
-  /**
-   * Execute all tool calls and return results.
-   *
-   * PocketFlow compliance:
-   * - exec() executes tools using services (tracker/todos are service state, not shared state)
-   * - Tool execution is I/O but acceptable since this node uses NODE_NO_RETRY
-   * - Results are returned for post() to apply side effects (logging, messages)
-   */
   async exec(
     prepRes: ToolUseDispatchPrepResult,
   ): Promise<ToolUseDispatchExecResult> {
@@ -719,9 +602,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const todoState = workspace.todos;
     const assistantText = prepRes.text ?? '';
 
-    // Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
     for (const call of prepRes.toolCalls) {
+      if (services.checkInterruption()) {
+        break;
+      }
       const execResult = await this.executeToolCall(
         call,
         services,
@@ -729,6 +614,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
         todoState,
       );
       execResults.push(execResult);
+    }
+
+    if (execResults.length === 0 && services.checkInterruption()) {
+      return { kind: 'skipped', interrupted: true };
     }
 
     return {
@@ -762,7 +651,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           {
             tracker,
             todoState,
-            streamId: options.logger.channelId,
+            streamId: options.logger.streamId,
             executionId: options.executionId,
             toolCallId: call.callId,
           },
@@ -778,10 +667,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
     }
 
-    // recordEdits computes line changes from edits array as single source of truth
     const trackedEdits = tracker.recordEdits(result.edits);
-
-    // Set lineChanges on result directly (tool's value takes precedence)
     if (!result.lineChanges && trackedEdits.lineChanges) {
       result.lineChanges = trackedEdits.lineChanges;
     }
@@ -793,8 +679,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       source: 'tool',
       sourceDisplay: 'Tool use',
     }));
-
-    // Track edited files separately (not same as attachment files)
     if (editedFiles.length > 0) {
       sanitizedOutput.editedFiles = editedFiles;
     }
@@ -808,9 +692,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
     };
   }
 
-  /**
-   * Log tool execution and handle media file attachments.
-   */
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
     options: ToolUseCycleOptions<C>,
@@ -826,24 +707,21 @@ class ToolUseDispatchNode<C> extends BaseNode<
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
-    options.logger.info('', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: toolUseLog,
-    });
+    options.logger.logToolUse(toolUseLog);
 
-    // Process media file attachments if present
-    const mediaLocations = await this.collectValidMediaLocations(result.files);
+    const mediaLocations = await this.collectValidMediaLocations(
+      result.files,
+      options.logger,
+    );
     if (mediaLocations.length > 0) {
       workspace.media.addMediaFiles(mediaLocations);
     }
   }
 
-  /**
-   * Collect valid file locations from tool result attachments.
-   * Filters out invalid paths and non-existent files.
-   */
+  /** Collect valid file locations from tool result attachments. */
   private async collectValidMediaLocations(
     files: ToolResult['files'],
+    logger: AgentLogger,
   ): Promise<FileLocation[]> {
     if (!files || files.length === 0) {
       return [];
@@ -860,20 +738,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
         if (await AbsoluteFS.exists(location.absolutePath)) {
           validLocations.push(location);
         }
-      } catch {
-        // Ignore files that can't be accessed
+      } catch (err) {
+        logger.debug(
+          `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
+        );
       }
     }
     return validLocations;
   }
 
-  /**
-   * Apply side effects from tool execution.
-   *
-   * PocketFlow compliance:
-   * - post() logs results, processes media files, and creates follow-up messages
-   * - All shared state mutations happen here
-   */
   async post(
     shared: ToolUseCycleShared,
     _prepRes: ToolUseDispatchPrepResult,
@@ -891,32 +764,23 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     const { execResults, assistantText } = execRes;
 
-    // Step 1: Log each tool execution and process media files
     for (const execResult of execResults) {
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
 
-    // Step 2: Create follow-up messages
-    // Extract attachments once per result (single extraction point)
     const extracted = execResults.map((er) =>
       extractToolAttachments(er.result),
     );
-
-    // Extract calls from results for message creation
     const calls = execResults.map((er) => er.call);
 
-    // For Google handlers with multiple parallel calls, use batched method
-    // to properly preserve thought signatures (required for Gemini 3 models).
-    // For DeepSeek thinking mode, batching ensures reasoning_content is
-    // properly included in the single assistant message with all tool calls.
+    // For Google/DeepSeek handlers with multiple parallel calls, batch all tool calls
+    // into a single message to preserve thought signatures.
     const shouldBatch =
-      (services.modelHandler.isGoogle || services.modelHandler.isDeepSeek) &&
       calls.length > 1 &&
-      typeof services.modelHandler.createBatchedToolUseFollowUpMessages ===
-        'function';
+      (services.modelHandler.isGoogle || services.modelHandler.isDeepSeek) &&
+      !!services.modelHandler.createBatchedToolUseFollowUpMessages;
 
     if (shouldBatch) {
-      // Batched: All function calls in one model message, all responses in one user message
       const followUpMsgs = await services.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
@@ -927,7 +791,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       );
       shared.messages.push(...followUpMsgs);
     } else {
-      // Individual: Process each call separately (original behavior)
       for (const [index, execResult] of execResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
@@ -943,7 +806,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
     }
 
-    // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
       if (isNonEmptyString(execResult.result.userInstruction)) {
         await services.modelHandler.createUserFollowUpMessages(
@@ -958,20 +820,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     return FlowTransition.CONTINUE;
   }
 }
-/**
- * Creates a tool-use cycle flow with services injected via params.
- *
- * The returned flow uses the services pattern:
- * - Services (options, store) are passed via `setParams({ services })`
- * - Only mutable state flows through the shared context
- *
- * @example
- * ```typescript
- * const flow = createToolUseCycleFlow<MyContext>();
- * flow.setParams({ services: { options, store } });
- * await flow.run(sharedState);
- * ```
- */
+/** Creates a tool-use cycle flow with services injected via params. */
 export function createToolUseCycleFlow<C>(): Flow<
   ToolUseCycleShared,
   ToolUseCycleParams<C>
@@ -981,21 +830,10 @@ export function createToolUseCycleFlow<C>(): Flow<
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
 
-  // Main flow: prep → call → process → dispatch
-  // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
-  // via maxRetries, wait, and retryPrompt. No separate RetryWaitNode needed.
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
-
-  // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
-
-  // COMPLETE transitions exit directly (no finalize node needed).
-  // Unlike ResponseCycleFlow which needs finalizeRound() for stats recording,
-  // ToolUseCycleFlow handles finalization inline in ProcessNode.post() for
-  // successful cycles. Error/interrupt paths don't need finalization since
-  // there's nothing to record.
 
   return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }
