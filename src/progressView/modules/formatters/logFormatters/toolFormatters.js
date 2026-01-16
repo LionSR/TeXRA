@@ -12,11 +12,6 @@ import {
   getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-import {
-  QUERY_PREVIEW_MAX_LENGTH,
-  HEADER_SUMMARY_MAX_LENGTH,
-} from '../constants.js';
-import { truncateWithEllipsis } from '../textUtils.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -116,11 +111,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
 
-  // Truncate header summary if too long
-  const headerSummary = truncateWithEllipsis(
-    normalizedToolLog.headerSummary || '',
-    HEADER_SUMMARY_MAX_LENGTH,
-  );
+  const headerSummary = normalizedToolLog.headerSummary ?? '';
 
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
@@ -215,10 +206,9 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[status] ?? '';
 
-  // Build query preview with truncation if needed
   let titleText = `${providerLabel} Search`;
   if (query) {
-    titleText += `: "${truncateWithEllipsis(query, QUERY_PREVIEW_MAX_LENGTH)}"`;
+    titleText += `: "${query}"`;
   }
   titleText += statusSuffix;
 
