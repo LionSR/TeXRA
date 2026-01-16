@@ -12,9 +12,6 @@ export {
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
-/** Maximum length for query preview in web search headers */
-export const QUERY_PREVIEW_MAX_LENGTH = 40;
-
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
   warn: '🟡',
