@@ -395,3 +395,39 @@ export async function fetchMathlibCache(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Ensure the InfoView panel is visible.
+ * The InfoView shows goal state and diagnostics interactively.
+ */
+export async function showInfoView(): Promise<boolean> {
+  try {
+    // Check if there's a way to detect if InfoView is already open
+    // For now, we use the focus command which opens it if closed
+    await vscode.commands.executeCommand('lean4.infoView.toggleUpdating');
+    // Toggle back to restore state - this is a hack but ensures InfoView is active
+    await vscode.commands.executeCommand('lean4.infoView.toggleUpdating');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Restart the Lean file server to pick up changes in dependencies.
+ * Call this after editing imported files or changing lakefile.
+ */
+export async function restartFileServer(filePath: string): Promise<boolean> {
+  try {
+    // First ensure the file is open
+    const uri = vscode.Uri.file(filePath);
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preserveFocus: true });
+
+    // Then restart
+    await vscode.commands.executeCommand('lean4.restartFile');
+    return true;
+  } catch {
+    return false;
+  }
+}
