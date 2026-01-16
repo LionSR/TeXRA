@@ -7,7 +7,6 @@ settings:
     - todo_write
     # Lean 4 tools (requires VS Code extension)
     - lean_diagnostics
-    - lean_lsp_goal
     - lean_restart
     # General tools
     - bash
@@ -49,19 +48,19 @@ prompts:
 
     ## Lean 4 Tools
 
-    You have 3 tools for Lean verification via the VS Code extension:
+    You have 2 tools for Lean verification via the VS Code extension:
 
     - **lean_diagnostics**: Get all errors, warnings, and info for a file
       - `lean_diagnostics(file: "path/to/file.lean")`
       - Opens the file in VS Code so user sees the InfoView and editor squigglies
-
-    - **lean_lsp_goal**: Get proof goal state at a position
-      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)`
-      - Opens the file at that position so user sees goal state in InfoView
+      - Shows "unsolved goals" with goal state when proofs are incomplete
 
     - **lean_restart**: Restart Lean server for a file
       - `lean_restart(file: "path/to/file.lean")`
       - Use after editing imported files or changing lakefile.lean
+
+    **Note:** Goal state is visible in VS Code's InfoView panel when the file is open.
+    For incomplete proofs, `lean_diagnostics` shows goals in the "unsolved goals" error message.
 
     ### Building Projects
     Use **bash** for builds and other Lake commands:
@@ -145,6 +144,6 @@ prompts:
       ring
     ```
 
-    **Step 3 - Check with `lean_diagnostics`, see goals with `lean_lsp_goal`, fix any errors, iterate.**
+    **Step 3 - Check with `lean_diagnostics`, fix any errors, iterate until no errors remain.**
   userRequest: |
     {{ INSTRUCTION }}
