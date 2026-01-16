@@ -1,21 +1,21 @@
 // Third-party imports
+import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import {
-  getLinterMessages,
-  countDiagnosticsBySeverity,
-} from '@frontend/latex/linter';
+  countBySeverity,
+  formatCounts,
+  formatMessageList,
+  type SeverityCounts,
+} from '@common/vscodeDiagnostics';
+import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
-import { formatResultCount } from '@tools/utils';
 
 // Local file imports
 import { defineTool } from './core/define';
 import { type DiagnosticsPayload, ToolResult, ToolError } from './result';
-
-// Type imports
-import type { Diagnostic } from 'vscode';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
@@ -27,8 +27,6 @@ export const DiagnosticsInputSchema = z.strictObject({
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
 
-type DiagnosticsSeverityCounts = ReturnType<typeof countDiagnosticsBySeverity>;
-
 export class DiagnosticsTool extends defineTool({
   name: 'diagnostics',
   description:
@@ -37,23 +35,35 @@ export class DiagnosticsTool extends defineTool({
 }) {
   protected async execute(input: DiagnosticsInput): Promise<ToolResult> {
     const { command, path } = input;
-    const { messages, severity } = await this.collectDiagnostics(path);
-    const summary = `Diagnostics ${command} for ${path}`;
-    const includeMessages = command === 'list' ? messages : undefined;
-    return this.createResult(path, command, summary, severity, includeMessages);
-  }
 
-  /**
-   * Resolve diagnostics for a given path and compute their severity totals.
-   */
-  private async collectDiagnostics(path: string): Promise<{
-    messages: Diagnostic[];
-    severity: DiagnosticsSeverityCounts;
-  }> {
     try {
       const messages = await getLinterMessages(path);
-      const severity = countDiagnosticsBySeverity(messages);
-      return { messages, severity };
+      const counts = countBySeverity(messages);
+      const countsStr = formatCounts(counts);
+
+      const summary = `Diagnostics ${command} for ${path}`;
+      const header = `${path}: ${countsStr}`;
+
+      // For count command, just return the summary
+      if (command === 'count') {
+        return {
+          summary,
+          output: header,
+          diagnostics: this.createPayload(path, command, counts),
+        };
+      }
+
+      // For list command, include formatted messages
+      const output =
+        messages.length > 0
+          ? `${header}\n\n${formatMessageList(messages)}`
+          : header;
+
+      return {
+        summary,
+        output,
+        diagnostics: this.createPayload(path, command, counts, messages),
+      };
     } catch (error) {
       const detail = toErrorMessage(error);
       logger.error(
@@ -64,48 +74,16 @@ export class DiagnosticsTool extends defineTool({
     }
   }
 
-  /**
-   * Wrap diagnostics data in the shared tool result format.
-   */
-  private createResult(
+  private createPayload(
     path: string,
     command: 'list' | 'count',
-    summary: string,
-    severity: DiagnosticsSeverityCounts,
-    messages?: Diagnostic[],
-  ): ToolResult {
+    severity: SeverityCounts,
+    messages?: vscode.Diagnostic[],
+  ): DiagnosticsPayload {
     const payload: DiagnosticsPayload = { path, command, severity };
     if (messages) {
       payload.messages = messages;
     }
-
-    const { errors = 0, warnings = 0, info = 0, hints = 0 } = severity;
-    const counts = [
-      errors > 0 && formatResultCount(errors, 'error'),
-      warnings > 0 && formatResultCount(warnings, 'warning'),
-      info > 0 && `${info} info`,
-      hints > 0 && formatResultCount(hints, 'hint'),
-    ]
-      .filter(Boolean)
-      .join(', ');
-
-    const header = `${path}: ${counts || 'No issues found'}`;
-    const output =
-      messages && messages.length > 0
-        ? `${header}\n\n${this.formatMessages(messages)}`
-        : header;
-
-    return { summary, output, diagnostics: payload };
-  }
-
-  private formatMessages(messages: Diagnostic[]): string {
-    const severityLabels = ['error', 'warning', 'info', 'hint'] as const;
-    return messages
-      .map((d) => {
-        const line = d.range.start.line + 1;
-        const label = severityLabels[d.severity] ?? 'unknown';
-        return `  ${line}: [${label}] ${d.message}`;
-      })
-      .join('\n');
+    return payload;
   }
 }
