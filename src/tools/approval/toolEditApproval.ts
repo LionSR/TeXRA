@@ -64,7 +64,6 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
-  'resumeApprovals',
   'showLatexdiff',
   'previewProposed',
 ] as const;
@@ -671,18 +670,7 @@ export async function handleProgressViewToolEditApprovalAction(
   payload: ProgressViewApprovalActionPayload,
 ): Promise<void> {
   const entry = pendingApprovals.get(payload.requestId);
-  if (!entry) {
-    return;
-  }
-
-  // State modification action - no isSettled check needed
-  if (payload.action === 'resumeApprovals') {
-    setToolEditApprovalSessionBypass(false);
-    return;
-  }
-
-  // All other actions require the entry to not be settled
-  if (entry.isSettled()) {
+  if (!entry || entry.isSettled()) {
     return;
   }
 
