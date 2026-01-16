@@ -14,7 +14,8 @@ import {
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import {
   QUERY_PREVIEW_MAX_LENGTH,
-  ERROR_TITLE_MAX_LENGTH,
+  HEADER_SUMMARY_MAX_LENGTH,
+  truncateWithEllipsis,
 } from '../constants.js';
 
 // Web search provider display names
@@ -116,10 +117,10 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
 
   // Truncate header summary if too long
-  let headerSummary = normalizedToolLog.headerSummary || '';
-  if (headerSummary.length > ERROR_TITLE_MAX_LENGTH) {
-    headerSummary = headerSummary.slice(0, ERROR_TITLE_MAX_LENGTH) + '...';
-  }
+  const headerSummary = truncateWithEllipsis(
+    normalizedToolLog.headerSummary || '',
+    HEADER_SUMMARY_MAX_LENGTH,
+  );
 
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
@@ -215,11 +216,7 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   // Build query preview with truncation if needed
   let titleText = `${providerLabel} Search`;
   if (query) {
-    const truncatedQuery =
-      query.length > QUERY_PREVIEW_MAX_LENGTH
-        ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...'
-        : query;
-    titleText += `: "${truncatedQuery}"`;
+    titleText += `: "${truncateWithEllipsis(query, QUERY_PREVIEW_MAX_LENGTH)}"`;
   }
   titleText += statusSuffix;
 
