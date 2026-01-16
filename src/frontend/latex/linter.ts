@@ -14,13 +14,18 @@ const CHANNEL = 'LinterUtils';
 
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 
+/** Check if a file path is a LaTeX file */
+function isTexFile(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith('.tex');
+}
+
 /**
  * Trigger a LaTeX build for a specific file
  * @param filePath Path to the file (relative to workspace)
  * @returns Promise resolving when build is triggered
  */
 export async function triggerLaTeXBuild(filePath: string): Promise<void> {
-  if (!filePath.toLowerCase().endsWith('.tex')) {
+  if (!isTexFile(filePath)) {
     return;
   }
 
@@ -68,7 +73,7 @@ export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
 export async function getLinterMessages(
   filePath: string,
 ): Promise<vscode.Diagnostic[]> {
-  if (filePath.toLowerCase().endsWith('.tex')) {
+  if (isTexFile(filePath)) {
     await triggerLaTeXBuild(filePath);
   }
   return getDiagnostics(filePath);

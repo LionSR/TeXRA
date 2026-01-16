@@ -93,20 +93,17 @@ export class WatcherManager {
         );
         this.disposables.push(watcher);
 
-        watcher.onDidCreate((uri) => {
+        const refreshAndValidate = (uri: vscode.Uri) => {
           this.triggerRefresh();
           scheduleYamlValidation(uri);
-        });
-        watcher.onDidDelete(this.triggerRefresh);
+        };
 
-        if (isCustomPath(watchPath)) {
-          watcher.onDidChange((uri) => {
-            this.triggerRefresh();
-            scheduleYamlValidation(uri);
-          });
-        } else {
-          watcher.onDidChange(this.triggerRefresh);
-        }
+        watcher.onDidCreate(refreshAndValidate);
+        watcher.onDidDelete(this.triggerRefresh);
+        // Only validate YAML on change for custom agents (built-in are read-only)
+        watcher.onDidChange(
+          isCustomPath(watchPath) ? refreshAndValidate : this.triggerRefresh,
+        );
       }
 
       logger.info(

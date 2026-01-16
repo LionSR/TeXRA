@@ -227,20 +227,17 @@ export class ProgressViewProvider
     if (!this._view && !this._panelView) return;
 
     if (!this.isAnyViewReady()) {
-      // Queue the update, preserving forceRebuild if any caller requested it.
-      // Once forceRebuild is true, it stays true until the update is processed.
+      // Queue the update, preserving forceRebuild if any caller requested it
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
-      const requestedForce = options?.forceRebuild ?? false;
       this._pendingUpdateOptions = {
-        forceRebuild: currentForce || requestedForce,
+        forceRebuild: currentForce || !!options?.forceRebuild,
       };
       return;
     }
 
-    const theme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-        ? 'dark'
-        : 'light';
+    const isDarkTheme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+    const theme = isDarkTheme ? 'dark' : 'light';
 
     const activeStream = this.webviewUpdater.updateAll(
       this.state,
@@ -366,9 +363,7 @@ export class ProgressViewProvider
    * Check if any view is visible (sidebar or panel)
    */
   public isViewVisible(): boolean {
-    return (
-      (this._view?.visible ?? false) || (this._panelView?.visible ?? false)
-    );
+    return !!this._view?.visible || !!this._panelView?.visible;
   }
 
   // ===== IRunStorageService implementation =====
