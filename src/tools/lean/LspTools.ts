@@ -3,7 +3,13 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
-import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
+import {
+  waitForDiagnosticsChange,
+  countBySeverity,
+  formatCounts,
+  formatGroupedSections,
+  DiagnosticSeverity,
+} from '@common/vscodeDiagnostics';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -17,6 +23,11 @@ import * as vscodeIntegration from './VscodeIntegration';
 // ============================================================================
 
 const LeanDiagnosticsInputSchema = z.strictObject({
+  /** Command: list for full messages, count for summary */
+  command: z
+    .enum(['list', 'count'])
+    .default('list')
+    .describe('Use "list" for full messages or "count" for summary only'),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
 });
@@ -106,11 +117,15 @@ async function openFileInEditor(
 // ============================================================================
 
 /**
- * Get diagnostics for a file from VS Code.
+ * Get diagnostics for a Lean file from VS Code.
  */
 export class LeanDiagnosticsTool extends defineTool({
   name: 'lean_diagnostics',
-  description: `Get all diagnostic messages (errors, warnings, info) for a Lean 4 file.
+  description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
+
+Commands:
+- "list" (default): Full diagnostic messages with locations
+- "count": Summary counts only (faster for checking if file compiles)
 
 Returns diagnostics from the Lean 4 VS Code extension including:
 - Compilation errors with location
@@ -118,23 +133,14 @@ Returns diagnostics from the Lean 4 VS Code extension including:
 - Unsolved goals
 - Warnings and hints
 
-This shows the same diagnostics as VS Code's Problems panel.
-
 Note: If Lean cannot load the file (e.g., bad imports), errors may only appear
-in the Lean 4 output panel, not as LSP diagnostics. Check the output panel if
-this tool reports no diagnostics but you see errors in VS Code.
+in the Lean 4 output panel, not as LSP diagnostics.
 
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanDiagnosticsInputSchema,
 }) {
   protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
-    const { file } = input;
-    const {
-      Error: E,
-      Warning: W,
-      Information: I,
-      Hint: H,
-    } = vscodeIntegration.DiagnosticSeverity;
+    const { command, file } = input;
 
     try {
       // Open file first to trigger Lean processing - this is REQUIRED
@@ -156,10 +162,16 @@ Requires: Lean 4 VS Code extension installed and active.`,
       }
 
       // Position at first error if any
-      const firstError = diagnostics.find((d) => d.severity === E);
+      const firstError = diagnostics.find(
+        (d) => d.severity === DiagnosticSeverity.Error,
+      );
       if (firstError) {
         await openFileInEditor(openedPath, firstError.range.start.line + 1);
       }
+
+      // Count by severity
+      const counts = countBySeverity(diagnostics);
+      const countsStr = formatCounts(counts);
 
       if (diagnostics.length === 0) {
         return {
@@ -171,38 +183,24 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      const errors = diagnostics.filter((d) => d.severity === E);
-      const warnings = diagnostics.filter((d) => d.severity === W);
-      const hints = diagnostics.filter(
-        (d) => d.severity === I || d.severity === H,
-      );
+      // For count command, just return the summary
+      if (command === 'count') {
+        return {
+          summary: countsStr,
+          output: `${file}: ${countsStr}`,
+          diagnostics: { ...counts, total: diagnostics.length },
+        };
+      }
 
-      const formatSection = (
-        title: string,
-        items: vscodeIntegration.LeanDiagnostic[],
-      ): string =>
-        items.length === 0
-          ? ''
-          : `## ${title} (${items.length})\n\n` +
-            items
-              .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}\n`)
-              .join('\n');
-
-      const output = [
-        formatSection('Errors', errors),
-        formatSection('Warnings', warnings),
-        formatSection('Info/Hints', hints),
-      ]
-        .filter(Boolean)
-        .join('\n');
+      // For list command, return formatted details
+      const output = formatGroupedSections(diagnostics);
 
       return {
-        summary: `${errors.length} error(s), ${warnings.length} warning(s), ${hints.length} hint(s)`,
+        summary: countsStr,
         output,
         diagnostics: {
-          errors: errors.length,
-          warnings: warnings.length,
-          hints: hints.length,
+          ...counts,
+          total: diagnostics.length,
           details: diagnostics,
         },
       };

@@ -3,7 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
+import {
+  waitForDiagnosticsChange,
+  countBySeverity,
+  getSeverityLabel,
+  type SeverityCounts,
+} from '@common/vscodeDiagnostics';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -143,44 +148,9 @@ export async function getLinterMessages(
   }
 }
 
-/** Map from DiagnosticSeverity to string name */
-const SEVERITY_MAP: Record<vscode.DiagnosticSeverity, string> = {
-  [vscode.DiagnosticSeverity.Error]: 'error',
-  [vscode.DiagnosticSeverity.Warning]: 'warning',
-  [vscode.DiagnosticSeverity.Information]: 'info',
-  [vscode.DiagnosticSeverity.Hint]: 'hint',
+// Re-export shared utilities for backwards compatibility
+export {
+  countBySeverity as countDiagnosticsBySeverity,
+  getSeverityLabel as getSeverityString,
 };
-
-/**
- * Convert diagnostic severity to a readable string
- */
-export function getSeverityString(severity: vscode.DiagnosticSeverity): string {
-  return SEVERITY_MAP[severity] ?? 'unknown';
-}
-
-/**
- * Count diagnostics by severity for a file
- */
-export function countDiagnosticsBySeverity(diagnostics: vscode.Diagnostic[]): {
-  errors: number;
-  warnings: number;
-  info: number;
-  hints: number;
-} {
-  const counts = { errors: 0, warnings: 0, info: 0, hints: 0 };
-  const countKey: Record<string, keyof typeof counts> = {
-    error: 'errors',
-    warning: 'warnings',
-    info: 'info',
-    hint: 'hints',
-  };
-
-  for (const diagnostic of diagnostics) {
-    const key = countKey[getSeverityString(diagnostic.severity)];
-    if (key) {
-      counts[key]++;
-    }
-  }
-
-  return counts;
-}
+export type { SeverityCounts as DiagnosticsSeverityCounts };
