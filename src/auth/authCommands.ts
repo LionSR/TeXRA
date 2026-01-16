@@ -337,15 +337,12 @@ export async function showAccountMenu(): Promise<void> {
         placeHolder: 'Account Options',
       });
 
+      const actionCommands: Record<'viewProfile' | 'signOut', string> = {
+        viewProfile: AUTH_COMMANDS.VIEW_PROFILE,
+        signOut: AUTH_COMMANDS.SIGN_OUT,
+      };
       if (choice) {
-        switch (choice.action) {
-          case 'viewProfile':
-            await vscode.commands.executeCommand(AUTH_COMMANDS.VIEW_PROFILE);
-            break;
-          case 'signOut':
-            await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
-            break;
-        }
+        await vscode.commands.executeCommand(actionCommands[choice.action]);
       }
     }
   } catch (error) {
