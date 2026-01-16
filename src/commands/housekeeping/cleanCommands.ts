@@ -32,21 +32,17 @@ const CleanParamsSchema = z.object({
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  switch (result.status) {
-    case 'success':
-      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
-      break;
-    case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to clean for ${inputFile}`,
-      );
-      break;
-    case 'missingParams':
-      vscode.window.showErrorMessage('Missing required parameters for clean');
-      break;
-    case 'error':
-      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
-      break;
+  const messages: Record<FileOpResult['status'], { text: string; isError: boolean }> = {
+    success: { text: `Cleanup complete for ${inputFile}`, isError: false },
+    noFiles: { text: `No files found to clean for ${inputFile}`, isError: false },
+    missingParams: { text: 'Missing required parameters for clean', isError: true },
+    error: { text: `Error during cleanup: ${result.error}`, isError: true },
+  };
+  const msg = messages[result.status];
+  if (msg.isError) {
+    vscode.window.showErrorMessage(msg.text);
+  } else {
+    vscode.window.showInformationMessage(msg.text);
   }
 }
 
