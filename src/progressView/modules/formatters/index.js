@@ -60,7 +60,7 @@ export class LogEntryFormatter {
   }
 
   _buildFormatterMap() {
-    // Wrapper for error handling
+    // Wrap formatter functions with error handling for graceful degradation
     const safe = (fn, label) => (m) => safeFormat(() => fn(m), label);
 
     // Field extractors for common formatter signatures
