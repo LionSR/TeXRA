@@ -15,6 +15,7 @@
 
 /* Tool use title - single line with ellipsis */
 .tool-use-title {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
