@@ -186,14 +186,10 @@ async function handleAcceptEdited(
     // Check if new file would overwrite an existing file
     const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
 
-    let confirmMessage: string;
-    if (isNewFile && targetExists) {
-      confirmMessage = `Extensions differ (${baseExt} vs ${editedExt}). This will overwrite existing '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
-    } else if (isNewFile) {
-      confirmMessage = `Extensions differ (${baseExt} vs ${editedExt}). This will create '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
-    } else {
-      confirmMessage = `This will overwrite '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
-    }
+    // Build confirmation message based on operation type
+    const action = targetExists ? 'overwrite existing' : isNewFile ? 'create' : 'overwrite';
+    const extensionNote = isNewFile ? `Extensions differ (${baseExt} vs ${editedExt}). ` : '';
+    const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
 
     const answer = await vscode.window.showWarningMessage(
       confirmMessage,
