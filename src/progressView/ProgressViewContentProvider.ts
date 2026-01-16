@@ -39,6 +39,10 @@ const PROGRESS_VIEW_MODULES = [
     key: 'baseUIRequestManagerUri',
     path: 'modules/uiManagers/BaseUIRequestManager.js',
   },
+  {
+    key: 'followupSectionManagerUri',
+    path: 'modules/uiManagers/FollowupSectionManager.js',
+  },
 ] as const;
 
 export class ProgressViewContentProvider extends BaseViewContentProvider {

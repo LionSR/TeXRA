@@ -85,13 +85,18 @@ class TaskGroups {
     return [...(this.childrenByParent.get(parentId) ?? [])];
   }
 
-  _linkChild(parentId, childId) {
+  /** Get or create children set for a parent */
+  _getChildrenSet(parentId) {
     let children = this.childrenByParent.get(parentId);
     if (!children) {
       children = new Set();
       this.childrenByParent.set(parentId, children);
     }
-    children.add(childId);
+    return children;
+  }
+
+  _linkChild(parentId, childId) {
+    this._getChildrenSet(parentId).add(childId);
     this.parentByChild.set(childId, parentId);
   }
 
@@ -133,36 +138,31 @@ class RunScopedMap {
     this._data = new Map();
   }
 
-  /**
-   * Resolve stream and optionally validate runId.
-   * Returns null if validation fails.
-   */
-  _resolve(streamId, runId = null, requireRunId = false) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) return null;
-    if (requireRunId && !runId) return null;
-    return targetStream;
-  }
-
-  set(streamId, runId, value) {
-    const stream = this._resolve(streamId, runId, true);
-    if (!stream) return;
+  /** Resolve stream and get its run map, optionally creating if missing */
+  _getOrCreateStreamMap(streamId, runId, create = false) {
+    const stream = runId ? this._resolveStreamId(streamId) : null;
+    if (!stream) return null;
 
     let runs = this._data.get(stream);
-    if (!runs) {
+    if (!runs && create) {
       runs = new Map();
       this._data.set(stream, runs);
     }
-    runs.set(runId, value);
+    return runs ?? null;
+  }
+
+  set(streamId, runId, value) {
+    const runs = this._getOrCreateStreamMap(streamId, runId, true);
+    if (runs) runs.set(runId, value);
   }
 
   get(streamId, runId) {
     if (!runId) return null;
-    return this.getStreamMap(streamId)?.get(runId) ?? null;
+    return this._getOrCreateStreamMap(streamId, runId)?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
-    const stream = this._resolve(streamId, runId, true);
+    const stream = runId ? this._resolveStreamId(streamId) : null;
     if (!stream) return;
 
     const runs = this._data.get(stream);
@@ -175,7 +175,7 @@ class RunScopedMap {
   }
 
   clearStream(streamId) {
-    const stream = this._resolve(streamId);
+    const stream = this._resolveStreamId(streamId);
     if (stream) this._data.delete(stream);
   }
 
@@ -184,12 +184,8 @@ class RunScopedMap {
   }
 
   getStreamMap(streamId) {
-    const stream = this._resolve(streamId);
+    const stream = this._resolveStreamId(streamId);
     return stream ? (this._data.get(stream) ?? null) : null;
-  }
-
-  streamEntries() {
-    return this._data.entries();
   }
 }
 
@@ -229,6 +225,8 @@ export class ProgressViewState {
     this.streamQueuedFollowUps = new StreamScopedMap(streamResolver);
     // Follow-up textarea text storage by stream ID (persists draft text per tab)
     this.streamFollowUpText = new StreamScopedMap(streamResolver);
+    // Followup section mode per stream (chat/workflow/merge)
+    this.streamFollowupMode = new StreamScopedMap(streamResolver);
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -238,19 +236,7 @@ export class ProgressViewState {
   }
 
   _resolveStreamId(streamId) {
-    return streamId ?? this.activeStream ?? null;
-  }
-
-  /**
-   * Resolve stream and validate runId for run-scoped operations.
-   * Returns null if either stream cannot be resolved or runId is missing.
-   * @param {string} streamId - Stream ID to resolve
-   * @param {string} runId - Run ID to validate
-   * @returns {string|null} Resolved stream or null if validation fails
-   */
-  _resolveRunContext(streamId, runId) {
-    if (!runId) return null;
-    return this._resolveStreamId(streamId);
+    return streamId || this.activeStream || null;
   }
 
   setExecutionIdAvailable(stream, hasExecutionId) {
@@ -368,14 +354,8 @@ export class ProgressViewState {
    */
   _resolveRunIdFromCandidates(streamId) {
     const candidates = this._collectRunCandidates(streamId);
-
-    // If exactly one candidate, use it
-    if (candidates.size === 1) {
-      const [only] = candidates;
-      if (only) return only;
-    }
-
-    // Otherwise fall back to latest
+    // Single candidate: use it directly; multiple: find latest
+    if (candidates.size === 1) return [...candidates][0] ?? null;
     return this._findLatestRunId(streamId);
   }
 
@@ -390,21 +370,15 @@ export class ProgressViewState {
       this.runUsage,
     ];
     for (const runMap of runMaps) {
-      const streamMap = runMap.getStreamMap(streamId);
-      if (streamMap) {
-        for (const runId of streamMap.keys()) {
-          if (runId) {
-            candidates.add(runId);
-          }
-        }
+      const keys = runMap.getStreamMap(streamId)?.keys();
+      if (keys) {
+        for (const runId of keys) if (runId) candidates.add(runId);
       }
     }
 
-    // Add root task group IDs
+    // Add root task group IDs (groups without a parent)
     for (const group of this.taskGroups.getGroupMap().values()) {
-      if (group && !group.parentGroupId) {
-        candidates.add(group.id);
-      }
+      if (group && !group.parentGroupId) candidates.add(group.id);
     }
 
     return candidates;
@@ -498,21 +472,17 @@ export class ProgressViewState {
 
   clearRunInstructions(streamId) {
     if (streamId != null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream != null) {
-        this.runInstructions.clearStream(targetStream);
-        this.clearPendingInstruction(targetStream);
-      }
-      return;
+      this.runInstructions.clearStream(streamId);
+      this.clearPendingInstruction(streamId);
+    } else {
+      this.runInstructions.clearAll();
+      this.clearAllPendingInstructions();
     }
-    this.runInstructions.clearAll();
-    this.clearAllPendingInstructions();
   }
 
   setRunFiles(streamId, runId, filesByRound) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
-    this.runFiles.set(targetStream, runId, filesByRound ?? {});
+    if (!runId) return;
+    this.runFiles.set(streamId, runId, filesByRound ?? {});
   }
 
   getRunFiles(streamId, runId) {
@@ -521,13 +491,10 @@ export class ProgressViewState {
 
   clearRunFiles(streamId) {
     if (streamId != null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream != null) {
-        this.runFiles.clearStream(targetStream);
-      }
-      return;
+      this.runFiles.clearStream(streamId);
+    } else {
+      this.runFiles.clearAll();
     }
-    this.runFiles.clearAll();
   }
 
   deleteRunFiles(streamId, runId) {
@@ -535,9 +502,8 @@ export class ProgressViewState {
   }
 
   setRunMissingOutputs(streamId, runId, filesByRound) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
-    this.runMissingOutputs.set(targetStream, runId, filesByRound ?? {});
+    if (!runId) return;
+    this.runMissingOutputs.set(streamId, runId, filesByRound ?? {});
   }
 
   getRunMissingOutputs(streamId, runId) {
@@ -546,36 +512,28 @@ export class ProgressViewState {
 
   clearRunMissingOutputs(streamId) {
     if (streamId != null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream != null) {
-        this.runMissingOutputs.clearStream(targetStream);
-      }
-      return;
+      this.runMissingOutputs.clearStream(streamId);
+    } else {
+      this.runMissingOutputs.clearAll();
     }
-    this.runMissingOutputs.clearAll();
   }
 
   setRunUsage(streamId, runId, usage) {
-    const targetStream = this._resolveRunContext(streamId, runId);
-    if (!targetStream) return;
+    if (!runId) return;
 
-    // Normalize usage fields - ?? preserves 0, unlike ||
-    const toNum = (v) => Number(v ?? 0);
+    const num = (v) => Number(v ?? 0);
     const normalized = {
-      inputTokens: toNum(usage?.inputTokens),
-      outputTokens: toNum(usage?.outputTokens),
-      cost: toNum(usage?.cost),
-      cacheReadInputTokens: toNum(usage?.cacheReadInputTokens),
-      cacheCreationInputTokens: toNum(usage?.cacheCreationInputTokens),
+      inputTokens: num(usage?.inputTokens),
+      outputTokens: num(usage?.outputTokens),
+      cost: num(usage?.cost),
+      cacheReadInputTokens: num(usage?.cacheReadInputTokens),
+      cacheCreationInputTokens: num(usage?.cacheCreationInputTokens),
     };
-    // Skip empty usage (cost=0 implies no cache billing)
-    const isEmpty =
-      normalized.inputTokens === 0 &&
-      normalized.outputTokens === 0 &&
-      normalized.cost === 0;
-    if (!isEmpty) {
-      this.runUsage.set(targetStream, runId, normalized);
-    }
+
+    // Skip empty usage (all zeros indicates no actual API call)
+    const hasUsage =
+      normalized.inputTokens || normalized.outputTokens || normalized.cost;
+    if (hasUsage) this.runUsage.set(streamId, runId, normalized);
   }
 
   getRunUsage(streamId, runId) {
@@ -584,47 +542,42 @@ export class ProgressViewState {
 
   clearRunUsage(streamId, runId) {
     if (runId) {
-      return this.runUsage.delete(streamId, runId);
+      this.runUsage.delete(streamId, runId);
+    } else if (streamId != null) {
+      this.runUsage.clearStream(streamId);
+    } else {
+      this.runUsage.clearAll();
     }
-    if (streamId != null) {
-      return this.runUsage.clearStream(streamId);
-    }
-    this.runUsage.clearAll();
   }
 
   /**
    * Set context state for a stream (input tokens vs context window).
    * @param {string} streamId - The stream ID
-   * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} state
+   * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} ctxState
    */
-  setContextState(streamId, state) {
-    if (!state) {
-      return;
-    }
+  setContextState(streamId, ctxState) {
+    if (!ctxState) return;
     this.contextState.set(streamId, {
-      inputTokens: state.inputTokens ?? 0,
-      contextWindow: state.contextWindow ?? 0,
-      utilizationPercent: state.utilizationPercent ?? 0,
+      inputTokens: ctxState.inputTokens ?? 0,
+      contextWindow: ctxState.contextWindow ?? 0,
+      utilizationPercent: ctxState.utilizationPercent ?? 0,
     });
   }
 
   /**
    * Get context state for a stream.
    * @param {string} streamId - The stream ID
-   * @returns {{ inputTokens: number, contextWindow: number, utilizationPercent: number } | null}
    */
   getContextState(streamId) {
-    return this.contextState.get(streamId) || null;
+    return this.contextState.get(streamId) ?? null;
   }
 
   /**
-   * Clear context state for a stream.
-   * @param {string} streamId - The stream ID (optional, clears all if omitted)
+   * Clear context state for a stream or all streams.
+   * @param {string} [streamId] - The stream ID (clears all if omitted)
    */
   clearContextState(streamId) {
-    if (streamId == null) {
-      return this.contextState.clear();
-    }
+    if (streamId == null) return this.contextState.clear();
     this.contextState.delete(streamId);
   }
 

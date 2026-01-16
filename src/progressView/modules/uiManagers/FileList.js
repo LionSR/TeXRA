@@ -149,45 +149,51 @@ export class FileList {
     const filePath = file.location.absolutePath;
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
-    // Standard buttons that use effectiveBase
-    const standardButtons = [
+    // Configure standard buttons (require effectiveBase)
+    const buttonConfigs = [
       { selector: '.compare-btn', command: COMMANDS.COMPARE_ORIGINAL },
       { selector: '.accept-btn', command: COMMANDS.ACCEPT_FILE },
       { selector: '.merge-btn', command: COMMANDS.MERGE_FILE },
       { selector: '.diff-btn', command: COMMANDS.LATEXDIFF_FILE },
     ];
 
-    for (const { selector, command } of standardButtons) {
-      const btn = clone.querySelector(selector);
-      if (!btn) continue;
-      if (effectiveBase) {
-        btn.dataset.command = command;
-        btn.dataset.file = filePath;
-        btn.dataset.base = effectiveBase;
-      } else {
-        btn.style.display = 'none';
-      }
+    for (const { selector, command } of buttonConfigs) {
+      this._configureButton(clone, selector, effectiveBase, {
+        command,
+        file: filePath,
+        base: effectiveBase,
+      });
     }
 
-    // Previous button has special handling
-    const prevBtn = clone.querySelector('.prev-btn');
-    if (prevBtn) {
-      if (diffBase) {
-        prevBtn.dataset.command = COMMANDS.COMPARE_PREVIOUS;
-        prevBtn.dataset.file = filePath;
-        prevBtn.dataset.prev = diffBase;
-        if (effectiveBase) prevBtn.dataset.base = effectiveBase;
-      } else {
-        prevBtn.style.display = 'none';
-      }
-    }
+    // Previous button (requires diffBase)
+    this._configureButton(clone, '.prev-btn', diffBase, {
+      command: COMMANDS.COMPARE_PREVIOUS,
+      file: filePath,
+      prev: diffBase,
+      ...(effectiveBase && { base: effectiveBase }),
+    });
 
-    // File path link
+    // File path link (always enabled)
     const filePathSpan = clone.querySelector('.file-path');
     if (filePathSpan) {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
       filePathSpan.dataset.file = filePath;
+    }
+  }
+
+  /**
+   * Configure a button: set dataset if condition met, hide otherwise
+   * @private
+   */
+  _configureButton(clone, selector, condition, datasetValues) {
+    const btn = clone.querySelector(selector);
+    if (!btn) return;
+
+    if (condition) {
+      Object.assign(btn.dataset, datasetValues);
+    } else {
+      btn.style.display = 'none';
     }
   }
 

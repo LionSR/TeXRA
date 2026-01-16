@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-import { isTexFile } from '@common/files/fileTypeUtils';
+import { isLatexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -41,7 +41,7 @@ export async function openAndBuildIfTex(
     const fullPath = WorkspaceFS.toAbsolute(file);
     const uri = vscode.Uri.file(fullPath);
 
-    if (isTexFile(file)) {
+    if (isLatexFile(file)) {
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {
         // preview: false,
@@ -79,7 +79,7 @@ export async function openBuildDisplayIfTex(
   const file = fileLocation.absolutePath;
   await openAndBuildIfTex(file, options);
 
-  if (isTexFile(file)) {
+  if (isLatexFile(file)) {
     try {
       setTimeout(async () => {
         await vscode.commands.executeCommand('latex-workshop.view');

@@ -173,8 +173,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Get output files for a stream */
   getFiles(stream: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> {
-    const runs = this.items.get(stream);
-    return runs ? new Map(runs) : new Map();
+    return new Map(this.items.get(stream) ?? []);
   }
 
   getRun(
@@ -207,9 +206,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
     // storageKey is THE single source of truth
     const targetRunIds =
-      options.storageKey !== undefined && options.storageKey !== null
-        ? [options.storageKey]
-        : [...runs.keys()];
+      options.storageKey != null ? [options.storageKey] : [...runs.keys()];
 
     for (const target of targetRunIds) {
       const runRounds = runs.get(target);
@@ -301,7 +298,7 @@ export class OutputFilesManager extends PersistentMapManager<
       {},
     );
 
-    if (saved && Object.keys(saved).length > 0) {
+    if (Object.keys(saved).length > 0) {
       this._missingOutputs = this.deserializeMissingOutputs(saved);
       return;
     }
@@ -365,7 +362,7 @@ export class OutputFilesManager extends PersistentMapManager<
       [key: string]: { [key: number]: string[] };
     }>(legacyKey, {});
 
-    if (!legacy || Object.keys(legacy).length === 0) {
+    if (Object.keys(legacy).length === 0) {
       return false;
     }
 

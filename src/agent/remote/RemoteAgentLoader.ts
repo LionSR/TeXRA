@@ -29,6 +29,111 @@ import {
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 
+interface HttpErrorResult {
+  message: string;
+  shouldContinue: boolean;
+}
+
+const HTTP_ERROR_MESSAGES: Partial<
+  Record<number, (agentName: string) => string>
+> = {
+  [StatusCodes.UNAUTHORIZED]: () =>
+    'Session expired. Sign in again to continue.',
+  [StatusCodes.FORBIDDEN]: (name) =>
+    `Access denied to agent "${name}". Upgrade your account for access.`,
+};
+
+/** Maps HTTP status codes to user-friendly error messages. */
+function mapHttpError(
+  status: number,
+  agentName: string,
+  candidateName: string,
+  isLastCandidate: boolean,
+  errorText: string,
+): HttpErrorResult {
+  // Handle static error messages
+  const staticMessage = HTTP_ERROR_MESSAGES[status];
+  if (staticMessage) {
+    return { message: staticMessage(agentName), shouldContinue: false };
+  }
+
+  // Handle 404 with fallback logic
+  if (status === StatusCodes.NOT_FOUND) {
+    if (!isLastCandidate) {
+      logger.debug(
+        CHANNEL,
+        `Agent variant "${candidateName}" not found, trying next candidate`,
+      );
+      return {
+        message: `Agent variant "${candidateName}" not found`,
+        shouldContinue: true,
+      };
+    }
+    return {
+      message: `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
+      shouldContinue: false,
+    };
+  }
+
+  // Handle 500 with storage-specific message
+  if (
+    status === StatusCodes.INTERNAL_SERVER_ERROR &&
+    errorText.includes('Failed to load agent configuration')
+  ) {
+    return {
+      message:
+        `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+        `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+        `Please contact the TeXRA team if this agent should be available.`,
+      shouldContinue: false,
+    };
+  }
+
+  return {
+    message: `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`,
+    shouldContinue: false,
+  };
+}
+
+/** Maps a database row to RemoteAgentMetadata using schema validation. */
+function parseMetadataRow(row: {
+  id: string;
+  name: string;
+  description?: string | null;
+  visibility?: string[] | null;
+  agent_category?: string | null;
+}): RemoteAgentMetadata | null {
+  const result = RemoteAgentMetadataSchema.safeParse({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    visibility: row.visibility,
+    agentCategory: row.agent_category,
+  });
+
+  if (!result.success) {
+    logger.warn(
+      CHANNEL,
+      `Invalid metadata for agent "${row.name}": ${result.error.message}`,
+    );
+    return null;
+  }
+  return result.data;
+}
+
+/** Set up authenticated Supabase session for database queries. Returns null if not authenticated. */
+async function getAuthenticatedClient() {
+  const tokens = await SupabaseClient.getSessionTokens();
+  if (!tokens) return null;
+
+  const supabase = SupabaseClient.getClient();
+  await supabase.auth.setSession({
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+  });
+  return supabase;
+}
+
 /**
  * Loader for remote agents stored in Supabase.
  * Fetches agent configurations via Edge Function with authentication.
@@ -106,55 +211,36 @@ export class RemoteAgentLoader {
         });
 
         if (!response.ok) {
-          if (response.status === StatusCodes.UNAUTHORIZED) {
-            throw new Error('Session expired. Sign in again to continue.');
-          } else if (response.status === StatusCodes.NOT_FOUND) {
-            // If not found and we have more candidates to try, continue to next
-            if (candidateName !== candidateNames.at(-1)) {
-              logger.debug(
-                CHANNEL,
-                `Agent variant "${candidateName}" not found, trying next candidate`,
-              );
-              lastError = new Error(
-                `Agent variant "${candidateName}" not found`,
-              );
-              continue;
-            }
-            throw new Error(
-              `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
-            );
-          } else if (response.status === StatusCodes.FORBIDDEN) {
-            throw new Error(
-              `Access denied to agent "${agentName}". Upgrade your account for access.`,
-            );
-          } else {
-            let errorText = 'Unknown error';
-            try {
-              errorText = await response.text();
-            } catch (error) {
-              logger.warn(CHANNEL, 'Failed to read error response body');
-            }
-
-            // Provide more helpful error message for storage-related failures
-            if (
-              response.status === StatusCodes.INTERNAL_SERVER_ERROR &&
-              errorText.includes('Failed to load agent configuration')
-            ) {
-              throw new Error(
-                `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
-                  `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
-                  `Please contact the TeXRA team if this agent should be available.`,
-              );
-            }
-
-            throw new Error(
-              `Failed to load agent: ${response.statusText} - ${errorText}`,
-            );
+          let errorText = 'Unknown error';
+          try {
+            errorText = await response.text();
+          } catch {
+            logger.warn(CHANNEL, 'Failed to read error response body');
           }
+
+          const isLastCandidate = candidateName === candidateNames.at(-1);
+          const { message, shouldContinue } = mapHttpError(
+            response.status,
+            agentName,
+            candidateName,
+            isLastCandidate,
+            errorText,
+          );
+
+          if (shouldContinue) {
+            lastError = new Error(message);
+            continue;
+          }
+          throw new Error(message);
         }
 
-        const responseData = await response.json();
-        const { config: yamlContent, name: _name, description } = responseData;
+        const {
+          config: yamlContent,
+          name: responseName,
+          description,
+          visibility,
+          agentCategory,
+        } = await response.json();
 
         if (!yamlContent) {
           throw new Error(
@@ -162,7 +248,6 @@ export class RemoteAgentLoader {
           );
         }
 
-        // Parse YAML configuration
         logger.debug(
           CHANNEL,
           `Parsing YAML for remote agent: ${candidateName}`,
@@ -170,13 +255,8 @@ export class RemoteAgentLoader {
         const parsed = yaml.parse(yamlContent);
         const validated = AgentDefinitionSchema.parse(parsed);
 
-        // Extract settings and prompts
-        // Note: Remote agents are expected to be self-contained (no inheritance).
-        // If inherits field is present, it's ignored - merge should happen on upload.
+        // Extract and process settings (remote agents are self-contained, no inheritance)
         const settings: Partial<AgentSetting> = validated.settings;
-        const prompts: Partial<AgentPrompt> = validated.prompts;
-
-        // Resolve tool names to definitions using shared utility
         if (Array.isArray(settings.tools)) {
           const { resolveToolDefinitions } = await import('@tools/registry');
           settings.tools = resolveToolDefinitions(
@@ -186,30 +266,22 @@ export class RemoteAgentLoader {
           );
         }
 
-        const validatedSettings = parseAgentSetting(settings);
-        const validatedPrompts = AgentPromptSchema.parse(prompts);
-
-        // Fetch metadata for the original agent name (not the candidate variant)
-        const metadata = await this.getAgentMetadata(agentName);
-
         logger.info(
           CHANNEL,
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
 
         return {
-          name: validated.name || agentName,
-          settings: validatedSettings,
-          prompts: validatedPrompts,
-          // Fallback metadata when database lookup fails
-          // Default to public visibility as a safe assumption
-          metadata: metadata || {
+          name: validated.name || responseName || agentName,
+          settings: parseAgentSetting(settings),
+          prompts: AgentPromptSchema.parse(validated.prompts),
+          metadata: RemoteAgentMetadataSchema.parse({
             id: '',
-            name: agentName,
-            description: description || undefined,
-            visibility: ['public'],
-            agentCategory: undefined,
-          },
+            name: responseName || agentName,
+            description,
+            visibility,
+            agentCategory,
+          }),
         };
       } catch (error) {
         // If this is the last candidate, throw the error
@@ -237,30 +309,14 @@ export class RemoteAgentLoader {
     );
   }
 
-  /**
-   * List all available remote agents for the current user.
-   */
+  /** List all available remote agents for the current user. */
   static async listRemoteAgents(): Promise<RemoteAgentMetadata[]> {
-    const isAuth = await SupabaseClient.isAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
+    if (!(await SupabaseClient.isAuthenticated())) return [];
 
     try {
-      const tokens = await SupabaseClient.getSessionTokens();
-      if (!tokens) {
-        return [];
-      }
+      const supabase = await getAuthenticatedClient();
+      if (!supabase) return [];
 
-      const supabase = SupabaseClient.getClient();
-
-      // Set auth session for RLS - requires both tokens
-      await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
-
-      // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
         .select('id, name, description, visibility, agent_category')
@@ -271,26 +327,8 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      // Map snake_case DB columns to camelCase and validate
-      // Use safeParse to filter invalid records without breaking the entire list
       return (data ?? [])
-        .map((row) => {
-          const result = RemoteAgentMetadataSchema.safeParse({
-            id: row.id,
-            name: row.name,
-            description: row.description,
-            visibility: row.visibility,
-            agentCategory: row.agent_category,
-          });
-          if (!result.success) {
-            logger.warn(
-              CHANNEL,
-              `Invalid metadata for agent "${row.name}": ${result.error.message}`,
-            );
-            return null;
-          }
-          return result.data;
-        })
+        .map(parseMetadataRow)
         .filter((item): item is RemoteAgentMetadata => item !== null);
     } catch (error) {
       logger.error(
@@ -301,25 +339,13 @@ export class RemoteAgentLoader {
     }
   }
 
-  /**
-   * Get metadata for a specific remote agent.
-   */
+  /** Get metadata for a specific remote agent. */
   static async getAgentMetadata(
     agentName: string,
   ): Promise<RemoteAgentMetadata | null> {
     try {
-      const tokens = await SupabaseClient.getSessionTokens();
-      if (!tokens) {
-        return null;
-      }
-
-      const supabase = SupabaseClient.getClient();
-
-      // Set auth session for RLS - requires both tokens
-      await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
+      const supabase = await getAuthenticatedClient();
+      if (!supabase) return null;
 
       const { data, error } = await supabase
         .from('remote_agents')
@@ -335,21 +361,7 @@ export class RemoteAgentLoader {
         return null;
       }
 
-      const result = RemoteAgentMetadataSchema.safeParse({
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        visibility: data.visibility,
-        agentCategory: data.agent_category,
-      });
-      if (!result.success) {
-        logger.warn(
-          CHANNEL,
-          `Invalid metadata for agent "${agentName}": ${result.error.message}`,
-        );
-        return null;
-      }
-      return result.data;
+      return parseMetadataRow(data);
     } catch (error) {
       logger.error(
         CHANNEL,

@@ -18,6 +18,7 @@ import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
 import { createRecordingHandlers } from './handlers/recordingHandlers.js';
 import { recordingManager } from './domHandlers.js';
+import { collectCurrentContext } from './state/currentContext.js';
 
 // Handler submodules
 import { createThemeHandlers } from './handlers/themeHandlers.js';
@@ -35,6 +36,7 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   safeGetElementById,
+  safeGetElementValue,
   setChevronIcon,
   waitForElement,
   isSelectLikeElement,
@@ -1272,8 +1274,23 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   // State restoration
   handleRestoreState(message) {
-    this._handleStateRestoration(message.state);
-    this._postHandle();
+    try {
+      this._handleStateRestoration(message.state);
+      this._postHandle();
+
+      // Support executeImmediately for followup tasks (reuses restore flow)
+      if (message.executeImmediately) {
+        // Determine mode from session type
+        const sessionType = this._getSessionTypeValue();
+        const mode =
+          sessionType === SESSION_TYPES.TOOL_USE ? 'chat' : 'workflow';
+        this._executeFollowupTask(mode);
+      }
+    } catch (error) {
+      console.error('Failed to restore state:', error);
+      // Show error to user via status or notification
+      this._showError?.('Failed to restore state. Please try again.');
+    }
   }
 
   handleCheckRestoredBaseFile() {
@@ -1337,6 +1354,35 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     recordingManager.setRecording(false);
     this._postHandle();
+  }
+
+  /**
+   * Execute the followup task after setup is complete.
+   * Called when executeImmediately flag is set.
+   * Note: merge mode is handled directly in ProgressViewMessageHandler.executeMergeDirectly
+   * @param {'chat'|'workflow'} mode - The followup mode
+   */
+  _executeFollowupTask(mode) {
+    const {
+      agent,
+      isToolUseAgent,
+      singleFileSelections,
+      multipleFileSelections,
+      checkboxValues,
+    } = collectCurrentContext({ fileList });
+    const modelValue = safeGetElementValue('model');
+    const instructionValue = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
+
+    vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.EXECUTE,
+      agent,
+      model: modelValue,
+      instruction: instructionValue,
+      isToolUseAgent,
+      ...singleFileSelections,
+      ...multipleFileSelections,
+      ...checkboxValues,
+    });
   }
 }
 

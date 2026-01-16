@@ -13,7 +13,6 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -46,14 +45,6 @@ interface ResumeAgentCommandPayload {
 
 const CHANNEL = 'resumeCommand';
 
-function formatLostFollowUpSuffix(count: number): string {
-  if (count === 0) {
-    return '';
-  }
-  const label = count === 1 ? 'follow-up was' : 'follow-ups were';
-  return ` ${count} queued ${label} lost.`;
-}
-
 /**
  * Resume a tool-use session from a snapshot.
  *
@@ -70,13 +61,10 @@ async function resumeFromSnapshot(
     return { success: false };
   }
 
-  const streamId = snapshot.streamId as StreamTabId;
-  const existingStatus = StreamStatusService.get(streamId);
+  const { streamId } = snapshot;
 
-  if (
-    existingStatus === STREAM_STATUS.RUNNING ||
-    existingStatus === STREAM_STATUS.RESUMING
-  ) {
+  // Guard against concurrent resume attempts
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
     return { success: false };
   }
 
@@ -117,9 +105,12 @@ async function resumeFromSnapshot(
       'Failed to resume tool-use session',
       error,
     );
-    await vscode.window.showWarningMessage(
-      `${baseMessage}${formatLostFollowUpSuffix(lostCount)}`,
-    );
+    let lostSuffix = '';
+    if (lostCount > 0) {
+      const label = lostCount === 1 ? 'follow-up was' : 'follow-ups were';
+      lostSuffix = ` ${lostCount} queued ${label} lost.`;
+    }
+    await vscode.window.showWarningMessage(`${baseMessage}${lostSuffix}`);
 
     return { success: false, lostFollowUps: lostCount };
   } finally {

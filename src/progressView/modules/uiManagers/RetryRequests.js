@@ -57,10 +57,19 @@ export class RetryRequests extends BaseUIRequestManager {
     const errorElem = element.querySelector('.retry-request__error');
     element.dataset.streamId = request.streamId || '';
 
+    // Check if this is a relay error
+    const isRelayError = request.errorDetails?.isRelayError === true;
+    const retryable = request.errorDetails?.retryable !== false; // Default to true for retry requests
+
+    // Update element class for styling
+    element.classList.toggle('retry-request--relay', isRelayError);
+
     if (operationElem) {
+      // Add [Relay] prefix for relay errors
+      const prefix = isRelayError ? '[Relay] ' : '';
       operationElem.textContent = request.operation
-        ? `Failed: ${request.operation}`
-        : 'Request failed';
+        ? `${prefix}Failed: ${request.operation}`
+        : `${prefix}Request failed`;
     }
 
     if (metaElem) {
@@ -68,6 +77,12 @@ export class RetryRequests extends BaseUIRequestManager {
       if (request.model) {
         parts.push(`Model: ${request.model}`);
       }
+      // Add source indicator
+      if (isRelayError) {
+        parts.push('Source: Relay');
+      }
+      // Add retryable status
+      parts.push(retryable ? 'Retryable: Yes' : 'Retryable: No');
       metaElem.textContent = parts.join(' \u2022 ');
     }
 
@@ -100,31 +115,28 @@ export class RetryRequests extends BaseUIRequestManager {
 
   /**
    * Formats error details into a displayable string.
-   * @param {Object|undefined} details - Error details object
+   * Uses all fields from ProviderError schema (single source of truth).
+   * @param {Object|undefined} details - Error details object (ProviderError)
    * @returns {string|null} Formatted details string, or null if no details
    */
   _formatErrorDetails(details) {
-    if (!details) {
-      return null;
-    }
+    if (!details) return null;
 
-    const lines = [];
+    // Fields to display in order (strings/numbers shown as-is, booleans explicitly)
+    const formatBody = (body) =>
+      typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
 
-    if (details.provider) {
-      lines.push(`provider: ${details.provider}`);
-    }
-
-    if (details.statusCode != null) {
-      lines.push(`statusCode: ${details.statusCode}`);
-    }
-
-    if (details.rawErrorBody != null) {
-      const bodyStr =
-        typeof details.rawErrorBody === 'object'
-          ? JSON.stringify(details.rawErrorBody, null, 2)
-          : String(details.rawErrorBody);
-      lines.push(`rawErrorBody: ${bodyStr}`);
-    }
+    const lines = [
+      details.message && `message: ${details.message}`,
+      details.provider && `provider: ${details.provider}`,
+      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusText && `statusText: ${details.statusText}`,
+      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
+      details.retryable != null && `retryable: ${details.retryable}`,
+      details.requestId && `requestId: ${details.requestId}`,
+      details.rawErrorBody != null &&
+        `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
+    ].filter(Boolean);
 
     return lines.length > 0 ? lines.join('\n') : null;
   }

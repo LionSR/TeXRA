@@ -152,11 +152,13 @@ export function hasVisibilityAccess(
   visibility: string | string[] | undefined | null,
 ): boolean {
   // Normalize to array and filter out non-strings
-  const visibilityArray = visibility
-    ? (Array.isArray(visibility) ? visibility : [visibility]).filter(
-        (v): v is string => typeof v === 'string',
-      )
-    : [];
+  let visibilityArray: string[];
+  if (!visibility) {
+    visibilityArray = [];
+  } else {
+    const raw = Array.isArray(visibility) ? visibility : [visibility];
+    visibilityArray = raw.filter((v): v is string => typeof v === 'string');
+  }
 
   // Empty/null visibility or 'public' tag means accessible to all
   if (visibilityArray.length === 0 || visibilityArray.includes('public')) {
