@@ -8,6 +8,11 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
+import {
+  STREAM_STATUS,
+  isTerminalStatus,
+  type StreamStatus,
+} from '@common/constants/streamStatus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -25,11 +30,6 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import {
-  STREAM_STATUS,
-  isTerminalStatus,
-  type StreamStatus,
-} from '@common/constants/streamStatus';
 import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 
