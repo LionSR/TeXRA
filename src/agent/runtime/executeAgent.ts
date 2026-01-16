@@ -381,45 +381,30 @@ async function resolveAgentBase(
 // Flow Execution Helpers
 // ============================================================================
 
+const STATUS_MESSAGES: Record<string, string> = {
+  [STREAM_STATUS.INITIALIZING]: 'already launching',
+  [STREAM_STATUS.RESUMING]: 'resuming',
+  [STREAM_STATUS.RUNNING]: 'already running',
+};
+
 /**
  * Acquire stream for execution or throw if already in use.
  * Must be called before expensive resolution to prevent race conditions.
- *
- * @param streamId - The stream ID to acquire
- * @param taskType - Type descriptor for error message (e.g., "Task", "Merge task")
- * @throws Error if stream is already initializing, running, or resuming
  */
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   taskType: string = 'Task',
 ): void {
-  if (!StreamStatusService.tryAcquire(streamId)) {
-    const currentStatus = StreamStatusService.get(streamId);
-    let statusMsg: string;
-    switch (currentStatus) {
-      case STREAM_STATUS.INITIALIZING:
-        statusMsg = 'already launching';
-        break;
-      case STREAM_STATUS.RESUMING:
-        statusMsg = 'resuming';
-        break;
-      default:
-        statusMsg = 'already running';
-    }
-    throw new Error(
-      `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
-    );
-  }
+  if (StreamStatusService.tryAcquire(streamId)) return;
+
+  const status = StreamStatusService.get(streamId) ?? '';
+  const statusMsg = STATUS_MESSAGES[status] || 'already running';
+  throw new Error(
+    `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+  );
 }
 
-/**
- * Validate that config has session metadata, releasing stream on failure.
- *
- * @param config - Agent configuration to validate
- * @param streamId - Stream ID to release if validation fails
- * @param agentType - Type descriptor for error message (e.g., "Agent", "Merge agent")
- * @throws Error if session metadata is missing
- */
+/** Validate that config has session metadata, releasing stream on failure. */
 function ensureSessionMetadata(
   config: AgentConfig,
   streamId: StreamTabId,
@@ -431,19 +416,12 @@ function ensureSessionMetadata(
   }
 }
 
-/**
- * Create a usage recorder callback for flow execution.
- *
- * This callback is invoked when a round is finalized and records usage
- * statistics via the usage monitor.
- */
+/** Create a usage recorder callback for flow execution. */
 function createUsageRecorder(
   usageMonitor: UsageMonitor,
   runKind: 'workflow' | 'tool-use' = 'workflow',
 ): () => RoundFinalizedCallback {
-  return () => async (run) => {
-    await usageMonitor.recordUsage(run, { runKind });
-  };
+  return () => (run) => usageMonitor.recordUsage(run, { runKind });
 }
 
 type FlowRunner = () => Promise<EndGroupStatus>;
@@ -458,13 +436,12 @@ async function runFlowWithLifecycle(
     const flowStatus = await runner();
     ctx.runStage.end(flowStatus);
 
-    // Update stream status, preserving WAITING and STOPPED states
     if (!StreamStatusService.shouldPreserveOnCompletion(streamTabId)) {
-      const newStatus =
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
-      StreamStatusService.set(streamTabId, newStatus);
+      StreamStatusService.set(
+        streamTabId,
+        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+      );
     }
-
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (error) {
     ctx.runStage.end(END_GROUP_STATUS.ERROR);
@@ -482,14 +459,13 @@ function showAgentNotification(config: AgentConfig): void {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
-
   const outputFiles = config.outputFiles ?? [];
-  let outputInfo = '';
-  if (config.useMultipleOutputs && outputFiles.length > 1) {
-    outputInfo = `to ${outputFiles.length} files`;
-  } else if (outputFiles[0]) {
-    outputInfo = `to ${path.basename(outputFiles[0])}`;
-  }
+  const outputInfo =
+    config.useMultipleOutputs && outputFiles.length > 1
+      ? `to ${outputFiles.length} files`
+      : outputFiles[0]
+        ? `to ${path.basename(outputFiles[0])}`
+        : '';
 
   void vscode.window
     .showInformationMessage(
@@ -501,9 +477,9 @@ function showAgentNotification(config: AgentConfig): void {
       },
       'Show ProgressBoard',
     )
-    .then((sel) => {
-      if (sel) void vscode.commands.executeCommand('texra.showProgressView');
-    });
+    .then(
+      (sel) => sel && vscode.commands.executeCommand('texra.showProgressView'),
+    );
 }
 
 /** Show API key error notification with action buttons. */
