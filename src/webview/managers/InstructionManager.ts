@@ -46,46 +46,6 @@ export class InstructionManager extends BaseWebviewManager {
     }, 100);
   }
 
-  /**
-   * Validate that the given file path is a non-empty value.
-   * Type guard to ensure file is a string.
-   */
-  private isValidFile(file?: string): file is string {
-    return !!file && file !== 'None' && file !== '';
-  }
-
-  /**
-   * Add a single file to the context when it passes validation.
-   */
-  private addSingleFileIfValid(
-    context: FileContext,
-    contextKey: 'inputFile' | 'referenceFile' | 'auxiliaryFile' | 'mediaFile',
-    file?: string,
-  ): void {
-    if (this.isValidFile(file)) {
-      context[contextKey] = file;
-    }
-  }
-
-  /**
-   * Add a list of files to the context when they are enabled and present.
-   */
-  private addMultipleFilesIfValid(
-    context: FileContext,
-    contextKey:
-      | 'inputFiles'
-      | 'referenceFiles'
-      | 'auxiliaryFiles'
-      | 'mediaFiles'
-      | 'outputFiles',
-    active: boolean,
-    files?: string[],
-  ): void {
-    if (active && Array.isArray(files) && files.length > 0) {
-      context[contextKey] = files;
-    }
-  }
-
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
@@ -93,54 +53,7 @@ export class InstructionManager extends BaseWebviewManager {
       return;
     }
     try {
-      const fileContext: FileContext = { agent: message.agent };
-
-      // Add single files
-      this.addSingleFileIfValid(fileContext, 'inputFile', message.inputFile);
-      this.addSingleFileIfValid(
-        fileContext,
-        'referenceFile',
-        message.referenceFile,
-      );
-      this.addSingleFileIfValid(
-        fileContext,
-        'auxiliaryFile',
-        message.auxiliaryFile,
-      );
-      this.addSingleFileIfValid(fileContext, 'mediaFile', message.mediaFile);
-
-      // Add multiple files
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'inputFiles',
-        !!message.inputFilesActive,
-        message.inputFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'referenceFiles',
-        !!message.referenceFilesActive,
-        message.referenceFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'auxiliaryFiles',
-        !!message.auxiliaryFilesActive,
-        message.auxiliaryFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'mediaFiles',
-        !!message.mediaFilesActive,
-        message.mediaFiles,
-      );
-      this.addMultipleFilesIfValid(
-        fileContext,
-        'outputFiles',
-        !!message.outputFilesActive,
-        message.outputFiles,
-      );
-
+      const fileContext = this.buildFileContext(message);
       const result = await polishTextWithAI(message.text, fileContext);
       if (result.success) {
         this.postMessage({
@@ -163,6 +76,43 @@ export class InstructionManager extends BaseWebviewManager {
         `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
       );
     }
+  }
+
+  /** Build file context for AI text polishing, filtering empty/placeholder values */
+  private buildFileContext(message: PolishInstructionMessage): FileContext {
+    const isValid = (f?: string): f is string =>
+      !!f && f !== 'None' && f !== '';
+    const context: FileContext = { agent: message.agent };
+
+    // Single file fields
+    const singleFields = [
+      'inputFile',
+      'referenceFile',
+      'auxiliaryFile',
+      'mediaFile',
+    ] as const;
+    for (const field of singleFields) {
+      if (isValid(message[field])) {
+        context[field] = message[field];
+      }
+    }
+
+    // Multi-file fields (check active flag and array content)
+    const multiFields = [
+      ['inputFiles', 'inputFilesActive'],
+      ['referenceFiles', 'referenceFilesActive'],
+      ['auxiliaryFiles', 'auxiliaryFilesActive'],
+      ['mediaFiles', 'mediaFilesActive'],
+      ['outputFiles', 'outputFilesActive'],
+    ] as const;
+    for (const [field, activeField] of multiFields) {
+      const files = message[field];
+      if (message[activeField] && Array.isArray(files) && files.length > 0) {
+        context[field] = files;
+      }
+    }
+
+    return context;
   }
 
   handleTranscribeInstruction(): void {

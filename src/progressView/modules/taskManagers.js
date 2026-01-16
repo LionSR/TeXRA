@@ -41,6 +41,11 @@ export class TaskGroupDomManager {
     }
 
     // Child groups need a header and collapsible details wrapper
+    return this._createChildGroupElement(group, groupContainer);
+  }
+
+  /** Create collapsible details element for child groups */
+  _createChildGroupElement(group, groupContainer) {
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) return null;
 
@@ -50,17 +55,21 @@ export class TaskGroupDomManager {
     detailsElem.appendChild(headerElement);
     detailsElem.appendChild(groupContainer);
 
-    // Restore collapsed state: toggleStates stores whether collapsed (true = collapsed)
-    const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
-    detailsElem.open = !isCollapsed;
-    const toggleListener = () => {
-      progressViewState.toggleStates.set(group.id, !detailsElem.open);
-    };
-    detailsElem.addEventListener('toggle', toggleListener);
-    this.toggleListeners.set(group.id, toggleListener);
-
+    this._setupToggleState(group.id, detailsElem);
     this._registerGroupElement(group, detailsElem);
     return detailsElem;
+  }
+
+  /** Set up toggle state persistence for a collapsible group */
+  _setupToggleState(groupId, detailsElem) {
+    const isCollapsed = progressViewState.toggleStates.get(groupId) === true;
+    detailsElem.open = !isCollapsed;
+
+    const toggleListener = () => {
+      progressViewState.toggleStates.set(groupId, !detailsElem.open);
+    };
+    detailsElem.addEventListener('toggle', toggleListener);
+    this.toggleListeners.set(groupId, toggleListener);
   }
 
   /**

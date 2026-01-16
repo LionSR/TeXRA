@@ -16,13 +16,19 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { isLatexFile } from '@common/files/fileTypeUtils';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type ToolResult, type LineChanges } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
+import {
+  type LatexPreviewEntry,
+  previewProposedLatex,
+  runLatexdiff,
+} from './latexPreview';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -45,16 +51,11 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 const REVEAL_TIMEOUT_MS = 1500;
 
-interface PendingApprovalEntry {
+interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
-  originalUri: vscode.Uri;
-  proposedUri: vscode.Uri;
-  originalContent: string;
-  proposedContent: string;
   title: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
-  isSettled: () => boolean;
   settle: (result: ToolEditApprovalResult) => void;
 }
 
@@ -65,6 +66,8 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'openDiff',
   'approveAll',
   'resumeApprovals',
+  'showLatexdiff',
+  'previewProposed',
 ] as const;
 
 export type ProgressViewApprovalAction =
@@ -195,6 +198,7 @@ async function showProgressViewApprovalPrompt(
     streamId: request.streamId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
+    isLatex: isLatexFile(request.path),
   });
 }
 
@@ -213,10 +217,19 @@ function countChangedLines(text: string): number {
 
   const normalized = text.replaceAll('\r\n', '\n');
   const segments = normalized.split('\n');
-  if (normalized.endsWith('\n')) {
-    return Math.max(segments.length - 1, 0);
-  }
-  return segments.length;
+  return normalized.endsWith('\n')
+    ? Math.max(segments.length - 1, 0)
+    : segments.length;
+}
+
+function createSemanticDiffs(
+  original: string,
+  proposed: string,
+): ReturnType<InstanceType<typeof diff_match_patch>['diff_main']> {
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(original, proposed);
+  dmp.diff_cleanupSemantic(diffs);
+  return diffs;
 }
 
 function computeLineChangeSummary(
@@ -227,18 +240,12 @@ function computeLineChangeSummary(
     return { added: 0, removed: 0 };
   }
 
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
+  const diffs = createSemanticDiffs(original, proposed);
 
   let added = 0;
   let removed = 0;
 
   for (const [type, text] of diffs) {
-    if (!text) {
-      continue;
-    }
-
     if (type === DIFF_INSERT) {
       added += countChangedLines(text);
     } else if (type === DIFF_DELETE) {
@@ -254,27 +261,18 @@ function firstChangedLine(original: string, proposed: string): number | null {
     return null;
   }
 
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
-
-  let originalLine = 0;
+  const diffs = createSemanticDiffs(original, proposed);
   let proposedLine = 0;
 
   for (const [type, text] of diffs) {
     switch (type) {
-      case DIFF_EQUAL: {
-        const newlineCount = countNewlines(text);
-        originalLine += newlineCount;
-        proposedLine += newlineCount;
+      case DIFF_EQUAL:
+        proposedLine += countNewlines(text);
         break;
-      }
       case DIFF_INSERT:
         return proposedLine;
       case DIFF_DELETE:
         return Math.max(proposedLine - 1, 0);
-      default:
-        break;
     }
   }
 
@@ -312,11 +310,7 @@ function computeUserPatch(
     diffOptions,
   );
 
-  if (!diffLines || diffLines.length === 0) {
-    return undefined;
-  }
-
-  return diffLines.join('\n');
+  return diffLines.length ? diffLines.join('\n') : undefined;
 }
 
 async function revealFirstChange(
@@ -443,25 +437,17 @@ async function nativeRequestApproval(
     originalContent,
     proposedContent,
   );
-  const totalChanged = Math.max(lineChanges.added + lineChanges.removed, 0);
-  const changeSummaryParts: string[] = [];
-  if (lineChanges.added > 0) {
-    changeSummaryParts.push(`+${lineChanges.added}`);
-  }
-  if (lineChanges.removed > 0) {
-    changeSummaryParts.push(`-${lineChanges.removed}`);
-  }
-  const changeSummary =
-    changeSummaryParts.length > 0
-      ? `${changeSummaryParts.join(' / ')} ${
-          totalChanged === 1 ? 'line' : 'lines'
-        }`
-      : undefined;
-
-  const titleDetails = changeSummary
-    ? `${description} · ${changeSummary}`
-    : description;
-  const title = `Tool edit (${sourceTool}): ${titleDetails}`;
+  const { added, removed } = lineChanges;
+  const totalChanged = added + removed;
+  const changeParts = [
+    added > 0 && `+${added}`,
+    removed > 0 && `-${removed}`,
+  ].filter(Boolean);
+  const lineWord = totalChanged === 1 ? 'line' : 'lines';
+  const changeSuffix = changeParts.length
+    ? ` · ${changeParts.join(' / ')} ${lineWord}`
+    : '';
+  const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
@@ -481,7 +467,7 @@ async function nativeRequestApproval(
           return;
         }
         settled = true;
-        pendingApprovals.delete(requestId);
+        // Note: Don't delete from pendingApprovals here - finally block handles cleanup
         resolve(value);
       };
 
@@ -496,6 +482,8 @@ async function nativeRequestApproval(
         lineChanges,
         isSettled: () => settled,
         settle,
+        workspaceTempCleanup: [],
+        latexOperationInProgress: false,
       };
 
       pendingApprovals.set(requestId, entry);
@@ -529,10 +517,20 @@ async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
+    // Get entry before deleting to access workspace temp cleanup functions
+    const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
     await cleanupTempFile(originalUri);
     await cleanupTempFile(proposedUri);
+
+    // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
+    if (entry?.workspaceTempCleanup.length) {
+      await Promise.all(
+        entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
+      );
+    }
+
     resolveProgressViewApprovalPrompt(requestId);
   }
 }
@@ -589,9 +587,8 @@ function finalizeApprovalResult(
 
   const appliedContent = result.appliedContent ?? request.proposedContent;
   const userPatch =
-    result.userPatch !== undefined
-      ? result.userPatch
-      : computeUserPatch(request.path, request.proposedContent, appliedContent);
+    result.userPatch ??
+    computeUserPatch(request.path, request.proposedContent, appliedContent);
 
   return {
     ...result,
@@ -609,8 +606,6 @@ export function getApprovedContent(
 ): string {
   return approval.appliedContent ?? fallback;
 }
-
-// (legacy formatting removed; use formatUnifiedApprovalUserDiff instead)
 
 /**
  * Render a human-readable, line-numbered unified diff for user adjustments.
@@ -684,67 +679,70 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
-  if (payload.action === 'openDiff') {
-    if (entry.isSettled()) {
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      entry.originalUri,
-      entry.proposedUri,
-      entry.title,
-    );
-    await revealFirstChange(
-      entry.proposedUri,
-      entry.originalContent,
-      entry.proposedContent,
-    );
-    return;
-  }
-
-  if (entry.isSettled()) {
-    return;
-  }
-
-  if (payload.action === 'approve') {
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
-    entry.settle({ accepted: true, appliedContent });
-    return;
-  }
-
-  if (payload.action === 'approveAll') {
-    enableSessionApprovalBypass();
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
-    entry.settle({ accepted: true, appliedContent });
-    return;
-  }
-
+  // State modification action - no isSettled check needed
   if (payload.action === 'resumeApprovals') {
     resetToolEditApprovalSessionBypass();
     return;
   }
 
-  if (payload.action === 'reject') {
-    let userMessage = payload.note?.trim();
-    if (!userMessage) {
-      const note = await vscode.window.showInputBox({
-        prompt: 'Optionally share why the change was rejected',
-        placeHolder: 'Add guidance for the assistant (press Enter to skip)',
-      });
-      // If user pressed Escape, cancel the rejection and keep waiting
-      if (note === undefined) {
-        return;
+  // All other actions require the entry to not be settled
+  if (entry.isSettled()) {
+    return;
+  }
+
+  switch (payload.action) {
+    case 'openDiff':
+      await vscode.commands.executeCommand(
+        'vscode.diff',
+        entry.originalUri,
+        entry.proposedUri,
+        entry.title,
+      );
+      await revealFirstChange(
+        entry.proposedUri,
+        entry.originalContent,
+        entry.proposedContent,
+      );
+      break;
+
+    case 'showLatexdiff':
+      await runLatexdiff(entry);
+      break;
+
+    case 'previewProposed':
+      await previewProposedLatex(entry);
+      break;
+
+    case 'approve':
+    case 'approveAll': {
+      if (payload.action === 'approveAll') {
+        enableSessionApprovalBypass();
       }
-      userMessage = note.trim();
+      const appliedContent = await fs
+        .readFile(entry.proposedUri.fsPath, 'utf-8')
+        .catch(() => entry.proposedContent);
+      entry.settle({ accepted: true, appliedContent });
+      break;
     }
 
-    entry.settle({
-      accepted: false,
-      userMessage: userMessage || undefined,
-    });
+    case 'reject': {
+      let userMessage = payload.note?.trim();
+      if (!userMessage) {
+        const note = await vscode.window.showInputBox({
+          prompt: 'Optionally share why the change was rejected',
+          placeHolder: 'Add guidance for the assistant (press Enter to skip)',
+        });
+        if (note === undefined) {
+          return;
+        }
+        userMessage = note.trim();
+      }
+      entry.settle({
+        accepted: false,
+        userMessage: userMessage || undefined,
+      });
+      break;
+    }
   }
 }
 

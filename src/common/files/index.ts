@@ -9,5 +9,7 @@ export {
   ExtensionCategory,
   FileType,
   getIncludedExtensions,
+  isLatexFile,
   isTexFile,
+  LATEX_EXTENSIONS,
 } from './fileTypeUtils';

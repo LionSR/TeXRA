@@ -10,35 +10,73 @@ import type { FileLocation } from '@utils/files';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
+const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
+
+function normalizePath(latexDir: string, relativePath: string): string {
+  return path.normalize(
+    path.join(latexDir, relativePath.replaceAll(/^\/+|\/+$/g, '')),
+  );
+}
+
 /**
- * Parse graphicspath commands supporting both single and multiple path formats
+ * Normalize a path to ensure it has a trailing slash.
+ */
+function ensureTrailingSlash(p: string): string {
+  const trimmed = p.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+}
+
+/**
+ * Parse graphicspath commands supporting both single and multiple path formats.
  * @param content LaTeX file content
  * @returns Array of paths found in graphicspath commands
  */
 function parseGraphicspath(content: string): string[] {
-  const paths: string[] = [];
-  // Match both single and multiple path formats
   const graphicspathPattern = /\\graphicspath\s*\{((?:\s*\{[^{}]+\}\s*)+)\}/g;
-  // Pattern to extract individual paths from nested braces
   const pathPattern = /\{([^{}]+)\}/g;
 
-  // Use flatMap to process outer matches and extract inner paths
-  const extractedPaths = [...content.matchAll(graphicspathPattern)].flatMap(
-    (outerMatch) =>
-      [...outerMatch[1].matchAll(pathPattern)]
-        .map((pathMatch) => {
-          let p = pathMatch[1].trim();
-          // Ensure path has trailing slash
-          if (p && !p.endsWith('/')) {
-            p += '/';
-          }
-          return p;
-        })
-        .filter(Boolean),
-  );
+  const extractedPaths: string[] = [];
+  for (const outerMatch of content.matchAll(graphicspathPattern)) {
+    for (const pathMatch of outerMatch[1].matchAll(pathPattern)) {
+      const normalized = ensureTrailingSlash(pathMatch[1]);
+      if (normalized) {
+        extractedPaths.push(normalized);
+      }
+    }
+  }
 
-  paths.push(...extractedPaths);
-  return paths;
+  return extractedPaths;
+}
+
+/**
+ * Resolve a figure path by searching through possible base paths and extensions
+ */
+async function resolveFigurePath(
+  figPath: string,
+  searchPaths: string[],
+  latexDir: string,
+): Promise<string | null> {
+  const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
+
+  for (const basePath of searchPaths) {
+    const normPath = path.normalize(path.join(basePath, figPath));
+
+    for (const ext of extensions) {
+      const pathToCheck = normPath + ext;
+      if (
+        await flexibleFS.exists({
+          kind: 'external',
+          absolutePath: pathToCheck,
+        })
+      ) {
+        return path.relative(latexDir, pathToCheck);
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -68,10 +106,7 @@ export async function extractFigurePathsFromLatex(
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
     for (const p of paths) {
-      const normalizedPath = path.normalize(
-        path.join(latexDir, p.replaceAll(/^\/+|\/+$/g, '')),
-      );
-      graphicspaths.push(normalizedPath);
+      graphicspaths.push(normalizePath(latexDir, p));
     }
 
     // Pre-process content to remove commented lines
@@ -85,37 +120,14 @@ export async function extractFigurePathsFromLatex(
 
     for (const pattern of figurePatterns) {
       for (const match of processedLines.matchAll(pattern)) {
-        const figPath = match[1];
-        let found = false;
-        for (const basePath of graphicspaths) {
-          const normPath = path.normalize(path.join(basePath, figPath));
-          // Try with common extensions if no extension is provided
-          const extensions = figPath.includes('.')
-            ? ['']
-            : ['.pdf', '.png', '.jpg', '.jpeg'];
-
-          for (const ext of extensions) {
-            const pathToCheck = normPath + ext;
-
-            if (
-              await flexibleFS.exists({
-                kind: 'external',
-                absolutePath: pathToCheck,
-              })
-            ) {
-              const relative = path.relative(latexDir, pathToCheck);
-              if (!discovered.has(relative)) {
-                figurePaths.push(relative);
-                discovered.add(relative);
-              }
-              found = true;
-              break;
-            }
-          }
-
-          if (found) {
-            break;
-          }
+        const resolved = await resolveFigurePath(
+          match[1],
+          graphicspaths,
+          latexDir,
+        );
+        if (resolved && !discovered.has(resolved)) {
+          figurePaths.push(resolved);
+          discovered.add(resolved);
         }
       }
     }

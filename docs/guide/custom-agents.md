@@ -183,7 +183,7 @@ Because this data lives alongside the run state, orchestrators can choose how to
 Tools live under `src/tools/` and each one defines its input schema with Zod.
 List the desired tools by name in your agent YAML. The registry includes
 workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
-`file_op`, `glob`, `grep`, and `ls` alongside domain-specific helpers such as
+`glob`, `grep`, and `ls` alongside domain-specific helpers such as
 `str_replace_editor`, `wolfram`,
 `web_fetch`, and `web_search`.
 

@@ -16,10 +16,6 @@ const PROFILE_VIEW_MODULES = [
 
 export class ProfileViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
-    super(context, 'ProfileView', [...PROFILE_VIEW_MODULES]);
-  }
-
-  protected getViewPath(): string {
-    return 'profileView';
+    super(context, 'ProfileView', PROFILE_VIEW_MODULES);
   }
 }

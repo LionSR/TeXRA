@@ -10,6 +10,7 @@ import { Placeholder } from './uiManagers/Placeholder.js';
 import { RunSelector } from './uiManagers/RunSelector.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
+import { FollowupSectionManager } from './uiManagers/FollowupSectionManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
@@ -40,6 +41,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       placeholder: new Placeholder(),
       instructionPanel: new InstructionPanel(),
       followUpInput: new FollowUpInputManager(vscode),
+      followupSection: new FollowupSectionManager(vscode),
       approvalRequests: new ApprovalRequests(),
       retryRequests: new RetryRequests(),
       todoList: new TodoList(),

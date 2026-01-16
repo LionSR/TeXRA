@@ -140,7 +140,10 @@ function shouldEnforceXmlStructure(
       ? XML_STRUCTURE_MODE_MAP[setting.xmlStructureMode]
       : (AGENT_TYPE_XML_DEFAULTS[setting.agentType] ?? false);
 
-  return mode === 'scratchpad' ? useScratchpad : mode;
+  if (mode === 'scratchpad') {
+    return useScratchpad;
+  }
+  return mode;
 }
 
 /** Compute the total number of rounds based on settings and prompt. */
@@ -156,11 +159,14 @@ function computeTotalRounds(
     return 1;
   }
 
-  const requests = Array.isArray(prompt.userRequest)
-    ? prompt.userRequest
-    : prompt.userRequest
-      ? [prompt.userRequest]
-      : [];
+  let requests: string[];
+  if (Array.isArray(prompt.userRequest)) {
+    requests = prompt.userRequest;
+  } else if (prompt.userRequest) {
+    requests = [prompt.userRequest];
+  } else {
+    requests = [];
+  }
   return Math.max(setting.rounds ?? 2, requests.length);
 }
 
@@ -228,7 +234,6 @@ export async function runReflectionFlow<C = unknown>(
   const outputHandler: IOutputHandler = new OutputHandler(
     setting,
     config,
-    0, // logId
     baseFiles,
     logger,
     fileService,

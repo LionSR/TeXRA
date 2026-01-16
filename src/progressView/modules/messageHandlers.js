@@ -95,10 +95,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Get active run context (stream and resolved runId).
    * @param {string} [runIdHint] - Optional runId to use instead of resolving
-   * @returns {{ stream: string, runId: string } | null}
    */
   _getActiveRunContext(runIdHint) {
-    const stream = state.activeStream || null;
+    const stream = state.activeStream;
     if (!stream) return null;
     const runId = runIdHint ?? state.resolveActiveRunId(stream);
     return runId ? { stream, runId } : null;
@@ -109,23 +108,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
   _refreshInstructionForActiveRun(runId) {
-    if (state.activeSessionKind === 'toolUse') {
-      dom.instructionPanel.hide();
-      return;
-    }
+    // Tool-use agents don't use instruction panel
+    if (state.activeSessionKind === 'toolUse')
+      return dom.instructionPanel.hide();
 
     const ctx = this._getActiveRunContext(runId);
-    if (!ctx) {
-      dom.instructionPanel.hide();
-      return;
-    }
+    if (!ctx) return dom.instructionPanel.hide();
 
     const instruction = state.getRunInstruction(ctx.stream, ctx.runId);
-    if (instruction && instruction.text) {
-      dom.instructionPanel.show(instruction.text, instruction.metadata);
-    } else {
-      dom.instructionPanel.hide();
-    }
+    instruction?.text
+      ? dom.instructionPanel.show(instruction.text, instruction.metadata)
+      : dom.instructionPanel.hide();
   }
 
   /**
@@ -151,13 +144,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * Clears display if stream has no context state.
    */
   _refreshContextStateForActiveStream() {
-    const stream = state.activeStream;
-    const contextState = stream ? state.getContextState(stream) : null;
-    if (contextState) {
-      dom.usageSummary.updateContextDisplay(contextState);
-    } else {
-      dom.usageSummary.clearContextDisplay();
-    }
+    const contextState = state.activeStream
+      ? state.getContextState(state.activeStream)
+      : null;
+    contextState
+      ? dom.usageSummary.updateContextDisplay(contextState)
+      : dom.usageSummary.clearContextDisplay();
   }
 
   /**
@@ -219,37 +211,32 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.queuedFollowUps.clear();
     dom.fileList.clear();
     dom.usageSummary.clearContextDisplay();
+    dom.followupSection.clear();
   }
 
   /**
-   * Clear run-scoped state for a specific stream.
-   * Shared between handleDeleteStream (single stream) and handleDeleteAll (all streams).
-   * @param {string} stream - The stream to clear, or null to clear all
+   * Clear run-scoped state for a specific stream or all streams.
+   * @param {string|null} stream - The stream to clear, or null to clear all
    */
   _clearRunScopedState(stream) {
+    // Stream-scoped clear methods accept optional stream param (null = clear all)
+    state.clearRunInstructions(stream);
+    state.clearRunFiles(stream);
+    state.clearRunMissingOutputs(stream);
+    state.clearRunUsage(stream, null);
+    state.clearContextState(stream);
+
     if (stream) {
-      // Clear stream-specific state
       state.clearExecutionIdAvailability(stream);
       state.clearActiveRun(stream);
-      state.clearRunInstructions(stream);
-      state.clearRunFiles(stream);
-      state.clearRunMissingOutputs(stream);
-      state.clearRunUsage(stream);
       state.clearTodos(stream);
       state.clearQueuedFollowUps(stream);
-      state.clearContextState(stream);
       state.clearFollowUpText(stream);
     } else {
-      // Clear all state
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
-      state.clearRunInstructions();
-      state.clearRunFiles();
-      state.clearRunMissingOutputs();
-      state.clearRunUsage();
       state.clearAllTodos();
       state.clearAllQueuedFollowUps();
-      state.clearContextState();
       state.clearAllFollowUpText();
     }
   }
@@ -330,33 +317,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Apply run-scoped data to state using the provided setter.
-   * @param {string} stream - The stream to update
-   * @param {Object|undefined} data - Run data mapping runId → value
-   * @param {Function} setter - State setter function (stream, runId, value)
-   */
-  _applyRunData(stream, data, setter) {
-    if (!data) return;
-    for (const [runId, value] of Object.entries(data)) {
-      if (runId) setter.call(state, stream, runId, value);
-    }
-  }
-
-  /**
    * Update run-scoped metadata (instructions, usage, files, context) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
-   * @param {string} stream - The stream to update
-   * @param {Object} message - Message containing runInstructions, runUsage, runFiles, contextState
    */
   _updateRunMetadata(stream, message) {
-    // Apply run-scoped metadata
-    this._applyRunData(
-      stream,
-      message.runInstructions,
-      state.setRunInstruction,
-    );
-    this._applyRunData(stream, message.runUsage, state.setRunUsage);
-    this._applyRunData(stream, message.runFiles, state.setRunFiles);
+    // Apply run-scoped metadata via iteration
+    const runDataSources = [
+      [message.runInstructions, state.setRunInstruction],
+      [message.runUsage, state.setRunUsage],
+      [message.runFiles, state.setRunFiles],
+    ];
+    for (const [data, setter] of runDataSources) {
+      if (!data) continue;
+      for (const [runId, value] of Object.entries(data)) {
+        if (runId) setter.call(state, stream, runId, value);
+      }
+    }
 
     // Context state is stream-scoped (not run-scoped)
     if (message.contextState) {
@@ -424,6 +400,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
       [COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
         this.handleUpdateQueuedFollowUps.bind(this),
+      [COMMANDS.SET_FOLLOWUP_OPTIONS]: this.handleSetFollowupOptions.bind(this),
     };
   }
 
@@ -434,23 +411,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.followUpInput.saveTextForStream(previousStream);
     }
 
-    try {
-      state.activeStream = message.activeStream;
-      if (
-        !state.pendingFilterUpdate &&
-        message.agentFilter !== undefined &&
-        message.agentFilter !== state.agentTypeFilter
-      ) {
-        state.agentTypeFilter = message.agentFilter;
-      }
-    } finally {
-      state.pendingFilterUpdate = false;
+    state.activeStream = message.activeStream;
+    // Update filter if message specifies a different value (and not a pending local change)
+    if (
+      !state.pendingFilterUpdate &&
+      message.agentFilter !== undefined &&
+      message.agentFilter !== state.agentTypeFilter
+    ) {
+      state.agentTypeFilter = message.agentFilter;
     }
+    state.pendingFilterUpdate = false;
     state.resetExecutionIdAvailability();
 
     // Process streams - preserve ERROR status when omitted
     const streams = (message.streams ?? []).map((s) => {
-      // Only preserve ERROR status; undefined means completed
       const cachedError = state.streamStatuses.get(s.name);
       const status =
         s.status ??
@@ -505,17 +479,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STREAM_STATUS.READY);
-      dom.instructionPanel.hide();
-      dom.runSelector.clear();
-      dom.todoList.clear();
-      dom.queuedFollowUps.clear();
-      dom.fileList.clear();
-      // Clear log content when no stream is active to avoid stale content
+      this._clearActivePanels();
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        logContent.innerHTML = '';
-      }
-      // Reset lastRenderedStream since we cleared content
+      if (logContent) logContent.innerHTML = '';
       state.lastRenderedStream = '';
       state.clearRunInstructions();
       state.clearAllActiveRuns();
@@ -526,16 +492,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
-      // Refresh todos for the active stream
-      const todos = state.getTodos(message.activeStream);
-      dom.todoList.update(todos ?? []);
-      // Refresh queued follow-ups for the active stream
-      const queuedFollowUps = state.getQueuedFollowUps(message.activeStream);
-      dom.queuedFollowUps.update(queuedFollowUps ?? []);
+      dom.todoList.update(state.getTodos(message.activeStream) ?? []);
+      dom.queuedFollowUps.update(
+        state.getQueuedFollowUps(message.activeStream) ?? [],
+      );
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
     this._refreshActiveRunPanels();
+    this._updateFollowupSection();
   }
 
   handleUpdateLogs(message) {
@@ -647,6 +612,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.lastRenderedStream = message.stream;
 
     this._updatePlaceholderVisibility();
+    // Update followup section - files may have been loaded via runFiles
+    this._updateFollowupSection();
   }
 
   /**
@@ -699,6 +666,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Refresh display panels - use validated run ID from state
     const activeRunId = state.resolveActiveRunId(message.stream);
     this._refreshActiveRunPanels(activeRunId);
+    // Update followup section - files may have changed
+    this._updateFollowupSection();
   }
 
   handleAppendLog(message) {
@@ -823,35 +792,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   handleUpdateStreamStatus(message) {
     const { stream, status, lastTimestamp } = message;
-    if (!stream) {
-      return;
-    }
+    if (!stream) return;
 
     // Validate status against known values
-    const validStatuses = Object.values(STREAM_STATUS);
-    if (status && !validStatuses.includes(status)) {
+    if (status && !Object.values(STREAM_STATUS).includes(status)) {
       console.debug(
         `[updateStreamStatus] Invalid status "${status}" for stream: ${stream}`,
       );
       return;
     }
 
-    // Always update state first - state is the single source of truth.
-    // If tab doesn't exist yet (race condition), UPDATE_STREAMS will read
-    // from state.streamStatuses and apply the status when creating the tab.
-    if (status && status !== STREAM_STATUS.READY) {
-      state.streamStatuses.set(stream, status);
-    } else {
-      state.streamStatuses.delete(stream);
-    }
-
-    // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
+    // Update state (single source of truth) - streamStatuses.set handles READY as delete
+    state.streamStatuses.set(stream, status);
     dom.streamTabs.updateStreamStatus(stream, status, lastTimestamp);
 
-    // Also update main status indicator if this is the active stream
+    // Update main status indicator if this is the active stream
     if (stream === state.activeStream) {
       dom.status.update(status || STREAM_STATUS.STOPPED);
       this._focusFollowUpIfWaiting(status);
+      // Update followup section when status changes (may become visible when stopped)
+      this._updateFollowupSection();
     }
   }
 
@@ -922,15 +882,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else if (message.runId) {
       const hasRounds =
         message.rounds && Object.keys(message.rounds).length > 0;
-      if (hasRounds) {
-        state.setRunFiles(targetStream, message.runId, message.rounds);
-      } else {
-        state.deleteRunFiles(targetStream, message.runId);
-      }
+      hasRounds
+        ? state.setRunFiles(targetStream, message.runId, message.rounds)
+        : state.deleteRunFiles(targetStream, message.runId);
     }
 
     if (targetStream === state.activeStream) {
       this._refreshOutputsForActiveRun();
+      // Update followup section when files change (affects visibility)
+      this._updateFollowupSection();
     }
   }
 
@@ -942,15 +902,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunMissingOutputs(targetStream);
       return;
     }
-
     if (!message.runId) return;
 
     const hasRounds = message.rounds && Object.keys(message.rounds).length > 0;
-    if (hasRounds) {
-      state.setRunMissingOutputs(targetStream, message.runId, message.rounds);
-    } else {
-      state.deleteRunMissingOutputs(targetStream, message.runId);
-    }
+    hasRounds
+      ? state.setRunMissingOutputs(targetStream, message.runId, message.rounds)
+      : state.deleteRunMissingOutputs(targetStream, message.runId);
   }
 
   handleShowToolEditApproval(message) {
@@ -1173,6 +1130,88 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (stream === state.activeStream) {
       dom.queuedFollowUps.update(messages);
     }
+  }
+
+  /**
+   * Handle SET_FOLLOWUP_OPTIONS command from extension host.
+   * Updates the followup section dropdowns with available agents and models.
+   * @param {{ workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }} message
+   */
+  handleSetFollowupOptions(message) {
+    const { workflowAgents, toolUseAgents, models, defaultMergeModel } =
+      message;
+    dom.followupSection?.setOptions?.({
+      workflowAgents,
+      toolUseAgents,
+      models,
+      defaultMergeModel,
+    });
+  }
+
+  /**
+   * Update followup section visibility based on current stream state.
+   * Called when stream status changes or streams are updated.
+   */
+  _updateFollowupSection() {
+    const activeStream = state.activeStream;
+    if (!activeStream) {
+      dom.followupSection?.updateForStream?.(null);
+      return;
+    }
+
+    const streamStatus = state.streamStatuses.get(activeStream);
+    const sessionKind = state.activeSessionKind || 'workflow';
+    const hasOutputFiles = this._hasOutputFilesForActiveStream();
+
+    // Extract agent name from stream ID (format: "agentName@timestamp")
+    const agentName = activeStream.split('@')[0] || activeStream;
+
+    // Get instruction text for workflow context
+    const runId = state.resolveActiveRunId(activeStream);
+    const instruction = runId
+      ? state.getRunInstruction(activeStream, runId)
+      : null;
+    const instructionPreview = instruction?.text
+      ? instruction.text.slice(0, 100) +
+        (instruction.text.length > 100 ? '...' : '')
+      : null;
+
+    // Count output files
+    const files = runId ? state.getRunFiles(activeStream, runId) : null;
+    const fileCount = files
+      ? Object.values(files).reduce(
+          (sum, roundFiles) =>
+            sum + (Array.isArray(roundFiles) ? roundFiles.length : 0),
+          0,
+        )
+      : 0;
+
+    dom.followupSection?.updateForStream?.({
+      agentCategory: sessionKind,
+      status: streamStatus,
+      hasOutputFiles,
+      agentName,
+      instructionPreview,
+      fileCount,
+    });
+  }
+
+  /**
+   * Check if the active stream has output files.
+   */
+  _hasOutputFilesForActiveStream() {
+    const activeStream = state.activeStream;
+    if (!activeStream) return false;
+
+    const runId = state.resolveActiveRunId(activeStream);
+    if (!runId) return false;
+
+    const files = state.getRunFiles(activeStream, runId);
+    if (!files) return false;
+
+    return Object.values(files).some(
+      (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
+    );
   }
 }
 

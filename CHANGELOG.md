@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.5] - 2026-01-15
+
+### Features
+
+- Added **Followup Task** feature for workflow continuation directly in the Progress View, with chat mode for discussing results and support for multiple file merges.
+- Added a **Lean Proof** tool-use agent for informal-to-formal Lean 4 verification workflows.
+- Added a **Merge Multiple** agent for batch merge operations.
+- Added **LaTeXdiff preview** button in tool edit approval dropdown for comparing proposed changes.
+- Added expandable error details to retry dialog UI for better debugging.
+- Relay errors are now retryable with clearer error messaging and distinct UI indicators.
+- Added setting to control thinking block clearing (`texra.model.enableThinkingClearing`).
+- VS Code GitHub login is now hidden behind a config flag.
+
+### Bug Fixes
+
+- Fixed duplicate workflow launches.
+- Fixed agent cancellation responsiveness.
+- Fixed multiple output filename handling.
+- Fixed temp file cleanup.
+- Fixed relay error recovery.
+- Fixed tooltip and dropdown clipping issues.
+- Fixed bash tool error messages to include stdout.
+- Fixed queued follow-up messages not being combined.
+- Fixed context state display to use only actual API tokens.
+
+### Improvements
+
+- Internal refactoring to simplify code patterns and improve consistency across command handlers.
+
 ## [0.35.4] - 2026-01-10
 
 ### Features

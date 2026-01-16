@@ -6,10 +6,8 @@ import { z } from 'zod';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
-import {
-  buildErrorLogData,
-  type ErrorLogContext,
-} from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
+import { type ErrorContext } from '@common/errors/schemas';
 import { sleep } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -227,11 +225,12 @@ export class AgentLogger {
   public readonly isAgentLogger: boolean;
 
   constructor(
-    public channelId: string,
+    /** The stream identifier used for routing log messages. */
+    public readonly streamId: string,
     isAgentLogger = false,
   ) {
     this.isAgentLogger = isAgentLogger;
-    logger.initialize(this.channelId, this.isAgentLogger);
+    logger.initialize(this.streamId, this.isAgentLogger);
   }
 
   /** Internal helper to log at any level with consistent options handling. */
@@ -240,7 +239,7 @@ export class AgentLogger {
     message: string,
     options: LogOptions = {},
   ): void {
-    logger[level](this.channelId, message, {
+    logger[level](this.streamId, message, {
       groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
@@ -280,7 +279,7 @@ export class AgentLogger {
   logError(
     message: string,
     err: unknown,
-    context?: ErrorLogContext,
+    context?: ErrorContext,
     groupId?: string,
   ): void {
     const errorData = buildErrorLogData(err, context);
@@ -299,11 +298,7 @@ export class AgentLogger {
    * @param context - Optional context (operation, model)
    * @param groupId - Optional group ID for progress view
    */
-  logProgress(
-    message: string,
-    context?: ErrorLogContext,
-    groupId?: string,
-  ): void {
+  logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
@@ -510,6 +505,30 @@ export class AgentLogger {
     });
   }
 
+  /**
+   * Log a tool use event for display in the progress view.
+   * Single source of truth for TOOL_USE message type.
+   */
+  logToolUse(data: unknown, groupId?: string): void {
+    this.info('', {
+      groupId,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data,
+    });
+  }
+
+  /**
+   * Log a web search result for display in the progress view.
+   * Single source of truth for WEB_SEARCH message type.
+   */
+  logWebSearch(data: unknown, groupId?: string): void {
+    this.info('', {
+      groupId,
+      messageType: MESSAGE_TYPES.WEB_SEARCH,
+      data,
+    });
+  }
+
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
     if (!groupId) {
@@ -532,20 +551,11 @@ export class AgentLogger {
     }
 
     return logger.runWithGroupContext(
-      this.channelId,
+      this.streamId,
       groupId,
       this.isAgentLogger,
       fn,
     );
-  }
-
-  async withScope<T>(
-    groupName: string,
-    fn: () => Promise<T>,
-    options: LoggerScopeOptions = {},
-  ): Promise<T> {
-    const stage = await this.createStageHandle(groupName, options);
-    return stage.run(fn);
   }
 
   async stage(
@@ -595,7 +605,7 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const streamId = this.channelId;
+    const emitStreamId = this.streamId;
     const id = randomUUID();
     let buffer = '';
     let isFirstUpdate = true;
@@ -613,7 +623,7 @@ export class AgentLogger {
     const emitMessage = (isNew: boolean, text: string): void => {
       if (isNew) {
         bus.emit('addLogMessage', {
-          stream: streamId,
+          stream: emitStreamId,
           logMessage: {
             id,
             text,
@@ -626,7 +636,7 @@ export class AgentLogger {
         });
       } else {
         bus.emit('updateLogMessage', {
-          stream: streamId,
+          stream: emitStreamId,
           logMessage: { id, text, groupId, messageType: type },
         });
       }
@@ -661,7 +671,7 @@ export class AgentLogger {
   ): Promise<string> {
     await sleep(SHORT_SLEEP_MS);
     return logger.startGroup(
-      this.channelId,
+      this.streamId,
       groupName,
       id,
       parentGroupId,
@@ -673,10 +683,10 @@ export class AgentLogger {
     groupId: string,
     status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   ): void {
-    logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
+    logger.endGroup(this.streamId, groupId, status, this.isAgentLogger);
   }
 
   private resolveActiveGroupId(): string | undefined {
-    return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
+    return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
   }
 }

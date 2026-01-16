@@ -12,8 +12,6 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
-import { z } from 'zod';
-
 import { Node } from '@agent/node';
 import {
   retryCoordinator,
@@ -21,7 +19,11 @@ import {
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  type ProviderError,
+  type RetryErrorInfo,
+} from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
@@ -29,29 +31,18 @@ import {
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
+// Re-export from canonical source for backward compatibility
+export { RetryErrorInfoSchema, type RetryErrorInfo } from '@common/errors';
+
 /**
- * Minimum retry count for background mode.
- * This is the minimum value for maxRetries (total attempts = 1 initial + N-1 retries).
- * Background jobs can take longer and may fail due to timeout, so we ensure
- * at least 3 total attempts before surfacing the manual retry UI.
+ * Minimum retry count for background mode (at least 3 attempts before manual retry UI).
+ * Background jobs may fail due to timeouts and need more automatic recovery attempts.
  */
 export const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 // ============================================================================
-// Schemas (Single Source of Truth)
+// Error State Types (using canonical schema)
 // ============================================================================
-
-/**
- * Error information for retry handling.
- * Schema-first: used for persistence validation and type derivation.
- */
-export const RetryErrorInfoSchema = z.object({
-  message: z.string(),
-  retryable: z.boolean(),
-});
-
-/** Derived type from schema */
-export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
 /**
  * Retry state for tracking errors across the retry flow.
@@ -143,10 +134,7 @@ interface RetryableNodeServices {
   setAbortController: (ac: AbortController | null) => void;
 }
 
-/**
- * Type constraint for Node params - must be an object-like type.
- * Matches the NonIterableObject constraint used by PocketFlow Node.
- */
+/** Type constraint for Node params (matches PocketFlow's NonIterableObject). */
 type NodeParams = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
@@ -183,13 +171,9 @@ export abstract class RetryableInvocationNode<
   Svc extends RetryableNodeServices = RetryableNodeServices,
 > extends Node<S, P, Svc> {
   /**
-   * Tracks if user cancelled manual retry (to distinguish from actual failures).
-   *
-   * Design note: We use instance state rather than a UserCancelledError type because:
-   * 1. PocketFlow's retry loop catches all errors - we can't distinguish error types there
-   * 2. execFallback() receives the original error, not a wrapped cancellation
-   * 3. The flag is set in retryPrompt() and read in execFallback() - clear data flow
-   * 4. Manual retry protection (MAX_MANUAL_RETRIES=100) is in Node._exec()
+   * Tracks if user cancelled manual retry (to distinguish from failures).
+   * Set in retryPrompt(), read in execFallback(). Instance state is used because
+   * PocketFlow's retry loop catches all errors without distinguishing types.
    */
   protected _userCancelled = false;
 
@@ -214,13 +198,8 @@ export abstract class RetryableInvocationNode<
 
   /**
    * Reset user-cancelled flag on clone to prevent stale state.
-   *
-   * IMPORTANT: BaseNode.clone() uses Object.assign (shallow copy).
-   * - Primitive properties like _userCancelled are copied by value (safe)
-   * - Object/array properties would share references (unsafe)
-   *
-   * If subclasses add object/array properties, they MUST override clone()
-   * to deep-copy them. Currently RetryableInvocationNode only has primitives.
+   * Note: BaseNode.clone() shallow-copies with Object.assign. Subclasses with
+   * object/array properties must override to deep-copy them.
    */
   clone(): this {
     const cloned = super.clone();
@@ -229,30 +208,15 @@ export abstract class RetryableInvocationNode<
   }
 
   /**
-   * Wraps an async operation with automatic AbortController lifecycle management.
-   *
-   * Provides single source of truth for the abort controller pattern that was
-   * previously duplicated across ResponseModelInvocationNode and ToolUseCallNode.
-   *
-   * Handles:
-   * - Create AbortController and register with Node.signal for retry detection
-   * - Call setAbortController(controller) on services to enable interruption
-   * - Execute the operation with the signal
-   * - Cleanup: call setAbortController(null) in finally block
-   *
-   * @param operation - Async operation that uses the AbortController's signal
-   * @returns Result of the operation
+   * Wraps an async operation with AbortController lifecycle management.
+   * Creates controller, registers with Node.signal, sets on services, executes
+   * operation, and cleans up in finally block.
    *
    * @example
-   * ```typescript
-   * async exec(prepRes: PrepResult): Promise<Result> {
-   *   if (prepRes.shouldStop) return { kind: 'skipped' };
-   *   return this.withAbortController(async (signal) => {
-   *     const response = await modelHandler.createResponse({ signal });
-   *     return { kind: 'success', response };
-   *   });
-   * }
-   * ```
+   * return this.withAbortController(async (signal) => {
+   *   const response = await modelHandler.createResponse({ signal });
+   *   return { kind: 'success', response };
+   * });
    */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
@@ -285,23 +249,11 @@ export abstract class RetryableInvocationNode<
 
   /**
    * Read fresh retry config before starting the retry loop.
+   * Enables config changes to take effect without rebuilding the flow.
    *
-   * This enables config changes (e.g., user adjusting retry settings)
-   * to take effect without rebuilding the flow.
-   *
-   * ## Why mutating instance state is safe here:
-   * 1. PocketFlow clones nodes before each execution (see Flow.run)
-   * 2. Config is read at the START of _exec(), before any retries
-   * 3. Same config applies to all retry attempts within one execution
-   * 4. Flows are single-threaded per request - no concurrent mutation
-   *
-   * The mutation pattern is intentional: it allows dynamic config while
-   * keeping the Node API simple (maxRetries/wait are base class fields).
-   *
-   * ## Background mode minimum retries
-   * When background mode is active, we enforce a minimum retry count
-   * (BACKGROUND_MODE_MIN_RETRIES) to give users more chances to recover
-   * from transient failures common in long-running background jobs.
+   * Mutating instance state is safe because PocketFlow clones nodes before
+   * each execution and flows are single-threaded. Background mode enforces
+   * minimum retries for better recovery from transient failures.
    */
   async _exec(prepRes: unknown): Promise<unknown> {
     const config = getNodeRetryConfig();
@@ -320,18 +272,7 @@ export abstract class RetryableInvocationNode<
   /**
    * Manual retry prompt - called when auto-retries are exhausted.
    * Shows retry UI for retryable errors and waits for user action.
-   *
-   * Flow:
-   * 1. Format error and check if retryable
-   * 2. If not retryable, return false immediately (no UI)
-   * 3. Log error and emit waiting status
-   * 4. Wait for user action via RetryRequestCoordinator
-   * 5. Return whether to retry
-   *
-   * NOTE: This must be a regular method (not an arrow function) because
-   * Node.clone() uses Object.assign. Arrow functions capture `this` at
-   * construction time, so they would reference the original instance
-   * instead of the clone after cloning.
+   * Must be regular method (not arrow function) for Node.clone() compatibility.
    *
    * @returns true to restart auto-retry loop, false to proceed to execFallback
    */
@@ -356,12 +297,11 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const services = this.getServices();
+    const { streamId, logger } = this.getServices();
     const operationName = this.getOperationName();
-    const streamId = services.streamId;
-    const logger = services.logger;
-
-    // Format error to check if retryable
+    // Format error for this method's scope (retryable error handling)
+    // Note: getFallbackResult() formats separately for non-retryable errors
+    // to ensure each path logs exactly once at the appropriate point
     const formatted = formatProviderHttpError(error);
 
     // If not retryable, don't show UI - go straight to execFallback
@@ -369,27 +309,21 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    // Log the error before showing retry UI
-    logger.logErrorData(`${operationName} failed: ${formatted.message}`, {
-      message: formatted.message,
-      statusCode: formatted.statusCode,
-      retryable: formatted.retryable,
-      ...(formatted.rawErrorBody !== undefined && {
-        rawErrorBody: formatted.rawErrorBody,
-      }),
-    });
+    // Log the error before showing retry UI - pass FULL formatted error
+    logger.logErrorData(
+      `${operationName} failed: ${formatted.message}`,
+      formatted, // Pass complete ProviderError - no field loss
+    );
 
-    // Emit waiting status to UI via single source of truth
+    // Emit waiting status and wait for user action
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-
-    // Wait for user action via the Promise-based coordinator (no timeout - wait indefinitely)
     const result: RetryResult = await retryCoordinator.waitForUserAction(
       streamId,
       {
         operation: operationName,
         errorMessage: formatted.message,
         logger,
-        errorDetails: formatted,
+        errorDetails: formatted, // Pass complete ProviderError - no field loss
       },
     );
 
@@ -399,16 +333,12 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: true, userCancelled: false };
     }
 
-    // User cancelled or timeout - preserve WAITING status so user can resume
-    // from last successful breakpoint. The flow record is NOT deleted when
-    // userCancelled is true, enabling resume capability.
+    // User cancelled or timeout - preserve WAITING status for resume capability
     const message =
       result.action === 'timeout'
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
-    logger.info(message, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
+    logger.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     return { shouldRetry: false, userCancelled: true };
   }
@@ -416,32 +346,21 @@ export abstract class RetryableInvocationNode<
   /**
    * Called by PocketFlow Node when retryPrompt returns false.
    * Returns 'cancelled' if user cancelled, 'failed' otherwise.
-   *
    * Subclasses should call this from their execFallback implementation.
    */
   protected getFallbackResult(
     error: Error,
   ): { kind: 'cancelled' } | { kind: 'failed'; message: string } {
-    // User cancelled manual retry - return 'cancelled' (not 'failed')
-    // This ensures lastError is NOT recorded, distinguishing cancellation from failure
     if (this._userCancelled) {
       return { kind: 'cancelled' };
     }
 
     const formatted = formatProviderHttpError(error);
-    // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
+    // Log final failure (only for non-retryable - retryable were logged in retryPrompt)
     if (!formatted.retryable) {
-      const services = this.getServices();
-      services.logger.logErrorData(
+      this.getServices().logger.logErrorData(
         `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
-        {
-          message: formatted.message,
-          statusCode: formatted.statusCode,
-          retryable: formatted.retryable,
-          ...(formatted.rawErrorBody !== undefined && {
-            rawErrorBody: formatted.rawErrorBody,
-          }),
-        },
+        formatted, // Pass complete ProviderError - no field loss
       );
     }
     return { kind: 'failed', message: formatted.message };
@@ -471,11 +390,8 @@ interface InvocationResultHandlerOptions {
 
 /**
  * Mark flow as stopped without normal completion.
- *
- * Sets shouldStop=true to halt the flow, and endTurn=false to indicate
- * this was not a normal model completion (e.g., due to cancellation,
- * failure, or empty response). This distinction is important for
- * determining whether to persist state for resume.
+ * Sets shouldStop=true and endTurn=false to indicate abnormal termination
+ * (cancellation, failure, or empty response).
  */
 function markFlowStopped(state: {
   shouldStop: boolean;
@@ -486,24 +402,9 @@ function markFlowStopped(state: {
 }
 
 /**
- * Handles common invocation result cases in post().
- *
- * This is the single source of truth for handling:
- * - 'skipped': Logs and returns null (COMPLETE)
- * - 'cancelled': Clears retry error, sets state, returns null (COMPLETE)
- * - 'failed': Records retry error, sets state, returns null (COMPLETE)
- * - 'success' with empty response: Records error, sets state, returns null (COMPLETE)
- * - 'success' with response: Clears error, returns the narrowed success result
- *
- * IMPORTANT: This fixes the empty response misclassification bug by recording
- * an error when response is empty, preventing it from being detected as
- * user cancellation (which requires lastError to be undefined).
- *
- * @param result - The invocation result to handle
- * @param state - Mutable cycle state (shouldStop, endTurn will be set)
- * @param retryState - Mutable retry state (lastError will be set/cleared)
- * @param options - Logger and operation name for messages
- * @returns The narrowed success result if successful, null if flow should complete
+ * Handles invocation result cases in post().
+ * Returns narrowed success result or null (flow complete).
+ * Records error for 'failed' and empty responses, clears for 'cancelled' and success.
  */
 export function handleInvocationResult<T extends { response: unknown }>(
   result: InvocationResult<T>,
@@ -513,32 +414,26 @@ export function handleInvocationResult<T extends { response: unknown }>(
 ): (T & { kind: 'success' }) | null {
   const { logger, operationName } = options;
 
-  // Handle skipped (shouldStop was true before invocation)
   if (result.kind === 'skipped') {
     logger.debug(`${operationName} skipped: shouldStop was already true`);
     return null;
   }
 
-  // Handle user cancellation (do NOT record error - distinguishes from failure)
+  // User cancellation - clear error (distinguishes from failure)
   if (result.kind === 'cancelled') {
     retryState.lastError = undefined;
     markFlowStopped(state);
     return null;
   }
 
-  // Handle failure (all retries exhausted or non-retryable error)
+  // Failure - record error
   if (result.kind === 'failed') {
-    retryState.lastError = {
-      message: result.message,
-      retryable: false, // Already exhausted retries
-    };
+    retryState.lastError = { message: result.message, retryable: false };
     markFlowStopped(state);
     return null;
   }
 
-  // At this point, result.kind === 'success' (all other cases handled above)
-  // Handle success with empty response (server/network issue)
-  // IMPORTANT: Record an error to prevent misclassification as user cancellation
+  // Empty response - record error to prevent misclassification as cancellation
   if (!result.response) {
     logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
     retryState.lastError = {
@@ -549,7 +444,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
-  // Success with valid response - clear any previous error
+  // Success - clear error and return
   retryState.lastError = undefined;
   return result;
 }

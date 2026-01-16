@@ -48,17 +48,13 @@ export async function handleParseXml(): Promise<void> {
       attributeNamePrefix: '',
     });
 
-    try {
-      const parsedXml = parser.parse(content);
+    const parsedXml = parser.parse(content);
 
-      logger.debug(CHANNEL, 'Parsed XML(JSON)');
-      logger.debug(
-        CHANNEL,
-        `Parsed structure: ${JSON.stringify(parsedXml, null, 2)}`,
-      );
-    } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Failed to parse XML', err);
-    }
+    logger.debug(CHANNEL, 'Parsed XML(JSON)');
+    logger.debug(
+      CHANNEL,
+      `Parsed structure: ${JSON.stringify(parsedXml, null, 2)}`,
+    );
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error parsing XML', err);
   }
@@ -67,9 +63,7 @@ export async function handleParseXml(): Promise<void> {
 /**
  * Validate and fix XML errors using Claude
  */
-export async function handleValidateAndFixXml(
-  _context: vscode.ExtensionContext,
-): Promise<void> {
+export async function handleValidateAndFixXml(): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({
       allowedExtensions: ['.xml'],
@@ -98,12 +92,12 @@ export async function handleValidateAndFixXml(
   }
 }
 
-export function registerXmlCommands(context: vscode.ExtensionContext) {
+export function registerXmlCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(xmlCommands.parseXml, handleParseXml),
-    vscode.commands.registerCommand(xmlCommands.validateAndFixXml, () =>
-      handleValidateAndFixXml(context),
+    vscode.commands.registerCommand(
+      xmlCommands.validateAndFixXml,
+      handleValidateAndFixXml,
     ),
   );
-  return xmlCommands;
 }

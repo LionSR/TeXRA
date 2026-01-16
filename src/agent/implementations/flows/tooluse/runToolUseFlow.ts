@@ -15,6 +15,7 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import {
@@ -23,12 +24,14 @@ import {
 } from '@common/constants/streamStatus';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
+import { getDefaultToolRegistry } from '@tools/registry';
 import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';
 import {
-  createToolUseFlowContext,
-  type ToolUseFlowContext,
+  resolveTools,
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
+import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
+import { migrateSharedState } from './nodes';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -55,6 +58,14 @@ export interface RunToolUseFlowInput<C = unknown> extends Omit<
 export interface RunToolUseFlowResult {
   /** Status of the flow execution */
   status: EndGroupStatus;
+}
+
+/** Runtime context for tool-use flow execution (created inline, not via factory). */
+export interface ToolUseFlowContext<C = unknown> {
+  services: ToolUseServices<C>;
+  session: ToolUseSessionLifecycle;
+  interrupt(): void;
+  dispose(): void;
 }
 
 /**
@@ -88,13 +99,35 @@ export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, streamId, executionId } = input;
+  const { logger, streamId, executionId, setting, onInterrupt } = input;
+  const resumeSnapshot = input.resumeSnapshot ?? null;
 
-  // Create the flow context (owns all services including session lifecycle)
-  const flowContext = createToolUseFlowContext<C>({
+  // Create session lifecycle and resolve tools inline (no factory indirection)
+  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
+  const toolRegistry = input.toolRegistry ?? getDefaultToolRegistry();
+  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
+  const services: ToolUseServices<C> = {
     ...input,
-    resumeSnapshot: input.resumeSnapshot ?? null,
-  });
+    toolRegistry,
+    session: sessionLifecycle,
+    resolvedTools,
+    snapshot: resumeSnapshot,
+    getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
+  };
+
+  const flowContext: ToolUseFlowContext<C> = {
+    services,
+    session: sessionLifecycle,
+    interrupt(): void {
+      onInterrupt?.();
+      retryCoordinator.clearRequest(streamId);
+      sessionLifecycle.interrupt();
+    },
+    dispose(): void {
+      sessionLifecycle.dispose();
+    },
+  };
+
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
@@ -119,11 +152,24 @@ export async function runToolUseFlow<C = unknown>(
     const isResume = Boolean(flowRecord?.shared);
     if (isResume) {
       logger.debug('Resuming tool-use flow from persistence');
+
+      // Migrate legacy shared state format if needed.
+      // Pre-flattening sessions stored shared as { state: { conversation, ... } }
+      // which would cause failures when cycle node reads shared.stateSlices.
+      const migratedShared = migrateSharedState(flowRecord!.shared);
+      if (migratedShared !== flowRecord!.shared) {
+        logger.debug('Migrated legacy shared state to flat format');
+        flowRecord!.shared = migratedShared;
+        // Persist the migrated format so future resumes use the new structure
+        await kv.write(`flow:${executionId}`, flowRecord);
+      }
     }
 
-    // Create shared state
+    // Create shared state (flat structure for consistency with reflection flows)
     const shared: ToolUseRunShared = {
-      state: { conversation: [], shouldSkipCycle: false, stateSlices: null },
+      conversation: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
     };
 
     // Create PersistedFlow with the start node
@@ -161,11 +207,11 @@ export async function runToolUseFlow<C = unknown>(
     try {
       const kv = getExecutionStore(executionId);
       const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      const sharedState = flowRecord?.shared as
-        | { state?: { userCancelledRetry?: boolean } }
-        | undefined;
-      const userCancelledRetry =
-        sharedState?.state?.userCancelledRetry === true;
+      // Handle both legacy { state: { userCancelledRetry } } and new flat format
+      const migratedShared = flowRecord?.shared
+        ? migrateSharedState(flowRecord.shared)
+        : undefined;
+      const userCancelledRetry = migratedShared?.userCancelledRetry === true;
 
       if (userCancelledRetry) {
         // Preserve flow record for resume - user can continue from last successful breakpoint
