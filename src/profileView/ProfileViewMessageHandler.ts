@@ -92,15 +92,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     const authContext = await SupabaseClient.getUserAuthContext();
 
     // Fetch remote agents - RLS filters based on user's permissions
-    // All authenticated users can see agents matching their visibility access
     await loadAgents();
-    const entries = getAgentsBySource('remote' as AgentSource);
-    const remoteAgents: RemoteAgentPayload[] = entries.map((entry) => ({
+    const remoteAgents: RemoteAgentPayload[] = getAgentsBySource(
+      'remote' as AgentSource,
+    ).map((entry) => ({
       name: entry.name,
       description: entry.description || '',
       visibility: entry.visibility || ['public'],
       category: entry.category || AgentCategory.Workflow,
-      supportsMultipleOutput: !!entry.multiplePath,
+      supportsMultipleOutput: Boolean(entry.multiplePath),
     }));
 
     // Get model access settings from the service (caches already primed)
