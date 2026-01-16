@@ -6,6 +6,7 @@ import { WriteFileTool } from '@tools/WriteTool';
 import {
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
+  toggleToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import * as configModule from '@utils/config';
@@ -149,5 +150,39 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(writtenContent, 'auto');
     assert.strictEqual(result.output, 'written');
+  });
+
+  it('toggleToolEditApprovalSessionBypass toggles state and returns new value', async () => {
+    const tool = new WriteFileTool();
+    let handlerCallCount = 0;
+
+    WorkspaceFS.exists = async () => false;
+    WorkspaceFS.read = async () => '';
+    WorkspaceFS.write = async () => {};
+
+    setToolEditApprovalHandler(async () => {
+      handlerCallCount++;
+      return { accepted: true };
+    });
+
+    // Initially bypass is off (set in beforeEach), so handler should be called
+    await tool.call({ path: 'doc.txt', content: 'content1' });
+    assert.strictEqual(handlerCallCount, 1, 'Handler called when bypass off');
+
+    // Toggle on - should return true
+    const enabledState = toggleToolEditApprovalSessionBypass();
+    assert.strictEqual(enabledState, true, 'Toggle returns true when enabling');
+
+    // Handler should NOT be called when bypass is on
+    await tool.call({ path: 'doc.txt', content: 'content2' });
+    assert.strictEqual(handlerCallCount, 1, 'Handler not called when bypass on');
+
+    // Toggle off - should return false
+    const disabledState = toggleToolEditApprovalSessionBypass();
+    assert.strictEqual(disabledState, false, 'Toggle returns false when disabling');
+
+    // Handler should be called again when bypass is off
+    await tool.call({ path: 'doc.txt', content: 'content3' });
+    assert.strictEqual(handlerCallCount, 2, 'Handler called again when bypass off');
   });
 });
