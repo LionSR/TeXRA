@@ -12,7 +12,6 @@ import {
   getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -111,8 +110,11 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   // Build title based on state
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-  const titleText = normalizedToolLog.headerSummary
-    ? `${titleBase} — ${normalizedToolLog.headerSummary}`
+
+  const headerSummary = normalizedToolLog.headerSummary ?? '';
+
+  const titleText = headerSummary
+    ? `${titleBase} — ${headerSummary}`
     : titleBase;
 
   if (headerLabel) {
@@ -146,7 +148,9 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   // Show error if present and not superseded by user feedback
   if (errorText && !isUserFeedback) {
-    sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
+    sections.push(
+      buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),
+    );
   }
 
   // Show user instruction as supplementary note/warning if present
@@ -202,14 +206,9 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[status] ?? '';
 
-  // Build query preview with truncation if needed
   let titleText = `${providerLabel} Search`;
   if (query) {
-    const truncatedQuery =
-      query.length > QUERY_PREVIEW_MAX_LENGTH
-        ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...'
-        : query;
-    titleText += `: "${truncatedQuery}"`;
+    titleText += `: "${query}"`;
   }
   titleText += statusSuffix;
 
