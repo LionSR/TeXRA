@@ -90,8 +90,8 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   settings: T,
   source: AgentSource,
 ): T {
-  if (source === 'builtInToolUse' && settings.agentType === undefined) {
-    settings.agentType = AgentType.ToolUse;
+  if (source === 'builtInToolUse' && !settings.agentType) {
+    return { ...settings, agentType: AgentType.ToolUse };
   }
   return settings;
 }
@@ -152,7 +152,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    ensureAgentTypeForSource(settings, entry.source);
+    settings = ensureAgentTypeForSource(settings, entry.source);
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {
