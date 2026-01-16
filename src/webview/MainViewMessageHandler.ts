@@ -385,43 +385,34 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleThemeRequest(_message: unknown): Promise<void> {
-    const webviewView = this.getActiveView();
-    if (!webviewView) {
-      return;
-    }
-    const theme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-        ? 'dark'
-        : 'light';
-    webviewView.webview.postMessage({
+    const isDarkTheme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+    this.postToActiveView({
       command: MAIN_VIEW_COMMANDS.THEME_SET,
-      theme,
+      theme: isDarkTheme ? 'dark' : 'light',
     });
   }
 
   private async handleDebugModeRequest(_message: unknown): Promise<void> {
-    const webviewView = this.getActiveView();
-    if (!webviewView) {
-      return;
-    }
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-    webviewView.webview.postMessage({
+    this.postToActiveView({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
       debugMode,
     });
   }
 
   private async handleModelSelection(message: any): Promise<void> {
-    const webviewView = this.getActiveView();
-    if (!webviewView) {
-      return;
-    }
     if (message.model) {
-      webviewView.webview.postMessage({
+      this.postToActiveView({
         command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
         model: message.model,
       });
     }
+  }
+
+  /** Post message to active view if available */
+  private postToActiveView(message: any): void {
+    this.getActiveView()?.webview.postMessage(message);
   }
 
   private async handleShowAgentHistory(_message: unknown): Promise<void> {

@@ -145,6 +145,23 @@ function prepareFilters(
   };
 }
 
+/** Check if a filename passes extension and keyword filters */
+function passesFileFilters(
+  fileNameLower: string,
+  filters: NormalizedListingOptions,
+): boolean {
+  const matchesInclude =
+    filters.includeExt.length === 0 ||
+    filters.includeExt.some((ext) => fileNameLower.endsWith(ext));
+  const matchesExcludeExt = filters.excludeExt.some((ext) =>
+    fileNameLower.endsWith(ext),
+  );
+  const matchesExcludeKeyword = filters.excludeKeywords.some((keyword) =>
+    fileNameLower.includes(keyword),
+  );
+  return matchesInclude && !matchesExcludeExt && !matchesExcludeKeyword;
+}
+
 export async function getFilesInDirectory(
   dir: string,
   includeExtensions: string[] = [],
@@ -172,14 +189,8 @@ export async function getFilesInDirectory(
     })
     .map((uri) => path.basename(uri.fsPath))
     .filter((name) => {
-      const nameLower = name.toLowerCase();
-      return (
-        !name.startsWith('.') &&
-        (filters.includeExt.length === 0 ||
-          filters.includeExt.some((ext) => nameLower.endsWith(ext))) &&
-        !filters.excludeExt.some((ext) => nameLower.endsWith(ext)) &&
-        !filters.excludeKeywords.some((keyword) => nameLower.includes(keyword))
-      );
+      if (name.startsWith('.')) return false;
+      return passesFileFilters(name.toLowerCase(), filters);
     });
 }
 
@@ -220,17 +231,8 @@ export async function getFilesRecursively(
         return false;
       }
 
-      const fileName = path.basename(relativePath);
-      const fileNameLower = fileName.toLowerCase();
-
-      return (
-        (filters.includeExt.length === 0 ||
-          filters.includeExt.some((ext) => fileNameLower.endsWith(ext))) &&
-        !filters.excludeExt.some((ext) => fileNameLower.endsWith(ext)) &&
-        !filters.excludeKeywords.some((keyword) =>
-          fileNameLower.includes(keyword),
-        ) &&
-        !filters.excludeFiles.includes(fileNameLower)
-      );
+      const fileNameLower = path.basename(relativePath).toLowerCase();
+      if (filters.excludeFiles.includes(fileNameLower)) return false;
+      return passesFileFilters(fileNameLower, filters);
     });
 }
