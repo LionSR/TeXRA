@@ -214,8 +214,7 @@ export class FollowUpInputManager {
     // Always get a fresh reference to handle cases where setup() hasn't run yet
     // or the button reference became stale
     const button =
-      this.yoloToggleButton ||
-      safeGetElementById(ELEMENT_IDS.YOLO_TOGGLE_BTN);
+      this.yoloToggleButton || safeGetElementById(ELEMENT_IDS.YOLO_TOGGLE_BTN);
     if (!button) {
       return;
     }
@@ -225,7 +224,10 @@ export class FollowUpInputManager {
 
     if (this._isYoloActive) {
       button.setAttribute('label', 'Disable YOLO mode');
-      button.setAttribute('title', 'Disable YOLO mode (resume approval prompts)');
+      button.setAttribute(
+        'title',
+        'Disable YOLO mode (resume approval prompts)',
+      );
     } else {
       button.setAttribute('label', 'Enable YOLO mode');
       button.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
