@@ -66,6 +66,24 @@ function formatError(error: unknown, hint?: string): string {
 }
 
 /**
+ * Resolve a file path to absolute, using workspace folder for relative paths.
+ */
+function resolveFilePath(filePath: string): string {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+
+  // Use workspace folder for relative paths
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    return path.join(workspaceFolders[0].uri.fsPath, filePath);
+  }
+
+  // Fallback to cwd (may not work in extension context)
+  return path.resolve(filePath);
+}
+
+/**
  * Open a file in VS Code and position cursor at given line.
  * This triggers the Lean 4 extension to process the file.
  * Returns the absolute file path that was opened.
@@ -76,10 +94,8 @@ async function openFileInEditor(
   column?: number,
 ): Promise<string | undefined> {
   try {
-    // Resolve to absolute path
-    const absolutePath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(filePath);
+    // Resolve to absolute path using workspace folder
+    const absolutePath = resolveFilePath(filePath);
     const uri = vscode.Uri.file(absolutePath);
 
     logger.debug('Lean4', `Opening file: ${absolutePath}`);
@@ -203,14 +219,14 @@ async function waitForDiagnostics(
   file: string,
   maxWaitMs: number = 3000,
 ): Promise<vscodeIntegration.LeanDiagnostic[]> {
-  // Resolve to absolute path for consistent comparison
-  const absolutePath = path.isAbsolute(file) ? file : path.resolve(file);
+  // Resolve to absolute path using workspace folder
+  const absolutePath = resolveFilePath(file);
   const uri = vscode.Uri.file(absolutePath);
   const startTime = Date.now();
   const pollInterval = 200;
 
   // Quick initial check - diagnostics may already be available
-  const diagnostics = vscodeIntegration.getDiagnostics(file);
+  const diagnostics = vscodeIntegration.getDiagnostics(absolutePath);
   if (diagnostics.length > 0) {
     return diagnostics;
   }
@@ -226,7 +242,7 @@ async function waitForDiagnostics(
         );
 
         if (hasOurFile) {
-          const updated = vscodeIntegration.getDiagnostics(file);
+          const updated = vscodeIntegration.getDiagnostics(absolutePath);
           if (updated.length > 0) {
             disposable.dispose();
             resolve(updated);
@@ -245,9 +261,9 @@ async function waitForDiagnostics(
       const pollTimer = setInterval(() => {
         if (Date.now() - startTime >= maxWaitMs) {
           clearInterval(pollTimer);
-          resolve(vscodeIntegration.getDiagnostics(file));
+          resolve(vscodeIntegration.getDiagnostics(absolutePath));
         } else {
-          const updated = vscodeIntegration.getDiagnostics(file);
+          const updated = vscodeIntegration.getDiagnostics(absolutePath);
           if (updated.length > 0) {
             clearInterval(pollTimer);
             resolve(updated);
