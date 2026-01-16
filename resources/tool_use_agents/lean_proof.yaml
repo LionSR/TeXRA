@@ -8,6 +8,7 @@ settings:
     # Lean 4 tools (requires VS Code extension)
     - lean_diagnostics
     - lean_lsp_goal
+    - lean_restart
     - lake_build
     # General tools
     - bash
@@ -49,15 +50,19 @@ prompts:
 
     ## Lean 4 Tools
 
-    You have 3 core tools for Lean verification:
+    You have 4 tools for Lean verification:
 
     - **lean_diagnostics**: Get all errors, warnings, and info for a file
-      - `lean_diagnostics(file: "path/to/file.lean")` - Shows what VS Code Problems panel shows
-      - Use this to see compilation errors and iterate on fixes
+      - `lean_diagnostics(file: "path/to/file.lean")`
+      - Opens the file in VS Code so user sees the InfoView and editor squigglies
 
     - **lean_lsp_goal**: Get proof goal state at a position
-      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)` - Goals at position
-      - Use this to see what you need to prove at a specific point in a tactic proof
+      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)`
+      - Opens the file at that position so user sees goal state in InfoView
+
+    - **lean_restart**: Restart Lean server for a file
+      - `lean_restart(file: "path/to/file.lean")`
+      - Use after editing imported files or changing lakefile.lean
 
     - **lake_build**: Build entire project
       - `lake_build()` - Build all targets
