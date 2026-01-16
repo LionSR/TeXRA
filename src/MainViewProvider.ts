@@ -190,28 +190,21 @@ export class MainViewProvider
 
     // Cache of agent directory paths for filtering
     let agentDirPaths: string[] = [];
-    const updateAgentDirs = async () => {
-      const dirs = await agentDirectories.getAllLocal();
-      agentDirPaths = dirs.map((d) => d.directory);
-    };
-    // Initialize and refresh periodically (directories might change)
-    void updateAgentDirs();
-
-    // Check if a file path is within an agent directory
-    const isAgentFile = (uri: vscode.Uri): boolean => {
-      const filePath = uri.fsPath;
-      return agentDirPaths.some((dir) => filePath.startsWith(dir));
-    };
 
     // Debounced refresh - updates agent dirs and options
     const debouncedAgentFileRefresh = debounce(async () => {
-      await updateAgentDirs();
+      const dirs = await agentDirectories.getAllLocal();
+      agentDirPaths = dirs.map((d) => d.directory);
       await this.refreshAgentOptions();
     }, DEBOUNCE_STATE_SAVE_MS);
 
+    // Initialize cache
+    void debouncedAgentFileRefresh();
+
     // Filter and debounce agent file changes
     const onAgentFileChange = (uri: vscode.Uri) => {
-      if (isAgentFile(uri)) {
+      const filePath = uri.fsPath;
+      if (agentDirPaths.some((dir) => filePath.startsWith(dir))) {
         void debouncedAgentFileRefresh();
       }
     };
