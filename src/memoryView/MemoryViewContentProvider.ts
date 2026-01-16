@@ -15,8 +15,4 @@ export class MemoryViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
     super(context, 'MemoryView', MEMORY_VIEW_MODULES);
   }
-
-  protected getViewPath(): string {
-    return 'memoryView';
-  }
 }
