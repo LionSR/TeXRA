@@ -18,7 +18,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
       listSelector: '.approval-requests__list',
       idAttribute: 'requestId',
     });
-    this.isBypassActive = false;
     this._handleToggle = this._handleToggle.bind(this);
     this._handleDropdownToggle = this._handleDropdownToggle.bind(this);
     this._handleClickOutside = this._handleClickOutside.bind(this);
@@ -72,19 +71,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
   /** @override */
   dispose() {
     super.dispose();
-    this.isBypassActive = false;
-  }
-
-  /**
-   * Set whether session bypass is active.
-   * @param {boolean} isActive
-   */
-  setSessionBypassActive(isActive) {
-    this.isBypassActive = Boolean(isActive);
-    this.requests.forEach((entry) => {
-      this._updateRequestElement(entry.element, entry.data);
-    });
-    this._syncVisibleEntries();
   }
 
   /** @override */

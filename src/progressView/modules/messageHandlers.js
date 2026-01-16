@@ -921,7 +921,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateToolEditApprovalState(message) {
     const bypassActive = Boolean(message?.bypassActive);
     state.approvalBypassActive = bypassActive;
-    dom.approvalRequests.setSessionBypassActive(bypassActive);
     dom.followUpInput.setApprovalBypassState(bypassActive);
   }
 
