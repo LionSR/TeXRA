@@ -46,11 +46,9 @@ export async function getActiveEditorWithGuards(
     return { status: 'noEditor' };
   }
 
-  const extensionsForDisplay = allowedExtensions.map((ext) =>
-    ext.startsWith('.') ? ext : `.${ext}`,
-  );
-  const normalizedExtensions = extensionsForDisplay.map((ext) =>
-    ext.toLowerCase(),
+  // Normalize extensions: ensure dot prefix and lowercase for comparison
+  const normalizedExtensions = allowedExtensions.map((ext) =>
+    (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase(),
   );
   const fileName = editor.document.fileName.toLowerCase();
 
@@ -61,9 +59,8 @@ export async function getActiveEditorWithGuards(
     const resourceLabel = resourceName
       ? `${resourceName} files`
       : 'files with the supported extensions';
-    const extensionList = extensionsForDisplay.join(', ');
     await vscode.window.showWarningMessage(
-      `This command only works with ${resourceLabel} (${extensionList}).`,
+      `This command only works with ${resourceLabel} (${normalizedExtensions.join(', ')}).`,
     );
     return { status: 'unsupportedExtension' };
   }
