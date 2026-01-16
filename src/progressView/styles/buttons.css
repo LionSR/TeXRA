@@ -22,12 +22,12 @@
   display: none;
 }
 
-/* YOLO reset button - shown in header when approval bypass is active */
-.yolo-reset-button {
-  color: var(--vscode-inputValidation-warningForeground, #dd8500);
+/* YOLO toggle button - always visible in header */
+.yolo-toggle-button {
   flex-shrink: 0;
 }
 
-.yolo-reset-button[hidden] {
-  display: none;
+/* Active state when YOLO mode is enabled */
+.yolo-toggle-button.is-active {
+  color: var(--vscode-inputValidation-warningForeground, #dd8500);
 }

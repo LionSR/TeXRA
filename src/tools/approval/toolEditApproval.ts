@@ -163,6 +163,12 @@ export function resetToolEditApprovalSessionBypass(): void {
   setToolEditApprovalSessionBypass(false);
 }
 
+export function toggleToolEditApprovalSessionBypass(): boolean {
+  const newState = !approvalsBypassedForSession;
+  setToolEditApprovalSessionBypass(newState);
+  return newState;
+}
+
 export function initializeToolEditApproval(
   context: vscode.ExtensionContext,
 ): void {

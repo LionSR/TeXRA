@@ -220,7 +220,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
-  RESET_TOOL_EDIT_APPROVAL_BYPASS: 'resetToolEditApprovalBypass',
+  TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',

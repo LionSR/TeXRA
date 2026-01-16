@@ -42,7 +42,7 @@ import {
 } from '@progressView/templates/followupInstructionTemplates';
 import {
   handleProgressViewToolEditApprovalAction,
-  resetToolEditApprovalSessionBypass,
+  toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
@@ -159,8 +159,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleShowInformationMessage.bind(this),
       [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]:
         this.handleToolEditApprovalAction.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RESET_TOOL_EDIT_APPROVAL_BYPASS]:
-        this.handleResetToolEditApprovalBypass.bind(this),
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]:
+        this.handleToggleToolEditApprovalBypass.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -439,11 +439,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleResetToolEditApprovalBypass(): Promise<void> {
-    resetToolEditApprovalSessionBypass();
-    await vscode.window.showInformationMessage(
-      'Tool edit approvals will prompt again for this session.',
-    );
+  private async handleToggleToolEditApprovalBypass(): Promise<void> {
+    const isNowEnabled = toggleToolEditApprovalSessionBypass();
+    const message = isNowEnabled
+      ? 'YOLO mode enabled: Tool edits will be auto-approved for this session.'
+      : 'YOLO mode disabled: Tool edits will prompt for approval.';
+    await vscode.window.showInformationMessage(message);
   }
 
   private async handleOpenTaskStorage(message: any): Promise<void> {
