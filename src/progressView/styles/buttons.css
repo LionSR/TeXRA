@@ -21,3 +21,13 @@
 #toolbarContainer .toolbar-button--hidden {
   display: none;
 }
+
+/* YOLO reset button - shown in header when approval bypass is active */
+.yolo-reset-button {
+  color: var(--vscode-inputValidation-warningForeground, #dd8500);
+  flex-shrink: 0;
+}
+
+.yolo-reset-button[hidden] {
+  display: none;
+}
