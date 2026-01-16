@@ -23,17 +23,6 @@ const LeanLspGoalInputSchema = z.strictObject({
 
 export type LeanLspGoalInput = z.infer<typeof LeanLspGoalInputSchema>;
 
-const LeanHoverInputSchema = z.strictObject({
-  /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
-  /** Line number (1-indexed) */
-  line: z.number().describe('Line number (1-indexed)'),
-  /** Column number (1-indexed) */
-  column: z.number().describe('Column number (1-indexed)'),
-});
-
-export type LeanHoverInput = z.infer<typeof LeanHoverInputSchema>;
-
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
@@ -123,52 +112,6 @@ Example output:
     } catch (error) {
       return {
         summary: 'Failed to get goal state',
-        output: `Error: ${error instanceof Error ? error.message : String(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
-        isError: true,
-      };
-    }
-  }
-}
-
-/**
- * Get hover information (documentation, type) at a position.
- */
-export class LeanHoverTool extends defineTool({
-  name: 'lean_hover',
-  description: `Get hover information for a symbol at a specific position in a Lean 4 file.
-
-Returns documentation, type signatures, and other information from the Lean 4 VS Code extension.
-
-Useful for:
-- Understanding the type of an expression
-- Reading documentation for a theorem or definition
-- Exploring available lemmas and their signatures
-
-Requires: Lean 4 VS Code extension installed and active.`,
-  schema: LeanHoverInputSchema,
-}) {
-  protected async execute(input: LeanHoverInput): Promise<ToolResult> {
-    const { file, line, column } = input;
-    const { line: lspLine, character } = toZeroIndexed(line, column);
-
-    try {
-      const hover = await vscodeIntegration.getHover(file, lspLine, character);
-
-      if (!hover) {
-        return {
-          summary: `No hover info at line ${line}:${column}`,
-          output: 'No information available at this position.',
-        };
-      }
-
-      return {
-        summary: `Hover info at line ${line}:${column}`,
-        output: hover.contents,
-        diagnostics: { hover },
-      };
-    } catch (error) {
-      return {
-        summary: 'Failed to get hover info',
         output: `Error: ${error instanceof Error ? error.message : String(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
         isError: true,
       };
