@@ -3,10 +3,7 @@ import { COMMANDS } from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
-import {
-  addEventListenerSafely,
-  setElementCheckedState,
-} from '@common/domUtils.js';
+import { addEventListenerSafely } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -112,7 +109,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
   _updateRequestElement(element, request) {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
-    const bypassButton = element.querySelector('[data-action="approveAll"]');
     const mainDiffButton = element.querySelector('.diff-main-button');
     const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
     const dropdownMenu = element.querySelector('.diff-dropdown-menu');
@@ -130,12 +126,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     if (metaElem) {
       this._updateMetaElement(metaElem, request);
-    }
-
-    if (bypassButton) {
-      const allowBypass = request.allowBypass !== false;
-      bypassButton.toggleAttribute('disabled', !allowBypass);
-      setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
 
     // Set requestId on all diff-related elements
@@ -352,7 +342,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const validActions = [
       'openDiff',
       'approve',
-      'approveAll',
       'reject',
       'showLatexdiff',
       'previewProposed',
