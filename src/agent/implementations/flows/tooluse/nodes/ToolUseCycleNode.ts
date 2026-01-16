@@ -19,13 +19,13 @@ import {
 import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
-import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import {
   type ToolUseRunShared,
   type CyclePrepResult,
   type CycleExecResult,
   assertPreparedShared,
 } from './types';
+import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,

@@ -5,8 +5,8 @@
  * without creating circular dependencies.
  */
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 /**
  * Context passed to domain event handlers.
