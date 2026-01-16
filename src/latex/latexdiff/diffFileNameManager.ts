@@ -34,7 +34,13 @@ export class DiffFileNameManager {
     );
     const editedRoundMatch = extractLastRoundModelMatch(editedFileName);
 
-    if (inputRoundMatch && editedRoundMatch) {
+    // Only use round-based naming if both files have rounds AND rounds differ.
+    // Same-round comparisons (e.g., original vs proposed temp files) fall back to suffix.
+    if (
+      inputRoundMatch &&
+      editedRoundMatch &&
+      inputRoundMatch[1] !== editedRoundMatch[1]
+    ) {
       return this.generateRoundBasedFileName(
         editedFileName,
         inputRoundMatch,
