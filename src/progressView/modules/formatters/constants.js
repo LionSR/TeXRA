@@ -25,6 +25,7 @@ export const HEADER_SUMMARY_MAX_LENGTH = 80;
  * @returns {string} Truncated text with ellipsis, or original if within limit
  */
 export function truncateWithEllipsis(text, maxLength) {
+  if (!text) return '';
   return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
 }
 
