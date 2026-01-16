@@ -15,8 +15,18 @@ export const BULLET_MARKUP =
 /** Maximum length for query preview in web search headers */
 export const QUERY_PREVIEW_MAX_LENGTH = 40;
 
-/** Maximum length for error summary in tool use headers */
-export const ERROR_TITLE_MAX_LENGTH = 80;
+/** Maximum length for header summary text in tool use titles */
+export const HEADER_SUMMARY_MAX_LENGTH = 80;
+
+/**
+ * Truncate text with ellipsis if it exceeds the max length.
+ * @param {string} text - Text to truncate
+ * @param {number} maxLength - Maximum length before truncation
+ * @returns {string} Truncated text with ellipsis, or original if within limit
+ */
+export function truncateWithEllipsis(text, maxLength) {
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+}
 
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
