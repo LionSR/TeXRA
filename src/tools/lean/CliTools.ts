@@ -192,11 +192,20 @@ function formatDiagnostics(diagnostics: LeanDiagnostic[]): string {
 
 /**
  * Validates a Lake build target to prevent command injection.
- * Valid targets: alphanumeric characters, dots, hyphens, underscores, forward slashes.
- * Examples: "Mathlib", "Mathlib.Algebra", "MyProject/Basic", "@Mathlib"
+ * Valid targets: alphanumeric characters, dots, hyphens, underscores, forward slashes, colons.
+ * Examples: "Mathlib", "Mathlib.Algebra", "MyProject/Basic", "@Mathlib", "Mathlib:Core"
+ * Blocks: path traversal (..), home directory (~), shell metacharacters
  */
 function isValidBuildTarget(target: string): boolean {
-  return /^[@a-zA-Z0-9._\/-]+$/.test(target);
+  // Allow: letters, numbers, @, ., _, -, /, :
+  if (!/^[@a-zA-Z0-9._/:/-]+$/.test(target)) {
+    return false;
+  }
+  // Block path traversal and home directory expansion
+  if (target.includes('..') || target.includes('~')) {
+    return false;
+  }
+  return true;
 }
 
 const LakeBuildInputSchema = z.strictObject({
@@ -230,8 +239,9 @@ Use \`lake exe cache get\` first for Mathlib projects to download prebuilt olean
     if (target && !isValidBuildTarget(target)) {
       return {
         summary: 'Invalid build target',
-        output: `Build target "${target}" contains invalid characters. ` +
-          'Targets must only contain alphanumeric characters, dots, hyphens, underscores, forward slashes, or @ prefix.',
+        output: `Build target "${target}" contains invalid characters or patterns. ` +
+          'Targets must only contain alphanumeric characters, dots, hyphens, underscores, forward slashes, colons, or @ prefix. ' +
+          'Path traversal (..) and home directory (~) are not allowed.',
         isError: true,
       };
     }
