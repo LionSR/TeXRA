@@ -178,7 +178,7 @@ export async function handleFixLinterIssues(): Promise<void> {
   }
 }
 
-export function registerLinterCommands(context: vscode.ExtensionContext) {
+export function registerLinterCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       linterCommands.showLinterMessages,
@@ -193,5 +193,4 @@ export function registerLinterCommands(context: vscode.ExtensionContext) {
       handleFixLinterIssues,
     ),
   );
-  return linterCommands;
 }
