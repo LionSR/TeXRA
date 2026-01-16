@@ -92,23 +92,22 @@ export class StreamTabs {
   _buildTooltip(info, includeLastActivity = false) {
     if (!info) return '';
 
-    const parts = [
+    const mainParts = [
       info.label,
       info.model && `Model: ${info.model}`,
       info.inputFile && `Input: ${info.inputFile}`,
     ].filter(Boolean);
 
+    const mainLine = mainParts.join(' • ');
+
+    // Add last activity on separate line if requested and available
     if (includeLastActivity && info.lastTimestamp) {
       const lastSeen = formatRelativeTime(info.lastTimestamp);
-      if (lastSeen) parts.push(`Last activity ${lastSeen}`);
+      if (lastSeen && mainLine) return `${mainLine}\nLast activity ${lastSeen}`;
+      if (lastSeen) return `Last activity ${lastSeen}`;
     }
 
-    // Use newline before last activity when present and multiple parts
-    if (includeLastActivity && parts.length > 1) {
-      const lastPart = parts.pop();
-      return `${parts.join(' • ')}\n${lastPart}`;
-    }
-    return parts.join(' • ');
+    return mainLine;
   }
 
   /**
