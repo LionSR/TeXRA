@@ -52,8 +52,16 @@ function toZeroIndexed(
 ): { line: number; character: number } {
   return {
     line: Math.max(0, line - 1),
-    character: column ? Math.max(0, column - 1) : 0,
+    character: Math.max(0, (column ?? 1) - 1),
   };
+}
+
+/**
+ * Format an error message for tool output.
+ */
+function formatError(error: unknown, hint?: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return hint ? `Error: ${message}\n\n${hint}` : `Error: ${message}`;
 }
 
 /**
@@ -119,11 +127,9 @@ Example output:
 }) {
   protected async execute(input: LeanLspGoalInput): Promise<ToolResult> {
     const { file, line, column } = input;
-    // Convert nullish to undefined for functions that expect undefined
     const col = column ?? undefined;
     const { line: lspLine, character } = toZeroIndexed(line, col);
 
-    // Open file in VS Code so user can see InfoView with goal state
     await openFileAtPosition(file, line, col);
 
     try {
@@ -141,26 +147,21 @@ Example output:
         };
       }
 
-      let output = `## Goal State at Line ${line}\n\n`;
-
-      if (goalState.rendered) {
-        output += goalState.rendered;
-      } else if (goalState.goals.length > 0) {
-        output += '**Goals:**\n';
-        for (let i = 0; i < goalState.goals.length; i++) {
-          output += `${i + 1}. ${goalState.goals[i]}\n`;
-        }
-      }
+      const goalsText = goalState.rendered
+        ? goalState.rendered
+        : goalState.goals.map((g, i) => `${i + 1}. ${g}`).join('\n');
 
       return {
         summary: `Found ${goalState.goals.length} goal(s) at line ${line}`,
-        output,
+        output: `## Goal State at Line ${line}\n\n${goalsText ? `**Goals:**\n${goalsText}` : ''}`,
         diagnostics: { goalState },
       };
     } catch (error) {
+      const hint =
+        'Make sure the Lean 4 VS Code extension is installed and active.';
       return {
         summary: 'Failed to get goal state',
-        output: `Error: ${error instanceof Error ? error.message : String(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
+        output: formatError(error, hint),
         isError: true,
       };
     }
@@ -187,16 +188,22 @@ Requires: Lean 4 VS Code extension installed and active.`,
 }) {
   protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
     const { file } = input;
+    const {
+      Error: E,
+      Warning: W,
+      Information: I,
+      Hint: H,
+    } = vscodeIntegration.DiagnosticSeverity;
 
     try {
       const diagnostics = vscodeIntegration.getDiagnostics(file);
 
       // Open file in VS Code - position at first error if any
-      const firstError = diagnostics.find(
-        (d) => d.severity === vscodeIntegration.DiagnosticSeverity.Error,
+      const firstError = diagnostics.find((d) => d.severity === E);
+      await openFileAtPosition(
+        file,
+        firstError ? firstError.range.start.line + 1 : undefined,
       );
-      const openLine = firstError ? firstError.range.start.line + 1 : undefined;
-      await openFileAtPosition(file, openLine);
 
       if (diagnostics.length === 0) {
         return {
@@ -205,40 +212,30 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      const errors = diagnostics.filter(
-        (d) => d.severity === vscodeIntegration.DiagnosticSeverity.Error,
-      );
-      const warnings = diagnostics.filter(
-        (d) => d.severity === vscodeIntegration.DiagnosticSeverity.Warning,
-      );
+      const errors = diagnostics.filter((d) => d.severity === E);
+      const warnings = diagnostics.filter((d) => d.severity === W);
       const hints = diagnostics.filter(
-        (d) =>
-          d.severity === vscodeIntegration.DiagnosticSeverity.Information ||
-          d.severity === vscodeIntegration.DiagnosticSeverity.Hint,
+        (d) => d.severity === I || d.severity === H,
       );
 
-      let output = '';
+      const formatSection = (
+        title: string,
+        items: vscodeIntegration.LeanDiagnostic[],
+      ): string =>
+        items.length === 0
+          ? ''
+          : `## ${title} (${items.length})\n\n` +
+            items
+              .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}\n`)
+              .join('\n');
 
-      if (errors.length > 0) {
-        output += `## Errors (${errors.length})\n\n`;
-        for (const e of errors) {
-          output += `**Line ${e.range.start.line + 1}:** ${e.message}\n\n`;
-        }
-      }
-
-      if (warnings.length > 0) {
-        output += `## Warnings (${warnings.length})\n\n`;
-        for (const w of warnings) {
-          output += `**Line ${w.range.start.line + 1}:** ${w.message}\n\n`;
-        }
-      }
-
-      if (hints.length > 0) {
-        output += `## Info/Hints (${hints.length})\n\n`;
-        for (const h of hints) {
-          output += `**Line ${h.range.start.line + 1}:** ${h.message}\n\n`;
-        }
-      }
+      const output = [
+        formatSection('Errors', errors),
+        formatSection('Warnings', warnings),
+        formatSection('Info/Hints', hints),
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       return {
         summary: `${errors.length} error(s), ${warnings.length} warning(s), ${hints.length} hint(s)`,
@@ -251,9 +248,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
         },
       };
     } catch (error) {
+      const hint =
+        'Make sure the Lean 4 VS Code extension is installed and active.';
       return {
         summary: 'Failed to get diagnostics',
-        output: `Error: ${error instanceof Error ? error.message : String(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
+        output: formatError(error, hint),
         isError: true,
       };
     }
@@ -297,7 +296,7 @@ This triggers the Lean 4 extension's "Restart File" command.`,
     } catch (error) {
       return {
         summary: 'Failed to restart',
-        output: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        output: formatError(error),
         isError: true,
       };
     }
