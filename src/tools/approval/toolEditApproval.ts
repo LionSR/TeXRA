@@ -159,10 +159,6 @@ export function setToolEditApprovalSessionBypass(enabled: boolean): void {
   notifyProgressViewApprovalBypassState();
 }
 
-export function resetToolEditApprovalSessionBypass(): void {
-  setToolEditApprovalSessionBypass(false);
-}
-
 export function toggleToolEditApprovalSessionBypass(): boolean {
   const newState = !approvalsBypassedForSession;
   setToolEditApprovalSessionBypass(newState);
@@ -687,7 +683,7 @@ export async function handleProgressViewToolEditApprovalAction(
 
   // State modification action - no isSettled check needed
   if (payload.action === 'resumeApprovals') {
-    resetToolEditApprovalSessionBypass();
+    setToolEditApprovalSessionBypass(false);
     return;
   }
 
