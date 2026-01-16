@@ -85,13 +85,18 @@ class TaskGroups {
     return [...(this.childrenByParent.get(parentId) ?? [])];
   }
 
-  _linkChild(parentId, childId) {
+  /** Get or create children set for a parent */
+  _getChildrenSet(parentId) {
     let children = this.childrenByParent.get(parentId);
     if (!children) {
       children = new Set();
       this.childrenByParent.set(parentId, children);
     }
-    children.add(childId);
+    return children;
+  }
+
+  _linkChild(parentId, childId) {
+    this._getChildrenSet(parentId).add(childId);
     this.parentByChild.set(childId, parentId);
   }
 
@@ -133,30 +138,40 @@ class RunScopedMap {
     this._data = new Map();
   }
 
-  set(streamId, runId, value) {
+  /** Resolve stream and get its run map, optionally creating if missing */
+  _getOrCreateStreamMap(streamId, runId, create = false) {
     const stream = runId ? this._resolveStreamId(streamId) : null;
-    if (!stream) return;
+    if (!stream) return null;
 
     let runs = this._data.get(stream);
-    if (!runs) {
+    if (!runs && create) {
       runs = new Map();
       this._data.set(stream, runs);
     }
-    runs.set(runId, value);
+    return runs ?? null;
+  }
+
+  set(streamId, runId, value) {
+    const runs = this._getOrCreateStreamMap(streamId, runId, true);
+    if (runs) runs.set(runId, value);
   }
 
   get(streamId, runId) {
     if (!runId) return null;
-    return this.getStreamMap(streamId)?.get(runId) ?? null;
+    return this._getOrCreateStreamMap(streamId, runId)?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
     const stream = runId ? this._resolveStreamId(streamId) : null;
-    const runs = stream ? this._data.get(stream) : null;
+    if (!stream) return;
+
+    const runs = this._data.get(stream);
     if (!runs) return;
 
     runs.delete(runId);
-    if (runs.size === 0) this._data.delete(stream);
+    if (runs.size === 0) {
+      this._data.delete(stream);
+    }
   }
 
   clearStream(streamId) {
@@ -355,21 +370,15 @@ export class ProgressViewState {
       this.runUsage,
     ];
     for (const runMap of runMaps) {
-      const streamMap = runMap.getStreamMap(streamId);
-      if (streamMap) {
-        for (const runId of streamMap.keys()) {
-          if (runId) {
-            candidates.add(runId);
-          }
-        }
+      const keys = runMap.getStreamMap(streamId)?.keys();
+      if (keys) {
+        for (const runId of keys) if (runId) candidates.add(runId);
       }
     }
 
-    // Add root task group IDs
+    // Add root task group IDs (groups without a parent)
     for (const group of this.taskGroups.getGroupMap().values()) {
-      if (group && !group.parentGroupId) {
-        candidates.add(group.id);
-      }
+      if (group && !group.parentGroupId) candidates.add(group.id);
     }
 
     return candidates;
