@@ -3,10 +3,8 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
-import { executeCommand } from '@utils/system/execUtils';
-
-// Local file imports
 import { defineTool } from '@tools/core/define';
+import { executeCommand } from '@utils/system/execUtils';
 
 // ============================================================================
 // Types
@@ -68,9 +66,8 @@ function parseLeanOutput(output: string): LeanDiagnostic[] {
       };
     } else if (currentDiagnostic && (line.startsWith('  ') || line === '')) {
       // Continuation of multi-line message (indented or empty line within message)
-      if (line !== '') {
-        currentDiagnostic.message += '\n' + line;
-      }
+      // Preserve empty lines to maintain error message readability
+      currentDiagnostic.message += '\n' + line;
     }
   }
 
@@ -193,11 +190,20 @@ function formatDiagnostics(diagnostics: LeanDiagnostic[]): string {
 // Tool Implementation: lake_build
 // ============================================================================
 
+/**
+ * Validates a Lake build target to prevent command injection.
+ * Valid targets: alphanumeric characters, dots, hyphens, underscores, forward slashes.
+ * Examples: "Mathlib", "Mathlib.Algebra", "MyProject/Basic", "@Mathlib"
+ */
+function isValidBuildTarget(target: string): boolean {
+  return /^[@a-zA-Z0-9._\/-]+$/.test(target);
+}
+
 const LakeBuildInputSchema = z.strictObject({
   /** Specific target to build (optional, builds all if not specified) */
-  target: z.string().optional().describe('Specific target to build'),
+  target: z.string().nullish().describe('Specific target to build'),
   /** Working directory for the command (must contain lakefile.lean) */
-  cwd: z.string().optional().describe('Project directory with lakefile.lean'),
+  cwd: z.string().nullish().describe('Project directory with lakefile.lean'),
   /** Use JSON output format for structured results */
   json: z.boolean().prefault(false).describe('Output results as JSON'),
 });
@@ -220,6 +226,16 @@ Use \`lake exe cache get\` first for Mathlib projects to download prebuilt olean
   protected async execute(input: LakeBuildInput): Promise<ToolResult> {
     const { target, cwd, json } = input;
 
+    // Validate target to prevent command injection
+    if (target && !isValidBuildTarget(target)) {
+      return {
+        summary: 'Invalid build target',
+        output: `Build target "${target}" contains invalid characters. ` +
+          'Targets must only contain alphanumeric characters, dots, hyphens, underscores, forward slashes, or @ prefix.',
+        isError: true,
+      };
+    }
+
     // Build command with optional JSON flag
     let command = 'lake build';
     if (json) {
@@ -230,7 +246,7 @@ Use \`lake exe cache get\` first for Mathlib projects to download prebuilt olean
     }
 
     const result = await executeCommand(command, {
-      cwd,
+      cwd: cwd ?? undefined,
       truncate: true,
       timeout: 300000, // 5 minutes for builds
     });

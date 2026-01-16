@@ -9,8 +9,23 @@
  * instead of spawning our own `lake serve` instance.
  */
 
-import * as vscode from 'vscode';
 import * as path from 'path';
+import * as vscode from 'vscode';
+
+import * as logger from '@logger/logUtils';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Lean 4 VS Code extension identifier */
+const LEAN4_EXTENSION_ID = 'leanprover.lean4';
+
+/** Lean LSP method names */
+const LSP_METHOD = {
+  PLAIN_GOAL: '$/lean/plainGoal',
+  PLAIN_TERM_GOAL: '$/lean/plainTermGoal',
+} as const;
 
 // ============================================================================
 // Types
@@ -71,8 +86,6 @@ export interface LeanCompletionItem {
 // Lean 4 Extension Access
 // ============================================================================
 
-const LEAN4_EXTENSION_ID = 'leanprover.lean4';
-
 interface Lean4ExtensionExports {
   clientProvider?: {
     getActiveClient(): LeanClient | undefined;
@@ -99,7 +112,8 @@ async function getLean4Extension(): Promise<Lean4ExtensionExports | undefined> {
   if (!extension.isActive) {
     try {
       await extension.activate();
-    } catch {
+    } catch (error) {
+      logger.debug('Lean4', `Failed to activate extension: ${error}`);
       return undefined;
     }
   }
@@ -274,7 +288,7 @@ export async function getGoalState(
   );
 
   try {
-    const result = await client.sendRequest('$/lean/plainGoal', {
+    const result = await client.sendRequest(LSP_METHOD.PLAIN_GOAL, {
       textDocument: { uri: uri.toString() },
       position: { line, character },
     });
@@ -301,7 +315,8 @@ export async function getGoalState(
     }
 
     return undefined;
-  } catch {
+  } catch (error) {
+    logger.debug('Lean4', `Failed to get goal state: ${error}`);
     return undefined;
   }
 }
@@ -325,7 +340,7 @@ export async function getTermGoal(
   );
 
   try {
-    const result = await client.sendRequest('$/lean/plainTermGoal', {
+    const result = await client.sendRequest(LSP_METHOD.PLAIN_TERM_GOAL, {
       textDocument: { uri: uri.toString() },
       position: { line, character },
     });
@@ -343,7 +358,8 @@ export async function getTermGoal(
     }
 
     return undefined;
-  } catch {
+  } catch (error) {
+    logger.debug('Lean4', `Failed to get term goal: ${error}`);
     return undefined;
   }
 }
@@ -399,16 +415,21 @@ export async function fetchMathlibCache(): Promise<boolean> {
 /**
  * Ensure the InfoView panel is visible.
  * The InfoView shows goal state and diagnostics interactively.
+ *
+ * Note: The Lean 4 extension does not expose a direct "show InfoView" command.
+ * The 'lean4.displayGoal' command requires an active editor with Lean file.
+ * We use toggleUpdating twice as a workaround - this ensures the InfoView
+ * webview is initialized and active without changing its update state.
+ * A more reliable approach would require the Lean 4 extension to expose
+ * a dedicated API for programmatic InfoView control.
  */
 export async function showInfoView(): Promise<boolean> {
   try {
-    // Check if there's a way to detect if InfoView is already open
-    // For now, we use the focus command which opens it if closed
     await vscode.commands.executeCommand('lean4.infoView.toggleUpdating');
-    // Toggle back to restore state - this is a hack but ensures InfoView is active
     await vscode.commands.executeCommand('lean4.infoView.toggleUpdating');
     return true;
-  } catch {
+  } catch (error) {
+    logger.debug('Lean4', `Failed to show InfoView: ${error}`);
     return false;
   }
 }
@@ -419,15 +440,19 @@ export async function showInfoView(): Promise<boolean> {
  */
 export async function restartFileServer(filePath: string): Promise<boolean> {
   try {
-    // First ensure the file is open
-    const uri = vscode.Uri.file(filePath);
+    // Resolve relative paths like other functions in this module
+    const resolvedPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(filePath);
+    const uri = vscode.Uri.file(resolvedPath);
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
 
     // Then restart
     await vscode.commands.executeCommand('lean4.restartFile');
     return true;
-  } catch {
+  } catch (error) {
+    logger.debug('Lean4', `Failed to restart file server: ${error}`);
     return false;
   }
 }
