@@ -1,4 +1,5 @@
 // Third-party imports
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
@@ -169,25 +170,72 @@ Example output:
 }
 
 /**
- * Wait for diagnostics to be available, with timeout.
+ * Wait for diagnostics to become available using event subscription
+ * with polling fallback for robustness.
+ *
+ * Uses vscode.languages.onDidChangeDiagnostics event (recommended by VS Code)
+ * combined with polling to handle edge cases where events might be missed.
  */
 async function waitForDiagnostics(
   file: string,
   maxWaitMs: number = 3000,
 ): Promise<vscodeIntegration.LeanDiagnostic[]> {
+  // Resolve to absolute path for consistent comparison
+  const absolutePath = path.isAbsolute(file) ? file : path.resolve(file);
+  const uri = vscode.Uri.file(absolutePath);
   const startTime = Date.now();
   const pollInterval = 200;
 
-  while (Date.now() - startTime < maxWaitMs) {
-    const diagnostics = vscodeIntegration.getDiagnostics(file);
-    if (diagnostics.length > 0) {
-      return diagnostics;
-    }
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  // Quick initial check - diagnostics may already be available
+  const diagnostics = vscodeIntegration.getDiagnostics(file);
+  if (diagnostics.length > 0) {
+    return diagnostics;
   }
 
-  // Final attempt
-  return vscodeIntegration.getDiagnostics(file);
+  // Set up promise that resolves on diagnostic change event
+  const waitForChange = new Promise<vscodeIntegration.LeanDiagnostic[]>(
+    (resolve) => {
+      const disposable = vscode.languages.onDidChangeDiagnostics((e) => {
+        // Check if this event is for our file (case-insensitive path match)
+        const hasOurFile = e.uris.some(
+          (diagUri) =>
+            diagUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase(),
+        );
+
+        if (hasOurFile) {
+          const updated = vscodeIntegration.getDiagnostics(file);
+          if (updated.length > 0) {
+            disposable.dispose();
+            resolve(updated);
+          }
+        }
+      });
+
+      // Cleanup subscription on timeout
+      setTimeout(() => disposable.dispose(), maxWaitMs);
+    },
+  );
+
+  // Polling fallback - handles cases where events might be missed
+  const pollFallback = new Promise<vscodeIntegration.LeanDiagnostic[]>(
+    (resolve) => {
+      const pollTimer = setInterval(() => {
+        if (Date.now() - startTime >= maxWaitMs) {
+          clearInterval(pollTimer);
+          resolve(vscodeIntegration.getDiagnostics(file));
+        } else {
+          const updated = vscodeIntegration.getDiagnostics(file);
+          if (updated.length > 0) {
+            clearInterval(pollTimer);
+            resolve(updated);
+          }
+        }
+      }, pollInterval);
+    },
+  );
+
+  // Race: return whichever resolves first (event or polling)
+  return Promise.race([waitForChange, pollFallback]);
 }
 
 /**
