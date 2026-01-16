@@ -15,17 +15,6 @@ import * as vscodeIntegration from './VscodeIntegration';
 // Schema Definitions
 // ============================================================================
 
-const LeanLspGoalInputSchema = z.strictObject({
-  /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
-  /** Line number (1-indexed) */
-  line: z.number().describe('Line number (1-indexed)'),
-  /** Column number (1-indexed, optional) */
-  column: z.number().nullish().describe('Column number (1-indexed)'),
-});
-
-export type LeanLspGoalInput = z.infer<typeof LeanLspGoalInputSchema>;
-
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
@@ -43,19 +32,6 @@ export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Convert 1-indexed user coordinates to 0-indexed LSP coordinates.
- */
-function toZeroIndexed(
-  line: number,
-  column?: number,
-): { line: number; character: number } {
-  return {
-    line: Math.max(0, line - 1),
-    character: Math.max(0, (column ?? 1) - 1),
-  };
-}
 
 /**
  * Format an error message for tool output.
@@ -87,6 +63,7 @@ function resolveFilePath(filePath: string): string {
  * Open a file in VS Code and position cursor at given line.
  * This triggers the Lean 4 extension to process the file.
  * Returns the absolute file path that was opened.
+ * Reuses existing editor if file is already open.
  */
 async function openFileInEditor(
   filePath: string,
@@ -100,11 +77,26 @@ async function openFileInEditor(
 
     logger.debug('Lean4', `Opening file: ${absolutePath}`);
 
-    const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, {
-      preserveFocus: false, // Focus the editor so Lean extension activates
-      preview: false, // Don't use preview mode
-    });
+    // Check if file is already open in an editor
+    const existingEditor = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.fsPath === uri.fsPath,
+    );
+
+    let editor: vscode.TextEditor;
+    if (existingEditor) {
+      // Reuse existing editor
+      editor = await vscode.window.showTextDocument(existingEditor.document, {
+        viewColumn: existingEditor.viewColumn,
+        preserveFocus: false,
+      });
+    } else {
+      // Open new editor
+      const document = await vscode.workspace.openTextDocument(uri);
+      editor = await vscode.window.showTextDocument(document, {
+        preserveFocus: false,
+        preview: false,
+      });
+    }
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -129,84 +121,6 @@ async function openFileInEditor(
 // ============================================================================
 // Tool Implementations
 // ============================================================================
-
-/**
- * Get proof goal state at a position using the Lean 4 VS Code extension.
- */
-export class LeanLspGoalTool extends defineTool({
-  name: 'lean_lsp_goal',
-  description: `Get the proof goal state at a specific position in a Lean 4 file.
-
-Queries the Lean 4 VS Code extension's language server for real-time goal information.
-
-Usage:
-- Specify file, line (1-indexed), and optionally column
-- Returns the current proof context and goals at that position
-
-Requires: Lean 4 VS Code extension installed and active.
-
-Example output:
-  Context:
-    n : Nat
-    h : n > 0
-  Goals:
-    1. ⊢ n + 1 > 1`,
-  schema: LeanLspGoalInputSchema,
-}) {
-  protected async execute(input: LeanLspGoalInput): Promise<ToolResult> {
-    const { file, line, column } = input;
-    const col = column ?? undefined;
-    const { line: lspLine, character } = toZeroIndexed(line, col);
-
-    // Open file first - required for Lean extension to process it
-    const openedPath = await openFileInEditor(file, line, col);
-    if (!openedPath) {
-      return {
-        summary: 'Failed to open file',
-        output: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
-        isError: true,
-      };
-    }
-
-    try {
-      // Small delay to let Lean process the position
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const goalState = await vscodeIntegration.getGoalState(
-        openedPath,
-        lspLine,
-        character,
-      );
-
-      if (!goalState) {
-        return {
-          summary: `No goal state at line ${line}`,
-          output:
-            'No proof goal found at this position. This may not be inside a tactic proof, ' +
-            'or Lean is still processing the file.',
-        };
-      }
-
-      const goalsText = goalState.rendered
-        ? goalState.rendered
-        : goalState.goals.map((g, i) => `${i + 1}. ${g}`).join('\n');
-
-      return {
-        summary: `Found ${goalState.goals.length} goal(s) at line ${line}`,
-        output: `## Goal State at Line ${line}\n\n${goalsText ? `**Goals:**\n${goalsText}` : ''}`,
-        diagnostics: { goalState },
-      };
-    } catch (error) {
-      const hint =
-        'Make sure the Lean 4 VS Code extension is installed and active.';
-      return {
-        summary: 'Failed to get goal state',
-        output: formatError(error, hint),
-        isError: true,
-      };
-    }
-  }
-}
 
 /**
  * Wait for diagnostics to become available using event subscription
