@@ -16,4 +16,25 @@ describe('buildArguments', () => {
     const args = buildArguments(baseInput, 'files_with_matches');
     assert.ok(args.includes('--files-with-matches'));
   });
+
+  it('includes --fixed-strings when literal is true', () => {
+    const args = buildArguments({ ...baseInput, literal: true }, 'content');
+    assert.ok(args.includes('--fixed-strings'));
+  });
+
+  it('omits --fixed-strings when literal is false or nullish', () => {
+    const argsWithFalse = buildArguments(
+      { ...baseInput, literal: false },
+      'content',
+    );
+    const argsWithNull = buildArguments(
+      { ...baseInput, literal: null },
+      'content',
+    );
+    const argsWithUndefined = buildArguments(baseInput, 'content');
+
+    assert.ok(!argsWithFalse.includes('--fixed-strings'));
+    assert.ok(!argsWithNull.includes('--fixed-strings'));
+    assert.ok(!argsWithUndefined.includes('--fixed-strings'));
+  });
 });
