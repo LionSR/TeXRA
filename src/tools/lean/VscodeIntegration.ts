@@ -32,14 +32,28 @@ const LSP_METHOD = {
 // ============================================================================
 
 /**
+ * Resolve file path to absolute, using workspace folder for relative paths.
+ */
+function resolveFilePath(filePath: string): string {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+
+  // Use workspace folder for relative paths
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    return path.join(workspaceFolders[0].uri.fsPath, filePath);
+  }
+
+  // Fallback to cwd (may not work in extension context)
+  return path.resolve(filePath);
+}
+
+/**
  * Resolve file path and create VS Code URI.
- * Handles both absolute and relative paths consistently.
  */
 function resolveFileUri(filePath: string): vscode.Uri {
-  const resolved = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(filePath);
-  return vscode.Uri.file(resolved);
+  return vscode.Uri.file(resolveFilePath(filePath));
 }
 
 /**
@@ -186,19 +200,29 @@ interface LeanClient {
 async function getLean4Extension(): Promise<Lean4ExtensionExports | undefined> {
   const extension = vscode.extensions.getExtension(LEAN4_EXTENSION_ID);
   if (!extension) {
+    logger.debug('Lean4', 'Lean 4 extension not found');
     return undefined;
   }
+
+  logger.debug('Lean4', `Extension found, isActive: ${extension.isActive}`);
 
   if (!extension.isActive) {
     try {
       await extension.activate();
+      logger.debug('Lean4', 'Extension activated');
     } catch (error) {
       logger.debug('Lean4', `Failed to activate extension: ${error}`);
       return undefined;
     }
   }
 
-  return extension.exports as Lean4ExtensionExports;
+  const exports = extension.exports as Lean4ExtensionExports;
+  logger.debug(
+    'Lean4',
+    `Extension exports: ${exports ? Object.keys(exports).join(', ') : 'none'}`,
+  );
+
+  return exports;
 }
 
 /**
@@ -209,17 +233,30 @@ async function getLeanClient(
 ): Promise<LeanClient | undefined> {
   const exports = await getLean4Extension();
   if (!exports?.clientProvider) {
+    logger.debug('Lean4', 'No clientProvider in extension exports');
     return undefined;
   }
 
   // Try to find client for this file
+  logger.debug('Lean4', `Looking for client for: ${filePath}`);
   const client = exports.clientProvider.findClient(filePath);
   if (client) {
+    logger.debug('Lean4', 'Found client via findClient');
     return client;
   }
+  logger.debug(
+    'Lean4',
+    'findClient returned undefined, trying getActiveClient',
+  );
 
   // Fall back to active client
-  return exports.clientProvider.getActiveClient();
+  const activeClient = exports.clientProvider.getActiveClient();
+  if (activeClient) {
+    logger.debug('Lean4', 'Found client via getActiveClient');
+  } else {
+    logger.debug('Lean4', 'getActiveClient also returned undefined');
+  }
+  return activeClient;
 }
 
 // ============================================================================
