@@ -126,8 +126,7 @@ Example output:
         return {
           summary: `No goal state at line ${line}`,
           output:
-            'No proof goal found at this position. This may not be inside a tactic proof.\n\n' +
-            '💡 The file is now open in VS Code - check the InfoView panel for more details.',
+            'No proof goal found at this position. This may not be inside a tactic proof.',
         };
       }
 
@@ -141,9 +140,6 @@ Example output:
           output += `${i + 1}. ${goalState.goals[i]}\n`;
         }
       }
-
-      output +=
-        '\n💡 The file is now open in VS Code - see the InfoView panel for interactive goal state.';
 
       return {
         summary: `Found ${goalState.goals.length} goal(s) at line ${line}`,
@@ -194,9 +190,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
       if (diagnostics.length === 0) {
         return {
           summary: '✓ No diagnostics',
-          output:
-            'No errors, warnings, or hints for this file.\n\n' +
-            '💡 The file is now open in VS Code - check the Problems panel (Ctrl+Shift+M) for details.',
+          output: 'No errors, warnings, or hints for this file.',
         };
       }
 
@@ -234,9 +228,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
           output += `**Line ${h.range.start.line + 1}:** ${h.message}\n\n`;
         }
       }
-
-      output +=
-        '💡 The file is now open in VS Code - see squiggly lines in editor and Problems panel (Ctrl+Shift+M).';
 
       return {
         summary: `${errors.length} error(s), ${warnings.length} warning(s), ${hints.length} hint(s)`,
