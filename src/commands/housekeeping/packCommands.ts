@@ -56,35 +56,46 @@ const PackMultipleSchema = z
 // --- Helpers ---
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
-  switch (result.status) {
-    case 'success': {
-      const folder = result.outputFolder;
-      if (folder) {
-        vscode.window
-          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-          .then((sel) => {
-            if (sel === 'Open Folder') {
-              void vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(WorkspaceFS.fullPath(folder)),
-              );
-            }
-          });
-      }
-      break;
+  if (result.status === 'success') {
+    const folder = result.outputFolder;
+    if (folder) {
+      vscode.window
+        .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
+        .then((sel) => {
+          if (sel === 'Open Folder') {
+            void vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(WorkspaceFS.fullPath(folder)),
+            );
+          }
+        });
     }
-    case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to pack for ${inputFile}`,
-      );
-      break;
-    case 'missingParams':
-      vscode.window.showErrorMessage('Missing required parameters for pack');
-      break;
-    case 'error':
-      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
-      break;
+    return;
   }
+
+  const messages: Record<Exclude<FileOpResult['status'], 'success'>, { text: string; isError: boolean }> = {
+    noFiles: { text: `No files found to pack for ${inputFile}`, isError: false },
+    missingParams: { text: 'Missing required parameters for pack', isError: true },
+    error: { text: `Error during packing: ${result.error}`, isError: true },
+  };
+  const msg = messages[result.status];
+  if (msg.isError) {
+    vscode.window.showErrorMessage(msg.text);
+  } else {
+    vscode.window.showInformationMessage(msg.text);
+  }
+}
+
+function emitClearMissingOutputs(
+  agent: string,
+  model: string,
+  inputFile: string,
+  useMultipleOutputs: boolean,
+  streamId?: string,
+): void {
+  bus.emit('clearMissingOutputs', {
+    stream: streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
+  });
 }
 
 // --- Handlers ---
@@ -125,11 +136,7 @@ async function handlePack(config: unknown): Promise<void> {
   showPackResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    bus.emit('clearMissingOutputs', {
-      stream:
-        streamId ||
-        getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
-    });
+    emitClearMissingOutputs(agent, model, inputFile, useMultipleOutputs, streamId);
   }
 }
 
@@ -150,11 +157,7 @@ async function handlePackSingle(
   const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
   showPackResult(result, data.inputFile);
-  bus.emit('clearMissingOutputs', {
-    stream: getStreamTabId(data.agent, data.model, data.inputFile, {
-      useMultipleOutputs: false,
-    }),
-  });
+  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
 }
 
 async function handlePackMultiple(
@@ -185,11 +188,7 @@ async function handlePackMultiple(
     data.outputFiles,
   );
   showPackResult(result, data.inputFile);
-  bus.emit('clearMissingOutputs', {
-    stream: getStreamTabId(data.agent, data.model, data.inputFile, {
-      useMultipleOutputs: true,
-    }),
-  });
+  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
 }
 
 // --- Registration ---

@@ -6,14 +6,13 @@ import { z } from 'zod';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 import { formatZodError, showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   runCleanSingle,
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
 } from '@housekeeping';
-import { getStreamTabId } from '@/logger/streamUtils';
+import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -29,10 +28,27 @@ const CleanParamsSchema = z.object({
   model: RequiredString,
 });
 
+/** For clean command - matches handlePack pattern */
+const CleanConfigSchema = z
+  .object({
+    inputFile: RequiredString,
+    agent: RequiredString,
+    model: RequiredString,
+    outputFiles: z.array(z.string()).prefault([]),
+    useMultipleOutputs: z.boolean().optional(),
+    streamId: z.string().optional(),
+    skipProgressViewClear: z.boolean().optional(),
+  })
+  .transform((c) => ({
+    ...c,
+    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 1,
+  }));
+
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  const isError = result.status === 'missingParams' || result.status === 'error';
+  const isError =
+    result.status === 'missingParams' || result.status === 'error';
   const messages: Record<FileOpResult['status'], string> = {
     success: `Cleanup complete for ${inputFile}`,
     noFiles: `No files found to clean for ${inputFile}`,
@@ -85,11 +101,7 @@ async function handleCleanSingle(
 
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
   showCleanResult(result, data.inputFile);
-
-  const streamId = getStreamTabId(data.agent, data.model, data.inputFile, {
-    useMultipleOutputs: false,
-  });
-  bus.emit('clearMissingOutputs', { stream: streamId });
+  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
 }
 
 async function handleCleanMultiple(
@@ -98,7 +110,12 @@ async function handleCleanMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const data = await validateCleanParams(inputFile, agent, model, 'cleanMultiple');
+  const data = await validateCleanParams(
+    inputFile,
+    agent,
+    model,
+    'cleanMultiple',
+  );
   if (!data) return;
 
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
@@ -110,38 +127,33 @@ async function handleCleanMultiple(
     outputFiles,
   );
   showCleanResult(result, data.inputFile);
-
-  const streamId = getStreamTabId(data.agent, data.model, data.inputFile, {
-    useMultipleOutputs: true,
-  });
-  bus.emit('clearMissingOutputs', { stream: streamId });
+  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
 }
 
-export async function handleClean(config: {
-  agent?: string;
-  model?: string;
-  inputFile?: string;
-  outputFiles?: string[];
-  useMultipleOutputs?: boolean;
-  streamId?: string;
-  skipProgressViewClear?: boolean;
-}): Promise<void> {
-  logger.debug(
-    CHANNEL,
-    `Clean command called with config: ${JSON.stringify(config)}`,
-  );
-
-  const { agent, model, inputFile } = config;
-  if (!agent || !model || !inputFile) {
-    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
+export async function handleClean(config: unknown): Promise<void> {
+  const parsed = CleanConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid config: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
 
-  const outputFiles = Array.isArray(config.outputFiles)
-    ? config.outputFiles
-    : [];
-  const useMultipleOutputs =
-    config.useMultipleOutputs ?? outputFiles.length > 1;
+  const {
+    agent,
+    model,
+    inputFile,
+    outputFiles,
+    useMultipleOutputs,
+    streamId,
+    skipProgressViewClear,
+  } = parsed.data;
+
+  logger.debug(
+    CHANNEL,
+    `Clean command called with config: ${JSON.stringify(parsed.data)}`,
+  );
 
   const result =
     useMultipleOutputs && outputFiles.length > 0
@@ -149,11 +161,13 @@ export async function handleClean(config: {
       : await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
-  const streamId =
-    config.streamId ||
-    getStreamTabId(agent, model, inputFile, { useMultipleOutputs });
-
-  if (!config.skipProgressViewClear) {
-    bus.emit('clearMissingOutputs', { stream: streamId });
+  if (!skipProgressViewClear) {
+    emitClearMissingOutputs(
+      agent,
+      model,
+      inputFile,
+      useMultipleOutputs,
+      streamId,
+    );
   }
 }
