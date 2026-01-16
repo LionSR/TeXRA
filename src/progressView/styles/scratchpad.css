@@ -13,6 +13,14 @@
   margin: var(--spacing-small) 0;
 }
 
+/* Tool use title - single line with ellipsis */
+.tool-use-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .tool-use-label {
   font-weight: 600;
   color: var(--color-text-link);
