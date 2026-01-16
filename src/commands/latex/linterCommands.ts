@@ -1,15 +1,15 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
-  getLinterMessages,
-  getSeverityString,
-  countDiagnosticsBySeverity,
-} from '@frontend/latex/linter';
+  countBySeverity,
+  getSeverityLabel,
+} from '@frontend/vscode/vscodeDiagnostics';
+import { getLinterMessages } from '@frontend/latex/linter';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -77,7 +77,7 @@ export async function handleShowLinterMessages(): Promise<void> {
 
     // Format messages for display
     const formattedMessages = messages.map((msg) => {
-      const severity = getSeverityString(msg.severity).toUpperCase();
+      const severity = getSeverityLabel(msg.severity).toUpperCase();
       const line = msg.range.start.line + 1;
       const col = msg.range.start.character + 1;
       const source = msg.source ?? 'unknown';
@@ -115,7 +115,7 @@ export async function handleCountLinterMessages(): Promise<void> {
     const messages = await getLinterMessages(relativePath);
 
     // Count by severity
-    const counts = countDiagnosticsBySeverity(messages);
+    const counts = countBySeverity(messages);
 
     const total = counts.errors + counts.warnings + counts.info + counts.hints;
 

@@ -3,11 +3,11 @@
  *
  * Handles log message events: addLogMessage, updateLogMessage.
  */
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { withEventErrorHandling } from './errorHandling';
 import {
   canUpdateWebview,
