@@ -39,6 +39,7 @@ import {
   LeanHoverTool,
   LeanCompletionsTool,
   LeanTermGoalTool,
+  LeanDiagnosticsTool,
 } from './lean';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -79,11 +80,12 @@ export function getDefaultToolRegistry(): IToolRegistry {
       lean_check: new LeanCheckTool(),
       lake_build: new LakeBuildTool(),
       lean_goal: new LeanGoalTool(),
-      // LSP-based Lean tools
+      // LSP-based Lean tools (uses VS Code extension when available)
       lean_lsp_goal: new LeanLspGoalTool(),
       lean_hover: new LeanHoverTool(),
       lean_completions: new LeanCompletionsTool(),
       lean_term_goal: new LeanTermGoalTool(),
+      lean_diagnostics: new LeanDiagnosticsTool(),
     });
   }
   return defaultRegistryInstance;
