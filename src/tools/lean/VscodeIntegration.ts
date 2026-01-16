@@ -28,6 +28,51 @@ const LSP_METHOD = {
 } as const;
 
 // ============================================================================
+// Utilities
+// ============================================================================
+
+/**
+ * Resolve file path and create VS Code URI.
+ * Handles both absolute and relative paths consistently.
+ */
+function resolveFileUri(filePath: string): vscode.Uri {
+  const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+  return vscode.Uri.file(resolved);
+}
+
+/**
+ * Execute a VS Code command and return success status.
+ */
+async function executeVscodeCommand(command: string): Promise<boolean> {
+  try {
+    await vscode.commands.executeCommand(command);
+    return true;
+  } catch (error) {
+    logger.debug('Lean4', `Failed to execute ${command}: ${error}`);
+    return false;
+  }
+}
+
+/**
+ * Type guard to check if value is a non-null object.
+ */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Safely extract string content from VS Code hover/completion content.
+ */
+function extractContentString(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (content instanceof vscode.MarkdownString) return content.value;
+  if (isObject(content) && 'value' in content && typeof content.value === 'string') {
+    return content.value;
+  }
+  return '';
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -159,20 +204,23 @@ export async function isLean4ExtensionAvailable(): Promise<boolean> {
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
 export function getDiagnostics(filePath: string): LeanDiagnostic[] {
-  const uri = vscode.Uri.file(
-    path.isAbsolute(filePath) ? filePath : path.resolve(filePath),
-  );
-  const diagnostics = vscode.languages.getDiagnostics(uri);
+  try {
+    const uri = resolveFileUri(filePath);
+    const diagnostics = vscode.languages.getDiagnostics(uri);
 
-  return diagnostics.map((d) => ({
-    range: {
-      start: { line: d.range.start.line, character: d.range.start.character },
-      end: { line: d.range.end.line, character: d.range.end.character },
-    },
-    message: d.message,
-    severity: d.severity as DiagnosticSeverity,
-    source: d.source,
-  }));
+    return diagnostics.map((d) => ({
+      range: {
+        start: { line: d.range.start.line, character: d.range.start.character },
+        end: { line: d.range.end.line, character: d.range.end.character },
+      },
+      message: d.message,
+      severity: d.severity as DiagnosticSeverity,
+      source: d.source,
+    }));
+  } catch (error) {
+    logger.debug('Lean4', `Failed to get diagnostics: ${error}`);
+    return [];
+  }
 }
 
 /**
@@ -183,9 +231,7 @@ export async function getHover(
   line: number,
   character: number,
 ): Promise<LeanHoverInfo | undefined> {
-  const uri = vscode.Uri.file(
-    path.isAbsolute(filePath) ? filePath : path.resolve(filePath),
-  );
+  const uri = resolveFileUri(filePath);
   const position = new vscode.Position(line, character);
 
   const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
@@ -198,19 +244,10 @@ export async function getHover(
     return undefined;
   }
 
-  // Combine all hover contents
+  // Combine all hover contents with safe extraction
   const contents = hovers
-    .flatMap((h) =>
-      h.contents.map((c) => {
-        if (typeof c === 'string') {
-          return c;
-        }
-        if (c instanceof vscode.MarkdownString) {
-          return c.value;
-        }
-        return (c as { value: string }).value;
-      }),
-    )
+    .flatMap((h) => h.contents.map(extractContentString))
+    .filter(Boolean)
     .join('\n\n');
 
   const firstHover = hovers[0];
@@ -236,9 +273,7 @@ export async function getCompletions(
   character: number,
   limit: number = 50,
 ): Promise<LeanCompletionItem[]> {
-  const uri = vscode.Uri.file(
-    path.isAbsolute(filePath) ? filePath : path.resolve(filePath),
-  );
+  const uri = resolveFileUri(filePath);
   const position = new vscode.Position(line, character);
 
   const completionList = await vscode.commands.executeCommand<
@@ -254,14 +289,12 @@ export async function getCompletions(
     : completionList.items;
 
   return items.slice(0, limit).map((item) => ({
-    label: typeof item.label === 'string' ? item.label : item.label.label,
+    // Safely extract label - handle both string and CompletionItemLabel object
+    label: typeof item.label === 'string'
+      ? item.label
+      : (item.label?.label ?? 'unknown'),
     detail: item.detail,
-    documentation:
-      typeof item.documentation === 'string'
-        ? item.documentation
-        : item.documentation instanceof vscode.MarkdownString
-          ? item.documentation.value
-          : undefined,
+    documentation: extractContentString(item.documentation) || undefined,
     kind:
       item.kind !== undefined
         ? vscode.CompletionItemKind[item.kind]
@@ -283,9 +316,7 @@ export async function getGoalState(
     return undefined;
   }
 
-  const uri = vscode.Uri.file(
-    path.isAbsolute(filePath) ? filePath : path.resolve(filePath),
-  );
+  const uri = resolveFileUri(filePath);
 
   try {
     const result = await client.sendRequest(LSP_METHOD.PLAIN_GOAL, {
@@ -293,25 +324,32 @@ export async function getGoalState(
       position: { line, character },
     });
 
-    if (!result) {
+    if (!result || !isObject(result)) {
       return undefined;
     }
 
-    // Handle different response formats
-    if (typeof result === 'object' && result !== null) {
-      const r = result as Record<string, unknown>;
-      if ('goals' in r && Array.isArray(r.goals)) {
+    // Handle response with goals array - validate each item is a string
+    if ('goals' in result && Array.isArray(result.goals)) {
+      const validGoals = result.goals.filter(
+        (g): g is string => typeof g === 'string',
+      );
+      if (validGoals.length > 0) {
         return {
-          goals: r.goals as string[],
-          rendered: r.rendered as string | undefined,
+          goals: validGoals,
+          rendered:
+            'rendered' in result && typeof result.rendered === 'string'
+              ? result.rendered
+              : undefined,
         };
       }
-      if ('rendered' in r && typeof r.rendered === 'string') {
-        return {
-          goals: [r.rendered],
-          rendered: r.rendered,
-        };
-      }
+    }
+
+    // Handle response with only rendered string
+    if ('rendered' in result && typeof result.rendered === 'string') {
+      return {
+        goals: [result.rendered],
+        rendered: result.rendered,
+      };
     }
 
     return undefined;
@@ -335,9 +373,7 @@ export async function getTermGoal(
     return undefined;
   }
 
-  const uri = vscode.Uri.file(
-    path.isAbsolute(filePath) ? filePath : path.resolve(filePath),
-  );
+  const uri = resolveFileUri(filePath);
 
   try {
     const result = await client.sendRequest(LSP_METHOD.PLAIN_TERM_GOAL, {
@@ -345,16 +381,30 @@ export async function getTermGoal(
       position: { line, character },
     });
 
-    if (!result || typeof result !== 'object') {
+    if (!result || !isObject(result)) {
       return undefined;
     }
 
-    const r = result as Record<string, unknown>;
-    if ('goal' in r && typeof r.goal === 'string') {
-      return {
-        goal: r.goal,
-        range: r.range as LeanTermGoal['range'],
-      };
+    if ('goal' in result && typeof result.goal === 'string') {
+      // Validate range structure if present
+      let range: LeanTermGoal['range'] = undefined;
+      if ('range' in result && isObject(result.range)) {
+        const r = result.range;
+        if (
+          isObject(r.start) &&
+          isObject(r.end) &&
+          typeof r.start.line === 'number' &&
+          typeof r.start.character === 'number' &&
+          typeof r.end.line === 'number' &&
+          typeof r.end.character === 'number'
+        ) {
+          range = {
+            start: { line: r.start.line, character: r.start.character },
+            end: { line: r.end.line, character: r.end.character },
+          };
+        }
+      }
+      return { goal: result.goal, range };
     }
 
     return undefined;
@@ -364,53 +414,18 @@ export async function getTermGoal(
   }
 }
 
-/**
- * Restart the Lean server for the current file.
- */
-export async function restartFile(): Promise<boolean> {
-  try {
-    await vscode.commands.executeCommand('lean4.restartFile');
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Restart the Lean server for the current file. */
+export const restartFile = () => executeVscodeCommand('lean4.restartFile');
 
-/**
- * Restart the entire Lean server.
- */
-export async function restartServer(): Promise<boolean> {
-  try {
-    await vscode.commands.executeCommand('lean4.restartServer');
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Restart the entire Lean server. */
+export const restartServer = () => executeVscodeCommand('lean4.restartServer');
 
-/**
- * Build the Lean project.
- */
-export async function buildProject(): Promise<boolean> {
-  try {
-    await vscode.commands.executeCommand('lean4.project.build');
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Build the Lean project. */
+export const buildProject = () => executeVscodeCommand('lean4.project.build');
 
-/**
- * Fetch Mathlib cache.
- */
-export async function fetchMathlibCache(): Promise<boolean> {
-  try {
-    await vscode.commands.executeCommand('lean4.project.fetchCache');
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Fetch Mathlib cache. */
+export const fetchMathlibCache = () =>
+  executeVscodeCommand('lean4.project.fetchCache');
 
 /**
  * Ensure the InfoView panel is visible.
@@ -440,15 +455,9 @@ export async function showInfoView(): Promise<boolean> {
  */
 export async function restartFileServer(filePath: string): Promise<boolean> {
   try {
-    // Resolve relative paths like other functions in this module
-    const resolvedPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(filePath);
-    const uri = vscode.Uri.file(resolvedPath);
+    const uri = resolveFileUri(filePath);
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
-
-    // Then restart
     await vscode.commands.executeCommand('lean4.restartFile');
     return true;
   } catch (error) {
