@@ -85,13 +85,18 @@ class TaskGroups {
     return [...(this.childrenByParent.get(parentId) ?? [])];
   }
 
-  _linkChild(parentId, childId) {
+  /** Get or create children set for a parent */
+  _getChildrenSet(parentId) {
     let children = this.childrenByParent.get(parentId);
     if (!children) {
       children = new Set();
       this.childrenByParent.set(parentId, children);
     }
-    children.add(childId);
+    return children;
+  }
+
+  _linkChild(parentId, childId) {
+    this._getChildrenSet(parentId).add(childId);
     this.parentByChild.set(childId, parentId);
   }
 
@@ -363,21 +368,15 @@ export class ProgressViewState {
       this.runUsage,
     ];
     for (const runMap of runMaps) {
-      const streamMap = runMap.getStreamMap(streamId);
-      if (streamMap) {
-        for (const runId of streamMap.keys()) {
-          if (runId) {
-            candidates.add(runId);
-          }
-        }
+      const keys = runMap.getStreamMap(streamId)?.keys();
+      if (keys) {
+        for (const runId of keys) if (runId) candidates.add(runId);
       }
     }
 
-    // Add root task group IDs
+    // Add root task group IDs (groups without a parent)
     for (const group of this.taskGroups.getGroupMap().values()) {
-      if (group && !group.parentGroupId) {
-        candidates.add(group.id);
-      }
+      if (group && !group.parentGroupId) candidates.add(group.id);
     }
 
     return candidates;

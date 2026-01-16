@@ -60,31 +60,30 @@ export class LogEntryFormatter {
   }
 
   _buildFormatterMap() {
-    // Helper to wrap formatter functions with error handling
+    // Wrapper for error handling
     const safe = (fn, label) => (m) => safeFormat(() => fn(m), label);
 
-    // Banner formatter factory for thinking/scratchpad
-    const banner = (title) => (m) =>
-      formatBannerContent(
-        m.normalizedPayload,
-        title,
-        m.id,
-        m.groupId,
-        m.timestamp,
-      );
-
-    // Data formatter factory for payload+id patterns
-    const data = (fn) => (m) => fn(m.normalizedPayload, m.id);
-
-    // Meta formatter factory for payload+id+groupId+timestamp patterns
-    const meta = (fn) => (m) =>
+    // Field extractors for common formatter signatures
+    const withPayloadId = (fn) => (m) => fn(m.normalizedPayload, m.id);
+    const withFullMeta = (fn) => (m) =>
       fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
 
+    // Banner formatter (thinking/scratchpad)
+    const banner = (title) =>
+      withFullMeta((p, id, gid, ts) =>
+        formatBannerContent(p, title, id, gid, ts),
+      );
+
     return {
+      // Collapsible content banners
       thinking: safe(banner('Thinking'), 'thinking'),
       scratchpad: safe(banner('Scratchpad'), 'scratchpad'),
-      toolUse: safe(meta(formatToolUse), 'tool use'),
-      webSearch: safe(meta(formatWebSearch), 'web search'),
+
+      // Tool/search results (need full metadata)
+      toolUse: safe(withFullMeta(formatToolUse), 'tool use'),
+      webSearch: safe(withFullMeta(formatWebSearch), 'web search'),
+
+      // Model response (custom field mapping)
       modelResponse: safe(
         (m) =>
           formatModelResponse({
@@ -97,15 +96,22 @@ export class LogEntryFormatter {
           }),
         'Assistant',
       ),
-      fileList: safe(data(formatFileList), 'file list'),
-      missingOutputs: safe(data(formatMissingOutputs), 'missing outputs'),
-      latexdiff: safe(data(formatLatexdiff), 'latexdiff'),
-      statistics: safe(data(formatStatistics), 'statistics'),
+
+      // Data formatters (payload + id only)
+      fileList: safe(withPayloadId(formatFileList), 'file list'),
+      missingOutputs: safe(
+        withPayloadId(formatMissingOutputs),
+        'missing outputs',
+      ),
+      latexdiff: safe(withPayloadId(formatLatexdiff), 'latexdiff'),
+      statistics: safe(withPayloadId(formatStatistics), 'statistics'),
       contextManagement: safe(
-        data(formatContextManagement),
+        withPayloadId(formatContextManagement),
         'context management',
       ),
-      contextState: () => null, // Displayed in footer, not inline
+
+      // Special cases
+      contextState: () => null, // Displayed in footer
       userMessage: safe(
         (m) => formatUserMessage(m.normalizedPayload, m.id, m.timestamp),
         'user message',
