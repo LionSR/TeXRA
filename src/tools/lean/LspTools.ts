@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
+import { openFileInEditor } from '@common/vscodeEditor';
 import {
   waitForDiagnosticsChange,
   countBySeverity,
@@ -11,10 +12,8 @@ import {
   formatGroupedSections,
   DiagnosticSeverity,
 } from '@common/vscodeDiagnostics';
-import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { WorkspaceFS } from '@utils/files';
 
 // Local imports - VS Code integration
 import * as vscodeIntegration from './VscodeIntegration';
@@ -41,69 +40,6 @@ const LeanRestartInputSchema = z.strictObject({
 });
 
 export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Open a file in VS Code and position cursor at given line.
- * This triggers the Lean 4 extension to process the file.
- * Returns the absolute file path that was opened.
- * Reuses existing editor if file is already open.
- */
-async function openFileInEditor(
-  filePath: string,
-  line?: number,
-  column?: number,
-): Promise<string | undefined> {
-  try {
-    // Resolve to absolute path using workspace folder
-    const absolutePath = WorkspaceFS.toAbsolute(filePath);
-    const uri = vscode.Uri.file(absolutePath);
-
-    logger.debug('Lean4', `Opening file: ${absolutePath}`);
-
-    // Check if file is already open in an editor
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
-    );
-
-    let editor: vscode.TextEditor;
-    if (existingEditor) {
-      // Reuse existing editor
-      editor = await vscode.window.showTextDocument(existingEditor.document, {
-        viewColumn: existingEditor.viewColumn,
-        preserveFocus: false,
-      });
-    } else {
-      // Open new editor
-      const document = await vscode.workspace.openTextDocument(uri);
-      editor = await vscode.window.showTextDocument(document, {
-        preserveFocus: false,
-        preview: false,
-      });
-    }
-
-    if (line !== undefined) {
-      const position = new vscode.Position(
-        Math.max(0, line - 1),
-        column ? Math.max(0, column - 1) : 0,
-      );
-      editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-      );
-    }
-
-    logger.debug('Lean4', `File opened successfully: ${absolutePath}`);
-    return absolutePath;
-  } catch (error) {
-    logger.debug('Lean4', `Failed to open file: ${filePath}: ${error}`);
-    return undefined;
-  }
-}
 
 // ============================================================================
 // Tool Implementations

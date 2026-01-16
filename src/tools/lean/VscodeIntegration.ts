@@ -6,12 +6,7 @@
 
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-
-// ============================================================================
-// Public API
-// ============================================================================
 
 /**
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
@@ -27,29 +22,10 @@ export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
 
   // Fallback: search by path in case URI format differs
   const resolvedPath = uri.fsPath.toLowerCase();
-  const allDiagnostics = vscode.languages.getDiagnostics();
-
-  for (const [diagUri, diags] of allDiagnostics) {
+  for (const [diagUri, diags] of vscode.languages.getDiagnostics()) {
     if (diagUri.fsPath.toLowerCase() === resolvedPath && diags.length > 0) {
-      logger.debug(
-        'Lean4',
-        `Found diagnostics via path match: ${diagUri.toString()}`,
-      );
       return diags;
     }
-  }
-
-  // Log available URIs for debugging when no match found
-  const urisWithDiags = allDiagnostics
-    .filter(([, d]) => d.length > 0)
-    .map(([u]) => u.toString())
-    .slice(0, 5);
-
-  if (urisWithDiags.length > 0) {
-    logger.debug(
-      'Lean4',
-      `No diagnostics for ${uri.toString()}. Available: ${urisWithDiags.join(', ')}`,
-    );
   }
 
   return [];
@@ -66,8 +42,7 @@ export async function restartFileServer(filePath: string): Promise<boolean> {
     await vscode.window.showTextDocument(document, { preserveFocus: true });
     await vscode.commands.executeCommand('lean4.restartFile');
     return true;
-  } catch (error) {
-    logger.debug('Lean4', `Failed to restart file server: ${error}`);
+  } catch {
     return false;
   }
 }
