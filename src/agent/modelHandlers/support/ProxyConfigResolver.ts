@@ -9,15 +9,13 @@ const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
  * Preserves any path component provided.
  */
 function normalizeUrl(input: string): string {
-  if (!input) {
-    return '';
-  }
+  if (!input) return '';
+  const withProtocol = input.includes('://') ? input : `https://${input}`;
   try {
-    const url = new URL(input.includes('://') ? input : `https://${input}`);
-    const withoutProtocol = `${url.host}${url.pathname}`;
-    return withoutProtocol.replace(/\/+$/, '');
-  } catch (_err) {
-    return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const url = new URL(withProtocol);
+    return `${url.host}${url.pathname}`.replace(/\/+$/, '');
+  } catch {
+    return withProtocol.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   }
 }
 
