@@ -27,6 +27,14 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
+/** Extract text content from a reasoning detail item by type */
+function getReasoningItemText(item: ReasoningDetailItem): string | undefined {
+  if (item.type === 'reasoning.text') return item.text ?? undefined;
+  if (item.type === 'reasoning.summary') return item.summary;
+  // 'reasoning.encrypted' - encrypted content is not useful for display
+  return undefined;
+}
+
 /**
  * Extracts text content from OpenRouter reasoning_details array.
  * Handles the structured format with type-specific fields.
@@ -37,28 +45,14 @@ const extractTextFromReasoningDetails = (
 ): string => {
   if (!Array.isArray(details)) {
     // Fallback: if it's a string, return it directly
-    if (typeof details === 'string') return details;
-    return '';
+    return typeof details === 'string' ? details : '';
   }
 
-  const textParts: string[] = [];
-  for (const item of details) {
-    if (!item || typeof item !== 'object') continue;
-
-    switch (item.type) {
-      case 'reasoning.text':
-        if (item.text) textParts.push(item.text);
-        break;
-      case 'reasoning.summary':
-        if (item.summary) textParts.push(item.summary);
-        break;
-      case 'reasoning.encrypted':
-        // Encrypted content is not useful for display, skip it
-        break;
-    }
-  }
-
-  return textParts.join('');
+  return details
+    .filter((item): item is ReasoningDetailItem => !!item && typeof item === 'object')
+    .map(getReasoningItemText)
+    .filter((text): text is string => !!text)
+    .join('');
 };
 
 /**
