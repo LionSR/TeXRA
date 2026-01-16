@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import {
   waitForDiagnosticsChange,
   countBySeverity,
@@ -44,14 +45,6 @@ export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Format an error message for tool output.
- */
-function formatError(error: unknown, hint?: string): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return hint ? `Error: ${message}\n\n${hint}` : `Error: ${message}`;
-}
 
 /**
  * Open a file in VS Code and position cursor at given line.
@@ -205,11 +198,9 @@ Requires: Lean 4 VS Code extension installed and active.`,
         },
       };
     } catch (error) {
-      const hint =
-        'Make sure the Lean 4 VS Code extension is installed and active.';
       return {
         summary: 'Failed to get diagnostics',
-        output: formatError(error, hint),
+        output: `Error: ${toErrorMessage(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
         isError: true,
       };
     }
@@ -253,7 +244,7 @@ This triggers the Lean 4 extension's "Restart File" command.`,
     } catch (error) {
       return {
         summary: 'Failed to restart',
-        output: formatError(error),
+        output: `Error: ${toErrorMessage(error)}`,
         isError: true,
       };
     }
