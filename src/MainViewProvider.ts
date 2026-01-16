@@ -191,15 +191,20 @@ export class MainViewProvider
     // Cache of agent directory paths for filtering
     let agentDirPaths: string[] = [];
 
-    // Debounced refresh - updates agent dirs and options
-    const debouncedAgentFileRefresh = debounce(async () => {
+    // Update cache (called directly for init, debounced for file changes)
+    const updateAgentDirs = async () => {
       const dirs = await agentDirectories.getAllLocal();
       agentDirPaths = dirs.map((d) => d.directory);
+    };
+
+    // Initialize cache immediately (not debounced)
+    void updateAgentDirs();
+
+    // Debounced refresh - updates dirs and options on file changes
+    const debouncedAgentFileRefresh = debounce(async () => {
+      await updateAgentDirs();
       await this.refreshAgentOptions();
     }, DEBOUNCE_STATE_SAVE_MS);
-
-    // Initialize cache
-    void debouncedAgentFileRefresh();
 
     // Filter and debounce agent file changes
     const onAgentFileChange = (uri: vscode.Uri) => {
