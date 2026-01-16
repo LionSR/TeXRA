@@ -26,7 +26,7 @@ const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
   command: z
     .enum(['list', 'count'])
-    .default('list')
+    .prefault('list')
     .describe('Use "list" for full messages or "count" for summary only'),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
