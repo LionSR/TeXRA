@@ -15,6 +15,9 @@ export const BULLET_MARKUP =
 /** Maximum length for query preview in web search headers */
 export const QUERY_PREVIEW_MAX_LENGTH = 40;
 
+/** Maximum length for error summary in tool use headers */
+export const ERROR_TITLE_MAX_LENGTH = 80;
+
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
   warn: '🟡',
