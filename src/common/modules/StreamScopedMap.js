@@ -73,6 +73,19 @@ export class StreamScopedMap {
   }
 
   /**
+   * Clear a specific stream's value or all values.
+   * Convenience method for the common pattern: clear one stream or clear all.
+   * @param {string|null|undefined} streamId - Stream to clear, or null/undefined to clear all
+   */
+  clearStreamOrAll(streamId) {
+    if (streamId == null) {
+      this._data.clear();
+    } else {
+      this.delete(streamId);
+    }
+  }
+
+  /**
    * Get the number of stored entries.
    * @returns {number}
    */
