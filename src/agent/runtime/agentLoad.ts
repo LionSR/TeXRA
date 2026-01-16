@@ -90,8 +90,8 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   settings: T,
   source: AgentSource,
 ): T {
-  if (source === 'builtInToolUse' && settings.agentType === undefined) {
-    settings.agentType = AgentType.ToolUse;
+  if (source === 'builtInToolUse' && !settings.agentType) {
+    return { ...settings, agentType: AgentType.ToolUse };
   }
   return settings;
 }

@@ -29,58 +29,64 @@ import {
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 
-/**
- * Maps HTTP status codes to user-friendly error messages.
- * Extracted to simplify the error handling in loadRemoteAgent.
- */
+interface HttpErrorResult {
+  message: string;
+  shouldContinue: boolean;
+}
+
+const HTTP_ERROR_MESSAGES: Partial<
+  Record<number, (agentName: string) => string>
+> = {
+  [StatusCodes.UNAUTHORIZED]: () =>
+    'Session expired. Sign in again to continue.',
+  [StatusCodes.FORBIDDEN]: (name) =>
+    `Access denied to agent "${name}". Upgrade your account for access.`,
+};
+
+/** Maps HTTP status codes to user-friendly error messages. */
 function mapHttpError(
   status: number,
   agentName: string,
   candidateName: string,
   isLastCandidate: boolean,
   errorText: string,
-): { message: string; shouldContinue: boolean } {
-  switch (status) {
-    case StatusCodes.UNAUTHORIZED:
-      return {
-        message: 'Session expired. Sign in again to continue.',
-        shouldContinue: false,
-      };
+): HttpErrorResult {
+  // Handle static error messages
+  const staticMessage = HTTP_ERROR_MESSAGES[status];
+  if (staticMessage) {
+    return { message: staticMessage(agentName), shouldContinue: false };
+  }
 
-    case StatusCodes.NOT_FOUND:
-      if (!isLastCandidate) {
-        logger.debug(
-          CHANNEL,
-          `Agent variant "${candidateName}" not found, trying next candidate`,
-        );
-        return {
-          message: `Agent variant "${candidateName}" not found`,
-          shouldContinue: true,
-        };
-      }
+  // Handle 404 with fallback logic
+  if (status === StatusCodes.NOT_FOUND) {
+    if (!isLastCandidate) {
+      logger.debug(
+        CHANNEL,
+        `Agent variant "${candidateName}" not found, trying next candidate`,
+      );
       return {
-        message: `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
-        shouldContinue: false,
+        message: `Agent variant "${candidateName}" not found`,
+        shouldContinue: true,
       };
+    }
+    return {
+      message: `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
+      shouldContinue: false,
+    };
+  }
 
-    case StatusCodes.FORBIDDEN:
-      return {
-        message: `Access denied to agent "${agentName}". Upgrade your account for access.`,
-        shouldContinue: false,
-      };
-
-    case StatusCodes.INTERNAL_SERVER_ERROR:
-      if (errorText.includes('Failed to load agent configuration')) {
-        return {
-          message:
-            `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
-            `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
-            `Please contact the TeXRA team if this agent should be available.`,
-          shouldContinue: false,
-        };
-      }
-      // Fall through to default
-      break;
+  // Handle 500 with storage-specific message
+  if (
+    status === StatusCodes.INTERNAL_SERVER_ERROR &&
+    errorText.includes('Failed to load agent configuration')
+  ) {
+    return {
+      message:
+        `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+        `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+        `Please contact the TeXRA team if this agent should be available.`,
+      shouldContinue: false,
+    };
   }
 
   return {
@@ -89,10 +95,7 @@ function mapHttpError(
   };
 }
 
-/**
- * Maps a database row to RemoteAgentMetadata using schema validation.
- * Shared between listRemoteAgents and getAgentMetadata.
- */
+/** Maps a database row to RemoteAgentMetadata using schema validation. */
 function parseMetadataRow(row: {
   id: string;
   name: string;
@@ -116,6 +119,19 @@ function parseMetadataRow(row: {
     return null;
   }
   return result.data;
+}
+
+/** Set up authenticated Supabase session for database queries. Returns null if not authenticated. */
+async function getAuthenticatedClient() {
+  const tokens = await SupabaseClient.getSessionTokens();
+  if (!tokens) return null;
+
+  const supabase = SupabaseClient.getClient();
+  await supabase.auth.setSession({
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+  });
+  return supabase;
 }
 
 /**
@@ -218,14 +234,13 @@ export class RemoteAgentLoader {
           throw new Error(message);
         }
 
-        const responseData = await response.json();
         const {
           config: yamlContent,
           name: responseName,
           description,
           visibility,
           agentCategory,
-        } = responseData;
+        } = await response.json();
 
         if (!yamlContent) {
           throw new Error(
@@ -233,7 +248,6 @@ export class RemoteAgentLoader {
           );
         }
 
-        // Parse YAML configuration
         logger.debug(
           CHANNEL,
           `Parsing YAML for remote agent: ${candidateName}`,
@@ -241,13 +255,8 @@ export class RemoteAgentLoader {
         const parsed = yaml.parse(yamlContent);
         const validated = AgentDefinitionSchema.parse(parsed);
 
-        // Extract settings and prompts
-        // Note: Remote agents are expected to be self-contained (no inheritance).
-        // If inherits field is present, it's ignored - merge should happen on upload.
+        // Extract and process settings (remote agents are self-contained, no inheritance)
         const settings: Partial<AgentSetting> = validated.settings;
-        const prompts: Partial<AgentPrompt> = validated.prompts;
-
-        // Resolve tool names to definitions using shared utility
         if (Array.isArray(settings.tools)) {
           const { resolveToolDefinitions } = await import('@tools/registry');
           settings.tools = resolveToolDefinitions(
@@ -257,29 +266,22 @@ export class RemoteAgentLoader {
           );
         }
 
-        const validatedSettings = parseAgentSetting(settings);
-        const validatedPrompts = AgentPromptSchema.parse(prompts);
-
         logger.info(
           CHANNEL,
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
 
-        // Build metadata from edge function response with schema validation
-        // The edge function returns camelCase fields, which matches the schema directly
-        const metadata = RemoteAgentMetadataSchema.parse({
-          id: '', // Not returned by edge function, not used by consumers
-          name: responseName || agentName,
-          description: description,
-          visibility: visibility,
-          agentCategory: agentCategory,
-        });
-
         return {
           name: validated.name || responseName || agentName,
-          settings: validatedSettings,
-          prompts: validatedPrompts,
-          metadata,
+          settings: parseAgentSetting(settings),
+          prompts: AgentPromptSchema.parse(validated.prompts),
+          metadata: RemoteAgentMetadataSchema.parse({
+            id: '',
+            name: responseName || agentName,
+            description,
+            visibility,
+            agentCategory,
+          }),
         };
       } catch (error) {
         // If this is the last candidate, throw the error
@@ -307,30 +309,14 @@ export class RemoteAgentLoader {
     );
   }
 
-  /**
-   * List all available remote agents for the current user.
-   */
+  /** List all available remote agents for the current user. */
   static async listRemoteAgents(): Promise<RemoteAgentMetadata[]> {
-    const isAuth = await SupabaseClient.isAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
+    if (!(await SupabaseClient.isAuthenticated())) return [];
 
     try {
-      const tokens = await SupabaseClient.getSessionTokens();
-      if (!tokens) {
-        return [];
-      }
+      const supabase = await getAuthenticatedClient();
+      if (!supabase) return [];
 
-      const supabase = SupabaseClient.getClient();
-
-      // Set auth session for RLS - requires both tokens
-      await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
-
-      // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
         .select('id, name, description, visibility, agent_category')
@@ -341,10 +327,8 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      // Map snake_case DB columns to camelCase and validate
-      // Use safeParse to filter invalid records without breaking the entire list
       return (data ?? [])
-        .map((row) => parseMetadataRow(row))
+        .map(parseMetadataRow)
         .filter((item): item is RemoteAgentMetadata => item !== null);
     } catch (error) {
       logger.error(
@@ -355,25 +339,13 @@ export class RemoteAgentLoader {
     }
   }
 
-  /**
-   * Get metadata for a specific remote agent.
-   */
+  /** Get metadata for a specific remote agent. */
   static async getAgentMetadata(
     agentName: string,
   ): Promise<RemoteAgentMetadata | null> {
     try {
-      const tokens = await SupabaseClient.getSessionTokens();
-      if (!tokens) {
-        return null;
-      }
-
-      const supabase = SupabaseClient.getClient();
-
-      // Set auth session for RLS - requires both tokens
-      await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
+      const supabase = await getAuthenticatedClient();
+      if (!supabase) return null;
 
       const { data, error } = await supabase
         .from('remote_agents')
