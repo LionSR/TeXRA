@@ -27,6 +27,7 @@ const GrepInputSchema = z.strictObject({
   type: z.string().nullish(),
   head_limit: z.int().min(1).nullish(),
   multiline: z.boolean().nullish(),
+  literal: z.boolean().nullish(),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
@@ -50,6 +51,7 @@ export function buildArguments(
   if (input.glob) args.push('--glob', input.glob);
   if (input.type) args.push('--type', input.type);
   if (input['-i']) args.push('-i');
+  if (input.literal) args.push('--fixed-strings');
   if (input.multiline) args.push('--multiline', '--multiline-dotall');
 
   // Context flags (only for content mode)
