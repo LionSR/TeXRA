@@ -87,8 +87,8 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     const missing = !progressState
       ? 'ProgressViewProvider'
       : !executionId
-        ? 'execution ID'
-        : 'task state';
+      ? 'execution ID'
+      : 'task state';
     logger.warn(`No ${missing} found for stream: ${streamId}`);
     return false;
   }
