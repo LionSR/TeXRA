@@ -162,12 +162,14 @@ class RunScopedMap {
   }
 
   delete(streamId, runId) {
-    const runs = this._getOrCreateStreamMap(streamId, runId);
+    const stream = runId ? this._resolveStreamId(streamId) : null;
+    if (!stream) return;
+
+    const runs = this._data.get(stream);
     if (!runs) return;
 
     runs.delete(runId);
     if (runs.size === 0) {
-      const stream = this._resolveStreamId(streamId);
       this._data.delete(stream);
     }
   }

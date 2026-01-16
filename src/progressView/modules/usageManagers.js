@@ -33,21 +33,18 @@ export class UsageSummary {
     this._footerElem = null;
   }
 
-  /** Get cached element or fetch by ID, validating connection */
-  _getCachedElement(cacheKey, elementId) {
-    if (this[cacheKey]?.isConnected) return this[cacheKey];
-    this[cacheKey] = document.getElementById(elementId);
-    return this[cacheKey];
-  }
-
-  /** Get the summary element with caching */
+  /** Get the summary element with caching and connection validation */
   _getSummary() {
-    return this._getCachedElement('_summaryElem', ELEMENT_IDS.RUN_SUMMARY);
+    if (this._summaryElem?.isConnected) return this._summaryElem;
+    this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
+    return this._summaryElem;
   }
 
-  /** Get the context element with caching */
+  /** Get the context element with caching and connection validation */
   _getContext() {
-    return this._getCachedElement('_contextElem', ELEMENT_IDS.CONTEXT_STATE);
+    if (this._contextElem?.isConnected) return this._contextElem;
+    this._contextElem = document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
+    return this._contextElem;
   }
 
   /** Get the footer element, deriving from anchor elements */
