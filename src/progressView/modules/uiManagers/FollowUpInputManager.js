@@ -18,9 +18,10 @@ export class FollowUpInputManager {
   constructor(vscode) {
     this.vscode = vscode;
     this.textarea = null;
-    this.approvalBypassButton = null;
+    this.yoloToggleButton = null;
     this._isContainerVisible = false;
     this._focusTimer = null;
+    this._isYoloActive = false;
     this.recordingButton = new RecordingButtonManager(vscode, {
       buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
       startCommand: COMMANDS.START_RECORDING,
@@ -31,15 +32,15 @@ export class FollowUpInputManager {
   }
 
   setup() {
+    // Setup YOLO toggle button (in header, independent of follow-up input)
+    this._setupYoloToggleButton();
+
     const target = safeGetElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
     if (!target) {
       return;
     }
 
     this.textarea = target;
-    this.approvalBypassButton = safeGetElementById(
-      ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN,
-    );
 
     const applySetup = () => {
       const { textarea } = resolveTextareaTarget(target);
@@ -70,18 +71,21 @@ export class FollowUpInputManager {
         this._clearFollowUp();
       });
 
-      addEventListenerSafely(
-        ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN,
-        'click',
-        () => {
-          this._resetApprovalBypass();
-        },
-      );
-
       this.recordingButton.setup();
     };
 
     awaitTextareaUpgrade(target, () => applySetup());
+  }
+
+  _setupYoloToggleButton() {
+    this.yoloToggleButton = safeGetElementById(ELEMENT_IDS.YOLO_TOGGLE_BTN);
+    if (!this.yoloToggleButton) {
+      return;
+    }
+
+    addEventListenerSafely(ELEMENT_IDS.YOLO_TOGGLE_BTN, 'click', () => {
+      this._toggleApprovalBypass();
+    });
   }
 
   _sendFollowUp() {
@@ -139,9 +143,9 @@ export class FollowUpInputManager {
     this.focus();
   }
 
-  _resetApprovalBypass() {
+  _toggleApprovalBypass() {
     this.vscode.postMessage({
-      command: COMMANDS.RESET_TOOL_EDIT_APPROVAL_BYPASS,
+      command: COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
     });
   }
 
@@ -205,18 +209,29 @@ export class FollowUpInputManager {
   }
 
   setApprovalBypassState(isBypassed) {
+    this._isYoloActive = Boolean(isBypassed);
+
     // Always get a fresh reference to handle cases where setup() hasn't run yet
     // or the button reference became stale
     const button =
-      this.approvalBypassButton ||
-      safeGetElementById(ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN);
+      this.yoloToggleButton || safeGetElementById(ELEMENT_IDS.YOLO_TOGGLE_BTN);
     if (!button) {
       return;
     }
 
-    const showButton = Boolean(isBypassed);
-    button.toggleAttribute('hidden', !showButton);
-    button.toggleAttribute('disabled', !showButton);
+    // Update button appearance based on YOLO mode state
+    button.classList.toggle('is-active', this._isYoloActive);
+
+    if (this._isYoloActive) {
+      button.setAttribute('label', 'Disable YOLO mode');
+      button.setAttribute(
+        'title',
+        'Disable YOLO mode (resume approval prompts)',
+      );
+    } else {
+      button.setAttribute('label', 'Enable YOLO mode');
+      button.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
+    }
   }
 
   /**
