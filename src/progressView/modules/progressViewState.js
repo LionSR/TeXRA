@@ -133,30 +133,38 @@ class RunScopedMap {
     this._data = new Map();
   }
 
-  set(streamId, runId, value) {
+  /** Resolve stream and get its run map, optionally creating if missing */
+  _getOrCreateStreamMap(streamId, runId, create = false) {
     const stream = runId ? this._resolveStreamId(streamId) : null;
-    if (!stream) return;
+    if (!stream) return null;
 
     let runs = this._data.get(stream);
-    if (!runs) {
+    if (!runs && create) {
       runs = new Map();
       this._data.set(stream, runs);
     }
-    runs.set(runId, value);
+    return runs ?? null;
+  }
+
+  set(streamId, runId, value) {
+    const runs = this._getOrCreateStreamMap(streamId, runId, true);
+    if (runs) runs.set(runId, value);
   }
 
   get(streamId, runId) {
     if (!runId) return null;
-    return this.getStreamMap(streamId)?.get(runId) ?? null;
+    return this._getOrCreateStreamMap(streamId, runId)?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
-    const stream = runId ? this._resolveStreamId(streamId) : null;
-    const runs = stream ? this._data.get(stream) : null;
+    const runs = this._getOrCreateStreamMap(streamId, runId);
     if (!runs) return;
 
     runs.delete(runId);
-    if (runs.size === 0) this._data.delete(stream);
+    if (runs.size === 0) {
+      const stream = this._resolveStreamId(streamId);
+      this._data.delete(stream);
+    }
   }
 
   clearStream(streamId) {
