@@ -32,18 +32,37 @@ const CleanParamsSchema = z.object({
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  const messages: Record<FileOpResult['status'], { text: string; isError: boolean }> = {
-    success: { text: `Cleanup complete for ${inputFile}`, isError: false },
-    noFiles: { text: `No files found to clean for ${inputFile}`, isError: false },
-    missingParams: { text: 'Missing required parameters for clean', isError: true },
-    error: { text: `Error during cleanup: ${result.error}`, isError: true },
+  const isError = result.status === 'missingParams' || result.status === 'error';
+  const messages: Record<FileOpResult['status'], string> = {
+    success: `Cleanup complete for ${inputFile}`,
+    noFiles: `No files found to clean for ${inputFile}`,
+    missingParams: 'Missing required parameters for clean',
+    error: `Error during cleanup: ${result.error}`,
   };
-  const msg = messages[result.status];
-  if (msg.isError) {
-    vscode.window.showErrorMessage(msg.text);
+  const text = messages[result.status];
+  if (isError) {
+    vscode.window.showErrorMessage(text);
   } else {
-    vscode.window.showInformationMessage(msg.text);
+    vscode.window.showInformationMessage(text);
   }
+}
+
+/** Validate clean params and log error if invalid. Returns parsed data or null. */
+async function validateCleanParams(
+  inputFile: string,
+  agent: string,
+  model: string,
+  commandName: string,
+): Promise<z.infer<typeof CleanParamsSchema> | null> {
+  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
+  if (!parsed.success) {
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid params for ${commandName}: ${formatZodError(parsed.error)}`,
+    );
+    return null;
+  }
+  return parsed.data;
 }
 
 export function registerCleanCommands(context: vscode.ExtensionContext): void {
@@ -61,16 +80,9 @@ async function handleCleanSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid params for cleanSingle: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
+  const data = await validateCleanParams(inputFile, agent, model, 'cleanSingle');
+  if (!data) return;
 
-  const data = parsed.data;
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
   showCleanResult(result, data.inputFile);
 
@@ -86,17 +98,11 @@ async function handleCleanMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid params for cleanMultiple: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
+  const data = await validateCleanParams(inputFile, agent, model, 'cleanMultiple');
+  if (!data) return;
+
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  const data = parsed.data;
   const result = await runCleanMultiple(
     data.model,
     data.inputFile,
