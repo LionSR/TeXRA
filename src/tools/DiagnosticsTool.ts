@@ -14,7 +14,7 @@ import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { type DiagnosticsPayload, ToolResult, ToolError } from './result';
+import { ToolResult, ToolError } from './result';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
@@ -38,28 +38,25 @@ export class DiagnosticsTool extends defineTool({
     try {
       const messages = await getLinterMessages(path);
       const counts = countBySeverity(messages);
-      const countsStr = formatCounts(counts);
-
+      const header = `${path}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${path}`;
-      const header = `${path}: ${countsStr}`;
+
+      const baseDiagnostics = {
+        path,
+        command,
+        severity: counts,
+      };
 
       if (command === 'count') {
-        return {
-          summary,
-          output: header,
-          diagnostics: { path, command, severity: counts },
-        };
+        return { summary, output: header, diagnostics: baseDiagnostics };
       }
 
-      const output =
-        messages.length > 0
-          ? `${header}\n\n${formatMessageList(messages)}`
-          : header;
-
+      const messageDetails =
+        messages.length > 0 ? `\n\n${formatMessageList(messages)}` : '';
       return {
         summary,
-        output,
-        diagnostics: { path, command, severity: counts, messages },
+        output: `${header}${messageDetails}`,
+        diagnostics: { ...baseDiagnostics, messages },
       };
     } catch (error) {
       const detail = toErrorMessage(error);

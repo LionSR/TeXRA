@@ -111,19 +111,13 @@ function parseToolUseFlowRecordState(
   // Try flat format first (current)
   const flatResult = FlatToolUseFlowRecordStateSchema.safeParse(shared);
   if (flatResult.success) {
-    return {
-      conversation: flatResult.data.conversation,
-      stateSlices: flatResult.data.stateSlices,
-    };
+    return flatResult.data;
   }
 
-  // Fall back to legacy format
+  // Fall back to legacy format (unwrap nested state)
   const legacyResult = LegacyToolUseFlowRecordStateSchema.safeParse(shared);
   if (legacyResult.success) {
-    return {
-      conversation: legacyResult.data.state.conversation,
-      stateSlices: legacyResult.data.state.stateSlices,
-    };
+    return legacyResult.data.state;
   }
 
   return null;
