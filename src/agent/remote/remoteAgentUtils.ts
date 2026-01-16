@@ -62,26 +62,24 @@ async function handleSelectionFallback(
   }
 }
 
+interface SelectAgentOptions {
+  showSuccessMessage?: boolean;
+  copyToClipboardOnFailure?: boolean;
+  source?: AgentSource;
+}
+
 /**
  * Select an agent in the main webview's dropdown.
  * This is the single source of truth for agent selection across the extension.
- *
- * @param agentName - The name of the agent to select
- * @param options - Optional configuration for the selection behavior
- * @returns Result indicating success/failure and any fallback actions taken
  */
 export async function selectAgentInMainView(
   agentName: string,
-  options: {
-    showSuccessMessage?: boolean;
-    copyToClipboardOnFailure?: boolean;
-    source?: AgentSource;
-  } = {},
+  options: SelectAgentOptions = {},
 ): Promise<SelectAgentResult> {
   const {
     showSuccessMessage = true,
     copyToClipboardOnFailure = false,
-    source = 'remote' as AgentSource,
+    source = 'remote',
   } = options;
 
   // Format agent value as source:name for dropdown selection
