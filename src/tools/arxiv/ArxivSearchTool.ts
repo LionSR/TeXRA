@@ -57,18 +57,13 @@ export class ArxivSearchTool extends defineTool({
 
     // Select the query function based on the field parameter
     const searchField = input.field ?? 'all';
-    const fieldQueryFn = (term: string) => {
-      switch (searchField) {
-        case 'author':
-          return authorQuery(term);
-        case 'title':
-          return titleQuery(term);
-        case 'abstract':
-          return abstractQuery(term);
-        default:
-          return all(term);
-      }
-    };
+    const fieldQueryFns = {
+      author: authorQuery,
+      title: titleQuery,
+      abstract: abstractQuery,
+      all: all,
+    } as const;
+    const fieldQueryFn = fieldQueryFns[searchField];
 
     // Build query using arxiv-client query builder
     const terms = Array.from(
