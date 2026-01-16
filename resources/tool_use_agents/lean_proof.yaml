@@ -12,8 +12,6 @@ settings:
     # LSP-based Lean tools (real-time via Lean 4 VS Code extension)
     - lean_lsp_goal
     - lean_hover
-    - lean_completions
-    - lean_term_goal
     - lean_diagnostics
     # General tools
     - bash
