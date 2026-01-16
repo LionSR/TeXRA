@@ -43,6 +43,31 @@ const LeanRestartInputSchema = z.strictObject({
 export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
+
+If you expected errors:
+1. Check the Lean 4 output panel (import/dependency errors appear there)
+2. Make sure the file is saved
+3. Try \`lean_restart\` to refresh the Lean server
+4. Verify the Lean 4 extension is active (look for goal state in the infoview)`;
+
+/** Navigate editor to first error location if present. */
+async function navigateToFirstError(
+  filePath: string,
+  diagnostics: vscode.Diagnostic[],
+): Promise<void> {
+  const firstError = diagnostics.find(
+    (d) => d.severity === DiagnosticSeverity.Error,
+  );
+  if (firstError) {
+    await openFileInEditor(filePath, firstError.range.start.line + 1);
+  }
+}
+
+// ============================================================================
 // Tool Implementations
 // ============================================================================
 
@@ -74,17 +99,8 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const { command, file } = input;
 
     try {
-      // Resolve the path first to set up the listener
-      const absolutePath = WorkspaceFS.toAbsolute(file);
-      const uri = vscode.Uri.file(absolutePath);
-
-      // Start listening for diagnostics BEFORE opening the file
-      // This ensures we don't miss the initial diagnostics event
-      const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
-
-      // Open file to trigger Lean processing
-      const openedPath = await openFileInEditor(file);
-      if (!openedPath) {
+      const diagnostics = await this.fetchDiagnostics(file);
+      if (!diagnostics) {
         return {
           summary: 'Failed to open file',
           output: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
@@ -92,57 +108,29 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      // Wait for Lean to publish diagnostics
-      await diagnosticsWait;
+      await navigateToFirstError(file, diagnostics);
 
-      // Now get the diagnostics
-      const diagnostics = vscodeIntegration.getDiagnostics(openedPath);
-
-      // Position at first error if any
-      const firstError = diagnostics.find(
-        (d) => d.severity === DiagnosticSeverity.Error,
-      );
-      if (firstError) {
-        await openFileInEditor(openedPath, firstError.range.start.line + 1);
-      }
-
-      // Count by severity
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
 
       if (diagnostics.length === 0) {
-        return {
-          summary: '✓ No diagnostics',
-          output:
-            'No errors, warnings, or hints for this file.\n\n' +
-            'If you expected errors:\n' +
-            '1. Check the Lean 4 output panel (import/dependency errors appear there)\n' +
-            '2. Make sure the file is saved\n' +
-            '3. Try `lean_restart` to refresh the Lean server\n' +
-            '4. Verify the Lean 4 extension is active (look for goal state in the infoview)',
-        };
+        return { summary: '✓ No diagnostics', output: NO_DIAGNOSTICS_HELP };
       }
 
-      // For count command, just return the summary
+      const baseDiagnostics = { ...counts, total: diagnostics.length };
+
       if (command === 'count') {
         return {
           summary: countsStr,
           output: `${file}: ${countsStr}`,
-          diagnostics: { ...counts, total: diagnostics.length },
+          diagnostics: baseDiagnostics,
         };
       }
 
-      // For list command, return formatted details
-      const output = formatGroupedSections(diagnostics);
-
       return {
         summary: countsStr,
-        output,
-        diagnostics: {
-          ...counts,
-          total: diagnostics.length,
-          details: diagnostics,
-        },
+        output: formatGroupedSections(diagnostics),
+        diagnostics: { ...baseDiagnostics, details: diagnostics },
       };
     } catch (error) {
       return {
@@ -151,6 +139,20 @@ Requires: Lean 4 VS Code extension installed and active.`,
         isError: true,
       };
     }
+  }
+
+  /** Open file and wait for diagnostics to be published. */
+  private async fetchDiagnostics(
+    file: string,
+  ): Promise<vscode.Diagnostic[] | null> {
+    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
+    const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
+
+    const openedPath = await openFileInEditor(file);
+    if (!openedPath) return null;
+
+    await diagnosticsWait;
+    return vscodeIntegration.getDiagnostics(openedPath);
   }
 }
 
