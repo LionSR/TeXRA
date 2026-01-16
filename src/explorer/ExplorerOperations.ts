@@ -67,9 +67,9 @@ export class ExplorerOperations {
    */
   private isBuiltInPath(targetPath: string): boolean {
     return (
-      (this.builtInAgentsPath !== '' &&
+      (!!this.builtInAgentsPath &&
         targetPath.startsWith(this.builtInAgentsPath)) ||
-      (this.builtInToolUsePath !== '' &&
+      (!!this.builtInToolUsePath &&
         targetPath.startsWith(this.builtInToolUsePath))
     );
   }
@@ -96,7 +96,7 @@ export class ExplorerOperations {
     }
 
     const isBuiltInToolUse =
-      this.builtInToolUsePath !== '' &&
+      !!this.builtInToolUsePath &&
       targetPath.startsWith(this.builtInToolUsePath);
     const base = isBuiltInToolUse
       ? this.builtInToolUsePath

@@ -86,15 +86,13 @@ async function refreshApiKeyStatus() {
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders || workspaceFolders.length === 0) {
-    promptToOpenFolder(
-      'TeXRA requires an open workspace. Please open a folder to enable the extension.',
-    );
-    return; // Exit before further initialization
-  } else if (workspaceFolders.length > 1) {
-    promptToOpenFolder(
-      'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.',
-    );
+
+  if (!workspaceFolders || workspaceFolders.length !== 1) {
+    const message =
+      !workspaceFolders || workspaceFolders.length === 0
+        ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
+        : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
+    promptToOpenFolder(message);
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
@@ -243,6 +241,10 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const runningStreams = new Set<string>();
+  const updateStatusBarText = () => {
+    statusBarItem!.text =
+      runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+  };
 
   disposeStatusListener = bus.on(
     'updateStreamStatus',
@@ -252,8 +254,7 @@ export async function activate(context: vscode.ExtensionContext) {
       } else if (isTerminalStatus(status)) {
         runningStreams.delete(stream);
       }
-      statusBarItem!.text =
-        runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+      updateStatusBarText();
     },
   );
 
