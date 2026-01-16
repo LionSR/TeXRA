@@ -594,28 +594,14 @@
                     hidden
                   ></vscode-toolbar-button>
                   <vscode-context-menu class="dropdown-menu diff-dropdown-menu">
-                    <div class="dropdown-menu-content">
-                      <div
-                        class="dropdown-action preview-menu-item"
-                        data-action="previewProposed"
-                        title="Compile and preview the proposed document"
-                        tabindex="0"
-                        role="menuitem"
-                      >
-                        <i class="codicon codicon-eye"></i>
-                        <span>Preview proposed</span>
-                      </div>
-                      <div
-                        class="dropdown-action latexdiff-menu-item"
-                        data-action="showLatexdiff"
-                        title="Show LaTeXdiff (compiles to PDF)"
-                        tabindex="0"
-                        role="menuitem"
-                      >
-                        <i class="codicon codicon-file-pdf"></i>
-                        <span>LaTeXdiff (PDF)</span>
-                      </div>
-                    </div>
+                    <vscode-context-menu-item
+                      label="Preview proposed"
+                      value="previewProposed"
+                    ></vscode-context-menu-item>
+                    <vscode-context-menu-item
+                      label="LaTeXdiff (PDF)"
+                      value="showLatexdiff"
+                    ></vscode-context-menu-item>
                   </vscode-context-menu>
                 </div>
                 <vscode-toolbar-button
