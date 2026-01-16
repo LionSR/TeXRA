@@ -169,6 +169,28 @@ Example output:
 }
 
 /**
+ * Wait for diagnostics to be available, with timeout.
+ */
+async function waitForDiagnostics(
+  file: string,
+  maxWaitMs: number = 3000,
+): Promise<vscodeIntegration.LeanDiagnostic[]> {
+  const startTime = Date.now();
+  const pollInterval = 200;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const diagnostics = vscodeIntegration.getDiagnostics(file);
+    if (diagnostics.length > 0) {
+      return diagnostics;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  // Final attempt
+  return vscodeIntegration.getDiagnostics(file);
+}
+
+/**
  * Get diagnostics for a file from VS Code.
  */
 export class LeanDiagnosticsTool extends defineTool({
@@ -183,6 +205,10 @@ Returns diagnostics from the Lean 4 VS Code extension including:
 
 This shows the same diagnostics as VS Code's Problems panel.
 
+Note: If Lean cannot load the file (e.g., bad imports), errors may only appear
+in the Lean 4 output panel, not as LSP diagnostics. Check the output panel if
+this tool reports no diagnostics but you see errors in VS Code.
+
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanDiagnosticsInputSchema,
 }) {
@@ -196,19 +222,25 @@ Requires: Lean 4 VS Code extension installed and active.`,
     } = vscodeIntegration.DiagnosticSeverity;
 
     try {
-      const diagnostics = vscodeIntegration.getDiagnostics(file);
+      // Open file first to trigger Lean processing
+      await openFileAtPosition(file);
 
-      // Open file in VS Code - position at first error if any
+      // Wait for Lean to process and populate diagnostics
+      const diagnostics = await waitForDiagnostics(file);
+
+      // Position at first error if any
       const firstError = diagnostics.find((d) => d.severity === E);
-      await openFileAtPosition(
-        file,
-        firstError ? firstError.range.start.line + 1 : undefined,
-      );
+      if (firstError) {
+        await openFileAtPosition(file, firstError.range.start.line + 1);
+      }
 
       if (diagnostics.length === 0) {
         return {
           summary: '✓ No diagnostics',
-          output: 'No errors, warnings, or hints for this file.',
+          output:
+            'No errors, warnings, or hints for this file.\n\n' +
+            'Note: If you see errors in VS Code, they may be in the Lean 4 output panel ' +
+            '(import/dependency errors are shown there instead of as LSP diagnostics).',
         };
       }
 
