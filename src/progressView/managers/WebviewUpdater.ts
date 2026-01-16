@@ -18,6 +18,7 @@ import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
+  WorkflowAgentProposalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
@@ -211,6 +212,20 @@ export class WebviewUpdater {
     this.sendMessage({
       command: COMMANDS.RESOLVE_RETRY_REQUEST,
       streamId,
+    });
+  }
+
+  showWorkflowAgentProposal(proposal: WorkflowAgentProposalPrompt): void {
+    this.sendMessage({
+      command: COMMANDS.SHOW_WORKFLOW_AGENT_PROPOSAL,
+      proposal,
+    });
+  }
+
+  resolveWorkflowAgentProposal(proposalId: string): void {
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_WORKFLOW_AGENT_PROPOSAL,
+      proposalId,
     });
   }
 
