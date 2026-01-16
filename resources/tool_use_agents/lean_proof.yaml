@@ -9,11 +9,12 @@ settings:
     - lean_check
     - lean_goal
     - lake_build
-    # LSP-based Lean tools (real-time via language server)
+    # LSP-based Lean tools (real-time via Lean 4 VS Code extension)
     - lean_lsp_goal
     - lean_hover
     - lean_completions
     - lean_term_goal
+    - lean_diagnostics
     # General tools
     - bash
     - read_file
