@@ -221,32 +221,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    // Map and validate action
-    const mappedAction = action === 'open' ? 'openDiff' : action;
-    const validActions = [
-      'openDiff',
-      'approve',
-      'approveAll',
-      'reject',
-      'showLatexdiff',
-      'previewProposed',
-    ];
-    if (!validActions.includes(mappedAction)) {
-      return;
-    }
-
-    if (
-      mappedAction === 'showLatexdiff' ||
-      mappedAction === 'previewProposed'
-    ) {
-      this._closeAllDropdowns();
-    }
-
-    vscode.postMessage({
-      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-      requestId,
-      action: mappedAction,
-    });
+    this._dispatchApprovalAction(requestId, action);
   }
 
   /** @private */
@@ -350,29 +325,81 @@ export class ApprovalRequests extends BaseUIRequestManager {
    * @private
    */
   _handleMenuItemClick(event) {
-    const action = event.detail?.value;
-    if (!action) {
+    const menuItem = this._getMenuItemFromEvent(event);
+    if (!menuItem) {
       return;
     }
 
-    const menuItem = event.target;
-    const requestId = menuItem?.dataset?.requestId;
-    if (!requestId) {
+    const action = event.detail?.value ?? menuItem.getAttribute('value');
+    const requestId = menuItem.dataset.requestId;
+    if (!action || !requestId) {
       return;
     }
 
-    const validActions = ['showLatexdiff', 'previewProposed'];
-    if (!validActions.includes(action)) {
-      return;
+    this._dispatchApprovalAction(requestId, action, { closeDropdown: true });
+  }
+
+  /**
+   * Dispatches an approval action and optionally closes dropdowns.
+   * @private
+   * @param {string} requestId
+   * @param {string} action
+   * @param {{ closeDropdown?: boolean }} [options]
+   * @returns {boolean}
+   */
+  _dispatchApprovalAction(requestId, action, options = {}) {
+    const mappedAction = action === 'open' ? 'openDiff' : action;
+    const validActions = [
+      'openDiff',
+      'approve',
+      'approveAll',
+      'reject',
+      'showLatexdiff',
+      'previewProposed',
+    ];
+    if (!validActions.includes(mappedAction)) {
+      return false;
     }
 
-    this._closeAllDropdowns();
+    if (options.closeDropdown) {
+      this._closeAllDropdowns();
+    }
 
     vscode.postMessage({
       command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
       requestId,
-      action,
+      action: mappedAction,
     });
+    return true;
+  }
+
+  /**
+   * Locates the clicked menu item for a vsc-click event.
+   * @private
+   * @param {Event} event
+   * @returns {Element | null}
+   */
+  _getMenuItemFromEvent(event) {
+    if (!(event.target instanceof Element)) {
+      return null;
+    }
+
+    const targetItem = event.target.closest('vscode-context-menu-item');
+    if (targetItem) {
+      return targetItem;
+    }
+
+    const path = event.composedPath?.() ?? [];
+    for (const entry of path) {
+      if (entry instanceof Element) {
+        const menuItem = entry.closest?.('vscode-context-menu-item');
+        if (menuItem) {
+          return menuItem;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
