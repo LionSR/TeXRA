@@ -15,9 +15,20 @@ import { defineTool } from './core/define';
 
 export const READ_FILE_MAX_LINES = 2000;
 
-const ReadInputSchema = z.strictObject({
-  path: z.string(),
-  range: z
+/**
+ * Schema for range parameter with preprocessing to handle array format.
+ * Some models (e.g., DeepSeek) may provide range as [start, end] array
+ * instead of {start, end} object. This preprocessor normalizes both formats.
+ */
+const RangeSchema = z.preprocess(
+  (val) => {
+    // Convert array format [start, end] to object format {start, end}
+    if (Array.isArray(val) && val.length >= 1) {
+      return { start: val[0], end: val[1] };
+    }
+    return val;
+  },
+  z
     .strictObject({
       start: z.int().min(1),
       end: z.int().min(1).nullish(),
@@ -26,8 +37,12 @@ const ReadInputSchema = z.strictObject({
     .refine((value) => value.end == null || value.end >= value.start, {
       path: ['end'],
       error: 'range.end must be greater than or equal to range.start',
-    })
-    .nullish(),
+    }),
+);
+
+const ReadInputSchema = z.strictObject({
+  path: z.string(),
+  range: RangeSchema.nullish(),
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
