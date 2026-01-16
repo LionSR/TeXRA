@@ -7,9 +7,8 @@ import type { FileOpResult } from '@agent/types/ResultTypes';
 import { formatZodError, showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
-import { getStreamTabId } from '@/logger/streamUtils';
+import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -73,9 +72,18 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
     return;
   }
 
-  const messages: Record<Exclude<FileOpResult['status'], 'success'>, { text: string; isError: boolean }> = {
-    noFiles: { text: `No files found to pack for ${inputFile}`, isError: false },
-    missingParams: { text: 'Missing required parameters for pack', isError: true },
+  const messages: Record<
+    Exclude<FileOpResult['status'], 'success'>,
+    { text: string; isError: boolean }
+  > = {
+    noFiles: {
+      text: `No files found to pack for ${inputFile}`,
+      isError: false,
+    },
+    missingParams: {
+      text: 'Missing required parameters for pack',
+      isError: true,
+    },
     error: { text: `Error during packing: ${result.error}`, isError: true },
   };
   const msg = messages[result.status];
@@ -84,18 +92,6 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   } else {
     vscode.window.showInformationMessage(msg.text);
   }
-}
-
-function emitClearMissingOutputs(
-  agent: string,
-  model: string,
-  inputFile: string,
-  useMultipleOutputs: boolean,
-  streamId?: string,
-): void {
-  bus.emit('clearMissingOutputs', {
-    stream: streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
-  });
 }
 
 // --- Handlers ---
@@ -136,7 +132,13 @@ async function handlePack(config: unknown): Promise<void> {
   showPackResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    emitClearMissingOutputs(agent, model, inputFile, useMultipleOutputs, streamId);
+    emitClearMissingOutputs(
+      agent,
+      model,
+      inputFile,
+      useMultipleOutputs,
+      streamId,
+    );
   }
 }
 
