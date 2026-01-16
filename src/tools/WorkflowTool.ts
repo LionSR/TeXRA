@@ -19,7 +19,10 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { WorkflowAgentProposal } from '@eventBus/types';
+import {
+  WorkflowAgentProposalSchema,
+  type WorkflowAgentProposal,
+} from '@eventBus/types';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
@@ -31,73 +34,48 @@ import { WorkspaceFS } from '@utils/files';
 /**
  * Schema for the workflow_agent tool input.
  *
- * Uses Zod v4 patterns:
- * - z.strictObject() to disallow extra keys
- * - .prefault([]) for optional arrays with defaults
- * - .nullish() for optional nullable strings
+ * Derived from WorkflowAgentProposalSchema with tool-specific modifications:
+ * - Adds defaults via .prefault() for optional arrays and booleans
+ * - Uses .nullish() instead of .nullable() for API compatibility
+ * - Adds descriptions for tool documentation
  */
-const WorkflowAgentInputSchema = z.strictObject({
-  /** Name of the workflow agent to execute (e.g., 'correct', 'polish', 'draw') */
+const WorkflowAgentInputSchema = WorkflowAgentProposalSchema.extend({
   agent: z.string().describe('Name of the workflow agent to execute'),
-
-  /** Model to use for the agent execution */
   model: z
     .string()
     .prefault('gemini3p')
     .describe('Model to use for agent execution'),
-
-  /** User instruction describing what the agent should do */
   instruction: z.string().describe('Instruction for the workflow agent'),
-
-  /** Primary input file path (relative to workspace) */
   inputFile: z.string().describe('Path to the primary input file'),
-
-  /** Additional input files */
   inputFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional input file paths'),
-
-  /** Reference file for context (optional) */
   referenceFile: z
     .string()
     .nullish()
     .describe('Reference file path for additional context'),
-
-  /** Additional reference files */
   referenceFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional reference file paths'),
-
-  /** Auxiliary file for supplementary content (optional) */
   auxiliaryFile: z
     .string()
     .nullish()
     .describe('Auxiliary file path for supplementary content'),
-
-  /** Additional auxiliary files */
   auxiliaryFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional auxiliary file paths'),
-
-  /** Media file for images/figures (optional) */
   mediaFile: z.string().nullish().describe('Media file path for images/figures'),
-
-  /** Additional media files */
   mediaFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional media file paths'),
-
-  /** Output file paths (optional - defaults to agent behavior) */
   outputFiles: z
     .array(z.string())
     .prefault([])
     .describe('Desired output file paths'),
-
-  /** Whether to use multiple outputs mode */
   useMultipleOutputs: z
     .boolean()
     .prefault(false)
