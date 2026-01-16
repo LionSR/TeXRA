@@ -36,7 +36,9 @@ const LSP_METHOD = {
  * Handles both absolute and relative paths consistently.
  */
 function resolveFileUri(filePath: string): vscode.Uri {
-  const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+  const resolved = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(filePath);
   return vscode.Uri.file(resolved);
 }
 
@@ -66,10 +68,52 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function extractContentString(content: unknown): string {
   if (typeof content === 'string') return content;
   if (content instanceof vscode.MarkdownString) return content.value;
-  if (isObject(content) && 'value' in content && typeof content.value === 'string') {
+  if (
+    isObject(content) &&
+    'value' in content &&
+    typeof content.value === 'string'
+  ) {
     return content.value;
   }
   return '';
+}
+
+/** Position with line and character. */
+interface Position {
+  line: number;
+  character: number;
+}
+
+/** Range with start and end positions. */
+interface Range {
+  start: Position;
+  end: Position;
+}
+
+/**
+ * Parse and validate a range object from LSP response.
+ */
+function parseRange(obj: Record<string, unknown>): Range | undefined {
+  if (!('range' in obj) || !isObject(obj.range)) return undefined;
+
+  const r = obj.range;
+  if (!isObject(r.start) || !isObject(r.end)) return undefined;
+
+  const start = r.start;
+  const end = r.end;
+  if (
+    typeof start.line !== 'number' ||
+    typeof start.character !== 'number' ||
+    typeof end.line !== 'number' ||
+    typeof end.character !== 'number'
+  ) {
+    return undefined;
+  }
+
+  return {
+    start: { line: start.line, character: start.character },
+    end: { line: end.line, character: end.character },
+  };
 }
 
 // ============================================================================
@@ -85,10 +129,7 @@ export interface LeanGoalState {
 /** Term goal from Lean's $/lean/plainTermGoal request */
 export interface LeanTermGoal {
   goal: string;
-  range?: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
+  range?: Range;
 }
 
 /** Diagnostic severity levels */
@@ -101,10 +142,7 @@ export enum DiagnosticSeverity {
 
 /** Structured diagnostic info */
 export interface LeanDiagnostic {
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
+  range: Range;
   message: string;
   severity: DiagnosticSeverity;
   source?: string;
@@ -113,10 +151,7 @@ export interface LeanDiagnostic {
 /** Hover information */
 export interface LeanHoverInfo {
   contents: string;
-  range?: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
+  range?: Range;
 }
 
 /** Completion item */
@@ -290,9 +325,10 @@ export async function getCompletions(
 
   return items.slice(0, limit).map((item) => ({
     // Safely extract label - handle both string and CompletionItemLabel object
-    label: typeof item.label === 'string'
-      ? item.label
-      : (item.label?.label ?? 'unknown'),
+    label:
+      typeof item.label === 'string'
+        ? item.label
+        : (item.label?.label ?? 'unknown'),
     detail: item.detail,
     documentation: extractContentString(item.documentation) || undefined,
     kind:
@@ -386,25 +422,10 @@ export async function getTermGoal(
     }
 
     if ('goal' in result && typeof result.goal === 'string') {
-      // Validate range structure if present
-      let range: LeanTermGoal['range'] = undefined;
-      if ('range' in result && isObject(result.range)) {
-        const r = result.range;
-        if (
-          isObject(r.start) &&
-          isObject(r.end) &&
-          typeof r.start.line === 'number' &&
-          typeof r.start.character === 'number' &&
-          typeof r.end.line === 'number' &&
-          typeof r.end.character === 'number'
-        ) {
-          range = {
-            start: { line: r.start.line, character: r.start.character },
-            end: { line: r.end.line, character: r.end.character },
-          };
-        }
-      }
-      return { goal: result.goal, range };
+      return {
+        goal: result.goal,
+        range: parseRange(result),
+      };
     }
 
     return undefined;
@@ -415,17 +436,24 @@ export async function getTermGoal(
 }
 
 /** Restart the Lean server for the current file. */
-export const restartFile = () => executeVscodeCommand('lean4.restartFile');
+export function restartFile(): Promise<boolean> {
+  return executeVscodeCommand('lean4.restartFile');
+}
 
 /** Restart the entire Lean server. */
-export const restartServer = () => executeVscodeCommand('lean4.restartServer');
+export function restartServer(): Promise<boolean> {
+  return executeVscodeCommand('lean4.restartServer');
+}
 
 /** Build the Lean project. */
-export const buildProject = () => executeVscodeCommand('lean4.project.build');
+export function buildProject(): Promise<boolean> {
+  return executeVscodeCommand('lean4.project.build');
+}
 
 /** Fetch Mathlib cache. */
-export const fetchMathlibCache = () =>
-  executeVscodeCommand('lean4.project.fetchCache');
+export function fetchMathlibCache(): Promise<boolean> {
+  return executeVscodeCommand('lean4.project.fetchCache');
+}
 
 /**
  * Ensure the InfoView panel is visible.
