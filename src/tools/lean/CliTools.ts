@@ -198,14 +198,12 @@ function formatDiagnostics(diagnostics: LeanDiagnostic[]): string {
  */
 function isValidBuildTarget(target: string): boolean {
   // Allow: letters, numbers, @, ., _, -, /, :
-  if (!/^[@a-zA-Z0-9._/:/-]+$/.test(target)) {
-    return false;
-  }
-  // Block path traversal and home directory expansion
-  if (target.includes('..') || target.includes('~')) {
-    return false;
-  }
-  return true;
+  // Block: path traversal (..) and home directory (~)
+  return (
+    /^[@a-zA-Z0-9._/:/-]+$/.test(target) &&
+    !target.includes('..') &&
+    !target.includes('~')
+  );
 }
 
 const LakeBuildInputSchema = z.strictObject({
@@ -239,21 +237,18 @@ Use \`lake exe cache get\` first for Mathlib projects to download prebuilt olean
     if (target && !isValidBuildTarget(target)) {
       return {
         summary: 'Invalid build target',
-        output: `Build target "${target}" contains invalid characters or patterns. ` +
+        output:
+          `Build target "${target}" contains invalid characters or patterns. ` +
           'Targets must only contain alphanumeric characters, dots, hyphens, underscores, forward slashes, colons, or @ prefix. ' +
           'Path traversal (..) and home directory (~) are not allowed.',
         isError: true,
       };
     }
 
-    // Build command with optional JSON flag
-    let command = 'lake build';
-    if (json) {
-      command += ' --json';
-    }
-    if (target) {
-      command += ` ${target}`;
-    }
+    // Build command with optional flags
+    const command = ['lake build', json && '--json', target]
+      .filter(Boolean)
+      .join(' ');
 
     const result = await executeCommand(command, {
       cwd: cwd ?? undefined,
