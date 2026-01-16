@@ -26,14 +26,6 @@ export type ActiveFileGuardResult =
       status: ActiveFileGuardFailureReason;
     };
 
-const ensureLeadingDot = (extension: string): string =>
-  extension.startsWith('.') ? extension : `.${extension}`;
-
-const toLowerCase = (value: string): string => value.toLowerCase();
-
-const formatExtensionList = (extensions: string[]): string =>
-  extensions.length > 0 ? extensions.join(', ') : '';
-
 /**
  * Retrieve the active text editor when available and ensure the document
  * matches the required extension list. Optionally saves dirty documents.
@@ -54,8 +46,12 @@ export async function getActiveEditorWithGuards(
     return { status: 'noEditor' };
   }
 
-  const extensionsForDisplay = allowedExtensions.map(ensureLeadingDot);
-  const normalizedExtensions = extensionsForDisplay.map(toLowerCase);
+  const extensionsForDisplay = allowedExtensions.map((ext) =>
+    ext.startsWith('.') ? ext : `.${ext}`,
+  );
+  const normalizedExtensions = extensionsForDisplay.map((ext) =>
+    ext.toLowerCase(),
+  );
   const fileName = editor.document.fileName.toLowerCase();
 
   if (
@@ -65,7 +61,7 @@ export async function getActiveEditorWithGuards(
     const resourceLabel = resourceName
       ? `${resourceName} files`
       : 'files with the supported extensions';
-    const extensionList = formatExtensionList(extensionsForDisplay);
+    const extensionList = extensionsForDisplay.join(', ');
     await vscode.window.showWarningMessage(
       `This command only works with ${resourceLabel} (${extensionList}).`,
     );

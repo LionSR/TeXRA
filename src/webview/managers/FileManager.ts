@@ -7,11 +7,7 @@ import { workspace } from 'vscode';
 
 // Local imports - webview
 import { getAgent } from '@agent/index';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-  toErrorMessage,
-} from '@common/errors';
+import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getIncludedExtensions,
@@ -20,7 +16,11 @@ import {
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  parseLatexDiffMetadata,
+  deriveBaseFileFromLatexDiff,
+} from '@utils/files';
 import { uncapitalize } from '@utils/text/stringUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
 
@@ -42,8 +42,6 @@ import type {
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
 
-const LATEX_DIFF_BASENAME_PATTERN = /^(.+?)-diff([0-9a-fA-F]{4,40})$/;
-
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
   additionalPayload?: Record<string, unknown>;
@@ -51,10 +49,6 @@ type FileUpdateOptions = {
 
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
-
-  constructor(_context: vscode.ExtensionContext) {
-    super();
-  }
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
     const singleFileType = message.command.replace('select', '');
@@ -202,12 +196,13 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const refreshedFiles = {
-      input: await fileLister.list('input'),
-      reference: await fileLister.list('reference'),
-      auxiliary: await fileLister.list('auxiliary'),
-      media: await fileLister.list('media'),
-    };
+    const [input, reference, auxiliary, media] = await Promise.all([
+      fileLister.list('input'),
+      fileLister.list('reference'),
+      fileLister.list('auxiliary'),
+      fileLister.list('media'),
+    ]);
+    const refreshedFiles = { input, reference, auxiliary, media };
 
     // Send all single file updates in a single batch message
     // This allows the webview to wrap all updates in a single blockSave()
@@ -308,7 +303,7 @@ export class FileManager extends BaseWebviewManager {
       return currentOpenFile;
     }
 
-    const derivedBaseFile = this._deriveBaseFileFromLatexDiff(currentOpenFile);
+    const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
     if (!derivedBaseFile) {
       return currentOpenFile;
     }
@@ -336,7 +331,7 @@ export class FileManager extends BaseWebviewManager {
     filePath: string,
   ): Promise<void> {
     const fileName = path.basename(filePath);
-    const latexDiffMetadata = this._parseLatexDiffMetadata(filePath);
+    const latexDiffMetadata = parseLatexDiffMetadata(filePath);
     if (!latexDiffMetadata) {
       return;
     }
@@ -396,33 +391,6 @@ export class FileManager extends BaseWebviewManager {
       `Updating ${fileType} with ${message.files?.length ?? 0} files`,
     );
     this.postMessage({ command: `set${fileType}`, files: message.files ?? [] });
-  }
-
-  private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
-    const metadata = this._parseLatexDiffMetadata(filePath);
-    if (!metadata) {
-      return null;
-    }
-
-    const { dir, baseName, ext } = metadata;
-    return path.join(dir, `${baseName}${ext}`);
-  }
-
-  private _parseLatexDiffMetadata(
-    filePath: string,
-  ): { dir: string; baseName: string; ext: string; commitHash: string } | null {
-    const { dir, name, ext } = path.parse(filePath);
-    const match = name.match(LATEX_DIFF_BASENAME_PATTERN);
-    if (!match) {
-      return null;
-    }
-
-    const [, baseName, commitHash] = match;
-    if (!baseName || !commitHash) {
-      return null;
-    }
-
-    return { dir, baseName, ext, commitHash };
   }
 
   async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {

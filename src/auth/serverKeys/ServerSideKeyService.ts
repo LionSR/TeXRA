@@ -152,14 +152,8 @@ export class ServerSideKeyService {
   // ==========================================================================
 
   /**
-   * Check if the "use included model access" setting is enabled.
-   */
-  isEnabled(): boolean {
-    return this.useIncludedModelAccess;
-  }
-
-  /**
    * Get the current "use included model access" preference.
+   * Returns true if user wants to use server-side API keys when available.
    */
   getUseIncludedModelAccess(): boolean {
     return this.useIncludedModelAccess;
@@ -278,7 +272,7 @@ export class ServerSideKeyService {
    * 3. At least one provider must be enabled on the server
    */
   async canUseServerSideKeys(): Promise<boolean> {
-    if (!this.isEnabled()) {
+    if (!this.getUseIncludedModelAccess()) {
       this.clearAllCaches();
       return false;
     }
@@ -376,7 +370,7 @@ export class ServerSideKeyService {
    * 4. For non-Ultra tier: the model must be in the tier's allowed list
    */
   shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
-    if (!this.isEnabled()) {
+    if (!this.getUseIncludedModelAccess()) {
       return false;
     }
 

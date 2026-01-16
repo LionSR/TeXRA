@@ -19,6 +19,7 @@ export interface ModuleDescriptor {
 export abstract class BaseViewContentProvider {
   protected readonly logger: any;
   protected readonly channel: string;
+  private readonly viewPath: string;
 
   /**
    * @param context - VS Code extension context
@@ -26,21 +27,28 @@ export abstract class BaseViewContentProvider {
    * @param moduleDescriptors - Optional view-specific module descriptors.
    *   If provided, getModuleUris() will automatically build URIs from these.
    *   If not provided, subclasses must override getModuleUris().
+   * @param viewPath - Optional view folder path. Defaults to camelCase of viewName.
    */
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
     private readonly moduleDescriptors: readonly ModuleDescriptor[] = [],
+    viewPath?: string,
   ) {
     this.logger = logger;
     this.channel = `${viewName}ContentProvider`;
+    // Default: convert 'HistoryView' to 'historyView'
+    this.viewPath =
+      viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
     logger.initialize(this.channel);
   }
 
   /**
-   * Subclasses must provide the relative path to their view directory
+   * Returns the relative path to the view directory.
    */
-  protected abstract getViewPath(): string;
+  protected getViewPath(): string {
+    return this.viewPath;
+  }
 
   /**
    * Returns view-specific module URIs. Default implementation uses
@@ -192,26 +200,34 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
-  /**
-   * Common URIs used by all views
-   */
+  /** Build URI record using a resolver function */
+  private buildUrisWithResolver(
+    webview: vscode.Webview,
+    descriptors: readonly ModuleDescriptor[],
+    resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
+  ): Record<string, vscode.Uri> {
+    const uris: Record<string, vscode.Uri> = {};
+    for (const { key, path } of descriptors) {
+      uris[key] = resolver.call(this, webview, path);
+    }
+    return uris;
+  }
+
+  /** Common URIs used by all views (from src/common and node_modules) */
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
-    const commonUris = BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS.reduce<
-      Record<string, vscode.Uri>
-    >((acc, d) => {
-      acc[d.key] = this.getCommonUri(webview, d.path);
-      return acc;
-    }, {});
-
-    const nodeUris = BaseViewContentProvider.NODE_MODULE_DESCRIPTORS.reduce<
-      Record<string, vscode.Uri>
-    >((acc, d) => {
-      acc[d.key] = this.getNodeModulesUri(webview, d.path);
-      return acc;
-    }, {});
-
-    return { ...commonUris, ...nodeUris };
+    return {
+      ...this.buildUrisWithResolver(
+        webview,
+        BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
+        this.getCommonUri,
+      ),
+      ...this.buildUrisWithResolver(
+        webview,
+        BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
+        this.getNodeModulesUri,
+      ),
+    };
   }
 }

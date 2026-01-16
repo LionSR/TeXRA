@@ -121,6 +121,28 @@ export async function loadAgents(): Promise<void> {
   return initPromise;
 }
 
+/**
+ * Check if the agent cache has been initialized.
+ * Use this to avoid redundant loadAgents() calls.
+ */
+export function isAgentCacheInitialized(): boolean {
+  return initialized;
+}
+
+/**
+ * Ensure agents are loaded, without triggering a re-scan if already loaded.
+ * Prefer this over loadAgents() when you just need to access the cache.
+ */
+export async function ensureAgentsLoaded(): Promise<void> {
+  if (initialized) {
+    return;
+  }
+  if (initPromise) {
+    return initPromise;
+  }
+  return loadAgents();
+}
+
 async function doLoad(): Promise<void> {
   const startTime = Date.now();
   cache.clear();
@@ -167,35 +189,27 @@ async function doLoad(): Promise<void> {
   );
 }
 
+/** Source priority for lookups (higher priority first). */
+const LOOKUP_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+  'remote',
+];
+
 /**
  * Get an agent by identifier.
- * Supports "source:name" format or just "name" (finds first match).
+ * Supports "source:name" format or just "name" (finds first match by priority).
  */
 export function getAgent(identifier: string): AgentEntry | undefined {
-  // Try direct lookup (source:name format)
-  const direct = cache.get(identifier);
-  if (direct) return direct;
+  // Direct lookup for source:name format
+  if (cache.has(identifier)) return cache.get(identifier);
 
-  // Parse source:name format
-  const colonIdx = identifier.indexOf(':');
-  if (colonIdx > 0) {
-    const source = identifier.slice(0, colonIdx);
-    const name = identifier.slice(colonIdx + 1);
-    return cache.get(`${source}:${name}`);
-  }
-
-  // Legacy: find first match by name (priority: custom > builtIn > builtInToolUse > remote)
-  const priorities: AgentSource[] = [
-    'custom',
-    'builtIn',
-    'builtInToolUse',
-    'remote',
-  ];
-  for (const source of priorities) {
+  // Legacy: find first match by name across sources
+  for (const source of LOOKUP_PRIORITY) {
     const entry = cache.get(`${source}:${identifier}`);
     if (entry) return entry;
   }
-
   return undefined;
 }
 
@@ -378,10 +392,9 @@ async function scanYaml(
       category,
       agentType,
       description: validated.description,
-      defaultOutputFiles:
-        defaultOutputFiles && defaultOutputFiles.length > 0
-          ? defaultOutputFiles
-          : undefined,
+      defaultOutputFiles: defaultOutputFiles?.length
+        ? defaultOutputFiles
+        : undefined,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -390,16 +403,10 @@ async function scanYaml(
 }
 
 function mapAgentType(value: string | undefined): AgentType {
-  switch (value) {
-    case 'toolUse':
-    case AgentType.ToolUse:
-      return AgentType.ToolUse;
-    case 'direct':
-    case AgentType.Direct:
-      return AgentType.Direct;
-    default:
-      return AgentType.CoT;
-  }
+  if (value === 'toolUse' || value === AgentType.ToolUse)
+    return AgentType.ToolUse;
+  if (value === 'direct' || value === AgentType.Direct) return AgentType.Direct;
+  return AgentType.CoT;
 }
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
@@ -413,27 +420,17 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
     // Build entries from grouped agents
     const entries: AgentEntry[] = [];
     for (const [baseName, { base, multiple }] of grouped) {
-      // Use base agent's metadata, or fall back to multiple if only _multiple exists
       const primary = base || multiple;
       if (!primary) continue;
 
-      // If only _multiple exists without a base, use full name as the entry name
-      const entryName = base ? baseName : primary.name;
-
-      // Determine category from agentCategory (new) or agentType (legacy)
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
-      const category = isToolUse
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
-      const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
-
       entries.push({
-        name: entryName,
+        name: base ? baseName : primary.name,
         source: 'remote' as AgentSource,
         path: '',
-        multiplePath: multiple ? multiple.name : undefined,
-        category,
-        agentType,
+        multiplePath: multiple?.name,
+        category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
+        agentType: isToolUse ? AgentType.ToolUse : AgentType.CoT,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
       });
@@ -534,23 +531,29 @@ export interface AgentOptionsPayload {
  * in the webview, which uses DOMParser to add the 'selected' attribute based
  * on the current dropdown value before setting innerHTML.
  */
+/**
+ * Get visible workflow agents (filtered and deduplicated).
+ * Returns the same agents shown in the main webview dropdown.
+ */
+export function getVisibleWorkflowAgents(): AgentEntry[] {
+  const entries = getWorkflowAgents();
+  const configured = new Set(getConfig<string[]>('texra.agents', []));
+  return deduplicateByName(filterVisible(entries, configured));
+}
+
+/**
+ * Get visible tool-use agents (filtered and deduplicated).
+ * Returns the same agents shown in the main webview dropdown.
+ */
+export function getVisibleToolUseAgents(): AgentEntry[] {
+  const entries = getToolUseAgents();
+  const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
+  return deduplicateByName(filterVisible(entries, configured));
+}
+
 export function buildAgentOptions(): AgentOptionsPayload {
-  const workflowEntries = getWorkflowAgents();
-  const toolUseEntries = getToolUseAgents();
-
-  // Get configured agent filters
-  const configuredWorkflow = new Set(getConfig<string[]>('texra.agents', []));
-  const configuredToolUse = new Set(
-    getConfig<string[]>('texra.toolUseAgents', []),
-  );
-
-  // Filter visible entries and deduplicate by name (priority: custom > builtIn > remote)
-  const visibleWorkflow = deduplicateByName(
-    filterVisible(workflowEntries, configuredWorkflow),
-  );
-  const visibleToolUse = deduplicateByName(
-    filterVisible(toolUseEntries, configuredToolUse),
-  );
+  const visibleWorkflow = getVisibleWorkflowAgents();
+  const visibleToolUse = getVisibleToolUseAgents();
 
   return {
     workflow: renderOptions(
@@ -566,14 +569,6 @@ export function buildAgentOptions(): AgentOptionsPayload {
   };
 }
 
-/** Source priority for deduplication (lower index = higher priority). */
-const SOURCE_PRIORITY: AgentSource[] = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-  'remote',
-];
-
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
  * Custom agents override built-in agents with the same name.
@@ -584,20 +579,16 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 
   for (const entry of entries) {
     // Remote agents use source:name key to preserve uniqueness
-    // Local agents use just name to allow custom overriding builtIn
     const key =
       entry.source === 'remote' ? `${entry.source}:${entry.name}` : entry.name;
-
     const existing = byKey.get(key);
-    if (!existing) {
-      byKey.set(key, entry);
-      continue;
-    }
 
-    // Keep higher priority source (lower SOURCE_PRIORITY index)
-    const existingPriority = SOURCE_PRIORITY.indexOf(existing.source);
-    const entryPriority = SOURCE_PRIORITY.indexOf(entry.source);
-    if (entryPriority < existingPriority) {
+    // Keep entry if none exists or if this one has higher priority
+    if (
+      !existing ||
+      LOOKUP_PRIORITY.indexOf(entry.source) <
+        LOOKUP_PRIORITY.indexOf(existing.source)
+    ) {
       byKey.set(key, entry);
     }
   }
@@ -616,17 +607,12 @@ function filterVisible(
     true,
   );
 
-  function isVisible(entry: AgentEntry): boolean {
-    // Remote agents auto-show when setting is enabled
-    if (entry.source === 'remote' && autoShowRemote) return true;
-    // Check if explicitly configured by source:name or just name
-    return (
+  return entries.filter(
+    (entry) =>
+      (entry.source === 'remote' && autoShowRemote) ||
       configured.has(createKey(entry.source, entry.name)) ||
-      configured.has(entry.name)
-    );
-  }
-
-  return entries.filter(isVisible);
+      configured.has(entry.name),
+  );
 }
 
 function renderOptions(
@@ -638,7 +624,7 @@ function renderOptions(
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // Sort: default agent first, then alphabetically by name
+  // Sort: default agent first (by reference), then alphabetically
   const defaultEntry = entries.find((e) => e.name === defaultName);
   const sorted = [...entries].sort((a, b) => {
     if (a === defaultEntry) return -1;
@@ -646,7 +632,7 @@ function renderOptions(
     return a.name.localeCompare(b.name);
   });
 
-  return sorted.map((entry) => renderOption(entry)).join('\n');
+  return sorted.map(renderOption).join('\n');
 }
 
 function renderOption(entry: AgentEntry): string {
@@ -674,11 +660,7 @@ function renderOption(entry: AgentEntry): string {
  * on the current dropdown value before setting innerHTML.
  */
 export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
-  if (!initialized) {
-    await loadAgents();
-  } else if (initPromise) {
-    await initPromise;
-  }
+  await ensureAgentsLoaded();
   return buildAgentOptions();
 }
 
@@ -686,22 +668,24 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
  * Sync version - returns placeholders from config if not loaded.
  */
 export function computeAgentOptionsSync(): AgentOptionsPayload {
-  if (!initialized) {
-    const buildPlaceholder = (configKey: string, defaultAgent: string) => {
-      const configured = getConfig<string[]>(configKey, []);
-      const agents = configured.length > 0 ? configured : [defaultAgent];
-      return agents
-        .map(
-          (name) =>
-            `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
-        )
-        .join('\n');
-    };
-
-    return {
-      workflow: buildPlaceholder('texra.agents', DEFAULT_WORKFLOW_AGENT),
-      toolUse: buildPlaceholder('texra.toolUseAgents', DEFAULT_TOOL_USE_AGENT),
-    };
+  if (initialized) {
+    return buildAgentOptions();
   }
-  return buildAgentOptions();
+
+  // Build placeholder options from config when cache isn't ready
+  function buildPlaceholder(configKey: string, defaultAgent: string): string {
+    const agents = getConfig<string[]>(configKey, []);
+    const names = agents.length > 0 ? agents : [defaultAgent];
+    return names
+      .map(
+        (name) =>
+          `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
+      )
+      .join('\n');
+  }
+
+  return {
+    workflow: buildPlaceholder('texra.agents', DEFAULT_WORKFLOW_AGENT),
+    toolUse: buildPlaceholder('texra.toolUseAgents', DEFAULT_TOOL_USE_AGENT),
+  };
 }

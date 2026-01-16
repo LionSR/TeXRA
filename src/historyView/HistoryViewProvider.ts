@@ -2,10 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import {
-  BaseWebviewProvider,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
+import { BaseWebviewProvider } from '@common/webview';
 
 // Local imports - history view components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
@@ -25,19 +22,8 @@ export class HistoryViewProvider
     this.messageHandler = new HistoryViewMessageHandler(context);
   }
 
-  /**
-   * Resolve webview for potential sidebar integration.
-   */
-  public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: getSharedLocalResourceRoots(
-        this.context,
-        'historyView',
-      ),
-    };
-
-    super.resolveWebviewViewInternal(webviewView);
+  protected override getViewPath(): string {
+    return 'historyView';
   }
 
   /**

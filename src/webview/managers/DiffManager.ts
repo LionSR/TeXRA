@@ -13,30 +13,38 @@ export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   handleLatexdiff(message: any): void {
-    void vscode.commands.executeCommand(
-      'texra.latexdiff',
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    );
+    this.runDiffCommand('latexdiff', message, [
+      'inputFile',
+      'baseFile',
+      'editedFile',
+    ]);
   }
 
   handleLatexdiffvc(message: any): void {
-    void vscode.commands.executeCommand(
-      'texra.latexdiffvc',
-      message.inputFile,
-      message.baseFile,
-      message.commitHash,
-    );
+    this.runDiffCommand('latexdiffvc', message, [
+      'inputFile',
+      'baseFile',
+      'commitHash',
+    ]);
   }
 
   handleLatexdiffvcOperation(message: any): void {
+    this.runDiffCommand(message.command, message, [
+      'inputFile',
+      'baseFile',
+      'commitHash',
+      'clean',
+    ]);
+  }
+
+  private runDiffCommand(
+    command: string,
+    message: any,
+    paramKeys: string[],
+  ): void {
     void vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.baseFile,
-      message.commitHash,
-      message.clean,
+      `texra.${command}`,
+      ...paramKeys.map((k) => message[k]),
     );
   }
 
@@ -58,7 +66,19 @@ export class DiffManager extends BaseWebviewManager {
 
   async handleRequestRecentCommits(message: any): Promise<void> {
     const result = await this._fetchRecentCommits();
-    this._notifyWhenEmpty(message, result);
+
+    // Notify user when empty if requested
+    const shouldNotify =
+      message?.notifyWhenEmpty &&
+      (result.commits.length === 0 || !result.isGitRepo);
+    if (shouldNotify) {
+      const infoMessage = result.isGitRepo
+        ? 'No recent commits found for this repository.'
+        : 'This workspace is not a Git repository.';
+      logger.info(CHANNEL, infoMessage);
+      vscode.window.showInformationMessage(infoMessage);
+    }
+
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       ...result,
@@ -71,24 +91,5 @@ export class DiffManager extends BaseWebviewManager {
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       ...result,
     });
-  }
-
-  private _notifyWhenEmpty(
-    message: any,
-    result: { commits: string[]; isGitRepo: boolean },
-  ): void {
-    if (
-      !message?.notifyWhenEmpty ||
-      (result.commits.length > 0 && result.isGitRepo)
-    ) {
-      return;
-    }
-
-    const infoMessage = result.isGitRepo
-      ? 'No recent commits found for this repository.'
-      : 'This workspace is not a Git repository.';
-
-    logger.info(CHANNEL, infoMessage);
-    vscode.window.showInformationMessage(infoMessage);
   }
 }

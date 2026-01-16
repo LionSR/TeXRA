@@ -129,7 +129,7 @@ export async function extractBibliographyContext(
 }
 
 function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined) {
+  if (value == null) {
     return '{}';
   }
 
@@ -148,11 +148,8 @@ function formatFieldValue(value: unknown): string {
       if (candidate.type === 'quotedstringwrapper') {
         return `"${rendered}"`;
       }
-
       return `{${rendered}}`;
     }
-
-    return `{${String(value)}}`;
   }
 
   return `{${String(value)}}`;

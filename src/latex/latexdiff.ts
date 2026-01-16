@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -325,8 +326,10 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      const firstRoundMatch = firstLocation.absolutePath.match(/_r(\d+)_/);
-      const secondRoundMatch = secondLocation.absolutePath.match(/_r(\d+)_/);
+      const firstRoundMatch = extractLastRoundMatch(firstLocation.absolutePath);
+      const secondRoundMatch = extractLastRoundMatch(
+        secondLocation.absolutePath,
+      );
 
       if (!firstRoundMatch || !secondRoundMatch) {
         const message = 'Could not extract round numbers from file names';
