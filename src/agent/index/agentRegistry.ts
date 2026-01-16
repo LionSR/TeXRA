@@ -624,10 +624,11 @@ function renderOptions(
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // Sort: default agent first, then alphabetically
+  // Sort: default agent first (by reference), then alphabetically
+  const defaultEntry = entries.find((e) => e.name === defaultName);
   const sorted = [...entries].sort((a, b) => {
-    if (a.name === defaultName) return -1;
-    if (b.name === defaultName) return 1;
+    if (a === defaultEntry) return -1;
+    if (b === defaultEntry) return 1;
     return a.name.localeCompare(b.name);
   });
 
