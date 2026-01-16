@@ -64,19 +64,70 @@ export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 // =============================================================================
 
 /**
- * Schema for validating tool-use flow record shared state structure.
- * Maps internal field names to snapshot format.
+ * State slices schema (shared between flat and legacy formats).
  */
-const ToolUseFlowRecordStateSchema = z.object({
+const StateSlicesSchema = z.object({
+  runStateSnapshot: AgentRunStateSnapshotSchema,
+  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+  userChannels: UserVariableChannelsSchema,
+});
+
+/**
+ * Current flat format schema (introduced with state flattening refactor).
+ * Shared state has conversation and stateSlices at top level.
+ */
+const FlatToolUseFlowRecordStateSchema = z.object({
+  conversation: z.array(ProviderMessageSchema),
+  stateSlices: StateSlicesSchema,
+});
+
+/**
+ * Legacy format schema (pre-flattening).
+ * Shared state is wrapped in a `state` property.
+ */
+const LegacyToolUseFlowRecordStateSchema = z.object({
   state: z.object({
     conversation: z.array(ProviderMessageSchema),
-    stateSlices: z.object({
-      runStateSnapshot: AgentRunStateSnapshotSchema,
-      workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-      userChannels: UserVariableChannelsSchema,
-    }),
+    stateSlices: StateSlicesSchema,
   }),
 });
+
+/**
+ * Normalized result from parsing either format.
+ * Both schemas are transformed to this common structure.
+ */
+interface NormalizedToolUseState {
+  conversation: z.infer<typeof ProviderMessageSchema>[];
+  stateSlices: z.infer<typeof StateSlicesSchema>;
+}
+
+/**
+ * Parse tool-use flow record shared state, supporting both flat and legacy formats.
+ * Returns normalized state structure regardless of input format.
+ */
+function parseToolUseFlowRecordState(
+  shared: unknown,
+): NormalizedToolUseState | null {
+  // Try flat format first (current)
+  const flatResult = FlatToolUseFlowRecordStateSchema.safeParse(shared);
+  if (flatResult.success) {
+    return {
+      conversation: flatResult.data.conversation,
+      stateSlices: flatResult.data.stateSlices,
+    };
+  }
+
+  // Fall back to legacy format
+  const legacyResult = LegacyToolUseFlowRecordStateSchema.safeParse(shared);
+  if (legacyResult.success) {
+    return {
+      conversation: legacyResult.data.state.conversation,
+      stateSlices: legacyResult.data.state.stateSlices,
+    };
+  }
+
+  return null;
+}
 
 /**
  * Minimal schema for validating workflow flow record exists and has resumable state.
@@ -141,17 +192,16 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const parseResult = ToolUseFlowRecordStateSchema.safeParse(
-      flowRecord.shared,
-    );
-    if (!parseResult.success) {
+    // Parse shared state, supporting both flat and legacy formats
+    const parsedState = parseToolUseFlowRecordState(flowRecord.shared);
+    if (!parsedState) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
       );
       return null;
     }
 
-    const { conversation, stateSlices } = parseResult.data.state;
+    const { conversation, stateSlices } = parsedState;
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
