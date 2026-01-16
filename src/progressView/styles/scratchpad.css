@@ -108,6 +108,20 @@
   border-left: 3px solid var(--vscode-textLink-foreground, #3794ff);
 }
 
+/* Error content styling - mirrors user feedback but with error colors */
+.tool-error-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--spacing-small);
+  background-color: var(
+    --vscode-inputValidation-errorBackground,
+    rgba(255, 0, 0, 0.1)
+  );
+  border-radius: var(--border-radius-small);
+  border-left: 3px solid var(--color-error);
+  color: var(--color-error);
+}
+
 .tool-output-full {
   white-space: pre-wrap;
   word-break: break-word;
