@@ -1,4 +1,5 @@
 // Third-party imports
+import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -47,6 +48,39 @@ function toZeroIndexed(
   };
 }
 
+/**
+ * Open a file in VS Code and position cursor at given line.
+ * This allows the user to see the Lean 4 InfoView showing goal state and diagnostics.
+ */
+async function openFileAtPosition(
+  filePath: string,
+  line?: number,
+  column?: number,
+): Promise<void> {
+  try {
+    const uri = vscode.Uri.file(filePath);
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document, {
+      preserveFocus: false, // Focus the editor so InfoView updates
+      preview: false, // Don't use preview mode
+    });
+
+    if (line !== undefined) {
+      const position = new vscode.Position(
+        Math.max(0, line - 1),
+        column ? Math.max(0, column - 1) : 0,
+      );
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+      );
+    }
+  } catch {
+    // Silently fail - opening file is a nice-to-have, not critical
+  }
+}
+
 // ============================================================================
 // Tool Implementations
 // ============================================================================
@@ -78,6 +112,9 @@ Example output:
     const { file, line, column } = input;
     const { line: lspLine, character } = toZeroIndexed(line, column);
 
+    // Open file in VS Code so user can see InfoView with goal state
+    await openFileAtPosition(file, line, column);
+
     try {
       const goalState = await vscodeIntegration.getGoalState(
         file,
@@ -89,7 +126,8 @@ Example output:
         return {
           summary: `No goal state at line ${line}`,
           output:
-            'No proof goal found at this position. This may not be inside a tactic proof.',
+            'No proof goal found at this position. This may not be inside a tactic proof.\n\n' +
+            '💡 The file is now open in VS Code - check the InfoView panel for more details.',
         };
       }
 
@@ -103,6 +141,9 @@ Example output:
           output += `${i + 1}. ${goalState.goals[i]}\n`;
         }
       }
+
+      output +=
+        '\n💡 The file is now open in VS Code - see the InfoView panel for interactive goal state.';
 
       return {
         summary: `Found ${goalState.goals.length} goal(s) at line ${line}`,
@@ -143,10 +184,19 @@ Requires: Lean 4 VS Code extension installed and active.`,
     try {
       const diagnostics = vscodeIntegration.getDiagnostics(file);
 
+      // Open file in VS Code - position at first error if any
+      const firstError = diagnostics.find(
+        (d) => d.severity === vscodeIntegration.DiagnosticSeverity.Error,
+      );
+      const openLine = firstError ? firstError.range.start.line + 1 : undefined;
+      await openFileAtPosition(file, openLine);
+
       if (diagnostics.length === 0) {
         return {
           summary: '✓ No diagnostics',
-          output: 'No errors, warnings, or hints for this file.',
+          output:
+            'No errors, warnings, or hints for this file.\n\n' +
+            '💡 The file is now open in VS Code - check the Problems panel (Ctrl+Shift+M) for details.',
         };
       }
 
@@ -184,6 +234,9 @@ Requires: Lean 4 VS Code extension installed and active.`,
           output += `**Line ${h.range.start.line + 1}:** ${h.message}\n\n`;
         }
       }
+
+      output +=
+        '💡 The file is now open in VS Code - see squiggly lines in editor and Problems panel (Ctrl+Shift+M).';
 
       return {
         summary: `${errors.length} error(s), ${warnings.length} warning(s), ${hints.length} hint(s)`,
