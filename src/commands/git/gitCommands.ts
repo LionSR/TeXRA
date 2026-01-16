@@ -10,7 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'gitCommands';
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 
-export function registerGitCommands(context: vscode.ExtensionContext) {
+export function registerGitCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.isGitRepository', isGitRepository),
     vscode.commands.registerCommand('texra.getRecentCommits', getRecentCommits),
