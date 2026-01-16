@@ -6,6 +6,7 @@
  */
 
 // Third-party imports
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -16,6 +17,9 @@ import {
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { WorkflowAgentProposal } from '@eventBus/types';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
@@ -66,6 +70,27 @@ const WorkflowAgentInputSchema = z.strictObject({
     .prefault([])
     .describe('Additional reference file paths'),
 
+  /** Auxiliary file for supplementary content (optional) */
+  auxiliaryFile: z
+    .string()
+    .nullish()
+    .describe('Auxiliary file path for supplementary content'),
+
+  /** Additional auxiliary files */
+  auxiliaryFiles: z
+    .array(z.string())
+    .prefault([])
+    .describe('Additional auxiliary file paths'),
+
+  /** Media file for images/figures (optional) */
+  mediaFile: z.string().nullish().describe('Media file path for images/figures'),
+
+  /** Additional media files */
+  mediaFiles: z
+    .array(z.string())
+    .prefault([])
+    .describe('Additional media file paths'),
+
   /** Output file paths (optional - defaults to agent behavior) */
   outputFiles: z
     .array(z.string())
@@ -112,10 +137,15 @@ Parameters:
 - inputFile: Primary file to process
 - inputFiles: Additional input files (optional)
 - referenceFile: Reference file for context (optional)
+- referenceFiles: Additional reference files (optional)
+- auxiliaryFile: Auxiliary file for supplementary content (optional)
+- auxiliaryFiles: Additional auxiliary files (optional)
+- mediaFile: Media file for images/figures (optional)
+- mediaFiles: Additional media files (optional)
 - outputFiles: Where to save results (optional)
 - useMultipleOutputs: Generate multiple output files (optional)
 
-The tool returns immediately after launching the agent. Monitor the ProgressBoard for execution status.`,
+The proposal is shown in the ProgressBoard for review. User can approve or reject before execution.`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -159,8 +189,48 @@ The tool returns immediately after launching the agent. Monitor the ProgressBoar
       }
     }
 
-    // Build agent configuration
-    const agentConfig = {
+    // Validate additional reference files
+    for (const file of input.referenceFiles) {
+      const exists = await WorkspaceFS.exists(file);
+      if (!exists) {
+        throw new Error(`Reference file not found: ${file}`);
+      }
+    }
+
+    // Validate auxiliary file if provided
+    if (input.auxiliaryFile) {
+      const auxExists = await WorkspaceFS.exists(input.auxiliaryFile);
+      if (!auxExists) {
+        throw new Error(`Auxiliary file not found: ${input.auxiliaryFile}`);
+      }
+    }
+
+    // Validate additional auxiliary files
+    for (const file of input.auxiliaryFiles) {
+      const exists = await WorkspaceFS.exists(file);
+      if (!exists) {
+        throw new Error(`Auxiliary file not found: ${file}`);
+      }
+    }
+
+    // Validate media file if provided
+    if (input.mediaFile) {
+      const mediaExists = await WorkspaceFS.exists(input.mediaFile);
+      if (!mediaExists) {
+        throw new Error(`Media file not found: ${input.mediaFile}`);
+      }
+    }
+
+    // Validate additional media files
+    for (const file of input.mediaFiles) {
+      const exists = await WorkspaceFS.exists(file);
+      if (!exists) {
+        throw new Error(`Media file not found: ${file}`);
+      }
+    }
+
+    // Build workflow agent proposal
+    const proposal: WorkflowAgentProposal = {
       agent: input.agent,
       model: input.model,
       instruction: input.instruction,
@@ -168,12 +238,62 @@ The tool returns immediately after launching the agent. Monitor the ProgressBoar
       inputFiles: input.inputFiles,
       referenceFile: input.referenceFile ?? null,
       referenceFiles: input.referenceFiles,
+      auxiliaryFile: input.auxiliaryFile ?? null,
+      auxiliaryFiles: input.auxiliaryFiles,
+      mediaFile: input.mediaFile ?? null,
+      mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
     };
 
+    // Get stream ID from tool execution context
+    const context = getCurrentToolFileInteractionContext();
+    const streamId = context?.streamId ?? '';
+
+    // Generate unique proposal ID
+    const proposalId = randomUUID();
+
+    // Wait for user approval
+    const result = await proposalCoordinator.waitForUserAction(streamId, {
+      proposalId,
+      proposal,
+    });
+
+    if (result.action === 'reject') {
+      return {
+        summary: `User rejected workflow agent '${input.agent}' proposal`,
+        output: 'The proposed workflow agent execution was rejected by the user.',
+        isError: true,
+      };
+    }
+
+    if (result.action === 'timeout') {
+      return {
+        summary: `Workflow agent '${input.agent}' proposal timed out`,
+        output:
+          'The proposed workflow agent execution timed out waiting for user approval.',
+        isError: true,
+      };
+    }
+
+    // User approved - execute the workflow agent
+    const agentConfig = {
+      agent: proposal.agent,
+      model: proposal.model,
+      instruction: proposal.instruction,
+      inputFile: proposal.inputFile,
+      inputFiles: proposal.inputFiles,
+      referenceFile: proposal.referenceFile,
+      referenceFiles: proposal.referenceFiles,
+      auxiliaryFile: proposal.auxiliaryFile,
+      auxiliaryFiles: proposal.auxiliaryFiles,
+      mediaFile: proposal.mediaFile,
+      mediaFiles: proposal.mediaFiles,
+      outputFiles: proposal.outputFiles,
+      useMultipleOutputs: proposal.useMultipleOutputs,
+    };
+
     // Execute the workflow agent (runs in background)
-    // Note: executeAgent doesn't block - it starts the agent and returns
     void executeAgent(agentConfig);
 
     // Build response
