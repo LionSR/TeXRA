@@ -664,6 +664,21 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   return buildAgentOptions();
 }
 
+/** Build placeholder options from config when cache isn't ready. */
+function buildPlaceholderOptions(
+  configKey: string,
+  defaultAgent: string,
+): string {
+  const agents = getConfig<string[]>(configKey, []);
+  const names = agents.length > 0 ? agents : [defaultAgent];
+  return names
+    .map(
+      (name) =>
+        `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
+    )
+    .join('\n');
+}
+
 /**
  * Sync version - returns placeholders from config if not loaded.
  */
@@ -672,20 +687,11 @@ export function computeAgentOptionsSync(): AgentOptionsPayload {
     return buildAgentOptions();
   }
 
-  // Build placeholder options from config when cache isn't ready
-  function buildPlaceholder(configKey: string, defaultAgent: string): string {
-    const agents = getConfig<string[]>(configKey, []);
-    const names = agents.length > 0 ? agents : [defaultAgent];
-    return names
-      .map(
-        (name) =>
-          `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
-      )
-      .join('\n');
-  }
-
   return {
-    workflow: buildPlaceholder('texra.agents', DEFAULT_WORKFLOW_AGENT),
-    toolUse: buildPlaceholder('texra.toolUseAgents', DEFAULT_TOOL_USE_AGENT),
+    workflow: buildPlaceholderOptions('texra.agents', DEFAULT_WORKFLOW_AGENT),
+    toolUse: buildPlaceholderOptions(
+      'texra.toolUseAgents',
+      DEFAULT_TOOL_USE_AGENT,
+    ),
   };
 }
