@@ -245,33 +245,22 @@ function getNewFileTarget(
 
   // Preserve location kind from base file
   let targetLocation: FileLocation;
-  switch (baseLocation.kind) {
-    case 'workspace': {
-      const targetRelativePath = path.join(
-        path.dirname(baseLocation.relativePath),
-        targetFileName,
-      );
-      targetLocation = createWorkspaceLocation(
-        targetAbsolutePath,
-        targetRelativePath,
-      );
-      break;
-    }
-    case 'runStorage': {
-      const targetRelativePath = path.join(
-        path.dirname(baseLocation.relativePath),
-        targetFileName,
-      );
-      targetLocation = createRunStorageLocation(
-        targetAbsolutePath,
-        targetRelativePath,
-        baseLocation.executionId,
-      );
-      break;
-    }
-    case 'external':
-      targetLocation = createExternalLocation(targetAbsolutePath);
-      break;
+  if (baseLocation.kind === 'external') {
+    targetLocation = createExternalLocation(targetAbsolutePath);
+  } else {
+    // workspace and runStorage share the same relative path computation
+    const targetRelativePath = path.join(
+      path.dirname(baseLocation.relativePath),
+      targetFileName,
+    );
+    targetLocation =
+      baseLocation.kind === 'workspace'
+        ? createWorkspaceLocation(targetAbsolutePath, targetRelativePath)
+        : createRunStorageLocation(
+            targetAbsolutePath,
+            targetRelativePath,
+            baseLocation.executionId,
+          );
   }
 
   return { targetLocation, targetFileName, isNewFile: true };
