@@ -9,10 +9,10 @@
  * instead of spawning our own `lake serve` instance.
  */
 
-import * as path from 'path';
 import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
+import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
 // Constants
@@ -32,28 +32,10 @@ const LSP_METHOD = {
 // ============================================================================
 
 /**
- * Resolve file path to absolute, using workspace folder for relative paths.
- */
-function resolveFilePath(filePath: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath;
-  }
-
-  // Use workspace folder for relative paths
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders && workspaceFolders.length > 0) {
-    return path.join(workspaceFolders[0].uri.fsPath, filePath);
-  }
-
-  // Fallback to cwd (may not work in extension context)
-  return path.resolve(filePath);
-}
-
-/**
  * Resolve file path and create VS Code URI.
  */
 function resolveFileUri(filePath: string): vscode.Uri {
-  return vscode.Uri.file(resolveFilePath(filePath));
+  return vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
 }
 
 /**

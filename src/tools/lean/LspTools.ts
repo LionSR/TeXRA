@@ -1,5 +1,4 @@
 // Third-party imports
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
@@ -8,6 +7,7 @@ import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - VS Code integration
 import * as vscodeIntegration from './VscodeIntegration';
@@ -43,24 +43,6 @@ function formatError(error: unknown, hint?: string): string {
 }
 
 /**
- * Resolve a file path to absolute, using workspace folder for relative paths.
- */
-function resolveFilePath(filePath: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath;
-  }
-
-  // Use workspace folder for relative paths
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders && workspaceFolders.length > 0) {
-    return path.join(workspaceFolders[0].uri.fsPath, filePath);
-  }
-
-  // Fallback to cwd (may not work in extension context)
-  return path.resolve(filePath);
-}
-
-/**
  * Open a file in VS Code and position cursor at given line.
  * This triggers the Lean 4 extension to process the file.
  * Returns the absolute file path that was opened.
@@ -73,7 +55,7 @@ async function openFileInEditor(
 ): Promise<string | undefined> {
   try {
     // Resolve to absolute path using workspace folder
-    const absolutePath = resolveFilePath(filePath);
+    const absolutePath = WorkspaceFS.toAbsolute(filePath);
     const uri = vscode.Uri.file(absolutePath);
 
     logger.debug('Lean4', `Opening file: ${absolutePath}`);
