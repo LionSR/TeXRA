@@ -21,3 +21,13 @@
 #toolbarContainer .toolbar-button--hidden {
   display: none;
 }
+
+/* YOLO toggle button - always visible in header */
+.yolo-toggle-button {
+  flex-shrink: 0;
+}
+
+/* Active state when YOLO mode is enabled */
+.yolo-toggle-button.is-active {
+  color: var(--vscode-inputValidation-warningForeground, #dd8500);
+}
