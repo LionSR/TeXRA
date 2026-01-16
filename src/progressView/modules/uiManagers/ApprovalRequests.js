@@ -25,6 +25,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
     this._handleToggle = this._handleToggle.bind(this);
     this._handleDropdownToggle = this._handleDropdownToggle.bind(this);
     this._handleClickOutside = this._handleClickOutside.bind(this);
+    this._handleMenuItemClick = this._handleMenuItemClick.bind(this);
   }
 
   /** @override */
@@ -42,6 +43,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
         this._handleDropdownToggle,
         true,
       );
+      addEventListenerSafely(
+        this.container,
+        'vsc-click',
+        this._handleMenuItemClick,
+        true,
+      );
     }
     // Listen for clicks outside to close dropdown menus
     document.addEventListener('click', this._handleClickOutside, true);
@@ -54,6 +61,11 @@ export class ApprovalRequests extends BaseUIRequestManager {
       this.container.removeEventListener(
         'click',
         this._handleDropdownToggle,
+        true,
+      );
+      this.container.removeEventListener(
+        'vsc-click',
+        this._handleMenuItemClick,
         true,
       );
     }
@@ -104,8 +116,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const mainDiffButton = element.querySelector('.diff-main-button');
     const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
     const dropdownMenu = element.querySelector('.diff-dropdown-menu');
-    const previewMenuItem = element.querySelector('.preview-menu-item');
-    const latexdiffMenuItem = element.querySelector('.latexdiff-menu-item');
+    const previewMenuItem = element.querySelector(
+      'vscode-context-menu-item[value="previewProposed"]',
+    );
+    const latexdiffMenuItem = element.querySelector(
+      'vscode-context-menu-item[value="showLatexdiff"]',
+    );
     element.dataset.streamId = request.streamId || '';
 
     if (pathElem) {
@@ -205,32 +221,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    // Map and validate action
-    const mappedAction = action === 'open' ? 'openDiff' : action;
-    const validActions = [
-      'openDiff',
-      'approve',
-      'approveAll',
-      'reject',
-      'showLatexdiff',
-      'previewProposed',
-    ];
-    if (!validActions.includes(mappedAction)) {
-      return;
-    }
-
-    if (
-      mappedAction === 'showLatexdiff' ||
-      mappedAction === 'previewProposed'
-    ) {
-      this._closeAllDropdowns();
-    }
-
-    vscode.postMessage({
-      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-      requestId,
-      action: mappedAction,
-    });
+    this._dispatchApprovalAction(requestId, action);
   }
 
   /** @private */
@@ -327,6 +318,88 @@ export class ApprovalRequests extends BaseUIRequestManager {
       }
       trigger.setAttribute('aria-expanded', 'false');
     }
+  }
+
+  /**
+   * Handle vsc-click events from context menu items.
+   * @private
+   */
+  _handleMenuItemClick(event) {
+    const menuItem = this._getMenuItemFromEvent(event);
+    if (!menuItem) {
+      return;
+    }
+
+    const action = event.detail?.value ?? menuItem.getAttribute('value');
+    const requestId = menuItem.dataset.requestId;
+    if (!action || !requestId) {
+      return;
+    }
+
+    this._dispatchApprovalAction(requestId, action, { closeDropdown: true });
+  }
+
+  /**
+   * Dispatches an approval action and optionally closes dropdowns.
+   * @private
+   * @param {string} requestId
+   * @param {string} action
+   * @param {{ closeDropdown?: boolean }} [options]
+   * @returns {boolean}
+   */
+  _dispatchApprovalAction(requestId, action, options = {}) {
+    const mappedAction = action === 'open' ? 'openDiff' : action;
+    const validActions = [
+      'openDiff',
+      'approve',
+      'approveAll',
+      'reject',
+      'showLatexdiff',
+      'previewProposed',
+    ];
+    if (!validActions.includes(mappedAction)) {
+      return false;
+    }
+
+    if (options.closeDropdown) {
+      this._closeAllDropdowns();
+    }
+
+    vscode.postMessage({
+      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId,
+      action: mappedAction,
+    });
+    return true;
+  }
+
+  /**
+   * Locates the clicked menu item for a vsc-click event.
+   * @private
+   * @param {Event} event
+   * @returns {Element | null}
+   */
+  _getMenuItemFromEvent(event) {
+    if (!(event.target instanceof Element)) {
+      return null;
+    }
+
+    const targetItem = event.target.closest('vscode-context-menu-item');
+    if (targetItem) {
+      return targetItem;
+    }
+
+    const path = event.composedPath?.() ?? [];
+    for (const entry of path) {
+      if (entry instanceof Element) {
+        const menuItem = entry.closest?.('vscode-context-menu-item');
+        if (menuItem) {
+          return menuItem;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
