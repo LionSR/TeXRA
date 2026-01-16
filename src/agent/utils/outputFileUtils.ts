@@ -74,8 +74,7 @@ export function createMergeOutputFileLocationGetter(
   const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
   const outputPath = path.join(inputDir, outputFile);
 
-  // Return a getter that always returns the same location (merge is single-output)
-  return (_round: number): AgentFileLocation => {
-    return fileService.createLocation(outputPath) as AgentFileLocation;
-  };
+  // Pre-compute location (merge is single-output, always the same location)
+  const location = fileService.createLocation(outputPath) as AgentFileLocation;
+  return (_round: number): AgentFileLocation => location;
 }
