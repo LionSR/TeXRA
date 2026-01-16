@@ -8,7 +8,7 @@ import {
   countBySeverity,
   formatCounts,
   formatMessageList,
-} from '@common/vscodeDiagnostics';
+} from '@frontend/vscode/vscodeDiagnostics';
 import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
 
