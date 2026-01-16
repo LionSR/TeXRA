@@ -36,10 +36,10 @@ class StateManagerImpl {
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   get<T>(key: string, defaultValue?: T): T | undefined {
-    if (arguments.length === 1) {
-      return this.memento.get<T>(key);
-    }
-    return this.memento.get<T>(key, defaultValue!);
+    // Use arguments.length to distinguish between no default and undefined default
+    return arguments.length === 1
+      ? this.memento.get<T>(key)
+      : this.memento.get<T>(key, defaultValue as T);
   }
 
   update<T>(key: string, value: T): Thenable<void> {

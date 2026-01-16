@@ -149,6 +149,9 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
+
+  // Followup task (receives from progress view)
+  SETUP_FOLLOWUP_TASK: 'setupFollowupTask',
 };
 
 // Progress view specific commands
@@ -234,6 +237,12 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Profile
   OPEN_PROFILE: 'openProfile',
+
+  // Followup task (workflow continuation)
+  SETUP_FOLLOWUP: 'setupFollowup',
+  RUN_FOLLOWUP: 'runFollowup',
+  GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
+  SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
 };
 
 // History view specific commands

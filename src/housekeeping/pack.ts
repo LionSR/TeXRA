@@ -88,16 +88,14 @@ export async function runPackSingle(
 
   let result: FileOpResult;
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
-    logger.debug(
-      CHANNEL,
-      'Found files to process:' +
-        (movedFiles.length > 0
-          ? `\nFiles to move:\n${movedFiles.join('\n')}`
-          : '') +
-        (copiedFiles.length > 0
-          ? `\nFiles to copy:\n${copiedFiles.join('\n')}`
-          : ''),
-    );
+    const logParts = ['Found files to process:'];
+    if (movedFiles.length > 0) {
+      logParts.push(`Files to move:\n${movedFiles.join('\n')}`);
+    }
+    if (copiedFiles.length > 0) {
+      logParts.push(`Files to copy:\n${copiedFiles.join('\n')}`);
+    }
+    logger.debug(CHANNEL, logParts.join('\n'));
 
     const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
     outputFolder =

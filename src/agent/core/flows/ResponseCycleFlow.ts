@@ -1,12 +1,9 @@
-// Standard library imports
 import * as path from 'path';
 
 import { z } from 'zod';
 
-// Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
-// Internal imports
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
@@ -16,30 +13,27 @@ import {
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-// Type imports
 import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
-// Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-// Internal imports
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
-// Local imports - logging
-// Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import {
+  RetryErrorInfoSchema,
+  type RetryErrorInfo,
+} from '@common/errors/schemas';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
-import { getSystemPromptWithRules } from '@utils/prompt';
 import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
-import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 
-// Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,
@@ -47,7 +41,6 @@ import {
   handleInvocationResult,
 } from './RetryState';
 import {
-  finalizeRound,
   type ResponseCycleParams,
   type ResponseCycleServices,
 } from './CycleServices';
@@ -137,7 +130,7 @@ export function assertCycleFieldsPopulated<T extends object>(
     }
   }
 
-  if (obj['outputLocation'] === undefined || obj['outputLocation'] === null) {
+  if (obj['outputLocation'] == null) {
     throw new Error(
       `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
     );
@@ -178,10 +171,8 @@ class ResponsePrepNode<C> extends BaseNode<
     const services = this.services;
     const { prompt, userVarChannels } = services;
     const interrupted = Boolean(await services.checkInterruption());
-    // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
-    // Merge input + transient channels for template rendering
     const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
     const systemPrompt = interrupted
       ? undefined
@@ -216,7 +207,6 @@ class ResponsePrepNode<C> extends BaseNode<
     shared.outputLocation = prepRes.outputLocation;
     resetResponseCycleShared(shared);
 
-    // Debug file options derived at call site (not stored in shared)
     await maybeSaveDebugObject({
       object: shared.messages,
       objectType: 'messages',
@@ -307,7 +297,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
     const start = Date.now();
 
-    // Use base class helper for abort controller lifecycle
     return this.withAbortController(async (signal) => {
       const { response, responseTimeMs } = await stage.run(async () => {
         const modelResponse = await services.modelHandler.createResponse({
@@ -329,8 +318,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
       return { kind: 'success', response, responseTimeMs };
     });
-    // Note: Errors from createResponse() are caught by PocketFlow Node's
-    // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
 
   /**
@@ -351,8 +338,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ): Promise<string | undefined> {
     const { logger, config, round } = this.services;
 
-    // Handle non-success cases (returns null) or get narrowed success result
-    // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
     const successRes = handleInvocationResult(execRes, shared, shared, {
       logger,
       operationName: this.getOperationName(),
@@ -362,11 +347,9 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       return FlowTransition.COMPLETE;
     }
 
-    // Apply success-specific side effects
     shared.responseObject = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
-    // Debug options derived at call site (not stored in shared)
     await maybeSaveDebugObject({
       object: successRes.response,
       objectType: 'response',
@@ -387,7 +370,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
 /**
  * Data extracted by prep() for response processing.
- * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ProcessPrepResult {
   shouldStop: boolean;
@@ -396,9 +378,7 @@ interface ProcessPrepResult {
   messages: ProviderMessage[];
   outputLocation: AgentFileLocation;
   outputExists: boolean;
-  /** Last response for connector calculation (read before update) */
   lastResponse: string;
-  /** Accumulated output for updating (read before update) */
   accumulatedOutput: string;
 }
 
@@ -410,14 +390,10 @@ interface ProcessResult {
   thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: any;
-  /** Normalized usage - single source of truth */
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
-  /** Response time in ms for store update in post() */
   responseTimeMs?: number;
-  /** Updated last response for store update in post() */
   updatedLastResponse?: string;
-  /** Updated accumulated output for store update in post() */
   updatedAccumulatedOutput?: string;
 }
 
@@ -425,7 +401,6 @@ type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
 
 /**
  * Data extracted by prep() for continuation decision.
- * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ContinuationPrepResult {
   shouldSkip: boolean;
@@ -449,8 +424,6 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * - prep() extracts only the data needed by exec()
  * - exec() performs pure computation, no side effects
  * - post() applies all side effects (store updates)
- *
- * Services accessed via `_params.services` (options flattened into services).
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -464,10 +437,8 @@ class ResponseProcessNode<C> extends BaseNode<
       responseObject: shared.responseObject,
       responseTimeMs: shared.responseTimeMs,
       messages: shared.messages,
-      // Non-null assertion: outputLocation is set by caller before cycle starts
       outputLocation: shared.outputLocation!,
       outputExists: shared.outputExists,
-      // Read workspace values before they're updated (for connector calculation)
       lastResponse: workspace.assembly.lastResponse,
       accumulatedOutput: workspace.assembly.accumulatedOutput,
     };
@@ -510,15 +481,12 @@ class ResponseProcessNode<C> extends BaseNode<
       );
       const useStreaming = modelHandler.getStreamingConfig();
 
-      // For non-streaming mode, emit thinking to progress view
-      // (streaming mode already shows it progressively via streams)
       if (thinkingContent && !useStreaming) {
         logger.info(thinkingContent, {
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
 
-      // Scratchpad is always extracted from final response, not streamed
       const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
       if (scratchpad) {
         logger.info(scratchpad, {
@@ -526,13 +494,11 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      // Normalize usage once - this is the single source of truth
       const normalizedUsage = modelHandler.normalizeUsage(
         responseUsage,
         prepRes.responseTimeMs ?? 0,
       );
 
-      // Emit context state for UI display (centralized for all model handlers)
       const { inputTokens } = normalizedUsage;
       const { contextWindow } = modelHandler.config;
       if (inputTokens > 0 && contextWindow > 0) {
@@ -575,7 +541,6 @@ class ResponseProcessNode<C> extends BaseNode<
             processedResponse.slice(0, K_SLICE),
           );
           bestConnector = connector.connector;
-          // Compute new values but don't update store (that's a side effect for post())
           updatedLastResponse = processedResponse;
           updatedAccumulatedOutput =
             prepRes.accumulatedOutput +
@@ -596,7 +561,6 @@ class ResponseProcessNode<C> extends BaseNode<
           responseUsage,
           normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
-          // Pass data for post() to apply side effects
           responseTimeMs: prepRes.responseTimeMs,
           updatedLastResponse,
           updatedAccumulatedOutput,
@@ -619,8 +583,6 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const result = execRes.value;
 
-    // Apply side effects that were computed in exec()
-    // These updates are now in post() where they belong (PocketFlow compliance)
     if (result.responseTimeMs !== undefined) {
       round.addResponseTime(result.responseTimeMs);
     }
@@ -727,50 +689,31 @@ class ResponseProcessNode<C> extends BaseNode<
  * PocketFlow pattern:
  * - Single finalization point in the flow graph
  * - No guard flags needed (graph ensures single execution)
- * - Services accessed via `this.services`
- *
- * PocketFlow compliance:
- * - prep(): Extracts data for exec() (none needed for finalization)
- * - exec(): Pure computation using prepRes (finalization is side-effect-free)
- * - post(): Applies side effects and returns action
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  /**
-   * No preparation needed - this node just finalizes.
-   * PocketFlow compliance: prep() extracts data for exec().
-   */
-  async prep(_shared: ResponseCycleShared): Promise<void> {
-    // No prep needed for finalize
-  }
+  async prep(_shared: ResponseCycleShared): Promise<void> {}
 
   /**
-   * Finalize the round using the shared helper.
-   *
-   * This is the SINGLE finalization point for ResponseCycleFlow.
-   * The parent ResponseCycleNode must pass onRoundFinalized
-   * to services for this to work correctly.
-   *
-   * PocketFlow compliance: exec() receives prepRes, returns compute result.
+   * Finalize the round by recording stats and invoking callback.
+   * This is the single finalization point for ResponseCycleFlow.
    */
   async exec(_prepRes: void): Promise<void> {
-    // Use shared helper for consistent finalization (single source of truth)
-    await finalizeRound(this.services);
+    const { round, run, onRoundFinalized } = this.services;
+    run.recordRound(round);
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
   }
 
-  /**
-   * Flow ends here.
-   * PocketFlow compliance: post() applies side effects and returns action.
-   */
   async post(
     _shared: ResponseCycleShared,
     _prepRes: void,
     _execRes: void,
   ): Promise<string | undefined> {
-    // Flow ends here
     return undefined;
   }
 }
@@ -783,26 +726,18 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  * - prep() extracts only the data needed by exec()
  * - exec() performs pure computation using prepRes
  * - post() applies all side effects
- *
- * Services accessed via `_params.services`: options, store
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  /**
-   * Extract data and check interruption.
-   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
-   */
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
     const { checkInterruption } = this.services;
 
-    // Check skip conditions in prep
     const shouldSkip =
       shared.shouldStop || !shared.stopReason || !shared.processedResponse;
 
-    // Check interruption only if not already skipping (avoid unnecessary I/O)
     const interrupted = shouldSkip ? false : Boolean(await checkInterruption());
 
     return {
@@ -814,10 +749,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     };
   }
 
-  /**
-   * Evaluate continuation conditions.
-   * PocketFlow compliance: Pure computation, no side effects.
-   */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
     const { round, run, modelHandler, setting } = this.services;
 
@@ -951,20 +882,15 @@ export function createResponseCycleFlow<C>(): Flow<
   const continuationNode = new ResponseContinuationNode<C>();
   const finalizeNode = new ResponseCycleFinalizeNode<C>();
 
-  // Main flow: prep → invoke → process → continuation
-  // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
-  // via maxRetries, wait, and retryPrompt. No separate RetryWaitNode needed.
   prepNode.next(invokeNode);
   invokeNode.next(processNode);
   processNode.next(continuationNode);
 
-  // All completion paths route through finalize node (PocketFlow-native pattern)
   prepNode.on(FlowTransition.COMPLETE, finalizeNode);
   invokeNode.on(FlowTransition.COMPLETE, finalizeNode);
   processNode.on(FlowTransition.COMPLETE, finalizeNode);
   continuationNode.on(FlowTransition.COMPLETE, finalizeNode);
 
-  // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ResponseCycleShared, ResponseCycleParams<C>>(prepNode);

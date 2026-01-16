@@ -256,10 +256,3 @@ async function cloneOverleafProject(
     }
   }
 }
-
-export const gitCommands = {
-  isGitRepository,
-  getRecentCommits,
-  findCommitInHistory,
-  cloneOverleafProject,
-};

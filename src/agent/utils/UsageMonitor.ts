@@ -196,37 +196,10 @@ export class UsageMonitor {
   ): void {
     try {
       const { config } = this.modelInfo;
-
-      // Validate provider against schema, fallback to 'unknown' if invalid
-      const providerLower = config.provider.toLowerCase();
-      const provider =
-        UsageProviderSchema.catch('unknown').parse(providerLower);
-
-      // Check if server-side keys (relay) were used for this request
-      const usedRelay = getServerSideKeyService().shouldUseServerSideKeysSync(
-        config.provider,
-        config.name,
+      const provider = UsageProviderSchema.catch('unknown').parse(
+        config.provider.toLowerCase(),
       );
-
-      // Relay billing should only reflect the current round's net tokens and cost
-      // rather than cumulative history. Downstream dashboards should treat each
-      // entry as a single round; if cumulative views are needed, aggregate by
-      // streamId/task.
-      const roundInputTokens = usage.inputTokens;
-      const roundOutputTokens = usage.outputTokens;
-      const roundCachedInputTokens = usage.cachedInputTokens ?? 0;
-      const roundCacheCreationTokens = usage.cacheCreationInputTokens ?? 0;
-      const roundReasoningTokens = usage.reasoningTokens ?? 0;
-      const roundCost = usage.cost;
-
-      const netInputTokens = Math.max(
-        0,
-        roundInputTokens - roundCachedInputTokens,
-      );
-
-      // roundCost already includes any cache discounts from the provider;
-      // avoid double-subtracting cached tokens here.
-      const relayCost = roundCost;
+      const cachedInputTokens = usage.cachedInputTokens ?? 0;
 
       UsageLogService.log({
         model: config.fullName,
@@ -234,18 +207,20 @@ export class UsageMonitor {
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,
         isMultipleOutput: this.metadata?.isMultipleOutput,
-        inputTokens: netInputTokens,
-        outputTokens: roundOutputTokens,
-        cost: Number(relayCost.toFixed(6)),
+        inputTokens: Math.max(0, usage.inputTokens - cachedInputTokens),
+        outputTokens: usage.outputTokens,
+        cost: Number(usage.cost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
-        cachedInputTokens: roundCachedInputTokens,
-        cacheCreationInputTokens: roundCacheCreationTokens,
-        reasoningTokens: roundReasoningTokens,
-        usedRelay,
+        cachedInputTokens,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
+        reasoningTokens: usage.reasoningTokens ?? 0,
+        usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
+          config.provider,
+          config.name,
+        ),
         streamId: this.context.streamId,
       });
     } catch (error) {
-      // Silently ignore backend logging errors - this should never block the main flow
       this.context.logger.debug(`Backend usage logging failed: ${error}`);
     }
   }

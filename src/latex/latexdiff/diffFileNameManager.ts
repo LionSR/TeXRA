@@ -1,14 +1,25 @@
 // Standard library imports
 import * as path from 'path';
 
+import {
+  extractLastRoundMatch,
+  extractLastRoundModelMatch,
+} from '@agent/utils/mergeFileUtils';
+
 /** Extract base name from filename using round pattern */
 function extractBaseName(filename: string, includeRound: boolean): string {
-  const pattern = includeRound ? /^(.*?_r\d+)/ : /^(.*?)_r\d+/;
-  const match = path.parse(filename).name.match(pattern);
-  if (!match) {
-    throw new Error('Failed to extract base name from edited file');
+  const name = path.parse(filename).name;
+  const lastMatch = extractLastRoundMatch(name);
+  if (lastMatch?.index == null) {
+    throw new Error(
+      `Failed to extract base name from edited file: ${filename}`,
+    );
   }
-  return match[1];
+  // Return everything up to (or including) the last _rN
+  // The -1 excludes the trailing underscore from _rN_ when includeRound is true
+  const endIndex =
+    lastMatch.index + (includeRound ? lastMatch[0].length - 1 : 0);
+  return name.slice(0, endIndex);
 }
 
 export class DiffFileNameManager {
@@ -18,8 +29,10 @@ export class DiffFileNameManager {
     suffix: string,
   ): string {
     const editedFileName = path.basename(editedFile);
-    const inputRoundMatch = path.basename(inputFile).match(/_r(\d+)_([^.]+)/);
-    const editedRoundMatch = editedFileName.match(/_r(\d+)_([^.]+)/);
+    const inputRoundMatch = extractLastRoundModelMatch(
+      path.basename(inputFile),
+    );
+    const editedRoundMatch = extractLastRoundModelMatch(editedFileName);
 
     if (inputRoundMatch && editedRoundMatch) {
       return this.generateRoundBasedFileName(
@@ -39,14 +52,10 @@ export class DiffFileNameManager {
   ): string {
     const firstRound = inputRoundMatch[1];
     const secondRound = editedRoundMatch[1];
-    const firstModel = inputRoundMatch[2];
-    const secondModel = editedRoundMatch[2];
-
-    const sameModel = firstModel === secondModel;
+    const sameModel = inputRoundMatch[2] === editedRoundMatch[2];
     const baseName = extractBaseName(editedFileName, sameModel);
+    const modelSuffix = sameModel ? `_${editedRoundMatch[2]}` : '';
 
-    return sameModel
-      ? `${baseName}_${secondModel}_diffr${secondRound}r${firstRound}.tex`
-      : `${baseName}_diffr${secondRound}r${firstRound}.tex`;
+    return `${baseName}${modelSuffix}_diffr${secondRound}r${firstRound}.tex`;
   }
 }

@@ -6,7 +6,7 @@ export {
   registerSampleProjectCommands,
 } from './sampleProjectCommands';
 export { settingsCommands, registerSettingsCommands } from './settingsCommands';
-export { testCommands, registerTestCommands } from './testCommands';
+export { registerTestCommands } from './testCommands';
 export {
   textEditorCommands,
   registerTextEditorCommands,

@@ -9,6 +9,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -69,6 +70,14 @@ export class XmlOutputManager {
     return content;
   }
 
+  /** Mapping of extraction methods to their log messages */
+  private static readonly EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
+    named: 'from named document tag',
+    simple: 'using fallback method',
+    markdown: 'from markdown code block',
+    latex: 'from \\documentclass block',
+  };
+
   private extractDocumentbyRegex(
     outputContent: string,
     documentTag: string,
@@ -77,15 +86,9 @@ export class XmlOutputManager {
     const result = extractDocument(outputContent, documentTag, filename);
 
     if (result.content) {
-      const methodMessages: Record<string, string> = {
-        named: `Recovered ${documentTag} from named document tag`,
-        simple: `Successfully extracted ${documentTag} using fallback method`,
-        markdown: `Recovered ${documentTag} from markdown code block`,
-        latex: `Recovered ${documentTag} from \\documentclass block`,
-      };
-      const message = methodMessages[result.method];
-      if (message) {
-        this.logger.logInternal(message);
+      const suffix = XmlOutputManager.EXTRACTION_METHOD_MESSAGES[result.method];
+      if (suffix) {
+        this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
       }
       return result.content;
     }
@@ -282,8 +285,8 @@ export class XmlOutputManager {
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    const roundMatch = outputLocation.absolutePath.match(/_r(\d+)_/);
-    const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+    const lastRoundMatch = extractLastRoundMatch(outputLocation.absolutePath);
+    const currRound = lastRoundMatch ? parseInt(lastRoundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -370,22 +373,21 @@ export class XmlOutputManager {
     const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
     let content = await this.processXmlContent(originalContent);
 
-    let fixed = false;
-    if (!content.endsWith(`</${documentTag}>`)) {
-      if (
-        !content.includes(`</${documentTag}>`) &&
-        content.includes(`<${documentTag}>`)
-      ) {
-        fixed = true;
-        content += `\n</${documentTag}>`;
-      } else if (content.includes(`<${documentTag}>`)) {
-        fixed = true;
-        content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
-        content += `\n</${documentTag}>`;
-      }
+    // Fix missing or misplaced closing tag
+    const closeTag = `</${documentTag}>`;
+    const openTag = `<${documentTag}>`;
+    const hasOpenTag = content.includes(openTag);
+    const hasCloseTag = content.includes(closeTag);
+
+    if (hasOpenTag && !content.endsWith(closeTag)) {
+      // Remove any trailing content after close tag, or add missing close tag
+      content = hasCloseTag
+        ? content.replace(new RegExp(`${closeTag}.*$`, 's'), '')
+        : content;
+      content += `\n${closeTag}`;
     }
 
-    if (fixed || content !== originalContent) {
+    if (content !== originalContent) {
       await AbsoluteFS.write(fileLocation.absolutePath, content);
     }
   }

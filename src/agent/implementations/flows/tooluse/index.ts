@@ -11,10 +11,7 @@ export type {
   PrepareStateResult,
 } from './ToolUseServices';
 
-export {
-  ToolUseFlowContext,
-  type ToolUseFlowContextInit,
-} from './ToolUseFlowContext';
+export { type ToolUseFlowContextInit } from './ToolUseFlowContext';
 
 export {
   ToolUseSessionLifecycle,
@@ -23,7 +20,17 @@ export {
 
 export {
   runToolUseFlow,
+  type ToolUseFlowContext,
   type RunToolUseFlowInput,
   type RunToolUseFlowResult,
   type ToolUseFlowSetupCallback,
 } from './runToolUseFlow';
+
+// Node implementations (exported for testing and extensibility)
+export {
+  ToolUsePrepareNode,
+  ToolUseCycleNode,
+  ToolUseWaitNode,
+  type ToolUseRunShared,
+  type StateSlicesSnapshot,
+} from './nodes';

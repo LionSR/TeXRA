@@ -58,7 +58,7 @@ export class QueuedFollowUps {
 
     // Update the title to show count
     const count = this._currentMessages.length;
-    const suffix = count === 1 ? '' : ` (${count} combined)`;
+    const suffix = count === 1 ? '' : ` (${count} pending)`;
     elements.container.setAttribute('title', `Queued Message${suffix}`);
 
     // Clear and show single combined message

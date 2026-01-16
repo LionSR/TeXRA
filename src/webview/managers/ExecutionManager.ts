@@ -20,11 +20,6 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-/** Normalize nullish file arrays to empty arrays */
-function toArray<T>(files: T[] | undefined | null): T[] {
-  return files ?? [];
-}
-
 export class ExecutionManager {
   async handleExecute(message: any): Promise<void> {
     const isToolUseAgent = Boolean(message.isToolUseAgent);
@@ -47,15 +42,18 @@ export class ExecutionManager {
   }
 
   private composeAgentConfig(message: any, isToolUse: boolean): AgentConfig {
+    // Session descriptor depends on agent type
     const session: AgentSessionDescriptor = isToolUse
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
       : { agentCategory: AgentCategory.Workflow };
 
-    const outputFiles = isToolUse ? [] : toArray<string>(message.outputFiles);
-    const useMultipleOutputs = isToolUse
-      ? false
-      : Boolean(message.outputFilesActive) || outputFiles.length > 1;
+    // Tool-use agents don't produce output files
+    const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
+    const useMultipleOutputs =
+      !isToolUse &&
+      (Boolean(message.outputFilesActive) || outputFiles.length > 1);
 
+    // Tool config: workflow agents use message values, tool-use uses defaults
     const toolConfig: ToolConfig = isToolUse
       ? DEFAULT_TOOL_CONFIG
       : {
@@ -66,23 +64,26 @@ export class ExecutionManager {
           autoCompileInputPdf: message.autoCompileInputPdf,
         };
 
+    // Map media file paths, filtering out null values
+    const mapMedia = (f: string | null): string | null => this.mapMediaPath(f);
+    const mediaFiles = (message.mediaFiles ?? [])
+      .map(mapMedia)
+      .filter((f: string | null): f is string => f !== null);
+
     return {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile ?? '',
-      inputFiles: toArray<string>(message.inputFiles),
+      inputFiles: message.inputFiles ?? [],
       referenceFile: message.referenceFile ?? null,
-      referenceFiles: toArray<string>(message.referenceFiles),
+      referenceFiles: message.referenceFiles ?? [],
       auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: toArray<string>(message.auxiliaryFiles),
-      mediaFile: this.mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: toArray<string>(
-        (message.mediaFiles ?? [])
-          .map((f: string | null) => this.mapMediaPath(f))
-          .filter((f: string | null): f is string => f !== null),
-      ),
+      auxiliaryFiles: message.auxiliaryFiles ?? [],
+      mediaFile: mapMedia(message.mediaFile ?? null),
+      mediaFiles,
       editedFile: null,
+      editedFiles: message.editedFiles ?? [],
       agentType: session.agentType,
       session,
       toolConfig,
@@ -96,46 +97,35 @@ export class ExecutionManager {
   }
 
   handleFileOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    ]);
+    this.runCommand(message, ['inputFile', 'baseFile', 'editedFile']);
   }
 
   handleHousekeeping(message: any): void {
-    this.executeCommand(message.command);
+    this.runCommand(message, []);
   }
 
   handleSingleOperation(message: any): void {
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-    ]);
+    this.runCommand(message, ['inputFile', 'agent', 'model']);
   }
 
   handleMultipleOperation(message: any): void {
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
-    const outputFilesStr = Array.isArray(message.outputFiles)
+    const files = Array.isArray(message.outputFiles)
       ? message.outputFiles.join(', ')
       : '';
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
     );
-
-    this.executeCommand(message.command, [
-      message.inputFile,
-      message.agent,
-      message.model,
-      message.outputFiles,
-    ]);
+    this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
   }
 
-  private executeCommand(command: string, args: unknown[] = []): void {
-    void vscode.commands.executeCommand(`texra.${command}`, ...args);
+  private runCommand(message: any, paramKeys: string[]): void {
+    void vscode.commands.executeCommand(
+      `texra.${message.command}`,
+      ...paramKeys.map((k) => message[k]),
+    );
   }
 }

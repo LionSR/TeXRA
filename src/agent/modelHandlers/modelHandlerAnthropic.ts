@@ -73,6 +73,10 @@ import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { extractScratchpad } from '@utils/text/xmlUtils';
+import {
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Local file imports
 import {
@@ -184,16 +188,14 @@ const extractTextFromContent = (
   content: BetaContentBlock[] | undefined,
   trim = false,
 ): string => {
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  let text = '';
-  for (const block of content) {
-    if (block.type === 'text') {
-      text += trim ? block.text.trim() : block.text;
-    }
-  }
-  return text;
+  if (!content) return '';
+  return content
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
+    )
+    .map((block) => (trim ? block.text.trim() : block.text))
+    .join('');
 };
 
 /**
@@ -213,10 +215,35 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
  */
 /** Number of recent tool use/result pairs to keep after context clearing */
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
-/** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
+/** Number of assistant turns with thinking blocks to keep */
 const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
+/**
+ * Minimum percentage of context to clear at once for tool uses.
+ * This ensures cache invalidation is worthwhile - clearing too few tokens
+ * causes frequent cache misses without meaningful benefit.
+ * 10% is a reasonable balance between cache efficiency and context retention.
+ */
+const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 10;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
+
+/**
+ * Extended response type for countTokens with context_management.
+ * The SDK doesn't export this, so we define it here for type safety.
+ */
+interface CountTokensContextManagementResponse {
+  original_input_tokens: number;
+}
+
+/**
+ * Options for setting up context management configuration.
+ */
+interface ContextManagementSetupOptions {
+  options: MessageCreateParams;
+  contextWindow: number;
+  supportsReasoning: boolean;
+  thresholdPercent: number;
+}
 
 /**
  * Block types that support cache_control for prompt caching.
@@ -294,6 +321,99 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!options.betas.includes(beta)) {
       options.betas.push(beta);
     }
+  }
+
+  /**
+   * Sets up context management configuration for Anthropic's server-side editing.
+   * Must be called BEFORE token counting so countTokens returns accurate post-clearing counts.
+   */
+  private setupContextManagement({
+    options,
+    contextWindow,
+    supportsReasoning,
+    thresholdPercent,
+  }: ContextManagementSetupOptions): void {
+    if (this.agentType !== AgentType.ToolUse) {
+      return;
+    }
+
+    // Only enable context management if threshold is configured (> 0)
+    if (thresholdPercent <= 0) {
+      return;
+    }
+
+    this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
+
+    const contextManagementEdits = [
+      ...(options.context_management?.edits ?? []),
+    ];
+
+    const triggerTokens = Math.floor((thresholdPercent / 100) * contextWindow);
+
+    // Thinking clearing is opt-in because the API requires it to be listed
+    // first in edits, which means it runs before tool use clearing and
+    // reduces tokens before the tool use trigger is checked. This can
+    // prevent tool use clearing from triggering in many scenarios.
+    // The API's default behavior (keep last 1 thinking turn) still applies
+    // even without explicit thinking clearing config.
+    const enableThinkingClearing = getConfig<boolean>(
+      'texra.model.enableThinkingClearing',
+      false,
+    );
+
+    if (
+      enableThinkingClearing &&
+      supportsReasoning &&
+      options.thinking &&
+      !contextManagementEdits.some(
+        (edit) => edit.type === 'clear_thinking_20251015',
+      )
+    ) {
+      // Thinking clearing must come first in the edits array per API requirement
+      contextManagementEdits.unshift({
+        type: 'clear_thinking_20251015' as const,
+        keep: {
+          type: 'thinking_turns' as const,
+          value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+        },
+      });
+    }
+
+    // Add tool result clearing strategy with server-side trigger.
+    // The trigger ensures clearing only activates when input tokens exceed threshold.
+    if (
+      !contextManagementEdits.some(
+        (edit) => edit.type === 'clear_tool_uses_20250919',
+      )
+    ) {
+      // clear_at_least ensures cache invalidation is worthwhile:
+      // Without it, the API may clear too few tokens, causing frequent
+      // cache misses without meaningful benefit.
+      const clearAtLeastTokens = Math.floor(
+        (CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT / 100) * contextWindow,
+      );
+
+      contextManagementEdits.push({
+        type: 'clear_tool_uses_20250919' as const,
+        trigger: {
+          type: 'input_tokens' as const,
+          value: triggerTokens,
+        },
+        keep: {
+          type: 'tool_uses' as const,
+          value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+        },
+        clear_at_least: {
+          type: 'input_tokens' as const,
+          value: clearAtLeastTokens,
+        },
+      });
+    }
+
+    options.context_management = {
+      ...(options.context_management ?? {}),
+      edits: contextManagementEdits,
+    } satisfies BetaContextManagementConfig;
   }
 
   private assignCacheControlToLatest(
@@ -431,6 +551,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.ensureBeta(options, CONTEXT_1M_BETA);
     }
 
+    // Set up context management BEFORE token counting so countTokens can
+    // return accurate post-clearing token counts.
+    const compactionThresholdPercent = getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+    this.setupContextManagement({
+      options,
+      contextWindow: effectiveContextWindow,
+      supportsReasoning: this.capabilities.supportsReasoning,
+      thresholdPercent: compactionThresholdPercent,
+    });
+
     if (this.capabilities.supportsTokenCounting) {
       if (documentAnalysis.hasFileSource) {
         this.logger.debug(
@@ -465,10 +598,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
             countTokensParams.thinking = options.thinking;
           }
 
+          // Include context_management in token counting to get accurate
+          // post-clearing token counts. This is critical for:
+          // 1. Correctly adjusting max_tokens based on actual available context
+          // 2. Allowing both clearing strategies to work together
+          if (options.context_management) {
+            countTokensParams.context_management = options.context_management;
+          }
+
           // Strip betas that only apply to message creation (e.g., output length)
           // while keeping context headers needed for accurate token counting.
           const countTokenBetas = options.betas?.filter(
-            (beta) => beta === CONTEXT_1M_BETA,
+            (beta) =>
+              beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
           );
           if (countTokenBetas && countTokenBetas.length > 0) {
             countTokensParams.betas = countTokenBetas;
@@ -478,7 +620,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
             await client.beta.messages.countTokens(countTokensParams);
           const { input_tokens: inputTokens } = responseTokenCount;
           measuredInputTokens = inputTokens;
-          this.logger.debug(`Token count of message: ${inputTokens}`);
+
+          // Log both original and post-clearing token counts if available
+          const contextMgmtResponse = (
+            responseTokenCount as typeof responseTokenCount & {
+              context_management?: CountTokensContextManagementResponse;
+            }
+          ).context_management;
+          if (contextMgmtResponse?.original_input_tokens) {
+            const clearedTokens =
+              contextMgmtResponse.original_input_tokens - inputTokens;
+            this.logger.debug(
+              `Token count: ${inputTokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
+            );
+          } else {
+            this.logger.debug(`Token count of message: ${inputTokens}`);
+          }
+
           if (inputTokens > effectiveContextWindow) {
             const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
             this.logger.error(errMsg);
@@ -554,79 +712,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (hasFileReference) {
       this.ensureBeta(options, FILES_API_BETA);
-    }
-
-    if (this.agentType === AgentType.ToolUse) {
-      // Use shared compaction threshold (percentage of context window)
-      // Set to 0 to disable context management entirely
-      const thresholdPercent = getConfig<number>(
-        'texra.model.compactionThresholdPercent',
-        DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-      );
-
-      // Only enable context management if threshold is configured (> 0)
-      if (thresholdPercent > 0) {
-        this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
-
-        const contextManagementEdits = [
-          ...(options.context_management?.edits ?? []),
-        ];
-
-        const triggerTokens = Math.floor(
-          (thresholdPercent / 100) * this.config.contextWindow,
-        );
-
-        // Add thinking block clearing strategy if reasoning is enabled
-        // NOTE: The Anthropic API doesn't support a trigger for thinking clearing,
-        // so we implement client-side triggering by only including the edit when
-        // token count is measured and exceeds the threshold.
-        const shouldClearThinking =
-          measuredInputTokens !== undefined &&
-          measuredInputTokens >= triggerTokens;
-
-        if (
-          shouldClearThinking &&
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          !contextManagementEdits.some(
-            (edit) => edit.type === 'clear_thinking_20251015',
-          )
-        ) {
-          // Thinking clearing must come first in the edits array
-          contextManagementEdits.unshift({
-            type: 'clear_thinking_20251015' as const,
-            keep: {
-              type: 'thinking_turns' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-            },
-          });
-        }
-
-        // Add tool result clearing strategy
-        // Tool use clearing has a server-side trigger - it only activates when input tokens exceed threshold
-        if (
-          !contextManagementEdits.some(
-            (edit) => edit.type === 'clear_tool_uses_20250919',
-          )
-        ) {
-          contextManagementEdits.push({
-            type: 'clear_tool_uses_20250919' as const,
-            trigger: {
-              type: 'input_tokens' as const,
-              value: triggerTokens,
-            },
-            keep: {
-              type: 'tool_uses' as const,
-              value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
-            },
-          });
-        }
-
-        options.context_management = {
-          ...(options.context_management ?? {}),
-          edits: contextManagementEdits,
-        } satisfies BetaContextManagementConfig;
-      }
     }
 
     let response: BetaMessage;
@@ -1468,33 +1553,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
     }
 
-    // Anthropic SDK docs: "Total input tokens in a request is the summation
-    // of `input_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`."
-    const baseInputTokens = rawUsage.input_tokens ?? 0;
-    const outputTokens = rawUsage.output_tokens ?? 0;
-    const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
-    const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
-
-    // Total input tokens for context measurement (includes all cached tokens)
-    const totalInputTokens =
-      baseInputTokens + cacheReadTokens + cacheCreationTokens;
-
-    // Calculate percentage cached (relative to total)
-    const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
-    const percentageCached =
-      totalInputTokens > 0 ? (totalCacheTokens / totalInputTokens) * 100 : 0;
+    // Anthropic: total = input_tokens + cache_read + cache_creation
+    const baseInput = rawUsage.input_tokens ?? 0;
+    const cacheRead = rawUsage.cache_read_input_tokens ?? 0;
+    const cacheCreation = rawUsage.cache_creation_input_tokens ?? 0;
+    const totalInput = baseInput + cacheRead + cacheCreation;
 
     return {
-      inputTokens: totalInputTokens,
-      outputTokens,
+      inputTokens: totalInput,
+      outputTokens: rawUsage.output_tokens ?? 0,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
       provider: 'anthropic',
-      cachedInputTokens: cacheReadTokens || undefined,
-      cacheCreationTokens: cacheCreationTokens || undefined,
-      percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      serverToolRequests:
-        rawUsage.server_tool_use?.web_search_requests || undefined,
+      cachedInputTokens: nonZeroOrUndefined(cacheRead),
+      cacheCreationTokens: nonZeroOrUndefined(cacheCreation),
+      percentageCached: computeCachePercentage(
+        cacheRead + cacheCreation,
+        totalInput,
+      ),
+      serverToolRequests: nonZeroOrUndefined(
+        rawUsage.server_tool_use?.web_search_requests,
+      ),
       _native: rawUsage,
     };
   }
@@ -1698,27 +1777,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const thinkingBlocks: BetaThinkingContent[] = [];
     let regularThinkingContent: string | null = null;
 
-    try {
-      if (responseObject.content && Array.isArray(responseObject.content)) {
-        // Collect all thinking and redacted_thinking blocks using type guards
-        for (const item of responseObject.content) {
-          if (isBetaThinkingBlock(item) && item.thinking) {
-            thinkingBlocks.push(item);
-            // Save the first regular thinking content for returning
-            if (regularThinkingContent === null) {
-              regularThinkingContent = item.thinking;
-            }
-          } else if (isBetaRedactedThinkingBlock(item) && item.data) {
-            thinkingBlocks.push(item);
+    if (responseObject.content && Array.isArray(responseObject.content)) {
+      for (const item of responseObject.content) {
+        if (isBetaThinkingBlock(item) && item.thinking) {
+          thinkingBlocks.push(item);
+          if (regularThinkingContent === null) {
+            regularThinkingContent = item.thinking;
           }
+        } else if (isBetaRedactedThinkingBlock(item) && item.data) {
+          thinkingBlocks.push(item);
         }
       }
-    } catch (e) {
-      this.logger.error(
-        `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        { data: e },
-      );
-      return null;
     }
 
     if (thinkingBlocks.length === 0) {

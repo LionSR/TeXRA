@@ -92,26 +92,22 @@ export class StreamTabs {
   _buildTooltip(info, includeLastActivity = false) {
     if (!info) return '';
 
-    const parts = [
+    const mainParts = [
       info.label,
       info.model && `Model: ${info.model}`,
       info.inputFile && `Input: ${info.inputFile}`,
     ].filter(Boolean);
 
+    const mainLine = mainParts.join(' • ');
+
+    // Add last activity on separate line if requested and available
     if (includeLastActivity && info.lastTimestamp) {
       const lastSeen = formatRelativeTime(info.lastTimestamp);
-      if (lastSeen) {
-        parts.push(`Last activity ${lastSeen}`);
-      }
+      if (lastSeen && mainLine) return `${mainLine}\nLast activity ${lastSeen}`;
+      if (lastSeen) return `Last activity ${lastSeen}`;
     }
 
-    // Use bullet separator for inline parts, newline for last activity
-    if (includeLastActivity && parts.length > 1) {
-      const lastPart = parts.pop();
-      return `${parts.join(' • ')}\n${lastPart}`;
-    }
-
-    return parts.join(' • ');
+    return mainLine;
   }
 
   /**
@@ -223,19 +219,12 @@ export class StreamTabs {
 
   /**
    * Apply or remove a property-based decorator icon.
-   * @param {HTMLElement} tabEl - The tab element
-   * @param {string} selector - CSS selector for the icon element
-   * @param {boolean} condition - Whether to show the decorator
-   * @param {string} property - Property key in AGENT_DECORATORS.properties
    */
   _applyPropertyDecorator(tabEl, selector, condition, property) {
     const iconEl = tabEl.querySelector(selector);
     if (!iconEl) return;
 
-    if (!condition) {
-      iconEl.remove();
-      return;
-    }
+    if (!condition) return iconEl.remove();
 
     const { icon, hint } = AGENT_DECORATORS.properties[property];
     applyCodiconClass(iconEl, icon);

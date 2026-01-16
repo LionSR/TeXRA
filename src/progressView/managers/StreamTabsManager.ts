@@ -108,23 +108,14 @@ export class StreamTabsManager extends PersistentMapManager<
     }
   }
 
-  /** Serialize messages before saving */
-  protected override serialize(
-    value: LogMessageData[],
-    _key: StreamTabId,
-  ): unknown {
-    return value;
-  }
-
-  /** Normalize loaded messages */
-  protected override async deserialize(
+  /** Normalize loaded messages with shallow copies for independence */
+  protected override deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<LogMessageData[]> {
+  ): LogMessageData[] {
     if (!Array.isArray(data)) {
       return [];
     }
-
     return data.map((entry) => ({ ...entry })) as LogMessageData[];
   }
 }
