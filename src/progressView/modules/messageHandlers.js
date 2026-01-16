@@ -815,41 +815,51 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  /**
+   * Handle full usage update (replaces all run usage for a stream).
+   *
+   * Always saves state regardless of active stream to prevent race conditions
+   * where messages arrive before UPDATE_STREAMS sets state.activeStream.
+   */
   handleUpdateUsage(message) {
-    if (message.stream && !this._isActiveStream(message)) {
-      return;
-    }
-
     const targetStream = this._getTargetStream(message);
     if (!targetStream) {
       return;
     }
 
+    // Always save state - ensures data available when switching streams
     state.clearRunUsage(targetStream);
     const usageByRun = message.usageByRun ?? {};
     Object.entries(usageByRun).forEach(([runId, usage]) => {
       state.setRunUsage(targetStream, runId, usage);
     });
-    this._refreshUsageForActiveRun();
+
+    // Only refresh display for active stream
+    if (targetStream === state.activeStream) {
+      this._refreshUsageForActiveRun();
+    }
   }
 
   /**
    * Handle incremental usage update for a single run.
    * More efficient than handleUpdateUsage during streaming.
+   *
+   * Always saves state regardless of active stream to prevent race conditions
+   * where messages arrive before UPDATE_STREAMS sets state.activeStream.
    */
   handleUpdateRunUsage(message) {
-    if (message.stream && !this._isActiveStream(message)) {
-      return;
-    }
-
     const targetStream = this._getTargetStream(message);
     if (!targetStream || !message.runId) {
       return;
     }
 
-    // Update only the specific run's usage without clearing others
+    // Always save state - ensures data available when switching streams
     state.setRunUsage(targetStream, message.runId, message.usage);
-    this._refreshUsageForActiveRun();
+
+    // Only refresh display for active stream
+    if (targetStream === state.activeStream) {
+      this._refreshUsageForActiveRun();
+    }
   }
 
   /**
