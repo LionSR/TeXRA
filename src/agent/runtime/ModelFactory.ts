@@ -36,6 +36,8 @@ const PROVIDER_HANDLERS = new Map<
 
 /** Check if OpenAI model should use Responses API. */
 function shouldUseResponsesAPI(config: ModelConfig): boolean {
+  // openRouterOnly models must always route through OpenRouter
+  if (config.openRouterOnly) return false;
   if (config.requiresResponsesAPI) return true;
   if (!getConfig<boolean>('texra.model.useOpenRouter', false)) {
     return (
