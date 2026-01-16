@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -12,47 +13,6 @@ const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);
 
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
-
-async function waitForDiagnosticsUpdate(
-  targetUri: vscode.Uri,
-  timeoutMs: number = DIAGNOSTIC_UPDATE_TIMEOUT_MS,
-): Promise<void> {
-  if (timeoutMs <= 0) {
-    return;
-  }
-
-  const targetKey = targetUri.toString();
-
-  await new Promise<void>((resolve) => {
-    let settled = false;
-
-    const diagnosticsDisposable = vscode.languages.onDidChangeDiagnostics(
-      (event) => {
-        if (event.uris.some((uri) => uri.toString() === targetKey)) {
-          finish();
-        }
-      },
-    );
-
-    const timeoutHandle = setTimeout(() => {
-      logger.debug(
-        CHANNEL,
-        `Timed out waiting for diagnostics update for ${targetUri.fsPath}`,
-      );
-      finish();
-    }, timeoutMs);
-
-    function finish(): void {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeoutHandle);
-      diagnosticsDisposable.dispose();
-      resolve();
-    }
-  });
-}
 
 /**
  * Trigger a LaTeX build for a specific file
@@ -107,7 +67,10 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
 
     // Start listening for diagnostics updates before triggering the build
     // to ensure we don't miss the event if the build completes quickly
-    const diagnosticsWait = waitForDiagnosticsUpdate(fileUri);
+    const diagnosticsWait = waitForDiagnosticsChange(
+      fileUri,
+      DIAGNOSTIC_UPDATE_TIMEOUT_MS,
+    );
 
     try {
       await vscode.commands.executeCommand('latex-workshop.build', fileUri);

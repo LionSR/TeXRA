@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
+import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -123,75 +124,6 @@ async function openFileInEditor(
 // ============================================================================
 
 /**
- * Wait for diagnostics to become available using event subscription
- * with polling fallback for robustness.
- *
- * Uses vscode.languages.onDidChangeDiagnostics event (recommended by VS Code)
- * combined with polling to handle edge cases where events might be missed.
- */
-async function waitForDiagnostics(
-  file: string,
-  maxWaitMs: number = 3000,
-): Promise<vscodeIntegration.LeanDiagnostic[]> {
-  // Resolve to absolute path using workspace folder
-  const absolutePath = resolveFilePath(file);
-  const uri = vscode.Uri.file(absolutePath);
-  const startTime = Date.now();
-  const pollInterval = 200;
-
-  // Quick initial check - diagnostics may already be available
-  const diagnostics = vscodeIntegration.getDiagnostics(absolutePath);
-  if (diagnostics.length > 0) {
-    return diagnostics;
-  }
-
-  // Set up promise that resolves on diagnostic change event
-  const waitForChange = new Promise<vscodeIntegration.LeanDiagnostic[]>(
-    (resolve) => {
-      const disposable = vscode.languages.onDidChangeDiagnostics((e) => {
-        // Check if this event is for our file (case-insensitive path match)
-        const hasOurFile = e.uris.some(
-          (diagUri) =>
-            diagUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase(),
-        );
-
-        if (hasOurFile) {
-          const updated = vscodeIntegration.getDiagnostics(absolutePath);
-          if (updated.length > 0) {
-            disposable.dispose();
-            resolve(updated);
-          }
-        }
-      });
-
-      // Cleanup subscription on timeout
-      setTimeout(() => disposable.dispose(), maxWaitMs);
-    },
-  );
-
-  // Polling fallback - handles cases where events might be missed
-  const pollFallback = new Promise<vscodeIntegration.LeanDiagnostic[]>(
-    (resolve) => {
-      const pollTimer = setInterval(() => {
-        if (Date.now() - startTime >= maxWaitMs) {
-          clearInterval(pollTimer);
-          resolve(vscodeIntegration.getDiagnostics(absolutePath));
-        } else {
-          const updated = vscodeIntegration.getDiagnostics(absolutePath);
-          if (updated.length > 0) {
-            clearInterval(pollTimer);
-            resolve(updated);
-          }
-        }
-      }, pollInterval);
-    },
-  );
-
-  // Race: return whichever resolves first (event or polling)
-  return Promise.race([waitForChange, pollFallback]);
-}
-
-/**
  * Get diagnostics for a file from VS Code.
  */
 export class LeanDiagnosticsTool extends defineTool({
@@ -233,8 +165,13 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      // Wait for Lean to process and populate diagnostics (using the resolved path)
-      const diagnostics = await waitForDiagnostics(openedPath);
+      // Check if diagnostics already available, otherwise wait for Lean to process
+      const uri = vscode.Uri.file(openedPath);
+      let diagnostics = vscodeIntegration.getDiagnostics(openedPath);
+      if (diagnostics.length === 0) {
+        await waitForDiagnosticsChange(uri, 3000);
+        diagnostics = vscodeIntegration.getDiagnostics(openedPath);
+      }
 
       // Position at first error if any
       const firstError = diagnostics.find((d) => d.severity === E);
