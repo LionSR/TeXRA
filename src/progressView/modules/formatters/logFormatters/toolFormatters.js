@@ -157,7 +157,9 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   // Show error if present and not superseded by user feedback
   if (errorText && !isUserFeedback) {
-    sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
+    sections.push(
+      buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),
+    );
   }
 
   // Show user instruction as supplementary note/warning if present
