@@ -18,12 +18,12 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import {
   formatProviderHttpError,
   type ProviderError,
   type RetryErrorInfo,
 } from '@common/errors';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
