@@ -378,10 +378,15 @@ export async function getGoalState(
 ): Promise<LeanGoalState | undefined> {
   const client = await getLeanClient(filePath);
   if (!client) {
+    logger.debug('Lean4', `No Lean client found for: ${filePath}`);
     return undefined;
   }
 
   const uri = resolveFileUri(filePath);
+  logger.debug(
+    'Lean4',
+    `getGoalState: ${uri.toString()} at ${line}:${character}`,
+  );
 
   try {
     const result = await client.sendRequest(LSP_METHOD.PLAIN_GOAL, {
@@ -389,12 +394,19 @@ export async function getGoalState(
       position: { line, character },
     });
 
+    logger.debug('Lean4', `plainGoal result: ${JSON.stringify(result)}`);
+
     if (!result || !isObject(result)) {
+      logger.debug('Lean4', 'plainGoal: no result or not an object');
       return undefined;
     }
 
     // Handle response with goals array - validate each item is a string
     if ('goals' in result && Array.isArray(result.goals)) {
+      logger.debug(
+        'Lean4',
+        `Found goals array with ${result.goals.length} items`,
+      );
       const validGoals = result.goals.filter(
         (g): g is string => typeof g === 'string',
       );
@@ -407,10 +419,16 @@ export async function getGoalState(
               : undefined,
         };
       }
+      // Goals array exists but is empty - no goals at this position
+      logger.debug('Lean4', 'Goals array is empty');
     }
 
     // Handle response with only rendered string
     if ('rendered' in result && typeof result.rendered === 'string') {
+      logger.debug(
+        'Lean4',
+        `Found rendered string: ${result.rendered.substring(0, 100)}...`,
+      );
       return {
         goals: [result.rendered],
         rendered: result.rendered,
