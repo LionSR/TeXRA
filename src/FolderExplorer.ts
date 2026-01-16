@@ -64,18 +64,14 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   getTreeItem(element: FileItem): vscode.TreeItem {
+    const isFile =
+      element.collapsibleState === vscode.TreeItemCollapsibleState.None;
     if (element.editing) {
       element.contextValue = 'editing';
     } else if (element.isBuiltIn) {
-      element.contextValue =
-        element.collapsibleState === vscode.TreeItemCollapsibleState.None
-          ? 'builtInFile'
-          : 'builtInFolder';
+      element.contextValue = isFile ? 'builtInFile' : 'builtInFolder';
     } else {
-      element.contextValue =
-        element.collapsibleState === vscode.TreeItemCollapsibleState.None
-          ? 'file'
-          : 'folder';
+      element.contextValue = isFile ? 'file' : 'folder';
     }
     return element;
   }
@@ -166,12 +162,14 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         }
       }
 
+      // Sort: folders first, then alphabetically by label
       return items.sort((a, b) => {
-        if (a.collapsibleState !== b.collapsibleState) {
-          return b.collapsibleState ===
-            vscode.TreeItemCollapsibleState.Collapsed
-            ? 1
-            : -1;
+        const aIsFolder =
+          a.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+        const bIsFolder =
+          b.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+        if (aIsFolder !== bIsFolder) {
+          return bIsFolder ? 1 : -1;
         }
         return a.label!.toString().localeCompare(b.label!.toString());
       });
