@@ -69,14 +69,11 @@ const MAX_ERROR_LENGTH = 500;
  * ```
  */
 export function formatError(prefix: string, err: unknown): string {
-  let detail = toErrorMessage(err);
-
-  // Truncate overly long error details for better readability
-  if (detail.length > MAX_ERROR_LENGTH) {
-    detail = `${detail.substring(0, MAX_ERROR_LENGTH)}...`;
-  }
-
-  return `${prefix}: ${detail}`;
+  const detail = toErrorMessage(err);
+  const truncated = detail.length > MAX_ERROR_LENGTH
+    ? `${detail.substring(0, MAX_ERROR_LENGTH)}...`
+    : detail;
+  return `${prefix}: ${truncated}`;
 }
 
 /**
@@ -150,15 +147,10 @@ export function formatZodError(error: z.ZodError): string {
  * ```
  */
 export function isFileNotFoundError(err: unknown): boolean {
-  // VS Code FileSystemError (explicit check for type safety)
-  if (err instanceof vscode.FileSystemError) {
-    return err.code === 'FileNotFound';
-  }
+  // VS Code FileSystemError
+  if (err instanceof vscode.FileSystemError) return err.code === 'FileNotFound';
   // Node.js filesystem errors (ENOENT)
-  if (err && typeof err === 'object' && 'code' in err) {
-    return (err as { code: string }).code === 'ENOENT';
-  }
-  return false;
+  return (err as { code?: string })?.code === 'ENOENT';
 }
 
 /**
