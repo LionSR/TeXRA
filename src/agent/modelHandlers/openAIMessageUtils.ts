@@ -14,7 +14,9 @@ type MessageLike = {
 type ContentArray = Array<Record<string, unknown>>;
 
 /** Type guard for text content items in message content arrays. */
-function isTextContentItem(item: unknown): item is { type: string; text: string } {
+function isTextContentItem(
+  item: unknown,
+): item is { type: string; text: string } {
   return (
     item !== null &&
     typeof item === 'object' &&
