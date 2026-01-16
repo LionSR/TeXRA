@@ -228,6 +228,17 @@ const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 10;
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
+ * Model patterns that require temperature removal when thinking is enabled.
+ * Per Anthropic docs, Claude 4 and Claude 3.7 Sonnet models don't support temperature with thinking.
+ */
+const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
+  'claude-opus-4',
+  'claude-sonnet-4',
+  'claude-haiku-4',
+  'claude-3-7-sonnet',
+];
+
+/**
  * Extended response type for countTokens with context_management.
  * The SDK doesn't export this, so we define it here for type safety.
  */
@@ -525,14 +536,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
 
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
-      if (
-        this.config.fullName.includes('claude-opus-4') ||
-        this.config.fullName.includes('claude-opus-4-5') ||
-        this.config.fullName.includes('claude-sonnet-4-5') ||
-        this.config.fullName.includes('claude-sonnet-4') ||
-        this.config.fullName.includes('claude-haiku-4-5') ||
-        this.config.fullName.includes('claude-3-7-sonnet')
-      ) {
+      const requiresNoTemperature = THINKING_TEMPERATURE_EXCLUDED_PATTERNS.some(
+        (pattern) => this.config.fullName.includes(pattern),
+      );
+      if (requiresNoTemperature) {
         delete options.temperature;
       }
     }
@@ -1643,29 +1650,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ? secondLastMessage.content.filter(isAnyThinkingBlockParam)
           : [];
 
-        // Anthropic models should include thinking blocks first in the content array
-        // Add all thinking blocks from workspaceState if we have them
+        // Log if we have thinking blocks from previous message
         if (thinkingBlocks.length > 0) {
-          // if we have thinking blocks, then we use them
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            } as ContentBlockParam);
-          }
-        } else {
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            } as ContentBlockParam);
-          }
         }
 
+        // Append text content to the previous assistant message and update cache control
         if (Array.isArray(secondLastMessage.content)) {
+          secondLastMessage.content.push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          } as ContentBlockParam);
           this.assignCacheControlToLatest(secondLastMessage.content);
         }
 
@@ -1683,10 +1680,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         'Last message is a request message rather than a ask to continue after cut off',
       );
       // Create a new assistant message with the response
-      const assistantMessage: MessageParam = {
-        role: 'assistant',
-        content: [],
-      };
+      const content: ContentBlockParam[] = [];
 
       // Include all thinking blocks from workspaceState if available
       if (
@@ -1696,30 +1690,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.logger.debug(
           `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
-        if (Array.isArray(assistantMessage.content)) {
-          // Include thinking blocks from workspace state in the message content
-          assistantMessage.content.push(
-            ...(workspaceState.reasoning
-              .thinkingBlocks as AnthropicThinkingContentParam[]),
-          );
-        }
+        content.push(
+          ...(workspaceState.reasoning
+            .thinkingBlocks as AnthropicThinkingContentParam[]),
+        );
         // Clear cached thinking so the next response can store fresh blocks
         workspaceState.resetReasoning();
       }
 
       // Add the text content
-      if (Array.isArray(assistantMessage.content)) {
-        assistantMessage.content.push({
-          type: 'text',
-          text: workspaceState.assembly.accumulatedOutput,
-        } as ContentBlockParam);
-      }
+      content.push({
+        type: 'text',
+        text: workspaceState.assembly.accumulatedOutput,
+      } as ContentBlockParam);
 
-      messages.push(assistantMessage);
-
-      if (Array.isArray(assistantMessage.content)) {
-        this.assignCacheControlToLatest(assistantMessage.content);
-      }
+      this.assignCacheControlToLatest(content);
+      messages.push({ role: 'assistant', content });
 
       this.logger.debug('Added a new assistant message');
     }

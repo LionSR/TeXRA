@@ -13,6 +13,16 @@ type MessageLike = {
 
 type ContentArray = Array<Record<string, unknown>>;
 
+/** Type guard for text content items in message content arrays. */
+function isTextContentItem(item: unknown): item is { type: string; text: string } {
+  return (
+    item !== null &&
+    typeof item === 'object' &&
+    (item as { type?: unknown }).type === 'text' &&
+    typeof (item as { text?: unknown }).text === 'string'
+  );
+}
+
 function mergeMessageContent(
   previous: MessageLike,
   current: MessageLike,
@@ -109,15 +119,8 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     working.forEach((message) => {
       if (Array.isArray(message.content)) {
         // Extract text from content array items and join with newlines
-        // Filter defensively to handle null/undefined items
         message.content = (message.content as Array<unknown>)
-          .filter(
-            (item): item is { type: string; text: string } =>
-              item !== null &&
-              typeof item === 'object' &&
-              (item as { type?: unknown }).type === 'text' &&
-              typeof (item as { text?: unknown }).text === 'string',
-          )
+          .filter(isTextContentItem)
           .map((item) => item.text)
           .join('\n');
       }
