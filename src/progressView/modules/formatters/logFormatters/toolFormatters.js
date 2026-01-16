@@ -15,8 +15,8 @@ import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import {
   QUERY_PREVIEW_MAX_LENGTH,
   HEADER_SUMMARY_MAX_LENGTH,
-  truncateWithEllipsis,
 } from '../constants.js';
+import { truncateWithEllipsis } from '../textUtils.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
