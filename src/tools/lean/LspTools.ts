@@ -14,6 +14,7 @@ import {
 } from '@frontend/vscode/vscodeDiagnostics';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - VS Code integration
 import * as vscodeIntegration from './VscodeIntegration';
@@ -62,8 +63,9 @@ Returns diagnostics from the Lean 4 VS Code extension including:
 - Unsolved goals
 - Warnings and hints
 
-Note: If Lean cannot load the file (e.g., bad imports), errors may only appear
-in the Lean 4 output panel, not as LSP diagnostics.
+Tips:
+- If diagnostics seem stale, call lean_restart first to refresh the Lean server
+- Import/dependency errors may only appear in the Lean 4 output panel
 
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanDiagnosticsInputSchema,
@@ -72,7 +74,15 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const { command, file } = input;
 
     try {
-      // Open file first to trigger Lean processing - this is REQUIRED
+      // Resolve the path first to set up the listener
+      const absolutePath = WorkspaceFS.toAbsolute(file);
+      const uri = vscode.Uri.file(absolutePath);
+
+      // Start listening for diagnostics BEFORE opening the file
+      // This ensures we don't miss the initial diagnostics event
+      const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
+
+      // Open file to trigger Lean processing
       const openedPath = await openFileInEditor(file);
       if (!openedPath) {
         return {
@@ -82,15 +92,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
 
-      // Get diagnostics - wait for Lean to process if needed
-      const uri = vscode.Uri.file(openedPath);
-      let diagnostics = vscodeIntegration.getDiagnostics(openedPath);
+      // Wait for Lean to publish diagnostics
+      await diagnosticsWait;
 
-      // If no diagnostics yet, wait for Lean to publish them (event-based)
-      if (diagnostics.length === 0) {
-        await waitForDiagnosticsChange(uri, 10000);
-        diagnostics = vscodeIntegration.getDiagnostics(openedPath);
-      }
+      // Now get the diagnostics
+      const diagnostics = vscodeIntegration.getDiagnostics(openedPath);
 
       // Position at first error if any
       const firstError = diagnostics.find(
