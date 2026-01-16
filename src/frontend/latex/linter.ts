@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-import { ensureFileOpen } from '@common/vscodeEditor';
-import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
+import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
+import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 
 // Local imports
 import * as logger from '@logger/logUtils';
