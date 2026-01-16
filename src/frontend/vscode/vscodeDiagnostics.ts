@@ -95,6 +95,14 @@ export function getSeverityLabel(severity: vscode.DiagnosticSeverity): string {
   return SEVERITY_LABELS[severity] ?? 'unknown';
 }
 
+/** Map from severity to counts key */
+const SEVERITY_TO_COUNT_KEY: Record<vscode.DiagnosticSeverity, keyof SeverityCounts> = {
+  [vscode.DiagnosticSeverity.Error]: 'errors',
+  [vscode.DiagnosticSeverity.Warning]: 'warnings',
+  [vscode.DiagnosticSeverity.Information]: 'info',
+  [vscode.DiagnosticSeverity.Hint]: 'hints',
+};
+
 /**
  * Count diagnostics by severity level.
  */
@@ -104,20 +112,8 @@ export function countBySeverity(
   const counts: SeverityCounts = { errors: 0, warnings: 0, info: 0, hints: 0 };
 
   for (const d of diagnostics) {
-    switch (d.severity) {
-      case vscode.DiagnosticSeverity.Error:
-        counts.errors++;
-        break;
-      case vscode.DiagnosticSeverity.Warning:
-        counts.warnings++;
-        break;
-      case vscode.DiagnosticSeverity.Information:
-        counts.info++;
-        break;
-      case vscode.DiagnosticSeverity.Hint:
-        counts.hints++;
-        break;
-    }
+    const key = SEVERITY_TO_COUNT_KEY[d.severity];
+    if (key) counts[key]++;
   }
 
   return counts;
