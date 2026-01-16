@@ -67,18 +67,26 @@ function formatError(error: unknown, hint?: string): string {
 
 /**
  * Open a file in VS Code and position cursor at given line.
- * This allows the user to see the Lean 4 InfoView showing goal state and diagnostics.
+ * This triggers the Lean 4 extension to process the file.
+ * Returns the absolute file path that was opened.
  */
-async function openFileAtPosition(
+async function openFileInEditor(
   filePath: string,
   line?: number,
   column?: number,
-): Promise<void> {
+): Promise<string | undefined> {
   try {
-    const uri = vscode.Uri.file(filePath);
+    // Resolve to absolute path
+    const absolutePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(filePath);
+    const uri = vscode.Uri.file(absolutePath);
+
+    logger.debug('Lean4', `Opening file: ${absolutePath}`);
+
     const document = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(document, {
-      preserveFocus: false, // Focus the editor so InfoView updates
+      preserveFocus: false, // Focus the editor so Lean extension activates
       preview: false, // Don't use preview mode
     });
 
@@ -93,9 +101,12 @@ async function openFileAtPosition(
         vscode.TextEditorRevealType.InCenterIfOutsideViewport,
       );
     }
+
+    logger.debug('Lean4', `File opened successfully: ${absolutePath}`);
+    return absolutePath;
   } catch (error) {
-    // Opening file is a nice-to-have for user visibility, not critical for tool operation
-    logger.debug('Lean4', `Failed to open file in editor: ${error}`);
+    logger.debug('Lean4', `Failed to open file: ${filePath}: ${error}`);
+    return undefined;
   }
 }
 
@@ -131,11 +142,22 @@ Example output:
     const col = column ?? undefined;
     const { line: lspLine, character } = toZeroIndexed(line, col);
 
-    await openFileAtPosition(file, line, col);
+    // Open file first - required for Lean extension to process it
+    const openedPath = await openFileInEditor(file, line, col);
+    if (!openedPath) {
+      return {
+        summary: 'Failed to open file',
+        output: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
+        isError: true,
+      };
+    }
 
     try {
+      // Small delay to let Lean process the position
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const goalState = await vscodeIntegration.getGoalState(
-        file,
+        openedPath,
         lspLine,
         character,
       );
@@ -144,7 +166,8 @@ Example output:
         return {
           summary: `No goal state at line ${line}`,
           output:
-            'No proof goal found at this position. This may not be inside a tactic proof.',
+            'No proof goal found at this position. This may not be inside a tactic proof, ' +
+            'or Lean is still processing the file.',
         };
       }
 
@@ -270,16 +293,23 @@ Requires: Lean 4 VS Code extension installed and active.`,
     } = vscodeIntegration.DiagnosticSeverity;
 
     try {
-      // Open file first to trigger Lean processing
-      await openFileAtPosition(file);
+      // Open file first to trigger Lean processing - this is REQUIRED
+      const openedPath = await openFileInEditor(file);
+      if (!openedPath) {
+        return {
+          summary: 'Failed to open file',
+          output: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
+          isError: true,
+        };
+      }
 
-      // Wait for Lean to process and populate diagnostics
-      const diagnostics = await waitForDiagnostics(file);
+      // Wait for Lean to process and populate diagnostics (using the resolved path)
+      const diagnostics = await waitForDiagnostics(openedPath);
 
       // Position at first error if any
       const firstError = diagnostics.find((d) => d.severity === E);
       if (firstError) {
-        await openFileAtPosition(file, firstError.range.start.line + 1);
+        await openFileInEditor(openedPath, firstError.range.start.line + 1);
       }
 
       if (diagnostics.length === 0) {
