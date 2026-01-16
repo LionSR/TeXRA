@@ -215,26 +215,16 @@ export function formatAttachmentSummaryFromNotes(
   variant: AttachmentSummaryVariant = 'metadata-only',
 ): string {
   const header = ATTACHMENT_SUMMARY_TEMPLATES[variant];
-  const needsReadHint = variant !== 'included-inline';
-  return needsReadHint
-    ? `${header}\n${notes}\n${READ_FILE_HINT}`
-    : `${header}\n${notes}`;
+  const hint = variant !== 'included-inline' ? `\n${READ_FILE_HINT}` : '';
+  return `${header}\n${notes}${hint}`;
 }
 
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {
-  if (attachment.bytes && attachment.bytes.length > 0) {
-    return Buffer.from(attachment.bytes);
-  }
-
-  if (attachment.base64Data && attachment.base64Data.length > 0) {
-    return Buffer.from(attachment.base64Data, 'base64');
-  }
-
-  if (attachment.path && attachment.path.length > 0) {
-    return WorkspaceFS.readFileBytes(attachment.path);
-  }
+  if (attachment.bytes?.length) return Buffer.from(attachment.bytes);
+  if (attachment.base64Data?.length) return Buffer.from(attachment.base64Data, 'base64');
+  if (attachment.path?.length) return WorkspaceFS.readFileBytes(attachment.path);
 
   throw new Error('Attachment did not include bytes, base64 data, or a path.');
 }
