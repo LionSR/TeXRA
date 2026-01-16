@@ -152,7 +152,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    ensureAgentTypeForSource(settings, entry.source);
+    settings = ensureAgentTypeForSource(settings, entry.source);
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {
