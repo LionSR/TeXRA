@@ -16,6 +16,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
 import {
   AgentTypeFilter,
   isAgentTypeFilter,
@@ -161,6 +162,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleToolEditApprovalAction.bind(this),
       [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]:
         this.handleToggleToolEditApprovalBypass.bind(this),
+      [PROGRESS_VIEW_COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION]:
+        this.handleWorkflowAgentProposalAction.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -445,6 +448,30 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? 'YOLO mode enabled: Tool edits will be auto-approved for this session.'
       : 'YOLO mode disabled: Tool edits will prompt for approval.';
     await vscode.window.showInformationMessage(message);
+  }
+
+  private async handleWorkflowAgentProposalAction(message: any): Promise<void> {
+    const { proposalId, action } = message;
+    if (!proposalId || !action) {
+      this.logger.warn(
+        this.channel,
+        'Workflow agent proposal action missing proposalId or action',
+        { data: message },
+      );
+      return;
+    }
+
+    if (action === 'approve') {
+      proposalCoordinator.approveProposal(proposalId);
+    } else if (action === 'reject') {
+      proposalCoordinator.rejectProposal(proposalId);
+    } else {
+      this.logger.warn(
+        this.channel,
+        `Unknown workflow agent proposal action: ${action}`,
+        { data: message },
+      );
+    }
   }
 
   private async handleOpenTaskStorage(message: any): Promise<void> {
