@@ -5,7 +5,10 @@ import * as vscode from 'vscode';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
-import { countBySeverity, getSeverityLabel } from '@common/vscodeDiagnostics';
+import {
+  countBySeverity,
+  getSeverityLabel,
+} from '@frontend/vscode/vscodeDiagnostics';
 import { getLinterMessages } from '@frontend/latex/linter';
 import {
   getActiveEditorWithGuards,
