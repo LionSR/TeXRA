@@ -64,8 +64,6 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
-  'approveAll',
-  'resumeApprovals',
   'showLatexdiff',
   'previewProposed',
 ] as const;
@@ -149,18 +147,15 @@ async function readCurrentContent(
   }
 }
 
-function enableSessionApprovalBypass(): void {
-  approvalsBypassedForSession = true;
-  notifyProgressViewApprovalBypassState();
-}
-
 export function setToolEditApprovalSessionBypass(enabled: boolean): void {
   approvalsBypassedForSession = enabled;
   notifyProgressViewApprovalBypassState();
 }
 
-export function resetToolEditApprovalSessionBypass(): void {
-  setToolEditApprovalSessionBypass(false);
+export function toggleToolEditApprovalSessionBypass(): boolean {
+  const newState = !approvalsBypassedForSession;
+  setToolEditApprovalSessionBypass(newState);
+  return newState;
 }
 
 export function initializeToolEditApproval(
@@ -675,18 +670,7 @@ export async function handleProgressViewToolEditApprovalAction(
   payload: ProgressViewApprovalActionPayload,
 ): Promise<void> {
   const entry = pendingApprovals.get(payload.requestId);
-  if (!entry) {
-    return;
-  }
-
-  // State modification action - no isSettled check needed
-  if (payload.action === 'resumeApprovals') {
-    resetToolEditApprovalSessionBypass();
-    return;
-  }
-
-  // All other actions require the entry to not be settled
-  if (entry.isSettled()) {
+  if (!entry || entry.isSettled()) {
     return;
   }
 
@@ -713,11 +697,7 @@ export async function handleProgressViewToolEditApprovalAction(
       await previewProposedLatex(entry);
       break;
 
-    case 'approve':
-    case 'approveAll': {
-      if (payload.action === 'approveAll') {
-        enableSessionApprovalBypass();
-      }
+    case 'approve': {
       const appliedContent = await fs
         .readFile(entry.proposedUri.fsPath, 'utf-8')
         .catch(() => entry.proposedContent);
