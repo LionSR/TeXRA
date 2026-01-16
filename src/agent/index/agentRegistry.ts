@@ -400,10 +400,9 @@ async function scanYaml(
       category,
       agentType,
       description: validated.description,
-      defaultOutputFiles:
-        defaultOutputFiles && defaultOutputFiles.length > 0
-          ? defaultOutputFiles
-          : undefined,
+      defaultOutputFiles: defaultOutputFiles?.length
+        ? defaultOutputFiles
+        : undefined,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
@@ -435,27 +434,17 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
     // Build entries from grouped agents
     const entries: AgentEntry[] = [];
     for (const [baseName, { base, multiple }] of grouped) {
-      // Use base agent's metadata, or fall back to multiple if only _multiple exists
       const primary = base || multiple;
       if (!primary) continue;
 
-      // If only _multiple exists without a base, use full name as the entry name
-      const entryName = base ? baseName : primary.name;
-
-      // Determine category from agentCategory (new) or agentType (legacy)
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
-      const category = isToolUse
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
-      const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
-
       entries.push({
-        name: entryName,
+        name: base ? baseName : primary.name,
         source: 'remote' as AgentSource,
         path: '',
-        multiplePath: multiple ? multiple.name : undefined,
-        category,
-        agentType,
+        multiplePath: multiple?.name,
+        category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
+        agentType: isToolUse ? AgentType.ToolUse : AgentType.CoT,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
       });
@@ -644,15 +633,12 @@ function filterVisible(
     true,
   );
 
-  return entries.filter((entry) => {
-    // Remote agents auto-show when setting is enabled
-    if (entry.source === 'remote' && autoShowRemote) return true;
-    // Check if explicitly configured by source:name or just name
-    return (
+  return entries.filter(
+    (entry) =>
+      (entry.source === 'remote' && autoShowRemote) ||
       configured.has(createKey(entry.source, entry.name)) ||
-      configured.has(entry.name)
-    );
-  });
+      configured.has(entry.name),
+  );
 }
 
 function renderOptions(
