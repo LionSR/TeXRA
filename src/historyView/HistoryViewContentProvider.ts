@@ -16,8 +16,4 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
     super(context, 'HistoryView', HISTORY_VIEW_MODULES);
   }
-
-  protected getViewPath(): string {
-    return 'historyView';
-  }
 }
