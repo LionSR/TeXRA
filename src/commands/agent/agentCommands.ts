@@ -5,25 +5,12 @@ import * as vscode from 'vscode';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'AgentCommands';
-logger.initialize(CHANNEL);
 
 export function registerAgentCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.stopAgent', handleStopAgent),
+    vscode.commands.registerCommand('texra.stopAgent', (stream: string) => {
+      getInterruptible(stream)?.interrupt();
+      StreamStatusService.set(stream, STREAM_STATUS.STOPPED);
+    }),
   );
-}
-
-async function handleStopAgent(stream: string): Promise<void> {
-  // Get the running execution from the unified registry
-  // Handles both flow contexts and agent class instances
-  const execution = getInterruptible(stream);
-  if (execution) {
-    execution.interrupt();
-  }
-
-  // Update the UI status
-  StreamStatusService.set(stream, STREAM_STATUS.STOPPED);
 }
