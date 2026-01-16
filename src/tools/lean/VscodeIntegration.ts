@@ -241,7 +241,36 @@ export async function isLean4ExtensionAvailable(): Promise<boolean> {
 export function getDiagnostics(filePath: string): LeanDiagnostic[] {
   try {
     const uri = resolveFileUri(filePath);
-    const diagnostics = vscode.languages.getDiagnostics(uri);
+    let diagnostics = vscode.languages.getDiagnostics(uri);
+
+    // If no diagnostics found, try to find by matching path in all diagnostics
+    if (diagnostics.length === 0) {
+      const allDiagnostics = vscode.languages.getDiagnostics();
+      const resolvedPath = uri.fsPath.toLowerCase();
+
+      for (const [diagUri, diags] of allDiagnostics) {
+        if (diagUri.fsPath.toLowerCase() === resolvedPath && diags.length > 0) {
+          diagnostics = diags;
+          logger.debug(
+            'Lean4',
+            `Found diagnostics via path match: ${diagUri.toString()}`,
+          );
+          break;
+        }
+      }
+
+      // Log available URIs for debugging
+      if (diagnostics.length === 0) {
+        const urisWithDiags = allDiagnostics
+          .filter(([, d]) => d.length > 0)
+          .map(([u]) => u.toString());
+        logger.debug(
+          'Lean4',
+          `No diagnostics for ${uri.toString()}. ` +
+            `Available: ${urisWithDiags.slice(0, 5).join(', ')}`,
+        );
+      }
+    }
 
     return diagnostics.map((d) => ({
       range: {
