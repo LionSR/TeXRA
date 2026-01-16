@@ -33,14 +33,7 @@ import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
-import {
-  LeanCheckTool,
-  LakeBuildTool,
-  LeanGoalTool,
-  LeanLspGoalTool,
-  LeanHoverTool,
-  LeanDiagnosticsTool,
-} from './lean';
+import { LakeBuildTool, LeanLspGoalTool, LeanDiagnosticsTool } from './lean';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -77,12 +70,9 @@ export function getDefaultToolRegistry(): IToolRegistry {
       web_search: new WebSearchTool(),
       todo_write: new TodoWriteTool(),
       memory: new MemoryTool(),
-      lean_check: new LeanCheckTool(),
+      // Lean 4 tools (uses VS Code extension)
       lake_build: new LakeBuildTool(),
-      lean_goal: new LeanGoalTool(),
-      // LSP-based Lean tools (uses Lean 4 VS Code extension)
       lean_lsp_goal: new LeanLspGoalTool(),
-      lean_hover: new LeanHoverTool(),
       lean_diagnostics: new LeanDiagnosticsTool(),
     });
   }

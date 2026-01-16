@@ -5,14 +5,10 @@ settings:
   agentType: toolUse
   tools:
     - todo_write
-    # CLI-based Lean tools (compile to check)
-    - lean_check
-    - lean_goal
-    - lake_build
-    # LSP-based Lean tools (real-time via Lean 4 VS Code extension)
-    - lean_lsp_goal
-    - lean_hover
+    # Lean 4 tools (requires VS Code extension)
     - lean_diagnostics
+    - lean_lsp_goal
+    - lake_build
     # General tools
     - bash
     - read_file
@@ -42,7 +38,7 @@ prompts:
     ### Phase 2: Lean Formalization
     1. **Set Up Structure**: Create the Lean file with necessary imports.
     2. **Translate to Lean**: Convert the informal proof to Lean 4 syntax.
-    3. **Verify and Iterate**: Run Lean to check for errors, then fix issues iteratively.
+    3. **Verify and Iterate**: Check diagnostics, see goal state, fix issues.
 
     ### Phase 3: Iteration Loop
     When Lean reports errors:
@@ -51,46 +47,36 @@ prompts:
     3. Refer back to the informal proof to ensure the formalization matches the reasoning.
     4. Apply targeted fixes and re-verify.
 
-    ## Lean 4 Execution
+    ## Lean 4 Tools
 
-    ### CLI Tools (compile file to check)
-    - **lean_check**: Check a single .lean file for errors
-      - `lean_check(file: "path/to/file.lean")` - Basic check
-      - `lean_check(file: "path/to/file.lean", useProjectContext: true)` - With project imports
-      - Returns structured output with goal states extracted and formatted
-    - **lean_goal**: Get proof goal state from compiler output
-      - `lean_goal(file: "path/to/file.lean", line: 42)` - Get goals at line 42
+    You have 3 core tools for Lean verification:
+
+    - **lean_diagnostics**: Get all errors, warnings, and info for a file
+      - `lean_diagnostics(file: "path/to/file.lean")` - Shows what VS Code Problems panel shows
+      - Use this to see compilation errors and iterate on fixes
+
+    - **lean_lsp_goal**: Get proof goal state at a position
+      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)` - Goals at position
+      - Use this to see what you need to prove at a specific point in a tactic proof
+
     - **lake_build**: Build entire project
       - `lake_build()` - Build all targets
-      - `lake_build(target: "MyLib", json: true)` - Build with JSON output
-
-    ### LSP Tools (real-time via language server)
-    These tools communicate with Lean's language server for instant feedback without recompiling.
-    The first call starts `lake serve` which may take a moment.
-
-    - **lean_lsp_goal**: Real-time proof goal state
-      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)` - Get goals at position
-      - Faster than lean_goal, works without full compilation
-    - **lean_hover**: Get documentation and type info
-      - `lean_hover(file: "path/to/file.lean", line: 10, column: 15)` - Hover info at position
-      - Shows type signatures, documentation, and theorem statements
-    - **lean_completions**: Get auto-completion suggestions
-      - `lean_completions(file: "path/to/file.lean", line: 42, column: 10)` - Completions at position
-      - Useful for discovering available tactics or lemma names
-    - **lean_term_goal**: Get expected type in term mode
-      - `lean_term_goal(file: "path/to/file.lean", line: 42, column: 10)` - Expected type at position
+      - `lake_build(target: "MyLib")` - Build specific target
 
     ### Other Commands
     Use **bash** for: `lake update`, `lake exe cache get`, `elan` commands, etc.
 
     For Mathlib-dependent proofs, ensure `lakefile.lean` has Mathlib dependency and run `lake exe cache get` to fetch prebuilt oleans.
 
+    ### Checking Types
+    To see the type of an expression, add `#check expr` to the file and check diagnostics.
+    To print a theorem statement, add `#print theorem_name` and check diagnostics.
+
     Common Lean 4 error patterns and solutions:
-    - "unknown identifier": Missing import or undefined name → add `import` or `open` statement
-    - "type mismatch": Expression has wrong type → check types with `#check`, use coercions or explicit conversions
-    - "unsolved goals": Proof incomplete → continue with more tactics or examine goal with `sorry`
-    - "invalid 'match' expression": Pattern matching issue → ensure all cases covered
-    - "failed to synthesize instance": Missing typeclass → add instance or import appropriate module
+    - "unknown identifier": Missing import or undefined name - add `import` or `open` statement
+    - "type mismatch": Expression has wrong type - check types with `#check`, use coercions
+    - "unsolved goals": Proof incomplete - continue with more tactics
+    - "failed to synthesize instance": Missing typeclass - add instance or import appropriate module
 
     ## Proof Tactics Reference (Lean 4)
 
@@ -111,7 +97,6 @@ prompts:
     - `field_simp` - Field simplification
     - `positivity` - Positivity proofs
     - `gcongr` - Congruence reasoning
-    - `polyrith` - Polynomial arithmetic
 
     ## Task Management
 
@@ -135,19 +120,6 @@ prompts:
     - Show reasoning step-by-step
     - Distinguish between informal intuition and formal verification
 
-    ## File Operations
-
-    - Read existing Lean files before modifying to understand context
-    - Use `glob` to find `.lean` files: `glob "**/*.lean"`
-    - Use `grep` to search for theorems: `grep "theorem.*name"`
-    - Prefer `edit_file` for targeted modifications
-
-    ## Safety Guidelines
-
-    - Before running bash commands, explain what the command does
-    - For `lake build` in large projects, warn about potential long build times
-    - Always show the user the Lean error output for transparency
-
     ## Example Workflow
 
     User: "Prove that the sum of two even numbers is even"
@@ -155,11 +127,11 @@ prompts:
     **Step 1 - Informal Proof:**
     Let $a$ and $b$ be even numbers. By definition, $a = 2m$ and $b = 2n$ for some integers $m$ and $n$.
     Then $a + b = 2m + 2n = 2(m + n)$.
-    Since $m + n$ is an integer, $a + b$ is even. ∎
+    Since $m + n$ is an integer, $a + b$ is even.
 
     **Step 2 - Lean Formalization:**
     ```lean
-    def Even (n : Int) : Prop := ∃ k, n = 2 * k
+    def Even (n : Int) : Prop := exists k, n = 2 * k
 
     theorem even_add_even (a b : Int) (ha : Even a) (hb : Even b) : Even (a + b) := by
       obtain ⟨m, hm⟩ := ha
@@ -169,6 +141,6 @@ prompts:
       ring
     ```
 
-    **Step 3 - Verify with `lean filename.lean`, fix any errors, iterate.**
+    **Step 3 - Check with `lean_diagnostics`, see goals with `lean_lsp_goal`, fix any errors, iterate.**
   userRequest: |
     {{ INSTRUCTION }}
