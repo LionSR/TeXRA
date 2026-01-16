@@ -8,9 +8,6 @@ export const historyCommands = {
   showHistory: 'texra.showAgentHistory',
 };
 
-/**
- * Register the commands related to agent execution history
- */
 export function registerHistoryCommands(
   context: vscode.ExtensionContext,
 ): void {

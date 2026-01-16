@@ -26,6 +26,11 @@ export const apiKeyCommands = {
   removeApiKey: 'texra.removeApiKey',
 };
 
+async function refreshApiKeyUI(): Promise<void> {
+  await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+  void vscode.commands.executeCommand('texra.refreshAllOptions');
+}
+
 // Helper function to set API key for a specific provider
 async function setApiKeyForProvider(
   provider: ApiProvider,
@@ -67,9 +72,7 @@ async function setApiKeyForProvider(
       apiKey,
     );
     vscode.window.showInformationMessage(`${provider} API key has been set`);
-    await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-    // Refresh both model and agent options (model availability may change)
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await refreshApiKeyUI();
     const view = await getMainWebview();
     view?.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
@@ -131,9 +134,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `${provider} API key has been removed`,
         );
-        await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-        // Refresh both model and agent options (model availability may change)
-        void vscode.commands.executeCommand('texra.refreshAllOptions');
+        await refreshApiKeyUI();
         const hasAnyKey = await SecretManager.anyApiKeyExists();
         const bannerCommand = hasAnyKey
           ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
