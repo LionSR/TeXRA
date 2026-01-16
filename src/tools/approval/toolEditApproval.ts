@@ -64,7 +64,6 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
-  'approveAll',
   'resumeApprovals',
   'showLatexdiff',
   'previewProposed',
@@ -147,11 +146,6 @@ async function readCurrentContent(
   } catch (_err) {
     return fallback;
   }
-}
-
-function enableSessionApprovalBypass(): void {
-  approvalsBypassedForSession = true;
-  notifyProgressViewApprovalBypassState();
 }
 
 export function setToolEditApprovalSessionBypass(enabled: boolean): void {
@@ -715,11 +709,7 @@ export async function handleProgressViewToolEditApprovalAction(
       await previewProposedLatex(entry);
       break;
 
-    case 'approve':
-    case 'approveAll': {
-      if (payload.action === 'approveAll') {
-        enableSessionApprovalBypass();
-      }
+    case 'approve': {
       const appliedContent = await fs
         .readFile(entry.proposedUri.fsPath, 'utf-8')
         .catch(() => entry.proposedContent);
