@@ -12,7 +12,10 @@ import {
   getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
+import {
+  QUERY_PREVIEW_MAX_LENGTH,
+  ERROR_TITLE_MAX_LENGTH,
+} from '../constants.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -111,8 +114,15 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   // Build title based on state
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-  const titleText = normalizedToolLog.headerSummary
-    ? `${titleBase} — ${normalizedToolLog.headerSummary}`
+
+  // Truncate header summary if too long
+  let headerSummary = normalizedToolLog.headerSummary || '';
+  if (headerSummary.length > ERROR_TITLE_MAX_LENGTH) {
+    headerSummary = headerSummary.slice(0, ERROR_TITLE_MAX_LENGTH) + '...';
+  }
+
+  const titleText = headerSummary
+    ? `${titleBase} — ${headerSummary}`
     : titleBase;
 
   if (headerLabel) {
