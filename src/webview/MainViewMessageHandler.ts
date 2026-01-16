@@ -417,29 +417,31 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(_message, webviewView);
     try {
-      const modelOptions = await computeModelOptions();
+      // Fetch options and auth status concurrently
+      const [modelOptions, agentOptions, authStatus] = await Promise.all([
+        computeModelOptions(),
+        computeAgentOptions(),
+        getAuthStatus(),
+      ]);
+
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         options: modelOptions,
       });
-
-      const agentOptions = await computeAgentOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         options: agentOptions,
       });
 
-      const showLoginBanner = getConfig<boolean>('ui.showLoginBanner', true);
-      const authStatus = await getAuthStatus();
-      if (showLoginBanner && !authStatus.authenticated) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
-        });
-      } else if (authStatus.authenticated) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        });
-      }
+      // Show login banner if not authenticated and banner not dismissed
+      const showBanner =
+        !authStatus.authenticated &&
+        getConfig<boolean>('ui.showLoginBanner', true);
+      webviewView.webview.postMessage({
+        command: showBanner
+          ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+      });
     } catch (error) {
       this.logger.error(
         this.channel,

@@ -381,35 +381,26 @@ async function resolveAgentBase(
 // Flow Execution Helpers
 // ============================================================================
 
+const STATUS_MESSAGES: Record<string, string> = {
+  [STREAM_STATUS.INITIALIZING]: 'already launching',
+  [STREAM_STATUS.RESUMING]: 'resuming',
+};
+
 /**
  * Acquire stream for execution or throw if already in use.
  * Must be called before expensive resolution to prevent race conditions.
- *
- * @param streamId - The stream ID to acquire
- * @param taskType - Type descriptor for error message (e.g., "Task", "Merge task")
- * @throws Error if stream is already initializing, running, or resuming
  */
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   taskType: string = 'Task',
 ): void {
-  if (!StreamStatusService.tryAcquire(streamId)) {
-    const currentStatus = StreamStatusService.get(streamId);
-    let statusMsg: string;
-    switch (currentStatus) {
-      case STREAM_STATUS.INITIALIZING:
-        statusMsg = 'already launching';
-        break;
-      case STREAM_STATUS.RESUMING:
-        statusMsg = 'resuming';
-        break;
-      default:
-        statusMsg = 'already running';
-    }
-    throw new Error(
-      `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
-    );
-  }
+  if (StreamStatusService.tryAcquire(streamId)) return;
+
+  const status = StreamStatusService.get(streamId) ?? '';
+  const statusMsg = STATUS_MESSAGES[status] || 'already running';
+  throw new Error(
+    `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+  );
 }
 
 /**
