@@ -4,14 +4,14 @@ import { z } from 'zod';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
-import { openFileInEditor } from '@common/vscodeEditor';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
   waitForDiagnosticsChange,
   countBySeverity,
   formatCounts,
   formatGroupedSections,
   DiagnosticSeverity,
-} from '@common/vscodeDiagnostics';
+} from '@frontend/vscode/vscodeDiagnostics';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
