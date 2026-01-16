@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
+import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -19,7 +20,7 @@ const LeanLspGoalInputSchema = z.strictObject({
   /** Line number (1-indexed) */
   line: z.number().describe('Line number (1-indexed)'),
   /** Column number (1-indexed, optional) */
-  column: z.number().optional().describe('Column number (1-indexed)'),
+  column: z.number().nullish().describe('Column number (1-indexed)'),
 });
 
 export type LeanLspGoalInput = z.infer<typeof LeanLspGoalInputSchema>;
@@ -83,8 +84,9 @@ async function openFileAtPosition(
         vscode.TextEditorRevealType.InCenterIfOutsideViewport,
       );
     }
-  } catch {
-    // Silently fail - opening file is a nice-to-have, not critical
+  } catch (error) {
+    // Opening file is a nice-to-have for user visibility, not critical for tool operation
+    logger.debug('Lean4', `Failed to open file in editor: ${error}`);
   }
 }
 
@@ -117,10 +119,12 @@ Example output:
 }) {
   protected async execute(input: LeanLspGoalInput): Promise<ToolResult> {
     const { file, line, column } = input;
-    const { line: lspLine, character } = toZeroIndexed(line, column);
+    // Convert nullish to undefined for functions that expect undefined
+    const col = column ?? undefined;
+    const { line: lspLine, character } = toZeroIndexed(line, col);
 
     // Open file in VS Code so user can see InfoView with goal state
-    await openFileAtPosition(file, line, column);
+    await openFileAtPosition(file, line, col);
 
     try {
       const goalState = await vscodeIntegration.getGoalState(

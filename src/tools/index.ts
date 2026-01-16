@@ -20,3 +20,4 @@ export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
 export * from './todo';
 export * from './memory';
+export * from './lean';
