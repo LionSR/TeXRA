@@ -12,7 +12,10 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { ToolEditApprovalPrompt } from '@eventBus/types';
+import type {
+  ToolEditApprovalPrompt,
+  WorkflowAgentProposalPrompt,
+} from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
@@ -76,6 +79,10 @@ export class ProgressViewProvider
     string,
     ProgressEventPayloads['showRetryRequest']
   >();
+  private readonly pendingWorkflowAgentProposals = new Map<
+    string,
+    WorkflowAgentProposalPrompt
+  >();
   private approvalBypassActive = false;
 
   constructor(
@@ -104,6 +111,9 @@ export class ProgressViewProvider
           this.resolveToolEditApprovalPrompt.bind(this),
         updateToolEditApprovalBypassState:
           this.updateToolEditApprovalBypassState.bind(this),
+        showWorkflowAgentProposal: this.showWorkflowAgentProposal.bind(this),
+        resolveWorkflowAgentProposal:
+          this.resolveWorkflowAgentProposal.bind(this),
       },
     );
 
@@ -297,6 +307,10 @@ export class ProgressViewProvider
     for (const payload of this.pendingRetryRequests.values()) {
       this.webviewUpdater.showRetryRequest(payload);
     }
+
+    for (const proposal of this.pendingWorkflowAgentProposals.values()) {
+      this.webviewUpdater.showWorkflowAgentProposal(proposal);
+    }
   }
 
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
@@ -330,6 +344,20 @@ export class ProgressViewProvider
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
     this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
+  }
+
+  public showWorkflowAgentProposal(prompt: WorkflowAgentProposalPrompt): void {
+    this.pendingWorkflowAgentProposals.set(prompt.proposalId, prompt);
+    this.sendIfReady(() =>
+      this.webviewUpdater.showWorkflowAgentProposal(prompt),
+    );
+  }
+
+  public resolveWorkflowAgentProposal(proposalId: string): void {
+    this.pendingWorkflowAgentProposals.delete(proposalId);
+    this.sendIfReady(() =>
+      this.webviewUpdater.resolveWorkflowAgentProposal(proposalId),
+    );
   }
 
   /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
