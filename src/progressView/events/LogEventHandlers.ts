@@ -63,13 +63,11 @@ function handleUpdateLogMessage(ctx: EventHandlerContext) {
         const existing = messages.find((m) => m.id === logMessage.id);
         if (!existing) return;
 
-        // Skip INTERNAL message updates
-        if (
+        // Skip INTERNAL message updates (either existing or incoming)
+        const isInternalUpdate =
           existing.messageType === MESSAGE_TYPES.INTERNAL ||
-          logMessage.messageType === MESSAGE_TYPES.INTERNAL
-        ) {
-          return;
-        }
+          logMessage.messageType === MESSAGE_TYPES.INTERNAL;
+        if (isInternalUpdate) return;
 
         // Update fields from logMessage, preserving existing values for undefined fields
         const { id: _id, ...updates } = logMessage;

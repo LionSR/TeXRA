@@ -123,25 +123,29 @@ export function countBySeverity(
 // Formatting
 // ============================================================================
 
+/** Pluralization rules for severity counts */
+const COUNT_LABELS: Array<{
+  key: keyof SeverityCounts;
+  singular: string;
+  plural: string;
+}> = [
+  { key: 'errors', singular: 'error', plural: 'errors' },
+  { key: 'warnings', singular: 'warning', plural: 'warnings' },
+  { key: 'info', singular: 'info', plural: 'info' },
+  { key: 'hints', singular: 'hint', plural: 'hints' },
+];
+
 /**
  * Format severity counts as a human-readable summary string.
  * Example: "3 errors, 2 warnings, 1 hint"
  */
 export function formatCounts(counts: SeverityCounts): string {
-  const parts: string[] = [];
-
-  if (counts.errors > 0) {
-    parts.push(`${counts.errors} error${counts.errors !== 1 ? 's' : ''}`);
-  }
-  if (counts.warnings > 0) {
-    parts.push(`${counts.warnings} warning${counts.warnings !== 1 ? 's' : ''}`);
-  }
-  if (counts.info > 0) {
-    parts.push(`${counts.info} info`);
-  }
-  if (counts.hints > 0) {
-    parts.push(`${counts.hints} hint${counts.hints !== 1 ? 's' : ''}`);
-  }
+  const parts = COUNT_LABELS.filter(({ key }) => counts[key] > 0).map(
+    ({ key, singular, plural }) => {
+      const count = counts[key];
+      return `${count} ${count === 1 ? singular : plural}`;
+    },
+  );
 
   return parts.length > 0 ? parts.join(', ') : 'No issues';
 }

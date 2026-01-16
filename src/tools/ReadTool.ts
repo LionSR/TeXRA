@@ -83,11 +83,19 @@ export class ReadFileTool extends defineTool({
     const totalLines = lines.length;
 
     const requestedStartLine = input.range?.start ?? 1;
-    const requestedEndLine =
-      input.range?.end ??
-      (input.range?.start
-        ? Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines)
-        : totalLines);
+    let requestedEndLine: number;
+    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+    if (input.range?.end != null) {
+      requestedEndLine = input.range.end;
+      // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+    } else if (input.range?.start != null) {
+      requestedEndLine = Math.min(
+        requestedStartLine + READ_FILE_MAX_LINES - 1,
+        totalLines,
+      );
+    } else {
+      requestedEndLine = totalLines;
+    }
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
