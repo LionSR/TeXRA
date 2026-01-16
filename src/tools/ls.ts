@@ -31,17 +31,15 @@ function isDefaultHiddenName(name: string): boolean {
   return DEFAULT_HIDDEN_NAMES.has(name);
 }
 
+const FILE_TYPE_LABELS: Record<vscode.FileType, string> = {
+  [vscode.FileType.Directory]: 'dir',
+  [vscode.FileType.SymbolicLink]: 'link',
+  [vscode.FileType.File]: 'file',
+  [vscode.FileType.Unknown]: 'other',
+};
+
 function getFileTypeLabel(type: vscode.FileType): string {
-  switch (type) {
-    case vscode.FileType.Directory:
-      return 'dir';
-    case vscode.FileType.SymbolicLink:
-      return 'link';
-    case vscode.FileType.File:
-      return 'file';
-    default:
-      return 'other';
-  }
+  return FILE_TYPE_LABELS[type] ?? 'other';
 }
 
 function formatEntry(name: string, type: vscode.FileType): string {
