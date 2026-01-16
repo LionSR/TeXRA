@@ -106,6 +106,13 @@
                   class="status-indicator is-stopped"
                   data-status="Ready"
                 ></span>
+                <vscode-toolbar-button
+                  id="yoloToggleBtn"
+                  icon="shield"
+                  label="Enable YOLO mode"
+                  title="Enable YOLO mode (skip approval prompts)"
+                  class="yolo-toggle-button"
+                ></vscode-toolbar-button>
               </div>
               <vscode-toolbar-container
                 id="toolbarContainer"
@@ -306,13 +313,6 @@
                   id="polishFollowUpProgressContainer"
                   style="display: none; width: 16px; height: 16px"
                 ></vscode-progress-ring>
-                <vscode-toolbar-button
-                  id="resetApprovalBypassBtn"
-                  icon="shield"
-                  label="Resume approval prompts"
-                  title="Resume approval prompts"
-                  hidden
-                ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="recordFollowUpBtn"
                   icon="mic"
@@ -621,15 +621,6 @@
                   title="Reject"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
-                >
-                <vscode-toolbar-button
-                  icon="shield"
-                  label="Approve & Yolo this session"
-                  title="Approve & Yolo this session"
-                  data-action="approveAll"
-                  data-toggle-action="resumeApprovals"
-                  toggleable
-                  >Yolo</vscode-toolbar-button
                 >
               </vscode-toolbar-container>
             </div>
