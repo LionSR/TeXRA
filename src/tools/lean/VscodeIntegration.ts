@@ -18,44 +18,41 @@ import { WorkspaceFS } from '@utils/files';
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
 export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
-  try {
-    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    let diagnostics = vscode.languages.getDiagnostics(uri);
+  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+  const diagnostics = vscode.languages.getDiagnostics(uri);
 
-    // If no diagnostics found, try to find by matching path in all diagnostics
-    if (diagnostics.length === 0) {
-      const allDiagnostics = vscode.languages.getDiagnostics();
-      const resolvedPath = uri.fsPath.toLowerCase();
-
-      for (const [diagUri, diags] of allDiagnostics) {
-        if (diagUri.fsPath.toLowerCase() === resolvedPath && diags.length > 0) {
-          diagnostics = diags;
-          logger.debug(
-            'Lean4',
-            `Found diagnostics via path match: ${diagUri.toString()}`,
-          );
-          break;
-        }
-      }
-
-      // Log available URIs for debugging
-      if (diagnostics.length === 0) {
-        const urisWithDiags = allDiagnostics
-          .filter(([, d]) => d.length > 0)
-          .map(([u]) => u.toString());
-        logger.debug(
-          'Lean4',
-          `No diagnostics for ${uri.toString()}. ` +
-            `Available: ${urisWithDiags.slice(0, 5).join(', ')}`,
-        );
-      }
-    }
-
+  if (diagnostics.length > 0) {
     return diagnostics;
-  } catch (error) {
-    logger.debug('Lean4', `Failed to get diagnostics: ${error}`);
-    return [];
   }
+
+  // Fallback: search by path in case URI format differs
+  const resolvedPath = uri.fsPath.toLowerCase();
+  const allDiagnostics = vscode.languages.getDiagnostics();
+
+  for (const [diagUri, diags] of allDiagnostics) {
+    if (diagUri.fsPath.toLowerCase() === resolvedPath && diags.length > 0) {
+      logger.debug(
+        'Lean4',
+        `Found diagnostics via path match: ${diagUri.toString()}`,
+      );
+      return diags;
+    }
+  }
+
+  // Log available URIs for debugging when no match found
+  const urisWithDiags = allDiagnostics
+    .filter(([, d]) => d.length > 0)
+    .map(([u]) => u.toString())
+    .slice(0, 5);
+
+  if (urisWithDiags.length > 0) {
+    logger.debug(
+      'Lean4',
+      `No diagnostics for ${uri.toString()}. Available: ${urisWithDiags.join(', ')}`,
+    );
+  }
+
+  return [];
 }
 
 /**
