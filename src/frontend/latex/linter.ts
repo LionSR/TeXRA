@@ -3,12 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-import {
-  waitForDiagnosticsChange,
-  countBySeverity,
-  getSeverityLabel,
-  type SeverityCounts,
-} from '@common/vscodeDiagnostics';
+import { waitForDiagnosticsChange } from '@common/vscodeDiagnostics';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -123,34 +118,14 @@ export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
 }
 
 /**
- * Retrieve linter diagnostics for a file
- * @param filePath Path to the file
- * @returns Array of VS Code diagnostic objects
+ * Retrieve linter diagnostics for a file.
+ * Triggers a LaTeX build first for .tex files to refresh diagnostics.
  */
 export async function getLinterMessages(
   filePath: string,
 ): Promise<vscode.Diagnostic[]> {
-  try {
-    // First trigger LaTeX build for TeX files to refresh diagnostics
-    if (filePath.toLowerCase().endsWith('.tex')) {
-      await triggerLaTeXBuild(filePath);
-    }
-
-    const diagnostics = getDiagnostics(filePath);
-
-    return diagnostics;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error formatting linter messages for ${filePath}: ${toErrorMessage(err)}`,
-    );
-    return [];
+  if (filePath.toLowerCase().endsWith('.tex')) {
+    await triggerLaTeXBuild(filePath);
   }
+  return getDiagnostics(filePath);
 }
-
-// Re-export shared utilities for backwards compatibility
-export {
-  countBySeverity as countDiagnosticsBySeverity,
-  getSeverityLabel as getSeverityString,
-};
-export type { SeverityCounts as DiagnosticsSeverityCounts };

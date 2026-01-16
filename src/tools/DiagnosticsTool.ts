@@ -8,7 +8,6 @@ import {
   countBySeverity,
   formatCounts,
   formatMessageList,
-  type SeverityCounts,
 } from '@common/vscodeDiagnostics';
 import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
@@ -44,16 +43,14 @@ export class DiagnosticsTool extends defineTool({
       const summary = `Diagnostics ${command} for ${path}`;
       const header = `${path}: ${countsStr}`;
 
-      // For count command, just return the summary
       if (command === 'count') {
         return {
           summary,
           output: header,
-          diagnostics: this.createPayload(path, command, counts),
+          diagnostics: { path, command, severity: counts },
         };
       }
 
-      // For list command, include formatted messages
       const output =
         messages.length > 0
           ? `${header}\n\n${formatMessageList(messages)}`
@@ -62,7 +59,7 @@ export class DiagnosticsTool extends defineTool({
       return {
         summary,
         output,
-        diagnostics: this.createPayload(path, command, counts, messages),
+        diagnostics: { path, command, severity: counts, messages },
       };
     } catch (error) {
       const detail = toErrorMessage(error);
@@ -72,18 +69,5 @@ export class DiagnosticsTool extends defineTool({
       );
       throw new ToolError(`Failed to collect diagnostics: ${detail}`);
     }
-  }
-
-  private createPayload(
-    path: string,
-    command: 'list' | 'count',
-    severity: SeverityCounts,
-    messages?: vscode.Diagnostic[],
-  ): DiagnosticsPayload {
-    const payload: DiagnosticsPayload = { path, command, severity };
-    if (messages) {
-      payload.messages = messages;
-    }
-    return payload;
   }
 }
