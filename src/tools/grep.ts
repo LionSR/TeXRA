@@ -41,10 +41,13 @@ export function buildArguments(
   const args: string[] = ['--color=never'];
 
   // Output mode flags
-  if (outputMode === 'files_with_matches') {
-    args.push('--files-with-matches');
-  } else if (outputMode === 'count') {
-    args.push('--count');
+  switch (outputMode) {
+    case 'files_with_matches':
+      args.push('--files-with-matches');
+      break;
+    case 'count':
+      args.push('--count');
+      break;
   }
 
   // Filter options

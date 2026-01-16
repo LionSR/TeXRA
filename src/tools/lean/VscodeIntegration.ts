@@ -14,20 +14,23 @@ import { WorkspaceFS } from '@utils/files';
  */
 export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-  const diagnostics = vscode.languages.getDiagnostics(uri);
-
-  if (diagnostics.length > 0) {
-    return diagnostics;
+  const directLookup = vscode.languages.getDiagnostics(uri);
+  if (directLookup.length > 0) {
+    return directLookup;
   }
 
   // Fallback: search by path in case URI format differs
-  const resolvedPath = uri.fsPath.toLowerCase();
+  return findDiagnosticsByPath(uri.fsPath);
+}
+
+/** Find diagnostics by matching file path (case-insensitive). */
+function findDiagnosticsByPath(targetPath: string): vscode.Diagnostic[] {
+  const normalizedTarget = targetPath.toLowerCase();
   for (const [diagUri, diags] of vscode.languages.getDiagnostics()) {
-    if (diagUri.fsPath.toLowerCase() === resolvedPath && diags.length > 0) {
+    if (diagUri.fsPath.toLowerCase() === normalizedTarget && diags.length > 0) {
       return diags;
     }
   }
-
   return [];
 }
 
