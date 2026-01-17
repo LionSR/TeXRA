@@ -176,26 +176,13 @@ export class BaseUIRequestManager {
    */
   _syncVisibleEntries() {
     if (!this.list) {
-      console.log(
-        `[BaseUIRequestManager:${this._config.containerId}] _syncVisibleEntries: no list`,
-      );
       return;
     }
 
     const activeStream = this.activeStream;
-    const meetsAgent = this._meetsAgentRequirement();
     const shouldDisplay =
-      meetsAgent && Boolean(activeStream && activeStream.length);
-
-    console.log(
-      `[BaseUIRequestManager:${this._config.containerId}] _syncVisibleEntries:`,
-      {
-        activeStream,
-        meetsAgent,
-        shouldDisplay,
-        requestCount: this.requests.size,
-      },
-    );
+      this._meetsAgentRequirement() &&
+      Boolean(activeStream && activeStream.length);
 
     const fragment = document.createDocumentFragment();
     for (const entry of this.requests.values()) {
@@ -204,14 +191,7 @@ export class BaseUIRequestManager {
         element.parentElement.removeChild(element);
       }
 
-      const matches = this._matchesActiveStream(data, activeStream);
-      console.log(`[BaseUIRequestManager:${this._config.containerId}] entry:`, {
-        dataStreamId: data.streamId,
-        activeStream,
-        matches,
-        willShow: shouldDisplay && matches,
-      });
-      if (shouldDisplay && matches) {
+      if (shouldDisplay && this._matchesActiveStream(data, activeStream)) {
         fragment.appendChild(element);
       }
     }
