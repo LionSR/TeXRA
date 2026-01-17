@@ -1,7 +1,10 @@
 /**
  * XML content extraction utilities.
  * Functions for extracting content from XML tags and documents.
+ * Zod schemas are the single source of truth; types are derived via z.infer<>.
  */
+
+import { z } from 'zod';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -247,21 +250,25 @@ export async function extractScratchpad(
   return extractedContent ? await formatContent(extractedContent) : null;
 }
 
-/**
- * Result of single document extraction with method indicator
- */
-export interface ExtractionResult {
-  content: string | null;
-  method: 'named' | 'simple' | 'markdown' | 'latex' | 'none';
-}
+// ============================================================================
+// Extraction Result Schemas
+// ============================================================================
 
-/**
- * Result of multiple document extraction with method indicator
- */
-export interface MultipleExtractionResult {
-  documents: Array<{ content: string; name: string }> | null;
-  method: 'simple' | 'none';
-}
+export const ExtractionResultSchema = z.object({
+  content: z.string().nullable(),
+  method: z.enum(['named', 'simple', 'markdown', 'latex', 'none']),
+});
+export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
+
+export const MultipleExtractionResultSchema = z.object({
+  documents: z
+    .array(z.object({ content: z.string(), name: z.string() }))
+    .nullable(),
+  method: z.enum(['simple', 'none']),
+});
+export type MultipleExtractionResult = z.infer<
+  typeof MultipleExtractionResultSchema
+>;
 
 /**
  * Extract document content using a consolidated cascade of fallback methods.
