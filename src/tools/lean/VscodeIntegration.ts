@@ -19,6 +19,15 @@ export interface PlainGoal {
   rendered: string;
 }
 
+/** Response from textDocument/hover LSP request */
+export interface HoverInfo {
+  contents: string;
+  range?: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
+
 /** Lean 4 extension's client provider interface */
 interface LeanClient {
   isRunning(): boolean;
@@ -126,4 +135,68 @@ export async function getGoalState(
   });
 
   return result as PlainGoal | null;
+}
+
+// ============================================================================
+// Hover Info (via LSP)
+// ============================================================================
+
+/** LSP Hover response structure */
+interface LspHoverResponse {
+  contents:
+    | string
+    | { kind: string; value: string }
+    | Array<string | { kind: string; value: string }>;
+  range?: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
+
+/** Extract plain text from LSP hover contents */
+function extractHoverContents(contents: LspHoverResponse['contents']): string {
+  if (typeof contents === 'string') {
+    return contents;
+  }
+  if (Array.isArray(contents)) {
+    return contents
+      .map((c) => (typeof c === 'string' ? c : c.value))
+      .join('\n\n');
+  }
+  return contents.value;
+}
+
+/**
+ * Get hover information (type signature + docs) at a specific position.
+ *
+ * Uses the standard LSP textDocument/hover request.
+ *
+ * @param filePath - Path to the .lean file
+ * @param line - 0-indexed line number
+ * @param column - 0-indexed column number
+ * @returns Hover info or null if unavailable
+ */
+export async function getHoverInfo(
+  filePath: string,
+  line: number,
+  column: number,
+): Promise<HoverInfo | null> {
+  const clientProvider = await getClientProvider();
+  if (!clientProvider) return null;
+
+  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+  const client = clientProvider.findClient(uri);
+  if (!client?.isRunning()) return null;
+
+  const result = (await client.sendRequest('textDocument/hover', {
+    textDocument: { uri: uri.toString() },
+    position: { line, character: column },
+  })) as LspHoverResponse | null;
+
+  if (!result) return null;
+
+  return {
+    contents: extractHoverContents(result.contents),
+    range: result.range,
+  };
 }
