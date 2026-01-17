@@ -40,25 +40,24 @@ risk of accidental edits.
 
 ## Formal Methods Agents
 
-### `lean_proof`
+### `lean`
 
-The `lean_proof` agent helps translate informal proofs into Lean 4, iterating
-with Lean verification to resolve errors.
-
-**Purpose:** Produce Lean-verified proofs from informal reasoning.
+Lean 4 proof assistant with VS Code extension integration and CLI fallback. Uses
+dedicated tools (`lean_diagnostics`, `lean_inspect`, `lean_project`, `lean_loogle`)
+for verification, with bash `lake`/`lean` commands as fallback when needed.
 
 **Best for:**
 
-- Formalizing math proofs in Lean 4 projects
-- Iterative debugging of Lean proof scripts
-- Building reusable helper lemmas alongside core proofs
+- Interactive proof development with real-time feedback
+- Inspecting proof state and types at specific positions
+- Projects using Mathlib (with `lean_loogle` search)
+- Building and verifying via CLI when extension tools are insufficient
 
 **Example instruction:**
 
 ```
 Formalize the proof of the theorem in `Proofs/GroupTheory.lean`. Start with an
-informal outline, then produce Lean code and iterate with `lake build` until it
-passes.
+informal outline, then produce Lean code and iterate until it passes.
 ```
 
 ## Correction & Polishing Agents
