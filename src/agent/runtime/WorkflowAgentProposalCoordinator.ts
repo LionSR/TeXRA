@@ -20,6 +20,7 @@
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
 import type { WorkflowAgentProposal } from '@eventBus/types';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 // ============================================================================
 // Types
@@ -111,7 +112,8 @@ class WorkflowAgentProposalCoordinatorImpl {
         proposalId,
       });
 
-      // Emit event to show proposal in UI
+      // Ensure progress view is visible and emit event to show proposal in UI
+      void safeExecuteCommand('texra.showProgressView');
       bus.emit('showWorkflowAgentProposal', {
         proposalId,
         streamId,
