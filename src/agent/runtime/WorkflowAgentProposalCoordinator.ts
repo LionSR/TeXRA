@@ -114,12 +114,6 @@ class WorkflowAgentProposalCoordinatorImpl {
       });
 
       // Ensure progress view is visible and emit event to show proposal in UI
-      console.log(
-        '[WorkflowAgentProposalCoordinator] emitting showWorkflowAgentProposal:',
-        proposalId,
-        'streamId:',
-        streamId,
-      );
       void safeExecuteCommand('texra.showProgressView');
       bus.emit('showWorkflowAgentProposal', {
         proposalId,
