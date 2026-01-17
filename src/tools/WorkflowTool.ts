@@ -19,10 +19,6 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import {
-  WorkflowAgentProposalSchema,
-  type WorkflowAgentProposal,
-} from '@eventBus/types';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
@@ -30,6 +26,12 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Local imports - event bus (after utils per import order rules)
+import {
+  WorkflowAgentProposalSchema,
+  type WorkflowAgentProposal,
+} from '@eventBus/types';
 
 /**
  * Schema for the workflow_agent tool input.
