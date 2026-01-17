@@ -3,6 +3,10 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import {
+  getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
+} from '@agent/index/agentRegistry';
 // Internal imports
 import {
   AgentSetting,
@@ -92,12 +96,21 @@ function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
 ): UserVars {
+  // Build agent lists for template use
+  const formatAgentList = (agents: { name: string; description?: string }[]) =>
+    agents.map((a) => `- ${a.name}: ${a.description || 'No description'}`).join('\n');
+
+  const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
+  const toolUseAgentsList = formatAgentList(getVisibleToolUseAgents());
+
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
     IS_OPENAI_MODEL: providerFlags.isOpenai,
     IS_ANTHROPIC_MODEL: providerFlags.isAnthropic,
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
+    WORKFLOW_AGENTS: workflowAgentsList,
+    TOOL_USE_AGENTS: toolUseAgentsList,
   };
 }
 

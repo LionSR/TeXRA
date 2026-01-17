@@ -106,6 +106,19 @@
   color: var(--vscode-textLink-foreground);
 }
 
+/* Feedback section */
+.workflow-proposal__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.workflow-proposal__feedback[hidden] {
+  display: none;
+}
+
+.workflow-proposal__feedback-input {
+  width: 100%;
+}
+
 /* Action button colors */
 .workflow-proposal__actions vscode-toolbar-button[data-action='approve']::part(control) {
   color: var(--vscode-testing-iconPassed);
@@ -117,4 +130,9 @@
 
 .workflow-proposal__actions vscode-toolbar-button[data-action='setup']::part(control) {
   color: var(--vscode-textLink-foreground);
+}
+
+/* Reject button when feedback is shown */
+.workflow-proposal--feedback-active .workflow-proposal__actions vscode-toolbar-button[data-action='reject']::part(control) {
+  color: var(--vscode-inputValidation-warningBorder);
 }
