@@ -1,42 +1,47 @@
-// Local imports - agent types
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { z } from 'zod';
+
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { ExecutionIdSchema } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
-export interface StreamUITraits {
-  /** Canonical session grouping for the stream. */
-  sessionKind: AgentCategory;
-  /** Indicates whether the associated agent is a tool-use session. */
-  isToolAgent: boolean;
-}
+// ============================================================================
+// Progress View Schemas
+// ============================================================================
 
-export interface StreamTabInfo {
-  name: string;
-  /** Short label displayed in the tab UI */
-  label: string;
-  model?: string;
-  agent?: string;
-  agentType?: AgentType;
-  agentSessionKind: AgentCategory;
-  uiTraits: StreamUITraits;
-  hasMultipleOutputs?: boolean;
-  /** Whether this is a remote agent */
-  isRemote?: boolean;
-  lastTimestamp?: number;
-  inputFile?: string;
-  creationTimestamp?: number;
-  status?: string;
-  executionId?: ExecutionId;
-}
+export const StreamUITraitsSchema = z.object({
+  sessionKind: z.nativeEnum(AgentCategory),
+  isToolAgent: z.boolean(),
+});
+export type StreamUITraits = z.infer<typeof StreamUITraitsSchema>;
+
+export const StreamTabInfoSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  model: z.string().optional(),
+  agent: z.string().optional(),
+  agentType: z.nativeEnum(AgentType).optional(),
+  agentSessionKind: z.nativeEnum(AgentCategory),
+  uiTraits: StreamUITraitsSchema,
+  hasMultipleOutputs: z.boolean().optional(),
+  isRemote: z.boolean().optional(),
+  lastTimestamp: z.number().optional(),
+  inputFile: z.string().optional(),
+  creationTimestamp: z.number().optional(),
+  status: z.string().optional(),
+  executionId: ExecutionIdSchema.optional(),
+});
+export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
 export type AgentFilter = AgentTypeFilter;
 
-export interface InstructionMetadata {
-  showToggle?: boolean;
-  expanded?: boolean;
-}
+export const InstructionMetadataSchema = z.object({
+  showToggle: z.boolean().optional(),
+  expanded: z.boolean().optional(),
+});
+export type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
 
-export interface InstructionUpdate {
-  text: string;
-  metadata?: InstructionMetadata;
-}
+export const InstructionUpdateSchema = z.object({
+  text: z.string(),
+  metadata: InstructionMetadataSchema.optional(),
+});
+export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;

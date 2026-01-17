@@ -1,40 +1,56 @@
 // Third-party imports
 import arxivClient from 'arxiv-client';
 import { extract as extractArxivId } from 'identifiers-arxiv';
+import { z } from 'zod';
 
 /** Infer ArxivEntry type from the client's execute() return type */
 type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
 
-/**
- * Base arXiv paper metadata shared between search and metadata tools.
- */
-export interface ArxivPaperBase {
-  id: string | null;
-  doi: string | null;
-  title: string;
-  published: Date | null;
-  updated: Date | null;
-  authors: string[];
-  primaryCategory: string | null;
-}
+// ============================================================================
+// arXiv Paper Schemas - Single Source of Truth
+// ============================================================================
 
 /**
- * arXiv paper metadata returned by search results.
+ * Schema for base arXiv paper metadata shared between search and metadata tools.
  */
-export interface ArxivSearchResult extends ArxivPaperBase {
-  abstract: string | null;
-  arxivUrl: string | null;
-}
+export const ArxivPaperBaseSchema = z.object({
+  id: z.string().nullable(),
+  doi: z.string().nullable(),
+  title: z.string(),
+  published: z.date().nullable(),
+  updated: z.date().nullable(),
+  authors: z.array(z.string()),
+  primaryCategory: z.string().nullable(),
+});
+
+/** Base arXiv paper metadata - derived from schema. */
+export type ArxivPaperBase = z.infer<typeof ArxivPaperBaseSchema>;
 
 /**
- * Detailed arXiv paper metadata with additional fields.
+ * Schema for arXiv paper metadata returned by search results.
+ * Extends ArxivPaperBaseSchema with search-specific fields.
  */
-export interface ArxivPaperMetadata extends ArxivPaperBase {
-  abstract?: string | null;
-  journalReference: string | null;
-  comment: string | null;
-  links: unknown;
-}
+export const ArxivSearchResultSchema = ArxivPaperBaseSchema.extend({
+  abstract: z.string().nullable(),
+  arxivUrl: z.string().nullable(),
+});
+
+/** arXiv search result - derived from schema. */
+export type ArxivSearchResult = z.infer<typeof ArxivSearchResultSchema>;
+
+/**
+ * Schema for detailed arXiv paper metadata with additional fields.
+ * Extends ArxivPaperBaseSchema with metadata-specific fields.
+ */
+export const ArxivPaperMetadataSchema = ArxivPaperBaseSchema.extend({
+  abstract: z.string().nullish(),
+  journalReference: z.string().nullable(),
+  comment: z.string().nullable(),
+  links: z.unknown(),
+});
+
+/** Detailed arXiv paper metadata - derived from schema. */
+export type ArxivPaperMetadata = z.infer<typeof ArxivPaperMetadataSchema>;
 
 export type ArxivClientInstance = typeof arxivClient;
 
