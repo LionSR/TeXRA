@@ -42,7 +42,8 @@ const LeanRestartInputSchema = z.strictObject({
 
 export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
 
-const LeanGoalInputSchema = z.strictObject({
+/** Shared schema for LSP position-based queries (file + line + column) */
+const LeanPositionInputSchema = z.strictObject({
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
   /** 1-indexed line number */
@@ -51,18 +52,13 @@ const LeanGoalInputSchema = z.strictObject({
   column: z.number().int().min(1).prefault(1).describe('Column number (1-indexed, default: 1)'),
 });
 
-export type LeanGoalInput = z.infer<typeof LeanGoalInputSchema>;
+export type LeanPositionInput = z.infer<typeof LeanPositionInputSchema>;
 
-const LeanHoverInputSchema = z.strictObject({
-  /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
-  /** 1-indexed line number */
-  line: z.number().int().min(1).describe('Line number (1-indexed)'),
-  /** 1-indexed column number */
-  column: z.number().int().min(1).describe('Column number (1-indexed)'),
-});
-
-export type LeanHoverInput = z.infer<typeof LeanHoverInputSchema>;
+// Aliases for backwards compatibility
+const LeanGoalInputSchema = LeanPositionInputSchema;
+const LeanHoverInputSchema = LeanPositionInputSchema;
+export type LeanGoalInput = LeanPositionInput;
+export type LeanHoverInput = LeanPositionInput;
 
 // ============================================================================
 // Helper Functions
