@@ -496,6 +496,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllQueuedFollowUps();
       state.clearAllFollowUpText();
     } else {
+      // Clear content immediately when switching streams to prevent stale display.
+      // handleUpdateLogs will repopulate with correct content, but if the new stream
+      // is empty, no logs message arrives - so we must clear proactively here.
+      // Use lastRenderedStream (not previousStream) to detect if displayed content
+      // differs from the new stream - handles cases where previousStream is unset.
+      if (
+        state.lastRenderedStream &&
+        state.lastRenderedStream !== message.activeStream
+      ) {
+        const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+        if (logContent) logContent.innerHTML = '';
+        state.lastRenderedStream = '';
+      }
+
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
       dom.todoList.update(state.getTodos(message.activeStream) ?? []);
