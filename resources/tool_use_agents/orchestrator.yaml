@@ -83,15 +83,4 @@ prompts:
     (4) Understand figure and table environments
 
   userRequest: |
-    {% if INPUT_CONTENT %}
-    Here is the document to work with:
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
-    {% endif %}
-
-    {% if INSTRUCTION %}
     {{ INSTRUCTION }}
-    {% else %}
-    Please analyze the document and help me improve it. First read and understand the content, then propose a plan for improvements using the available workflow agents.
-    {% endif %}
