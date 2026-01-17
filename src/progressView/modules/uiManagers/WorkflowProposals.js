@@ -4,6 +4,7 @@ import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
 import { createFromTemplate } from '@common/templateUtils.js';
+import { getBasename } from '@common/pathUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -74,62 +75,52 @@ export class WorkflowProposals extends BaseUIRequestManager {
     }
 
     if (instructionElem) {
-      const instruction = request.instruction || '';
-      // Truncate long instructions for display
-      const maxLen = 200;
-      instructionElem.textContent =
-        instruction.length > maxLen
-          ? instruction.slice(0, maxLen) + '...'
-          : instruction;
-      instructionElem.title = instruction;
+      // Show full instruction without truncation
+      instructionElem.textContent = request.instruction || '';
     }
 
-    // Helper to format file list
-    const formatFiles = (files, singular, plural) => {
+    // Helper to format file list with names
+    const formatFileList = (files, label) => {
       if (!files || files.length === 0) return null;
-      const label = files.length === 1 ? singular : plural;
-      return `${files.length} ${label}`;
+      const names = files.map((f) => getBasename(f));
+      return { label, names, fullPaths: files };
     };
 
-    // Helper to set file info element
-    const setFileInfo = (elem, files, singular, plural) => {
+    // Helper to set file info element with names
+    const setFileInfo = (elem, files, label) => {
       if (!elem) return;
-      const text = formatFiles(files, singular, plural);
-      if (text) {
-        elem.textContent = text;
-        elem.title = files.join('\n');
+      const info = formatFileList(files, label);
+      if (info) {
+        // Create label and file list
+        elem.innerHTML = '';
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'workflow-proposal__file-label';
+        labelSpan.textContent = `${info.label}: `;
+        elem.appendChild(labelSpan);
+
+        info.names.forEach((name, i) => {
+          if (i > 0) {
+            elem.appendChild(document.createTextNode(', '));
+          }
+          const fileSpan = document.createElement('span');
+          fileSpan.className = 'workflow-proposal__file-name';
+          fileSpan.textContent = name;
+          fileSpan.title = info.fullPaths[i];
+          elem.appendChild(fileSpan);
+        });
+
         elem.hidden = false;
       } else {
         elem.hidden = true;
       }
     };
 
-    // Set all file info
-    setFileInfo(
-      inputFilesElem,
-      request.inputFiles,
-      'input file',
-      'input files',
-    );
-    setFileInfo(
-      referenceFilesElem,
-      request.referenceFiles,
-      'reference file',
-      'reference files',
-    );
-    setFileInfo(
-      auxiliaryFilesElem,
-      request.auxiliaryFiles,
-      'auxiliary file',
-      'auxiliary files',
-    );
-    setFileInfo(mediaFilesElem, request.mediaFiles, 'media file', 'media files');
-    setFileInfo(
-      outputFilesElem,
-      request.outputFiles,
-      'output file',
-      'output files',
-    );
+    // Set all file info with names
+    setFileInfo(inputFilesElem, request.inputFiles, 'Input');
+    setFileInfo(referenceFilesElem, request.referenceFiles, 'Reference');
+    setFileInfo(auxiliaryFilesElem, request.auxiliaryFiles, 'Auxiliary');
+    setFileInfo(mediaFilesElem, request.mediaFiles, 'Media');
+    setFileInfo(outputFilesElem, request.outputFiles, 'Output');
   }
 
   /** @override */
@@ -148,7 +139,7 @@ export class WorkflowProposals extends BaseUIRequestManager {
       return;
     }
 
-    const validActions = ['approve', 'reject'];
+    const validActions = ['approve', 'reject', 'setup'];
     if (!validActions.includes(action)) {
       return;
     }

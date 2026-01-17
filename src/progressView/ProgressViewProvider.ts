@@ -360,6 +360,12 @@ export class ProgressViewProvider
     );
   }
 
+  public getPendingWorkflowAgentProposal(
+    proposalId: string,
+  ): WorkflowAgentProposalPrompt | undefined {
+    return this.pendingWorkflowAgentProposals.get(proposalId);
+  }
+
   /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
   private sendIfReady(send: () => void): void {
     if (this.canSendToWebview()) {
