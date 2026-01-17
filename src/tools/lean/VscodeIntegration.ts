@@ -80,7 +80,7 @@ export async function restartFileServer(filePath: string): Promise<boolean> {
 }
 
 // ============================================================================
-// Goal State (via Lean 4 Extension API)
+// LSP Requests (via Lean 4 Extension API)
 // ============================================================================
 
 const LEAN4_EXTENSION_ID = 'leanprover.lean4';
@@ -99,21 +99,15 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
 }
 
 /**
- * Get the proof goal state at a specific position in a Lean file.
- *
- * Uses the Lean 4 extension's LSP client to send a $/lean/plainGoal request.
+ * Send an LSP request at a specific position in a Lean file.
  * Opens the file first to ensure the LSP server has processed it.
- *
- * @param filePath - Path to the .lean file
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- * @returns Goal state or null if unavailable
  */
-export async function getGoalState(
+async function sendPositionRequest<T>(
   filePath: string,
   line: number,
   column: number,
-): Promise<PlainGoal | null> {
+  method: string,
+): Promise<T | null> {
   const clientProvider = await getClientProvider();
   if (!clientProvider) return null;
 
@@ -130,10 +124,44 @@ export async function getGoalState(
   const client = clientProvider.findClient(uri);
   if (!client?.isRunning()) return null;
 
-  const result = await client.sendRequest('$/lean/plainGoal', {
+  const result = await client.sendRequest(method, {
     textDocument: { uri: uri.toString() },
     position: { line, character: column },
   });
 
-  return result as PlainGoal | null;
+  return result as T | null;
+}
+
+/**
+ * Get the proof goal state at a specific position in a Lean file.
+ * @param line - 0-indexed line number
+ * @param column - 0-indexed column number
+ */
+export async function getGoalState(
+  filePath: string,
+  line: number,
+  column: number,
+): Promise<PlainGoal | null> {
+  return sendPositionRequest<PlainGoal>(filePath, line, column, '$/lean/plainGoal');
+}
+
+/** Response from textDocument/hover LSP request */
+export interface HoverResult {
+  contents: {
+    kind: string;
+    value: string;
+  };
+}
+
+/**
+ * Get hover information (type + docs) at a specific position in a Lean file.
+ * @param line - 0-indexed line number
+ * @param column - 0-indexed column number
+ */
+export async function getHoverInfo(
+  filePath: string,
+  line: number,
+  column: number,
+): Promise<HoverResult | null> {
+  return sendPositionRequest<HoverResult>(filePath, line, column, 'textDocument/hover');
 }
