@@ -30,7 +30,7 @@ import type { WorkflowAgentProposal } from '@eventBus/types';
  */
 export type ProposalResult =
   | { action: 'approve' }
-  | { action: 'reject' }
+  | { action: 'reject'; feedback?: string }
   | { action: 'timeout' };
 
 /**
@@ -148,13 +148,18 @@ class WorkflowAgentProposalCoordinatorImpl {
 
   /**
    * Reject a workflow agent proposal. Called when user clicks the reject button.
-   * Resolves the pending Promise with 'reject' action.
+   * Resolves the pending Promise with 'reject' action and optional feedback.
    *
    * @param proposalId - The proposal to reject
+   * @param feedback - Optional feedback from the user explaining the rejection
    * @returns true if rejected, false if no pending proposal
    */
-  rejectProposal(proposalId: string): boolean {
-    return this.handleUserAction(proposalId, 'reject');
+  rejectProposal(proposalId: string, feedback?: string): boolean {
+    const req = this.getPendingProposal(proposalId);
+    if (!req) return false;
+
+    this.resolveProposal(proposalId, { action: 'reject', feedback });
+    return true;
   }
 
   /**
