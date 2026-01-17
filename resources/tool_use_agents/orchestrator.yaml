@@ -25,7 +25,6 @@ prompts:
     - polish: Improve writing quality and clarity
     - draw: Generate TikZ figures
     - ocr: Extract text from images
-    - merge: Combine revisions
 
     Document Splitting (when requested):
     ```bash
