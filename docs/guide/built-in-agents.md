@@ -40,26 +40,18 @@ risk of accidental edits.
 
 ## Formal Methods Agents
 
-### `lean_vscode`
+### `lean`
 
-Lean 4 proof assistant using VS Code extension integration. Uses dedicated tools
-(`lean_diagnostics`, `lean_inspect`, `lean_project`, etc.) for verification.
+Lean 4 proof assistant with VS Code extension integration and CLI fallback. Uses
+dedicated tools (`lean_diagnostics`, `lean_inspect`, `lean_project`, `lean_loogle`)
+for verification, with bash `lake`/`lean` commands as fallback when needed.
 
 **Best for:**
 
 - Interactive proof development with real-time feedback
 - Inspecting proof state and types at specific positions
 - Projects using Mathlib (with `lean_loogle` search)
-
-### `lean_cli`
-
-Lean 4 proof assistant using CLI tools (`lake build`, `lake env lean`).
-
-**Best for:**
-
-- Quick verification via command line
-- When CLI output is more convenient than extension tools
-- Simpler workflows without position-based inspection
+- Building and verifying via CLI when extension tools are insufficient
 
 **Example instruction:**
 
