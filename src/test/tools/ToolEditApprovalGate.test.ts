@@ -175,14 +175,26 @@ describe('Tool edit approval gating', () => {
 
     // Handler should NOT be called when bypass is on
     await tool.call({ path: 'doc.txt', content: 'content2' });
-    assert.strictEqual(handlerCallCount, 1, 'Handler not called when bypass on');
+    assert.strictEqual(
+      handlerCallCount,
+      1,
+      'Handler not called when bypass on',
+    );
 
     // Toggle off - should return false
     const disabledState = toggleToolEditApprovalSessionBypass();
-    assert.strictEqual(disabledState, false, 'Toggle returns false when disabling');
+    assert.strictEqual(
+      disabledState,
+      false,
+      'Toggle returns false when disabling',
+    );
 
     // Handler should be called again when bypass is off
     await tool.call({ path: 'doc.txt', content: 'content3' });
-    assert.strictEqual(handlerCallCount, 2, 'Handler called again when bypass off');
+    assert.strictEqual(
+      handlerCallCount,
+      2,
+      'Handler called again when bypass off',
+    );
   });
 });

@@ -12,28 +12,21 @@ import {
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
 
-/** Default values for ConversationRoundState */
-const ROUND_STATE_DEFAULTS = {
-  continuationCount: 0,
-  responseTimeMs: 0,
-  outputFile: '',
-  normalizedUsage: null,
-} as const;
-
+/**
+ * Schema for ConversationRoundState snapshot.
+ * Defaults are defined inline via .prefault() - schema is the single source of truth.
+ */
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
-  continuationCount: z
-    .int()
-    .nonnegative()
-    .prefault(ROUND_STATE_DEFAULTS.continuationCount),
-  responseTimeMs: z
-    .number()
-    .nonnegative()
-    .prefault(ROUND_STATE_DEFAULTS.responseTimeMs),
-  outputFile: z.string().prefault(ROUND_STATE_DEFAULTS.outputFile),
-  normalizedUsage: NormalizedUsageSchema.nullable().prefault(
-    ROUND_STATE_DEFAULTS.normalizedUsage,
-  ),
+  continuationCount: z.int().nonnegative().prefault(0),
+  responseTimeMs: z.number().nonnegative().prefault(0),
+  outputFile: z.string().prefault(''),
+  normalizedUsage: NormalizedUsageSchema.nullable().prefault(null),
+});
+
+/** Parsed defaults for ConversationRoundState - derived from schema */
+const ROUND_STATE_DEFAULTS = ConversationRoundStateSnapshotSchema.parse({
+  roundIndex: 0,
 });
 
 /**
@@ -117,24 +110,21 @@ export class ConversationRoundState {
   }
 }
 
-/** Default values for AgentRunState */
-const RUN_STATE_DEFAULTS = {
-  totalRounds: 0,
-  totalResponseTimeMs: 0,
-} as const;
-
+/**
+ * Schema for AgentRunState snapshot.
+ * Defaults are defined inline via .prefault() - schema is the single source of truth.
+ */
 export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative().prefault(RUN_STATE_DEFAULTS.totalRounds),
-  totalResponseTimeMs: z
-    .number()
-    .nonnegative()
-    .prefault(RUN_STATE_DEFAULTS.totalResponseTimeMs),
-  // Prefault normalizes missing accumulator before validation
+  totalRounds: z.int().nonnegative().prefault(0),
+  totalResponseTimeMs: z.number().nonnegative().prefault(0),
   usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({
     totals: DEFAULT_TOTALS,
     normalizedSnapshots: [],
   }),
 });
+
+/** Parsed defaults for AgentRunState - derived from schema */
+const RUN_STATE_DEFAULTS = AgentRunStateSnapshotSchema.parse({});
 
 /**
  * Single source of truth for AgentRunState serialization format.
