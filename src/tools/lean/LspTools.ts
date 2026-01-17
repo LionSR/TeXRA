@@ -144,10 +144,9 @@ const LeanInspectInputSchema = z.strictObject({
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
   /** 1-indexed line number */
-  line: z.number().int().min(1).describe('Line number (1-indexed)'),
+  line: z.int().min(1).describe('Line number (1-indexed)'),
   /** 1-indexed column number */
   column: z
-    .number()
     .int()
     .min(1)
     .prefault(1)
@@ -297,7 +296,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
       if (success) {
         return {
-          summary: `${description}`,
+          summary: description,
           output: `Executed "${command}" on ${file}`,
         };
       }
