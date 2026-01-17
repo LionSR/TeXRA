@@ -42,6 +42,17 @@ const LeanRestartInputSchema = z.strictObject({
 
 export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
 
+const LeanGoalInputSchema = z.strictObject({
+  /** Path to the Lean file */
+  file: z.string().describe('Path to the .lean file'),
+  /** 1-indexed line number */
+  line: z.number().int().min(1).describe('Line number (1-indexed)'),
+  /** 1-indexed column number */
+  column: z.number().int().min(1).prefault(1).describe('Column number (1-indexed, default: 1)'),
+});
+
+export type LeanGoalInput = z.infer<typeof LeanGoalInputSchema>;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -194,6 +205,77 @@ This triggers the Lean 4 extension's "Restart File" command.`,
       return {
         summary: 'Failed to restart',
         output: `Error: ${toErrorMessage(error)}`,
+        isError: true,
+      };
+    }
+  }
+}
+
+/**
+ * Get the proof goal state at a specific position in a Lean file.
+ */
+export class LeanGoalTool extends defineTool({
+  name: 'lean_goal',
+  description: `Get the proof goal state at a specific position in a Lean 4 file.
+
+Returns the current proof goals (what needs to be proven) at the given line and column.
+This is equivalent to what you see in the Lean InfoView when your cursor is at that position.
+
+Use this to:
+- See what goals remain to be proven at a tactic
+- Understand the current proof state before choosing the next tactic
+- Check if a proof step made progress
+
+Returns:
+- goals: Array of goal strings (e.g., ["⊢ n + 0 = n"])
+- rendered: Markdown-formatted goal display
+
+Line and column are 1-indexed (first line is 1, first column is 1).
+
+Requires: Lean 4 VS Code extension installed and active.`,
+  schema: LeanGoalInputSchema,
+}) {
+  protected async execute(input: LeanGoalInput): Promise<ToolResult> {
+    const { file, line, column } = input;
+
+    try {
+      // Convert to 0-indexed for LSP
+      const result = await vscodeIntegration.getGoalState(file, line - 1, column - 1);
+
+      if (!result) {
+        return {
+          summary: 'No goal state',
+          output: `Could not get goal state at ${file}:${line}:${column}
+
+Possible reasons:
+- The Lean 4 extension is not installed or active
+- The position is not inside a tactic proof
+- The file has not been processed yet (try lean_diagnostics first)`,
+          isError: true,
+        };
+      }
+
+      if (result.goals.length === 0) {
+        return {
+          summary: 'No goals',
+          output: 'No goals at this position. The proof may be complete here.',
+        };
+      }
+
+      return {
+        summary: `${result.goals.length} goal${result.goals.length > 1 ? 's' : ''}`,
+        output: result.rendered,
+        goalState: {
+          goals: result.goals,
+          count: result.goals.length,
+        },
+      };
+    } catch (error) {
+      return {
+        summary: 'Failed to get goal state',
+        output: `Error: ${toErrorMessage(error)}
+
+Make sure the Lean 4 VS Code extension is installed and the file is open.`,
         isError: true,
       };
     }
