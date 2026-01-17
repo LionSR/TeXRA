@@ -123,7 +123,7 @@ Parameters:
 - agent: Name of the agent to execute
 - model: Model to use (default: gemini3p)
 - instruction: What the agent should do
-- inputFile: Primary file to process
+- inputFile: Primary file to process (required)
 - inputFiles: Additional input files (optional)
 - referenceFile: Reference file for context (optional)
 - referenceFiles: Additional reference files (optional)
@@ -131,10 +131,19 @@ Parameters:
 - auxiliaryFiles: Additional auxiliary files (optional)
 - mediaFile: Media file for images/figures (optional)
 - mediaFiles: Additional media files (optional)
-- outputFiles: Where to save results (optional)
+- outputFiles: Output file paths (optional, see below)
 - useMultipleOutputs: Generate multiple output files (optional)
 
-The proposal is shown in the ProgressBoard for review. User can approve or reject before execution.`,
+Output file naming:
+- If outputFiles is empty/omitted, a default output path is derived from inputFile
+- The agent's post-processing pipeline automatically appends suffixes (e.g., _enhanced, _polished)
+- Output paths support Nunjucks templating with variables: {{ name }}, {{ ext }}, {{ dir }}
+- Example: "{{ dir }}/output{{ ext }}" uses inputFile's directory and extension
+
+The proposal is shown in the ProgressBoard for user review. User can:
+- Approve: Execute the agent immediately
+- Reject: Cancel with optional feedback
+- Setup: Open in main view for editing before execution`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -235,6 +244,15 @@ The proposal is shown in the ProgressBoard for review. User can approve or rejec
         output:
           'The proposed workflow agent execution timed out waiting for user approval.',
         isError: true,
+      };
+    }
+
+    if (result.action === 'setup') {
+      return {
+        summary: `User opened '${input.agent}' proposal for editing`,
+        output:
+          `The proposal was opened in the main view for editing. ` +
+          `The user may modify the configuration and execute manually.`,
       };
     }
 

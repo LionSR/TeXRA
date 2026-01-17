@@ -106,15 +106,16 @@
   color: var(--color-text-secondary);
 }
 
-/* File names */
+/* File names - clickable to open */
 .workflow-proposal__file-name {
   font-family: var(--vscode-editor-font-family);
   color: var(--vscode-textLink-foreground);
-  cursor: help;
+  cursor: pointer;
 }
 
 .workflow-proposal__file-name:hover {
   text-decoration: underline;
+  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
 }
 
 /* Highlight input files */
