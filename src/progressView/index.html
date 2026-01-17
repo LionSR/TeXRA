@@ -585,11 +585,11 @@
                 </div>
                 <div class="workflow-proposal__instruction"></div>
                 <div class="workflow-proposal__files">
-                  <span class="workflow-proposal__input-files" hidden></span>
-                  <span class="workflow-proposal__reference-files" hidden></span>
-                  <span class="workflow-proposal__auxiliary-files" hidden></span>
-                  <span class="workflow-proposal__media-files" hidden></span>
-                  <span class="workflow-proposal__output-files" hidden></span>
+                  <div class="workflow-proposal__input-files" hidden></div>
+                  <div class="workflow-proposal__reference-files" hidden></div>
+                  <div class="workflow-proposal__auxiliary-files" hidden></div>
+                  <div class="workflow-proposal__media-files" hidden></div>
+                  <div class="workflow-proposal__output-files" hidden></div>
                 </div>
               </div>
               <vscode-toolbar-container class="workflow-proposal__actions">
@@ -606,6 +606,13 @@
                   title="Reject proposal"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
+                >
+                <vscode-toolbar-button
+                  icon="go-to-file"
+                  label="Setup"
+                  title="Open in main view for editing before execution"
+                  data-action="setup"
+                  >Setup</vscode-toolbar-button
                 >
               </vscode-toolbar-container>
             </div>
