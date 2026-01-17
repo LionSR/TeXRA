@@ -1,0 +1,100 @@
+/**
+ * Workflow proposals - component-specific styles
+ * Shared styles are in requests-shared.css
+ */
+
+/* Container theme - info style */
+.workflow-proposals {
+  border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+  background: var(--vscode-inputValidation-infoBackground, #d6ecf2);
+}
+
+.workflow-proposals__header .codicon {
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Button flex basis */
+.workflow-proposal__actions vscode-toolbar-button {
+  flex: 1 1 8rem;
+}
+
+/* Proposal card */
+.workflow-proposal {
+  position: relative;
+}
+
+/* Header row with agent and model */
+.workflow-proposal__header-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-medium);
+  flex-wrap: wrap;
+}
+
+.workflow-proposal__agent {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+}
+
+.workflow-proposal__model {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.workflow-proposal__model::before {
+  content: '\2022';
+  margin-right: var(--spacing-small);
+}
+
+/* Instruction preview */
+.workflow-proposal__instruction {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-editor-foreground);
+  word-break: break-word;
+  max-height: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  padding: var(--spacing-small) 0;
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+}
+
+/* Files info */
+.workflow-proposal__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-small);
+  margin-top: var(--spacing-small);
+}
+
+.workflow-proposal__files > span {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--vscode-badge-background);
+  padding: 2px 6px;
+  border-radius: var(--border-radius-small);
+  cursor: help;
+}
+
+.workflow-proposal__files > span[hidden] {
+  display: none;
+}
+
+.workflow-proposal__input-files {
+  color: var(--vscode-editor-foreground) !important;
+}
+
+.workflow-proposal__output-files {
+  color: var(--vscode-textLink-foreground) !important;
+}
+
+/* Action highlight */
+.workflow-proposal__actions vscode-toolbar-button[data-action='approve']::part(control) {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.workflow-proposal__actions vscode-toolbar-button[data-action='reject']::part(control) {
+  color: var(--vscode-testing-iconFailed);
+}
