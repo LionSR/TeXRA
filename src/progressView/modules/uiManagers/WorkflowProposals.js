@@ -115,11 +115,31 @@ export class WorkflowProposals extends BaseUIRequestManager {
       }
     };
 
-    // Set all file info with names
-    setFileInfo(inputFilesElem, request.inputFiles, 'Input');
-    setFileInfo(referenceFilesElem, request.referenceFiles, 'Reference');
-    setFileInfo(auxiliaryFilesElem, request.auxiliaryFiles, 'Auxiliary');
-    setFileInfo(mediaFilesElem, request.mediaFiles, 'Media');
+    // Combine singular + array fields for display (filter out empty strings/nulls)
+    const combineFiles = (single, arr) =>
+      [single, ...(arr || [])].filter((f) => f);
+
+    // Set all file info with names (includes both singular and array fields)
+    setFileInfo(
+      inputFilesElem,
+      combineFiles(request.inputFile, request.inputFiles),
+      'Input',
+    );
+    setFileInfo(
+      referenceFilesElem,
+      combineFiles(request.referenceFile, request.referenceFiles),
+      'Reference',
+    );
+    setFileInfo(
+      auxiliaryFilesElem,
+      combineFiles(request.auxiliaryFile, request.auxiliaryFiles),
+      'Auxiliary',
+    );
+    setFileInfo(
+      mediaFilesElem,
+      combineFiles(request.mediaFile, request.mediaFiles),
+      'Media',
+    );
     setFileInfo(outputFilesElem, request.outputFiles, 'Output');
   }
 

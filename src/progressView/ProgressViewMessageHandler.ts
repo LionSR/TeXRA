@@ -502,19 +502,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentCategory: AgentCategory.Workflow,
     };
 
-    // Build the agentConfig from the proposal
+    // Build the agentConfig from the proposal (preserve all fields as-is)
     const agentConfig = {
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
-      inputFile: proposal.inputFiles[0] || '',
-      inputFiles: proposal.inputFiles.slice(1),
-      referenceFile: proposal.referenceFiles[0] || null,
-      referenceFiles: proposal.referenceFiles.slice(1),
-      auxiliaryFile: proposal.auxiliaryFiles[0] || null,
-      auxiliaryFiles: proposal.auxiliaryFiles.slice(1),
-      mediaFile: proposal.mediaFiles[0] || null,
-      mediaFiles: proposal.mediaFiles.slice(1),
+      inputFile: proposal.inputFile,
+      inputFiles: proposal.inputFiles,
+      referenceFile: proposal.referenceFile,
+      referenceFiles: proposal.referenceFiles,
+      auxiliaryFile: proposal.auxiliaryFile,
+      auxiliaryFiles: proposal.auxiliaryFiles,
+      mediaFile: proposal.mediaFile,
+      mediaFiles: proposal.mediaFiles,
       outputFiles: proposal.outputFiles,
       useMultipleOutputs: proposal.useMultipleOutputs,
       agentType,
