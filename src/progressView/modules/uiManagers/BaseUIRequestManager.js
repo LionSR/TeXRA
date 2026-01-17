@@ -74,17 +74,26 @@ export class BaseUIRequestManager {
     const requestId = this._getRequestId(request);
     console.log(
       `[BaseUIRequestManager:${this._config.containerId}] show() called:`,
-      { requestId, streamId: request?.streamId, activeStream: this.activeStream, isToolAgentActive: this.isToolAgentActive },
+      {
+        requestId,
+        streamId: request?.streamId,
+        activeStream: this.activeStream,
+        isToolAgentActive: this.isToolAgentActive,
+      },
     );
     if (!requestId) {
-      console.log(`[BaseUIRequestManager:${this._config.containerId}] show(): no requestId, returning`);
+      console.log(
+        `[BaseUIRequestManager:${this._config.containerId}] show(): no requestId, returning`,
+      );
       return;
     }
 
     if (!this.container || !this.list) {
       this.setup();
       if (!this.container || !this.list) {
-        console.log(`[BaseUIRequestManager:${this._config.containerId}] show(): no container/list after setup, returning`);
+        console.log(
+          `[BaseUIRequestManager:${this._config.containerId}] show(): no container/list after setup, returning`,
+        );
         return;
       }
     }
@@ -194,11 +203,17 @@ export class BaseUIRequestManager {
 
     const activeStream = this.activeStream;
     const meetsAgent = this._meetsAgentRequirement();
-    const shouldDisplay = meetsAgent && Boolean(activeStream && activeStream.length);
+    const shouldDisplay =
+      meetsAgent && Boolean(activeStream && activeStream.length);
 
     console.log(
       `[BaseUIRequestManager:${this._config.containerId}] _syncVisibleEntries:`,
-      { activeStream, meetsAgent, shouldDisplay, requestCount: this.requests.size },
+      {
+        activeStream,
+        meetsAgent,
+        shouldDisplay,
+        requestCount: this.requests.size,
+      },
     );
 
     const fragment = document.createDocumentFragment();
@@ -209,10 +224,12 @@ export class BaseUIRequestManager {
       }
 
       const matches = this._matchesActiveStream(data, activeStream);
-      console.log(
-        `[BaseUIRequestManager:${this._config.containerId}] entry:`,
-        { dataStreamId: data.streamId, activeStream, matches, willShow: shouldDisplay && matches },
-      );
+      console.log(`[BaseUIRequestManager:${this._config.containerId}] entry:`, {
+        dataStreamId: data.streamId,
+        activeStream,
+        matches,
+        willShow: shouldDisplay && matches,
+      });
       if (shouldDisplay && matches) {
         fragment.appendChild(element);
       }
