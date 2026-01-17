@@ -13,6 +13,7 @@ import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { FollowupSectionManager } from './uiManagers/FollowupSectionManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
+import { WorkflowProposals } from './uiManagers/WorkflowProposals.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { TodoList } from './uiManagers/TodoList.js';
 import { QueuedFollowUps } from './uiManagers/QueuedFollowUps.js';
@@ -44,6 +45,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       followupSection: new FollowupSectionManager(vscode),
       approvalRequests: new ApprovalRequests(),
       retryRequests: new RetryRequests(),
+      workflowProposals: new WorkflowProposals(),
       todoList: new TodoList(),
       queuedFollowUps: new QueuedFollowUps(),
     });

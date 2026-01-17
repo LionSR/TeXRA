@@ -48,6 +48,7 @@
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/uiManagers/ApprovalRequests.js": "${approvalRequestsUri}",
           "./modules/uiManagers/RetryRequests.js": "${retryRequestsUri}",
+          "./modules/uiManagers/WorkflowProposals.js": "${workflowProposalsUri}",
           "./modules/uiManagers/TodoList.js": "${todoListUri}",
           "./modules/uiManagers/BaseUIRequestManager.js": "${baseUIRequestManagerUri}",
           "./modules/uiManagers/FollowupSectionManager.js": "${followupSectionManagerUri}",
@@ -185,6 +186,13 @@
               <span>Retry available</span>
             </div>
             <div class="retry-requests__list"></div>
+          </div>
+          <div id="workflowProposals" class="workflow-proposals" hidden>
+            <div class="workflow-proposals__header">
+              <i class="codicon codicon-play-circle"></i>
+              <span>Workflow Agent Proposal</span>
+            </div>
+            <div class="workflow-proposals__list"></div>
           </div>
           <vscode-scrollable
             id="logContent"
@@ -564,6 +572,40 @@
                   title="Dismiss"
                   data-action="dismiss"
                   >Dismiss</vscode-toolbar-button
+                >
+              </vscode-toolbar-container>
+            </div>
+          </template>
+          <template id="workflowProposalTemplate">
+            <div class="workflow-proposal">
+              <div class="workflow-proposal__details">
+                <div class="workflow-proposal__header-row">
+                  <span class="workflow-proposal__agent"></span>
+                  <span class="workflow-proposal__model"></span>
+                </div>
+                <div class="workflow-proposal__instruction"></div>
+                <div class="workflow-proposal__files">
+                  <span class="workflow-proposal__input-files" hidden></span>
+                  <span class="workflow-proposal__reference-files" hidden></span>
+                  <span class="workflow-proposal__auxiliary-files" hidden></span>
+                  <span class="workflow-proposal__media-files" hidden></span>
+                  <span class="workflow-proposal__output-files" hidden></span>
+                </div>
+              </div>
+              <vscode-toolbar-container class="workflow-proposal__actions">
+                <vscode-toolbar-button
+                  icon="check"
+                  label="Approve"
+                  title="Approve and execute workflow agent"
+                  data-action="approve"
+                  >Approve</vscode-toolbar-button
+                >
+                <vscode-toolbar-button
+                  icon="close"
+                  label="Reject"
+                  title="Reject proposal"
+                  data-action="reject"
+                  >Reject</vscode-toolbar-button
                 >
               </vscode-toolbar-container>
             </div>
