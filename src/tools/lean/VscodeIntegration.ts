@@ -163,14 +163,15 @@ async function sendPositionRequest<T>(
   const vscodeUri = fileUri.asUri();
 
   // Get client provider
-  const clientProvider = await getClientProvider().catch(
-    (e) => ({ error: `Failed to get Lean extension API: ${e}` }) as const,
-  );
-  if (!clientProvider) {
-    return { data: null, error: 'Lean 4 extension not found or not activated' };
-  }
-  if ('error' in clientProvider) {
-    return { data: null, error: clientProvider.error };
+  let clientProvider: LeanClientProvider;
+  try {
+    const provider = await getClientProvider();
+    if (!provider) {
+      return { data: null, error: 'Lean 4 extension not found or not activated' };
+    }
+    clientProvider = provider;
+  } catch (e) {
+    return { data: null, error: `Failed to get Lean extension API: ${e}` };
   }
 
   // Open file in editor so LSP server has processed it
