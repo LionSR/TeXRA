@@ -32,6 +32,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 export type ProposalResult =
   | { action: 'approve' }
   | { action: 'reject'; feedback?: string }
+  | { action: 'setup' }
   | { action: 'timeout' };
 
 /**
@@ -167,6 +168,22 @@ class WorkflowAgentProposalCoordinatorImpl {
     if (!req) return false;
 
     this.resolveProposal(proposalId, { action: 'reject', feedback });
+    return true;
+  }
+
+  /**
+   * Setup a workflow agent proposal. Called when user clicks the setup button.
+   * Resolves the pending Promise with 'setup' action, indicating user wants to
+   * edit the proposal in the main view before execution.
+   *
+   * @param proposalId - The proposal to setup
+   * @returns true if setup initiated, false if no pending proposal
+   */
+  setupProposal(proposalId: string): boolean {
+    const req = this.getPendingProposal(proposalId);
+    if (!req) return false;
+
+    this.resolveProposal(proposalId, { action: 'setup' });
     return true;
   }
 

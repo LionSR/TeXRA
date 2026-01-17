@@ -72,28 +72,13 @@ export class BaseUIRequestManager {
    */
   show(request) {
     const requestId = this._getRequestId(request);
-    console.log(
-      `[BaseUIRequestManager:${this._config.containerId}] show() called:`,
-      {
-        requestId,
-        streamId: request?.streamId,
-        activeStream: this.activeStream,
-        isToolAgentActive: this.isToolAgentActive,
-      },
-    );
     if (!requestId) {
-      console.log(
-        `[BaseUIRequestManager:${this._config.containerId}] show(): no requestId, returning`,
-      );
       return;
     }
 
     if (!this.container || !this.list) {
       this.setup();
       if (!this.container || !this.list) {
-        console.log(
-          `[BaseUIRequestManager:${this._config.containerId}] show(): no container/list after setup, returning`,
-        );
         return;
       }
     }
@@ -157,10 +142,6 @@ export class BaseUIRequestManager {
    * @param {boolean} isToolAgent
    */
   setActiveStream(streamId, isToolAgent) {
-    console.log(
-      `[BaseUIRequestManager:${this._config.containerId}] setActiveStream:`,
-      { streamId, isToolAgent },
-    );
     this.activeStream = streamId || '';
     this.isToolAgentActive = Boolean(isToolAgent);
     this._syncVisibleEntries();
