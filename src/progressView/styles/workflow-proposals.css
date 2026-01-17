@@ -115,7 +115,10 @@
 
 .workflow-proposal__file-name:hover {
   text-decoration: underline;
-  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+  color: var(
+    --vscode-textLink-activeForeground,
+    var(--vscode-textLink-foreground)
+  );
 }
 
 /* Highlight input files */

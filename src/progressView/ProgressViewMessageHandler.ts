@@ -13,7 +13,7 @@ import {
   ensureAgentsLoaded,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
@@ -502,8 +502,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentCategory: AgentCategory.Workflow,
     };
 
-    // Build the agentConfig from the proposal (preserve all fields as-is)
-    const agentConfig = {
+    // Helper to check if a file array has content
+    const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
+
+    // Build activeFiles to indicate which sections should be expanded
+    const activeFiles = {
+      input: hasFiles(proposal.inputFiles),
+      reference: hasFiles(proposal.referenceFiles),
+      auxiliary: hasFiles(proposal.auxiliaryFiles),
+      media: hasFiles(proposal.mediaFiles),
+      output: hasFiles(proposal.outputFiles),
+    };
+
+    // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
+    const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
@@ -520,21 +532,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentType,
       session,
       // Set visibility flags for file arrays that have content
-      inputFilesActive: (proposal.inputFiles?.length ?? 0) > 0,
-      referenceFilesActive: (proposal.referenceFiles?.length ?? 0) > 0,
-      auxiliaryFilesActive: (proposal.auxiliaryFiles?.length ?? 0) > 0,
-      mediaFilesActive: (proposal.mediaFiles?.length ?? 0) > 0,
-      outputFilesActive: (proposal.outputFiles?.length ?? 0) > 0,
-    } as AgentConfig;
-
-    // Build activeFiles to indicate which sections should be expanded
-    const activeFiles = {
-      input: (proposal.inputFiles?.length ?? 0) > 0,
-      reference: (proposal.referenceFiles?.length ?? 0) > 0,
-      auxiliary: (proposal.auxiliaryFiles?.length ?? 0) > 0,
-      media: (proposal.mediaFiles?.length ?? 0) > 0,
-      output: (proposal.outputFiles?.length ?? 0) > 0,
-    };
+      inputFilesActive: activeFiles.input,
+      referenceFilesActive: activeFiles.reference,
+      auxiliaryFilesActive: activeFiles.auxiliary,
+      mediaFilesActive: activeFiles.media,
+      outputFilesActive: activeFiles.output,
+    });
 
     // Build a TaskState from the proposal
     const taskState: TaskState = {
