@@ -12,8 +12,12 @@
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import {
+  ExecutionIdSchema,
+  type StreamTabId,
+  type ExecutionId,
+} from '@agent/types/IdentifierTypes';
 import type { FlowRecord } from '@agent/node/persisted-flow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
@@ -31,33 +35,45 @@ import { AgentLogger } from '@logger/AgentLogger';
 const logger = new AgentLogger('SessionResumeRetrieval');
 
 // =============================================================================
-// Types
+// Types - Zod schemas as single source of truth
 // =============================================================================
 
 /**
- * Resume data for tool-use sessions.
+ * Schema for tool-use session resume data.
  * Contains full snapshot with messages, state slices, etc.
  */
-export interface ToolUseResumeData {
-  type: 'toolUse';
-  snapshot: ToolUseSessionSnapshot;
-}
+const ToolUseResumeDataSchema = z.object({
+  type: z.literal('toolUse'),
+  snapshot: ToolUseSessionSnapshotSchema,
+});
 
 /**
- * Resume data for workflow sessions.
+ * Schema for workflow session resume data.
  * Contains minimal data - flow reads persisted state via executionId.
  */
-export interface WorkflowResumeData {
-  type: 'workflow';
-  agentConfig: AgentConfig;
-  executionId: ExecutionId;
-}
+const WorkflowResumeDataSchema = z.object({
+  type: z.literal('workflow'),
+  agentConfig: AgentConfigSchema,
+  executionId: ExecutionIdSchema,
+});
 
 /**
- * Discriminated union of session resume data.
- * Use `type` field to determine how to resume.
+ * Discriminated union schema for session resume data.
+ * Uses z.discriminatedUnion for O(1) lookup and better error messages.
  */
-export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
+export const SessionResumeDataSchema = z.discriminatedUnion('type', [
+  ToolUseResumeDataSchema,
+  WorkflowResumeDataSchema,
+]);
+
+/** Resume data for tool-use sessions - derived from schema. */
+export type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
+
+/** Resume data for workflow sessions - derived from schema. */
+export type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
+
+/** Discriminated union of session resume data - derived from schema. */
+export type SessionResumeData = z.infer<typeof SessionResumeDataSchema>;
 
 // =============================================================================
 // Schema for Tool-Use Flow Record Validation
