@@ -96,7 +96,10 @@ export function getSeverityLabel(severity: vscode.DiagnosticSeverity): string {
 }
 
 /** Map from severity to counts key */
-const SEVERITY_TO_COUNT_KEY: Record<vscode.DiagnosticSeverity, keyof SeverityCounts> = {
+const SEVERITY_TO_COUNT_KEY: Record<
+  vscode.DiagnosticSeverity,
+  keyof SeverityCounts
+> = {
   [vscode.DiagnosticSeverity.Error]: 'errors',
   [vscode.DiagnosticSeverity.Warning]: 'warnings',
   [vscode.DiagnosticSeverity.Information]: 'info',
