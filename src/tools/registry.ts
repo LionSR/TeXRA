@@ -32,7 +32,13 @@ import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
-import { LeanDiagnosticsTool, LeanRestartTool } from './lean';
+import {
+  LeanDiagnosticsTool,
+  LeanFileTool,
+  LeanProjectTool,
+  LeanInspectTool,
+  LeanLoogleTool,
+} from './lean';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -70,7 +76,10 @@ export function getDefaultToolRegistry(): IToolRegistry {
       memory: new MemoryTool(),
       // Lean 4 tools (uses VS Code extension)
       lean_diagnostics: new LeanDiagnosticsTool(),
-      lean_restart: new LeanRestartTool(),
+      lean_file: new LeanFileTool(),
+      lean_project: new LeanProjectTool(),
+      lean_inspect: new LeanInspectTool(),
+      lean_loogle: new LeanLoogleTool(),
     });
   }
   return defaultRegistryInstance;
