@@ -69,8 +69,9 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
  */
 export class MemoryTool extends defineTool({
   name: 'memory',
-  description:
-    'Store, read, and manage persistent memory files under /memories using view, create, str_replace, insert, delete, or rename.',
+  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename).
+
+Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.`,
   schema: MemoryToolInputSchema,
 }) {
   protected async execute(input: MemoryToolInput): Promise<ToolResult> {
@@ -144,7 +145,7 @@ export class MemoryTool extends defineTool({
       return displayToStoragePath(inputPath);
     } catch {
       throw new ToolError(
-        `The path ${inputPath} does not exist. Please provide a valid path.`,
+        `Invalid path "${inputPath}". All memory paths must start with /memories (e.g., /memories or /memories/notes.md).`,
       );
     }
   }
