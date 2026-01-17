@@ -30,7 +30,11 @@ export interface PlainGoal {
 /** Check if a file path is inside a folder */
 function isFileInFolder(file: string, folder: string): boolean {
   const relative = path.relative(folder, file);
-  return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
+  return (
+    relative.length > 0 &&
+    !relative.startsWith('..') &&
+    !path.isAbsolute(relative)
+  );
 }
 
 /** FileUri compatible with Lean 4 extension's ExtUri type */
