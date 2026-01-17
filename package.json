@@ -61,7 +61,8 @@
               "chat",
               "lean",
               "research",
-              "search"
+              "search",
+              "lean_proof"
             ],
             "description": "List of tool-use agents shown in the dedicated dropdown",
             "scope": "resource"
