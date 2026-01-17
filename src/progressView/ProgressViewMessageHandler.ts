@@ -519,16 +519,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       useMultipleOutputs: proposal.useMultipleOutputs,
       agentType,
       session,
+      // Set visibility flags for file arrays that have content
+      inputFilesActive: (proposal.inputFiles?.length ?? 0) > 0,
+      referenceFilesActive: (proposal.referenceFiles?.length ?? 0) > 0,
+      auxiliaryFilesActive: (proposal.auxiliaryFiles?.length ?? 0) > 0,
+      mediaFilesActive: (proposal.mediaFiles?.length ?? 0) > 0,
+      outputFilesActive: (proposal.outputFiles?.length ?? 0) > 0,
     } as AgentConfig;
+
+    // Build activeFiles to indicate which sections should be expanded
+    const activeFiles = {
+      input: (proposal.inputFiles?.length ?? 0) > 0,
+      reference: (proposal.referenceFiles?.length ?? 0) > 0,
+      auxiliary: (proposal.auxiliaryFiles?.length ?? 0) > 0,
+      media: (proposal.mediaFiles?.length ?? 0) > 0,
+      output: (proposal.outputFiles?.length ?? 0) > 0,
+    };
 
     // Build a TaskState from the proposal
     const taskState: TaskState = {
       agentConfig,
+      activeFiles,
     } as TaskState;
 
-    // Reject the proposal to dismiss it from the UI
-    // (user will manually execute from the main view)
-    proposalCoordinator.rejectProposal(proposalId);
+    // Resolve the proposal with 'setup' action to dismiss it from the UI
+    // (user will manually execute from the main view after editing)
+    proposalCoordinator.setupProposal(proposalId);
 
     // Open the main view with the proposal details
     await vscode.commands.executeCommand('texra.mainView.focus');
