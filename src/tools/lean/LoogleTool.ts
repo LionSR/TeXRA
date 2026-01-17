@@ -4,6 +4,7 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
+import axios from 'axios';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
@@ -76,23 +77,15 @@ Useful for finding the right lemma when you know roughly what type it should hav
     const { query, limit } = input;
 
     try {
-      const url = `${LOOGLE_API_URL}?q=${encodeURIComponent(query)}`;
-      const response = await fetch(url, {
+      const response = await axios.get<LoogleResponse>(LOOGLE_API_URL, {
+        params: { q: query },
         headers: {
           'User-Agent': 'TeXRA-VSCode-Extension',
-          Accept: 'application/json',
         },
+        timeout: 10000,
       });
 
-      if (!response.ok) {
-        return {
-          summary: 'Loogle request failed',
-          output: `HTTP ${response.status}: ${response.statusText}`,
-          isError: true,
-        };
-      }
-
-      const data = (await response.json()) as LoogleResponse;
+      const data = response.data;
 
       // Check for error response
       if ('error' in data) {
