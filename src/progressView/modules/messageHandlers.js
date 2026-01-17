@@ -951,6 +951,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleShowWorkflowProposal(message) {
+    console.log(
+      '[MessageHandler] handleShowWorkflowProposal received:',
+      message?.proposal?.proposalId,
+    );
     if (message?.proposal) dom.workflowProposals.show(message.proposal);
   }
 
