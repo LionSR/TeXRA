@@ -8,6 +8,7 @@ export const COMMON_COMMANDS = {
   DEBUG_MODE_SET: 'setDebugMode',
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
+  ERROR: 'error',
 };
 
 // Main view specific commands
@@ -194,10 +195,13 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
   SHOW_RETRY_REQUEST: 'showRetryRequest',
   RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
+  SHOW_WORKFLOW_AGENT_PROPOSAL: 'showWorkflowAgentProposal',
+  RESOLVE_WORKFLOW_AGENT_PROPOSAL: 'resolveWorkflowAgentProposal',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
+  UPDATE_CONTEXT_STATE: 'updateContextState', // Update context utilization display
 
   // Actions
   RESUME: 'resume',
@@ -222,15 +226,10 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
+  WORKFLOW_AGENT_PROPOSAL_ACTION: 'workflowAgentProposalAction',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
-
-  // Followup task
-  GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
-  SETUP_FOLLOWUP: 'setupFollowup',
-  RUN_FOLLOWUP: 'runFollowup',
-  SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
 
   // File operations
   OPEN_FILE: 'openFile',
@@ -244,6 +243,12 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Profile
   OPEN_PROFILE: 'openProfile',
+
+  // Followup task (workflow continuation)
+  SETUP_FOLLOWUP: 'setupFollowup',
+  RUN_FOLLOWUP: 'runFollowup',
+  GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
+  SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
 };
 
 // History view specific commands
@@ -277,6 +282,10 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY: 'updateMemory',
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+  GET_MEMORY_ENABLED: 'getMemoryEnabled',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
+  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 };
 
 // Export all commands in a single object for convenience
