@@ -3,6 +3,7 @@
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
+import { CoreWorkflowFieldsSchema } from '@agent/core/AgentConfig';
 
 // Import canonical error schema - SINGLE SOURCE OF TRUTH
 // schemas.ts has no internal project imports, so no circular dependency risk
@@ -45,23 +46,9 @@ export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 
 /**
  * Workflow agent proposal details (without UI-specific fields).
- * Used by the tool to build proposals.
+ * Uses CoreWorkflowFieldsSchema as single source of truth.
  */
-export const WorkflowAgentProposalSchema = z.strictObject({
-  agent: z.string(),
-  model: z.string(),
-  instruction: z.string(),
-  inputFile: z.string(),
-  inputFiles: z.array(z.string()),
-  referenceFile: z.string().nullable(),
-  referenceFiles: z.array(z.string()),
-  auxiliaryFile: z.string().nullable(),
-  auxiliaryFiles: z.array(z.string()),
-  mediaFile: z.string().nullable(),
-  mediaFiles: z.array(z.string()),
-  outputFiles: z.array(z.string()),
-  useMultipleOutputs: z.boolean(),
-});
+export const WorkflowAgentProposalSchema = CoreWorkflowFieldsSchema;
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 
 /**

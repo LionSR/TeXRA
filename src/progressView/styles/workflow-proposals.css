@@ -120,19 +120,24 @@
 }
 
 /* Action button colors */
-.workflow-proposal__actions vscode-toolbar-button[data-action='approve']::part(control) {
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='approve']::part(control) {
   color: var(--vscode-testing-iconPassed);
 }
 
-.workflow-proposal__actions vscode-toolbar-button[data-action='reject']::part(control) {
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='reject']::part(control) {
   color: var(--vscode-testing-iconFailed);
 }
 
-.workflow-proposal__actions vscode-toolbar-button[data-action='setup']::part(control) {
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='setup']::part(control) {
   color: var(--vscode-textLink-foreground);
 }
 
 /* Reject button when feedback is shown */
-.workflow-proposal--feedback-active .workflow-proposal__actions vscode-toolbar-button[data-action='reject']::part(control) {
+.workflow-proposal--feedback-active
+  .workflow-proposal__actions
+  vscode-toolbar-button[data-action='reject']::part(control) {
   color: var(--vscode-inputValidation-warningBorder);
 }
