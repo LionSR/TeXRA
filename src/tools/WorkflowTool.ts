@@ -135,10 +135,10 @@ Parameters:
 - useMultipleOutputs: Generate multiple output files (optional)
 
 Output file naming:
-- If outputFiles is empty/omitted, a default output path is derived from inputFile
-- The agent's post-processing pipeline automatically appends suffixes (e.g., _enhanced, _polished)
-- Output paths support Nunjucks templating with variables: {{ name }}, {{ ext }}, {{ dir }}
-- Example: "{{ dir }}/output{{ ext }}" uses inputFile's directory and extension
+- If outputFiles is empty/omitted: single output mode, path derived from inputFile with agent suffix
+- If outputFiles is provided: multiple outputs mode, one output per input file
+  - Output file names should correspond to input files (e.g., inputFiles: [a.tex, b.tex] → outputFiles: [a_out.tex, b_out.tex])
+- Paths support Nunjucks templating: {{ name }}, {{ ext }}, {{ dir }} from the corresponding input file
 
 The proposal is shown in the ProgressBoard for user review. User can:
 - Approve: Execute the agent immediately
