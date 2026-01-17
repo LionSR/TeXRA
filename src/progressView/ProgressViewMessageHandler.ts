@@ -465,6 +465,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       proposalCoordinator.approveProposal(proposalId);
     } else if (action === 'reject') {
       proposalCoordinator.rejectProposal(proposalId);
+    } else if (action === 'setup') {
+      await this.handleWorkflowAgentProposalSetup(proposalId);
     } else {
       this.logger.warn(
         this.channel,
@@ -472,6 +474,71 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         { data: message },
       );
     }
+  }
+
+  /**
+   * Handle the "setup" action for a workflow agent proposal.
+   * Opens the proposal in the main view for editing before execution.
+   */
+  private async handleWorkflowAgentProposalSetup(
+    proposalId: string,
+  ): Promise<void> {
+    const proposal = this.provider.getPendingWorkflowAgentProposal(proposalId);
+    if (!proposal) {
+      this.logger.warn(
+        this.channel,
+        `No pending workflow agent proposal found for setup: ${proposalId}`,
+      );
+      return;
+    }
+
+    // Look up the agent to get the agentType
+    const agentEntry = getAgent(proposal.agent);
+    const agentType = agentEntry?.agentType;
+
+    // Build session descriptor for workflow category
+    const session = {
+      agentType,
+      agentCategory: AgentCategory.Workflow,
+    };
+
+    // Build the agentConfig from the proposal
+    const agentConfig = {
+      agent: proposal.agent,
+      model: proposal.model,
+      instruction: proposal.instruction,
+      inputFile: proposal.inputFiles[0] || '',
+      inputFiles: proposal.inputFiles.slice(1),
+      referenceFile: proposal.referenceFiles[0] || null,
+      referenceFiles: proposal.referenceFiles.slice(1),
+      auxiliaryFile: proposal.auxiliaryFiles[0] || null,
+      auxiliaryFiles: proposal.auxiliaryFiles.slice(1),
+      mediaFile: proposal.mediaFiles[0] || null,
+      mediaFiles: proposal.mediaFiles.slice(1),
+      outputFiles: proposal.outputFiles,
+      useMultipleOutputs: proposal.useMultipleOutputs,
+      agentType,
+      session,
+    } as AgentConfig;
+
+    // Build a TaskState from the proposal
+    const taskState: TaskState = {
+      agentConfig,
+    } as TaskState;
+
+    // Reject the proposal to dismiss it from the UI
+    // (user will manually execute from the main view)
+    proposalCoordinator.rejectProposal(proposalId);
+
+    // Open the main view with the proposal details
+    await vscode.commands.executeCommand('texra.mainView.focus');
+    await vscode.commands.executeCommand('texra.restoreState', taskState);
+
+    this.logger.info(
+      this.channel,
+      `Workflow agent proposal ${proposalId} set up in main view`,
+      { data: { agent: proposal.agent } },
+    );
   }
 
   private async handleOpenTaskStorage(message: any): Promise<void> {
