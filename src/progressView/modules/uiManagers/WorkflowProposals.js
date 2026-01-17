@@ -144,6 +144,42 @@ export class WorkflowProposals extends BaseUIRequestManager {
       return;
     }
 
+    // Handle reject action with feedback toggle
+    if (action === 'reject') {
+      const proposalElem = button.closest('.workflow-proposal');
+      const feedbackSection = proposalElem?.querySelector(
+        '.workflow-proposal__feedback',
+      );
+      const feedbackInput = feedbackSection?.querySelector(
+        '.workflow-proposal__feedback-input',
+      );
+
+      if (feedbackSection && feedbackInput) {
+        // Check if feedback section is visible
+        const isFeedbackVisible = !feedbackSection.hidden;
+
+        if (!isFeedbackVisible) {
+          // First click: show feedback section, update button label
+          feedbackSection.hidden = false;
+          proposalElem.classList.add('workflow-proposal--feedback-active');
+          button.textContent = 'Submit';
+          button.title = 'Submit rejection with feedback';
+          feedbackInput.focus();
+          return;
+        } else {
+          // Second click: submit rejection with feedback
+          const feedback = feedbackInput.value?.trim() || undefined;
+          vscode.postMessage({
+            command: COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
+            proposalId,
+            action,
+            feedback,
+          });
+          return;
+        }
+      }
+    }
+
     vscode.postMessage({
       command: COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
       proposalId,

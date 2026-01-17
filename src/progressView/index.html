@@ -592,6 +592,14 @@
                   <div class="workflow-proposal__output-files" hidden></div>
                 </div>
               </div>
+              <div class="workflow-proposal__feedback" hidden>
+                <vscode-textarea
+                  class="workflow-proposal__feedback-input"
+                  placeholder="Feedback (optional) - explain what changes you'd like"
+                  rows="2"
+                  resize="vertical"
+                ></vscode-textarea>
+              </div>
               <vscode-toolbar-container class="workflow-proposal__actions">
                 <vscode-toolbar-button
                   icon="check"
@@ -603,7 +611,7 @@
                 <vscode-toolbar-button
                   icon="close"
                   label="Reject"
-                  title="Reject proposal"
+                  title="Reject proposal (click to add feedback)"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
                 >

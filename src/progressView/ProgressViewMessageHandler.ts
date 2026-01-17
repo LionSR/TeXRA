@@ -451,7 +451,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleWorkflowAgentProposalAction(message: any): Promise<void> {
-    const { proposalId, action } = message;
+    const { proposalId, action, feedback } = message;
     if (!proposalId || !action) {
       this.logger.warn(
         this.channel,
@@ -464,7 +464,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (action === 'approve') {
       proposalCoordinator.approveProposal(proposalId);
     } else if (action === 'reject') {
-      proposalCoordinator.rejectProposal(proposalId);
+      proposalCoordinator.rejectProposal(proposalId, feedback);
     } else if (action === 'setup') {
       await this.handleWorkflowAgentProposalSetup(proposalId);
     } else {
