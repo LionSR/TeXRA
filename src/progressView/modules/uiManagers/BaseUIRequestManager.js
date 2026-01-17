@@ -176,6 +176,9 @@ export class BaseUIRequestManager {
    */
   _syncVisibleEntries() {
     if (!this.list) {
+      console.log(
+        `[BaseUIRequestManager:${this._config.containerId}] _syncVisibleEntries: no list`,
+      );
       return;
     }
 

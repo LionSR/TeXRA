@@ -44,22 +44,36 @@ export const RetryRequestPromptSchema = z.strictObject({
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 
-/**
- * Workflow agent proposal details (without UI-specific fields).
- * Uses CoreWorkflowFieldsSchema as single source of truth.
- */
-export const WorkflowAgentProposalSchema = CoreWorkflowFieldsSchema;
-export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
+/** Agent category for proposals */
+export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
+export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
 
 /**
- * Workflow agent proposal prompt for UI display.
+ * Agent proposal details (without UI-specific fields).
+ * Uses CoreWorkflowFieldsSchema as single source of truth.
+ * Supports both workflow and tool-use agents.
+ */
+export const AgentProposalSchema = CoreWorkflowFieldsSchema.extend({
+  /** Category of the agent being proposed */
+  agentCategory: AgentProposalCategorySchema,
+});
+export type AgentProposal = z.infer<typeof AgentProposalSchema>;
+
+// Legacy aliases for backward compatibility
+export const WorkflowAgentProposalSchema = AgentProposalSchema;
+export type WorkflowAgentProposal = AgentProposal;
+
+/**
+ * Agent proposal prompt for UI display.
  * Includes proposal details plus UI-specific fields.
  */
-export const WorkflowAgentProposalPromptSchema = z.strictObject({
+export const AgentProposalPromptSchema = z.strictObject({
   proposalId: z.string(),
   streamId: StreamTabIdSchema,
-  ...WorkflowAgentProposalSchema.shape,
+  ...AgentProposalSchema.shape,
 });
-export type WorkflowAgentProposalPrompt = z.infer<
-  typeof WorkflowAgentProposalPromptSchema
->;
+export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
+
+// Legacy aliases for backward compatibility
+export const WorkflowAgentProposalPromptSchema = AgentProposalPromptSchema;
+export type WorkflowAgentProposalPrompt = AgentProposalPrompt;

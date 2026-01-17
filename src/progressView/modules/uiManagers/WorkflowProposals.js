@@ -42,6 +42,9 @@ export class WorkflowProposals extends BaseUIRequestManager {
 
   /** @override */
   _updateRequestElement(element, request) {
+    const categoryBadgeElem = element.querySelector(
+      '.workflow-proposal__category-badge',
+    );
     const agentElem = element.querySelector('.workflow-proposal__agent');
     const modelElem = element.querySelector('.workflow-proposal__model');
     const instructionElem = element.querySelector(
@@ -65,6 +68,14 @@ export class WorkflowProposals extends BaseUIRequestManager {
 
     element.dataset.streamId = request.streamId || '';
     element.dataset.proposalId = request.proposalId || '';
+    element.dataset.agentCategory = request.agentCategory || 'workflow';
+
+    // Set category badge
+    if (categoryBadgeElem) {
+      const isToolUse = request.agentCategory === 'toolUse';
+      categoryBadgeElem.textContent = isToolUse ? 'Tool-Use' : 'Workflow';
+      categoryBadgeElem.className = `workflow-proposal__category-badge workflow-proposal__category-badge--${isToolUse ? 'tool-use' : 'workflow'}`;
+    }
 
     if (agentElem) {
       agentElem.textContent = request.agent || 'Unknown agent';
