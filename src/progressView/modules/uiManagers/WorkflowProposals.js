@@ -117,6 +117,18 @@ export class WorkflowProposals extends BaseUIRequestManager {
           fileSpan.className = 'workflow-proposal__file-name';
           fileSpan.textContent = name;
           fileSpan.title = info.fullPaths[i];
+          fileSpan.dataset.filePath = info.fullPaths[i];
+          fileSpan.style.cursor = 'pointer';
+          fileSpan.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const filePath = e.target.dataset.filePath;
+            if (filePath) {
+              vscode.postMessage({
+                command: COMMANDS.OPEN_FILE,
+                path: filePath,
+              });
+            }
+          });
           elem.appendChild(fileSpan);
         });
 
