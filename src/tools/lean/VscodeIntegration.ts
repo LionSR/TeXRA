@@ -102,6 +102,7 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
  * Get the proof goal state at a specific position in a Lean file.
  *
  * Uses the Lean 4 extension's LSP client to send a $/lean/plainGoal request.
+ * Opens the file first to ensure the LSP server has processed it.
  *
  * @param filePath - Path to the .lean file
  * @param line - 0-indexed line number
@@ -117,6 +118,15 @@ export async function getGoalState(
   if (!clientProvider) return null;
 
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+
+  // Open the document to ensure the LSP server has processed it
+  try {
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preserveFocus: true });
+  } catch {
+    return null;
+  }
+
   const client = clientProvider.findClient(uri);
   if (!client?.isRunning()) return null;
 
