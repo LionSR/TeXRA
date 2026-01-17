@@ -12,8 +12,8 @@ import { z } from 'zod';
 // Local imports - agent
 import {
   getAgent,
-  getWorkflowAgents,
   getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -32,6 +32,37 @@ import {
   WorkflowAgentProposalSchema,
   type WorkflowAgentProposal,
 } from '@eventBus/types';
+
+/**
+ * Build the dynamic agent list for the tool description.
+ * Called at class definition time to include current agents.
+ */
+function buildAgentListDescription(): string {
+  const workflowAgents = getVisibleWorkflowAgents();
+  const toolUseAgents = getVisibleToolUseAgents();
+
+  const formatAgent = (a: { name: string; description?: string }): string =>
+    `- ${a.name}: ${a.description || 'No description'}`;
+
+  const sections: string[] = [];
+
+  if (workflowAgents.length > 0) {
+    sections.push(
+      '**Workflow Agents** (document processing):',
+      ...workflowAgents.map(formatAgent),
+    );
+  }
+
+  if (toolUseAgents.length > 0) {
+    sections.push(
+      '',
+      '**Tool-Use Agents** (interactive assistants):',
+      ...toolUseAgents.map(formatAgent),
+    );
+  }
+
+  return sections.join('\n');
+}
 
 /**
  * Schema for the workflow_agent tool input.
@@ -73,15 +104,12 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
  */
 export class WorkflowAgentTool extends defineTool({
   name: 'workflow_agent',
-  description: `Execute a workflow agent to process files.
+  description: `Execute a workflow or tool-use agent to process files.
 
-This tool invokes specialized workflow agents (like 'correct', 'polish', 'draw') to process documents. The agent runs in the background and saves results to the output files.
+This tool invokes specialized agents to process documents. The agent runs in the background and saves results to the output files.
 
-Available workflow agents and their purposes:
-- correct: Fix grammar, spelling, and LaTeX errors
-- polish: Improve writing quality and clarity
-- draw: Generate vector graphics from descriptions
-- ocr: Extract text from images
+Available agents:
+${buildAgentListDescription()}
 
 Parameters:
 - agent: Name of the workflow agent to execute
@@ -239,6 +267,6 @@ The proposal is shown in the ProgressBoard for review. User can approve or rejec
    * Get list of available workflow agents for discovery.
    */
   static getAvailableAgents(): string[] {
-    return getWorkflowAgents().map((a) => a.name);
+    return getVisibleWorkflowAgents().map((a) => a.name);
   }
 }
