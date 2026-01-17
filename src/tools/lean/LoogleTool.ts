@@ -73,20 +73,15 @@ export class LeanLoogleTool extends defineTool({
   name: 'lean_loogle',
   description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
 
-Loogle lets you find theorems by describing what type they should have.
-
 Example queries:
-- "Nat → Nat → Nat" - functions taking two Nats and returning Nat
-- "List.map" - search by name
-- "_ + _ = _ + _" - commutativity-like theorems
-- "Real → Real" with "continuous" - continuous functions on reals
-- "∀ n, n + 0 = n" - specific theorem patterns
+- "Real.sin" - find lemmas mentioning a constant
+- "List.map" or "\"differ\"" - search by name substring
+- "_ * (_ ^ _)" - find lemmas with subexpression pattern
+- "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
+- "|- tsum _ = _ * tsum _" - search by main conclusion
+- "|- _ < _ → tsum _ < tsum _" - search by hypothesis pattern
 
-Returns matching theorems with:
-- name: Fully qualified name (e.g., Nat.add_comm)
-- type: Type signature
-- module: Source module for imports
-- doc: Documentation if available
+Returns: name, type signature, module (for imports), and documentation.
 
 Useful for finding the right lemma when you know roughly what type it should have.`,
   schema: LeanLoogleInputSchema,
