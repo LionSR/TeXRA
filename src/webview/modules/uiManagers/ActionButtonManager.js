@@ -1,22 +1,8 @@
 // Local imports - webview
-import {
-  ELEMENT_IDS,
-  BASE_FILE,
-  EDITED_FILE,
-  SINGLE_FILE_ELEMENTS,
-  MULTIPLE_SELECTIONS,
-  CHECK_BOXES_AUTO_EXTRACT,
-  SESSION_TYPES,
-  parseSessionType,
-} from '../constants.js';
+import { ELEMENT_IDS, BASE_FILE, EDITED_FILE } from '../constants.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { collectCurrentContext } from '../state/currentContext.js';
-import {
-  safeGetElementById,
-  safeGetElementValue,
-  safeSetElementValue,
-  safeSetElementChecked,
-} from '@common/domUtils.js';
+import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -275,52 +261,10 @@ export class ActionButtonManager extends BaseDomHandler {
     );
   }
 
-  _setupNewSessionButton() {
-    this.addListener(ELEMENT_IDS.NEW_SESSION_BUTTON, 'click', () => {
-      const sessionType = parseSessionType(safeGetElementValue('sessionType'));
-      const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
-
-      // Always clear the instruction
-      const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
-      if (instruction) {
-        instruction.value = '';
-      }
-
-      if (isToolUseSession) {
-        // Chat mode: Clear instruction only
-        // (conversation history is managed separately in progress view)
-      } else {
-        // Workflow mode: Clear instruction + file selections + checkboxes
-        this._clearWorkflowView();
-      }
-
-      this.state.save();
-    });
-  }
-
-  _clearWorkflowView() {
-    // Clear single file selections
-    SINGLE_FILE_ELEMENTS.forEach((id) => {
-      safeSetElementValue(id, '');
-    });
-
-    // Clear multiple file selections
-    MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
-      this.fileList.empty(id, toggleId, false);
-    });
-
-    // Uncheck auto-extract checkboxes
-    CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
-      safeSetElementChecked(id, false);
-    });
-  }
-
   setup() {
     this._setupInstructionButtons();
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
     this._setupCompareButtons();
-    this._setupNewSessionButton();
   }
 }
