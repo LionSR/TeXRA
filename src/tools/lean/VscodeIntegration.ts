@@ -167,7 +167,10 @@ async function sendPositionRequest<T>(
   try {
     const provider = await getClientProvider();
     if (!provider) {
-      return { data: null, error: 'Lean 4 extension not found or not activated' };
+      return {
+        data: null,
+        error: 'Lean 4 extension not found or not activated',
+      };
     }
     clientProvider = provider;
   } catch (e) {
@@ -267,15 +270,20 @@ export function extractHoverText(contents: Hover['contents']): string | null {
   if (typeof contents === 'string') {
     return contents;
   }
+
   if (Array.isArray(contents)) {
-    return contents
-      .map((c) => (typeof c === 'string' ? c : 'value' in c ? c.value : null))
-      .filter(Boolean)
-      .join('\n\n');
+    const texts = contents.map((item) => {
+      if (typeof item === 'string') return item;
+      if ('value' in item) return item.value;
+      return null;
+    });
+    return texts.filter(Boolean).join('\n\n');
   }
+
   if ('value' in contents) {
     return contents.value;
   }
+
   return null;
 }
 

@@ -20,7 +20,6 @@ const LeanLoogleInputSchema = z.strictObject({
   query: z.string().describe('Search query (type signature or name pattern)'),
   /** Maximum number of results to return */
   limit: z
-    .number()
     .int()
     .min(1)
     .max(20)
@@ -58,6 +57,27 @@ function isErrorResponse(
   response: LoogleResponse,
 ): response is LoogleErrorResponse {
   return 'error' in response;
+}
+
+const MAX_DOC_LENGTH = 200;
+
+/** Format a single Loogle hit for display. */
+function formatHit(hit: LoogleHit, index: number): string {
+  const lines = [
+    `${index}. **${hit.name}**`,
+    `   Type: \`${hit.type}\``,
+    `   Module: ${hit.module}`,
+  ];
+
+  if (hit.doc) {
+    const truncatedDoc =
+      hit.doc.length > MAX_DOC_LENGTH
+        ? hit.doc.slice(0, MAX_DOC_LENGTH) + '...'
+        : hit.doc;
+    lines.push(`   Doc: ${truncatedDoc}`);
+  }
+
+  return lines.join('\n');
 }
 
 // ============================================================================
@@ -123,16 +143,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       }
 
       const formatted = hits
-        .map((hit, i) => {
-          let entry = `${i + 1}. **${hit.name}**\n   Type: \`${hit.type}\`\n   Module: ${hit.module}`;
-          if (hit.doc) {
-            // Truncate long docs
-            const doc =
-              hit.doc.length > 200 ? hit.doc.slice(0, 200) + '...' : hit.doc;
-            entry += `\n   Doc: ${doc}`;
-          }
-          return entry;
-        })
+        .map((hit, i) => formatHit(hit, i + 1))
         .join('\n\n');
 
       return {
