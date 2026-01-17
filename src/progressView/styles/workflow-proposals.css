@@ -31,6 +31,27 @@
   flex-wrap: wrap;
 }
 
+/* Category badge */
+.workflow-proposal__category-badge {
+  font-size: var(--font-size-xs, 0.7rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.workflow-proposal__category-badge--workflow {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.workflow-proposal__category-badge--tool-use {
+  background: var(--vscode-textLink-foreground);
+  color: var(--vscode-editor-background);
+}
+
 .workflow-proposal__agent {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--font-size-base);
