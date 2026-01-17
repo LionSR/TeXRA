@@ -66,7 +66,12 @@ export class DiffCommandExecutor {
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffVcCommand(inputFile, commitHash, useFlatten, options),
+        this.buildLatexdiffVcCommand(
+          inputFile,
+          commitHash,
+          useFlatten,
+          options,
+        ),
       'latexdiff-vc',
       options?.cwd,
     );
@@ -90,7 +95,8 @@ export class DiffCommandExecutor {
     useFlatten = true,
     options?: DiffExecutionOptions,
   ): string[] {
-    const { mathMarkup, pictureEnvs, subtype } = this.getLatexdiffConfig(options);
+    const { mathMarkup, pictureEnvs, subtype } =
+      this.getLatexdiffConfig(options);
     const command = [
       'latexdiff',
       '--encoding=utf8',
@@ -110,7 +116,8 @@ export class DiffCommandExecutor {
     useFlatten = true,
     options?: DiffExecutionOptions,
   ): string[] {
-    const { mathMarkup, pictureEnvs, subtype } = this.getLatexdiffConfig(options);
+    const { mathMarkup, pictureEnvs, subtype } =
+      this.getLatexdiffConfig(options);
     const command = [
       'latexdiff-vc',
       '--encoding=utf8',

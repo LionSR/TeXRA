@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.6] - 2026-01-17
+
+### Features
+
+- Added **Orchestrator** tool-use agent for multi-agent workflow coordination with proposal review system.
+- Added **Runs tool** for accessing agent execution history via `/runs` virtual filesystem.
+- Added **Workflow agent proposal** system with frontend UI for reviewing and approving delegated tasks.
+- Added **Lean** agent to default tool-use agents with VS Code integration, real-time diagnostics, and tools (`lean_goal`, `lean_hover`, `lean_loogle`, `lean_restart`).
+- Added **LaTeXdiff changed pages only** option for tool edit proposals (ONLYCHANGEDPAGE by default).
+- Added **pasted arXiv URL support** in download source command.
+- Added **New button with mode-specific clearing** for workflow/tool-use views.
+- Added **always-visible YOLO mode toggle** button in the header for quick access.
+- Added **literal matching option** to grep tool for fixed string searches.
+- Added **reference-agents** folder with example agent definitions.
+
+### Bug Fixes
+
+- Fixed agent/model dropdowns to open upward for better visibility.
+- Fixed extension activation error with Zod v4 schema refinement separation.
+- Fixed progress view theming with VS Code CSS variables.
+- Fixed LaTeX tool detection with improved logging and robustness.
+- Fixed empty chat display and stale log content between tabs.
+- Fixed chat resume schema validation to support flat message format.
+- Fixed range parameter handling in read_file tool for array format.
+- Fixed context window updates during streaming.
+- Fixed diff naming to prevent `diffr{X}r{X}` when comparing same-round files.
+
+### Improvements
+
+- Flattened abstraction layers in agent execution path.
+- Consolidated CSS styles and removed redundancy across views.
+- Schema-based state initialization with Zod v4 patterns.
+- Consolidated path utilities and removed pass-through functions.
+- Simplified progress view architecture and UI managers.
+- Converted interfaces to Zod schemas with lean implementation patterns.
+- Simplified code patterns and reduced duplication.
+- Removed dead code, deprecated functions, and obsolete approval paths.
+
 ## [0.35.5] - 2026-01-15
 
 ### Features
