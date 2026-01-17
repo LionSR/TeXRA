@@ -1,12 +1,9 @@
 /**
- * Shared event bus types for breaking circular dependency with progressView.
+ * Shared event bus types (avoids circular dependency with progressView).
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 import { CoreWorkflowFieldsSchema } from '@agent/core/AgentConfig';
-
-// Import canonical error schema - SINGLE SOURCE OF TRUTH
-// schemas.ts has no internal project imports, so no circular dependency risk
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
@@ -28,10 +25,7 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
-/**
- * Error details for retry requests.
- * Uses ProviderErrorPartialSchema from canonical source - all fields optional for transport.
- */
+/** Error details for retry requests (all fields optional for transport). */
 export const RetryErrorDetailsSchema = ProviderErrorPartialSchema;
 export type RetryErrorDetails = ProviderErrorPartial;
 
@@ -48,13 +42,8 @@ export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
 export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
 
-/**
- * Agent proposal details (without UI-specific fields).
- * Uses CoreWorkflowFieldsSchema as single source of truth.
- * Supports both workflow and tool-use agents.
- */
+/** Agent proposal details (extends CoreWorkflowFieldsSchema). */
 export const AgentProposalSchema = CoreWorkflowFieldsSchema.extend({
-  /** Category of the agent being proposed */
   agentCategory: AgentProposalCategorySchema,
 });
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
@@ -63,10 +52,7 @@ export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 export const WorkflowAgentProposalSchema = AgentProposalSchema;
 export type WorkflowAgentProposal = AgentProposal;
 
-/**
- * Agent proposal prompt for UI display.
- * Includes proposal details plus UI-specific fields.
- */
+/** Agent proposal prompt for UI display. */
 export const AgentProposalPromptSchema = z.strictObject({
   proposalId: z.string(),
   streamId: StreamTabIdSchema,

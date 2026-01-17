@@ -1,9 +1,6 @@
 /**
- * Workflow tool for proposing agent executions from tool-use agents.
- *
- * This tool allows tool-use agents to invoke other agents (workflow agents like
- * 'correct', 'polish', 'draw', or tool-use agents like 'chat', 'lean') on files,
- * enabling sophisticated multi-agent workflows.
+ * Tool for proposing agent executions from tool-use agents.
+ * Enables invoking workflow or tool-use agents on files for multi-agent workflows.
  */
 
 // Third-party imports
@@ -34,10 +31,7 @@ import {
   type WorkflowAgentProposal,
 } from '@eventBus/types';
 
-/**
- * Build the dynamic agent list for the tool description.
- * Called at class definition time to include current agents.
- */
+/** Build the dynamic agent list for the tool description. */
 function buildAgentListDescription(): string {
   const workflowAgents = getVisibleWorkflowAgents();
   const toolUseAgents = getVisibleToolUseAgents();
@@ -66,50 +60,33 @@ function buildAgentListDescription(): string {
 }
 
 /**
- * Schema for the workflow_agent tool input.
- *
- * Extends WorkflowAgentProposalSchema with tool-specific modifications:
- * - .prefault() for default values on optional arrays and booleans
- * - .nullish() instead of .nullable() for OpenAI API compatibility
+ * Tool input schema. Extends WorkflowAgentProposalSchema with:
+ * - .prefault() defaults for arrays/booleans
+ * - .nullish() for OpenAI API compatibility
  */
 const WorkflowAgentInputSchema = WorkflowAgentProposalSchema.extend({
-  // Default model
   model: z.string().prefault('gemini3p'),
-  // Arrays need defaults for tool invocation
   inputFiles: z.array(z.string()).prefault([]),
   referenceFiles: z.array(z.string()).prefault([]),
   auxiliaryFiles: z.array(z.string()).prefault([]),
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
-  // Nullable fields need nullish for OpenAI API compatibility
   referenceFile: z.string().nullish(),
   auxiliaryFile: z.string().nullish(),
   mediaFile: z.string().nullish(),
-  // Boolean needs default
   useMultipleOutputs: z.boolean().prefault(false),
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
-/** Get list of available agent names (workflow + tool-use) for the tool description. */
 function getAvailableAgentNames(): string[] {
-  const workflow = getVisibleWorkflowAgents().map((a) => a.name);
-  const toolUse = getVisibleToolUseAgents().map((a) => a.name);
-  return [...workflow, ...toolUse];
+  return [
+    ...getVisibleWorkflowAgents().map((a) => a.name),
+    ...getVisibleToolUseAgents().map((a) => a.name),
+  ];
 }
 
-/**
- * Tool for proposing agent executions from tool-use agents.
- *
- * This tool enables tool-use agents to invoke other agents (workflow or tool-use)
- * to process files. The agent runs in the background and results are saved to
- * the specified output files.
- *
- * Use cases:
- * - Processing LaTeX documents with specialized agents
- * - Chaining agent operations in complex workflows
- * - Delegating specific tasks to purpose-built agents
- */
+/** Tool for invoking workflow or tool-use agents to process files. */
 export class WorkflowAgentTool extends defineTool({
   name: 'workflow_agent',
   description: `Execute a workflow or tool-use agent to process files.
@@ -166,37 +143,36 @@ The proposal is shown in the ProgressBoard for user review. User can:
     }
 
     // Validate all file paths exist
+    const toValidate = (
+      single: string | null | undefined,
+      arr: string[],
+      label: string,
+    ): { path: string; label: string }[] =>
+      [single, ...arr]
+        .filter((p): p is string => typeof p === 'string' && p.length > 0)
+        .map((path) => ({ path, label }));
+
     const filesToValidate = [
-      { path: input.inputFile, label: 'Input file' },
-      ...input.inputFiles.map((path) => ({ path, label: 'Input file' })),
-      ...(input.referenceFile
-        ? [{ path: input.referenceFile, label: 'Reference file' }]
-        : []),
-      ...input.referenceFiles.map((path) => ({
-        path,
-        label: 'Reference file',
-      })),
-      ...(input.auxiliaryFile
-        ? [{ path: input.auxiliaryFile, label: 'Auxiliary file' }]
-        : []),
-      ...input.auxiliaryFiles.map((path) => ({
-        path,
-        label: 'Auxiliary file',
-      })),
-      ...(input.mediaFile
-        ? [{ path: input.mediaFile, label: 'Media file' }]
-        : []),
-      ...input.mediaFiles.map((path) => ({ path, label: 'Media file' })),
+      ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
+      ...toValidate(
+        input.referenceFile,
+        input.referenceFiles,
+        'Reference file',
+      ),
+      ...toValidate(
+        input.auxiliaryFile,
+        input.auxiliaryFiles,
+        'Auxiliary file',
+      ),
+      ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
     ];
 
     for (const { path, label } of filesToValidate) {
-      const exists = await WorkspaceFS.exists(path);
-      if (!exists) {
+      if (!(await WorkspaceFS.exists(path))) {
         throw new Error(`${label} not found: ${path}`);
       }
     }
 
-    // Build agent proposal
     const proposal: WorkflowAgentProposal = {
       agent: input.agent,
       model: input.model,
@@ -214,14 +190,9 @@ The proposal is shown in the ProgressBoard for user review. User can:
       agentCategory: isWorkflow ? 'workflow' : 'toolUse',
     };
 
-    // Get stream ID from tool execution context
-    const context = getCurrentToolFileInteractionContext();
-    const streamId = context?.streamId ?? '';
-
-    // Generate unique proposal ID
+    const streamId = getCurrentToolFileInteractionContext()?.streamId ?? '';
     const proposalId = randomUUID();
 
-    // Wait for user approval
     const result = await proposalCoordinator.waitForUserAction(streamId, {
       proposalId,
       proposal,
@@ -251,15 +222,14 @@ The proposal is shown in the ProgressBoard for user review. User can:
       return {
         summary: `User opened '${input.agent}' proposal for editing`,
         output:
-          `The proposal was opened in the main view for editing. ` +
-          `The user may modify the configuration and execute manually.`,
+          'The proposal was opened in the main view for editing. ' +
+          'The user may modify the configuration and execute manually.',
       };
     }
 
-    // User approved - execute the workflow agent in background
+    // Approved - execute in background
     void executeAgent(proposal);
 
-    // Build response
     const outputInfo =
       input.outputFiles.length > 0
         ? `Output will be saved to: ${input.outputFiles.join(', ')}`
@@ -290,9 +260,6 @@ The proposal is shown in the ProgressBoard for user review. User can:
     };
   }
 
-  /**
-   * Get list of available agents (workflow + tool-use) for discovery.
-   */
   static getAvailableAgents(): string[] {
     return getAvailableAgentNames();
   }
