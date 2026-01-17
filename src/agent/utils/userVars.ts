@@ -98,7 +98,9 @@ function getBasicVars(
 ): UserVars {
   // Build agent lists for template use
   const formatAgentList = (agents: { name: string; description?: string }[]) =>
-    agents.map((a) => `- ${a.name}: ${a.description || 'No description'}`).join('\n');
+    agents
+      .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
+      .join('\n');
 
   const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
   const toolUseAgentsList = formatAgentList(getVisibleToolUseAgents());

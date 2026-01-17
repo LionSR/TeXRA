@@ -36,52 +36,25 @@ import {
 /**
  * Schema for the workflow_agent tool input.
  *
- * Derived from WorkflowAgentProposalSchema with tool-specific modifications:
- * - Adds defaults via .prefault() for optional arrays and booleans
- * - Uses .nullish() instead of .nullable() for API compatibility
- * - Adds descriptions for tool documentation
+ * Extends WorkflowAgentProposalSchema with tool-specific modifications:
+ * - .prefault() for default values on optional arrays and booleans
+ * - .nullish() instead of .nullable() for OpenAI API compatibility
  */
 const WorkflowAgentInputSchema = WorkflowAgentProposalSchema.extend({
-  agent: z.string().describe('Name of the workflow agent to execute'),
-  model: z
-    .string()
-    .prefault('gemini3p')
-    .describe('Model to use for agent execution'),
-  instruction: z.string().describe('Instruction for the workflow agent'),
-  inputFile: z.string().describe('Path to the primary input file'),
-  inputFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Additional input file paths'),
-  referenceFile: z
-    .string()
-    .nullish()
-    .describe('Reference file path for additional context'),
-  referenceFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Additional reference file paths'),
-  auxiliaryFile: z
-    .string()
-    .nullish()
-    .describe('Auxiliary file path for supplementary content'),
-  auxiliaryFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Additional auxiliary file paths'),
-  mediaFile: z.string().nullish().describe('Media file path for images/figures'),
-  mediaFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Additional media file paths'),
-  outputFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Desired output file paths'),
-  useMultipleOutputs: z
-    .boolean()
-    .prefault(false)
-    .describe('Enable multiple outputs mode for agents that support it'),
+  // Default model
+  model: z.string().prefault('gemini3p'),
+  // Arrays need defaults for tool invocation
+  inputFiles: z.array(z.string()).prefault([]),
+  referenceFiles: z.array(z.string()).prefault([]),
+  auxiliaryFiles: z.array(z.string()).prefault([]),
+  mediaFiles: z.array(z.string()).prefault([]),
+  outputFiles: z.array(z.string()).prefault([]),
+  // Nullable fields need nullish for OpenAI API compatibility
+  referenceFile: z.string().nullish(),
+  auxiliaryFile: z.string().nullish(),
+  mediaFile: z.string().nullish(),
+  // Boolean needs default
+  useMultipleOutputs: z.boolean().prefault(false),
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -147,65 +120,34 @@ The proposal is shown in the ProgressBoard for review. User can approve or rejec
       );
     }
 
-    // Validate input file exists
-    const inputExists = await WorkspaceFS.exists(input.inputFile);
-    if (!inputExists) {
-      throw new Error(`Input file not found: ${input.inputFile}`);
-    }
+    // Validate all file paths exist
+    const filesToValidate = [
+      { path: input.inputFile, label: 'Input file' },
+      ...input.inputFiles.map((path) => ({ path, label: 'Input file' })),
+      ...(input.referenceFile
+        ? [{ path: input.referenceFile, label: 'Reference file' }]
+        : []),
+      ...input.referenceFiles.map((path) => ({
+        path,
+        label: 'Reference file',
+      })),
+      ...(input.auxiliaryFile
+        ? [{ path: input.auxiliaryFile, label: 'Auxiliary file' }]
+        : []),
+      ...input.auxiliaryFiles.map((path) => ({
+        path,
+        label: 'Auxiliary file',
+      })),
+      ...(input.mediaFile
+        ? [{ path: input.mediaFile, label: 'Media file' }]
+        : []),
+      ...input.mediaFiles.map((path) => ({ path, label: 'Media file' })),
+    ];
 
-    // Validate additional input files exist
-    for (const file of input.inputFiles) {
-      const exists = await WorkspaceFS.exists(file);
+    for (const { path, label } of filesToValidate) {
+      const exists = await WorkspaceFS.exists(path);
       if (!exists) {
-        throw new Error(`Additional input file not found: ${file}`);
-      }
-    }
-
-    // Validate reference file if provided
-    if (input.referenceFile) {
-      const refExists = await WorkspaceFS.exists(input.referenceFile);
-      if (!refExists) {
-        throw new Error(`Reference file not found: ${input.referenceFile}`);
-      }
-    }
-
-    // Validate additional reference files
-    for (const file of input.referenceFiles) {
-      const exists = await WorkspaceFS.exists(file);
-      if (!exists) {
-        throw new Error(`Reference file not found: ${file}`);
-      }
-    }
-
-    // Validate auxiliary file if provided
-    if (input.auxiliaryFile) {
-      const auxExists = await WorkspaceFS.exists(input.auxiliaryFile);
-      if (!auxExists) {
-        throw new Error(`Auxiliary file not found: ${input.auxiliaryFile}`);
-      }
-    }
-
-    // Validate additional auxiliary files
-    for (const file of input.auxiliaryFiles) {
-      const exists = await WorkspaceFS.exists(file);
-      if (!exists) {
-        throw new Error(`Auxiliary file not found: ${file}`);
-      }
-    }
-
-    // Validate media file if provided
-    if (input.mediaFile) {
-      const mediaExists = await WorkspaceFS.exists(input.mediaFile);
-      if (!mediaExists) {
-        throw new Error(`Media file not found: ${input.mediaFile}`);
-      }
-    }
-
-    // Validate additional media files
-    for (const file of input.mediaFiles) {
-      const exists = await WorkspaceFS.exists(file);
-      if (!exists) {
-        throw new Error(`Media file not found: ${file}`);
+        throw new Error(`${label} not found: ${path}`);
       }
     }
 
@@ -240,9 +182,12 @@ The proposal is shown in the ProgressBoard for review. User can approve or rejec
     });
 
     if (result.action === 'reject') {
+      const feedbackMessage = result.feedback
+        ? `\n\nUser feedback: ${result.feedback}`
+        : '';
       return {
         summary: `User rejected workflow agent '${input.agent}' proposal`,
-        output: 'The proposed workflow agent execution was rejected by the user.',
+        output: `The proposed workflow agent execution was rejected by the user.${feedbackMessage}`,
         isError: true,
       };
     }
@@ -256,25 +201,8 @@ The proposal is shown in the ProgressBoard for review. User can approve or rejec
       };
     }
 
-    // User approved - execute the workflow agent
-    const agentConfig = {
-      agent: proposal.agent,
-      model: proposal.model,
-      instruction: proposal.instruction,
-      inputFile: proposal.inputFile,
-      inputFiles: proposal.inputFiles,
-      referenceFile: proposal.referenceFile,
-      referenceFiles: proposal.referenceFiles,
-      auxiliaryFile: proposal.auxiliaryFile,
-      auxiliaryFiles: proposal.auxiliaryFiles,
-      mediaFile: proposal.mediaFile,
-      mediaFiles: proposal.mediaFiles,
-      outputFiles: proposal.outputFiles,
-      useMultipleOutputs: proposal.useMultipleOutputs,
-    };
-
-    // Execute the workflow agent (runs in background)
-    void executeAgent(agentConfig);
+    // User approved - execute the workflow agent in background
+    void executeAgent(proposal);
 
     // Build response
     const outputInfo =
