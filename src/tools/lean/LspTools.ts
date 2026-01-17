@@ -53,6 +53,17 @@ const LeanGoalInputSchema = z.strictObject({
 
 export type LeanGoalInput = z.infer<typeof LeanGoalInputSchema>;
 
+const LeanHoverInputSchema = z.strictObject({
+  /** Path to the Lean file */
+  file: z.string().describe('Path to the .lean file'),
+  /** 1-indexed line number */
+  line: z.number().int().min(1).describe('Line number (1-indexed)'),
+  /** 1-indexed column number */
+  column: z.number().int().min(1).describe('Column number (1-indexed)'),
+});
+
+export type LeanHoverInput = z.infer<typeof LeanHoverInputSchema>;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -282,3 +293,48 @@ Make sure the Lean 4 VS Code extension is installed and the file is open.`,
   }
 }
 
+/**
+ * Get hover information (type signature + docs) at a position in a Lean file.
+ */
+export class LeanHoverTool extends defineTool({
+  name: 'lean_hover',
+  description: `Get type signature and documentation for an identifier in a Lean 4 file.
+
+Returns the same information you see when hovering over a symbol in VS Code:
+- Type signature
+- Documentation/docstrings
+- Fully qualified name
+
+Line and column are 1-indexed. Position the column on the identifier to inspect.
+
+Requires: Lean 4 VS Code extension installed and active.`,
+  schema: LeanHoverInputSchema,
+}) {
+  protected async execute(input: LeanHoverInput): Promise<ToolResult> {
+    const { file, line, column } = input;
+
+    try {
+      // Convert to 0-indexed for LSP
+      const result = await vscodeIntegration.getHoverInfo(file, line - 1, column - 1);
+
+      if (!result?.contents?.value) {
+        return {
+          summary: 'No hover info',
+          output: `No information at ${file}:${line}:${column}`,
+          isError: true,
+        };
+      }
+
+      return {
+        summary: 'Hover info',
+        output: result.contents.value,
+      };
+    } catch (error) {
+      return {
+        summary: 'Failed to get hover info',
+        output: `Error: ${toErrorMessage(error)}`,
+        isError: true,
+      };
+    }
+  }
+}
