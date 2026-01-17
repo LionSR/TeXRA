@@ -216,6 +216,10 @@ export class WebviewUpdater {
   }
 
   showWorkflowAgentProposal(proposal: WorkflowAgentProposalPrompt): void {
+    console.log(
+      '[WebviewUpdater] showWorkflowAgentProposal:',
+      proposal.proposalId,
+    );
     this.sendMessage({
       command: COMMANDS.SHOW_WORKFLOW_AGENT_PROPOSAL,
       proposal,
