@@ -32,7 +32,8 @@ const CleanParamsSchema = z.object({
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  const isError = result.status === 'missingParams' || result.status === 'error';
+  const isError =
+    result.status === 'missingParams' || result.status === 'error';
   const messages: Record<FileOpResult['status'], string> = {
     success: `Cleanup complete for ${inputFile}`,
     noFiles: `No files found to clean for ${inputFile}`,
@@ -80,7 +81,12 @@ async function handleCleanSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const data = await validateCleanParams(inputFile, agent, model, 'cleanSingle');
+  const data = await validateCleanParams(
+    inputFile,
+    agent,
+    model,
+    'cleanSingle',
+  );
   if (!data) return;
 
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
@@ -98,7 +104,12 @@ async function handleCleanMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const data = await validateCleanParams(inputFile, agent, model, 'cleanMultiple');
+  const data = await validateCleanParams(
+    inputFile,
+    agent,
+    model,
+    'cleanMultiple',
+  );
   if (!data) return;
 
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
