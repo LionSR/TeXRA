@@ -5,7 +5,10 @@
  * than locally. This module provides a unified abstraction layer.
  *
  * Uses native SDK types where available for better type safety and maintainability.
+ * Zod schemas are the single source of truth; types are derived via z.infer<>.
  */
+
+import { z } from 'zod';
 
 // SDK type imports - using native types for better type safety
 // Consumers should import SDK types directly from the respective SDKs:
@@ -22,41 +25,47 @@ import type {
 } from 'openai/resources/responses/responses';
 
 // ============================================================================
-// Web Search Result Types
+// Web Search Result Schemas - Single Source of Truth
 // ============================================================================
 
 /**
- * A single web search result entry.
+ * Schema for a single web search result entry.
  * Normalized across all providers.
  */
-export interface WebSearchResultEntry {
+export const WebSearchResultEntrySchema = z.object({
   /** URL of the search result */
-  url: string;
+  url: z.string(),
   /** Title of the page */
-  title: string;
+  title: z.string(),
   /** Text snippet/description (may be encrypted for Anthropic) */
-  snippet?: string;
+  snippet: z.string().optional(),
   /** Domain extracted from URL */
-  domain?: string;
+  domain: z.string().optional(),
   /** Page age/freshness hint (Anthropic only) */
-  pageAge?: string;
-}
+  pageAge: z.string().optional(),
+});
+
+/** A single web search result entry - derived from schema. */
+export type WebSearchResultEntry = z.infer<typeof WebSearchResultEntrySchema>;
 
 /**
- * Unified web search result across all providers.
+ * Schema for unified web search result across all providers.
  */
-export interface WebSearchResult {
+export const WebSearchResultSchema = z.object({
   /** The search query that was executed */
-  query: string;
+  query: z.string(),
   /** Search result entries */
-  results: WebSearchResultEntry[];
+  results: z.array(WebSearchResultEntrySchema),
   /** Provider that executed the search */
-  provider: 'anthropic' | 'openai';
+  provider: z.enum(['anthropic', 'openai']),
   /** Unique identifier for this search call */
-  callId?: string;
+  callId: z.string().optional(),
   /** Status of the search */
-  status: 'completed' | 'in_progress' | 'failed';
-}
+  status: z.enum(['completed', 'in_progress', 'failed']),
+});
+
+/** Unified web search result - derived from schema. */
+export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
 
 // ============================================================================
 // Server Tool Content Block Types

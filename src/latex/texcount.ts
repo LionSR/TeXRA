@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -40,34 +42,31 @@ async function hasChinesePackages(
   }
 }
 
+// ============================================================================
+// Texcount Schemas
+// ============================================================================
+
+export const TexcountModeSchema = z.enum(['separate', 'include', 'sum']);
+export type TexcountMode = z.infer<typeof TexcountModeSchema>;
+
+export const TexcountOptionsSchema = z.object({
+  mode: TexcountModeSchema.optional(),
+  channel: z.string().optional(),
+});
+export type TexcountOptions = z.infer<typeof TexcountOptionsSchema>;
+
+export const TexcountResultSchema = z.object({
+  output: z.string().nullable(),
+  errors: z.array(z.string()),
+});
+export type TexcountResult = z.infer<typeof TexcountResultSchema>;
+
+/** Internal validation result - simple discriminated union */
+type ValidationResult = { valid: true } | { valid: false; reason: string };
+
 /**
- * Get full statistics for LaTeX documents using the texcount Perl script
- * @param filePaths Single file path or array of file paths
- * @param options Options to control merging behavior and logging channel
- * @returns Promise<TexcountResult> Combined texcount output and any errors encountered during processing
+ * Get full statistics for LaTeX documents using the texcount Perl script.
  */
-export type TexcountMode = 'separate' | 'include' | 'sum';
-
-export interface TexcountOptions {
-  mode?: TexcountMode;
-  channel?: string;
-}
-
-interface ValidationSuccess {
-  valid: true;
-}
-
-interface ValidationFailure {
-  valid: false;
-  reason: string;
-}
-
-type ValidationResult = ValidationSuccess | ValidationFailure;
-
-export interface TexcountResult {
-  output: string | null;
-  errors: string[];
-}
 
 async function validateTexFile(
   fileLocation: FileLocation,

@@ -1,18 +1,23 @@
-// Local imports
+import { z } from 'zod';
+
 import { getConfig } from '@utils/config';
-import { MESSAGE_TYPES, type MessageType } from './messageTypes';
+import { MESSAGE_TYPES, MessageTypeSchema } from './messageTypes';
 
-export interface FilterOptions {
-  level: 'debug' | 'info' | 'warn' | 'error';
-  messageType: MessageType;
-}
+// ============================================================================
+// Filter Schemas
+// ============================================================================
 
-export interface FilterResult {
-  /** Whether the message should be emitted to the progress view */
-  shouldEmit: boolean;
-  /** Current debug mode state (for setting verbose flag on emitted messages) */
-  debugMode: boolean;
-}
+export const FilterOptionsSchema = z.object({
+  level: z.enum(['debug', 'info', 'warn', 'error']),
+  messageType: MessageTypeSchema,
+});
+export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
+
+export const FilterResultSchema = z.object({
+  shouldEmit: z.boolean(),
+  debugMode: z.boolean(),
+});
+export type FilterResult = z.infer<typeof FilterResultSchema>;
 
 /**
  * Determines whether a log message should be emitted to the progress view
