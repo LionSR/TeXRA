@@ -35,30 +35,126 @@ const LeanDiagnosticsInputSchema = z.strictObject({
 
 export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
-const LeanRestartInputSchema = z.strictObject({
-  /** Path to the Lean file to restart */
-  file: z.string().describe('Path to the .lean file to restart'),
+// ============================================================================
+// Lean File Tool (file-specific commands)
+// ============================================================================
+
+const FILE_COMMANDS = ['restart', 'refresh_dependencies'] as const;
+type FileCommand = (typeof FILE_COMMANDS)[number];
+
+const FILE_COMMAND_MAP: Record<FileCommand, string> = {
+  restart: 'lean4.restartFile',
+  refresh_dependencies: 'lean4.refreshFileDependencies',
+};
+
+const FILE_COMMAND_DESCRIPTIONS: Record<FileCommand, string> = {
+  restart: 'Restart Lean server for this file',
+  refresh_dependencies: 'Refresh file dependencies without full restart',
+};
+
+const LeanFileInputSchema = z.strictObject({
+  /** Command to execute on the file */
+  command: z
+    .enum(FILE_COMMANDS)
+    .describe('Command: "restart" or "refresh_dependencies"'),
+  /** Path to the Lean file */
+  file: z.string().describe('Path to the .lean file'),
 });
 
-export type LeanRestartInput = z.infer<typeof LeanRestartInputSchema>;
+export type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
 
-/** Shared schema for LSP position-based queries (file + line + column) */
-const LeanPositionInputSchema = z.strictObject({
+// ============================================================================
+// Lean Project Tool (global commands - project, server, and setup)
+// ============================================================================
+
+const PROJECT_COMMANDS = [
+  // Server commands
+  'restart_server',
+  'stop_server',
+  // Project commands
+  'build',
+  'clean',
+  'fetch_cache',
+  'fetch_file_cache',
+  // Setup commands
+  'install_elan',
+  'install_deps',
+  'update_elan',
+  'select_toolchain',
+] as const;
+type ProjectCommand = (typeof PROJECT_COMMANDS)[number];
+
+const PROJECT_COMMAND_MAP: Record<ProjectCommand, string> = {
+  // Server
+  restart_server: 'lean4.restartServer',
+  stop_server: 'lean4.stopServer',
+  // Project
+  build: 'lean4.project.build',
+  clean: 'lean4.project.clean',
+  fetch_cache: 'lean4.project.fetchCache',
+  fetch_file_cache: 'lean4.project.fetchFileCache',
+  // Setup
+  install_elan: 'lean4.setup.installElan',
+  install_deps: 'lean4.setup.installDeps',
+  update_elan: 'lean4.setup.updateElan',
+  select_toolchain: 'lean4.setup.selectDefaultToolchain',
+};
+
+const PROJECT_COMMAND_DESCRIPTIONS: Record<ProjectCommand, string> = {
+  // Server
+  restart_server: 'Restart the entire Lean language server',
+  stop_server: 'Stop the Lean language server',
+  // Project
+  build: 'Build the project (runs lake build)',
+  clean: 'Clean project build artifacts',
+  fetch_cache: 'Download Mathlib build cache for the project',
+  fetch_file_cache: "Download Mathlib cache for current file's imports only",
+  // Setup
+  install_elan: 'Install Elan (Lean version manager)',
+  install_deps: 'Install Lean dependencies',
+  update_elan: 'Update Elan to latest version',
+  select_toolchain: 'Select default Lean toolchain version',
+};
+
+const LeanProjectInputSchema = z.strictObject({
+  /** Command to execute */
+  command: z.enum(PROJECT_COMMANDS).describe(
+    `Global command to execute:
+Server: restart_server, stop_server
+Project: build, clean, fetch_cache, fetch_file_cache
+Setup: install_elan, install_deps, update_elan, select_toolchain`,
+  ),
+});
+
+export type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
+
+// ============================================================================
+// Lean Inspect Tool (position-based queries: goal or hover)
+// ============================================================================
+
+const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
+
+const LeanInspectInputSchema = z.strictObject({
+  /** What to inspect: goal, term_goal, or hover */
+  type: z
+    .enum(INSPECT_TYPES)
+    .describe(
+      'What to inspect: "goal" for tactic proof state, "term_goal" for expected type in term mode, "hover" for type/docs',
+    ),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
   /** 1-indexed line number */
   line: z.number().int().min(1).describe('Line number (1-indexed)'),
   /** 1-indexed column number */
-  column: z.number().int().min(1).prefault(1).describe('Column number (1-indexed, default: 1)'),
+  column: z
+    .number()
+    .int()
+    .min(1)
+    .prefault(1)
+    .describe('Column number (1-indexed, default: 1)'),
 });
 
-export type LeanPositionInput = z.infer<typeof LeanPositionInputSchema>;
-
-// Aliases for backwards compatibility
-const LeanGoalInputSchema = LeanPositionInputSchema;
-const LeanHoverInputSchema = LeanPositionInputSchema;
-export type LeanGoalInput = LeanPositionInput;
-export type LeanHoverInput = LeanPositionInput;
+export type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
 
 // ============================================================================
 // Helper Functions
@@ -69,7 +165,7 @@ const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 If you expected errors:
 1. Check the Lean 4 output panel (import/dependency errors appear there)
 2. Make sure the file is saved
-3. Try \`lean_restart\` to refresh the Lean server
+3. Try \`lean_file\` with command "restart" to refresh the Lean server
 4. Verify the Lean 4 extension is active (look for goal state in the infoview)`;
 
 /** Navigate editor to first error location if present. */
@@ -107,7 +203,7 @@ Returns diagnostics from the Lean 4 VS Code extension including:
 - Warnings and hints
 
 Tips:
-- If diagnostics seem stale, call lean_restart first to refresh the Lean server
+- If diagnostics seem stale, use lean_file with command "restart" to refresh the Lean server
 - Import/dependency errors may only appear in the Lean 4 output panel
 
 Requires: Lean 4 VS Code extension installed and active.`,
@@ -175,42 +271,45 @@ Requires: Lean 4 VS Code extension installed and active.`,
 }
 
 /**
- * Restart the Lean file server to pick up changes in imports/dependencies.
+ * Execute file-specific Lean 4 extension commands.
  */
-export class LeanRestartTool extends defineTool({
-  name: 'lean_restart',
-  description: `Restart the Lean server for a file to pick up changes in imports or dependencies.
+export class LeanFileTool extends defineTool({
+  name: 'lean_file',
+  description: `Execute Lean 4 extension commands on a specific file.
 
-Use this when:
-- You edited an imported file and want the changes visible in the importing file
-- You changed lakefile.lean or lake-manifest.json
-- Diagnostics seem stale or incorrect
+Commands:
+- "restart": Restart Lean server for this file (use when diagnostics are stale or after editing imports)
+- "refresh_dependencies": Refresh file dependencies without full restart (lighter than restart)
 
-This triggers the Lean 4 extension's "Restart File" command.`,
-  schema: LeanRestartInputSchema,
+Requires: Lean 4 VS Code extension installed and active.`,
+  schema: LeanFileInputSchema,
 }) {
-  protected async execute(input: LeanRestartInput): Promise<ToolResult> {
-    const { file } = input;
+  protected async execute(input: LeanFileInput): Promise<ToolResult> {
+    const { command, file } = input;
+    const vscodeCommand = FILE_COMMAND_MAP[command];
+    const description = FILE_COMMAND_DESCRIPTIONS[command];
 
     try {
-      const success = await vscodeIntegration.restartFileServer(file);
+      const success = await vscodeIntegration.executeFileCommand(
+        vscodeCommand,
+        file,
+      );
 
       if (success) {
         return {
-          summary: `Restarted Lean server for ${file}`,
-          output:
-            'File server restarted. Lean will re-process the file and update diagnostics.',
+          summary: `${description}`,
+          output: `Executed "${command}" on ${file}`,
         };
       }
 
       return {
-        summary: 'Failed to restart',
-        output: 'Could not restart the Lean server. Is the file open?',
+        summary: 'Command failed',
+        output: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
         isError: true,
       };
     } catch (error) {
       return {
-        summary: 'Failed to restart',
+        summary: 'Command failed',
         output: `Error: ${toErrorMessage(error)}`,
         isError: true,
       };
@@ -219,70 +318,47 @@ This triggers the Lean 4 extension's "Restart File" command.`,
 }
 
 /**
- * Get the proof goal state at a specific position in a Lean file.
+ * Execute global Lean 4 extension commands (project, server, and setup).
  */
-export class LeanGoalTool extends defineTool({
-  name: 'lean_goal',
-  description: `Get the proof goal state at a specific position in a Lean 4 file.
+export class LeanProjectTool extends defineTool({
+  name: 'lean_project',
+  description: `Execute global Lean 4 extension commands (no file required).
 
-Returns the current proof goals (what needs to be proven) at the given line and column.
-This is equivalent to what you see in the Lean InfoView when your cursor is at that position.
+Server commands:
+- "restart_server": Restart the entire Lean language server
+- "stop_server": Stop the Lean language server
 
-Use this to:
-- See what goals remain to be proven at a tactic
-- Understand the current proof state before choosing the next tactic
-- Check if a proof step made progress
+Project commands:
+- "build": Build the project (runs lake build)
+- "clean": Clean project build artifacts
+- "fetch_cache": Download Mathlib build cache for the entire project
+- "fetch_file_cache": Download Mathlib cache for current file's imports only (faster)
 
-Returns:
-- goals: Array of goal strings (e.g., ["⊢ n + 0 = n"])
-- rendered: Markdown-formatted goal display
+Setup commands:
+- "install_elan": Install Elan (the Lean version manager)
+- "install_deps": Install Lean dependencies for the project
+- "update_elan": Update Elan to the latest version
+- "select_toolchain": Select the default Lean toolchain version
 
-Line and column are 1-indexed (first line is 1, first column is 1).
-
-Requires: Lean 4 VS Code extension installed and active.`,
-  schema: LeanGoalInputSchema,
+Requires: Lean 4 VS Code extension installed.`,
+  schema: LeanProjectInputSchema,
 }) {
-  protected async execute(input: LeanGoalInput): Promise<ToolResult> {
-    const { file, line, column } = input;
+  protected async execute(input: LeanProjectInput): Promise<ToolResult> {
+    const { command } = input;
+    const vscodeCommand = PROJECT_COMMAND_MAP[command];
+    const description = PROJECT_COMMAND_DESCRIPTIONS[command];
 
     try {
-      // Convert to 0-indexed for LSP
-      const result = await vscodeIntegration.getGoalState(file, line - 1, column - 1);
-
-      if (!result) {
-        return {
-          summary: 'No goal state',
-          output: `Could not get goal state at ${file}:${line}:${column}
-
-Possible reasons:
-- The Lean 4 extension is not installed or active
-- The position is not inside a tactic proof
-- The file has not been processed yet (try lean_diagnostics first)`,
-          isError: true,
-        };
-      }
-
-      if (result.goals.length === 0) {
-        return {
-          summary: 'No goals',
-          output: 'No goals at this position. The proof may be complete here.',
-        };
-      }
+      await vscode.commands.executeCommand(vscodeCommand);
 
       return {
-        summary: `${result.goals.length} goal${result.goals.length > 1 ? 's' : ''}`,
-        output: result.rendered,
-        goalState: {
-          goals: result.goals,
-          count: result.goals.length,
-        },
+        summary: description,
+        output: `Executed "${command}" successfully`,
       };
     } catch (error) {
       return {
-        summary: 'Failed to get goal state',
-        output: `Error: ${toErrorMessage(error)}
-
-Make sure the Lean 4 VS Code extension is installed and the file is open.`,
+        summary: 'Command failed',
+        output: `Error executing "${command}": ${toErrorMessage(error)}`,
         isError: true,
       };
     }
@@ -290,47 +366,134 @@ Make sure the Lean 4 VS Code extension is installed and the file is open.`,
 }
 
 /**
- * Get hover information (type signature + docs) at a position in a Lean file.
+ * Inspect proof state or type info at a position in a Lean file.
  */
-export class LeanHoverTool extends defineTool({
-  name: 'lean_hover',
-  description: `Get type signature and documentation for an identifier in a Lean 4 file.
+export class LeanInspectTool extends defineTool({
+  name: 'lean_inspect',
+  description: `Inspect proof state or type information at a position in a Lean 4 file.
 
-Returns the same information you see when hovering over a symbol in VS Code:
-- Type signature
-- Documentation/docstrings
-- Fully qualified name
+Types:
+- "goal": Get tactic proof state (what needs to be proven)
+- "term_goal": Get expected type at cursor in term mode
+- "hover": Get type signature and documentation for an identifier
 
-Line and column are 1-indexed. Position the column on the identifier to inspect.
+Line and column are 1-indexed.
 
 Requires: Lean 4 VS Code extension installed and active.`,
-  schema: LeanHoverInputSchema,
+  schema: LeanInspectInputSchema,
 }) {
-  protected async execute(input: LeanHoverInput): Promise<ToolResult> {
-    const { file, line, column } = input;
+  protected async execute(input: LeanInspectInput): Promise<ToolResult> {
+    const { type, file, line, column } = input;
+    // Convert to 0-indexed for LSP
+    const line0 = line - 1;
+    const col0 = column - 1;
+    const location = `${file}:${line}:${column}`;
 
     try {
-      // Convert to 0-indexed for LSP
-      const result = await vscodeIntegration.getHoverInfo(file, line - 1, column - 1);
-
-      if (!result?.contents?.value) {
-        return {
-          summary: 'No hover info',
-          output: `No information at ${file}:${line}:${column}`,
-          isError: true,
-        };
+      switch (type) {
+        case 'goal':
+          return this.executeGoal(file, line0, col0, location);
+        case 'term_goal':
+          return this.executeTermGoal(file, line0, col0, location);
+        case 'hover':
+          return this.executeHover(file, line0, col0, location);
       }
-
-      return {
-        summary: 'Hover info',
-        output: result.contents.value,
-      };
     } catch (error) {
       return {
-        summary: 'Failed to get hover info',
+        summary: `Failed to get ${type}`,
         output: `Error: ${toErrorMessage(error)}`,
         isError: true,
       };
     }
+  }
+
+  private async executeGoal(
+    file: string,
+    line: number,
+    column: number,
+    location: string,
+  ): Promise<ToolResult> {
+    const { data, error } = await vscodeIntegration.getGoalState(
+      file,
+      line,
+      column,
+    );
+
+    if (!data) {
+      return {
+        summary: 'No goal state',
+        output: `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
+        isError: true,
+      };
+    }
+
+    if (data.goals.length === 0) {
+      return {
+        summary: 'No goals',
+        output: 'No goals at this position. The proof may be complete here.',
+      };
+    }
+
+    const goalCount = data.goals.length;
+    return {
+      summary: `${goalCount} goal${goalCount > 1 ? 's' : ''}`,
+      output: data.rendered,
+      goalState: { goals: data.goals, count: goalCount },
+    };
+  }
+
+  private async executeTermGoal(
+    file: string,
+    line: number,
+    column: number,
+    location: string,
+  ): Promise<ToolResult> {
+    const { data, error } = await vscodeIntegration.getTermGoal(
+      file,
+      line,
+      column,
+    );
+
+    if (!data) {
+      return {
+        summary: 'No term goal',
+        output: `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
+        isError: true,
+      };
+    }
+
+    return { summary: 'Term goal', output: data.goal };
+  }
+
+  private async executeHover(
+    file: string,
+    line: number,
+    column: number,
+    location: string,
+  ): Promise<ToolResult> {
+    const { data, error } = await vscodeIntegration.getHoverInfo(
+      file,
+      line,
+      column,
+    );
+
+    if (!data) {
+      return {
+        summary: 'No hover info',
+        output: `No information at ${location}${error ? `\nError: ${error}` : ''}`,
+        isError: true,
+      };
+    }
+
+    const text = vscodeIntegration.extractHoverText(data.contents);
+    if (!text) {
+      return {
+        summary: 'No hover info',
+        output: `Empty hover response at ${location}`,
+        isError: true,
+      };
+    }
+
+    return { summary: 'Hover info', output: text };
   }
 }

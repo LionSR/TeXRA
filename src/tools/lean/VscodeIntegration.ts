@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import { Hover } from 'vscode-languageserver-protocol';
 
 import { WorkspaceFS } from '@utils/files';
 
@@ -64,15 +65,18 @@ function findDiagnosticsByPath(targetPath: string): vscode.Diagnostic[] {
 }
 
 /**
- * Restart the Lean file server to pick up changes in dependencies.
- * Call this after editing imported files or changing lakefile.
+ * Execute a VS Code command that requires a file to be open.
+ * Opens the file first, then executes the command.
  */
-export async function restartFileServer(filePath: string): Promise<boolean> {
+export async function executeFileCommand(
+  command: string,
+  filePath: string,
+): Promise<boolean> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
-    await vscode.commands.executeCommand('lean4.restartFile');
+    await vscode.commands.executeCommand(command);
     return true;
   } catch {
     return false;
@@ -90,7 +94,8 @@ const LEAN4_EXTENSION_ID = 'leanprover.lean4';
  * Returns null if the extension is not installed or not ready.
  */
 async function getClientProvider(): Promise<LeanClientProvider | null> {
-  const lean4Ext = vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
+  const lean4Ext =
+    vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
   if (!lean4Ext) return null;
 
   const api = await lean4Ext.activate();
@@ -102,34 +107,73 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
  * Send an LSP request at a specific position in a Lean file.
  * Opens the file first to ensure the LSP server has processed it.
  */
+export interface LspResult<T> {
+  data: T | null;
+  error?: string;
+}
+
 async function sendPositionRequest<T>(
   filePath: string,
   line: number,
   column: number,
   method: string,
-): Promise<T | null> {
-  const clientProvider = await getClientProvider();
-  if (!clientProvider) return null;
+): Promise<LspResult<T>> {
+  const absolutePath = WorkspaceFS.toAbsolute(filePath);
+  const uri = vscode.Uri.file(absolutePath);
 
-  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+  // Get client provider
+  const clientProvider = await getClientProvider().catch(
+    (e) => ({ error: `Failed to get Lean extension API: ${e}` }) as const,
+  );
+  if (!clientProvider) {
+    return { data: null, error: 'Lean 4 extension not found or not activated' };
+  }
+  if ('error' in clientProvider) {
+    return { data: null, error: clientProvider.error };
+  }
 
-  // Open the document to ensure the LSP server has processed it
+  // Open file in editor so LSP server has processed it
   try {
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
-  } catch {
-    return null;
+  } catch (e) {
+    return { data: null, error: `Failed to open file ${absolutePath}: ${e}` };
   }
 
-  const client = clientProvider.findClient(uri);
-  if (!client?.isRunning()) return null;
+  // Find and validate Lean client
+  let client: LeanClient | undefined;
+  try {
+    client = clientProvider.findClient(uri);
+  } catch (e) {
+    return {
+      data: null,
+      error: `Lean extension error finding client for ${absolutePath}: ${e}. Is this file in a Lean project?`,
+    };
+  }
+  if (!client) {
+    return {
+      data: null,
+      error: `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
+    };
+  }
+  if (!client.isRunning()) {
+    return {
+      data: null,
+      error: 'Lean server not running. Try lean_project restart_server.',
+    };
+  }
 
-  const result = await client.sendRequest(method, {
-    textDocument: { uri: uri.toString() },
-    position: { line, character: column },
-  });
-
-  return result as T | null;
+  // Send LSP request
+  try {
+    const params = {
+      textDocument: { uri: uri.toString() },
+      position: { line, character: column },
+    };
+    const result = await client.sendRequest(method, params);
+    return { data: result as T };
+  } catch (e) {
+    return { data: null, error: `LSP request ${method} failed: ${e}` };
+  }
 }
 
 /**
@@ -141,16 +185,56 @@ export async function getGoalState(
   filePath: string,
   line: number,
   column: number,
-): Promise<PlainGoal | null> {
-  return sendPositionRequest<PlainGoal>(filePath, line, column, '$/lean/plainGoal');
+): Promise<LspResult<PlainGoal>> {
+  return sendPositionRequest<PlainGoal>(
+    filePath,
+    line,
+    column,
+    '$/lean/plainGoal',
+  );
 }
 
-/** Response from textDocument/hover LSP request */
-export interface HoverResult {
-  contents: {
-    kind: string;
-    value: string;
-  };
+/** Response from $/lean/plainTermGoal LSP request */
+export interface PlainTermGoal {
+  goal: string;
+}
+
+/**
+ * Get the expected type (term goal) at a specific position in a Lean file.
+ * @param line - 0-indexed line number
+ * @param column - 0-indexed column number
+ */
+export async function getTermGoal(
+  filePath: string,
+  line: number,
+  column: number,
+): Promise<LspResult<PlainTermGoal>> {
+  return sendPositionRequest<PlainTermGoal>(
+    filePath,
+    line,
+    column,
+    '$/lean/plainTermGoal',
+  );
+}
+
+// HoverResult uses LSP Hover type from vscode-languageserver-protocol
+export type HoverResult = Hover;
+
+/** Extract text value from hover contents (handles all LSP content formats) */
+export function extractHoverText(contents: Hover['contents']): string | null {
+  if (typeof contents === 'string') {
+    return contents;
+  }
+  if (Array.isArray(contents)) {
+    return contents
+      .map((c) => (typeof c === 'string' ? c : 'value' in c ? c.value : null))
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  if ('value' in contents) {
+    return contents.value;
+  }
+  return null;
 }
 
 /**
@@ -162,6 +246,11 @@ export async function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
-): Promise<HoverResult | null> {
-  return sendPositionRequest<HoverResult>(filePath, line, column, 'textDocument/hover');
+): Promise<LspResult<HoverResult>> {
+  return sendPositionRequest<HoverResult>(
+    filePath,
+    line,
+    column,
+    'textDocument/hover',
+  );
 }
