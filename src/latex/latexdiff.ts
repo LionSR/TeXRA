@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - log
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
@@ -21,20 +22,28 @@ import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 // Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
-export interface LaTeXdiffResult {
-  success: boolean;
-  diffFileName?: string;
-  message?: string;
-}
+// ============================================================================
+// LaTeXdiff Result Schemas
+// ============================================================================
 
-export interface LaTeXdiffMultipleResult {
-  success: boolean;
-  results: {
-    success: string[];
-    failed: string[];
-  };
-  message?: string;
-}
+export const LaTeXdiffResultSchema = z.object({
+  success: z.boolean(),
+  diffFileName: z.string().optional(),
+  message: z.string().optional(),
+});
+export type LaTeXdiffResult = z.infer<typeof LaTeXdiffResultSchema>;
+
+export const LaTeXdiffMultipleResultSchema = z.object({
+  success: z.boolean(),
+  results: z.object({
+    success: z.array(z.string()),
+    failed: z.array(z.string()),
+  }),
+  message: z.string().optional(),
+});
+export type LaTeXdiffMultipleResult = z.infer<
+  typeof LaTeXdiffMultipleResultSchema
+>;
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
