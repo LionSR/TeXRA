@@ -347,6 +347,12 @@ export class ProgressViewProvider
   }
 
   public showWorkflowAgentProposal(prompt: WorkflowAgentProposalPrompt): void {
+    console.log(
+      '[ProgressViewProvider] showWorkflowAgentProposal:',
+      prompt.proposalId,
+      'canSend:',
+      this.canSendToWebview(),
+    );
     this.pendingWorkflowAgentProposals.set(prompt.proposalId, prompt);
     this.sendIfReady(() =>
       this.webviewUpdater.showWorkflowAgentProposal(prompt),
