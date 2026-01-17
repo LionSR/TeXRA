@@ -75,6 +75,7 @@ export const ELEMENT_IDS = {
   CLEAN_BUTTON: 'cleanButton',
   MAGIC_POLISH_BUTTON: 'magicPolishButton',
   ERASE_INSTRUCTION_BUTTON: 'eraseInstructionButton',
+  NEW_SESSION_BUTTON: 'newSessionButton',
   RECORD_INSTRUCTION_BUTTON: 'recordInstructionButton',
   EXECUTE_BUTTON: 'executeButton',
   MERGE_BUTTON: 'mergeButton',
