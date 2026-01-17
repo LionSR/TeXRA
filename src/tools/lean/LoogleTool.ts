@@ -19,7 +19,13 @@ const LeanLoogleInputSchema = z.strictObject({
   /** Search query - can be a type signature like "Nat → Nat → Nat" or name pattern */
   query: z.string().describe('Search query (type signature or name pattern)'),
   /** Maximum number of results to return */
-  limit: z.number().int().min(1).max(20).prefault(10).describe('Max results (default: 10)'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .prefault(10)
+    .describe('Max results (default: 10)'),
 });
 
 export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
@@ -35,12 +41,24 @@ interface LoogleHit {
   doc: string;
 }
 
+interface LoogleSuccessResponse {
+  count: number;
+  header: string;
+  hits: LoogleHit[];
+}
+
 interface LoogleErrorResponse {
   error: string;
   suggestions?: string[];
 }
 
-type LoogleResponse = LoogleHit[] | LoogleErrorResponse;
+type LoogleResponse = LoogleSuccessResponse | LoogleErrorResponse;
+
+function isErrorResponse(
+  response: LoogleResponse,
+): response is LoogleErrorResponse {
+  return 'error' in response;
+}
 
 // ============================================================================
 // Tool Implementation
@@ -87,22 +105,20 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
       const data = response.data;
 
-      // Check for error response
-      if ('error' in data) {
-        const errorResponse = data as LoogleErrorResponse;
-        let output = `Error: ${errorResponse.error}`;
-        if (errorResponse.suggestions && errorResponse.suggestions.length > 0) {
-          output += `\n\nSuggestions:\n${errorResponse.suggestions.map((s) => `  - ${s}`).join('\n')}`;
-        }
+      if (isErrorResponse(data)) {
+        const suggestions = data.suggestions ?? [];
+        const suggestionText =
+          suggestions.length > 0
+            ? `\n\nSuggestions:\n${suggestions.map((s) => `  - ${s}`).join('\n')}`
+            : '';
         return {
           summary: 'No results',
-          output,
+          output: `Error: ${data.error}${suggestionText}`,
           isError: true,
         };
       }
 
-      // Handle successful results
-      const hits = (data as LoogleHit[]).slice(0, limit);
+      const hits = data.hits.slice(0, limit);
 
       if (hits.length === 0) {
         return {
@@ -116,7 +132,8 @@ Useful for finding the right lemma when you know roughly what type it should hav
           let entry = `${i + 1}. **${hit.name}**\n   Type: \`${hit.type}\`\n   Module: ${hit.module}`;
           if (hit.doc) {
             // Truncate long docs
-            const doc = hit.doc.length > 200 ? hit.doc.slice(0, 200) + '...' : hit.doc;
+            const doc =
+              hit.doc.length > 200 ? hit.doc.slice(0, 200) + '...' : hit.doc;
             entry += `\n   Doc: ${doc}`;
           }
           return entry;
