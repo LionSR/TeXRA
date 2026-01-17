@@ -23,21 +23,61 @@ export const validateOutputFiles = (cfg: {
   return cfg.outputFiles.length <= inputs.length;
 };
 
+/**
+ * File path fields shared across agent config, proposals, and messages.
+ * Use .partial() for optional message fields, .extend() for defaults.
+ */
+export const FileFieldsSchema = z.object({
+  inputFile: z.string().describe('Path to the primary input file'),
+  inputFiles: z.array(z.string()).describe('Additional input file paths'),
+  referenceFile: z
+    .string()
+    .nullable()
+    .describe('Reference file path for additional context'),
+  referenceFiles: z
+    .array(z.string())
+    .describe('Additional reference file paths'),
+  auxiliaryFile: z
+    .string()
+    .nullable()
+    .describe('Auxiliary file path for supplementary content'),
+  auxiliaryFiles: z
+    .array(z.string())
+    .describe('Additional auxiliary file paths'),
+  mediaFile: z
+    .string()
+    .nullable()
+    .describe('Media file path for images/figures'),
+  mediaFiles: z.array(z.string()).describe('Additional media file paths'),
+  outputFiles: z.array(z.string()).describe('Desired output file paths'),
+});
+export type FileFields = z.infer<typeof FileFieldsSchema>;
+
+/**
+ * Core workflow fields shared between AgentConfig and WorkflowAgentProposal.
+ * No defaults - consumers add their own via .extend() or .prefault().
+ */
+export const CoreWorkflowFieldsSchema = z.object({
+  agent: z.string().describe('Name of the workflow agent to execute'),
+  model: z.string().describe('Model to use for agent execution'),
+  instruction: z.string().describe('Instruction for the workflow agent'),
+  ...FileFieldsSchema.shape,
+  useMultipleOutputs: z
+    .boolean()
+    .describe('Enable multiple outputs mode for agents that support it'),
+});
+export type CoreWorkflowFields = z.infer<typeof CoreWorkflowFieldsSchema>;
+
 /** Zod schema for validating AgentConfig objects */
 const stringArrayField = () => z.array(z.string()).prefault([]);
 
 const AgentConfigBaseSchema = z
   .object({
-    model: z.string().prefault('gemini3p'),
+    // Core workflow fields with defaults
     agent: z.string().prefault('correct'),
+    model: z.string().prefault('gemini3p'),
     instruction: z.string().prefault(''),
     useMultipleOutputs: z.boolean().prefault(false),
-
-    // Legacy field for backward compatibility - prefer session.agentType
-    agentType: z.enum(AgentType).optional(),
-    // Canonical session descriptor - single source of truth
-    session: AgentSessionDescriptorSchema.optional(),
-
     inputFile: z.string().prefault(''),
     inputFiles: stringArrayField(),
     referenceFile: z.string().nullable().prefault(null),
@@ -47,6 +87,12 @@ const AgentConfigBaseSchema = z
     mediaFile: z.string().nullable().prefault(null),
     mediaFiles: stringArrayField(),
     outputFiles: stringArrayField(),
+
+    // AgentConfig-specific fields
+    // Legacy field for backward compatibility - prefer session.agentType
+    agentType: z.enum(AgentType).optional(),
+    // Canonical session descriptor - single source of truth
+    session: AgentSessionDescriptorSchema.optional(),
     editedFile: z.string().nullable().prefault(null),
     editedFiles: stringArrayField(),
 

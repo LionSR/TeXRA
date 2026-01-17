@@ -40,20 +40,28 @@ const WithFileActiveFlags = z.object({
 // --- Message Schemas ---
 
 /**
+ * File fields as optional for message schemas.
+ * Uses plain optional strings (not nullable) for message compatibility.
+ */
+const OptionalFileFields = z.object({
+  inputFile: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  referenceFile: z.string().optional(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFile: z.string().optional(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  mediaFile: z.string().optional(),
+  mediaFiles: z.array(z.string()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+});
+
+/**
  * Polish instruction text message from webview
  */
 export const PolishInstructionMessageSchema = BaseMessageSchema.extend({
   text: z.string(),
   agent: z.string().optional(),
-  inputFile: z.string().optional(),
-  referenceFile: z.string().optional(),
-  auxiliaryFile: z.string().optional(),
-  mediaFile: z.string().optional(),
-  inputFiles: z.array(z.string()).optional(),
-  referenceFiles: z.array(z.string()).optional(),
-  auxiliaryFiles: z.array(z.string()).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-  outputFiles: z.array(z.string()).optional(),
+  ...OptionalFileFields.shape,
 }).extend(WithFileActiveFlags.shape);
 
 export type PolishInstructionMessage = z.infer<
@@ -191,12 +199,14 @@ export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
  * Batch update all single file selects message from extension.
  * Used by REFRESH_ALL_FILES to prevent race conditions during file watcher updates.
  */
-export const SetAllSingleFilesMessageSchema = BaseMessageSchema.extend({
-  inputFiles: z.array(z.string()).optional(),
-  referenceFiles: z.array(z.string()).optional(),
-  auxiliaryFiles: z.array(z.string()).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-});
+export const SetAllSingleFilesMessageSchema = BaseMessageSchema.extend(
+  OptionalFileFields.pick({
+    inputFiles: true,
+    referenceFiles: true,
+    auxiliaryFiles: true,
+    mediaFiles: true,
+  }).shape,
+);
 
 export type SetAllSingleFilesMessage = z.infer<
   typeof SetAllSingleFilesMessageSchema
