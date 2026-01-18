@@ -9,55 +9,86 @@ This document outlines the findings from analyzing TypeScript interfaces and Zod
 | Interfaces needing schemas | 21 | Add Zod schemas |
 | Dual definitions (interface + schema) | 4 | 1 to consolidate, 3 justified |
 | Unsafe trust boundaries | 9 | Add validation |
-| Dead/unused types | 10 | Delete |
-| Single-use exported types | 2 | Make local |
+| Dead/unused types | 6 | ✅ DELETED |
+| Single-use exported types | 3 | ✅ REMOVED |
 | Internal-only interfaces | 41 | No action needed |
 
 ---
 
-## Priority 1: DELETE DEAD TYPES (Low Risk, High Cleanup Value)
+## Zod v4 Patterns (Reference)
 
-These types are defined but never used anywhere. Safe to delete immediately.
+This project uses **Zod v4.3.5**. Use these idiomatic patterns when adding schemas:
 
-| Type | File | Recommendation |
-|------|------|----------------|
-| `BetaToolUnionParam` | `src/tools/types.ts` | DELETE |
-| `TextEditorToolParams` | `src/tools/types.ts` | DELETE |
-| `FileHistoryEntry` | `src/tools/types.ts` | DELETE |
-| `BaseError` | `src/tools/types.ts` | DELETE |
-| `XMLValidationError` | `src/tools/types.ts` | DELETE |
-| `ValidationResult` | `src/tools/types.ts` | DELETE |
-| `LaTeXdiffMultipleResult` | `src/latex/latexdiff.ts` | DELETE |
-| `ExtractResult` | `src/latex/arxivProcessor.ts` | DELETE |
-| `ExtractOptions` | `src/latex/arxivProcessor.ts` | DELETE |
-| `ProxyConfig` | `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | DELETE |
+```typescript
+// ✅ Pre-validation default (replaces undefined BEFORE validation)
+z.string().prefault('default value')
 
-### Single-Use Exports (Make Local)
+// ✅ Post-validation default (replaces undefined AFTER validation)
+z.string().default('default value')
 
-| Type | File | Recommendation |
-|------|------|----------------|
-| `ConnectionResult` | `src/latex/textConnection.ts` | Remove from `src/latex/index.ts` exports |
-| `SeverityCounts` | `src/frontend/vscode/vscodeDiagnostics.ts` | Remove `export` keyword |
-| `BibliographyReferenceResult` | `src/latex/extractBibliography.ts` | Remove from `src/latex/index.ts` exports |
-| `BibliographyEntriesResult` | `src/latex/extractBibliography.ts` | Remove from `src/latex/index.ts` exports |
+// ✅ Fallback on validation error
+z.string().catch('fallback if parse fails')
+
+// ✅ Nullable + optional shorthand
+z.string().nullish()  // equivalent to .nullable().optional()
+
+// ✅ Safe parsing with fallback (common pattern)
+const result = SomeSchema.catch({ defaultField: 'value' }).parse(untrustedData)
+```
+
+**Tool schema pattern** (for LLM tool inputs):
+```typescript
+const ToolInputSchema = z.object({
+  required_field: z.string(),
+  optional_field: z.string().nullish(),        // accepts string | null | undefined
+  with_default: z.string().prefault('auto'),   // uses 'auto' if undefined
+});
+```
 
 ---
 
-## Priority 2: CONSOLIDATE DUAL DEFINITIONS (Medium Risk)
+## Priority 1: DELETE DEAD TYPES ✅ COMPLETED
 
-### Recommended Consolidation
+~~These types are defined but never used anywhere.~~ **Deleted in commit `1f4c3a7`.**
+
+| Type | File | Status |
+|------|------|--------|
+| `BetaToolUnionParam` | `src/tools/types.ts` | ✅ DELETED |
+| `TextEditorToolParams` | `src/tools/types.ts` | ✅ DELETED |
+| `FileHistoryEntry` | `src/tools/types.ts` | ✅ DELETED |
+| `BaseError` | `src/tools/types.ts` | ✅ DELETED |
+| `XMLValidationError` | `src/tools/types.ts` | ✅ DELETED |
+| `ValidationResult` | `src/tools/types.ts` | ✅ DELETED |
+| `LaTeXdiffMultipleResult` | `src/latex/latexdiff.ts` | KEEP (used internally) |
+| `ExtractResult` | `src/latex/arxivProcessor.ts` | KEEP (used internally) |
+| `ExtractOptions` | `src/latex/arxivProcessor.ts` | KEEP (used internally) |
+| `ProxyConfig` | `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | KEEP (used in ModelHandler.ts) |
+
+### Single-Use Exports ✅ COMPLETED
+
+| Type | File | Status |
+|------|------|--------|
+| `ConnectionResult` | `src/latex/textConnection.ts` | ✅ Removed from exports |
+| `BibliographyReferenceResult` | `src/latex/extractBibliography.ts` | ✅ Removed from exports |
+| `BibliographyEntriesResult` | `src/latex/extractBibliography.ts` | ✅ Removed from exports |
+
+---
+
+## Priority 2: CONSOLIDATE DUAL DEFINITIONS ✅ COMPLETED
+
+### ✅ Consolidated in commit `1f4c3a7`
 
 **`ModelRegistry` in `src/model/ModelConfig.ts`**
 
-Current (anti-pattern):
+~~Current (anti-pattern):~~
 ```typescript
-export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
+// OLD - manual type alias
 export type ModelRegistry = Record<string, ModelConfig>;
 ```
 
-Recommended:
+✅ Fixed:
 ```typescript
-export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
+// NEW - derived from schema (single source of truth)
 export type ModelRegistry = z.infer<typeof ModelRegistrySchema>;
 ```
 
