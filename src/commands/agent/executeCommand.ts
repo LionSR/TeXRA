@@ -10,7 +10,7 @@ import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { formatZodError } from '@common/errors';
-import { AgentHistoryManager } from '@common/history';
+import { addToHistory } from '@common/history';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
@@ -51,7 +51,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const isResume = wrapped?.executionId !== undefined;
 
     if (!isResume) {
-      await AgentHistoryManager.addToHistory(executionId, config);
+      await addToHistory(executionId, config);
     }
     await executeAgent(config, executionId);
   } catch (error) {
