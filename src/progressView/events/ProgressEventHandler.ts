@@ -142,21 +142,13 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
     this.replayPendingTaskGroups(stream);
 
-    // Get current status without defaulting to RUNNING.
-    // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
-    // not here. Defaulting to RUNNING here causes a race condition.
-    const status = StreamStatusService.get(stream);
-
     if (!this.webviewUpdater.isAvailable()) return;
 
-    // Update webview with stream data
+    // Update stream tabs list (required to set activeStream in frontend)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
-    if (status !== undefined) {
-      this.setStreamStatus(stream, status);
-    }
-
-    // Refresh stream surface and instruction panel
+    // Refresh stream content (logs, groups, metadata, status, todos)
+    // Note: refreshStreamSurface includes status update, so no separate setStreamStatus needed
     const activeRunId = this.refreshStreamSurface(stream, {
       updateInstruction: false,
     });
@@ -189,6 +181,13 @@ export class ProgressEventHandler {
         const isActiveStream = this.state.activeStream === streamTabId;
         const sessionKind = taskState.agentConfig.session.agentCategory;
 
+        // Check if filter needs updating BEFORE setting state (affects stream visibility)
+        const previousFilter = this.state.agentTypeFilter;
+        const filterMightChange =
+          isActiveStream &&
+          previousFilter !== 'all' &&
+          previousFilter !== sessionKind;
+
         this.state.setTaskState(streamTabId, taskState);
 
         if (isActiveStream) {
@@ -203,11 +202,16 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamTabId);
         }
 
+        // Only send full stream update if filter changed (affects visible streams)
+        // or if webview needs the updated task state metadata
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
+          const filterChanged = this.state.agentTypeFilter !== previousFilter;
+          if (filterChanged || filterMightChange) {
+            this.webviewUpdater.updateAll(
+              this.state,
+              StreamStatusService.getAll(),
+            );
+          }
         }
       },
     );
@@ -364,7 +368,9 @@ export class ProgressEventHandler {
       this.state.runInstructions.getInstructions(stream).entries(),
     );
     const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
-    const missingByRun = nestedMapToRecord(this.state.outputFiles.getMissingOutputs(stream));
+    const runMissingOutputs = nestedMapToRecord(
+      this.state.outputFiles.getMissingOutputs(stream),
+    ) as Record<string, { [key: number]: string[] }>;
     const runUsage = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
@@ -375,17 +381,15 @@ export class ProgressEventHandler {
     // Clear buffer before update to prevent race condition
     this.pendingTaskGroups.delete(stream);
 
-    // Send primary content update
+    // Send primary content update (includes all run-scoped data in single message)
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,
       runUsage,
       runFiles,
+      runMissingOutputs,
       contextState,
     });
-
-    // Send missing outputs (reset + incremental)
-    this.sendMissingOutputs(stream, missingByRun);
 
     // Send ephemeral state
     this.webviewUpdater.updateTodos(stream, todos);
@@ -409,22 +413,6 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
     if (clearInstruction) {
       this.webviewUpdater.updateInstruction('', null);
-    }
-  }
-
-  /**
-   * Send missing outputs with reset followed by incremental updates.
-   */
-  private sendMissingOutputs(
-    stream: string,
-    missingByRun: ReturnType<typeof nestedMapToRecord>,
-  ): void {
-    this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
-    for (const [runId, rounds] of Object.entries(missingByRun)) {
-      this.webviewUpdater.updateMissingOutputs(stream, {
-        runId,
-        rounds: rounds as { [key: number]: string[] },
-      });
     }
   }
 
