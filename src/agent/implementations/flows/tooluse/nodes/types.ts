@@ -12,6 +12,7 @@ import type {
   AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // ============================================================================
@@ -51,11 +52,11 @@ export interface PrepareResult {
   shouldSkipCycle: boolean;
 }
 
-export type CycleExecResult =
-  | { kind: 'success'; messages: ProviderMessage[] }
-  | { kind: 'skipped' }
-  | { kind: 'failed'; message: string }
-  | { kind: 'cancelled' };
+/**
+ * Result type for tool-use cycle execution.
+ * Uses InvocationResult as the single source of truth for result patterns.
+ */
+export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
 
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
