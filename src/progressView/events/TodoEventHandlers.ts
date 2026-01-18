@@ -21,11 +21,9 @@ export function registerTodoEventHandlers(
   ctx: EventHandlerContext,
   signal: AbortSignal,
 ): void {
-  bus.on(
-    'updateTodos',
-    (payload) => handleUpdateTodos(ctx, payload),
-    { signal },
-  );
+  bus.on('updateTodos', (payload) => handleUpdateTodos(ctx, payload), {
+    signal,
+  });
 }
 
 function handleUpdateTodos(
