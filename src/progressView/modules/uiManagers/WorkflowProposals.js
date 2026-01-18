@@ -1,5 +1,9 @@
 // Local imports - progress view
-import { COMMANDS } from '../constants.js';
+import {
+  COMMANDS,
+  AGENT_PROPOSAL_ACTIONS,
+  AGENT_PROPOSAL_CATEGORIES,
+} from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
@@ -46,9 +50,11 @@ export class WorkflowProposals extends BaseUIRequestManager {
   _updateRequestElement(element, request) {
     element.dataset.streamId = request.streamId || '';
     element.dataset.proposalId = request.proposalId || '';
-    element.dataset.agentCategory = request.agentCategory || 'workflow';
+    element.dataset.agentCategory =
+      request.agentCategory || AGENT_PROPOSAL_CATEGORIES.WORKFLOW;
 
-    const isToolUse = request.agentCategory === 'toolUse';
+    const isToolUse =
+      request.agentCategory === AGENT_PROPOSAL_CATEGORIES.TOOL_USE;
 
     // Update category badge
     const categoryBadge = element.querySelector(
@@ -155,21 +161,21 @@ export class WorkflowProposals extends BaseUIRequestManager {
     const { proposalId, action } = button.dataset;
     if (!proposalId || !action) return;
 
-    if (!['approve', 'reject', 'setup'].includes(action)) return;
+    if (!AGENT_PROPOSAL_ACTIONS.includes(action)) return;
 
     // Handle reject with feedback toggle (uses shared base class logic)
     if (action === 'reject') {
       const handled = this._handleRejectWithFeedback(
         button,
         proposalId,
-        COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
+        COMMANDS.AGENT_PROPOSAL_ACTION,
         'proposalId',
       );
       if (handled) return;
     }
 
     vscode.postMessage({
-      command: COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
+      command: COMMANDS.AGENT_PROPOSAL_ACTION,
       proposalId,
       action,
     });
