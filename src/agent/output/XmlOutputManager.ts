@@ -260,22 +260,6 @@ export class XmlOutputManager {
     }
   }
 
-  /**
-   * Build minimal output file info from source and path.
-   * Lineage and diff stats are added later by OutputHandler.
-   */
-  private buildOutputFileInfo(
-    source: string,
-    outputLocation: FileLocation,
-  ): OutputFileInfo {
-    return {
-      source,
-      location: outputLocation,
-      lineage: null,
-      diff: null,
-    };
-  }
-
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputLocation: FileLocation,
@@ -317,7 +301,12 @@ export class XmlOutputManager {
         texFile,
       );
       await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
-      outputFiles.push(this.buildOutputFileInfo(source, texLocation));
+      outputFiles.push({
+        source,
+        location: texLocation,
+        lineage: null,
+        diff: null,
+      });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -345,10 +334,12 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
-    return this.buildOutputFileInfo(
-      original || this.agentConfig.inputFile,
-      processedTexLocation,
-    );
+    return {
+      source: original || this.agentConfig.inputFile,
+      location: processedTexLocation,
+      lineage: null,
+      diff: null,
+    };
   }
 
   async processMultipleXmlOutputs(
