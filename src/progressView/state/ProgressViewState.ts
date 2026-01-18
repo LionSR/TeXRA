@@ -11,14 +11,12 @@ import type {
   ExecutionId,
   StorageKey,
 } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger, type ContextStateData } from '@logger/AgentLogger';
-import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
   TaskStateSchema,
@@ -130,10 +128,6 @@ export class ProgressViewState {
 
   get usageStats(): UsageStatsManager {
     return this._usageStats;
-  }
-
-  get runInstructions(): RunInstructionManager {
-    return this._runInstructions;
   }
 
   // Active stream management
@@ -307,123 +301,32 @@ export class ProgressViewState {
     }
   }
 
-  /**
-   * Switch to a specific run (user-initiated).
-   * Validates the run exists, then sets it as active.
-   *
-   * @param stream - The stream to switch runs in
-   * @param runId - The run ID to switch to
-   * @returns The normalized StorageKey if valid, null if run doesn't exist
-   */
-  switchToRun(stream: StreamTabId, runId: string): StorageKey | null {
-    const candidates = this.collectRunCandidates(stream);
-    if (!candidates.has(runId)) return null;
-    const normalized = normalizeRunId(runId);
-    this.setActiveRunId(stream, normalized);
-    return normalized;
+  // ============================================================================
+  // Run Instruction Management (delegation to internal manager)
+  // ============================================================================
+
+  /** Get all instructions for a stream */
+  getRunInstructions(
+    stream: StreamTabId,
+  ): Map<string, import('@progressView/types').InstructionUpdate> {
+    return this._runInstructions.getInstructions(stream);
   }
 
-  /**
-   * Ensure a stream has an active run ID set.
-   * Called during initialization when activeRunId might not be set yet.
-   * Uses auto-selection only if no cached value exists.
-   *
-   * @returns The active StorageKey (cached or auto-selected), or null if no runs
-   */
-  ensureActiveRunId(stream: StreamTabId): StorageKey | null {
-    const current = this.getActiveRunId(stream);
-    if (current) return current;
-
-    const { candidates, groups, usageRuns } = this.collectRunData(stream);
-    if (candidates.size === 0) return null;
-
-    const selected =
-      candidates.size === 1
-        ? [...candidates][0]
-        : this.findLatestRunId(candidates, groups, usageRuns);
-
-    if (!selected) return null;
-    const normalized = normalizeRunId(selected);
-    this.setActiveRunId(stream, normalized);
-    return normalized;
+  /** Set or clear an instruction for a run */
+  async setRunInstruction(
+    stream: StreamTabId,
+    runId: StorageKey,
+    instruction: import('@progressView/types').InstructionUpdate | null,
+  ): Promise<void> {
+    await this._runInstructions.setInstruction(stream, runId, instruction);
   }
 
-  /**
-   * Collected run data for a stream.
-   * Groups query results to avoid redundant manager lookups.
-   */
-  private collectRunData(stream: StreamTabId): {
-    candidates: Set<string>;
-    groups: Map<string, TaskGroup>;
-    usageRuns: Map<string, TokenUsageStats>;
-  } {
-    const candidates = new Set<string>();
-    const groups = this._taskGroups.getStreamGroups(stream);
-
-    // Root task groups are primary run identifiers (workflow sessions)
-    for (const group of groups.values()) {
-      if (!group.parentGroupId) {
-        candidates.add(group.id);
-      }
-    }
-
-    // Run-scoped data sources (tool-use sessions use these)
-    const usageRuns = this._usageStats.getRunUsage(stream);
-    const sources = [
-      this._runInstructions.getInstructions(stream),
-      this._outputFiles.getFiles(stream),
-      this._outputFiles.getMissingOutputs(stream),
-      usageRuns,
-    ];
-
-    for (const source of sources) {
-      for (const runId of source.keys()) {
-        if (runId) candidates.add(runId);
-      }
-    }
-
-    return { candidates, groups, usageRuns };
-  }
-
-  /**
-   * Collect all valid run IDs for a stream.
-   * Delegates to collectRunData for shared implementation.
-   */
-  private collectRunCandidates(stream: StreamTabId): Set<string> {
-    return this.collectRunData(stream).candidates;
-  }
-
-  /**
-   * Find the most recent run from collected data.
-   * Prefers task groups by startTime, falls back to usage runs for tool-use sessions.
-   * Uses pre-collected data to avoid redundant manager queries.
-   */
-  private findLatestRunId(
-    candidates: Set<string>,
-    groups: Map<string, TaskGroup>,
-    usageRuns: Map<string, TokenUsageStats>,
-  ): string | null {
-    let latest: { id: string; start: number } | null = null;
-
-    // Find latest root task group by startTime
-    for (const group of groups.values()) {
-      if (group.parentGroupId) continue;
-      if (!candidates.has(group.id)) continue;
-
-      const startTime = group.startTime;
-      if (!latest || startTime >= latest.start) {
-        latest = { id: group.id, start: startTime };
-      }
-    }
-
-    if (latest) return latest.id;
-
-    // For tool-use sessions (no task groups), fall back to usage runs
-    if (usageRuns.size > 0) {
-      return [...usageRuns.keys()].at(-1) ?? null;
-    }
-
-    return null;
+  /** Delete instruction for a run */
+  async deleteRunInstruction(
+    stream: StreamTabId,
+    runId: StorageKey,
+  ): Promise<void> {
+    await this._runInstructions.deleteRun(stream, runId);
   }
 
   private loadActiveRunIds(): void {
