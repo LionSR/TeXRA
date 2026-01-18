@@ -128,42 +128,12 @@ export function getDebugContext(
   };
 }
 
-// ============================================================================
-// Result Type Primitives (Single Source of Truth)
-// ============================================================================
-
-/**
- * Schema for a failed result with an error message.
- * Used across invocation nodes and cycle flows.
- */
-export const FailedResultSchema = z.object({
-  kind: z.literal('failed'),
-  message: z.string(),
-});
-export type FailedResult = z.infer<typeof FailedResultSchema>;
-
-/**
- * Schema for a cancelled result (user cancelled retry).
- */
-export const CancelledResultSchema = z.object({
-  kind: z.literal('cancelled'),
-});
-export type CancelledResult = z.infer<typeof CancelledResultSchema>;
-
-/**
- * Schema for a skipped result (flow stopped before execution).
- */
-export const SkippedResultSchema = z.object({
-  kind: z.literal('skipped'),
-});
-export type SkippedResult = z.infer<typeof SkippedResultSchema>;
-
 /**
  * Result type for nodes that can be skipped based on flow state.
  * Uses 'kind' discriminant for consistency with InvocationResult.
  */
 export type SkippableNodeResult<T> =
-  | SkippedResult
+  | { kind: 'skipped' }
   | { kind: 'success'; value: T };
 
 /**

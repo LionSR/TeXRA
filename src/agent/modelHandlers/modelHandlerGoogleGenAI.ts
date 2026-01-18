@@ -161,8 +161,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private supportsFileUploads(): boolean {
     return (
-      this.capabilities.supportsVision ||
-      this.capabilities.supportsNativeAudio
+      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio
     );
   }
 
