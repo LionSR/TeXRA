@@ -3,7 +3,6 @@
  *
  * Handles usage events: updateStreamUsage, updateContextState.
  */
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
@@ -39,19 +38,11 @@ function handleUpdateStreamUsage(
   { stream, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
 ): void {
   withEventErrorHandling('UsageEvents', 'failed to handle updateStreamUsage', async () => {
-    const normalizedUsage: TokenUsageStats = {
-      inputTokens: Number(usage.inputTokens ?? 0),
-      outputTokens: Number(usage.outputTokens ?? 0),
-      cost: Number(usage.cost ?? 0),
-      cacheReadInputTokens: Number(usage.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens: Number(usage.cacheCreationInputTokens ?? 0),
-    };
-
-    // Backend accumulates the delta and returns the accumulated value
+    // usage is already typed as TokenUsageStats from the event payload
     const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
       stream,
       storageKey,
-      normalizedUsage,
+      usage,
     );
 
     // For tool-use sessions (no task groups), set active run ID from usage

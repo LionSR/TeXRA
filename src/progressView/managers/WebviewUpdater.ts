@@ -7,9 +7,15 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
-import type { LogMessageData } from '@logger/LogTypes';
+import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
+
+/** Message payload sent to webview */
+interface WebviewMessage {
+  command: string;
+  [key: string]: unknown;
+}
 
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
@@ -54,7 +60,7 @@ export class WebviewUpdater {
   constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
 
   /** Helper to send messages to all registered webviews */
-  private sendMessage(message: any): void {
+  private sendMessage(message: WebviewMessage): void {
     for (const webview of this.getWebviews()) {
       if (webview) {
         webview.postMessage(message);
@@ -109,7 +115,7 @@ export class WebviewUpdater {
   updateLogContent(
     stream: StreamTabId,
     messages: LogMessageData[],
-    groups: any[] = [],
+    groups: TaskGroup[] = [],
     extras?: LogContentExtras,
     action: 'render' | 'clear' = 'render',
   ): void {
@@ -324,7 +330,7 @@ export class WebviewUpdater {
   /**
    * Add a task group to the webview
    */
-  addTaskGroup(stream: StreamTabId, group: any): void {
+  addTaskGroup(stream: StreamTabId, group: TaskGroup): void {
     this.sendMessage({
       command: COMMANDS.ADD_TASK_GROUP,
       stream,
