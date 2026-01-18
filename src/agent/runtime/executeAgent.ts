@@ -249,6 +249,7 @@ async function resolveAgentBase(
   const config: AgentConfig = {
     ...fullConfig,
     agentType: sessionDescriptor.agentType,
+    agentCategory: sessionDescriptor.agentCategory,
     session: sessionDescriptor,
   };
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
