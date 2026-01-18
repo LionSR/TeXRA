@@ -461,18 +461,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    if (action === 'approve') {
-      proposalCoordinator.approveProposal(proposalId);
-    } else if (action === 'reject') {
-      proposalCoordinator.rejectProposal(proposalId, feedback);
-    } else if (action === 'setup') {
-      await this.handleWorkflowAgentProposalSetup(proposalId);
-    } else {
-      this.logger.warn(
-        this.channel,
-        `Unknown workflow agent proposal action: ${action}`,
-        { data: message },
-      );
+    switch (action) {
+      case 'approve':
+        proposalCoordinator.approveProposal(proposalId);
+        break;
+      case 'reject':
+        proposalCoordinator.rejectProposal(proposalId, feedback);
+        break;
+      case 'setup':
+        await this.handleWorkflowAgentProposalSetup(proposalId);
+        break;
+      default:
+        this.logger.warn(
+          this.channel,
+          `Unknown workflow agent proposal action: ${action}`,
+          { data: message },
+        );
     }
   }
 
@@ -496,7 +500,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const agentEntry = getAgent(proposal.agent);
     const agentType = agentEntry?.agentType;
 
-    // Use the proposal's agent category (workflow or toolUse)
+    // Map proposal category string to AgentCategory enum
     const agentCategory =
       proposal.agentCategory === 'toolUse'
         ? AgentCategory.ToolUse
