@@ -822,9 +822,7 @@ export class ModelHandlerOpenAI<
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
 
-    const role = this.capabilities.supportsIntermDevMsgs
-      ? 'system'
-      : 'user';
+    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
     messages.push({
       role,
       content: [{ type: 'text', text: userMessageContinuation }],
