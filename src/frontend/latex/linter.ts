@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { isTexFile } from '@common/files/fileTypeUtils';
 import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 
@@ -13,11 +14,6 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'LinterUtils';
 
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
-
-/** Check if a file path is a LaTeX file */
-function isTexFile(filePath: string): boolean {
-  return filePath.toLowerCase().endsWith('.tex');
-}
 
 /**
  * Trigger a LaTeX build for a specific file
