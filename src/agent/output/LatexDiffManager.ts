@@ -16,7 +16,10 @@ import {
 } from '@utils/files';
 
 // Internal imports
-import { getComparablePath, getFileDirectory } from '@utils/files/taskRunStorage';
+import {
+  getComparablePath,
+  getFileDirectory,
+} from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
