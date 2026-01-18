@@ -63,9 +63,12 @@ function buildAgentListDescription(): string {
  * Tool input schema. Extends WorkflowAgentProposalSchema with:
  * - .prefault() defaults for arrays/booleans
  * - .nullish() for OpenAI API compatibility
+ * - inputFile optional (only needed for workflow agents, not tool-use)
  */
 const WorkflowAgentInputSchema = WorkflowAgentProposalSchema.extend({
   model: z.string().prefault('gemini3p'),
+  // inputFile optional - required for workflow agents, not for tool-use
+  inputFile: z.string().prefault(''),
   inputFiles: z.array(z.string()).prefault([]),
   referenceFiles: z.array(z.string()).prefault([]),
   auxiliaryFiles: z.array(z.string()).prefault([]),
@@ -86,41 +89,26 @@ function getAvailableAgentNames(): string[] {
   ];
 }
 
-/** Tool for invoking workflow or tool-use agents to process files. */
+/** Tool for invoking workflow or tool-use agents. */
 export class WorkflowAgentTool extends defineTool({
   name: 'workflow_agent',
-  description: `Execute a workflow or tool-use agent to process files.
-
-This tool invokes specialized agents to process documents. The agent runs in the background and saves results to the output files.
+  description: `Propose running another agent. The proposal appears in the ProgressBoard for user approval.
 
 Available agents:
 ${buildAgentListDescription()}
 
+For workflow agents (document processing): Provide inputFile and instruction. The agent processes the file directly and saves output.
+
+For tool-use agents (interactive): Only provide instruction with file paths mentioned naturally in text. Tool-use agents access files through their own tools (read_file, write_file, etc.), so inputFile/outputFiles are not needed.
+
 Parameters:
 - agent: Name of the agent to execute
 - model: Model to use (default: gemini3p)
-- instruction: What the agent should do
-- inputFile: Primary file to process (required)
-- inputFiles: Additional input files (optional)
-- referenceFile: Reference file for context (optional)
-- referenceFiles: Additional reference files (optional)
-- auxiliaryFile: Auxiliary file for supplementary content (optional)
-- auxiliaryFiles: Additional auxiliary files (optional)
-- mediaFile: Media file for images/figures (optional)
-- mediaFiles: Additional media files (optional)
-- outputFiles: Output file paths (optional, see below)
-- useMultipleOutputs: Generate multiple output files (optional)
+- instruction: What the agent should do (for tool-use agents, mention files here)
+- inputFile: Primary file to process (required for workflow agents, optional for tool-use)
+- outputFiles: Output paths (optional, workflow agents only)
 
-Output file naming:
-- If outputFiles is empty/omitted: single output mode, path derived from inputFile with agent suffix
-- If outputFiles is provided: multiple outputs mode, one output per input file
-  - Output file names should correspond to input files (e.g., inputFiles: [a.tex, b.tex] → outputFiles: [a_out.tex, b_out.tex])
-- Paths support Nunjucks templating: {{ name }}, {{ ext }}, {{ dir }} from the corresponding input file
-
-The proposal is shown in the ProgressBoard for user review. User can:
-- Approve: Execute the agent immediately
-- Reject: Cancel with optional feedback
-- Setup: Open in main view for editing before execution`,
+The user can Approve (run immediately), Reject (with feedback), or Setup (edit in main view first).`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -142,34 +130,45 @@ The proposal is shown in the ProgressBoard for user review. User can:
       );
     }
 
-    // Validate all file paths exist
-    const toValidate = (
-      single: string | null | undefined,
-      arr: string[],
-      label: string,
-    ): { path: string; label: string }[] =>
-      [single, ...arr]
-        .filter((p): p is string => typeof p === 'string' && p.length > 0)
-        .map((path) => ({ path, label }));
+    // For workflow agents, inputFile is required
+    if (isWorkflow && !input.inputFile) {
+      throw new Error(
+        `Workflow agent '${input.agent}' requires inputFile. ` +
+          `Specify the file to process.`,
+      );
+    }
 
-    const filesToValidate = [
-      ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
-      ...toValidate(
-        input.referenceFile,
-        input.referenceFiles,
-        'Reference file',
-      ),
-      ...toValidate(
-        input.auxiliaryFile,
-        input.auxiliaryFiles,
-        'Auxiliary file',
-      ),
-      ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
-    ];
+    // Only validate file paths for workflow agents
+    // Tool-use agents access files through their own tools (read_file, etc.)
+    if (isWorkflow) {
+      const toValidate = (
+        single: string | null | undefined,
+        arr: string[],
+        label: string,
+      ): { path: string; label: string }[] =>
+        [single, ...arr]
+          .filter((p): p is string => typeof p === 'string' && p.length > 0)
+          .map((path) => ({ path, label }));
 
-    for (const { path, label } of filesToValidate) {
-      if (!(await WorkspaceFS.exists(path))) {
-        throw new Error(`${label} not found: ${path}`);
+      const filesToValidate = [
+        ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
+        ...toValidate(
+          input.referenceFile,
+          input.referenceFiles,
+          'Reference file',
+        ),
+        ...toValidate(
+          input.auxiliaryFile,
+          input.auxiliaryFiles,
+          'Auxiliary file',
+        ),
+        ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
+      ];
+
+      for (const { path, label } of filesToValidate) {
+        if (!(await WorkspaceFS.exists(path))) {
+          throw new Error(`${label} not found: ${path}`);
+        }
       }
     }
 
