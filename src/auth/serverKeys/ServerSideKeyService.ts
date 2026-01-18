@@ -215,15 +215,6 @@ export class ServerSideKeyService {
   // ==========================================================================
 
   /**
-   * Get the cached list of enabled providers (synchronous).
-   * Returns empty array if tier config not fetched yet.
-   * Call canUseServerSideKeys() first to prime the cache.
-   */
-  getEnabledProvidersSync(): string[] {
-    return this.tierService.getProviders();
-  }
-
-  /**
    * Check if a provider has API keys configured on the server.
    * All tiers have access to the same providers.
    */
