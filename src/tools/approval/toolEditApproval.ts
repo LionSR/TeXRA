@@ -74,7 +74,7 @@ export type ProgressViewApprovalAction =
 interface ProgressViewApprovalActionPayload {
   requestId: string;
   action: ProgressViewApprovalAction;
-  note?: string;
+  feedback?: string;
 }
 
 let queue: Promise<void> = Promise.resolve();
@@ -706,16 +706,17 @@ export async function handleProgressViewToolEditApprovalAction(
     }
 
     case 'reject': {
-      let userMessage = payload.note?.trim();
+      let userMessage = payload.feedback?.trim();
       if (!userMessage) {
-        const note = await vscode.window.showInputBox({
+        // Fallback to VS Code input box if no feedback provided via progress view
+        const feedback = await vscode.window.showInputBox({
           prompt: 'Optionally share why the change was rejected',
           placeHolder: 'Add guidance for the assistant (press Enter to skip)',
         });
-        if (note === undefined) {
+        if (feedback === undefined) {
           return;
         }
-        userMessage = note.trim();
+        userMessage = feedback.trim();
       }
       entry.settle({
         accepted: false,
@@ -733,8 +734,8 @@ export function buildApprovalRejectedResult(
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
   // Always mark rejections as errors so logs, status, and tests reflect failure,
-  // while still forwarding any user note as explicit instruction for the model.
-  const note = userMessage?.trim();
+  // while still forwarding any user feedback as explicit instruction for the model.
+  const feedback = userMessage?.trim();
   const result: ToolResult = {
     // Use output to ensure the rejection message is always shown to the model.
     // formatToolResultAsText prioritizes output over error/summary.
@@ -742,10 +743,10 @@ export function buildApprovalRejectedResult(
     summary: baseMessage,
     error: baseMessage,
     isError: true,
-    ...(note && note.length > 0 ? { userInstruction: note } : {}),
+    ...(feedback && feedback.length > 0 ? { userInstruction: feedback } : {}),
   };
 
-  // No file attachments for user notes; treated purely as guidance via fields.
+  // No file attachments for user feedback; treated purely as guidance via fields.
 
   return result;
 }
