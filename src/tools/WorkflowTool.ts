@@ -31,6 +31,34 @@ import {
   type WorkflowAgentProposal,
 } from '@eventBus/types';
 
+/** Build the dynamic agent list for the tool description. */
+function buildAgentListDescription(): string {
+  const workflowAgents = getVisibleWorkflowAgents();
+  const toolUseAgents = getVisibleToolUseAgents();
+
+  const formatAgent = (a: { name: string; description?: string }): string =>
+    `- ${a.name}: ${a.description || 'No description'}`;
+
+  const sections: string[] = [];
+
+  if (workflowAgents.length > 0) {
+    sections.push(
+      '**Workflow Agents** (document processing):',
+      ...workflowAgents.map(formatAgent),
+    );
+  }
+
+  if (toolUseAgents.length > 0) {
+    sections.push(
+      '',
+      '**Tool-Use Agents** (interactive assistants):',
+      ...toolUseAgents.map(formatAgent),
+    );
+  }
+
+  return sections.join('\n');
+}
+
 /**
  * Tool input schema. Extends WorkflowAgentProposalSchema with:
  * - .prefault() defaults for arrays/booleans
@@ -63,7 +91,10 @@ export class WorkflowAgentTool extends defineTool({
   name: 'workflow_agent',
   description: `Execute a workflow or tool-use agent to process files.
 
-This tool invokes specialized agents to process documents. The agent runs in the background and saves results to the output files. See the system prompt for the list of available agents.
+This tool invokes specialized agents to process documents. The agent runs in the background and saves results to the output files.
+
+Available agents:
+${buildAgentListDescription()}
 
 Parameters:
 - agent: Name of the agent to execute
