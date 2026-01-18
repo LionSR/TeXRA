@@ -52,20 +52,3 @@ export function canUpdateWebview(
 ): boolean {
   return isWebviewAvailable(ctx) && isActiveStream(ctx, stream);
 }
-
-/**
- * Determine update strategy for a stream event.
- * Returns 'immediate' for active stream, 'buffer' for background streams,
- * or 'skip' if webview is unavailable.
- *
- * This enables proper multi-agent support by distinguishing between:
- * - Active stream: immediate webview updates
- * - Background streams: buffer for later replay
- */
-export function getUpdateStrategy(
-  ctx: EventHandlerContext,
-  stream: StreamTabId,
-): 'immediate' | 'buffer' | 'skip' {
-  if (!isWebviewAvailable(ctx)) return 'skip';
-  return isActiveStream(ctx, stream) ? 'immediate' : 'buffer';
-}

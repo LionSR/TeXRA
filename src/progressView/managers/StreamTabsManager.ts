@@ -85,8 +85,32 @@ export class StreamTabsManager extends PersistentMapManager<
     await this.save();
   }
 
+  /**
+   * Get a copy of messages for a stream (safe for external use).
+   * Returns a shallow copy to prevent external mutation of internal state.
+   */
   getMessages(stream: StreamTabId): LogMessageData[] {
-    return this.ensureMessages(stream);
+    return [...this.ensureMessages(stream)];
+  }
+
+  /**
+   * Update an existing message by ID.
+   * Returns true if message was found and updated, false otherwise.
+   */
+  updateMessage(
+    stream: StreamTabId,
+    messageId: string,
+    updates: Partial<Omit<LogMessageData, 'id'>>,
+  ): boolean {
+    const messages = this.items.get(stream);
+    if (!messages) return false;
+
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index < 0) return false;
+
+    messages[index] = { ...messages[index], ...updates };
+    void this.save();
+    return true;
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
