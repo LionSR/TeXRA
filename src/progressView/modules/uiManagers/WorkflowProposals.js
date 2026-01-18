@@ -126,7 +126,7 @@ export class WorkflowProposals extends BaseUIRequestManager {
       fileSpan.dataset.filePath = filePath;
       fileSpan.addEventListener('click', (e) => {
         e.stopPropagation();
-        vscode.postMessage({ command: COMMANDS.OPEN_FILE, path: filePath });
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: filePath });
       });
       elem.appendChild(fileSpan);
     });
