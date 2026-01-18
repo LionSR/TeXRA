@@ -58,22 +58,15 @@ function handleUpdateLogMessage(
     'LogEvents',
     'failed to handle updateLogMessage',
     () => {
-      if (!ctx.state.streamTabs.has(stream)) return;
+      // Skip INTERNAL messages entirely (never shown to users)
+      if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
 
-      // Check if message exists and get its type for INTERNAL filtering
+      // Find existing message (also verifies stream exists via empty array return)
       const messages = ctx.state.streamTabs.getMessages(stream);
       const existing = messages.find((m) => m.id === logMessage.id);
-      if (!existing) return;
+      if (!existing || existing.messageType === MESSAGE_TYPES.INTERNAL) return;
 
-      // Skip INTERNAL message updates (either existing or incoming)
-      if (
-        existing.messageType === MESSAGE_TYPES.INTERNAL ||
-        logMessage.messageType === MESSAGE_TYPES.INTERNAL
-      ) {
-        return;
-      }
-
-      // Update via proper encapsulated method (no direct mutation)
+      // Update state and notify webview
       const { id: _id, ...updates } = logMessage;
       const updated = ctx.state.streamTabs.updateMessage(
         stream,
@@ -82,7 +75,6 @@ function handleUpdateLogMessage(
       );
 
       if (updated && canUpdateWebview(ctx, stream)) {
-        // Send merged update to webview
         ctx.webviewUpdater.updateLogMessage(stream, {
           ...existing,
           ...updates,
