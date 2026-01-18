@@ -6,7 +6,7 @@ export {
   type RetryCallbacks,
   type ApprovalCallbacks,
 } from './UIEvents';
-export { type ProgressEventBusLike } from './types';
+export { type ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 
 // Domain-specific event handlers (modular, focused files)
 export {
