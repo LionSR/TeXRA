@@ -109,6 +109,7 @@ class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
           logger.warn(
             `Manual retry wait timed out after ${timeoutMinutes} minutes`,
           );
+          this.loggers.delete(streamId);
           return { action: 'timeout' };
         },
       },
