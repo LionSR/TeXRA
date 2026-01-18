@@ -56,6 +56,7 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
         state: {},
+        isResetOperation: true,
       });
     },
   );
