@@ -75,20 +75,6 @@ export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
 ]);
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
-/** Type guard for workflow agent proposals */
-export function isWorkflowAgentProposal(
-  proposal: AgentProposal,
-): proposal is WorkflowAgentProposal {
-  return proposal.agentCategory === 'workflow';
-}
-
-/** Type guard for tool-use agent proposals */
-export function isToolUseAgentProposal(
-  proposal: AgentProposal,
-): proposal is ToolUseAgentProposal {
-  return proposal.agentCategory === 'toolUse';
-}
-
 /** Base prompt fields for UI display */
 const ProposalPromptBaseSchema = z.object({
   proposalId: z.string(),
