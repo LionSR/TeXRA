@@ -32,8 +32,6 @@ export const StreamTabInfoSchema = z.object({
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
-export type AgentFilter = AgentTypeFilter;
-
 export const InstructionMetadataSchema = z.object({
   showToggle: z.boolean().optional(),
   expanded: z.boolean().optional(),
