@@ -52,7 +52,9 @@ export type RunsToolInput = z.infer<typeof RunsToolInputSchema>;
  *
  * Paths:
  * - /runs - List all past executions
- * - /runs/{id} - Execution detail (config + conversation)
+ * - /runs/{id} - Execution summary
+ * - /runs/{id}/config - Agent configuration (JSON)
+ * - /runs/{id}/conversation - Message history
  * - /runs/{id}/files - List generated files
  * - /runs/{id}/files/{path} - Read specific file
  */
@@ -62,7 +64,9 @@ export class RunsTool extends defineTool({
 
 Paths:
 - /runs - List all past executions
-- /runs/{id} - Execution detail with config and conversation
+- /runs/{id} - Execution summary (agent, model, timestamp)
+- /runs/{id}/config - Agent configuration JSON (for propose_workflow/propose_agent)
+- /runs/{id}/conversation - Full message history
 - /runs/{id}/files - List generated files
 - /runs/{id}/files/{path} - Read specific file
 
@@ -87,9 +91,19 @@ Use view_range: [start, end] to paginate large outputs.`,
 
     const executionId = this.resolveExecutionId(id);
 
-    // /runs/{id} - execution detail
+    // /runs/{id} - execution summary
     if (!resource) {
-      return this.showExecution(executionId, input.view_range ?? undefined);
+      return this.showSummary(executionId);
+    }
+
+    // /runs/{id}/config - agent configuration
+    if (resource === 'config') {
+      return this.showConfig(executionId);
+    }
+
+    // /runs/{id}/conversation - message history
+    if (resource === 'conversation') {
+      return this.showConversation(executionId, input.view_range ?? undefined);
     }
 
     // /runs/{id}/files or /runs/{id}/files/{path}
@@ -101,7 +115,7 @@ Use view_range: [start, end] to paginate large outputs.`,
     }
 
     throw new ToolError(
-      `Unknown path: ${input.path}. Expected /runs, /runs/{id}, /runs/{id}/files, or /runs/{id}/files/{path}`,
+      `Unknown path: ${input.path}. Valid: /runs/{id}, /runs/{id}/config, /runs/{id}/conversation, /runs/{id}/files`,
     );
   }
 
@@ -143,60 +157,89 @@ Use view_range: [start, end] to paginate large outputs.`,
   }
 
   /**
-   * Show execution detail: config + conversation history.
+   * Show execution summary (brief metadata).
    */
-  private async showExecution(
+  private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
+    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
+
+    if (!historyItem) {
+      // Check if flow exists even without history entry
+      const store = getExecutionStore(executionId);
+      const flow = await store.read(`flow:${executionId}`);
+      if (!flow) {
+        throw new ToolError(`Execution not found: ${executionId}`);
+      }
+      return {
+        output: `Execution: ${executionId}\n(No metadata available - use /runs/${executionId}/conversation to view messages)`,
+      };
+    }
+
+    const config = historyItem.agentConfig;
+    const lines = [
+      `Execution: ${executionId}`,
+      `Agent: ${config.agent}`,
+      `Model: ${config.model ?? 'default'}`,
+      `Timestamp: ${historyItem.timestamp}`,
+    ];
+
+    if (config.session?.taskSummary) {
+      lines.push(`Task: ${config.session.taskSummary}`);
+    }
+
+    lines.push('');
+    lines.push('Available paths:');
+    lines.push(`  /runs/${executionId}/config - Agent configuration (JSON)`);
+    lines.push(`  /runs/${executionId}/conversation - Message history`);
+    lines.push(`  /runs/${executionId}/files - Generated files`);
+
+    return { output: lines.join('\n') };
+  }
+
+  /**
+   * Show agent configuration as JSON.
+   */
+  private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
+    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
+
+    if (!historyItem) {
+      throw new ToolError(
+        `Config not found for execution: ${executionId}. Config is only available for executions in history.`,
+      );
+    }
+
+    const config = historyItem.agentConfig;
+    return {
+      output: JSON.stringify(config, null, 2),
+    };
+  }
+
+  /**
+   * Show conversation/message history.
+   */
+  private async showConversation(
     executionId: ExecutionId,
     viewRange?: [number, number],
   ): Promise<ToolResult> {
-    // Get metadata from history
-    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
-
-    // Get flow record from KV store
     const store = getExecutionStore(executionId);
     const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(`flow:${executionId}`);
 
-    if (!historyItem && !flow) {
+    if (!flow) {
       throw new ToolError(`Execution not found: ${executionId}`);
     }
 
-    const lines: string[] = [];
-
-    // Header with config
-    if (historyItem) {
-      const config = historyItem.agentConfig;
-      lines.push('=== Config ===');
-      lines.push(`Agent: ${config.agent}`);
-      lines.push(`Model: ${config.model ?? 'default'}`);
-      lines.push(`Timestamp: ${historyItem.timestamp}`);
-      if (config.session?.taskSummary) {
-        lines.push(`Task: ${config.session.taskSummary}`);
-      }
-      if (config.session?.inputFiles?.length) {
-        lines.push(`Input files: ${config.session.inputFiles.join(', ')}`);
-      }
-      if (config.tools?.length) {
-        lines.push(`Tools: ${config.tools.map(t => typeof t === 'string' ? t : t.name).join(', ')}`);
-      }
-      lines.push('');
+    const conversation = flow?.shared?.conversation;
+    if (!Array.isArray(conversation) || conversation.length === 0) {
+      return { output: '(No conversation history available)' };
     }
 
-    // Conversation history
-    const conversation = flow?.shared?.conversation;
-    if (Array.isArray(conversation) && conversation.length > 0) {
-      lines.push('=== Conversation ===');
+    const lines: string[] = [];
+    for (let i = 0; i < conversation.length; i++) {
+      const msg = conversation[i] as { role?: string; content?: unknown };
+      const role = msg.role ?? 'unknown';
+      const content = this.formatMessageContent(msg.content);
+      lines.push(`[${i + 1}] ${role}:`);
+      lines.push(content);
       lines.push('');
-
-      for (let i = 0; i < conversation.length; i++) {
-        const msg = conversation[i] as { role?: string; content?: unknown };
-        const role = msg.role ?? 'unknown';
-        const content = this.formatMessageContent(msg.content);
-        lines.push(`[${i + 1}] ${role}:`);
-        lines.push(content);
-        lines.push('');
-      }
-    } else {
-      lines.push('(No conversation history available)');
     }
 
     let output = lines.join('\n');
