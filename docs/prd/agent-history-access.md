@@ -221,30 +221,50 @@ Paths:
 Use view_range: [start, end] to paginate large outputs.
 ```
 
-## Integration with WorkflowTool
+## Integration with Agent Proposal Tools
 
-The `/runs/{id}/config` path enables a powerful workflow:
+The `/runs/{id}/config` path enables agents to learn from past executions and propose new ones:
 
-1. Agent views past execution config via `runs` tool
-2. Agent proposes modified execution via `propose_workflow` or `propose_agent` tools
+### Tool-Use Agent History → Propose New Tool-Use Agent
 
-Example agent reasoning:
 ```
-// Agent reads past successful config
+// View past tool-use execution
 runs({ command: 'view', path: '/runs/abc123/config' })
-→ { agent: "correct", model: "sonnet45", inputFile: "paper.tex", ... }
+→ { agent: "search", model: "sonnet45", instruction: "Find papers on attention..." }
 
-// Agent proposes similar run with modifications
-propose_workflow({
-  agent: "correct",
-  model: "opus45",  // Upgraded model
-  inputFile: "paper_v2.tex",
-  instruction: "Same corrections as before, plus check citations"
+// Propose similar with modifications
+propose_agent({
+  agent: "search",
+  model: "opus45",
+  instruction: "Find papers on linear attention, focusing on memory efficiency"
 })
 ```
 
+### Workflow Agent History → Propose New Workflow
+
+```
+// View past workflow execution
+runs({ command: 'view', path: '/runs/def456/config' })
+→ { agent: "correct", model: "sonnet45", inputFile: "paper.tex", ... }
+
+// Propose similar with modifications
+propose_workflow({
+  agent: "correct",
+  model: "opus45",
+  inputFile: "paper_v2.tex",
+  instruction: "Same corrections, plus check citations"
+})
+```
+
+### Cross-Type Learning
+
+An orchestrating tool-use agent can:
+1. Review tool-use execution history (what searches worked)
+2. Review workflow execution history (what corrections were applied)
+3. Propose either type based on current needs
+
 This creates a learning loop where agents can:
-- Review what worked before
+- Review what worked before (both types)
 - Understand successful configurations
 - Propose improvements based on history
 
