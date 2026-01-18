@@ -16,7 +16,11 @@ import type {
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
-import type { RetryRequestPrompt, ToolEditApprovalPrompt } from './types';
+import type {
+  RetryRequestPrompt,
+  ToolEditApprovalPrompt,
+  AgentProposalPrompt,
+} from './types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -53,6 +57,8 @@ export interface ProgressEventPayloads {
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
+  showAgentProposal: AgentProposalPrompt;
+  resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   extensionDeactivating: undefined;
 }

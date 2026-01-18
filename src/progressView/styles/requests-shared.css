@@ -1,5 +1,5 @@
 /**
- * Shared styles for approval-requests and retry-requests
+ * Shared styles for approval-requests, retry-requests, and workflow-proposals
  * Uses CSS variables from common.css
  */
 
@@ -8,7 +8,8 @@
    ========================================================================== */
 
 .approval-requests,
-.retry-requests {
+.retry-requests,
+.workflow-proposals {
   margin: var(--spacing-large) 0;
   padding: var(--spacing-large);
   border-radius: var(--border-radius-large);
@@ -19,7 +20,8 @@
 }
 
 .approval-requests.is-visible,
-.retry-requests.is-visible {
+.retry-requests.is-visible,
+.workflow-proposals.is-visible {
   display: flex;
 }
 
@@ -28,7 +30,8 @@
    ========================================================================== */
 
 .approval-requests__header,
-.retry-requests__header {
+.retry-requests__header,
+.workflow-proposals__header {
   display: flex;
   align-items: center;
   gap: var(--spacing-medium);
@@ -42,21 +45,26 @@
 
 .approval-requests__list,
 .retry-requests__list,
+.workflow-proposals__list,
 .approval-request,
 .retry-request,
+.workflow-proposal,
 .approval-request__details,
-.retry-request__details {
+.retry-request__details,
+.workflow-proposal__details {
   display: flex;
   flex-direction: column;
 }
 
 .approval-requests__list,
-.retry-requests__list {
+.retry-requests__list,
+.workflow-proposals__list {
   gap: var(--spacing-large);
 }
 
 .approval-request,
-.retry-request {
+.retry-request,
+.workflow-proposal {
   border-radius: var(--border-radius);
   border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
   background: var(--vscode-editorHoverWidget-background);
@@ -65,7 +73,8 @@
 }
 
 .approval-request__details,
-.retry-request__details {
+.retry-request__details,
+.workflow-proposal__details {
   gap: var(--spacing-small);
 }
 
@@ -88,31 +97,36 @@
    ========================================================================== */
 
 .approval-request__actions,
-.retry-request__actions {
+.retry-request__actions,
+.workflow-proposal__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-small);
 }
 
 .approval-request__actions::part(container),
-.retry-request__actions::part(container) {
+.retry-request__actions::part(container),
+.workflow-proposal__actions::part(container) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-small);
 }
 
 .approval-request__actions vscode-toolbar-button,
-.retry-request__actions vscode-toolbar-button {
+.retry-request__actions vscode-toolbar-button,
+.workflow-proposal__actions vscode-toolbar-button {
   min-width: auto;
 }
 
 .approval-request__actions vscode-toolbar-button::part(control),
-.retry-request__actions vscode-toolbar-button::part(control) {
+.retry-request__actions vscode-toolbar-button::part(control),
+.workflow-proposal__actions vscode-toolbar-button::part(control) {
   justify-content: flex-start;
   gap: var(--spacing-small);
 }
 
 .approval-request__actions [hidden],
-.retry-request__actions [hidden] {
+.retry-request__actions [hidden],
+.workflow-proposal__actions [hidden] {
   display: none !important;
 }
