@@ -16,7 +16,7 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
+import { bus } from '@eventBus/ProgressEventBus';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Type imports
@@ -76,7 +76,7 @@ async function resumeFromSnapshot(
     // Drain queued follow-ups before starting the flow
     queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
     // Update UI to show queue is now empty (messages are being processed)
-    updateQueuedFollowUpsUI(streamId);
+    bus.emit('updateQueuedFollowUps', { streamId });
 
     // Resume using flow-first execution
     await resumeToolUseFromSnapshot(snapshot, (session) => {
