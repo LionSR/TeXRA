@@ -115,7 +115,8 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 /** Tool for proposing workflow agent executions (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'propose_workflow',
-  description: `Propose running a workflow agent for document processing. Creates a proposal for user approval in the ProgressBoard.
+  description:
+    () => `Propose running a workflow agent for document processing. Creates a proposal for user approval in the ProgressBoard.
 
 **IMPORTANT:** The agent runs in a NEW session WITHOUT your context. Write SELF-SUFFICIENT instructions:
 - Include ALL relevant context, goals, and constraints
@@ -289,7 +290,8 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({
   name: 'propose_agent',
-  description: `Delegate a task to another tool-use agent. Creates a proposal for user approval in the ProgressBoard.
+  description:
+    () => `Delegate a task to another tool-use agent. Creates a proposal for user approval in the ProgressBoard.
 
 **IMPORTANT:** The delegated agent runs in a NEW session WITHOUT your context. Write SELF-SUFFICIENT instructions:
 - Include ALL relevant context, file paths, goals, and constraints

@@ -217,14 +217,14 @@ export class WebviewUpdater {
 
   showAgentProposal(proposal: AgentProposalPrompt): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_WORKFLOW_AGENT_PROPOSAL,
+      command: COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,
     });
   }
 
   resolveAgentProposal(proposalId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_WORKFLOW_AGENT_PROPOSAL,
+      command: COMMANDS.RESOLVE_AGENT_PROPOSAL,
       proposalId,
     });
   }
