@@ -88,3 +88,23 @@
   .codicon-chevron-down {
   transform: rotate(180deg);
 }
+
+/* Feedback section */
+.approval-request__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.approval-request__feedback[hidden] {
+  display: none;
+}
+
+.approval-request__feedback-input {
+  width: 100%;
+}
+
+/* Reject button when feedback is shown */
+.approval-request--feedback-active
+  .approval-request__actions
+  vscode-toolbar-button[data-action='reject']::part(control) {
+  color: var(--vscode-inputValidation-warningBorder);
+}
