@@ -596,11 +596,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
-      persist: false,
-    });
-    // Only fetch output files if we have a resolved run ID
-    const storageKey = resolvedRunId ? (resolvedRunId as StorageKey) : null;
+    // Use cached activeRunId (set by event handlers when data arrives)
+    const storageKey = this.provider.state.getActiveRunId(stream);
     const runOutputs = storageKey
       ? this.provider.state.getRunOutputFiles(stream, { storageKey })
       : undefined;
@@ -788,15 +785,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
-      persist: false,
-    });
+    const storageKey = this.provider.state.getActiveRunId(stream);
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
       stream,
-      {
-        storageKey: resolvedRunId ? (resolvedRunId as StorageKey) : null,
-        workspaceOnly: true,
-      },
+      { storageKey, workspaceOnly: true },
     );
 
     // Collect all output files from declared config and generated paths
@@ -1071,9 +1063,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return null;
     }
 
-    const storageKey = this.provider.state.resolveRunId(streamId, undefined, {
-      persist: false,
-    }) as StorageKey | null;
+    const storageKey = this.provider.state.getActiveRunId(streamId);
     const runOutputs = storageKey
       ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
       : null;

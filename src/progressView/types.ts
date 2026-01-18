@@ -32,8 +32,6 @@ export const StreamTabInfoSchema = z.object({
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
-export type AgentFilter = AgentTypeFilter;
-
 export const InstructionMetadataSchema = z.object({
   showToggle: z.boolean().optional(),
   expanded: z.boolean().optional(),
@@ -45,3 +43,19 @@ export const InstructionUpdateSchema = z.object({
   metadata: InstructionMetadataSchema.optional(),
 });
 export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;
+
+// ============================================================================
+// Round Data Types
+// ============================================================================
+
+/**
+ * Map from round number to items for that round.
+ * Used for output files, missing outputs, etc. that are organized by round.
+ */
+export type RoundMap<T> = Map<number, T[]>;
+
+/**
+ * Map from run ID to round maps (run → round → items).
+ * Nested structure for per-run, per-round data.
+ */
+export type RunRoundMap<T> = Map<string, RoundMap<T>>;
