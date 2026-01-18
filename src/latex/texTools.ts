@@ -1,32 +1,48 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - log
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { LaTeXCompileOptionsSchema } from '@common/schemas';
+
+// Local imports - log
 import * as logger from '@logger/logUtils';
-import { runToolWithCheck } from '@utils/system';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 // Tool configurations have been moved to utils/toolUtils.ts for centralized management
 
+export interface LaTeXCompileOptions {
+  /** Channel for logging */
+  channel?: string;
+  /** Output directory for compiled PDF */
+  outputDirectory?: string;
+  /** Compiler to use: 'pdflatex' or 'latexmk' */
+  compiler?: 'pdflatex' | 'latexmk';
+}
+
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
- * @param channel Optional channel for logging
- * @param outputDirectory Directory for compiled PDF (default: alongside file)
+ * @param options Compilation options
  * @returns Promise<boolean> True if compilation succeeded
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
-  channel: string = CHANNEL,
-  outputDirectory?: string,
-  useLatexmk: boolean = false,
+  options: LaTeXCompileOptions = {},
 ): Promise<boolean> {
+  // Schema provides defaults
+  const parsed = LaTeXCompileOptionsSchema.parse(options);
+  const channel = parsed.channel ?? CHANNEL;
+  const outputDirectory = parsed.outputDirectory;
+  const useLatexmk = parsed.compiler === 'latexmk';
   try {
     const latexFile = latexLocation.absolutePath;
     const outDir = outputDirectory ?? path.dirname(latexFile);

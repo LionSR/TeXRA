@@ -4,6 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { ListingOptionsSchema } from '@common/schemas';
+
 /** Normalize backslashes to forward slashes for consistent comparison */
 function toForwardSlashes(str: string): string {
   return str.replaceAll('\\', '/');
@@ -127,20 +130,19 @@ function prepareFilters(
   patternRoot: string,
   options: ListingOptions,
 ): NormalizedListingOptions {
-  const includeExtensions = options.includeExtensions ?? [];
-  const excludeExtensions = options.excludeExtensions ?? [];
-  const excludeDirectories = options.excludeDirectories ?? [];
-  const excludeKeywords = options.excludeKeywords ?? [];
-  const excludeFiles = options.excludeFiles ?? [];
+  // Schema provides defaults for all optional fields
+  const parsed = ListingOptionsSchema.parse(options);
 
-  const sanitizedDirectories = sanitizeDirectories(excludeDirectories);
+  const sanitizedDirectories = sanitizeDirectories(parsed.excludeDirectories);
 
   return {
-    includeExt: includeExtensions.map((ext) => ext.toLowerCase()),
-    excludeExt: excludeExtensions.map((ext) => ext.toLowerCase()),
-    excludeKeywords: excludeKeywords.map((keyword) => keyword.toLowerCase()),
+    includeExt: parsed.includeExtensions.map((ext) => ext.toLowerCase()),
+    excludeExt: parsed.excludeExtensions.map((ext) => ext.toLowerCase()),
+    excludeKeywords: parsed.excludeKeywords.map((keyword) =>
+      keyword.toLowerCase(),
+    ),
     excludeDirs: sanitizedDirectories.map((dir) => dir.toLowerCase()),
-    excludeFiles: excludeFiles.map((file) => file.toLowerCase()),
+    excludeFiles: parsed.excludeFiles.map((file) => file.toLowerCase()),
     excludePattern: createExcludePattern(patternRoot, sanitizedDirectories),
   };
 }
