@@ -73,20 +73,36 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Clear content of a specific stream (but keep the stream)
+   * Get a copy of messages for a stream (safe for external use).
+   * Returns a shallow copy to prevent external mutation of internal state.
    */
-  async clearContent(stream: StreamTabId): Promise<void> {
-    if (!this.has(stream)) {
-      return;
-    }
-
-    const messages = this.ensureMessages(stream);
-    messages.length = 0;
-    await this.save();
+  getMessages(stream: StreamTabId): LogMessageData[] {
+    return [...this.ensureMessages(stream)];
   }
 
-  getMessages(stream: StreamTabId): LogMessageData[] {
-    return this.ensureMessages(stream);
+  /**
+   * Update an existing message by ID.
+   * Returns true if message was found and updated, false otherwise.
+   *
+   * Note: Uses fire-and-forget persistence (void this.save()) because:
+   * - Callers only need to know if message was found/updated in memory
+   * - The in-memory state is immediately correct for webview updates
+   * - Persistence is background work; failures are logged by base class
+   */
+  updateMessage(
+    stream: StreamTabId,
+    messageId: string,
+    updates: Partial<Omit<LogMessageData, 'id'>>,
+  ): boolean {
+    const messages = this.items.get(stream);
+    if (!messages) return false;
+
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index < 0) return false;
+
+    messages[index] = { ...messages[index], ...updates };
+    void this.save();
+    return true;
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {

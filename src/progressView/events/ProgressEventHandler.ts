@@ -141,21 +141,13 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
     this.replayPendingTaskGroups(stream);
 
-    // Get current status without defaulting to RUNNING.
-    // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
-    // not here. Defaulting to RUNNING here causes a race condition.
-    const status = StreamStatusService.get(stream);
-
     if (!this.webviewUpdater.isAvailable()) return;
 
-    // Update webview with stream data
+    // Update stream tabs list (required to set activeStream in frontend)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
-    if (status !== undefined) {
-      this.setStreamStatus(stream, status);
-    }
-
-    // Refresh stream surface and instruction panel
+    // Refresh stream content (logs, groups, metadata, status, todos)
+    // Note: refreshStreamSurface includes status update, so no separate setStreamStatus needed
     const activeRunId = this.refreshStreamSurface(stream, {
       updateInstruction: false,
     });
@@ -187,6 +179,7 @@ export class ProgressEventHandler {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
         const sessionKind = taskState.agentConfig.session.agentCategory;
+        const previousFilter = this.state.agentTypeFilter;
 
         this.state.setTaskState(streamTabId, taskState);
 
@@ -202,11 +195,17 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamTabId);
         }
 
+        // Update stream tabs when:
+        // 1. Filter changed (affects visible streams)
+        // 2. Active stream's task state changed (label needs inputFile, agent, etc.)
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(
-            this.state,
-            StreamStatusService.getAll(),
-          );
+          const filterChanged = this.state.agentTypeFilter !== previousFilter;
+          if (filterChanged || isActiveStream) {
+            this.webviewUpdater.updateAll(
+              this.state,
+              StreamStatusService.getAll(),
+            );
+          }
         }
       },
     );
@@ -303,22 +302,16 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKind = this.getStreamCategory(stream);
 
-    // Resolve runId: auto-resolve if undefined, use provided value otherwise
+    // Use provided runId or read cached activeRunId (no expensive resolution)
     const runId =
-      runIdHint === undefined
-        ? this.state.resolveRunId(stream, undefined, { persist: false })
-        : runIdHint;
+      runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
     // Persist instruction if both runId and instruction exist
     if (runId) {
       if (instructionUpdate) {
-        void this.state.runInstructions.setInstruction(
-          stream,
-          runId,
-          instructionUpdate,
-        );
+        void this.state.setRunInstruction(stream, runId, instructionUpdate);
       } else {
-        void this.state.runInstructions.deleteRun(stream, runId);
+        void this.state.deleteRunInstruction(stream, runId);
       }
     }
 
@@ -348,81 +341,46 @@ export class ProgressEventHandler {
 
     const { updateInstruction = true } = options;
 
+    // Handle empty stream (clear all content)
     if (!stream) {
-      // No active stream: explicitly clear content with action: 'clear'.
-      // This is an intentional clear (e.g., stream deleted, no streams left).
-      this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
-      this.webviewUpdater.updateFiles('', { reset: true });
-      this.webviewUpdater.updateMissingOutputs('', { reset: true });
-      this.webviewUpdater.updateUsage('', {});
-      this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
-      if (updateInstruction) {
-        this.webviewUpdater.updateInstruction('', null);
-      }
+      this.clearStreamSurface(updateInstruction);
       return null;
     }
 
+    // Collect stream data (activeRunId is already set by event handlers when data arrives)
     const messages = this.state.streamTabs.getMessages(stream);
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
-    const activeRunId = this.state.resolveRunId(stream, undefined, {
-      persist: false,
-    });
+    const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
-      this.state.runInstructions.getInstructions(stream).entries(),
+      this.state.getRunInstructions(stream).entries(),
     );
-
-    const filesByRun = nestedMapToRecord(
-      this.state.outputFiles.getFiles(stream),
-    );
-    const missingByRun = nestedMapToRecord(
+    const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
+    const runMissingOutputs = nestedMapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
-    );
-    const usageByRun = Object.fromEntries(
+    ) as Record<string, { [key: number]: string[] }>;
+    const runUsage = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
+    const contextState = this.state.getContextState(stream);
+    const todos = this.state.getTodos(stream) ?? [];
+    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
-    // Clear pending task groups buffer BEFORE update to prevent race condition.
-    // If new groups arrive during updateLogContent, they'll be buffered fresh.
-    // Groups already in state will be sent via updateLogContent.
+    // Clear buffer before update to prevent race condition
     this.pendingTaskGroups.delete(stream);
 
-    // Get context state for this stream (ephemeral - not persisted)
-    const contextState = this.state.getContextState(stream);
-
-    // Send data with action: 'render' (default).
-    // Frontend detects stream switch by comparing stream with lastRenderedStream.
+    // Send primary content update (includes all run-scoped data in single message)
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,
-      runUsage: usageByRun,
-      runFiles: filesByRun,
+      runUsage,
+      runFiles,
+      runMissingOutputs,
       contextState,
     });
 
-    // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
-    // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
-    // messages here to avoid a race condition where reset: true would clear
-    // the files just populated from UPDATE_LOGS.
-
-    // Reset and send all missing outputs in sequence
-    this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
-    for (const [runId, rounds] of Object.entries(missingByRun)) {
-      this.webviewUpdater.updateMissingOutputs(stream, { runId, rounds });
-    }
-
-    // Refresh todos for the stream (ephemeral state)
-    // Always send update (empty array if undefined) to clear stale UI from previous stream
-    const todos = this.state.getTodos(stream) ?? [];
+    // Send ephemeral state
     this.webviewUpdater.updateTodos(stream, todos);
-
-    // Context state is already included in updateLogContent above (via contextState field)
-    // No separate UPDATE_CONTEXT_STATE message needed here
-
-    // Update status for current stream. Don't default to RUNNING - that causes a race
-    // condition where the "already running" check in executeAgent fails. Let setupFlowUIState
-    // be the only place that sets RUNNING. Use READY as fallback for uninitialized streams.
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
@@ -430,6 +388,21 @@ export class ProgressEventHandler {
     }
 
     return activeRunId;
+  }
+
+  /**
+   * Clear all webview content when no stream is active.
+   *
+   * Note: updateLogContent with action='clear' triggers the frontend to clear
+   * all run-scoped state (files, missing outputs, usage). No separate reset
+   * messages needed - the frontend handles this in its full rebuild path.
+   */
+  private clearStreamSurface(clearInstruction: boolean): void {
+    this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
+    this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
+    if (clearInstruction) {
+      this.webviewUpdater.updateInstruction('', null);
+    }
   }
 
   /**
