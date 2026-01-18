@@ -114,7 +114,6 @@ export abstract class BasePromiseCoordinator<
       });
 
       // Emit show event (cast needed for generic base class)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       bus.emit(this.config.showEventName, payload as any);
     });
   }
@@ -180,7 +179,6 @@ export abstract class BasePromiseCoordinator<
     this.requests.set(id, { status: 'resolved' });
 
     // Emit resolve event (cast needed for generic base class)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bus.emit(this.config.resolveEventName, {
       [this.config.idFieldName]: id,
     } as any);
