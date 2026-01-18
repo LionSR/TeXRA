@@ -39,12 +39,13 @@ export class WorkflowProposals extends BaseUIRequestManager {
     element.dataset.proposalId = request.proposalId || '';
     element.dataset.agentCategory = request.agentCategory || 'workflow';
 
+    const isToolUse = request.agentCategory === 'toolUse';
+
     // Update category badge
     const categoryBadge = element.querySelector(
       '.workflow-proposal__category-badge',
     );
     if (categoryBadge) {
-      const isToolUse = request.agentCategory === 'toolUse';
       categoryBadge.textContent = isToolUse ? 'Tool-Use' : 'Workflow';
       categoryBadge.className = `workflow-proposal__category-badge workflow-proposal__category-badge--${isToolUse ? 'tool-use' : 'workflow'}`;
     }
@@ -61,7 +62,9 @@ export class WorkflowProposals extends BaseUIRequestManager {
       request.instruction || '',
     );
 
-    // Combine singular + array fields for display
+    // File fields only exist for workflow agent proposals (agentCategory === 'workflow')
+    // Tool-use agent proposals access files via their own tools (read_file, etc.)
+    // The schema enforces this - tool-use proposals simply don't have file fields
     const combine = (single, arr) => [single, ...(arr || [])].filter((f) => f);
 
     this._setFileInfo(

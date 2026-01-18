@@ -35,18 +35,18 @@ export interface ApprovalCallbacks {
   updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
 }
 
-/** Callbacks for workflow agent proposal handling. */
-export interface WorkflowProposalCallbacks {
-  showWorkflowAgentProposal: (
-    payload: ProgressEventPayloads['showWorkflowAgentProposal'],
+/** Callbacks for agent proposal handling (workflow or tool-use). */
+export interface AgentProposalCallbacks {
+  showAgentProposal: (
+    payload: ProgressEventPayloads['showAgentProposal'],
   ) => void;
-  resolveWorkflowAgentProposal: (proposalId: string) => void;
+  resolveAgentProposal: (proposalId: string) => void;
 }
 
 /** Combined UI callbacks interface. */
 export type UICallbacks = RetryCallbacks &
   ApprovalCallbacks &
-  WorkflowProposalCallbacks;
+  AgentProposalCallbacks;
 
 /** Helper to register an event with error handling wrapper. */
 function registerEvent<K extends ProgressEvent>(
@@ -112,19 +112,19 @@ export function registerUIEvents(
     signal,
   );
 
-  // Workflow agent proposal events
+  // Agent proposal events (workflow or tool-use)
   registerEvent(
     bus,
-    'showWorkflowAgentProposal',
-    callbacks.showWorkflowAgentProposal,
-    'failed to show workflow agent proposal',
+    'showAgentProposal',
+    callbacks.showAgentProposal,
+    'failed to show agent proposal',
     signal,
   );
   registerEvent(
     bus,
-    'resolveWorkflowAgentProposal',
-    (p) => callbacks.resolveWorkflowAgentProposal(p.proposalId),
-    'failed to resolve workflow agent proposal',
+    'resolveAgentProposal',
+    (p) => callbacks.resolveAgentProposal(p.proposalId),
+    'failed to resolve agent proposal',
     signal,
   );
 }
