@@ -87,3 +87,23 @@
   background: var(--vscode-editorWarning-foreground, #ff8c00);
   border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
 }
+
+/* Feedback section */
+.retry-request__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.retry-request__feedback[hidden] {
+  display: none;
+}
+
+.retry-request__feedback-input {
+  width: 100%;
+}
+
+/* Retry button when feedback is shown */
+.retry-request--feedback-active
+  .retry-request__actions
+  vscode-toolbar-button[data-action='retry']::part(control) {
+  color: var(--vscode-inputValidation-infoBorder);
+}

@@ -88,6 +88,19 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Use standardized commands directly (OPEN_LABEL is already included)
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
+// Agent proposal actions (matches AgentProposalActionSchema in eventBus/types.ts)
+export const AGENT_PROPOSAL_ACTIONS = Object.freeze([
+  'approve',
+  'reject',
+  'setup',
+]);
+
+// Agent proposal categories (matches AgentProposalCategorySchema in eventBus/types.ts)
+export const AGENT_PROPOSAL_CATEGORIES = Object.freeze({
+  WORKFLOW: 'workflow',
+  TOOL_USE: 'toolUse',
+});
+
 // Shared definitions reused across toolbar configurations
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,

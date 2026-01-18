@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   progressViewDomHandler.followUpInput.setup();
   progressViewDomHandler.approvalRequests.setup();
   progressViewDomHandler.retryRequests.setup();
+  progressViewDomHandler.workflowProposals.setup();
   progressViewDomHandler.followupSection.setup();
 
   // Apply saved group toggle states to any groups already in the DOM
