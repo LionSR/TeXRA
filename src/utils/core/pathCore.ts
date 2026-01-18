@@ -93,5 +93,7 @@ export function joinLatexPath(baseDir: string, relativePath: string): string {
  */
 export function ensureExtension(filePath: string, extension: string): string {
   if (!filePath) return '';
-  return hasExtension(filePath, extension) ? filePath : `${filePath}${extension}`;
+  return hasExtension(filePath, extension)
+    ? filePath
+    : `${filePath}${extension}`;
 }
