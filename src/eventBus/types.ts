@@ -3,7 +3,10 @@
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
-import { CoreWorkflowFieldsSchema } from '@agent/core/AgentConfig';
+import {
+  BaseProposalFieldsSchema,
+  WorkflowSpecificFieldsSchema,
+} from '@agent/core/AgentConfig';
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
@@ -42,24 +45,74 @@ export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
 export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
 
-/** Agent proposal details (extends CoreWorkflowFieldsSchema). */
-export const AgentProposalSchema = CoreWorkflowFieldsSchema.extend({
-  agentCategory: AgentProposalCategorySchema,
+/**
+ * Workflow agent proposal - includes file fields for document processing.
+ * Workflow agents receive files directly and process them.
+ */
+export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
+  agentCategory: z.literal('workflow'),
+  ...WorkflowSpecificFieldsSchema.shape,
 });
+export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
+
+/**
+ * Tool-use agent proposal - no file fields.
+ * Tool-use agents access files through their own tools (read_file, etc.).
+ * File paths are mentioned in the instruction text.
+ */
+export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
+  agentCategory: z.literal('toolUse'),
+});
+export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
+
+/**
+ * Discriminated union for agent proposals.
+ * TypeScript will narrow the type based on agentCategory.
+ */
+export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
+  WorkflowAgentProposalSchema,
+  ToolUseAgentProposalSchema,
+]);
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
-// Legacy aliases for backward compatibility
-export const WorkflowAgentProposalSchema = AgentProposalSchema;
-export type WorkflowAgentProposal = AgentProposal;
+/** Type guard for workflow agent proposals */
+export function isWorkflowAgentProposal(
+  proposal: AgentProposal,
+): proposal is WorkflowAgentProposal {
+  return proposal.agentCategory === 'workflow';
+}
 
-/** Agent proposal prompt for UI display. */
-export const AgentProposalPromptSchema = z.strictObject({
+/** Type guard for tool-use agent proposals */
+export function isToolUseAgentProposal(
+  proposal: AgentProposal,
+): proposal is ToolUseAgentProposal {
+  return proposal.agentCategory === 'toolUse';
+}
+
+/** Base prompt fields for UI display */
+const ProposalPromptBaseSchema = z.object({
   proposalId: z.string(),
   streamId: StreamTabIdSchema,
-  ...AgentProposalSchema.shape,
 });
-export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
 
-// Legacy aliases for backward compatibility
-export const WorkflowAgentProposalPromptSchema = AgentProposalPromptSchema;
-export type WorkflowAgentProposalPrompt = AgentProposalPrompt;
+/** Workflow agent proposal prompt for UI display */
+export const WorkflowAgentProposalPromptSchema =
+  ProposalPromptBaseSchema.extend(WorkflowAgentProposalSchema.shape);
+export type WorkflowAgentProposalPrompt = z.infer<
+  typeof WorkflowAgentProposalPromptSchema
+>;
+
+/** Tool-use agent proposal prompt for UI display */
+export const ToolUseAgentProposalPromptSchema = ProposalPromptBaseSchema.extend(
+  ToolUseAgentProposalSchema.shape,
+);
+export type ToolUseAgentProposalPrompt = z.infer<
+  typeof ToolUseAgentProposalPromptSchema
+>;
+
+/** Discriminated union for agent proposal prompts */
+export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
+  WorkflowAgentProposalPromptSchema,
+  ToolUseAgentProposalPromptSchema,
+]);
+export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
