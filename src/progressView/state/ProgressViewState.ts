@@ -326,12 +326,14 @@ export class ProgressViewState {
     requested?: string | null,
     options?: { persist?: boolean },
   ): StorageKey | null {
+    const shouldPersist = options?.persist ?? true;
+
     // 1. Specific runId requested - validate it exists
     if (requested) {
       const candidates = this.collectRunCandidates(stream);
       if (!candidates.has(requested)) return null;
       const normalized = normalizeRunId(requested);
-      if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
+      if (shouldPersist) this.setActiveRunId(stream, normalized);
       return normalized;
     }
 
@@ -339,51 +341,77 @@ export class ProgressViewState {
     const current = this.getActiveRunId(stream);
     if (current) return current;
 
-    // 3. Auto-select from candidates
+    // 3. Auto-select: collect candidates once, then pick latest or single
     const candidates = this.collectRunCandidates(stream);
+    if (candidates.size === 0) return null;
+
     const selected =
-      candidates.size === 1 ? [...candidates][0] : this.findLatestRunId(stream);
+      candidates.size === 1
+        ? [...candidates][0]
+        : this.findLatestRunId(stream, candidates);
 
     if (!selected) return null;
     const normalized = normalizeRunId(selected);
-    if (options?.persist ?? true) this.setActiveRunId(stream, normalized);
+    if (shouldPersist) this.setActiveRunId(stream, normalized);
     return normalized;
   }
 
+  /**
+   * Collect all valid run IDs for a stream.
+   *
+   * Run candidates come from:
+   * - Root task groups (workflow runs)
+   * - Run-scoped data: instructions, output files, usage stats
+   *
+   * This is the single source of truth for run discovery.
+   */
   private collectRunCandidates(stream: StreamTabId): Set<string> {
     const candidates = new Set<string>();
 
-    // Helper to add all keys from a Map
-    const addKeys = (map: Map<string, unknown>): void => {
-      for (const runId of map.keys()) {
-        if (runId) candidates.add(runId);
-      }
-    };
-
-    // Collect from all run-scoped data sources
-    addKeys(this._runInstructions.getInstructions(stream));
-    addKeys(this._outputFiles.getFiles(stream));
-    addKeys(this._outputFiles.getMissingOutputs(stream));
-    addKeys(this._usageStats.getRunUsage(stream));
-
-    // Add root task group IDs (groups without parents)
+    // Root task groups are primary run identifiers (workflow sessions)
     for (const group of this._taskGroups.getStreamGroups(stream).values()) {
       if (!group.parentGroupId) {
         candidates.add(group.id);
       }
     }
 
+    // Run-scoped data sources (tool-use sessions use these)
+    const sources = [
+      this._runInstructions.getInstructions(stream),
+      this._outputFiles.getFiles(stream),
+      this._outputFiles.getMissingOutputs(stream),
+      this._usageStats.getRunUsage(stream),
+    ];
+
+    for (const source of sources) {
+      for (const runId of source.keys()) {
+        if (runId) candidates.add(runId);
+      }
+    }
+
     return candidates;
   }
 
-  private findLatestRunId(stream: StreamTabId): string | null {
+  /**
+   * Find the most recent run from candidates.
+   * Prefers task groups by startTime, falls back to usage runs for tool-use sessions.
+   *
+   * @param stream - The stream to search in
+   * @param candidates - Pre-collected run candidates (avoids redundant iteration)
+   */
+  private findLatestRunId(
+    stream: StreamTabId,
+    candidates?: Set<string>,
+  ): string | null {
     const groups = this._taskGroups.getStreamGroups(stream);
     let latest: { id: string; start: number } | null = null;
 
+    // If candidates provided, only consider those; otherwise check all root groups
+    const candidateSet = candidates ?? this.collectRunCandidates(stream);
+
     for (const group of groups.values()) {
-      if (group.parentGroupId) {
-        continue;
-      }
+      if (group.parentGroupId) continue;
+      if (!candidateSet.has(group.id)) continue;
 
       const startTime = group.startTime;
       if (!latest || startTime >= latest.start) {
