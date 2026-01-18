@@ -7,20 +7,15 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Stream Config Schema
+// Stream Config
 // ============================================================================
 
-/**
- * Configuration for identifying a stream by agent/model/file.
- * Used by streamEventUtils for ClearMissingOutputsOptions.
- */
-export const StreamConfigSchema = z.object({
-  agent: z.string(),
-  model: z.string(),
-  inputFile: z.string(),
-});
-
-export type StreamConfig = z.infer<typeof StreamConfigSchema>;
+/** Configuration for identifying a stream by agent/model/file. */
+export interface StreamConfig {
+  agent: string;
+  model: string;
+  inputFile: string;
+}
 
 // ============================================================================
 // Listing Options Schema
