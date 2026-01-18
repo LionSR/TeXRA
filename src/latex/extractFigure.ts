@@ -6,17 +6,12 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
-
-function normalizePath(latexDir: string, relativePath: string): string {
-  return path.normalize(
-    path.join(latexDir, relativePath.replaceAll(/^\/+|\/+$/g, '')),
-  );
-}
 
 /**
  * Normalize a path to ensure it has a trailing slash.
@@ -106,7 +101,7 @@ export async function extractFigurePathsFromLatex(
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
     for (const p of paths) {
-      graphicspaths.push(normalizePath(latexDir, p));
+      graphicspaths.push(joinLatexPath(latexDir, p));
     }
 
     // Pre-process content to remove commented lines
