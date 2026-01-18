@@ -1,1 +1,0 @@
-export { handleTestConnection } from './connectionTests';

@@ -57,37 +57,36 @@ function withOpenRouterName(config: ModelConfig): ModelConfig {
   };
 }
 
-/** Factory class for instantiating appropriate model handlers based on configuration. */
-export class ModelFactory {
-  /** Creates a model handler instance based on provider and routing configuration. */
-  static createHandler(config: ModelConfig): ModelHandler {
-    // OpenAI Responses API (required or optional)
-    if (
-      config.provider === ModelProvider.OPENAI &&
-      shouldUseResponsesAPI(config)
-    ) {
-      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-      return new ModelHandlerOpenAIResponse(config);
-    }
-
-    // Route through OpenRouter if configured
-    const useOpenRouter =
-      config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false);
-    if (useOpenRouter) {
-      const routerConfig = withOpenRouterName(config);
-      if (config.provider === ModelProvider.ANTHROPIC) {
-        return new ModelHandlerAnthropicViaOpenRouter(routerConfig);
-      }
-      return new ModelHandlerOpenRouter(routerConfig);
-    }
-
-    // Direct provider handler
-    const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
-    if (!HandlerClass) {
-      throw new Error(`Unsupported model provider: ${config.provider}`);
-    }
-    logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
-    return new HandlerClass(config);
+/**
+ * Creates a model handler instance based on provider and routing configuration.
+ */
+export function createModelHandler(config: ModelConfig): ModelHandler {
+  // OpenAI Responses API (required or optional)
+  if (
+    config.provider === ModelProvider.OPENAI &&
+    shouldUseResponsesAPI(config)
+  ) {
+    logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+    return new ModelHandlerOpenAIResponse(config);
   }
+
+  // Route through OpenRouter if configured
+  const useOpenRouter =
+    config.openRouterOnly ||
+    getConfig<boolean>('texra.model.useOpenRouter', false);
+  if (useOpenRouter) {
+    const routerConfig = withOpenRouterName(config);
+    if (config.provider === ModelProvider.ANTHROPIC) {
+      return new ModelHandlerAnthropicViaOpenRouter(routerConfig);
+    }
+    return new ModelHandlerOpenRouter(routerConfig);
+  }
+
+  // Direct provider handler
+  const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
+  if (!HandlerClass) {
+    throw new Error(`Unsupported model provider: ${config.provider}`);
+  }
+  logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
+  return new HandlerClass(config);
 }
