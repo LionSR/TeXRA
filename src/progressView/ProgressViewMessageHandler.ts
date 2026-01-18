@@ -496,10 +496,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const agentEntry = getAgent(proposal.agent);
     const agentType = agentEntry?.agentType;
 
-    // Build session descriptor for workflow category
+    // Use the proposal's agent category (workflow or toolUse)
+    const agentCategory =
+      proposal.agentCategory === 'toolUse'
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
+
     const session = {
       agentType,
-      agentCategory: AgentCategory.Workflow,
+      agentCategory,
     };
 
     // Helper to check if a file array has content
