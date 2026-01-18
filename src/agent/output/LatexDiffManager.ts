@@ -16,20 +16,12 @@ import {
 } from '@utils/files';
 
 // Internal imports
-import { getComparablePath } from '@utils/files/taskRunStorage';
+import { getComparablePath, getFileDirectory } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
 import type { OutputFileInfo, RoundFileMapping } from './types';
-
-/** Get directory path from a FileLocation. */
-function getFileDirectory(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return path.dirname(location.relativePath);
-  }
-  return path.dirname(location.absolutePath);
-}
 
 /**
  * Result of a latexdiff operation with file locations.

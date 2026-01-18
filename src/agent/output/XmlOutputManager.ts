@@ -18,7 +18,11 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import {
+  AbsoluteFS,
+  TaskRunFileService,
+  getFileDirectory,
+} from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
   DOCUMENT_NAME_REGEX,
@@ -32,14 +36,6 @@ import {
 
 // Local file imports
 import type { OutputFileInfo } from './types';
-
-/** Get directory path from a FileLocation. */
-function getFileDirectory(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return path.dirname(location.relativePath);
-  }
-  return path.dirname(location.absolutePath);
-}
 
 /** Shared XMLParser configuration for scratchpad output extraction */
 const XML_PARSER_OPTIONS = {
