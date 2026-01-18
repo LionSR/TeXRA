@@ -1,8 +1,12 @@
 /**
- * Promise-based coordinator for workflow agent proposals.
+ * Promise-based coordinator for agent proposals (workflow and tool-use).
+ *
+ * Handles both:
+ * - Workflow agents (document processing with file I/O)
+ * - Tool-use agents (interactive assistants with tools)
  *
  * Flow:
- * 1. Tool calls `waitForUserAction()` - returns Promise, emits 'showAgentProposal'
+ * 1. Tool calls `waitForProposal()` - returns Promise, emits 'showAgentProposal'
  * 2. User approves/rejects/sets up → resolves Promise with corresponding action
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
@@ -44,8 +48,8 @@ interface ProposalShowPayload {
 // Coordinator Implementation
 // ============================================================================
 
-/** Manages pending workflow agent proposals. */
-class WorkflowAgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+/** Manages pending agent proposals (workflow and tool-use). */
+class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
   ProposalResult,
   ProposalShowPayload
 > {
@@ -107,4 +111,4 @@ class WorkflowAgentProposalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const proposalCoordinator = new WorkflowAgentProposalCoordinatorImpl();
+export const proposalCoordinator = new AgentProposalCoordinatorImpl();

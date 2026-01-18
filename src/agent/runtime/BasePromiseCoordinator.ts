@@ -181,7 +181,9 @@ export abstract class BasePromiseCoordinator<
 
     // Emit resolve event (cast needed for generic base class)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bus.emit(this.config.resolveEventName, { [this.config.idFieldName]: id } as any);
+    bus.emit(this.config.resolveEventName, {
+      [this.config.idFieldName]: id,
+    } as any);
 
     // Defer Map deletion to avoid blocking current execution
     setImmediate(() => {
