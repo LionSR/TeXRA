@@ -274,11 +274,7 @@ export function getReasoningPrimaryBlock(
   return state.thinkingBlocks.length > 0 ? state.thinkingBlocks[0] : null;
 }
 
-/**
- * Reset reasoning cache state to initial values.
- * @deprecated Use createReasoningCacheState() for immutable pattern.
- * This mutating version exists for backward compatibility.
- */
+/** Reset reasoning cache state to initial values */
 export function resetReasoningCacheState(state: ReasoningCacheState): void {
   state.thinkingBlocks = [];
   state.thinkingAdded = false;
@@ -312,11 +308,7 @@ export function createServerToolContentState(): ServerToolContentState {
   return { contentBlocks: [], lastAssistantContent: [] };
 }
 
-/**
- * Reset server tool content state to initial values.
- * @deprecated Use createServerToolContentState() for immutable pattern.
- * This mutating version exists for backward compatibility.
- */
+/** Reset server tool content state to initial values */
 export function resetServerToolContentState(
   state: ServerToolContentState,
 ): void {
