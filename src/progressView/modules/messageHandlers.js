@@ -388,6 +388,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.SHOW_RETRY_REQUEST]: this.handleShowRetryRequest.bind(this),
       [COMMANDS.RESOLVE_RETRY_REQUEST]:
         this.handleResolveRetryRequest.bind(this),
+      [COMMANDS.SHOW_AGENT_PROPOSAL]:
+        this.handleShowWorkflowProposal.bind(this),
+      [COMMANDS.RESOLVE_AGENT_PROPOSAL]:
+        this.handleResolveWorkflowProposal.bind(this),
       [COMMANDS.UPDATE_INSTRUCTION]: this.handleUpdateInstruction.bind(this),
       [COMMANDS.DELETE_STREAM]: this.handleDeleteStream.bind(this),
       [COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
@@ -471,6 +475,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
+    dom.workflowProposals.setActiveStream(message.activeStream, isToolAgent);
 
     dom.toolbar.render(sessionKind);
 
@@ -945,6 +950,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleResolveRetryRequest(message) {
     if (message?.streamId) dom.retryRequests.resolve(message.streamId);
+  }
+
+  handleShowWorkflowProposal(message) {
+    if (message?.proposal) dom.workflowProposals.show(message.proposal);
+  }
+
+  handleResolveWorkflowProposal(message) {
+    if (message?.proposalId) dom.workflowProposals.resolve(message.proposalId);
   }
 
   /**

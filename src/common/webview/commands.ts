@@ -182,6 +182,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Todo List
   UPDATE_TODOS: 'updateTodos',
 
+  // Queued follow-ups
+  UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
+
   // Status and files
   UPDATE_STATUS: 'updateStatus',
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
@@ -192,6 +195,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
   SHOW_RETRY_REQUEST: 'showRetryRequest',
   RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
+  SHOW_AGENT_PROPOSAL: 'showAgentProposal',
+  RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
@@ -221,6 +226,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
+  AGENT_PROPOSAL_ACTION: 'agentProposalAction',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
