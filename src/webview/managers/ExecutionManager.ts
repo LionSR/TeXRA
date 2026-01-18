@@ -124,7 +124,7 @@ export class ExecutionManager {
     const files = message.outputFiles?.join(', ') ?? '';
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
+      \`\${capitalize(operation)} multiple files: \${message.inputFile}, \${files}\`,
     );
     this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
   }
@@ -134,7 +134,7 @@ export class ExecutionManager {
     paramKeys: (keyof CommandMessage)[],
   ): void {
     void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+      \`texra.\${message.command}\`,
       ...paramKeys.map((k) => message[k]),
     );
   }
