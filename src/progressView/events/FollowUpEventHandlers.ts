@@ -4,9 +4,11 @@
  * Handles the updateQueuedFollowUps event by fetching queue data
  * and sending it to the webview.
  */
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import {
   canUpdateWebview,
@@ -29,16 +31,17 @@ export function registerFollowUpEventHandlers(
 }
 
 function handleUpdateQueuedFollowUps(ctx: EventHandlerContext) {
-  return ({ streamId }: { streamId: StreamTabId }): void => {
+  return ({
+    streamId,
+  }: ProgressEventPayloads['updateQueuedFollowUps']): void => {
     withEventErrorHandling(
       'FollowUpEvents',
       'failed to handle updateQueuedFollowUps',
       () => {
-        if (!canUpdateWebview(ctx, streamId)) {
-          return;
+        if (canUpdateWebview(ctx, streamId)) {
+          const messages = ToolUseFollowUpQueue.getAll(streamId);
+          ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
         }
-        const messages = ToolUseFollowUpQueue.getAll(streamId);
-        ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
       },
     );
   };
