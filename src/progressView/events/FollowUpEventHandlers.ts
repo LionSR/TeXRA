@@ -3,6 +3,14 @@
  *
  * Handles the updateQueuedFollowUps event by fetching queue data
  * and sending it to the webview.
+ *
+ * DESIGN NOTE: Unlike other handlers (e.g., TodoEventHandlers), this does NOT
+ * filter by active stream. Follow-up updates are sent for any stream because:
+ * 1. Follow-ups represent user messages waiting to be processed - losing them is worse
+ *    than showing updates for a non-visible stream
+ * 2. refreshStreamSurface doesn't refresh queued follow-ups when switching streams
+ *    (unlike todos, files, and usage which get refreshed)
+ * 3. The frontend handles display logic based on which stream is visible
  */
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type {
@@ -35,9 +43,7 @@ function handleUpdateQueuedFollowUps(ctx: EventHandlerContext) {
       'FollowUpEvents',
       'failed to handle updateQueuedFollowUps',
       () => {
-        // Only check webview availability, NOT active stream.
-        // Follow-up updates should be sent for any stream (matching old behavior).
-        // The frontend handles display logic based on which stream is visible.
+        // Don't filter by active stream - see module docstring for rationale
         if (ctx.webviewUpdater.isAvailable()) {
           const messages = ToolUseFollowUpQueue.getAll(streamId);
           ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
