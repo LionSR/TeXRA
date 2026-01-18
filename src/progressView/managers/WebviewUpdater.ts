@@ -34,6 +34,8 @@ export interface LogContentExtras {
   runUsage?: Record<string, TokenUsageStats>;
   /** Output files by run ID and round */
   runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+  /** Missing outputs by run ID and round (batched with initial render) */
+  runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
   contextState?: {
     inputTokens: number;

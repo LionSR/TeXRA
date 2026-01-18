@@ -39,44 +39,13 @@ export class TaskGroupManager extends PersistentMapManager<
     groupId: string,
     group: TaskGroup,
   ): Promise<void> {
-    this.insertGroup(stream, groupId, group);
-    await this.save();
-  }
-
-  /**
-   * Add multiple task groups in a single persistence operation.
-   * Enables efficient concurrent additions for multi-agent scenarios.
-   *
-   * @param groups - Array of { stream, group } to add
-   * @returns Number of groups added
-   */
-  async addMultipleGroups(
-    groups: Array<{ stream: StreamTabId; group: TaskGroup }>,
-  ): Promise<number> {
-    for (const { stream, group } of groups) {
-      this.insertGroup(stream, group.id, group);
-    }
-
-    if (groups.length > 0) {
-      await this.save();
-    }
-
-    return groups.length;
-  }
-
-  /**
-   * Insert a group without persisting (internal helper).
-   */
-  private insertGroup(
-    stream: StreamTabId,
-    groupId: string,
-    group: TaskGroup,
-  ): void {
     if (!this.has(stream)) {
       this.items.set(stream, new Map());
     }
+
     const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
+    await this.save();
   }
 
   /**
@@ -89,52 +58,10 @@ export class TaskGroupManager extends PersistentMapManager<
     status,
     endTime,
   }: UpdateTaskGroupPayload): Promise<void> {
-    const updated = this.applyGroupUpdate(stream, id, status, endTime);
-    if (updated) {
-      await this.save();
-    }
-  }
-
-  /**
-   * Update multiple task groups in a single persistence operation.
-   * Enables efficient concurrent updates for multi-agent scenarios.
-   *
-   * @param updates - Array of update payloads to apply
-   * @returns Number of successfully updated groups
-   */
-  async updateMultipleGroups(
-    updates: UpdateTaskGroupPayload[],
-  ): Promise<number> {
-    let successCount = 0;
-
-    for (const { stream, id, status, endTime } of updates) {
-      if (this.applyGroupUpdate(stream, id, status, endTime)) {
-        successCount++;
-      }
-    }
-
-    if (successCount > 0) {
-      await this.save();
-    }
-
-    return successCount;
-  }
-
-  /**
-   * Apply a single group update without persisting.
-   * Used by both updateGroup and updateMultipleGroups.
-   * @returns true if update was applied, false if group not found
-   */
-  private applyGroupUpdate(
-    stream: StreamTabId,
-    id: string,
-    status: TaskGroup['status'],
-    endTime?: number,
-  ): boolean {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
       this.logger.warn(`Cannot update group ${id}: stream ${stream} not found`);
-      return false;
+      return;
     }
 
     const group = streamGroups.get(id);
@@ -142,7 +69,7 @@ export class TaskGroupManager extends PersistentMapManager<
       this.logger.warn(
         `Cannot update group ${id}: group not found in stream ${stream}`,
       );
-      return false;
+      return;
     }
 
     // Apply updates - only include endTime if explicitly provided
@@ -151,7 +78,7 @@ export class TaskGroupManager extends PersistentMapManager<
       updated.endTime = endTime;
     }
     streamGroups.set(id, updated);
-    return true;
+    await this.save();
   }
 
   async endRunningGroups(now: number = Date.now()): Promise<StreamTabId[]> {
