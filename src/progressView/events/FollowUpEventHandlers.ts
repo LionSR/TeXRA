@@ -10,10 +10,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
-import {
-  canUpdateWebview,
-  type EventHandlerContext,
-} from './EventHandlerContext';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 /**
  * Register follow-up queue event handlers on the event bus.
@@ -38,7 +35,10 @@ function handleUpdateQueuedFollowUps(ctx: EventHandlerContext) {
       'FollowUpEvents',
       'failed to handle updateQueuedFollowUps',
       () => {
-        if (canUpdateWebview(ctx, streamId)) {
+        // Only check webview availability, NOT active stream.
+        // Follow-up updates should be sent for any stream (matching old behavior).
+        // The frontend handles display logic based on which stream is visible.
+        if (ctx.webviewUpdater.isAvailable()) {
           const messages = ToolUseFollowUpQueue.getAll(streamId);
           ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
         }
