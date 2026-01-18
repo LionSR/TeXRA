@@ -16,12 +16,11 @@ import {
 } from '@utils/files';
 
 // Internal imports
-import { getComparablePath } from '@utils/files/taskRunStorage';
+import { getComparablePath, getFileDirectory } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo, RoundFileMapping } from './types';
 
 /**

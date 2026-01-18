@@ -6,6 +6,7 @@ import { BibEntry, parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const CITE_COMMANDS = [
   'cite',
@@ -62,10 +63,7 @@ function normalizeBibPath(baseDir: string, target: string): string {
   if (!trimmed) {
     return '';
   }
-
-  const withExtension = trimmed.endsWith('.bib') ? trimmed : `${trimmed}.bib`;
-  const resolved = path.normalize(path.join(baseDir, withExtension));
-  return resolved;
+  return joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
 }
 
 function collectBibliographyPaths(baseDir: string, content: string): string[] {

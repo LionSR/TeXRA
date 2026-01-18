@@ -1,3 +1,7 @@
+// Third-party imports
+import { diff_match_patch } from 'diff-match-patch';
+
+// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -5,6 +9,7 @@ import {
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { DiffStats } from '@agent/types/DiffTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -19,8 +24,7 @@ import {
   type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
-
-import { DiffStatsManager } from './DiffStatsManager';
+import { countLines } from '@utils/text/stringUtils';
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
@@ -58,7 +62,6 @@ export class OutputHandler implements IOutputHandler {
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
   private readonly lineageCalculator: FileLineageCalculator;
-  private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private readonly executionId: string;
@@ -98,7 +101,6 @@ export class OutputHandler implements IOutputHandler {
       this.fileService,
     );
     this.lineageCalculator = new FileLineageCalculator(this.baseFiles);
-    this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
     this._storageKey = null;
     this.runPreparation = null;
@@ -219,6 +221,41 @@ export class OutputHandler implements IOutputHandler {
     data.outputs = outputs;
   }
 
+  private async computeDiffStats(
+    baseLocation: FileLocation | null,
+    outputLocation: FileLocation,
+  ): Promise<DiffStats> {
+    try {
+      if (!baseLocation) {
+        const outContent = await flexibleFS.read(outputLocation);
+        const added = countLines(outContent);
+        return { added };
+      }
+
+      const [baseContent, outContent] = await Promise.all([
+        flexibleFS.read(baseLocation),
+        flexibleFS.read(outputLocation),
+      ]);
+
+      const dmp = new diff_match_patch();
+      const diffs = dmp.diff_main(baseContent, outContent);
+      let added = 0;
+      let removed = 0;
+      for (const [op, text] of diffs) {
+        if (op === 1) {
+          added += countLines(text);
+        } else if (op === -1) {
+          removed += countLines(text);
+        }
+      }
+      return { added, removed };
+    } catch (_error) {
+      // File read errors are expected (e.g., file not found during processing)
+      // Return empty stats rather than propagating the error
+      return {};
+    }
+  }
+
   public async gatherOutputFileInfo(
     currRound: number,
   ): Promise<OutputFileInfo[]> {
@@ -243,10 +280,7 @@ export class OutputHandler implements IOutputHandler {
           diffBaseLocation = originalLocation;
         }
 
-        const stats = await this.diffStatsManager.computeDiffStats(
-          diffBaseLocation,
-          location,
-        );
+        const stats = await this.computeDiffStats(diffBaseLocation, location);
 
         return {
           source: output.source,

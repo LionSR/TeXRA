@@ -11,7 +11,6 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -566,7 +565,8 @@ export abstract class ModelHandler<
     agentSetting: AgentSetting,
   ): string {
     const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    return createContinuationMessage(agentSetting.endTag, prefillTokens);
+    const endTag = agentSetting.endTag;
+    return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${endTag}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
   }
 
   /**
