@@ -314,13 +314,9 @@ export class ProgressEventHandler {
     // Persist instruction if both runId and instruction exist
     if (runId) {
       if (instructionUpdate) {
-        void this.state.runInstructions.setInstruction(
-          stream,
-          runId,
-          instructionUpdate,
-        );
+        void this.state.setRunInstruction(stream, runId, instructionUpdate);
       } else {
-        void this.state.runInstructions.deleteRun(stream, runId);
+        void this.state.deleteRunInstruction(stream, runId);
       }
     }
 
@@ -362,7 +358,7 @@ export class ProgressEventHandler {
     const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
-      this.state.runInstructions.getInstructions(stream).entries(),
+      this.state.getRunInstructions(stream).entries(),
     );
     const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
     const runMissingOutputs = nestedMapToRecord(
