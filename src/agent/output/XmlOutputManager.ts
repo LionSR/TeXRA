@@ -31,8 +31,15 @@ import {
 } from '@utils/text/xmlUtils';
 
 // Local file imports
-import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo } from './types';
+
+/** Get directory path from a FileLocation. */
+function getFileDirectory(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return path.dirname(location.relativePath);
+  }
+  return path.dirname(location.absolutePath);
+}
 
 /** Shared XMLParser configuration for scratchpad output extraction */
 const XML_PARSER_OPTIONS = {
