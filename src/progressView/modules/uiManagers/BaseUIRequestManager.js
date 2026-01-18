@@ -242,4 +242,66 @@ export class BaseUIRequestManager {
   _handleAction(_event) {
     throw new Error('Subclass must implement _handleAction');
   }
+
+  // ===========================================================================
+  // Feedback Input Support (optional mixin for reject-with-feedback flows)
+  // ===========================================================================
+
+  /**
+   * Get feedback configuration for this manager.
+   * Override to enable feedback support.
+   * @returns {{ containerClass: string, feedbackClass: string, inputClass: string, activeClass: string } | null}
+   * @protected
+   */
+  _getFeedbackConfig() {
+    return null; // No feedback by default
+  }
+
+  /**
+   * Handle reject action with two-step feedback flow.
+   * First click shows feedback input, second click submits.
+   *
+   * @param {Element} button - The clicked reject button
+   * @param {string} id - The request/proposal ID
+   * @param {string} command - The VS Code command to send
+   * @param {string} idField - The ID field name in the message (e.g., 'requestId', 'proposalId')
+   * @returns {boolean} Whether the action was handled (true = stop propagation)
+   * @protected
+   */
+  _handleRejectWithFeedback(button, id, command, idField) {
+    const config = this._getFeedbackConfig();
+    if (!config) return false;
+
+    const containerElem = button.closest(`.${config.containerClass}`);
+    const feedbackSection = containerElem?.querySelector(
+      `.${config.feedbackClass}`,
+    );
+    const feedbackInput = feedbackSection?.querySelector(
+      `.${config.inputClass}`,
+    );
+
+    if (!feedbackSection || !feedbackInput) return false;
+
+    if (feedbackSection.hidden) {
+      // First click: show feedback section
+      feedbackSection.hidden = false;
+      containerElem.classList.add(config.activeClass);
+      button.textContent = 'Submit';
+      button.title = 'Submit rejection with feedback';
+      feedbackInput.focus();
+      return true;
+    }
+
+    // Second click: submit with feedback
+    // Import vscode dynamically to avoid circular dependency
+    import('@common/webviewContext.js').then(({ vscode }) => {
+      vscode.postMessage({
+        command,
+        [idField]: id,
+        action: 'reject',
+        feedback: feedbackInput.value?.trim() || undefined,
+      });
+    });
+    return true;
+  }
 }

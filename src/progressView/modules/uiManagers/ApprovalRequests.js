@@ -21,6 +21,15 @@ export class ApprovalRequests extends BaseUIRequestManager {
     this._handleMenuItemClick = this._handleMenuItemClick.bind(this);
   }
 
+  _getFeedbackConfig() {
+    return {
+      containerClass: 'approval-request',
+      feedbackClass: 'approval-request__feedback',
+      inputClass: 'approval-request__feedback-input',
+      activeClass: 'approval-request--feedback-active',
+    };
+  }
+
   _setupAdditionalListeners() {
     if (this.container) {
       addEventListenerSafely(
@@ -171,35 +180,15 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const { requestId, action } = button.dataset;
     if (!requestId || !action) return;
 
-    // Handle reject with feedback toggle
+    // Handle reject with feedback toggle (uses shared base class logic)
     if (action === 'reject') {
-      const requestElem = button.closest('.approval-request');
-      const feedbackSection = requestElem?.querySelector(
-        '.approval-request__feedback',
+      const handled = this._handleRejectWithFeedback(
+        button,
+        requestId,
+        COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        'requestId',
       );
-      const feedbackInput = feedbackSection?.querySelector(
-        '.approval-request__feedback-input',
-      );
-
-      if (feedbackSection && feedbackInput) {
-        if (feedbackSection.hidden) {
-          // First click: show feedback section
-          feedbackSection.hidden = false;
-          requestElem.classList.add('approval-request--feedback-active');
-          button.textContent = 'Submit';
-          button.title = 'Submit rejection with feedback';
-          feedbackInput.focus();
-          return;
-        }
-        // Second click: submit with feedback
-        vscode.postMessage({
-          command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId,
-          action,
-          note: feedbackInput.value?.trim() || undefined,
-        });
-        return;
-      }
+      if (handled) return;
     }
 
     this._dispatchApprovalAction(requestId, action);
