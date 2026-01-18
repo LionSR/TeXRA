@@ -477,7 +477,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Handle the "setup" action for a workflow agent proposal.
+   * Handle the "setup" action for an agent proposal.
    * Opens the proposal in the main view for editing before execution.
    */
   private async handleWorkflowAgentProposalSetup(
@@ -487,7 +487,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!proposal) {
       this.logger.warn(
         this.channel,
-        `No pending workflow agent proposal found for setup: ${proposalId}`,
+        `No pending agent proposal found for setup: ${proposalId}`,
       );
       return;
     }
@@ -507,41 +507,57 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentCategory,
     };
 
+    // Build the agentConfig based on proposal type
+    // Workflow proposals have file fields; tool-use proposals don't
+    const isWorkflow = proposal.agentCategory === 'workflow';
+
     // Helper to check if a file array has content
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
-    // Build activeFiles to indicate which sections should be expanded
-    const activeFiles = {
-      input: hasFiles(proposal.inputFiles),
-      reference: hasFiles(proposal.referenceFiles),
-      auxiliary: hasFiles(proposal.auxiliaryFiles),
-      media: hasFiles(proposal.mediaFiles),
-      output: hasFiles(proposal.outputFiles),
-    };
+    // Build activeFiles - only relevant for workflow agents
+    const activeFiles = isWorkflow
+      ? {
+          input: hasFiles(proposal.inputFiles),
+          reference: hasFiles(proposal.referenceFiles),
+          auxiliary: hasFiles(proposal.auxiliaryFiles),
+          media: hasFiles(proposal.mediaFiles),
+          output: hasFiles(proposal.outputFiles),
+        }
+      : {
+          input: false,
+          reference: false,
+          auxiliary: false,
+          media: false,
+          output: false,
+        };
 
     // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
+    // For tool-use agents, file fields will get default values from AgentConfigSchema
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
-      inputFile: proposal.inputFile,
-      inputFiles: proposal.inputFiles,
-      referenceFile: proposal.referenceFile,
-      referenceFiles: proposal.referenceFiles,
-      auxiliaryFile: proposal.auxiliaryFile,
-      auxiliaryFiles: proposal.auxiliaryFiles,
-      mediaFile: proposal.mediaFile,
-      mediaFiles: proposal.mediaFiles,
-      outputFiles: proposal.outputFiles,
-      useMultipleOutputs: proposal.useMultipleOutputs,
       agentType,
       session,
-      // Set visibility flags for file arrays that have content
-      inputFilesActive: activeFiles.input,
-      referenceFilesActive: activeFiles.reference,
-      auxiliaryFilesActive: activeFiles.auxiliary,
-      mediaFilesActive: activeFiles.media,
-      outputFilesActive: activeFiles.output,
+      // File fields only present for workflow agents
+      ...(isWorkflow && {
+        inputFile: proposal.inputFile,
+        inputFiles: proposal.inputFiles,
+        referenceFile: proposal.referenceFile,
+        referenceFiles: proposal.referenceFiles,
+        auxiliaryFile: proposal.auxiliaryFile,
+        auxiliaryFiles: proposal.auxiliaryFiles,
+        mediaFile: proposal.mediaFile,
+        mediaFiles: proposal.mediaFiles,
+        outputFiles: proposal.outputFiles,
+        useMultipleOutputs: proposal.useMultipleOutputs,
+        // Set visibility flags for file arrays that have content
+        inputFilesActive: activeFiles.input,
+        referenceFilesActive: activeFiles.reference,
+        auxiliaryFilesActive: activeFiles.auxiliary,
+        mediaFilesActive: activeFiles.media,
+        outputFilesActive: activeFiles.output,
+      }),
     });
 
     // Build a TaskState from the proposal
@@ -560,7 +576,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     this.logger.info(
       this.channel,
-      `Workflow agent proposal ${proposalId} set up in main view`,
+      `Agent proposal ${proposalId} set up in main view`,
       { data: { agent: proposal.agent } },
     );
   }

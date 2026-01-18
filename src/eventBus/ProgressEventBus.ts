@@ -19,7 +19,7 @@ import type {
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
-  WorkflowAgentProposalPrompt,
+  AgentProposalPrompt,
 } from './types';
 
 // Maximum number of events to buffer when no listeners are registered
@@ -57,8 +57,8 @@ export interface ProgressEventPayloads {
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
-  showWorkflowAgentProposal: WorkflowAgentProposalPrompt;
-  resolveWorkflowAgentProposal: { proposalId: string };
+  showAgentProposal: AgentProposalPrompt;
+  resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   extensionDeactivating: undefined;
 }

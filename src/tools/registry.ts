@@ -39,7 +39,7 @@ import {
   LeanInspectTool,
   LeanLoogleTool,
 } from './lean';
-import { WorkflowAgentTool } from './WorkflowTool';
+import { WorkflowAgentTool, DelegateAgentTool } from './WorkflowTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -81,7 +81,8 @@ export function getDefaultToolRegistry(): IToolRegistry {
       lean_project: new LeanProjectTool(),
       lean_inspect: new LeanInspectTool(),
       lean_loogle: new LeanLoogleTool(),
-      workflow_agent: new WorkflowAgentTool(),
+      propose_workflow: new WorkflowAgentTool(),
+      propose_agent: new DelegateAgentTool(),
     });
   }
   return defaultRegistryInstance;

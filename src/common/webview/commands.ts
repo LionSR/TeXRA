@@ -195,8 +195,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
   SHOW_RETRY_REQUEST: 'showRetryRequest',
   RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
-  SHOW_WORKFLOW_AGENT_PROPOSAL: 'showWorkflowAgentProposal',
-  RESOLVE_WORKFLOW_AGENT_PROPOSAL: 'resolveWorkflowAgentProposal',
+  SHOW_AGENT_PROPOSAL: 'showAgentProposal',
+  RESOLVE_AGENT_PROPOSAL: 'resolveAgentProposal',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',

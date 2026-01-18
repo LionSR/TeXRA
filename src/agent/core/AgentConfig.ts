@@ -24,8 +24,19 @@ export const validateOutputFiles = (cfg: {
 };
 
 /**
- * File path fields shared across agent config, proposals, and messages.
- * Use .partial() for optional message fields, .extend() for defaults.
+ * Base proposal fields shared by both workflow and tool-use agent proposals.
+ * Contains only the common fields that all proposal types need.
+ */
+export const BaseProposalFieldsSchema = z.object({
+  agent: z.string().describe('Name of the agent to execute'),
+  model: z.string().describe('Model to use for agent execution'),
+  instruction: z.string().describe('Instruction for the agent'),
+});
+export type BaseProposalFields = z.infer<typeof BaseProposalFieldsSchema>;
+
+/**
+ * File path fields for workflow agents only.
+ * Tool-use agents access files through their own tools instead.
  */
 export const FileFieldsSchema = z.object({
   inputFile: z.string().describe('Path to the primary input file'),
@@ -54,17 +65,25 @@ export const FileFieldsSchema = z.object({
 export type FileFields = z.infer<typeof FileFieldsSchema>;
 
 /**
- * Core workflow fields shared between AgentConfig and WorkflowAgentProposal.
- * No defaults - consumers add their own via .extend() or .prefault().
+ * Workflow-specific fields: file fields + multiple outputs flag.
+ * Only workflow agents (document processing) use these fields.
  */
-export const CoreWorkflowFieldsSchema = z.object({
-  agent: z.string().describe('Name of the workflow agent to execute'),
-  model: z.string().describe('Model to use for agent execution'),
-  instruction: z.string().describe('Instruction for the workflow agent'),
-  ...FileFieldsSchema.shape,
+export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   useMultipleOutputs: z
     .boolean()
     .describe('Enable multiple outputs mode for agents that support it'),
+});
+export type WorkflowSpecificFields = z.infer<
+  typeof WorkflowSpecificFieldsSchema
+>;
+
+/**
+ * Core workflow fields - combines base fields with workflow-specific fields.
+ * Used by AgentConfig and WorkflowAgentProposal (workflow category only).
+ * No defaults - consumers add their own via .extend() or .prefault().
+ */
+export const CoreWorkflowFieldsSchema = BaseProposalFieldsSchema.extend({
+  ...WorkflowSpecificFieldsSchema.shape,
 });
 export type CoreWorkflowFields = z.infer<typeof CoreWorkflowFieldsSchema>;
 

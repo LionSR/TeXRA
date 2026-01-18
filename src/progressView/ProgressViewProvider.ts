@@ -14,7 +14,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type {
   ToolEditApprovalPrompt,
-  WorkflowAgentProposalPrompt,
+  AgentProposalPrompt,
 } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
@@ -81,7 +81,7 @@ export class ProgressViewProvider
   >();
   private readonly pendingWorkflowAgentProposals = new Map<
     string,
-    WorkflowAgentProposalPrompt
+    AgentProposalPrompt
   >();
   private approvalBypassActive = false;
 
@@ -111,9 +111,8 @@ export class ProgressViewProvider
           this.resolveToolEditApprovalPrompt.bind(this),
         updateToolEditApprovalBypassState:
           this.updateToolEditApprovalBypassState.bind(this),
-        showWorkflowAgentProposal: this.showWorkflowAgentProposal.bind(this),
-        resolveWorkflowAgentProposal:
-          this.resolveWorkflowAgentProposal.bind(this),
+        showAgentProposal: this.showAgentProposal.bind(this),
+        resolveAgentProposal: this.resolveAgentProposal.bind(this),
       },
     );
 
@@ -309,7 +308,7 @@ export class ProgressViewProvider
     }
 
     for (const proposal of this.pendingWorkflowAgentProposals.values()) {
-      this.webviewUpdater.showWorkflowAgentProposal(proposal);
+      this.webviewUpdater.showAgentProposal(proposal);
     }
   }
 
@@ -346,23 +345,21 @@ export class ProgressViewProvider
     this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
   }
 
-  public showWorkflowAgentProposal(prompt: WorkflowAgentProposalPrompt): void {
+  public showAgentProposal(prompt: AgentProposalPrompt): void {
     this.pendingWorkflowAgentProposals.set(prompt.proposalId, prompt);
-    this.sendIfReady(() =>
-      this.webviewUpdater.showWorkflowAgentProposal(prompt),
-    );
+    this.sendIfReady(() => this.webviewUpdater.showAgentProposal(prompt));
   }
 
-  public resolveWorkflowAgentProposal(proposalId: string): void {
+  public resolveAgentProposal(proposalId: string): void {
     this.pendingWorkflowAgentProposals.delete(proposalId);
     this.sendIfReady(() =>
-      this.webviewUpdater.resolveWorkflowAgentProposal(proposalId),
+      this.webviewUpdater.resolveAgentProposal(proposalId),
     );
   }
 
   public getPendingWorkflowAgentProposal(
     proposalId: string,
-  ): WorkflowAgentProposalPrompt | undefined {
+  ): AgentProposalPrompt | undefined {
     return this.pendingWorkflowAgentProposals.get(proposalId);
   }
 
