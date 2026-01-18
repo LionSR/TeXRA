@@ -1275,7 +1275,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   // State restoration
   handleRestoreState(message) {
     try {
-      this._handleStateRestoration(message.state);
+      // Check for explicit reset flag from mainView.reset command
+      if (message.isResetOperation === true) {
+        // Delegate to mainViewState for mode-specific clearing
+        // Preserves current radio selection (session type)
+        const sessionType = this._getSessionTypeValue();
+        mainViewState.clearForNewSession(sessionType);
+        // Skip restore in _postHandle since we already persisted the cleared state
+        this._skipNextRestoreState = true;
+      } else {
+        this._handleStateRestoration(message.state);
+      }
       this._postHandle();
 
       // Support executeImmediately for followup tasks (reuses restore flow)
