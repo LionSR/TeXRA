@@ -13,9 +13,10 @@ import {
   ensureAgentsLoaded,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentTypeFilter,
   isAgentTypeFilter,
@@ -59,6 +60,10 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import {
+  AgentProposalActionMessageSchema,
+  AgentProposalCategorySchema,
+} from '@eventBus/types';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
@@ -161,6 +166,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleToolEditApprovalAction.bind(this),
       [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]:
         this.handleToggleToolEditApprovalBypass.bind(this),
+      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]:
+        this.handleAgentProposalAction.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -281,7 +288,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleRetryStreamRequest(message: any): Promise<void> {
     // triggerRetry is synchronous, no await needed
-    const success = retryCoordinator.triggerRetry(message.stream);
+    // Pass optional feedback from the UI
+    const success = retryCoordinator.triggerRetry(
+      message.stream,
+      message.feedback,
+    );
     if (!success) {
       await vscode.window.showInformationMessage(
         'No retryable request is available for this stream yet.',
@@ -445,6 +456,135 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? 'YOLO mode enabled: Tool edits will be auto-approved for this session.'
       : 'YOLO mode disabled: Tool edits will prompt for approval.';
     await vscode.window.showInformationMessage(message);
+  }
+
+  private async handleAgentProposalAction(message: unknown): Promise<void> {
+    const parsed = AgentProposalActionMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      this.logger.warn(this.channel, 'Invalid agent proposal action message', {
+        data: { message, error: parsed.error.message },
+      });
+      return;
+    }
+
+    const { proposalId, action, feedback } = parsed.data;
+
+    switch (action) {
+      case 'approve':
+        proposalCoordinator.approveProposal(proposalId);
+        break;
+      case 'reject':
+        proposalCoordinator.rejectProposal(proposalId, feedback);
+        break;
+      case 'setup':
+        await this.handleAgentProposalSetup(proposalId);
+        break;
+    }
+  }
+
+  /**
+   * Handle the "setup" action for an agent proposal.
+   * Opens the proposal in the main view for editing before execution.
+   */
+  private async handleAgentProposalSetup(proposalId: string): Promise<void> {
+    const proposal = this.provider.getPendingAgentProposal(proposalId);
+    if (!proposal) {
+      this.logger.warn(
+        this.channel,
+        `No pending agent proposal found for setup: ${proposalId}`,
+      );
+      return;
+    }
+
+    // Look up the agent to get the agentType
+    const agentEntry = getAgent(proposal.agent);
+    const agentType = agentEntry?.agentType;
+
+    // Map proposal category string to AgentCategory enum
+    const agentCategory =
+      proposal.agentCategory === 'toolUse'
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
+
+    const session = {
+      agentType,
+      agentCategory,
+    };
+
+    // Build the agentConfig based on proposal type
+    // Workflow proposals have file fields; tool-use proposals don't
+    const isWorkflow = proposal.agentCategory === 'workflow';
+
+    // Helper to check if a file array has content
+    const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
+
+    // Build activeFiles - only relevant for workflow agents
+    const activeFiles = isWorkflow
+      ? {
+          input: hasFiles(proposal.inputFiles),
+          reference: hasFiles(proposal.referenceFiles),
+          auxiliary: hasFiles(proposal.auxiliaryFiles),
+          media: hasFiles(proposal.mediaFiles),
+          output: hasFiles(proposal.outputFiles),
+        }
+      : {
+          input: false,
+          reference: false,
+          auxiliary: false,
+          media: false,
+          output: false,
+        };
+
+    // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
+    // For tool-use agents, file fields will get default values from AgentConfigSchema
+    const agentConfig = AgentConfigSchema.parse({
+      agent: proposal.agent,
+      model: proposal.model,
+      instruction: proposal.instruction,
+      agentType,
+      session,
+      // File fields only present for workflow agents
+      ...(isWorkflow && {
+        inputFile: proposal.inputFile,
+        inputFiles: proposal.inputFiles,
+        referenceFile: proposal.referenceFile,
+        referenceFiles: proposal.referenceFiles,
+        auxiliaryFile: proposal.auxiliaryFile,
+        auxiliaryFiles: proposal.auxiliaryFiles,
+        mediaFile: proposal.mediaFile,
+        mediaFiles: proposal.mediaFiles,
+        outputFiles: proposal.outputFiles,
+        useMultipleOutputs: proposal.useMultipleOutputs,
+        // Set visibility flags for file arrays that have content
+        inputFilesActive: activeFiles.input,
+        referenceFilesActive: activeFiles.reference,
+        auxiliaryFilesActive: activeFiles.auxiliary,
+        mediaFilesActive: activeFiles.media,
+        outputFilesActive: activeFiles.output,
+      }),
+    });
+
+    // Build the appropriate TaskState variant based on agent category
+    // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
+    // Cast needed because agentConfig.session.agentCategory is typed as the general
+    // AgentCategory enum, not the specific literal type that TaskState requires
+    const taskState = (
+      isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
+    ) as TaskState;
+
+    // Resolve the proposal with 'setup' action to dismiss it from the UI
+    // (user will manually execute from the main view after editing)
+    proposalCoordinator.setupProposal(proposalId);
+
+    // Open the main view with the proposal details
+    await vscode.commands.executeCommand('texra.mainView.focus');
+    await vscode.commands.executeCommand('texra.restoreState', taskState);
+
+    this.logger.info(
+      this.channel,
+      `Agent proposal ${proposalId} set up in main view`,
+      { data: { agent: proposal.agent } },
+    );
   }
 
   private async handleOpenTaskStorage(message: any): Promise<void> {
