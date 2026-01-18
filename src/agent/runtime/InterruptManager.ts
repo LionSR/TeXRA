@@ -1,23 +1,26 @@
 /**
- * Interrupt state manager for flow execution.
- *
- * Encapsulates interrupt state with type-safe access and abort controller management.
+ * Interrupt callbacks passed to flow execution.
+ * Subset of InterruptManager used by BaseFlowContextInit.
  */
-export interface InterruptManager {
+export interface InterruptCallbacks {
   /** Check if interruption has been requested. */
   checkInterruption: () => boolean;
   /** Set the current abort controller for cancellation. */
   setAbortController: (controller: AbortController | null) => void;
   /** Request interruption - called when user stops the agent. */
   onInterrupt: () => void;
+}
+
+/**
+ * Interrupt state manager for flow execution.
+ *
+ * Encapsulates interrupt state with type-safe access and abort controller management.
+ */
+export interface InterruptManager extends InterruptCallbacks {
   /** Get the current abort controller. */
   getAbortController: () => AbortController | null;
   /** Get interrupt-related fields for flow input. */
-  asFlowInput: () => {
-    checkInterruption: () => boolean;
-    setAbortController: (controller: AbortController | null) => void;
-    onInterrupt: () => void;
-  };
+  asFlowInput: () => InterruptCallbacks;
 }
 
 /**
@@ -41,7 +44,7 @@ export function createInterruptManager(): InterruptManager {
 
   const getAbortController = (): AbortController | null => abortController;
 
-  const asFlowInput = () => ({
+  const asFlowInput = (): InterruptCallbacks => ({
     checkInterruption,
     setAbortController,
     onInterrupt,
