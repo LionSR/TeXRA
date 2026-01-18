@@ -6,7 +6,13 @@ import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview';
-import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
+import {
+  getHistory,
+  getHistoryItemById,
+  deleteHistoryItemById,
+  clearHistory,
+  type AgentHistoryItem,
+} from '@common/history';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { HistoryIdMessageSchema } from '@webview/types/messages';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -33,7 +39,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
-    const history = await AgentHistoryManager.getHistory();
+    const history = await getHistory();
     await webview.postMessage({
       command: HISTORY_VIEW_COMMANDS.UPDATE_HISTORY,
       historyItems: history,
@@ -63,8 +69,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       operationName,
       async ({ historyId }) => {
         try {
-          const historyItem =
-            await AgentHistoryManager.getHistoryItemById(historyId);
+          const historyItem = await getHistoryItemById(historyId);
           if (!historyItem) {
             await vscode.window.showErrorMessage('History item not found');
             return;
@@ -119,8 +124,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       'deleteAgent',
       async ({ historyId }) => {
         try {
-          const deleted =
-            await AgentHistoryManager.deleteHistoryItemById(historyId);
+          const deleted = await deleteHistoryItemById(historyId);
           if (deleted) {
             await this.sendHistoryData(view.webview);
           } else {
@@ -144,7 +148,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     try {
-      await AgentHistoryManager.clearHistory();
+      await clearHistory();
       await vscode.window.showInformationMessage('Agent history cleared');
       await view.webview.postMessage({
         command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
