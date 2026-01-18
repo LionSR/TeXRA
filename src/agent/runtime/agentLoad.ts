@@ -75,14 +75,17 @@ export async function loadYaml(absolutePath: string): Promise<object> {
 }
 
 /**
- * Loads agent settings and prompts with inheritance support.
- * Merges with parent configurations if specified in the inherits field.
+ * Options for loading agent definitions.
  *
- * The {@link LoadAgentOptions.preferMultiple} flag only affects the initial
+ * The {@link AgentLoadOptions.preferMultiple} flag only affects the initial
  * agent being resolved. Parent definitions always load their base variant so
  * that inherited prompts remain consistent with the author's expectations.
+ *
+ * This is the unified options type for agent loading/resolution operations,
+ * replacing the duplicate AgentResolveOptions.
  */
-export interface LoadAgentOptions {
+export interface AgentLoadOptions {
+  /** When true, prefer _multiple agent variant for multiple outputs support */
   preferMultiple?: boolean;
 }
 
@@ -98,7 +101,7 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
 
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
-  options?: LoadAgentOptions,
+  options?: AgentLoadOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     if (options?.preferMultiple && resolution.usedFallback) {

@@ -2,7 +2,11 @@
 import { z } from 'zod';
 
 // Local imports - agent components
-import { AgentType, resolveAgentSessionDescriptor } from './AgentDataclass';
+import {
+  AgentCategory,
+  AgentType,
+  resolveAgentSessionDescriptor,
+} from './AgentDataclass';
 import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
@@ -144,9 +148,32 @@ export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
   return {
     ...config,
     agentType: descriptor.agentType,
+    // Lift agentCategory to top level for easier access (reduces nesting)
+    // Access via config.agentCategory instead of config.session.agentCategory
+    agentCategory: descriptor.agentCategory,
     session: descriptor,
   };
 });
 
+// Re-export AgentCategory for consumers that need the enum
+export { AgentCategory };
+
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
 export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+
+/**
+ * Schema for agent configuration payload passed to executeAgent.
+ *
+ * Only `agent` and `model` are required - all other fields have defaults.
+ * This replaces ambiguous `Partial<AgentConfig>` usage with explicit requirements.
+ *
+ * Use this type for function parameters that accept agent configuration input.
+ */
+export const AgentConfigPayloadSchema = AgentConfigBaseSchema.partial()
+  .required({
+    agent: true,
+    model: true,
+  })
+  .describe('Agent configuration payload with required agent and model fields');
+
+export type AgentConfigPayload = z.infer<typeof AgentConfigPayloadSchema>;
