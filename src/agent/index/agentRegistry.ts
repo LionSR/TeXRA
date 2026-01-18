@@ -63,6 +63,7 @@ export interface AgentEntry {
   category: AgentCategory;
   agentType: AgentType;
   description?: string;
+  tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
   visibility?: RemoteVisibility; // remote only
 }
@@ -378,6 +379,14 @@ async function scanYaml(
       | string[]
       | undefined;
 
+    // Extract tool names (can be strings or objects with name field)
+    const rawTools = rawSettings.tools as unknown[] | undefined;
+    const tools = rawTools
+      ?.map((t) =>
+        typeof t === 'string' ? t : ((t as { name?: string })?.name ?? null),
+      )
+      .filter((t): t is string => t !== null);
+
     // Determine category
     const category =
       source === 'builtInToolUse' || agentType === AgentType.ToolUse
@@ -392,6 +401,7 @@ async function scanYaml(
       category,
       agentType,
       description: validated.description,
+      tools: tools?.length ? tools : undefined,
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,

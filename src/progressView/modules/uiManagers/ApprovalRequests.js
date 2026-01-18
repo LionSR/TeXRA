@@ -7,10 +7,7 @@ import { addEventListenerSafely } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
-/**
- * Manages approval request popups for tool edits.
- * @extends BaseUIRequestManager
- */
+/** Manages approval request popups for tool edits. */
 export class ApprovalRequests extends BaseUIRequestManager {
   constructor() {
     super({
@@ -24,7 +21,15 @@ export class ApprovalRequests extends BaseUIRequestManager {
     this._handleMenuItemClick = this._handleMenuItemClick.bind(this);
   }
 
-  /** @override */
+  _getFeedbackConfig() {
+    return {
+      containerClass: 'approval-request',
+      feedbackClass: 'approval-request__feedback',
+      inputClass: 'approval-request__feedback-input',
+      activeClass: 'approval-request--feedback-active',
+    };
+  }
+
   _setupAdditionalListeners() {
     if (this.container) {
       addEventListenerSafely(
@@ -50,7 +55,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
     document.addEventListener('click', this._handleClickOutside, true);
   }
 
-  /** @override */
   _disposeAdditionalListeners() {
     if (this.container) {
       this.container.removeEventListener('change', this._handleToggle, true);
@@ -68,20 +72,13 @@ export class ApprovalRequests extends BaseUIRequestManager {
     document.removeEventListener('click', this._handleClickOutside, true);
   }
 
-  /** @override */
-  dispose() {
-    super.dispose();
-  }
-
-  /** @override */
   _createRequestElement(request) {
     const element = createFromTemplate('approvalRequestTemplate');
     if (!element) {
-      console.error('ApprovalRequests: approvalRequestTemplate not found');
+      console.error('ApprovalRequests: template not found');
       return document.createElement('div');
     }
 
-    // Set request ID on element and all action buttons
     this._setRequestId(
       [element, ...element.querySelectorAll('[data-action]')],
       request.requestId,
@@ -91,7 +88,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
     return element;
   }
 
-  /** @override */
   _updateRequestElement(element, request) {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
@@ -134,7 +130,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
   }
 
-  /** @private */
   _updateMetaElement(metaElem, request) {
     const toCount = (v) => (Number.isFinite(v) ? Math.max(0, v) : 0);
     const added = toCount(request.addedLines);
@@ -176,55 +171,44 @@ export class ApprovalRequests extends BaseUIRequestManager {
     metaElem.appendChild(diffContainer);
   }
 
-  /** @override */
   _handleAction(event) {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
+    if (!(event.target instanceof Element)) return;
+
     const button = event.target.closest('[data-request-id][data-action]');
-    if (!button) {
-      return;
-    }
+    if (!button || button.hasAttribute('data-toggle-action')) return;
 
-    // Skip toggle buttons - handled by _handleToggle
-    if (button.hasAttribute('data-toggle-action')) {
-      return;
-    }
+    const { requestId, action } = button.dataset;
+    if (!requestId || !action) return;
 
-    const requestId = button.dataset.requestId;
-    const action = button.dataset.action;
-    if (!requestId || !action) {
-      return;
+    // Handle reject with feedback toggle (uses shared base class logic)
+    if (action === 'reject') {
+      const handled = this._handleRejectWithFeedback(
+        button,
+        requestId,
+        COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        'requestId',
+      );
+      if (handled) return;
     }
 
     this._dispatchApprovalAction(requestId, action);
   }
 
-  /** @private */
   _handleToggle(event) {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
+    if (!(event.target instanceof Element)) return;
 
     const button = event.target.closest(
       '[data-request-id][data-action][data-toggle-action]',
     );
-    if (!button) {
-      return;
-    }
+    if (!button) return;
 
-    const requestId = button.dataset.requestId;
-    if (!requestId) {
-      return;
-    }
+    const { requestId } = button.dataset;
+    if (!requestId) return;
 
-    const primaryAction = button.dataset.action;
-    const toggleAction = button.dataset.toggleAction;
-    const action = button.checked ? primaryAction : toggleAction;
-
-    if (!action) {
-      return;
-    }
+    const action = button.checked
+      ? button.dataset.action
+      : button.dataset.toggleAction;
+    if (!action) return;
 
     vscode.postMessage({
       command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -233,33 +217,24 @@ export class ApprovalRequests extends BaseUIRequestManager {
     });
   }
 
-  /** @private */
   _handleDropdownToggle(event) {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
+    if (!(event.target instanceof Element)) return;
 
     const trigger = event.target.closest('.diff-dropdown-trigger');
-    if (!trigger) {
-      return;
-    }
+    if (!trigger) return;
 
     event.stopPropagation();
 
     const menu = trigger
       .closest('.diff-dropdown')
       ?.querySelector('.diff-dropdown-menu');
-    if (!menu) {
-      return;
-    }
+    if (!menu) return;
 
     const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
     this._closeAllDropdowns();
 
     if (!wasExpanded) {
-      // Workaround: vscode-context-menu constructor sets _data=[] which prevents slot rendering.
-      // See: node_modules/@vscode-elements/elements/dist/vscode-context-menu/vscode-context-menu.js
-      // render() returns this.data ? data.map(...) : <slot>, so empty array skips slot.
+      // Workaround: vscode-context-menu sets _data=[] which prevents slot rendering
       if (Array.isArray(menu.data) && menu.data.length === 0) {
         menu.data = undefined;
         menu.requestUpdate?.();
@@ -269,60 +244,38 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
   }
 
-  /** @private */
   _handleClickOutside(event) {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
+    if (!(event.target instanceof Element)) return;
     if (!event.target.closest('.diff-dropdown')) {
       this._closeAllDropdowns();
     }
   }
 
-  /** @private */
   _closeAllDropdowns() {
-    if (!this.container) {
-      return;
-    }
+    if (!this.container) return;
 
-    const triggers = this.container.querySelectorAll('.diff-dropdown-trigger');
-    for (const trigger of triggers) {
-      const dropdown = trigger.closest('.diff-dropdown');
-      const menu = dropdown?.querySelector('.diff-dropdown-menu');
-      if (menu) {
-        menu.show = false;
-      }
+    for (const trigger of this.container.querySelectorAll(
+      '.diff-dropdown-trigger',
+    )) {
+      const menu = trigger
+        .closest('.diff-dropdown')
+        ?.querySelector('.diff-dropdown-menu');
+      if (menu) menu.show = false;
       trigger.setAttribute('aria-expanded', 'false');
     }
   }
 
-  /**
-   * Handle vsc-click events from context menu items.
-   * @private
-   */
   _handleMenuItemClick(event) {
     const menuItem = this._getMenuItemFromEvent(event);
-    if (!menuItem) {
-      return;
-    }
+    if (!menuItem) return;
 
     const action = event.detail?.value ?? menuItem.getAttribute('value');
-    const requestId = menuItem.dataset.requestId;
-    if (!action || !requestId) {
-      return;
-    }
+    const { requestId } = menuItem.dataset;
+    if (!action || !requestId) return;
 
     this._dispatchApprovalAction(requestId, action, { closeDropdown: true });
   }
 
-  /**
-   * Dispatches an approval action and optionally closes dropdowns.
-   * @private
-   * @param {string} requestId
-   * @param {string} action
-   * @param {{ closeDropdown?: boolean }} [options]
-   * @returns {boolean}
-   */
   _dispatchApprovalAction(requestId, action, options = {}) {
     const mappedAction = action === 'open' ? 'openDiff' : action;
     const validActions = [
@@ -332,13 +285,9 @@ export class ApprovalRequests extends BaseUIRequestManager {
       'showLatexdiff',
       'previewProposed',
     ];
-    if (!validActions.includes(mappedAction)) {
-      return false;
-    }
+    if (!validActions.includes(mappedAction)) return false;
 
-    if (options.closeDropdown) {
-      this._closeAllDropdowns();
-    }
+    if (options.closeDropdown) this._closeAllDropdowns();
 
     vscode.postMessage({
       command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -348,41 +297,21 @@ export class ApprovalRequests extends BaseUIRequestManager {
     return true;
   }
 
-  /**
-   * Locates the clicked menu item for a vsc-click event.
-   * @private
-   * @param {Event} event
-   * @returns {Element | null}
-   */
   _getMenuItemFromEvent(event) {
-    if (!(event.target instanceof Element)) {
-      return null;
-    }
+    if (!(event.target instanceof Element)) return null;
 
     const targetItem = event.target.closest('vscode-context-menu-item');
-    if (targetItem) {
-      return targetItem;
-    }
+    if (targetItem) return targetItem;
 
-    const path = event.composedPath?.() ?? [];
-    for (const entry of path) {
+    for (const entry of event.composedPath?.() ?? []) {
       if (entry instanceof Element) {
         const menuItem = entry.closest?.('vscode-context-menu-item');
-        if (menuItem) {
-          return menuItem;
-        }
+        if (menuItem) return menuItem;
       }
     }
-
     return null;
   }
 
-  /**
-   * Sets requestId on multiple elements.
-   * @private
-   * @param {(Element | null | undefined)[]} elements
-   * @param {string} requestId
-   */
   _setRequestId(elements, requestId) {
     elements.forEach((el) => el && (el.dataset.requestId = requestId));
   }
