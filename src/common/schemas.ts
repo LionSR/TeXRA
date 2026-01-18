@@ -38,7 +38,8 @@ export const ListingOptionsSchema = z.object({
   excludeFiles: z.array(z.string()).prefault([]),
 });
 
-export type ListingOptions = z.infer<typeof ListingOptionsSchema>;
+/** Input type - all fields optional (for function parameters) */
+export type ListingOptions = z.input<typeof ListingOptionsSchema>;
 
 // ============================================================================
 // LaTeX Compile Options Schema
@@ -54,4 +55,5 @@ export const LaTeXCompileOptionsSchema = z.object({
   compiler: z.enum(['pdflatex', 'latexmk']).prefault('pdflatex'),
 });
 
-export type LaTeXCompileOptions = z.infer<typeof LaTeXCompileOptionsSchema>;
+/** Input type - compiler optional with default applied by schema.parse() */
+export type LaTeXCompileOptions = z.input<typeof LaTeXCompileOptionsSchema>;
