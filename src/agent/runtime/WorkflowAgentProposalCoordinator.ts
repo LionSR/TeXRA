@@ -2,17 +2,17 @@
  * Promise-based coordinator for workflow agent proposals.
  *
  * Flow:
- * 1. Tool calls `waitForUserAction()` - returns Promise, emits 'showWorkflowAgentProposal'
+ * 1. Tool calls `waitForUserAction()` - returns Promise, emits 'showAgentProposal'
  * 2. User approves/rejects/sets up → resolves Promise with corresponding action
- * 3. On resolution → emits 'resolveWorkflowAgentProposal' to dismiss UI
+ * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
 
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { WorkflowAgentProposal } from '@eventBus/types';
+import type { AgentProposal } from '@eventBus/types';
 
-/** Result of a workflow agent proposal. */
+/** Result of an agent proposal (workflow or tool-use). */
 export type ProposalResult =
   | { action: 'approve' }
   | { action: 'reject'; feedback?: string }
@@ -21,7 +21,7 @@ export type ProposalResult =
 
 export interface ProposalRequestOptions {
   proposalId: string;
-  proposal: WorkflowAgentProposal;
+  proposal: AgentProposal;
   /** Timeout in milliseconds (default: wait indefinitely) */
   timeoutMs?: number;
 }
@@ -73,7 +73,7 @@ class WorkflowAgentProposalCoordinatorImpl {
       });
 
       void safeExecuteCommand('texra.showProgressView');
-      bus.emit('showWorkflowAgentProposal', {
+      bus.emit('showAgentProposal', {
         proposalId,
         streamId,
         ...proposal,
@@ -134,7 +134,7 @@ class WorkflowAgentProposalCoordinatorImpl {
 
   private cleanup(proposalId: string): void {
     this.proposals.set(proposalId, { status: 'resolved' });
-    bus.emit('resolveWorkflowAgentProposal', { proposalId });
+    bus.emit('resolveAgentProposal', { proposalId });
 
     // Defer deletion to avoid blocking current execution
     setImmediate(() => {
