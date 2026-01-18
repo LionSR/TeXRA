@@ -317,7 +317,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Update run-scoped metadata (instructions, usage, files, context) from message.
+   * Update run-scoped metadata (instructions, usage, files, missing outputs, context) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    */
   _updateRunMetadata(stream, message) {
@@ -326,6 +326,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [message.runInstructions, state.setRunInstruction],
       [message.runUsage, state.setRunUsage],
       [message.runFiles, state.setRunFiles],
+      [message.runMissingOutputs, state.setRunMissingOutputs],
     ];
     for (const [data, setter] of runDataSources) {
       if (!data) continue;
@@ -561,6 +562,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.taskGroups.clear();
     state.clearRunInstructions(message.stream);
     state.clearRunFiles(message.stream);
+    state.clearRunMissingOutputs(message.stream);
     state.clearRunUsage(message.stream);
     state.clearPendingInstruction(state.activeStream);
     const previousRunId = state.getActiveRunId(message.stream);
