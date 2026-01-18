@@ -69,6 +69,42 @@ function buildToolUseAgentsList(): string {
   return formatAgentList(getVisibleToolUseAgents());
 }
 
+/** Convert proposal result to ToolResult. Returns null if approved. */
+function proposalResultToToolResult(
+  result: Awaited<ReturnType<typeof proposalCoordinator.waitForUserAction>>,
+  agentName: string,
+  context: 'workflow' | 'delegation',
+): ToolResult | null {
+  const label = context === 'workflow' ? 'proposal' : 'delegation';
+
+  switch (result.action) {
+    case 'reject': {
+      const feedback = result.feedback
+        ? `\n\nUser feedback: ${result.feedback}`
+        : '';
+      return {
+        summary: `User rejected '${agentName}' ${label}`,
+        output: `The ${context === 'workflow' ? 'workflow agent proposal' : 'delegation proposal'} was rejected.${feedback}`,
+        isError: true,
+      };
+    }
+    case 'timeout':
+      return {
+        summary: `'${agentName}' ${label} timed out`,
+        output: 'The proposal timed out waiting for user approval.',
+        isError: true,
+      };
+    case 'setup':
+      return {
+        summary: `User opened '${agentName}' for editing`,
+        output:
+          'Proposal opened in main view for editing. User will run manually.',
+      };
+    case 'approve':
+      return null;
+  }
+}
+
 // ============================================================================
 // workflow_agent tool - for document processing agents
 // ============================================================================
@@ -222,32 +258,12 @@ instruction="This is a research paper about quantum computing. Fix grammar error
       proposal,
     });
 
-    if (result.action === 'reject') {
-      const feedback = result.feedback
-        ? `\n\nUser feedback: ${result.feedback}`
-        : '';
-      return {
-        summary: `User rejected '${input.agent}' proposal`,
-        output: `The workflow agent proposal was rejected.${feedback}`,
-        isError: true,
-      };
-    }
-
-    if (result.action === 'timeout') {
-      return {
-        summary: `'${input.agent}' proposal timed out`,
-        output: 'The proposal timed out waiting for user approval.',
-        isError: true,
-      };
-    }
-
-    if (result.action === 'setup') {
-      return {
-        summary: `User opened '${input.agent}' for editing`,
-        output:
-          'Proposal opened in main view for editing. User will run manually.',
-      };
-    }
+    const nonApproveResult = proposalResultToToolResult(
+      result,
+      input.agent,
+      'workflow',
+    );
+    if (nonApproveResult) return nonApproveResult;
 
     // Approved - execute
     void executeAgent(proposal);
@@ -351,32 +367,12 @@ instruction="Read the paper at /workspace/paper.tex which proposes a new attenti
       proposal,
     });
 
-    if (result.action === 'reject') {
-      const feedback = result.feedback
-        ? `\n\nUser feedback: ${result.feedback}`
-        : '';
-      return {
-        summary: `User rejected '${input.agent}' delegation`,
-        output: `The delegation proposal was rejected.${feedback}`,
-        isError: true,
-      };
-    }
-
-    if (result.action === 'timeout') {
-      return {
-        summary: `'${input.agent}' delegation timed out`,
-        output: 'The proposal timed out waiting for user approval.',
-        isError: true,
-      };
-    }
-
-    if (result.action === 'setup') {
-      return {
-        summary: `User opened '${input.agent}' for editing`,
-        output:
-          'Proposal opened in main view for editing. User will run manually.',
-      };
-    }
+    const nonApproveResult = proposalResultToToolResult(
+      result,
+      input.agent,
+      'delegation',
+    );
+    if (nonApproveResult) return nonApproveResult;
 
     // Approved - execute
     void executeAgent(proposal);
