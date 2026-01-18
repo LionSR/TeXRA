@@ -471,10 +471,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     switch (action) {
       case 'approve':
-        proposalCoordinator.approveProposal(proposalId);
+        proposalCoordinator.resolveRequest(proposalId, { action: 'approve' });
         break;
       case 'reject':
-        proposalCoordinator.rejectProposal(proposalId, feedback);
+        proposalCoordinator.resolveRequest(proposalId, {
+          action: 'reject',
+          feedback,
+        });
         break;
       case 'setup':
         await this.handleAgentProposalSetup(proposalId);
@@ -574,7 +577,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Resolve the proposal with 'setup' action to dismiss it from the UI
     // (user will manually execute from the main view after editing)
-    proposalCoordinator.setupProposal(proposalId);
+    proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
 
     // Open the main view with the proposal details
     await vscode.commands.executeCommand('texra.mainView.focus');
