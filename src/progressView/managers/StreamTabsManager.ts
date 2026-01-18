@@ -83,6 +83,11 @@ export class StreamTabsManager extends PersistentMapManager<
   /**
    * Update an existing message by ID.
    * Returns true if message was found and updated, false otherwise.
+   *
+   * Note: Uses fire-and-forget persistence (void this.save()) because:
+   * - Callers only need to know if message was found/updated in memory
+   * - The in-memory state is immediately correct for webview updates
+   * - Persistence is background work; failures are logged by base class
    */
   updateMessage(
     stream: StreamTabId,
