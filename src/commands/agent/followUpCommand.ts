@@ -13,7 +13,7 @@ import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
+import { bus } from '@eventBus/ProgressEventBus';
 import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
@@ -144,11 +144,11 @@ async function handleFollowUpResult(
     case 'sent':
       // Silent success - no notification needed
       // Also update queue display (message was sent, queue may be empty now)
-      updateQueuedFollowUpsUI(streamId);
+      bus.emit('updateQueuedFollowUps', { streamId });
       break;
     case 'queued':
       // Update the queued follow-ups display
-      updateQueuedFollowUpsUI(streamId);
+      bus.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting') {
         // Auto-resume WAITING tool-use sessions
         const resumed = await tryAutoResume(streamId);
