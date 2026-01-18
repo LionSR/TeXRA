@@ -223,20 +223,6 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update usage statistics (full replacement)
-   */
-  updateUsage(
-    stream: StreamTabId,
-    usageByRun: Record<string, TokenUsageStats>,
-  ): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_USAGE,
-      stream,
-      usageByRun,
-    });
-  }
-
-  /**
    * Update usage for a single run (incremental).
    * More efficient than updateUsage when only one run's usage changed.
    */
