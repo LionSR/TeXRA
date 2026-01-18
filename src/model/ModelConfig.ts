@@ -69,8 +69,8 @@ export const ModelConfigSchema = z.object({
 /** Registry of all model configurations. */
 export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
 
-// Type alias for registry
-export type ModelRegistry = Record<string, ModelConfig>;
+// Type alias derived from schema (single source of truth)
+export type ModelRegistry = z.infer<typeof ModelRegistrySchema>;
 
 // ============================================================================
 // Compile-time assertions - ensure schemas stay synchronized with llm-zoo types
