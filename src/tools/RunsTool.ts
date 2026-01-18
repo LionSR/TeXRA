@@ -134,7 +134,7 @@ Use view_range: [start, end] to paginate large outputs.`,
   }
 
   /**
-   * List all executions from history.
+   * List all executions from history (most recent first).
    */
   private async listRuns(): Promise<ToolResult> {
     const history = await AgentHistoryManager.getHistory();
@@ -147,12 +147,14 @@ Use view_range: [start, end] to paginate large outputs.`,
       const agent = item.agentConfig.agent;
       const model = item.agentConfig.model ?? 'unknown';
       const summary = item.agentConfig.session?.taskSummary ?? '';
-      const shortSummary = summary.length > 50 ? summary.slice(0, 47) + '...' : summary;
-      return `${item.id}  ${item.timestamp}  ${agent}  ${model}  ${shortSummary}`;
+      const shortSummary = summary.length > 40 ? summary.slice(0, 37) + '...' : summary;
+      // Format timestamp: extract date and time
+      const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      return `${item.id}  ${ts}  ${agent}  ${model}  ${shortSummary}`;
     });
 
     return {
-      output: `Executions (${history.length}):\n\n${lines.join('\n')}`,
+      output: `Executions (${history.length}, most recent first):\n\n${lines.join('\n')}`,
     };
   }
 
