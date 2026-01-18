@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { ListingOptionsSchema } from '@common/schemas';
+import { ListingOptionsSchema, type ListingOptions } from '@common/schemas';
 
 /** Normalize backslashes to forward slashes for consistent comparison */
 function toForwardSlashes(str: string): string {
@@ -107,14 +107,6 @@ function containsExcludedDirectory(
   return pathSegments.some((segment) =>
     normalizedExcludeDirs.includes(segment),
   );
-}
-
-interface ListingOptions {
-  includeExtensions?: string[];
-  excludeExtensions?: string[];
-  excludeDirectories?: string[];
-  excludeKeywords?: string[];
-  excludeFiles?: string[];
 }
 
 interface NormalizedListingOptions {
