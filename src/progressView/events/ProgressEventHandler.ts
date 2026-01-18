@@ -33,7 +33,6 @@ import { withEventErrorHandling } from './errorHandling';
 // Re-export for consumers
 export type { UICallbacks };
 
-
 /**
  * Handles progress event bus subscriptions for the progress view.
  * Provides a clean separation between event handling and business logic
@@ -309,7 +308,8 @@ export class ProgressEventHandler {
     const sessionKind = this.getStreamCategory(stream);
 
     // Use provided runId or read cached activeRunId (no expensive resolution)
-    const runId = runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
+    const runId =
+      runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
     // Persist instruction if both runId and instruction exist
     if (runId) {
