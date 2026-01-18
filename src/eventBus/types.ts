@@ -1,11 +1,12 @@
 /**
- * Shared event bus types for breaking circular dependency with progressView.
+ * Shared event bus types (avoids circular dependency with progressView).
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
-
-// Import canonical error schema - SINGLE SOURCE OF TRUTH
-// schemas.ts has no internal project imports, so no circular dependency risk
+import {
+  BaseProposalFieldsSchema,
+  WorkflowSpecificFieldsSchema,
+} from '@agent/core/AgentConfig';
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
@@ -27,10 +28,7 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
-/**
- * Error details for retry requests.
- * Uses ProviderErrorPartialSchema from canonical source - all fields optional for transport.
- */
+/** Error details for retry requests (all fields optional for transport). */
 export const RetryErrorDetailsSchema = ProviderErrorPartialSchema;
 export type RetryErrorDetails = ProviderErrorPartial;
 
@@ -42,3 +40,79 @@ export const RetryRequestPromptSchema = z.strictObject({
   errorDetails: RetryErrorDetailsSchema.optional(),
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
+
+/** Agent category for proposals */
+export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
+export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
+
+/** Agent proposal actions */
+export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
+export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
+
+/** Message schema for agent proposal action from UI */
+export const AgentProposalActionMessageSchema = z.object({
+  proposalId: z.string(),
+  action: AgentProposalActionSchema,
+  feedback: z.string().optional(),
+});
+export type AgentProposalActionMessage = z.infer<
+  typeof AgentProposalActionMessageSchema
+>;
+
+/**
+ * Workflow agent proposal - includes file fields for document processing.
+ * Workflow agents receive files directly and process them.
+ */
+export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
+  agentCategory: z.literal('workflow'),
+  ...WorkflowSpecificFieldsSchema.shape,
+});
+export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
+
+/**
+ * Tool-use agent proposal - no file fields.
+ * Tool-use agents access files through their own tools (read_file, etc.).
+ * File paths are mentioned in the instruction text.
+ */
+export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
+  agentCategory: z.literal('toolUse'),
+});
+export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
+
+/**
+ * Discriminated union for agent proposals.
+ * TypeScript will narrow the type based on agentCategory.
+ */
+export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
+  WorkflowAgentProposalSchema,
+  ToolUseAgentProposalSchema,
+]);
+export type AgentProposal = z.infer<typeof AgentProposalSchema>;
+
+/** Base prompt fields for UI display */
+const ProposalPromptBaseSchema = z.object({
+  proposalId: z.string(),
+  streamId: StreamTabIdSchema,
+});
+
+/** Workflow agent proposal prompt for UI display */
+export const WorkflowAgentProposalPromptSchema =
+  ProposalPromptBaseSchema.extend(WorkflowAgentProposalSchema.shape);
+export type WorkflowAgentProposalPrompt = z.infer<
+  typeof WorkflowAgentProposalPromptSchema
+>;
+
+/** Tool-use agent proposal prompt for UI display */
+export const ToolUseAgentProposalPromptSchema = ProposalPromptBaseSchema.extend(
+  ToolUseAgentProposalSchema.shape,
+);
+export type ToolUseAgentProposalPrompt = z.infer<
+  typeof ToolUseAgentProposalPromptSchema
+>;
+
+/** Discriminated union for agent proposal prompts */
+export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
+  WorkflowAgentProposalPromptSchema,
+  ToolUseAgentProposalPromptSchema,
+]);
+export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;

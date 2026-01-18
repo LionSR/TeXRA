@@ -48,6 +48,7 @@
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/uiManagers/ApprovalRequests.js": "${approvalRequestsUri}",
           "./modules/uiManagers/RetryRequests.js": "${retryRequestsUri}",
+          "./modules/uiManagers/WorkflowProposals.js": "${workflowProposalsUri}",
           "./modules/uiManagers/TodoList.js": "${todoListUri}",
           "./modules/uiManagers/BaseUIRequestManager.js": "${baseUIRequestManagerUri}",
           "./modules/uiManagers/FollowupSectionManager.js": "${followupSectionManagerUri}",
@@ -185,6 +186,13 @@
               <span>Retry available</span>
             </div>
             <div class="retry-requests__list"></div>
+          </div>
+          <div id="workflowProposals" class="workflow-proposals" hidden>
+            <div class="workflow-proposals__header">
+              <i class="codicon codicon-play-circle"></i>
+              <span>Agent Proposal</span>
+            </div>
+            <div class="workflow-proposals__list"></div>
           </div>
           <vscode-scrollable
             id="logContent"
@@ -550,11 +558,18 @@
                   <pre class="retry-request__error-body"></pre>
                 </details>
               </div>
+              <div class="retry-request__feedback" hidden>
+                <vscode-textarea
+                  class="retry-request__feedback-input"
+                  placeholder="Add guidance for the retry (optional)"
+                  rows="2"
+                ></vscode-textarea>
+              </div>
               <vscode-toolbar-container class="retry-request__actions">
                 <vscode-toolbar-button
                   icon="refresh"
                   label="Retry"
-                  title="Retry"
+                  title="Click to add optional guidance, then retry"
                   data-action="retry"
                   >Retry</vscode-toolbar-button
                 >
@@ -568,11 +583,69 @@
               </vscode-toolbar-container>
             </div>
           </template>
+          <template id="workflowProposalTemplate">
+            <div class="workflow-proposal">
+              <div class="workflow-proposal__details">
+                <div class="workflow-proposal__header-row">
+                  <span class="workflow-proposal__category-badge"></span>
+                  <span class="workflow-proposal__agent"></span>
+                  <span class="workflow-proposal__model"></span>
+                </div>
+                <div class="workflow-proposal__instruction"></div>
+                <div class="workflow-proposal__files">
+                  <div class="workflow-proposal__input-files" hidden></div>
+                  <div class="workflow-proposal__reference-files" hidden></div>
+                  <div class="workflow-proposal__auxiliary-files" hidden></div>
+                  <div class="workflow-proposal__media-files" hidden></div>
+                  <div class="workflow-proposal__output-files" hidden></div>
+                </div>
+              </div>
+              <div class="workflow-proposal__feedback" hidden>
+                <vscode-textarea
+                  class="workflow-proposal__feedback-input"
+                  placeholder="Feedback (optional) - explain what changes you'd like"
+                  rows="2"
+                  resize="vertical"
+                ></vscode-textarea>
+              </div>
+              <vscode-toolbar-container class="workflow-proposal__actions">
+                <vscode-toolbar-button
+                  icon="check"
+                  label="Approve"
+                  title="Approve and execute workflow agent"
+                  data-action="approve"
+                  >Approve</vscode-toolbar-button
+                >
+                <vscode-toolbar-button
+                  icon="close"
+                  label="Reject"
+                  title="Reject proposal (click to add feedback)"
+                  data-action="reject"
+                  >Reject</vscode-toolbar-button
+                >
+                <vscode-toolbar-button
+                  icon="go-to-file"
+                  label="Setup"
+                  title="Open in main view for editing before execution"
+                  data-action="setup"
+                  >Setup</vscode-toolbar-button
+                >
+              </vscode-toolbar-container>
+            </div>
+          </template>
           <template id="approvalRequestTemplate">
             <div class="approval-request">
               <div class="approval-request__details">
                 <div class="approval-request__path"></div>
                 <div class="approval-request__meta"></div>
+              </div>
+              <div class="approval-request__feedback" hidden>
+                <vscode-textarea
+                  class="approval-request__feedback-input"
+                  placeholder="Feedback (optional) - explain what changes you'd like"
+                  rows="2"
+                  resize="vertical"
+                ></vscode-textarea>
               </div>
               <vscode-toolbar-container class="approval-request__actions">
                 <div class="dropdown-container dropdown-left diff-dropdown">
@@ -618,7 +691,7 @@
                 <vscode-toolbar-button
                   icon="close"
                   label="Reject"
-                  title="Reject"
+                  title="Reject (click to add feedback)"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
                 >

@@ -1,0 +1,193 @@
+/**
+ * Generic promise-based coordinator for user interaction flows.
+ *
+ * Provides a reusable pattern for:
+ * - Retry requests (after API failures)
+ * - Agent proposals (workflow/tool-use delegation)
+ * - Future interactive flows
+ *
+ * Architecture:
+ * - Single Map tracks all pending requests by ID
+ * - Promise-based: callers await a Promise that resolves on user action
+ * - Two states: pending (waiting) or resolved (done)
+ *
+ * Flow:
+ * 1. Caller invokes waitForUserAction() → returns Promise, emits show event
+ * 2. User acts → appropriate method resolves Promise with result
+ * 3. On resolution → emits resolve event to dismiss UI, defers cleanup
+ */
+
+// Local imports
+import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/** Base result type - subclasses extend with specific actions */
+export interface BaseResult {
+  action: string;
+  feedback?: string;
+}
+
+/** Internal state: pending (waiting for user) or resolved (done) */
+type RequestState<TResult> =
+  | {
+      status: 'pending';
+      resolve: (result: TResult) => void;
+      timeoutId?: NodeJS.Timeout;
+      id: string;
+    }
+  | { status: 'resolved' };
+
+/** Configuration for coordinator behavior */
+export interface CoordinatorConfig {
+  /** Event name emitted to show UI (e.g., 'showRetryRequest') */
+  showEventName: keyof ProgressEventPayloads;
+  /** Event name emitted to resolve/hide UI (e.g., 'resolveRetryRequest') */
+  resolveEventName: keyof ProgressEventPayloads;
+  /** Field name for ID in resolve event payload (e.g., 'streamId', 'proposalId') */
+  idFieldName: string;
+}
+
+// ============================================================================
+// Base Coordinator Implementation
+// ============================================================================
+
+/**
+ * Generic coordinator for promise-based user interaction flows.
+ * Subclasses provide specific result types and event configurations.
+ */
+export abstract class BasePromiseCoordinator<
+  TResult extends BaseResult,
+  TShowPayload extends Record<string, unknown>,
+> {
+  /** Single source of truth for all pending requests */
+  protected readonly requests = new Map<string, RequestState<TResult>>();
+
+  /** Configuration for this coordinator */
+  protected abstract readonly config: CoordinatorConfig;
+
+  /**
+   * Get the default result for cancelled/replaced requests.
+   * Subclasses override to provide appropriate default (e.g., { action: 'cancel' }).
+   */
+  protected abstract getDefaultCancelResult(): TResult;
+
+  /**
+   * Wait for user action. Emits show event and returns Promise.
+   *
+   * @param id - Unique identifier for this request
+   * @param payload - Data to emit with show event
+   * @param options - Optional timeout configuration
+   * @returns Promise that resolves with user's action
+   */
+  waitForUserAction(
+    id: string,
+    payload: TShowPayload,
+    options?: { timeoutMs?: number; onTimeout?: () => TResult },
+  ): Promise<TResult> {
+    // Cancel any existing pending request for this ID
+    const existing = this.requests.get(id);
+    if (existing?.status === 'pending') {
+      clearTimeout(existing.timeoutId);
+      existing.resolve(this.getDefaultCancelResult());
+    }
+
+    return new Promise<TResult>((resolve) => {
+      const timeoutId =
+        options?.timeoutMs && options.timeoutMs > 0
+          ? setTimeout(() => {
+              const req = this.requests.get(id);
+              if (req?.status === 'pending' && req.resolve === resolve) {
+                const result = options.onTimeout?.() ?? this.getTimeoutResult();
+                this.resolveRequest(id, result);
+              }
+            }, options.timeoutMs)
+          : undefined;
+
+      this.requests.set(id, {
+        status: 'pending',
+        resolve,
+        timeoutId,
+        id,
+      });
+
+      // Emit show event (cast needed for generic base class)
+      bus.emit(this.config.showEventName, payload as any);
+    });
+  }
+
+  /**
+   * Get timeout result. Override if different from cancel.
+   */
+  protected getTimeoutResult(): TResult {
+    return { action: 'timeout' } as TResult;
+  }
+
+  /**
+   * Check if a request is pending.
+   */
+  hasPendingRequest(id: string): boolean {
+    return this.getPendingRequest(id) !== null;
+  }
+
+  /**
+   * Clear a pending request without user action.
+   * Used for cleanup when flow is cancelled externally.
+   */
+  clearRequest(id: string): void {
+    const req = this.getPendingRequest(id);
+    if (!req) return;
+
+    clearTimeout(req.timeoutId);
+    req.resolve(this.getDefaultCancelResult());
+    this.cleanup(id);
+  }
+
+  // ==========================================================================
+  // Protected helpers for subclasses
+  // ==========================================================================
+
+  /**
+   * Get a pending request if it exists.
+   */
+  protected getPendingRequest(
+    id: string,
+  ): (RequestState<TResult> & { status: 'pending' }) | null {
+    const req = this.requests.get(id);
+    return req?.status === 'pending' ? req : null;
+  }
+
+  /**
+   * Resolve a pending request with a result.
+   */
+  protected resolveRequest(id: string, result: TResult): boolean {
+    const req = this.getPendingRequest(id);
+    if (!req) return false;
+
+    clearTimeout(req.timeoutId);
+    req.resolve(result);
+    this.cleanup(id);
+    return true;
+  }
+
+  /**
+   * Clean up state and emit resolution event.
+   */
+  private cleanup(id: string): void {
+    this.requests.set(id, { status: 'resolved' });
+
+    // Emit resolve event (cast needed for generic base class)
+    bus.emit(this.config.resolveEventName, {
+      [this.config.idFieldName]: id,
+    } as any);
+
+    // Defer Map deletion to avoid blocking current execution
+    setImmediate(() => {
+      if (this.requests.get(id)?.status === 'resolved') {
+        this.requests.delete(id);
+      }
+    });
+  }
+}
