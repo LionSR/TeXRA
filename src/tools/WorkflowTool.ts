@@ -146,11 +146,7 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Model short name (e.g., gemini3p, sonnet45, opus45, gpt45, o3). User can change via dropdown.',
     ),
-  instruction: z
-    .string()
-    .describe(
-      'Self-contained plain prose instruction. The agent has no context, so include everything needed.',
-    ),
+  instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
   inputFiles: z
     .array(z.string())
@@ -189,12 +185,10 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 export class WorkflowAgentTool extends defineTool({
   name: 'propose_workflow',
   description:
-    () => `Propose a workflow agent for document processing. Use when the task centers on transforming a specific file.
+    () => `Propose a workflow agent for document processing.
 
-Available workflow agents:
+Available agents:
 ${buildWorkflowAgentsList()}
-
-Set agent name and inputFile (required). Write a self-contained instruction in plain prose. The agent has no access to your conversation, so include all context needed. Optionally specify outputFiles for custom paths.
 
 Example: agent=correct, inputFile=/workspace/paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
@@ -329,9 +323,7 @@ const DelegateAgentInputSchema = z.object({
     ),
   instruction: z
     .string()
-    .describe(
-      'Self-contained plain prose instruction. Include file paths naturally. Agent has no context.',
-    ),
+    .describe('Plain prose instruction with file paths included naturally'),
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -340,12 +332,10 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'propose_agent',
   description:
-    () => `Propose a tool-use agent for exploration or research tasks. Use when the task requires searching, reading multiple files, or making decisions based on discoveries.
+    () => `Propose a tool-use agent for exploration or research tasks.
 
-Available tool-use agents:
+Available agents:
 ${buildToolUseAgentsList()}
-
-Set agent name and write a self-contained instruction in plain prose. The agent has no access to your conversation, so include all context and file paths needed. Mention file paths naturally within the instruction text.
 
 Example: agent=search, instruction="The paper at /workspace/paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
   schema: DelegateAgentInputSchema,
