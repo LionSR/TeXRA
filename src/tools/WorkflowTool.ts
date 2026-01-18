@@ -20,6 +20,9 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
+// Local imports - logger
+import * as logger from '@logger/logUtils';
+
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -38,6 +41,31 @@ import {
 // ============================================================================
 // Shared utilities
 // ============================================================================
+
+const LOG_CHANNEL = 'WorkflowTool';
+logger.initialize(LOG_CHANNEL);
+
+/** Execute agent with error logging. */
+function executeAgentWithLogging(
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+): void {
+  executeAgent(proposal).catch((error: unknown) => {
+    logger.error(LOG_CHANNEL, `Failed to start agent '${proposal.agent}'`, {
+      data: error,
+    });
+  });
+}
+
+/** Get streamId from context, throwing if unavailable. */
+function getRequiredStreamId(): string {
+  const streamId = getCurrentToolFileInteractionContext()?.streamId;
+  if (!streamId) {
+    throw new Error(
+      'Tool context unavailable. Cannot create proposal without active stream.',
+    );
+  }
+  return streamId;
+}
 
 /** Format agent entry for description. */
 function formatAgentEntry(agent: {
@@ -201,7 +229,7 @@ instruction="This is a research paper about quantum computing. Fix grammar error
       throw new Error('inputFile is required for workflow agents.');
     }
 
-    // Validate all file paths exist
+    // Validate all file paths exist (parallel for performance)
     const toValidate = (
       single: string | null | undefined,
       arr: string[],
@@ -226,10 +254,17 @@ instruction="This is a research paper about quantum computing. Fix grammar error
       ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
     ];
 
-    for (const { path, label } of filesToValidate) {
-      if (!(await WorkspaceFS.exists(path))) {
-        throw new Error(`${label} not found: ${path}`);
-      }
+    const validationResults = await Promise.all(
+      filesToValidate.map(async ({ path, label }) => ({
+        path,
+        label,
+        exists: await WorkspaceFS.exists(path),
+      })),
+    );
+
+    const missing = validationResults.find((r) => !r.exists);
+    if (missing) {
+      throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
     // Construct workflow proposal
@@ -250,7 +285,7 @@ instruction="This is a research paper about quantum computing. Fix grammar error
       useMultipleOutputs: input.useMultipleOutputs,
     } satisfies WorkflowAgentProposal);
 
-    const streamId = getCurrentToolFileInteractionContext()?.streamId ?? '';
+    const streamId = getRequiredStreamId();
     const proposalId = randomUUID();
 
     const result = await proposalCoordinator.waitForUserAction(streamId, {
@@ -265,8 +300,8 @@ instruction="This is a research paper about quantum computing. Fix grammar error
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute
-    void executeAgent(proposal);
+    // Approved - execute with error logging
+    executeAgentWithLogging(proposal);
 
     const outputInfo =
       input.outputFiles.length > 0
@@ -359,7 +394,7 @@ instruction="Read the paper at /workspace/paper.tex which proposes a new attenti
       instruction: input.instruction,
     } satisfies ToolUseAgentProposal);
 
-    const streamId = getCurrentToolFileInteractionContext()?.streamId ?? '';
+    const streamId = getRequiredStreamId();
     const proposalId = randomUUID();
 
     const result = await proposalCoordinator.waitForUserAction(streamId, {
@@ -374,8 +409,8 @@ instruction="Read the paper at /workspace/paper.tex which proposes a new attenti
     );
     if (nonApproveResult) return nonApproveResult;
 
-    // Approved - execute
-    void executeAgent(proposal);
+    // Approved - execute with error logging
+    executeAgentWithLogging(proposal);
 
     return {
       summary: `Delegated task to '${input.agent}'`,
