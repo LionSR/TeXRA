@@ -4,6 +4,8 @@ import {
   CHECK_BOXES,
   VALUE_ELEMENTS,
   CHECK_BOXES_TOOL_USE,
+  CHECK_BOXES_AUTO_EXTRACT,
+  SINGLE_FILE_ELEMENTS,
   ELEMENT_IDS,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
@@ -452,6 +454,78 @@ export class MainViewState {
       outputFiles: [],
       outputFilesVisible: false,
       outputFilesActive: false,
+    });
+  }
+
+  /**
+   * Clear the view for a new session based on session type.
+   * Chat mode: Clear instruction only
+   * Workflow mode: Clear instruction + file selections + checkboxes
+   * Uses set() to persist state even when saves are blocked.
+   * @param {string} sessionType - Current session type (toolUse or workflow)
+   */
+  clearForNewSession(sessionType) {
+    const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
+
+    // Always clear instruction in DOM
+    const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
+    if (instruction) {
+      instruction.value = '';
+    }
+
+    // Workflow mode: also clear file selections and checkboxes
+    if (!isToolUseSession) {
+      this._clearWorkflowFields();
+    }
+
+    // Persist state using set() to bypass save block check
+    // (save() returns early if _saveBlockCount > 0)
+    const currentState = this.stateManager.getState() ?? {};
+    const clearedState = {
+      ...currentState,
+      instruction: '',
+    };
+
+    if (!isToolUseSession) {
+      // Clear workflow-specific state
+      SINGLE_FILE_ELEMENTS.forEach((id) => {
+        clearedState[id] = '';
+      });
+      MULTIPLE_SELECTIONS.forEach((id) => {
+        clearedState[id] = [];
+        clearedState[`${id}Visible`] = false;
+      });
+      CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
+        clearedState[id] = false;
+      });
+      // Clear output files state (consistent with _resetOutputFilesForToolUse)
+      clearedState.outputFilesActive = false;
+    }
+
+    this.set(clearedState);
+  }
+
+  /**
+   * Clear workflow-specific fields in DOM: single files, multiple file lists, and checkboxes.
+   */
+  _clearWorkflowFields() {
+    // Clear single file selections
+    SINGLE_FILE_ELEMENTS.forEach((id) => {
+      safeSetElementValue(id, '');
+    });
+
+    // Clear multiple file selections and hide containers
+    MULTIPLE_SELECTIONS.forEach((id) => {
+      const toggleId = `toggle${capitalize(id)}`;
+      fileList.empty(id, toggleId, false);
+    });
+
+    // Hide output files container (consistent with _resetOutputFilesForToolUse)
+    this._setOutputFilesContainerVisible(false);
+
+    // Uncheck auto-extract checkboxes
+    CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
+      safeSetElementChecked(id, false);
     });
   }
 }
