@@ -14,7 +14,10 @@ import {
 
 const TexcountInputSchema = z.strictObject({
   files: z.union([z.string(), z.array(z.string()).min(1)]),
-  mode: z.enum(['separate', 'include', 'sum']).nullish(),
+  mode: z
+    .enum(['separate', 'include', 'sum'])
+    .nullish()
+    .transform((v) => v ?? 'separate'),
   format: z.enum(['raw', 'stats']).nullish(),
 });
 
@@ -45,8 +48,7 @@ export class TexcountTool extends defineTool({
       throw new ToolError('No LaTeX files provided for texcount.');
     }
 
-    const mode: TexcountMode = input.mode ?? 'separate';
-    const { output, errors } = await getTeXCount(files, { mode });
+    const { output, errors } = await getTeXCount(files, { mode: input.mode });
 
     if (!output) {
       const errorMessage =

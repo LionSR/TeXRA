@@ -9,7 +9,12 @@ import { wrapApiCall } from '@tools/utils';
 
 const WebSearchInputSchema = z.strictObject({
   query: z.string(),
-  max_results: z.number().min(1).max(5).nullish(),
+  max_results: z
+    .number()
+    .min(1)
+    .max(5)
+    .nullish()
+    .transform((v) => v ?? 3),
 });
 
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
@@ -38,8 +43,7 @@ export class WebSearchTool extends defineTool({
   schema: WebSearchInputSchema,
 }) {
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
-    const { query } = input;
-    const max_results = input.max_results ?? 3;
+    const { query, max_results } = input;
 
     const response = await wrapApiCall(
       () =>
