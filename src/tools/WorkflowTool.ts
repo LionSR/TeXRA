@@ -152,20 +152,29 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional input files'),
-  referenceFile: z.string().nullish().describe('Reference file for context'),
+  referenceFile: z
+    .string()
+    .nullable()
+    .prefault(null)
+    .describe('Reference file for context'),
   referenceFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional reference files'),
   auxiliaryFile: z
     .string()
-    .nullish()
+    .nullable()
+    .prefault(null)
     .describe('Auxiliary file for supplementary content'),
   auxiliaryFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional auxiliary files'),
-  mediaFile: z.string().nullish().describe('Media file for images/figures'),
+  mediaFile: z
+    .string()
+    .nullable()
+    .prefault(null)
+    .describe('Media file for images/figures'),
   mediaFiles: z
     .array(z.string())
     .prefault([])
@@ -184,8 +193,7 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 /** Tool for proposing workflow agent executions (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'propose_workflow',
-  description:
-    () => `Propose a workflow agent for document processing.
+  description: () => `Propose a workflow agent for document processing.
 
 Available agents:
 ${buildWorkflowAgentsList()}
@@ -262,11 +270,11 @@ Example: agent=correct, inputFile=/workspace/paper.tex, instruction="This resear
       instruction: input.instruction,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
-      referenceFile: input.referenceFile ?? null,
+      referenceFile: input.referenceFile,
       referenceFiles: input.referenceFiles,
-      auxiliaryFile: input.auxiliaryFile ?? null,
+      auxiliaryFile: input.auxiliaryFile,
       auxiliaryFiles: input.auxiliaryFiles,
-      mediaFile: input.mediaFile ?? null,
+      mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       useMultipleOutputs: input.useMultipleOutputs,
