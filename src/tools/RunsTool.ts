@@ -1,0 +1,351 @@
+/**
+ * Tool for viewing execution history and generated files.
+ * Read-only access to past runs - agents can learn from history.
+ */
+
+// Third-party imports
+import { z } from 'zod';
+
+// Local imports - agent
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Local imports - common
+import { AgentHistoryManager } from '@common/history';
+
+// Local imports - tools
+import { defineTool } from './core/define';
+import { ToolError, type ToolResult } from './result';
+
+// Local imports - utils
+import { StorageFS } from '@utils/files';
+import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { getPathSegments } from '@utils/core/pathCore';
+
+// ============================================================================
+// Schema
+// ============================================================================
+
+const RunsToolInputSchema = z.strictObject({
+  /** Virtual path: /runs, /runs/{id}, /runs/{id}/files, /runs/{id}/files/{path} */
+  path: z.string().describe('Path starting with /runs'),
+
+  /** Optional line range [start, end] for large outputs */
+  view_range: z
+    .array(z.int().min(1))
+    .length(2)
+    .refine(([start, end]) => end >= start, {
+      message: 'view_range[1] must be >= view_range[0]',
+    })
+    .nullish(),
+});
+
+export type RunsToolInput = z.infer<typeof RunsToolInputSchema>;
+
+// ============================================================================
+// Tool Implementation
+// ============================================================================
+
+/**
+ * Read-only tool for viewing execution history and generated files.
+ *
+ * Paths:
+ * - /runs - List all past executions
+ * - /runs/{id} - Execution detail (config + conversation)
+ * - /runs/{id}/files - List generated files
+ * - /runs/{id}/files/{path} - Read specific file
+ */
+export class RunsTool extends defineTool({
+  name: 'runs',
+  description: `View execution history and generated files (read-only).
+
+Paths:
+- /runs - List all past executions
+- /runs/{id} - Execution detail with config and conversation
+- /runs/{id}/files - List generated files
+- /runs/{id}/files/{path} - Read specific file
+
+Use "current" as {id} to access the active execution.
+Use view_range: [start, end] to paginate large outputs.`,
+  schema: RunsToolInputSchema,
+}) {
+  protected async execute(input: RunsToolInput): Promise<ToolResult> {
+    const segments = getPathSegments(input.path);
+    const [namespace, id, resource, ...rest] = segments;
+
+    if (namespace !== 'runs') {
+      throw new ToolError(
+        `Path must start with /runs. Got: ${input.path}`,
+      );
+    }
+
+    // /runs - list all executions
+    if (!id) {
+      return this.listRuns();
+    }
+
+    const executionId = this.resolveExecutionId(id);
+
+    // /runs/{id} - execution detail
+    if (!resource) {
+      return this.showExecution(executionId, input.view_range ?? undefined);
+    }
+
+    // /runs/{id}/files or /runs/{id}/files/{path}
+    if (resource === 'files') {
+      if (rest.length === 0) {
+        return this.listFiles(executionId);
+      }
+      return this.readFile(executionId, rest.join('/'), input.view_range ?? undefined);
+    }
+
+    throw new ToolError(
+      `Unknown path: ${input.path}. Expected /runs, /runs/{id}, /runs/{id}/files, or /runs/{id}/files/{path}`,
+    );
+  }
+
+  /**
+   * Resolve "current" to active execution ID, or return as-is.
+   */
+  private resolveExecutionId(id: string): ExecutionId {
+    if (id === 'current') {
+      const ctx = getCurrentToolFileInteractionContext();
+      if (!ctx?.executionId) {
+        throw new ToolError('No active execution. Use a specific execution ID instead of "current".');
+      }
+      return ctx.executionId;
+    }
+    return id as ExecutionId;
+  }
+
+  /**
+   * List all executions from history.
+   */
+  private async listRuns(): Promise<ToolResult> {
+    const history = await AgentHistoryManager.getHistory();
+
+    if (history.length === 0) {
+      return { output: 'No execution history found.' };
+    }
+
+    const lines = history.map((item) => {
+      const agent = item.agentConfig.agent;
+      const model = item.agentConfig.model ?? 'unknown';
+      const summary = item.agentConfig.session?.taskSummary ?? '';
+      const shortSummary = summary.length > 50 ? summary.slice(0, 47) + '...' : summary;
+      return `${item.id}  ${item.timestamp}  ${agent}  ${model}  ${shortSummary}`;
+    });
+
+    return {
+      output: `Executions (${history.length}):\n\n${lines.join('\n')}`,
+    };
+  }
+
+  /**
+   * Show execution detail: config + conversation history.
+   */
+  private async showExecution(
+    executionId: ExecutionId,
+    viewRange?: [number, number],
+  ): Promise<ToolResult> {
+    // Get metadata from history
+    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
+
+    // Get flow record from KV store
+    const store = getExecutionStore(executionId);
+    const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(`flow:${executionId}`);
+
+    if (!historyItem && !flow) {
+      throw new ToolError(`Execution not found: ${executionId}`);
+    }
+
+    const lines: string[] = [];
+
+    // Header with config
+    if (historyItem) {
+      const config = historyItem.agentConfig;
+      lines.push('=== Config ===');
+      lines.push(`Agent: ${config.agent}`);
+      lines.push(`Model: ${config.model ?? 'default'}`);
+      lines.push(`Timestamp: ${historyItem.timestamp}`);
+      if (config.session?.taskSummary) {
+        lines.push(`Task: ${config.session.taskSummary}`);
+      }
+      if (config.session?.inputFiles?.length) {
+        lines.push(`Input files: ${config.session.inputFiles.join(', ')}`);
+      }
+      if (config.tools?.length) {
+        lines.push(`Tools: ${config.tools.map(t => typeof t === 'string' ? t : t.name).join(', ')}`);
+      }
+      lines.push('');
+    }
+
+    // Conversation history
+    const conversation = flow?.shared?.conversation;
+    if (Array.isArray(conversation) && conversation.length > 0) {
+      lines.push('=== Conversation ===');
+      lines.push('');
+
+      for (let i = 0; i < conversation.length; i++) {
+        const msg = conversation[i] as { role?: string; content?: unknown };
+        const role = msg.role ?? 'unknown';
+        const content = this.formatMessageContent(msg.content);
+        lines.push(`[${i + 1}] ${role}:`);
+        lines.push(content);
+        lines.push('');
+      }
+    } else {
+      lines.push('(No conversation history available)');
+    }
+
+    let output = lines.join('\n');
+
+    // Apply view_range if specified
+    if (viewRange) {
+      const outputLines = output.split('\n');
+      const [start, end] = viewRange;
+      const startIdx = Math.max(start - 1, 0);
+      const endIdx = Math.min(end, outputLines.length);
+      output = outputLines.slice(startIdx, endIdx).join('\n');
+    }
+
+    return { output };
+  }
+
+  /**
+   * Format message content for display.
+   */
+  private formatMessageContent(content: unknown): string {
+    if (typeof content === 'string') {
+      return content.length > 500 ? content.slice(0, 497) + '...' : content;
+    }
+    if (Array.isArray(content)) {
+      // Handle content blocks (text, tool_use, tool_result)
+      return content.map((block) => {
+        if (typeof block === 'string') return block;
+        if (block?.type === 'text') return block.text ?? '';
+        if (block?.type === 'tool_use') {
+          const input = JSON.stringify(block.input ?? {});
+          const shortInput = input.length > 100 ? input.slice(0, 97) + '...' : input;
+          return `[tool_use: ${block.name}(${shortInput})]`;
+        }
+        if (block?.type === 'tool_result') {
+          const output = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+          const shortOutput = output.length > 100 ? output.slice(0, 97) + '...' : output;
+          return `[tool_result: ${shortOutput}]`;
+        }
+        return JSON.stringify(block).slice(0, 100);
+      }).join('\n');
+    }
+    return JSON.stringify(content).slice(0, 500);
+  }
+
+  /**
+   * List files in task run directory.
+   */
+  private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
+    const runDir = `${TASK_RUNS_DIR}/${executionId}`;
+
+    if (!await StorageFS.exists(runDir)) {
+      return { output: 'No files generated for this execution.' };
+    }
+
+    const entries = await this.walkDirectory(runDir, '', 2);
+
+    if (entries.length === 0) {
+      return { output: 'No files generated for this execution.' };
+    }
+
+    const lines = entries.map(({ path: p, size, isDir }) => {
+      const sizeStr = isDir ? '<dir>' : this.formatSize(size);
+      return `${sizeStr.padStart(8)}  ${p}`;
+    });
+
+    return {
+      output: `Files in /runs/${executionId}/files:\n\n${lines.join('\n')}`,
+    };
+  }
+
+  /**
+   * Walk directory up to maxDepth levels.
+   */
+  private async walkDirectory(
+    basePath: string,
+    relativePath: string,
+    maxDepth: number,
+  ): Promise<Array<{ path: string; size: number; isDir: boolean }>> {
+    const results: Array<{ path: string; size: number; isDir: boolean }> = [];
+    const fullPath = relativePath ? `${basePath}/${relativePath}` : basePath;
+
+    try {
+      const entries = await StorageFS.readDir(fullPath);
+
+      for (const [name, type] of entries) {
+        const entryRelative = relativePath ? `${relativePath}/${name}` : name;
+        const entryFull = `${basePath}/${entryRelative}`;
+        const isDir = type === 2; // vscode.FileType.Directory
+
+        try {
+          const stats = await StorageFS.stat(entryFull);
+          results.push({ path: entryRelative, size: stats.size, isDir });
+
+          if (isDir && maxDepth > 1) {
+            const children = await this.walkDirectory(basePath, entryRelative, maxDepth - 1);
+            results.push(...children);
+          }
+        } catch {
+          // Skip entries we can't stat
+        }
+      }
+    } catch {
+      // Directory doesn't exist or can't be read
+    }
+
+    return results;
+  }
+
+  /**
+   * Read a specific file from task run storage.
+   */
+  private async readFile(
+    executionId: ExecutionId,
+    filePath: string,
+    viewRange?: [number, number],
+  ): Promise<ToolResult> {
+    const fullPath = `${TASK_RUNS_DIR}/${executionId}/${filePath}`;
+
+    if (!await StorageFS.exists(fullPath)) {
+      throw new ToolError(`File not found: /runs/${executionId}/files/${filePath}`);
+    }
+
+    const stats = await StorageFS.stat(fullPath);
+    if (stats.type === 2) { // Directory
+      throw new ToolError(`Path is a directory: /runs/${executionId}/files/${filePath}. Use without trailing path to list.`);
+    }
+
+    let content = await StorageFS.read(fullPath);
+
+    // Apply view_range if specified
+    if (viewRange) {
+      const lines = content.split('\n');
+      const [start, end] = viewRange;
+      const startIdx = Math.max(start - 1, 0);
+      const endIdx = Math.min(end, lines.length);
+      content = lines.slice(startIdx, endIdx).join('\n');
+    }
+
+    return {
+      output: `File: /runs/${executionId}/files/${filePath}\n\n${content}`,
+    };
+  }
+
+  /**
+   * Format bytes to human-readable size.
+   */
+  private formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
+  }
+}
