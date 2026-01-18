@@ -11,29 +11,17 @@ import { StorageFS } from '@utils/files';
 // Local imports - tool core
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
+import { formatLinesWithNumbers } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
   MEMORY_DISPLAY_ROOT,
   MEMORY_STORAGE_ROOT,
   MAX_VIEW_LINES,
-  LINE_NUMBER_WIDTH,
   DIRECTORY_LISTING_DEPTH,
   shouldSkipEntry,
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
-
-function formatLinesWithNumbers(
-  lines: string[],
-  startIndex: number = 0,
-): string[] {
-  return lines.map((line, index) => {
-    const lineNumber = (startIndex + index + 1)
-      .toString()
-      .padStart(LINE_NUMBER_WIDTH, ' ');
-    return `${lineNumber}\t${line}`;
-  });
-}
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
@@ -214,7 +202,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const startIndex = Math.max(start - 1, 0);
     const endIndex = Math.min(end, lines.length);
     const selected = lines.slice(startIndex, endIndex);
-    const numbered = formatLinesWithNumbers(selected, startIndex);
+    const numbered = formatLinesWithNumbers(selected, startIndex + 1);
 
     return {
       output: [
