@@ -73,19 +73,6 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Clear content of a specific stream (but keep the stream)
-   */
-  async clearContent(stream: StreamTabId): Promise<void> {
-    if (!this.has(stream)) {
-      return;
-    }
-
-    const messages = this.ensureMessages(stream);
-    messages.length = 0;
-    await this.save();
-  }
-
-  /**
    * Get a copy of messages for a stream (safe for external use).
    * Returns a shallow copy to prevent external mutation of internal state.
    */
