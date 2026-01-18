@@ -308,11 +308,8 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKind = this.getStreamCategory(stream);
 
-    // Resolve runId: auto-resolve if undefined, use provided value otherwise
-    const runId =
-      runIdHint === undefined
-        ? this.state.resolveRunId(stream, undefined, { persist: false })
-        : runIdHint;
+    // Use provided runId or read cached activeRunId (no expensive resolution)
+    const runId = runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
     // Persist instruction if both runId and instruction exist
     if (runId) {
@@ -359,10 +356,10 @@ export class ProgressEventHandler {
       return null;
     }
 
-    // Collect stream data
+    // Collect stream data (activeRunId is already set by event handlers when data arrives)
     const messages = this.state.streamTabs.getMessages(stream);
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
-    const activeRunId = this.state.resolveRunId(stream, undefined, { persist: false });
+    const activeRunId = this.state.getActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
       this.state.runInstructions.getInstructions(stream).entries(),
@@ -404,12 +401,13 @@ export class ProgressEventHandler {
 
   /**
    * Clear all webview content when no stream is active.
+   *
+   * Note: updateLogContent with action='clear' triggers the frontend to clear
+   * all run-scoped state (files, missing outputs, usage). No separate reset
+   * messages needed - the frontend handles this in its full rebuild path.
    */
   private clearStreamSurface(clearInstruction: boolean): void {
     this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
-    this.webviewUpdater.updateFiles('', { reset: true });
-    this.webviewUpdater.updateMissingOutputs('', { reset: true });
-    this.webviewUpdater.updateUsage('', {});
     this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
     if (clearInstruction) {
       this.webviewUpdater.updateInstruction('', null);
