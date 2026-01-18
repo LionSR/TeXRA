@@ -19,7 +19,12 @@ import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),
-  rows: z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS).nullish(),
+  rows: z
+    .int()
+    .positive()
+    .max(CROSSREF_CONSTANTS.MAX_ROWS)
+    .nullish()
+    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS),
   offset: z.int().min(0).nullish(),
   sort: z.string().nullish(),
   order: z.enum(['asc', 'desc']).nullish(),
@@ -50,7 +55,7 @@ export class CrossrefSearchTool extends defineTool({
 
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
-      rows: input.rows ?? CROSSREF_CONSTANTS.DEFAULT_ROWS,
+      rows: input.rows,
       ...(typeof input.offset === 'number' && { offset: input.offset }),
       ...(input.sort && { sort: input.sort as WorkSortOptions }),
       ...(input.order && {
