@@ -2,14 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import type { AgentConfigPayload } from '@agent/core/AgentConfig';
-// Internal imports
 import {
-  AgentCategory,
-  AgentType,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
-import { DEFAULT_TOOL_CONFIG, ToolConfig } from '@agent/core/ToolConfig';
+  AgentConfigSchema,
+  type AgentConfigInput,
+} from '@agent/core/AgentConfig';
+// Internal imports
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from '@agent/core/ToolConfig';
+import type { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import { capitalize } from '@utils/text/stringUtils';
 import {
@@ -20,12 +20,47 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
+/**
+ * Message shape from webview for agent execution.
+ * Extends AgentConfigInput with UI-specific fields.
+ * ToolConfig fields are sent flat from the UI form.
+ */
+type ExecuteMessage = AgentConfigInput & {
+  /** UI toggle indicating tool-use vs workflow agent */
+  isToolUseAgent?: boolean;
+  /** UI toggle for multiple outputs mode */
+  outputFilesActive?: boolean;
+  /** Media files may contain nulls from UI (filtered during processing) */
+  mediaFiles?: (string | null)[];
+} & z.input<typeof ToolConfigSchema>;
+
+/** Message shape for command-based operations. */
+interface CommandMessage {
+  command: string;
+  inputFile?: string;
+  baseFile?: string;
+  editedFile?: string;
+  agent?: string;
+  model?: string;
+  outputFiles?: string[];
+}
+
 export class ExecutionManager {
-  async handleExecute(message: any): Promise<void> {
-    const isToolUseAgent = Boolean(message.isToolUseAgent);
+  async handleExecute(message: ExecuteMessage): Promise<void> {
+    // IMPORTANT: Validate required fields before schema parsing.
+    // AgentConfigSchema uses .prefault() for agent/model (see AgentConfig.ts:96-97),
+    // which would silently provide defaults instead of failing on missing values.
+    if (!message.agent || !message.model) {
+      vscode.window.showErrorMessage(
+        'Agent and model selection required. Please select both before running.',
+      );
+      return;
+    }
+
+    const isToolUse = Boolean(message.isToolUseAgent);
 
     // Tool-use agents don't need input file validation
-    if (!isToolUseAgent && !message.inputFile) {
+    if (!isToolUse && !message.inputFile) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
         'Please select an input file.',
@@ -37,87 +72,56 @@ export class ExecutionManager {
       return;
     }
 
-    const config = this.composeAgentConfig(message, isToolUseAgent);
-    await vscode.commands.executeCommand('texra.execute', config);
-  }
-
-  private composeAgentConfig(
-    message: any,
-    isToolUse: boolean,
-  ): AgentConfigPayload {
-    // Session descriptor depends on agent type
-    const session: AgentSessionDescriptor = isToolUse
-      ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
-      : { agentCategory: AgentCategory.Workflow };
+    // Map media file paths (pasted images need full path resolution)
+    const mapMedia = (f: string | null): string | null =>
+      f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
 
     // Tool-use agents don't produce output files
     const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
-    const useMultipleOutputs =
-      !isToolUse &&
-      (Boolean(message.outputFilesActive) || outputFiles.length > 1);
 
-    // Tool config: workflow agents use message values, tool-use uses defaults
-    const toolConfig: ToolConfig = isToolUse
+    // Tool config: tool-use uses defaults, workflow agents use message values (schema provides defaults)
+    const toolConfig = isToolUse
       ? DEFAULT_TOOL_CONFIG
-      : {
-          autoExtractFigure: message.autoExtractFigure,
-          autoExtractTikzFigure: message.autoExtractTikzFigure,
-          attachTeXCount: message.attachTeXCount,
-          attachDiagnostics: message.attachDiagnostics,
-          autoCompileInputPdf: message.autoCompileInputPdf,
-        };
+      : ToolConfigSchema.parse(message);
 
-    // Map media file paths, filtering out null values
-    const mapMedia = (f: string | null): string | null => this.mapMediaPath(f);
-    const mediaFiles = (message.mediaFiles ?? [])
-      .map(mapMedia)
-      .filter((f: string | null): f is string => f !== null);
-
-    return {
-      agent: message.agent,
-      model: message.model,
-      instruction: message.instruction,
-      inputFile: message.inputFile ?? '',
-      inputFiles: message.inputFiles ?? [],
-      referenceFile: message.referenceFile ?? null,
-      referenceFiles: message.referenceFiles ?? [],
-      auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: message.auxiliaryFiles ?? [],
-      mediaFile: mapMedia(message.mediaFile ?? null),
-      mediaFiles,
-      editedFile: null,
-      editedFiles: message.editedFiles ?? [],
-      agentType: session.agentType,
-      session,
-      toolConfig,
-      useMultipleOutputs,
+    // Schema provides defaults via .prefault(), we only override conditional fields
+    const config = AgentConfigSchema.parse({
+      ...message,
+      session: isToolUse
+        ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
+        : { agentCategory: AgentCategory.Workflow },
       outputFiles,
-    };
+      useMultipleOutputs:
+        !isToolUse &&
+        (Boolean(message.outputFilesActive) || outputFiles.length > 1),
+      toolConfig,
+      mediaFile: mapMedia(message.mediaFile ?? null),
+      mediaFiles: (message.mediaFiles ?? [])
+        .map(mapMedia)
+        .filter((f: string | null): f is string => f !== null),
+      editedFile: null,
+    });
+
+    await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private mapMediaPath(f: string | null): string | null {
-    return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
-  }
-
-  handleFileOperation(message: any): void {
+  handleFileOperation(message: CommandMessage): void {
     this.runCommand(message, ['inputFile', 'baseFile', 'editedFile']);
   }
 
-  handleHousekeeping(message: any): void {
+  handleHousekeeping(message: CommandMessage): void {
     this.runCommand(message, []);
   }
 
-  handleSingleOperation(message: any): void {
+  handleSingleOperation(message: CommandMessage): void {
     this.runCommand(message, ['inputFile', 'agent', 'model']);
   }
 
-  handleMultipleOperation(message: any): void {
+  handleMultipleOperation(message: CommandMessage): void {
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
-    const files = Array.isArray(message.outputFiles)
-      ? message.outputFiles.join(', ')
-      : '';
+    const files = message.outputFiles?.join(', ') ?? '';
     logger.info(
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
@@ -125,7 +129,10 @@ export class ExecutionManager {
     this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
   }
 
-  private runCommand(message: any, paramKeys: string[]): void {
+  private runCommand(
+    message: CommandMessage,
+    paramKeys: (keyof CommandMessage)[],
+  ): void {
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
       ...paramKeys.map((k) => message[k]),
