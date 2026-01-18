@@ -24,6 +24,7 @@ import {
   type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
+import { countLines } from '@utils/text/stringUtils';
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
@@ -220,12 +221,6 @@ export class OutputHandler implements IOutputHandler {
     data.outputs = outputs;
   }
 
-  private countLines(text: string): number {
-    if (!text) return 0;
-    const lines = text.split('\n');
-    return text.endsWith('\n') ? lines.length - 1 : lines.length;
-  }
-
   private async computeDiffStats(
     baseLocation: FileLocation | null,
     outputLocation: FileLocation,
@@ -233,7 +228,7 @@ export class OutputHandler implements IOutputHandler {
     try {
       if (!baseLocation) {
         const outContent = await flexibleFS.read(outputLocation);
-        const added = this.countLines(outContent);
+        const added = countLines(outContent);
         return { added };
       }
 
@@ -248,9 +243,9 @@ export class OutputHandler implements IOutputHandler {
       let removed = 0;
       for (const [op, text] of diffs) {
         if (op === 1) {
-          added += this.countLines(text);
+          added += countLines(text);
         } else if (op === -1) {
-          removed += this.countLines(text);
+          removed += countLines(text);
         }
       }
       return { added, removed };
