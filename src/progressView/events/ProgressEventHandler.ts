@@ -179,13 +179,7 @@ export class ProgressEventHandler {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
         const sessionKind = taskState.agentConfig.session.agentCategory;
-
-        // Check if filter needs updating BEFORE setting state (affects stream visibility)
         const previousFilter = this.state.agentTypeFilter;
-        const filterMightChange =
-          isActiveStream &&
-          previousFilter !== 'all' &&
-          previousFilter !== sessionKind;
 
         this.state.setTaskState(streamTabId, taskState);
 
@@ -201,11 +195,12 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamTabId);
         }
 
-        // Only send full stream update if filter changed (affects visible streams)
-        // or if webview needs the updated task state metadata
+        // Update stream tabs when:
+        // 1. Filter changed (affects visible streams)
+        // 2. Active stream's task state changed (label needs inputFile, agent, etc.)
         if (this.webviewUpdater.isAvailable()) {
           const filterChanged = this.state.agentTypeFilter !== previousFilter;
-          if (filterChanged || filterMightChange) {
+          if (filterChanged || isActiveStream) {
             this.webviewUpdater.updateAll(
               this.state,
               StreamStatusService.getAll(),
