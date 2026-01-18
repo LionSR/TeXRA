@@ -9,15 +9,12 @@ export {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
-  type BibliographyEntriesResult,
-  type BibliographyReferenceResult,
 } from './extractBibliography';
 
 // Export text connection functionality
 export {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
-  ConnectionResult,
 } from './textConnection';
 
 // Export LaTeX compilation tools
