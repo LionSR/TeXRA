@@ -9,7 +9,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import {
-  canUpdateWebview,
+  isWebviewAvailable,
   type EventHandlerContext,
 } from './EventHandlerContext';
 
@@ -53,7 +53,8 @@ function handleUpdateStreamUsage(
         ctx.state.setActiveRunId(stream, storageKey);
       }
 
-      if (canUpdateWebview(ctx, stream) && accumulatedUsage) {
+      // Broadcast to webview - frontend decides which run to display
+      if (isWebviewAvailable(ctx) && accumulatedUsage) {
         ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
       }
     },
@@ -69,7 +70,8 @@ function handleUpdateContextState(
     'failed to handle updateContextState',
     () => {
       ctx.state.setContextState(stream, contextState);
-      if (canUpdateWebview(ctx, stream)) {
+      // Broadcast to webview - frontend decides which run to display
+      if (isWebviewAvailable(ctx)) {
         ctx.webviewUpdater.updateContextState(stream, contextState);
       }
     },

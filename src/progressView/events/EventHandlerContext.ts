@@ -3,6 +3,18 @@
  *
  * Provides access to state, webview updater, and common utilities
  * without creating circular dependencies.
+ *
+ * ## Multi-Agent Architecture: "Backend broadcasts, Frontend decides"
+ *
+ * For run-scoped data (usage, outputs, todos, instructions), use `isWebviewAvailable()`
+ * to broadcast updates to the frontend regardless of which run is "active". The frontend
+ * decides what to display based on user focus.
+ *
+ * For stream-level operations (like clearing all content), use `canUpdateWebview()`
+ * which checks both webview availability AND active stream.
+ *
+ * This design supports concurrent subagents - each run receives updates independently,
+ * and the frontend can display multiple runs simultaneously in the future.
  */
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -21,7 +33,16 @@ export interface EventHandlerContext {
 
 /**
  * Check if webview is available (regardless of active stream).
- * Use for events that should always be sent when webview is visible.
+ *
+ * Use for run-scoped data that should always be broadcast:
+ * - Usage statistics (per-run)
+ * - Output files (per-run)
+ * - Missing outputs (per-run)
+ * - Todos (per-run)
+ * - Log messages (append - messages persist across stream switches)
+ *
+ * This enables multi-agent support where concurrent runs can all update
+ * the webview, and the frontend decides what to display.
  */
 export function isWebviewAvailable(ctx: EventHandlerContext): boolean {
   return ctx.webviewUpdater.isAvailable();
@@ -40,11 +61,13 @@ export function isActiveStream(
 
 /**
  * Check if webview is available and the stream is active.
- * Common guard for event handlers that should only update the webview
- * when it's visible and showing the relevant stream.
  *
- * For multi-agent scenarios, consider using isWebviewAvailable() and
- * isActiveStream() separately to handle non-active stream updates.
+ * Use for stream-level operations that affect the entire display:
+ * - Log message updates (modifying existing messages in current view)
+ * - Stream metadata changes
+ *
+ * NOT for run-scoped data - use isWebviewAvailable() instead to support
+ * multi-agent scenarios where concurrent runs should all receive updates.
  */
 export function canUpdateWebview(
   ctx: EventHandlerContext,
