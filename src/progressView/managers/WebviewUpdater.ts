@@ -24,6 +24,7 @@ import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
+  AgentProposalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
@@ -219,6 +220,20 @@ export class WebviewUpdater {
     this.sendMessage({
       command: COMMANDS.RESOLVE_RETRY_REQUEST,
       streamId,
+    });
+  }
+
+  showAgentProposal(proposal: AgentProposalPrompt): void {
+    this.sendMessage({
+      command: COMMANDS.SHOW_AGENT_PROPOSAL,
+      proposal,
+    });
+  }
+
+  resolveAgentProposal(proposalId: string): void {
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_AGENT_PROPOSAL,
+      proposalId,
     });
   }
 
