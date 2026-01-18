@@ -26,59 +26,25 @@ const ActiveFilesSchema = z.partialRecord(
 ) as z.ZodType<Record<FileType, boolean>>;
 
 /**
- * Helper to extract agentCategory from either new or legacy format.
- * - New format: agentConfig.agentCategory (lifted to top level)
- * - Legacy format: agentConfig.session.agentCategory (nested in session)
+ * AgentConfig schema that normalizes legacy format on parse.
+ * Lifts session.agentCategory to top level if not already present.
  */
-function getAgentCategory(
-  config: Record<string, unknown>,
-): AgentCategory | undefined {
-  // Try new format first (top-level agentCategory)
-  if (
-    'agentCategory' in config &&
-    typeof config.agentCategory === 'string' &&
-    Object.values(AgentCategory).includes(config.agentCategory as AgentCategory)
-  ) {
-    return config.agentCategory as AgentCategory;
-  }
-
-  // Fall back to legacy format (nested in session)
-  if (
-    'session' in config &&
-    typeof config.session === 'object' &&
-    config.session !== null &&
-    'agentCategory' in config.session
-  ) {
-    const session = config.session as Record<string, unknown>;
-    if (
-      typeof session.agentCategory === 'string' &&
-      Object.values(AgentCategory).includes(
-        session.agentCategory as AgentCategory,
-      )
-    ) {
-      return session.agentCategory as AgentCategory;
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * Minimal agentConfig schema - validates category from either location.
- * Accepts both new format (agentConfig.agentCategory) and legacy format
- * (agentConfig.session.agentCategory) for backwards compatibility with
- * persisted task states.
- */
-const AgentConfigWithCategorySchema = z
-  .looseObject({})
-  .refine((c) => getAgentCategory(c) !== undefined, {
-    error: 'Missing agentCategory in agentConfig',
-  });
+const AgentConfigSchema = z
+  .looseObject({
+    agentCategory: z.enum(AgentCategory).optional(),
+    session: z.object({ agentCategory: z.enum(AgentCategory) }).optional(),
+  })
+  .transform((c) => ({
+    ...c,
+    // Lift from session if not at top level (legacy format migration)
+    agentCategory: c.agentCategory ?? c.session?.agentCategory,
+  }))
+  .pipe(z.looseObject({ agentCategory: z.enum(AgentCategory) }));
 
 /** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({
-  agentConfig: AgentConfigWithCategorySchema.refine(
-    (c) => getAgentCategory(c) === AgentCategory.Workflow,
+  agentConfig: AgentConfigSchema.refine(
+    (c) => c.agentCategory === AgentCategory.Workflow,
     { error: 'Expected Workflow category' },
   ),
   activeFiles: ActiveFilesSchema,
@@ -86,8 +52,8 @@ const WorkflowTaskStateSchema = z.object({
 
 /** Schema for tool-use task state */
 const ToolUseTaskStateSchema = z.object({
-  agentConfig: AgentConfigWithCategorySchema.refine(
-    (c) => getAgentCategory(c) === AgentCategory.ToolUse,
+  agentConfig: AgentConfigSchema.refine(
+    (c) => c.agentCategory === AgentCategory.ToolUse,
     { error: 'Expected ToolUse category' },
   ),
   toolSessionState: ToolSessionStateSchema.optional(),
