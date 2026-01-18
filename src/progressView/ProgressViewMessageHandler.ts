@@ -564,11 +564,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }),
     });
 
-    // Build a TaskState from the proposal
-    const taskState: TaskState = {
-      agentConfig,
-      activeFiles,
-    } as TaskState;
+    // Build the appropriate TaskState variant based on agent category
+    // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
+    // Cast needed because agentConfig.session.agentCategory is typed as the general
+    // AgentCategory enum, not the specific literal type that TaskState requires
+    const taskState = (
+      isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
+    ) as TaskState;
 
     // Resolve the proposal with 'setup' action to dismiss it from the UI
     // (user will manually execute from the main view after editing)
