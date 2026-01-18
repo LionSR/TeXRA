@@ -151,12 +151,33 @@ runs({ command: 'view', path: '/runs/current' })
 
 ## Implementation
 
+### Path Parsing
+
+Use existing `getPathSegments` from `src/utils/core/pathCore.ts`:
+
+```typescript
+import { getPathSegments } from '@utils/core/pathCore';
+
+// Example: '/runs/abc123/config' → ['runs', 'abc123', 'config']
+const segments = getPathSegments(input.path);
+const [namespace, id, resource, ...rest] = segments;
+
+if (namespace !== 'runs') throw new ToolError('Path must start with /runs');
+if (!id) return this.listRuns();
+if (!resource) return this.showExecution(id);
+if (resource === 'config') return this.showConfig(id);
+if (resource === 'files') {
+  if (rest.length === 0) return this.listFiles(id);
+  return this.readFile(id, rest.join('/'));
+}
+```
+
 ### Files to Create
 
 ```
 src/tools/runs/
-├── constants.ts      # RUNS_DISPLAY_ROOT, path patterns
-├── RunsTool.ts       # Main tool (~180 lines)
+├── constants.ts      # RUNS_DISPLAY_ROOT = '/runs'
+├── RunsTool.ts       # Main tool (~150 lines)
 └── index.ts          # Exports
 ```
 
@@ -166,12 +187,23 @@ src/tools/runs/
 src/tools/registry.ts  # Register RunsTool (1 line)
 ```
 
+### Existing Utilities to Reuse
+
+| Utility | Location | Usage |
+|---------|----------|-------|
+| `getPathSegments` | `@utils/core/pathCore` | Parse virtual paths |
+| `getCurrentToolFileInteractionContext` | `@agent/toolUse/ToolFileInteractionContext` | Get current executionId |
+| `getExecutionStore` | `@agent/storage/ExecutionKVStore` | Read flow records |
+| `AgentHistoryManager` | `@common/history` | List executions |
+| `StorageFS` | `@utils/files` | Read task run files |
+
 ### No Changes Required
 
 - `ExecutionKVStore` - read as-is
 - `AgentHistoryManager` - read as-is
 - `TaskRunFileService` - read as-is
 - `Memory tool` - untouched (follows Anthropic API)
+- `pathCore.ts` - already has `getPathSegments`
 
 ## Tool Description (for LLM)
 
@@ -188,6 +220,33 @@ Paths:
 
 Use view_range: [start, end] to paginate large outputs.
 ```
+
+## Integration with WorkflowTool
+
+The `/runs/{id}/config` path enables a powerful workflow:
+
+1. Agent views past execution config via `runs` tool
+2. Agent proposes modified execution via `propose_workflow` or `propose_agent` tools
+
+Example agent reasoning:
+```
+// Agent reads past successful config
+runs({ command: 'view', path: '/runs/abc123/config' })
+→ { agent: "correct", model: "sonnet45", inputFile: "paper.tex", ... }
+
+// Agent proposes similar run with modifications
+propose_workflow({
+  agent: "correct",
+  model: "opus45",  // Upgraded model
+  inputFile: "paper_v2.tex",
+  instruction: "Same corrections as before, plus check citations"
+})
+```
+
+This creates a learning loop where agents can:
+- Review what worked before
+- Understand successful configurations
+- Propose improvements based on history
 
 ## Future Considerations
 
