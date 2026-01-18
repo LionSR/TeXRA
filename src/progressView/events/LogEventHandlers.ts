@@ -52,9 +52,10 @@ function handleUpdateLogMessage(
   ctx: EventHandlerContext,
   { stream, logMessage }: ProgressEventPayloads['updateLogMessage'],
 ): void {
-  withEventErrorHandling('LogEvents', 'failed to handle updateLogMessage', async () => {
+  withEventErrorHandling('LogEvents', 'failed to handle updateLogMessage', () => {
     if (!ctx.state.streamTabs.has(stream)) return;
 
+    // Check if message exists and get its type for INTERNAL filtering
     const messages = ctx.state.streamTabs.getMessages(stream);
     const existing = messages.find((m) => m.id === logMessage.id);
     if (!existing) return;
@@ -67,13 +68,13 @@ function handleUpdateLogMessage(
       return;
     }
 
-    // Update fields, preserving existing values for undefined fields
+    // Update via proper encapsulated method (no direct mutation)
     const { id: _id, ...updates } = logMessage;
-    Object.assign(existing, updates);
-    await ctx.state.streamTabs.save();
+    const updated = ctx.state.streamTabs.updateMessage(stream, logMessage.id, updates);
 
-    if (canUpdateWebview(ctx, stream)) {
-      ctx.webviewUpdater.updateLogMessage(stream, existing);
+    if (updated && canUpdateWebview(ctx, stream)) {
+      // Send merged update to webview
+      ctx.webviewUpdater.updateLogMessage(stream, { ...existing, ...updates });
     }
   });
 }
