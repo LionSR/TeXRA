@@ -303,27 +303,21 @@ export class TaskGroupDomManager {
    * @param {string|null} groupId - The run ID to show, or null to show all
    */
   showRun(groupId) {
-    // For toolUse sessions, always show all groups (they're conversation turns)
-    // See ARCHITECTURAL NOTE in messageHandlers.js for design context
-    const isToolUse = progressViewState.activeSessionKind === 'toolUse';
-    const effectiveGroupId = isToolUse ? null : groupId;
-
-    const hasTarget = Boolean(
-      effectiveGroupId && this.groupElements.has(effectiveGroupId),
-    );
+    // ToolUse sessions show all groups as conversation turns (append-only history)
+    // Workflow sessions filter to single run (mutually exclusive runs)
+    const showAll =
+      progressViewState.activeSessionKind === 'toolUse' ||
+      !groupId ||
+      !this.groupElements.has(groupId);
 
     for (const [id, element] of this.groupElements.entries()) {
-      if (!element) {
-        continue;
-      }
+      if (!element) continue;
 
       const group = progressViewState.taskGroups.get(id);
-      if (!group || group.parentGroupId) {
-        continue;
-      }
+      // Skip child groups (they follow parent visibility)
+      if (!group || group.parentGroupId) continue;
 
-      const shouldShow = hasTarget ? id === effectiveGroupId : true;
-      element.hidden = !shouldShow;
+      element.hidden = !showAll && id !== groupId;
     }
   }
 
