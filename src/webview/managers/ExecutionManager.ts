@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 // Internal imports
 import {
   AgentCategory,
@@ -41,7 +41,7 @@ export class ExecutionManager {
     await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private composeAgentConfig(message: any, isToolUse: boolean): AgentConfig {
+  private composeAgentConfig(message: any, isToolUse: boolean): AgentConfigPayload {
     // Session descriptor depends on agent type
     const session: AgentSessionDescriptor = isToolUse
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
