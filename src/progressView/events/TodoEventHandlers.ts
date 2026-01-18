@@ -9,7 +9,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import {
-  canUpdateWebview,
+  isWebviewAvailable,
   type EventHandlerContext,
 } from './EventHandlerContext';
 
@@ -32,7 +32,8 @@ function handleUpdateTodos(
 ): void {
   withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
     ctx.state.setTodos(stream, todos);
-    if (canUpdateWebview(ctx, stream)) {
+    // Broadcast to webview - frontend decides which run to display
+    if (isWebviewAvailable(ctx)) {
       ctx.webviewUpdater.updateTodos(stream, todos);
     }
   });
