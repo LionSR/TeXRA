@@ -39,13 +39,24 @@ import {
 // Shared utilities
 // ============================================================================
 
+/** Format agent entry for description. */
+function formatAgentEntry(agent: {
+  name: string;
+  description?: string;
+  tools?: string[];
+}): string {
+  const desc = agent.description || 'No description';
+  if (agent.tools?.length) {
+    return `- ${agent.name}: ${desc}\n  Tools: ${agent.tools.join(', ')}`;
+  }
+  return `- ${agent.name}: ${desc}`;
+}
+
 /** Format agent list for tool descriptions. */
 function formatAgentList(
-  agents: { name: string; description?: string }[],
+  agents: { name: string; description?: string; tools?: string[] }[],
 ): string {
-  return agents
-    .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
-    .join('\n');
+  return agents.map(formatAgentEntry).join('\n');
 }
 
 /** Build workflow agents list for description. */
