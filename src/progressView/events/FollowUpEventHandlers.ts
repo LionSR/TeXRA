@@ -4,13 +4,18 @@
  * Handles the updateQueuedFollowUps event by fetching queue data
  * and sending it to the webview.
  *
- * DESIGN NOTE: Unlike other handlers (e.g., TodoEventHandlers), this does NOT
- * filter by active stream. Follow-up updates are sent for any stream because:
- * 1. Follow-ups represent user messages waiting to be processed - losing them is worse
- *    than showing updates for a non-visible stream
- * 2. refreshStreamSurface doesn't refresh queued follow-ups when switching streams
- *    (unlike todos, files, and usage which get refreshed)
- * 3. The frontend handles display logic based on which stream is visible
+ * DESIGN NOTES:
+ *
+ * 1. No active stream filtering: Unlike TodoEventHandlers, this does NOT filter
+ *    by active stream. Follow-up updates are sent for any stream because:
+ *    - Follow-ups represent user messages waiting to be processed
+ *    - refreshStreamSurface doesn't refresh follow-ups when switching streams
+ *    - The frontend handles display logic based on which stream is visible
+ *
+ * 2. No state storage: Unlike TodoEventHandlers which stores state via
+ *    ctx.state.setTodos(), this handler doesn't store in ProgressViewState.
+ *    ToolUseFollowUpQueue is the canonical source of truth for follow-up state.
+ *    This avoids duplicating state and keeps queue management centralized.
  */
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type {
