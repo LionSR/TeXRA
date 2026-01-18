@@ -15,6 +15,7 @@ import {
 } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
+import { RoundKeySchema } from '@progressView/persistence/schemaUtils';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -525,11 +526,11 @@ function normalizeOutputsByRound(
   const roundMap = new Map<number, OutputFileInfo[]>();
 
   for (const [roundKey, value] of entries) {
-    const round = Number.parseInt(roundKey, 10);
-    if (Number.isNaN(round) || !Array.isArray(value) || value.length === 0) {
+    const roundResult = RoundKeySchema.safeParse(roundKey);
+    if (!roundResult.success || !Array.isArray(value) || value.length === 0) {
       continue;
     }
-    roundMap.set(round, value);
+    roundMap.set(roundResult.data, value);
   }
 
   if (roundMap.size === 0) {
@@ -763,11 +764,11 @@ async function runLatexdiffViaWorkspaceScan(params: {
         continue;
       }
 
-      const round = Number.parseInt(match[1], 10);
-      if (Number.isNaN(round)) {
+      const roundResult = RoundKeySchema.safeParse(match[1]);
+      if (!roundResult.success) {
         continue;
       }
-      roundOutputsMap.set(round, path.join(outputDirPath, fileName));
+      roundOutputsMap.set(roundResult.data, path.join(outputDirPath, fileName));
     }
 
     if (roundOutputsMap.size > 0) {
