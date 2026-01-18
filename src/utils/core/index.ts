@@ -7,6 +7,8 @@ export {
   getPathSegments,
   normalizeLatexPath,
   hasExtension,
+  joinLatexPath,
+  ensureExtension,
 } from './pathCore';
 export {
   isNonEmptyString,

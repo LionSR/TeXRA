@@ -105,6 +105,17 @@ export function createExternalLocation(
 }
 
 /**
+ * Get directory path from a FileLocation.
+ * Returns relativePath's directory for workspace/runStorage, absolutePath's for external.
+ */
+export function getFileDirectory(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return path.dirname(location.relativePath);
+  }
+  return path.dirname(location.absolutePath);
+}
+
+/**
  * Result of resolving a path against a workspace.
  * Used internally by path resolution functions.
  */
