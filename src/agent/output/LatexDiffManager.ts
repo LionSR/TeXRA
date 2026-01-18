@@ -16,7 +16,10 @@ import {
 } from '@utils/files';
 
 // Internal imports
-import { getComparablePath, getFileDirectory } from '@utils/files/taskRunStorage';
+import {
+  getComparablePath,
+  getFileDirectory,
+} from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
@@ -333,12 +336,11 @@ export class LatexDiffManager {
       path.dirname(diffLocation.absolutePath),
       'build',
     );
-    await this.dependencies.compileLatex2Pdf(
-      diffLocation,
-      this.channel,
-      buildDir,
-      true,
-    );
+    await this.dependencies.compileLatex2Pdf(diffLocation, {
+      channel: this.channel,
+      outputDirectory: buildDir,
+      compiler: 'latexmk',
+    });
 
     return diffLocation;
   }

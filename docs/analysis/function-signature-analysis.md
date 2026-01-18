@@ -4,28 +4,31 @@ Analysis of function signatures in the TeXRA codebase to identify opportunities 
 
 ## Executive Summary
 
-| Category | Functions Found | Key Finding |
-|----------|-----------------|-------------|
-| Long Signatures (4+ params) | 20 | Boolean flags, parameters always passed together |
-| Manual Default Handling | 18 | 32+ lines of boilerplate `??` chains |
-| Pseudo-Overloads | 22 | `typeof`/`Array.isArray` dispatch patterns |
-| Repeated Parameters | 15 patterns | Logger+Channel (45 occurrences), ExecutionIDs (20) |
+| Category                    | Functions Found | Key Finding                                        |
+| --------------------------- | --------------- | -------------------------------------------------- |
+| Long Signatures (4+ params) | 20              | Boolean flags, parameters always passed together   |
+| Manual Default Handling     | 18              | 32+ lines of boilerplate `??` chains               |
+| Pseudo-Overloads            | 22              | `typeof`/`Array.isArray` dispatch patterns         |
+| Repeated Parameters         | 15 patterns     | Logger+Channel (45 occurrences), ExecutionIDs (20) |
 
 ---
 
 ## Top 10 Functions for Schema-Based Refactoring
 
 ### 1. `resolveToolDefinitions` (CRITICAL)
+
 **File:** `src/tools/registry.ts:128`
 
 **Current Issues:**
+
 - Union parameter with typeof dispatch
 - Core tool system - affects all tool registrations
 
 **Current:**
+
 ```typescript
 export function resolveToolDefinitions(
-  tools: RawToolConfig[],  // Array of unions
+  tools: RawToolConfig[], // Array of unions
   warnOnMissing?: (toolName: string) => void,
 ): ToolDefinition[] {
   return tools.map((item): ToolDefinition => {
@@ -39,11 +42,9 @@ export function resolveToolDefinitions(
 ```
 
 **Proposed:**
+
 ```typescript
-const RawToolConfigSchema = z.union([
-  z.string(),
-  ToolDefinitionSchema,
-]);
+const RawToolConfigSchema = z.union([z.string(), ToolDefinitionSchema]);
 
 const ResolveToolsOptionsSchema = z.object({
   tools: z.array(RawToolConfigSchema),
@@ -60,13 +61,16 @@ export function resolveToolDefinitions(
 ---
 
 ### 2. `executeCommand` (CRITICAL)
+
 **File:** `src/utils/system/execUtils.ts:71`
 
 **Current Issues:**
+
 - 4+ lines of defaults at function start
 - Encoding transform logic inline
 
 **Current:**
+
 ```typescript
 async function executeCommand(
   command: string | string[],
@@ -84,12 +88,16 @@ async function executeCommand(
 ```
 
 **Proposed:**
+
 ```typescript
 const ExecOptionsSchema = z.object({
   cwd: z.string().optional(),
   channel: z.string().default(CHANNEL),
   truncate: z.boolean().default(false),
-  encoding: z.enum(['utf8', 'utf-8']).transform(e => e === 'utf-8' ? 'utf8' : e).default('utf8'),
+  encoding: z
+    .enum(['utf8', 'utf-8'])
+    .transform((e) => (e === 'utf-8' ? 'utf8' : e))
+    .default('utf8'),
   timeout: z.number().optional(),
   env: z.record(z.string()).optional(),
   stdin: z.string().optional(),
@@ -99,12 +107,15 @@ const ExecOptionsSchema = z.object({
 ---
 
 ### 3. `prepareFilters` (HIGH)
+
 **File:** `src/frontend/files/listing.ts:126`
 
 **Current Issues:**
+
 - 5 lines of nullish coalescing defaults
 
 **Current:**
+
 ```typescript
 function prepareFilters(
   patternRoot: string,
@@ -120,6 +131,7 @@ function prepareFilters(
 ```
 
 **Proposed:**
+
 ```typescript
 const ListingOptionsSchema = z.object({
   includeExtensions: z.array(z.string()).default([]),
@@ -133,14 +145,17 @@ const ListingOptionsSchema = z.object({
 ---
 
 ### 4. `emitClearMissingOutputs` (HIGH)
+
 **File:** `src/commands/housekeeping/streamEventUtils.ts:8`
 
 **Current Issues:**
+
 - 5 positional parameters
 - First 3 always passed together (stream identifier)
 - Boolean flag without semantic clarity
 
 **Current:**
+
 ```typescript
 export function emitClearMissingOutputs(
   agent: string,
@@ -148,10 +163,11 @@ export function emitClearMissingOutputs(
   inputFile: string,
   useMultipleOutputs: boolean,
   streamId?: string,
-): void
+): void;
 ```
 
 **Proposed:**
+
 ```typescript
 const ClearMissingOutputsParamsSchema = z.object({
   streamConfig: z.object({
@@ -169,13 +185,16 @@ const ClearMissingOutputsParamsSchema = z.object({
 ---
 
 ### 5. `applyReplacements` (HIGH)
+
 **File:** `src/replacement/engine.ts:252`
 
 **Current Issues:**
+
 - Union parameter with Array.isArray dispatch
 - Core text replacement engine
 
 **Current:**
+
 ```typescript
 export function applyReplacements(
   text: string,
@@ -190,10 +209,11 @@ export function applyReplacements(
 ```
 
 **Proposed:**
+
 ```typescript
 const ApplyReplacementsOptionsSchema = z.object({
   text: z.string(),
-  replacements: z.array(ReplacementCategorySchema),  // Always array
+  replacements: z.array(ReplacementCategorySchema), // Always array
   processMathUnicode: z.boolean().optional(),
 });
 ```
@@ -201,19 +221,23 @@ const ApplyReplacementsOptionsSchema = z.object({
 ---
 
 ### 6. `formatToolUse` / `formatWebSearch` (HIGH)
+
 **File:** `src/progressView/modules/formatters/logFormatters/toolFormatters.js:79,183`
 
 **Current Issues:**
+
 - 4 parameters always passed together
 - logId, groupId, timestamp form a context tuple
 
 **Current:**
+
 ```javascript
 export function formatToolUse(normalizedPayload, logId, groupId, timestamp)
 export function formatWebSearch(normalizedPayload, logId, groupId, timestamp)
 ```
 
 **Proposed:**
+
 ```typescript
 const FormatterContextSchema = z.object({
   logId: z.string(),
@@ -230,23 +254,27 @@ const FormatToolUseParamsSchema = z.object({
 ---
 
 ### 7. `compileLatex2Pdf` (MEDIUM)
+
 **File:** `src/latex/texTools.ts:24`
 
 **Current Issues:**
+
 - 4 parameters with multiple defaults
 - Boolean `useLatexmk` lacks semantic clarity
 
 **Current:**
+
 ```typescript
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
   channel: string = CHANNEL,
   outputDirectory?: string,
   useLatexmk: boolean = false,
-): Promise<boolean>
+): Promise<boolean>;
 ```
 
 **Proposed:**
+
 ```typescript
 const CompileLatex2PdfOptionsSchema = z.object({
   latexLocation: FileLocationSchema,
@@ -261,13 +289,16 @@ const CompileLatex2PdfOptionsSchema = z.object({
 ---
 
 ### 8. `createStream` (HIGH)
+
 **File:** `src/logger/AgentLogger.ts:612`
 
 **Current Issues:**
+
 - 3 defaults at function start
 - High-use logging method
 
 **Current:**
+
 ```typescript
 createStream(type: MessageType, options: AgentLogStreamOptions = {}): AgentLogStream {
   const level = options.level ?? 'info';
@@ -278,6 +309,7 @@ createStream(type: MessageType, options: AgentLogStreamOptions = {}): AgentLogSt
 ```
 
 **Proposed:**
+
 ```typescript
 const AgentLogStreamOptionsSchema = z.object({
   level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -289,23 +321,27 @@ const AgentLogStreamOptionsSchema = z.object({
 ---
 
 ### 9. `handlePackLatexdiffvc` (MEDIUM)
+
 **File:** `src/commands/latex/latexdiffCommands.ts:255`
 
 **Current Issues:**
+
 - 4 parameters with boolean flag
 - Confusing clean mode semantics
 
 **Current:**
+
 ```typescript
 async function handlePackLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
   clean: boolean,
-)
+);
 ```
 
 **Proposed:**
+
 ```typescript
 const PackLatexdiffVcOptionsSchema = z.object({
   files: z.object({
@@ -320,13 +356,16 @@ const PackLatexdiffVcOptionsSchema = z.object({
 ---
 
 ### 10. `ArxivSearchTool.execute` (MEDIUM)
+
 **File:** `src/tools/arxiv/ArxivSearchTool.ts:59`
 
 **Current Issues:**
+
 - 4 defaults scattered through function body
 - Repeated default application
 
 **Current:**
+
 ```typescript
 protected async execute(input: ArxivSearchInput) {
   const searchField = input.field ?? 'all';
@@ -339,6 +378,7 @@ protected async execute(input: ArxivSearchInput) {
 ```
 
 **Proposed:**
+
 ```typescript
 const ArxivSearchInputSchema = z.object({
   query: z.string().min(1),
@@ -356,6 +396,7 @@ const ArxivSearchInputSchema = z.object({
 These base schemas would eliminate duplication across many functions:
 
 ### LoggerContext (45 occurrences)
+
 ```typescript
 export const LoggerContextSchema = z.object({
   logger: z.instanceof(AgentLogger),
@@ -364,6 +405,7 @@ export const LoggerContextSchema = z.object({
 ```
 
 ### ExecutionContext (20 occurrences)
+
 ```typescript
 export const ExecutionContextSchema = z.object({
   streamId: z.string().brand<'StreamTabId'>(),
@@ -372,6 +414,7 @@ export const ExecutionContextSchema = z.object({
 ```
 
 ### GuardContext (15 functions)
+
 ```typescript
 export const GuardContextSchema = z.object({
   channel: z.string(),
@@ -381,6 +424,7 @@ export const GuardContextSchema = z.object({
 ```
 
 ### FormatterContext (formatter functions)
+
 ```typescript
 export const FormatterContextSchema = z.object({
   logId: z.string(),
@@ -394,21 +438,25 @@ export const FormatterContextSchema = z.object({
 ## Implementation Priority
 
 ### Phase 1 - Foundation (Highest Impact)
+
 1. Create `LoggerContextSchema` - eliminates 45 parameter pairs
 2. Create `ExecutionContextSchema` - eliminates 20 parameter pairs
 3. Refactor `executeCommand` - heavily used utility
 
 ### Phase 2 - Core Functions
+
 4. `resolveToolDefinitions` - affects entire tool system
 5. `prepareFilters` - file listing foundation
 6. `applyReplacements` - replacement engine
 
 ### Phase 3 - Command Layer
+
 7. `emitClearMissingOutputs` - stream management
 8. `formatToolUse`/`formatWebSearch` - formatter pattern
 9. `createStream` - logging infrastructure
 
 ### Phase 4 - Domain-Specific
+
 10. `compileLatex2Pdf`, `handlePackLatexdiffvc`, `ArxivSearchTool.execute`
 
 ---
@@ -416,6 +464,7 @@ export const FormatterContextSchema = z.object({
 ## Detailed Findings by Category
 
 ### Long Signatures (20 functions)
+
 - `emitClearMissingOutputs` - 5 params
 - `handlePackLatexdiffvc` - 4 params with boolean
 - `compileLatex2Pdf` - 4 params with defaults
@@ -425,6 +474,7 @@ export const FormatterContextSchema = z.object({
 - `runPackLatexdiffvc` / `runPackLatexdiffvcMultiple` - 3 params with boolean
 
 ### Default Dance (18 functions, 32+ lines)
+
 - `prepareFilters` - 5 defaults
 - `executeCommand` - 4+ defaults
 - `ArxivSearchTool.execute` - 4 defaults
@@ -433,12 +483,14 @@ export const FormatterContextSchema = z.object({
 - `selectFiles` - 2 defaults
 
 ### Pseudo-Overloads (22 functions)
+
 - `typeof` dispatch: 11 functions
 - `Array.isArray` dispatch: 12 functions
 - `instanceof` dispatch: 5 functions
 - `'in'` operator: 4 functions
 
 ### Repeated Parameter Patterns (15 patterns)
+
 - Logger + Channel: 45 occurrences
 - ExecutionIDs (streamId + executionId): 20 occurrences
 - Guard Options: 15 functions
