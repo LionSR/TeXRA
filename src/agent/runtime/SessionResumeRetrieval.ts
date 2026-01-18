@@ -88,55 +88,32 @@ const StateSlicesSchema = z.object({
   userChannels: UserVariableChannelsSchema,
 });
 
-/**
- * Current flat format schema (introduced with state flattening refactor).
- * Shared state has conversation and stateSlices at top level.
- */
-const FlatToolUseFlowRecordStateSchema = z.object({
+/** Core fields schema (shared between flat and legacy formats) */
+const ToolUseStateFieldsSchema = z.object({
   conversation: z.array(ProviderMessageSchema),
   stateSlices: StateSlicesSchema,
 });
 
 /**
- * Legacy format schema (pre-flattening).
- * Shared state is wrapped in a `state` property.
+ * Schema that accepts both flat and legacy formats, normalizing to flat.
+ * - Flat format: { conversation, stateSlices, ... }
+ * - Legacy format: { state: { conversation, stateSlices, ... } }
  */
-const LegacyToolUseFlowRecordStateSchema = z.object({
-  state: z.object({
-    conversation: z.array(ProviderMessageSchema),
-    stateSlices: StateSlicesSchema,
-  }),
-});
+const ToolUseFlowRecordStateSchema = z
+  .union([
+    ToolUseStateFieldsSchema,
+    z.object({ state: ToolUseStateFieldsSchema }),
+  ])
+  .transform((data) => ('state' in data ? data.state : data));
 
-/**
- * Normalized result from parsing either format.
- * Both schemas are transformed to this common structure.
- */
-interface NormalizedToolUseState {
-  conversation: z.infer<typeof ProviderMessageSchema>[];
-  stateSlices: z.infer<typeof StateSlicesSchema>;
-}
+type NormalizedToolUseState = z.infer<typeof ToolUseFlowRecordStateSchema>;
 
-/**
- * Parse tool-use flow record shared state, supporting both flat and legacy formats.
- * Returns normalized state structure regardless of input format.
- */
+/** Parse tool-use flow record state, returns null if invalid. */
 function parseToolUseFlowRecordState(
   shared: unknown,
 ): NormalizedToolUseState | null {
-  // Try flat format first (current)
-  const flatResult = FlatToolUseFlowRecordStateSchema.safeParse(shared);
-  if (flatResult.success) {
-    return flatResult.data;
-  }
-
-  // Fall back to legacy format (unwrap nested state)
-  const legacyResult = LegacyToolUseFlowRecordStateSchema.safeParse(shared);
-  if (legacyResult.success) {
-    return legacyResult.data.state;
-  }
-
-  return null;
+  const result = ToolUseFlowRecordStateSchema.safeParse(shared);
+  return result.success ? result.data : null;
 }
 
 /**
