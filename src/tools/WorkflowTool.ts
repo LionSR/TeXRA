@@ -143,7 +143,9 @@ const WorkflowAgentInputSchema = z.object({
   model: z.string().prefault('gemini3p').describe('Model to use'),
   instruction: z
     .string()
-    .describe('Self-contained instruction with all context needed'),
+    .describe(
+      'Self-contained plain prose instruction. The agent has no context, so include everything needed.',
+    ),
   inputFile: z.string().describe('Primary input file to process (required)'),
   inputFiles: z
     .array(z.string())
@@ -180,30 +182,14 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 export class WorkflowAgentTool extends defineTool({
   name: 'propose_workflow',
   description:
-    () => `Propose running a workflow agent for document processing. Creates a proposal for user approval in the ProgressBoard.
+    () => `Propose a workflow agent for document processing. Use when the task centers on transforming a specific file.
 
-**IMPORTANT:** The agent runs in a NEW session WITHOUT your context. Write SELF-SUFFICIENT instructions:
-- Include ALL relevant context, goals, and constraints
-- The agent cannot see your conversation or memory
-- Provide enough detail for the agent to succeed independently
-
-**Available Workflow Agents:**
+Available workflow agents:
 ${buildWorkflowAgentsList()}
 
-**Usage:**
-- Set agent name and inputFile (required)
-- Write a complete, self-contained instruction
-- Optionally specify outputFiles for custom paths
+Set agent name and inputFile (required). Write a self-contained instruction in plain prose. The agent has no access to your conversation, so include all context needed. Optionally specify outputFiles for custom paths.
 
-**Example:**
-agent="correct"
-inputFile="/workspace/paper.tex"
-instruction="This is a research paper about quantum computing. Fix grammar errors, improve sentence clarity, and ensure consistent terminology. Focus on the abstract and introduction."
-
-**User Response Options:**
-- Approve: Run immediately
-- Reject: Cancel with feedback (adjust and retry)
-- Setup: Edit in main view before running`,
+Example: agent=correct, inputFile=/workspace/paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -332,7 +318,7 @@ const DelegateAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe(
-      'Self-contained instruction with all context. Include file paths in the text.',
+      'Self-contained plain prose instruction. Include file paths naturally. Agent has no context.',
     ),
 });
 
@@ -342,30 +328,14 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'propose_agent',
   description:
-    () => `Delegate a task to another tool-use agent. Creates a proposal for user approval in the ProgressBoard.
+    () => `Propose a tool-use agent for exploration or research tasks. Use when the task requires searching, reading multiple files, or making decisions based on discoveries.
 
-**IMPORTANT:** The delegated agent runs in a NEW session WITHOUT your context. Write SELF-SUFFICIENT instructions:
-- Include ALL relevant context, file paths, goals, and constraints
-- The agent cannot see your conversation or memory
-- Mention file paths naturally in the instruction text
-- Provide enough detail for the agent to succeed independently
-
-**Available Tool-Use Agents:**
+Available tool-use agents:
 ${buildToolUseAgentsList()}
 
-**Usage:**
-- Set agent name and instruction (both required)
-- Include file paths and context IN the instruction
-- The delegated agent uses its own tools (read_file, etc.) to access files
+Set agent name and write a self-contained instruction in plain prose. The agent has no access to your conversation, so include all context and file paths needed. Mention file paths naturally within the instruction text.
 
-**Example:**
-agent="search"
-instruction="Read the paper at /workspace/paper.tex which proposes a new attention mechanism called FlashAttention-3. Search the web for 3-5 related papers on efficient transformer attention mechanisms that we should cite in the related work section."
-
-**User Response Options:**
-- Approve: Run immediately
-- Reject: Cancel with feedback (adjust and retry)
-- Setup: Edit in main view before running`,
+Example: agent=search, instruction="The paper at /workspace/paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
