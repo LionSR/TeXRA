@@ -109,8 +109,8 @@ export class OutputFilesManager extends PersistentMapManager<
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
-      const roundNum = Number.parseInt(round, 10);
-      if (Number.isNaN(roundNum)) {
+      const roundResult = RoundKeySchema.safeParse(round);
+      if (!roundResult.success) {
         this.logger.warn(
           `Invalid round number '${round}' for stream ${stream}`,
         );
@@ -120,11 +120,11 @@ export class OutputFilesManager extends PersistentMapManager<
         Array.isArray(files) ? files : [],
       );
       if (normalizedFiles.length === 0) {
-        runRounds.delete(roundNum);
+        runRounds.delete(roundResult.data);
         continue;
       }
 
-      runRounds.set(roundNum, normalizedFiles);
+      runRounds.set(roundResult.data, normalizedFiles);
     }
 
     await this.save();
@@ -158,14 +158,14 @@ export class OutputFilesManager extends PersistentMapManager<
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
-      const roundNum = Number.parseInt(round, 10);
-      if (Number.isNaN(roundNum)) {
+      const roundResult = RoundKeySchema.safeParse(round);
+      if (!roundResult.success) {
         this.logger.warn(
           `Invalid missing-output round '${round}' for stream ${stream}`,
         );
         continue;
       }
-      runMissing.set(roundNum, files);
+      runMissing.set(roundResult.data, files);
     }
 
     await this.saveMissingOutputs();
