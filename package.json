@@ -1675,6 +1675,7 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.53.0",
+    "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1",
     "zod-v3-to-v4": "^1.12.1"
@@ -1750,7 +1751,6 @@
     "tar": "^7.5.2",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
-    "vscode-languageserver-protocol": "^3.17.5",
     "winston": "^3.19.0",
     "yaml": "^2.8.2",
     "zod": "^4.3.5"

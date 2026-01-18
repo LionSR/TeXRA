@@ -12,7 +12,10 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { ToolEditApprovalPrompt } from '@eventBus/types';
+import type {
+  ToolEditApprovalPrompt,
+  AgentProposalPrompt,
+} from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
@@ -76,6 +79,10 @@ export class ProgressViewProvider
     string,
     ProgressEventPayloads['showRetryRequest']
   >();
+  private readonly pendingAgentProposals = new Map<
+    string,
+    AgentProposalPrompt
+  >();
   private approvalBypassActive = false;
 
   constructor(
@@ -104,6 +111,8 @@ export class ProgressViewProvider
           this.resolveToolEditApprovalPrompt.bind(this),
         updateToolEditApprovalBypassState:
           this.updateToolEditApprovalBypassState.bind(this),
+        showAgentProposal: this.showAgentProposal.bind(this),
+        resolveAgentProposal: this.resolveAgentProposal.bind(this),
       },
     );
 
@@ -297,6 +306,10 @@ export class ProgressViewProvider
     for (const payload of this.pendingRetryRequests.values()) {
       this.webviewUpdater.showRetryRequest(payload);
     }
+
+    for (const proposal of this.pendingAgentProposals.values()) {
+      this.webviewUpdater.showAgentProposal(proposal);
+    }
   }
 
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
@@ -330,6 +343,24 @@ export class ProgressViewProvider
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
     this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
+  }
+
+  public showAgentProposal(prompt: AgentProposalPrompt): void {
+    this.pendingAgentProposals.set(prompt.proposalId, prompt);
+    this.sendIfReady(() => this.webviewUpdater.showAgentProposal(prompt));
+  }
+
+  public resolveAgentProposal(proposalId: string): void {
+    this.pendingAgentProposals.delete(proposalId);
+    this.sendIfReady(() =>
+      this.webviewUpdater.resolveAgentProposal(proposalId),
+    );
+  }
+
+  public getPendingAgentProposal(
+    proposalId: string,
+  ): AgentProposalPrompt | undefined {
+    return this.pendingAgentProposals.get(proposalId);
   }
 
   /** Send to webview if ready, otherwise skip (pending state will be replayed later) */

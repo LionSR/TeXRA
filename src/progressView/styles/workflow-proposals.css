@@ -1,0 +1,168 @@
+/**
+ * Workflow proposals - component-specific styles
+ * Shared styles are in requests-shared.css
+ */
+
+/* Container theme - info style */
+.workflow-proposals {
+  border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+  background: var(--vscode-inputValidation-infoBackground, #d6ecf2);
+}
+
+.workflow-proposals__header .codicon {
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Button flex basis */
+.workflow-proposal__actions vscode-toolbar-button {
+  flex: 1 1 6rem;
+}
+
+/* Proposal card */
+.workflow-proposal {
+  position: relative;
+}
+
+/* Header row with agent and model */
+.workflow-proposal__header-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-medium);
+  flex-wrap: wrap;
+}
+
+/* Category badge */
+.workflow-proposal__category-badge {
+  font-size: var(--font-size-xs, 0.7rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.workflow-proposal__category-badge--workflow {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.workflow-proposal__category-badge--tool-use {
+  background: var(--vscode-textLink-foreground);
+  color: var(--vscode-editor-background);
+}
+
+.workflow-proposal__agent {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+}
+
+.workflow-proposal__model {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.workflow-proposal__model::before {
+  content: '\2022';
+  margin-right: var(--spacing-small);
+}
+
+/* Instruction - full text, scrollable */
+.workflow-proposal__instruction {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-editor-foreground);
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-height: 12em;
+  overflow-y: auto;
+  line-height: 1.4;
+  padding: var(--spacing-small) 0;
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+}
+
+/* Files section */
+.workflow-proposal__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+  margin-top: var(--spacing-small);
+}
+
+.workflow-proposal__files > div {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-editor-foreground);
+  line-height: 1.4;
+}
+
+.workflow-proposal__files > div[hidden] {
+  display: none;
+}
+
+/* File label (Input, Reference, etc.) */
+.workflow-proposal__file-label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* File names - clickable to open */
+.workflow-proposal__file-name {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+
+.workflow-proposal__file-name:hover {
+  text-decoration: underline;
+  color: var(
+    --vscode-textLink-activeForeground,
+    var(--vscode-textLink-foreground)
+  );
+}
+
+/* Highlight input files */
+.workflow-proposal__input-files .workflow-proposal__file-label {
+  color: var(--vscode-editor-foreground);
+}
+
+/* Highlight output files */
+.workflow-proposal__output-files .workflow-proposal__file-label {
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Feedback section */
+.workflow-proposal__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.workflow-proposal__feedback[hidden] {
+  display: none;
+}
+
+.workflow-proposal__feedback-input {
+  width: 100%;
+}
+
+/* Action button colors */
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='approve']::part(control) {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='reject']::part(control) {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.workflow-proposal__actions
+  vscode-toolbar-button[data-action='setup']::part(control) {
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Reject button when feedback is shown */
+.workflow-proposal--feedback-active
+  .workflow-proposal__actions
+  vscode-toolbar-button[data-action='reject']::part(control) {
+  color: var(--vscode-inputValidation-warningBorder);
+}
