@@ -79,7 +79,7 @@ export class ProgressViewProvider
     string,
     ProgressEventPayloads['showRetryRequest']
   >();
-  private readonly pendingWorkflowAgentProposals = new Map<
+  private readonly pendingAgentProposals = new Map<
     string,
     AgentProposalPrompt
   >();
@@ -307,7 +307,7 @@ export class ProgressViewProvider
       this.webviewUpdater.showRetryRequest(payload);
     }
 
-    for (const proposal of this.pendingWorkflowAgentProposals.values()) {
+    for (const proposal of this.pendingAgentProposals.values()) {
       this.webviewUpdater.showAgentProposal(proposal);
     }
   }
@@ -346,21 +346,21 @@ export class ProgressViewProvider
   }
 
   public showAgentProposal(prompt: AgentProposalPrompt): void {
-    this.pendingWorkflowAgentProposals.set(prompt.proposalId, prompt);
+    this.pendingAgentProposals.set(prompt.proposalId, prompt);
     this.sendIfReady(() => this.webviewUpdater.showAgentProposal(prompt));
   }
 
   public resolveAgentProposal(proposalId: string): void {
-    this.pendingWorkflowAgentProposals.delete(proposalId);
+    this.pendingAgentProposals.delete(proposalId);
     this.sendIfReady(() =>
       this.webviewUpdater.resolveAgentProposal(proposalId),
     );
   }
 
-  public getPendingWorkflowAgentProposal(
+  public getPendingAgentProposal(
     proposalId: string,
   ): AgentProposalPrompt | undefined {
-    return this.pendingWorkflowAgentProposals.get(proposalId);
+    return this.pendingAgentProposals.get(proposalId);
   }
 
   /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
