@@ -26,18 +26,59 @@ const ActiveFilesSchema = z.partialRecord(
 ) as z.ZodType<Record<FileType, boolean>>;
 
 /**
- * Minimal agentConfig schema - validates the top-level agentCategory discriminant.
- * Uses the lifted agentCategory field (added via transform in AgentConfigSchema)
- * for simpler validation without deep nesting.
+ * Helper to extract agentCategory from either new or legacy format.
+ * - New format: agentConfig.agentCategory (lifted to top level)
+ * - Legacy format: agentConfig.session.agentCategory (nested in session)
  */
-const AgentConfigWithCategorySchema = z.looseObject({
-  agentCategory: z.enum(AgentCategory),
-});
+function getAgentCategory(
+  config: Record<string, unknown>,
+): AgentCategory | undefined {
+  // Try new format first (top-level agentCategory)
+  if (
+    'agentCategory' in config &&
+    typeof config.agentCategory === 'string' &&
+    Object.values(AgentCategory).includes(config.agentCategory as AgentCategory)
+  ) {
+    return config.agentCategory as AgentCategory;
+  }
+
+  // Fall back to legacy format (nested in session)
+  if (
+    'session' in config &&
+    typeof config.session === 'object' &&
+    config.session !== null &&
+    'agentCategory' in config.session
+  ) {
+    const session = config.session as Record<string, unknown>;
+    if (
+      typeof session.agentCategory === 'string' &&
+      Object.values(AgentCategory).includes(
+        session.agentCategory as AgentCategory,
+      )
+    ) {
+      return session.agentCategory as AgentCategory;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Minimal agentConfig schema - validates category from either location.
+ * Accepts both new format (agentConfig.agentCategory) and legacy format
+ * (agentConfig.session.agentCategory) for backwards compatibility with
+ * persisted task states.
+ */
+const AgentConfigWithCategorySchema = z
+  .looseObject({})
+  .refine((c) => getAgentCategory(c) !== undefined, {
+    error: 'Missing agentCategory in agentConfig',
+  });
 
 /** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigWithCategorySchema.refine(
-    (c) => c.agentCategory === AgentCategory.Workflow,
+    (c) => getAgentCategory(c) === AgentCategory.Workflow,
     { error: 'Expected Workflow category' },
   ),
   activeFiles: ActiveFilesSchema,
@@ -46,7 +87,7 @@ const WorkflowTaskStateSchema = z.object({
 /** Schema for tool-use task state */
 const ToolUseTaskStateSchema = z.object({
   agentConfig: AgentConfigWithCategorySchema.refine(
-    (c) => c.agentCategory === AgentCategory.ToolUse,
+    (c) => getAgentCategory(c) === AgentCategory.ToolUse,
     { error: 'Expected ToolUse category' },
   ),
   toolSessionState: ToolSessionStateSchema.optional(),
