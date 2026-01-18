@@ -227,10 +227,8 @@ async function resolveAgentBase(
     providedExecutionId ?? (randomUUID() as ExecutionId);
 
   // 1. Resolve agent definition
-  const fullConfig = AgentConfigSchema.parse({
-    agent: agentName,
-    ...configPayload,
-  });
+  // configPayload already contains agent (required by AgentConfigPayload)
+  const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
