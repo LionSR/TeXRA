@@ -60,6 +60,7 @@ export interface ProgressEventPayloads {
   showAgentProposal: AgentProposalPrompt;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
+  updateQueuedFollowUps: { streamId: StreamTabId };
   extensionDeactivating: undefined;
 }
 
