@@ -63,3 +63,28 @@ function getExtensionLowercase(filePath: string): string {
 export function hasExtension(filePath: string, extension: string): boolean {
   return getExtensionLowercase(filePath) === extension.toLowerCase();
 }
+
+/**
+ * Join a base directory with a relative path, stripping leading/trailing slashes.
+ * Used by LaTeX file extraction (figures, bibliography) to resolve relative paths.
+ *
+ * @example
+ * joinLatexPath('/project', 'figures/image.pdf') // '/project/figures/image.pdf'
+ * joinLatexPath('/project', '/figures/') // '/project/figures'
+ */
+export function joinLatexPath(baseDir: string, relativePath: string): string {
+  const stripped = relativePath.replaceAll(/^\/+|\/+$/g, '');
+  return path.normalize(path.join(baseDir, stripped));
+}
+
+/**
+ * Ensure a path has a specific file extension (adds if missing).
+ *
+ * @example
+ * ensureExtension('refs', '.bib') // 'refs.bib'
+ * ensureExtension('refs.bib', '.bib') // 'refs.bib'
+ */
+export function ensureExtension(filePath: string, extension: string): string {
+  if (!filePath) return '';
+  return filePath.endsWith(extension) ? filePath : `${filePath}${extension}`;
+}

@@ -21,8 +21,15 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo, RoundFileMapping } from './types';
+
+/** Get directory path from a FileLocation. */
+function getFileDirectory(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return path.dirname(location.relativePath);
+  }
+  return path.dirname(location.absolutePath);
+}
 
 /**
  * Result of a latexdiff operation with file locations.
