@@ -5,7 +5,6 @@ export * from './outputFileUtils';
 export * from './priceUtils';
 export * from './UsageMonitor';
 export * from './debugMessageSaver';
-export * from './continuationMessage';
 export * from './mergeFileUtils';
 
 // Note: Prompt utilities are NOT re-exported here.

@@ -18,7 +18,11 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import {
+  AbsoluteFS,
+  TaskRunFileService,
+  getFileDirectory,
+} from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
   DOCUMENT_NAME_REGEX,
@@ -31,7 +35,6 @@ import {
 } from '@utils/text/xmlUtils';
 
 // Local file imports
-import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo } from './types';
 
 /** Shared XMLParser configuration for scratchpad output extraction */

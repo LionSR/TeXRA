@@ -22,6 +22,7 @@ import { type ToolResult, type LineChanges } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
+import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -205,18 +206,6 @@ function countNewlines(value: string): number {
   return (value.match(/\n/g) ?? []).length;
 }
 
-function countChangedLines(text: string): number {
-  if (!text) {
-    return 0;
-  }
-
-  const normalized = text.replaceAll('\r\n', '\n');
-  const segments = normalized.split('\n');
-  return normalized.endsWith('\n')
-    ? Math.max(segments.length - 1, 0)
-    : segments.length;
-}
-
 function createSemanticDiffs(
   original: string,
   proposed: string,
@@ -242,9 +231,9 @@ function computeLineChangeSummary(
 
   for (const [type, text] of diffs) {
     if (type === DIFF_INSERT) {
-      added += countChangedLines(text);
+      added += countLines(text);
     } else if (type === DIFF_DELETE) {
-      removed += countChangedLines(text);
+      removed += countLines(text);
     }
   }
 
