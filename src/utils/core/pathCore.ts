@@ -67,24 +67,31 @@ export function hasExtension(filePath: string, extension: string): boolean {
 /**
  * Join a base directory with a relative path, stripping leading/trailing slashes.
  * Used by LaTeX file extraction (figures, bibliography) to resolve relative paths.
+ * Preserves absolute paths (starting with / or drive letter) without joining.
  *
  * @example
  * joinLatexPath('/project', 'figures/image.pdf') // '/project/figures/image.pdf'
- * joinLatexPath('/project', '/figures/') // '/project/figures'
+ * joinLatexPath('/project', '/abs/refs') // '/abs/refs' (absolute preserved)
  */
 export function joinLatexPath(baseDir: string, relativePath: string): string {
+  // Preserve absolute paths (Unix / or Windows C:\)
+  if (path.isAbsolute(relativePath)) {
+    return path.normalize(relativePath);
+  }
   const stripped = relativePath.replaceAll(/^\/+|\/+$/g, '');
   return path.normalize(path.join(baseDir, stripped));
 }
 
 /**
  * Ensure a path has a specific file extension (adds if missing).
+ * Case-insensitive check using hasExtension.
  *
  * @example
  * ensureExtension('refs', '.bib') // 'refs.bib'
  * ensureExtension('refs.bib', '.bib') // 'refs.bib'
+ * ensureExtension('refs.BIB', '.bib') // 'refs.BIB' (no duplicate)
  */
 export function ensureExtension(filePath: string, extension: string): string {
   if (!filePath) return '';
-  return filePath.endsWith(extension) ? filePath : `${filePath}${extension}`;
+  return hasExtension(filePath, extension) ? filePath : `${filePath}${extension}`;
 }
