@@ -18,7 +18,7 @@ import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
-  WorkflowAgentProposalPrompt,
+  AgentProposalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
@@ -215,14 +215,14 @@ export class WebviewUpdater {
     });
   }
 
-  showWorkflowAgentProposal(proposal: WorkflowAgentProposalPrompt): void {
+  showAgentProposal(proposal: AgentProposalPrompt): void {
     this.sendMessage({
       command: COMMANDS.SHOW_WORKFLOW_AGENT_PROPOSAL,
       proposal,
     });
   }
 
-  resolveWorkflowAgentProposal(proposalId: string): void {
+  resolveAgentProposal(proposalId: string): void {
     this.sendMessage({
       command: COMMANDS.RESOLVE_WORKFLOW_AGENT_PROPOSAL,
       proposalId,
