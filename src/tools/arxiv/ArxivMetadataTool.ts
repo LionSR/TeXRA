@@ -17,7 +17,10 @@ import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),
-  includeAbstract: z.boolean().nullish(),
+  includeAbstract: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? true),
   maxAuthors: z.int().positive().max(ARXIV_CONSTANTS.MAX_AUTHORS).nullish(),
 });
 
@@ -58,7 +61,7 @@ export class ArxivMetadataTool extends defineTool({
       targetEntry,
       input.maxAuthors ?? undefined,
     );
-    const includeAbstract = input.includeAbstract ?? true;
+    const { includeAbstract } = input;
 
     const metadata: ArxivPaperMetadata = {
       ...base,
