@@ -18,6 +18,15 @@ export class WorkflowProposals extends BaseUIRequestManager {
     });
   }
 
+  _getFeedbackConfig() {
+    return {
+      containerClass: 'workflow-proposal',
+      feedbackClass: 'workflow-proposal__feedback',
+      inputClass: 'workflow-proposal__feedback-input',
+      activeClass: 'workflow-proposal--feedback-active',
+    };
+  }
+
   _createRequestElement(request) {
     const element = createFromTemplate('workflowProposalTemplate');
     if (!element) {
@@ -148,35 +157,15 @@ export class WorkflowProposals extends BaseUIRequestManager {
 
     if (!['approve', 'reject', 'setup'].includes(action)) return;
 
-    // Handle reject with feedback toggle
+    // Handle reject with feedback toggle (uses shared base class logic)
     if (action === 'reject') {
-      const proposalElem = button.closest('.workflow-proposal');
-      const feedbackSection = proposalElem?.querySelector(
-        '.workflow-proposal__feedback',
+      const handled = this._handleRejectWithFeedback(
+        button,
+        proposalId,
+        COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
+        'proposalId',
       );
-      const feedbackInput = feedbackSection?.querySelector(
-        '.workflow-proposal__feedback-input',
-      );
-
-      if (feedbackSection && feedbackInput) {
-        if (feedbackSection.hidden) {
-          // First click: show feedback section
-          feedbackSection.hidden = false;
-          proposalElem.classList.add('workflow-proposal--feedback-active');
-          button.textContent = 'Submit';
-          button.title = 'Submit rejection with feedback';
-          feedbackInput.focus();
-          return;
-        }
-        // Second click: submit with feedback
-        vscode.postMessage({
-          command: COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION,
-          proposalId,
-          action,
-          feedback: feedbackInput.value?.trim() || undefined,
-        });
-        return;
-      }
+      if (handled) return;
     }
 
     vscode.postMessage({

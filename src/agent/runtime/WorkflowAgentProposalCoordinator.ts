@@ -9,8 +9,15 @@
 
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentProposal } from '@eventBus/types';
+import {
+  BasePromiseCoordinator,
+  type CoordinatorConfig,
+} from './BasePromiseCoordinator';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 /** Result of an agent proposal (workflow or tool-use). */
 export type ProposalResult =
@@ -26,124 +33,78 @@ export interface ProposalRequestOptions {
   timeoutMs?: number;
 }
 
-/** Internal state: pending (waiting for user) or resolved (done). */
-type ProposalRequestState =
-  | {
-      status: 'pending';
-      resolve: (result: ProposalResult) => void;
-      timeoutId?: NodeJS.Timeout;
-      proposalId: string;
-    }
-  | { status: 'resolved' };
+/** Payload for show event */
+interface ProposalShowPayload {
+  proposalId: string;
+  streamId: string;
+  [key: string]: unknown; // Spread from proposal
+}
 
-/** Manages pending workflow agent proposals (singleton). */
-class WorkflowAgentProposalCoordinatorImpl {
-  private readonly proposals = new Map<string, ProposalRequestState>();
+// ============================================================================
+// Coordinator Implementation
+// ============================================================================
 
-  /** Wait for user action on a proposal. Resolves when user approves, rejects, or timeout. */
-  waitForUserAction(
+/** Manages pending workflow agent proposals. */
+class WorkflowAgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+  ProposalResult,
+  ProposalShowPayload
+> {
+  protected readonly config: CoordinatorConfig = {
+    showEventName: 'showAgentProposal',
+    resolveEventName: 'resolveAgentProposal',
+    idFieldName: 'proposalId',
+  };
+
+  protected getDefaultCancelResult(): ProposalResult {
+    return { action: 'reject' };
+  }
+
+  /** Wait for user action on a proposal. Uses different signature from base class. */
+  waitForProposal(
     streamId: string,
     options: ProposalRequestOptions,
   ): Promise<ProposalResult> {
     const { proposalId, proposal, timeoutMs } = options;
 
-    // Cancel any existing pending proposal for this ID
-    const existing = this.proposals.get(proposalId);
-    if (existing?.status === 'pending') {
-      clearTimeout(existing.timeoutId);
-      existing.resolve({ action: 'reject' });
-    }
+    // Show progress view to ensure user sees the proposal
+    void safeExecuteCommand('texra.showProgressView');
 
-    return new Promise<ProposalResult>((resolve) => {
-      const timeoutId =
-        timeoutMs && timeoutMs > 0
-          ? setTimeout(() => {
-              const req = this.proposals.get(proposalId);
-              if (req?.status === 'pending' && req.resolve === resolve) {
-                this.resolveProposal(proposalId, { action: 'timeout' });
-              }
-            }, timeoutMs)
-          : undefined;
-
-      this.proposals.set(proposalId, {
-        status: 'pending',
-        resolve,
-        timeoutId,
-        proposalId,
-      });
-
-      void safeExecuteCommand('texra.showProgressView');
-      bus.emit('showAgentProposal', {
-        proposalId,
-        streamId,
-        ...proposal,
-      });
-    });
+    return this.waitForUserAction(
+      proposalId,
+      { proposalId, streamId, ...proposal },
+      { timeoutMs },
+    );
   }
 
   /** Approve a proposal. Returns true if approved, false if no pending proposal. */
   approveProposal(proposalId: string): boolean {
-    if (!this.getPendingProposal(proposalId)) return false;
-    this.resolveProposal(proposalId, { action: 'approve' });
-    return true;
+    return this.resolveRequest(proposalId, { action: 'approve' });
   }
 
   /** Reject a proposal with optional feedback. Returns true if rejected. */
   rejectProposal(proposalId: string, feedback?: string): boolean {
-    if (!this.getPendingProposal(proposalId)) return false;
-    this.resolveProposal(proposalId, { action: 'reject', feedback });
-    return true;
+    return this.resolveRequest(proposalId, { action: 'reject', feedback });
   }
 
   /** Open proposal in main view for editing. Returns true if initiated. */
   setupProposal(proposalId: string): boolean {
-    if (!this.getPendingProposal(proposalId)) return false;
-    this.resolveProposal(proposalId, { action: 'setup' });
-    return true;
+    return this.resolveRequest(proposalId, { action: 'setup' });
   }
 
+  /** Check if a proposal is pending. */
   hasPendingProposal(proposalId: string): boolean {
-    return this.getPendingProposal(proposalId) !== null;
+    return this.hasPendingRequest(proposalId);
   }
 
-  /** Clear a pending proposal. Used for cleanup when flow is cancelled externally. */
+  /** Clear a pending proposal. */
   clearProposal(proposalId: string): void {
-    const req = this.getPendingProposal(proposalId);
-    if (!req) return;
-
-    clearTimeout(req.timeoutId);
-    req.resolve({ action: 'reject' }); // Avoid hanging Promise
-    this.cleanup(proposalId);
-  }
-
-  private getPendingProposal(
-    proposalId: string,
-  ): (ProposalRequestState & { status: 'pending' }) | null {
-    const req = this.proposals.get(proposalId);
-    return req?.status === 'pending' ? req : null;
-  }
-
-  private resolveProposal(proposalId: string, result: ProposalResult): void {
-    const req = this.getPendingProposal(proposalId);
-    if (!req) return;
-
-    clearTimeout(req.timeoutId);
-    req.resolve(result);
-    this.cleanup(proposalId);
-  }
-
-  private cleanup(proposalId: string): void {
-    this.proposals.set(proposalId, { status: 'resolved' });
-    bus.emit('resolveAgentProposal', { proposalId });
-
-    // Defer deletion to avoid blocking current execution
-    setImmediate(() => {
-      if (this.proposals.get(proposalId)?.status === 'resolved') {
-        this.proposals.delete(proposalId);
-      }
-    });
+    this.clearRequest(proposalId);
   }
 }
+
+// ============================================================================
+// Singleton Export
+// ============================================================================
 
 /** Singleton coordinator instance. */
 export const proposalCoordinator = new WorkflowAgentProposalCoordinatorImpl();

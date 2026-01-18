@@ -239,7 +239,7 @@ export type InfoMessage = z.infer<typeof InfoMessageSchema>;
 export const ApprovalActionMessageSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(PROGRESS_VIEW_APPROVAL_ACTIONS),
-  note: z.string().optional(),
+  feedback: z.string().optional(),
 });
 
 export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
