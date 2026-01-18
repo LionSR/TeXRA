@@ -25,29 +25,26 @@ A new `runs` tool providing read-only virtual filesystem access to execution sto
 
 ```
 /runs                        → List all executions
-/runs/current                → Alias for active execution
-/runs/{id}                   → Summary + conversation history
-/runs/{id}/config            → AgentConfig JSON
+/runs/{id}                   → Execution detail (config + conversation)
 /runs/{id}/files             → List generated files
 /runs/{id}/files/{path}      → Read file content
 ```
 
+Use `current` as `{id}` to access the active execution.
+
 ### Design Principles
 
-1. **Minimal surface** - 5 path patterns, not 12
-2. **Read-only** - History is immutable
-3. **Agent-type agnostic** - Works for both tool-use and workflow agents (both have `conversation[]`)
-4. **No over-abstraction** - Single tool file, no elaborate backend hierarchy
-5. **Follows existing patterns** - Mirrors `/memories` tool interface
+1. **Minimal surface** - 4 path patterns
+2. **Read-only** - History is immutable, no `command` parameter needed
+3. **Agent-type agnostic** - Works for both tool-use and workflow agents
+4. **Single file** - `src/tools/RunsTool.ts`, no subdirectory
+5. **Config merged into detail** - `/runs/{id}` shows config + conversation together
 
 ## Schema
 
 ```typescript
 const RunsToolInputSchema = z.strictObject({
-  /** Only 'view' supported - runs are read-only */
-  command: z.literal('view'),
-
-  /** Virtual path starting with /runs */
+  /** Virtual path: /runs, /runs/{id}, /runs/{id}/files, /runs/{id}/files/{path} */
   path: z.string(),
 
   /** Optional line range [start, end] for large outputs */
@@ -55,29 +52,24 @@ const RunsToolInputSchema = z.strictObject({
 });
 ```
 
+No `command` parameter - it's always "view" (read-only).
+
 ## Path Semantics
 
 | Path | Source | Returns |
 |------|--------|---------|
-| `/runs` | `AgentHistoryManager.getHistory()` | List: id, agent, timestamp, status |
-| `/runs/{id}` | `ExecutionKVStore` → `flow:{id}` | Header + `conversation[]` formatted |
-| `/runs/{id}/config` | `ExecutionKVStore` → `flow:{id}` | `agentConfig` as JSON |
+| `/runs` | `AgentHistoryManager.getHistory()` | List: id, timestamp, agent, model, summary |
+| `/runs/{id}` | History + `ExecutionKVStore` | Config + conversation combined |
 | `/runs/{id}/files` | `StorageFS` → `taskRuns/{id}/` | Directory listing |
 | `/runs/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content |
 
-### Special: `/runs/current`
+### Special: `current`
 
-Resolves to the active execution via `ToolFileInteractionContext.executionId`.
+Use `current` as execution ID to access the active session:
 
-```typescript
-function resolveExecutionId(id: string): string {
-  if (id === 'current') {
-    const ctx = getCurrentToolFileInteractionContext();
-    if (!ctx?.executionId) throw new Error('No active execution');
-    return ctx.executionId;
-  }
-  return id;
-}
+```
+runs({ path: '/runs/current' })
+runs({ path: '/runs/current/files' })
 ```
 
 ## Storage Architecture (Unchanged)
@@ -103,50 +95,52 @@ Both agent types store accumulated messages in `shared.conversation[]`. The tool
 
 ```
 // List past executions
-runs({ command: 'view', path: '/runs' })
-→ abc123  research-assistant  2024-01-15 10:30  completed
-  def456  latex-rewriter      2024-01-15 11:00  completed
-  ...
+runs({ path: '/runs' })
+→ abc123  2024-01-15T10:30:00Z  research-assistant  sonnet45  Find related work...
+  def456  2024-01-15T11:00:00Z  latex-rewriter      gemini3p  Fix grammar errors...
 
-// View execution history
-runs({ command: 'view', path: '/runs/abc123' })
-→ Agent: research-assistant
-  Model: claude-sonnet-4-20250514
-  Started: 2024-01-15 10:30:00
-  Status: completed
+// View execution detail (config + conversation)
+runs({ path: '/runs/abc123' })
+→ === Config ===
+  Agent: research-assistant
+  Model: sonnet45
+  Timestamp: 2024-01-15T10:30:00Z
+  Task: Find related work
+  Tools: read_file, web_search, arxiv_search
 
-  [1] user: Find papers about quantum computing...
-  [2] assistant: I'll search for relevant papers...
-  [3] tool_use: arxiv_search({query: "quantum computing"})
-  [4] tool_result: Found 10 papers...
-  ...
+  === Conversation ===
 
-// View config (useful for proposing new runs)
-runs({ command: 'view', path: '/runs/abc123/config' })
-→ {
-    "agent": "research-assistant",
-    "model": "claude-sonnet-4-20250514",
-    "tools": ["read_file", "web_search", "arxiv_search"],
-    "session": {
-      "inputFiles": ["paper.tex"],
-      "taskSummary": "Find related work"
-    }
-  }
+  [1] user:
+  Find papers about quantum computing...
+
+  [2] assistant:
+  I'll search for relevant papers...
+
+  [3] assistant:
+  [tool_use: arxiv_search({"query": "quantum computing"})]
+
+  [4] user:
+  [tool_result: Found 10 papers...]
 
 // List generated files
-runs({ command: 'view', path: '/runs/abc123/files' })
-→ output.tex      2,451 bytes
-  summary.md      1,203 bytes
-  original/
-    input.tex     3,102 bytes
+runs({ path: '/runs/abc123/files' })
+→ Files in /runs/abc123/files:
+
+      2.4K  output.tex
+      1.2K  summary.md
+    <dir>  original
+      3.1K  original/input.tex
 
 // Read generated file
-runs({ command: 'view', path: '/runs/abc123/files/output.tex' })
-→ [file content...]
+runs({ path: '/runs/abc123/files/output.tex' })
+→ File: /runs/abc123/files/output.tex
+
+  \documentclass{article}
+  ...
 
 // Access current session
-runs({ command: 'view', path: '/runs/current' })
-→ [current execution history so far]
+runs({ path: '/runs/current' })
+→ [current execution detail]
 ```
 
 ## Implementation
@@ -158,33 +152,29 @@ Use existing `getPathSegments` from `src/utils/core/pathCore.ts`:
 ```typescript
 import { getPathSegments } from '@utils/core/pathCore';
 
-// Example: '/runs/abc123/config' → ['runs', 'abc123', 'config']
+// Example: '/runs/abc123/files' → ['runs', 'abc123', 'files']
 const segments = getPathSegments(input.path);
 const [namespace, id, resource, ...rest] = segments;
 
 if (namespace !== 'runs') throw new ToolError('Path must start with /runs');
 if (!id) return this.listRuns();
-if (!resource) return this.showExecution(id);
-if (resource === 'config') return this.showConfig(id);
+if (!resource) return this.showExecution(id);  // Config + conversation combined
 if (resource === 'files') {
   if (rest.length === 0) return this.listFiles(id);
   return this.readFile(id, rest.join('/'));
 }
 ```
 
-### Files to Create
+### Files Created
 
 ```
-src/tools/runs/
-├── constants.ts      # RUNS_DISPLAY_ROOT = '/runs'
-├── RunsTool.ts       # Main tool (~150 lines)
-└── index.ts          # Exports
+src/tools/RunsTool.ts  # Single file, ~280 lines
 ```
 
-### Files to Modify
+### Files Modified
 
 ```
-src/tools/registry.ts  # Register RunsTool (1 line)
+src/tools/registry.ts  # Import + register RunsTool
 ```
 
 ### Existing Utilities to Reuse
@@ -212,25 +202,28 @@ View execution history and generated files (read-only).
 
 Paths:
 - /runs - List all past executions
-- /runs/current - Current session
-- /runs/{id} - Execution summary and conversation history
-- /runs/{id}/config - Agent configuration used
+- /runs/{id} - Execution detail with config and conversation
 - /runs/{id}/files - List generated files
 - /runs/{id}/files/{path} - Read specific file
 
+Use "current" as {id} to access the active execution.
 Use view_range: [start, end] to paginate large outputs.
 ```
 
 ## Integration with Agent Proposal Tools
 
-The `/runs/{id}/config` path enables agents to learn from past executions and propose new ones:
+The `/runs/{id}` path shows config + conversation, enabling agents to learn and propose new executions:
 
 ### Tool-Use Agent History → Propose New Tool-Use Agent
 
 ```
-// View past tool-use execution
-runs({ command: 'view', path: '/runs/abc123/config' })
-→ { agent: "search", model: "sonnet45", instruction: "Find papers on attention..." }
+// View past execution (config included in output)
+runs({ path: '/runs/abc123' })
+→ === Config ===
+  Agent: search
+  Model: sonnet45
+  Task: Find papers on attention...
+  ...
 
 // Propose similar with modifications
 propose_agent({
@@ -243,9 +236,13 @@ propose_agent({
 ### Workflow Agent History → Propose New Workflow
 
 ```
-// View past workflow execution
-runs({ command: 'view', path: '/runs/def456/config' })
-→ { agent: "correct", model: "sonnet45", inputFile: "paper.tex", ... }
+// View past execution
+runs({ path: '/runs/def456' })
+→ === Config ===
+  Agent: correct
+  Model: sonnet45
+  Input files: paper.tex
+  ...
 
 // Propose similar with modifications
 propose_workflow({
@@ -262,11 +259,6 @@ An orchestrating tool-use agent can:
 1. Review tool-use execution history (what searches worked)
 2. Review workflow execution history (what corrections were applied)
 3. Propose either type based on current needs
-
-This creates a learning loop where agents can:
-- Review what worked before (both types)
-- Understand successful configurations
-- Propose improvements based on history
 
 ## Future Considerations
 
@@ -286,12 +278,11 @@ This creates a learning loop where agents can:
 ## Success Criteria
 
 1. Agent can list past executions
-2. Agent can read conversation history from any execution
-3. Agent can view config to understand/propose new runs
-4. Agent can read generated files from past runs
-5. Works for both tool-use and workflow agents
-6. No breaking changes to existing code
-7. Implementation < 200 lines
+2. Agent can view execution detail (config + conversation combined)
+3. Agent can read generated files from past runs
+4. Works for both tool-use and workflow agents
+5. No breaking changes to existing code
+6. Single file implementation (~280 lines)
 
 ## References
 
