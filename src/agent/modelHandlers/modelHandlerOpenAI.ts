@@ -179,12 +179,12 @@ export class ModelHandlerOpenAI<
     }
 
     if (
-      this.config.capabilities.supportsReasoning &&
-      this.config.capabilities.supportsReasoningEffort &&
-      this.config.capabilities.reasoningEffort
+      this.capabilities.supportsReasoning &&
+      this.capabilities.supportsReasoningEffort &&
+      this.capabilities.reasoningEffort
     ) {
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        this.config.capabilities.reasoningEffort,
+        this.capabilities.reasoningEffort,
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 
@@ -196,7 +196,7 @@ export class ModelHandlerOpenAI<
 
     if (
       this.config.fullName === 'deepseek-chat' &&
-      !this.config.capabilities.supportsReasoning
+      !this.capabilities.supportsReasoning
     ) {
       this.logger.debug(
         `Setting max_tokens to ${DEEPSEEK_OFFICIAL_API_MAX_TOKENS} for DeepSeek-chat models from the official api`,
@@ -513,7 +513,7 @@ export class ModelHandlerOpenAI<
 
     // Handle system prompt differently for O1 models
     if (systemPrompt) {
-      if (this.config.capabilities.supportsSystemPrompt) {
+      if (this.capabilities.supportsSystemPrompt) {
         // note that for openai native o1 full or above reasoning models, they have been renamed to "developer" but "system" still works
         messages.push({
           role: 'system',
@@ -536,8 +536,8 @@ export class ModelHandlerOpenAI<
     // Add media if provided
     if (
       mediaFiles &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
+      (this.capabilities.supportsVision ||
+        this.capabilities.supportsNativeAudio)
     ) {
       // createMediaMessage returns an array of objects formatted by createMediaContent
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
@@ -553,7 +553,7 @@ export class ModelHandlerOpenAI<
     }
 
     // Add final user request
-    const requestRole = this.config.capabilities.supportsIntermDevMsgs
+    const requestRole = this.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
     const lastMessage = messages.at(-1);
@@ -588,8 +588,8 @@ export class ModelHandlerOpenAI<
     if (
       mediaFiles &&
       mediaFiles.length > 0 &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
+      (this.capabilities.supportsVision ||
+        this.capabilities.supportsNativeAudio)
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
@@ -645,7 +645,7 @@ export class ModelHandlerOpenAI<
         return this.buildStandardVisionParts(media);
       } else if (
         media.media_category === 'audio' &&
-        this.config.capabilities.supportsNativeAudio
+        this.capabilities.supportsNativeAudio
       ) {
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
         // Extract format from mime type (e.g., 'wav' from 'audio/wav')
@@ -822,7 +822,7 @@ export class ModelHandlerOpenAI<
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
 
-    const role = this.config.capabilities.supportsIntermDevMsgs
+    const role = this.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
     messages.push({
@@ -1378,7 +1378,7 @@ export class ModelHandlerOpenAI<
     messages: ChatCompletionMessageParam[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
-    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg || !('content' in lastUserMsg)) return;

@@ -498,7 +498,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
-      if (this.config.capabilities.supportsInterleavedThinking) {
+      if (this.capabilities.supportsInterleavedThinking) {
         this.ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
 
@@ -1110,7 +1110,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Add media if provided (images and native PDFs)
-    if (mediaFiles && this.config.capabilities.supportsVision) {
+    if (mediaFiles && this.capabilities.supportsVision) {
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
     }
@@ -1148,7 +1148,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (
       mediaFiles &&
       mediaFiles.length > 0 &&
-      this.config.capabilities.supportsVision
+      this.capabilities.supportsVision
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
@@ -2082,7 +2082,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
-    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg) return;

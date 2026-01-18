@@ -181,7 +181,7 @@ export class ProgressEventHandler {
       () => {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
-        const sessionKind = taskState.agentConfig.session.agentCategory;
+        const sessionKind = taskState.agentConfig.agentCategory;
         const previousFilter = this.state.agentTypeFilter;
 
         this.state.setTaskState(streamTabId, taskState);
