@@ -41,7 +41,10 @@ export class ExecutionManager {
     await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private composeAgentConfig(message: any, isToolUse: boolean): AgentConfigPayload {
+  private composeAgentConfig(
+    message: any,
+    isToolUse: boolean,
+  ): AgentConfigPayload {
     // Session descriptor depends on agent type
     const session: AgentSessionDescriptor = isToolUse
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
