@@ -4,7 +4,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent runtime
-import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -217,7 +217,7 @@ ${text}`;
 
       let handler: ModelHandler;
       try {
-        handler = ModelFactory.createHandler(modelConfig);
+        handler = createModelHandler(modelConfig);
       } catch (error) {
         logger.error(
           CHANNEL,
