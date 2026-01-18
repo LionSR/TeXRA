@@ -132,13 +132,11 @@ async function handlePack(config: unknown): Promise<void> {
   showPackResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    emitClearMissingOutputs(
-      agent,
-      model,
-      inputFile,
+    emitClearMissingOutputs({
+      streamConfig: { agent, model, inputFile },
       useMultipleOutputs,
-      streamId,
-    );
+      streamIdOverride: streamId,
+    });
   }
 }
 
@@ -159,7 +157,14 @@ async function handlePackSingle(
   const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
   showPackResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+    useMultipleOutputs: false,
+  });
 }
 
 async function handlePackMultiple(
@@ -190,7 +195,14 @@ async function handlePackMultiple(
     data.outputFiles,
   );
   showPackResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+    useMultipleOutputs: true,
+  });
 }
 
 // --- Registration ---

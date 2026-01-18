@@ -106,7 +106,14 @@ async function handleCleanSingle(
 
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
   showCleanResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+    useMultipleOutputs: false,
+  });
 }
 
 async function handleCleanMultiple(
@@ -132,7 +139,14 @@ async function handleCleanMultiple(
     outputFiles,
   );
   showCleanResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+    useMultipleOutputs: true,
+  });
 }
 
 export async function handleClean(config: unknown): Promise<void> {
@@ -167,12 +181,10 @@ export async function handleClean(config: unknown): Promise<void> {
   showCleanResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    emitClearMissingOutputs(
-      agent,
-      model,
-      inputFile,
+    emitClearMissingOutputs({
+      streamConfig: { agent, model, inputFile },
       useMultipleOutputs,
-      streamId,
-    );
+      streamIdOverride: streamId,
+    });
   }
 }
