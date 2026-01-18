@@ -3,7 +3,10 @@ import * as path from 'path';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-import { LaTeXCompileOptionsSchema } from '@common/schemas';
+import {
+  LaTeXCompileOptionsSchema,
+  type LaTeXCompileOptions,
+} from '@common/schemas';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -19,26 +22,17 @@ logger.initialize(CHANNEL);
 
 // Tool configurations have been moved to utils/toolUtils.ts for centralized management
 
-export interface LaTeXCompileOptions {
-  /** Channel for logging */
-  channel?: string;
-  /** Output directory for compiled PDF */
-  outputDirectory?: string;
-  /** Compiler to use: 'pdflatex' or 'latexmk' */
-  compiler?: 'pdflatex' | 'latexmk';
-}
-
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
- * @param options Compilation options
+ * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns Promise<boolean> True if compilation succeeded
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
   options: LaTeXCompileOptions = {},
 ): Promise<boolean> {
-  // Schema provides defaults
+  // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
   const outputDirectory = parsed.outputDirectory;
