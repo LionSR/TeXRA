@@ -36,13 +36,6 @@ export function registerOutputEventHandlers(
   );
 }
 
-/** Convert Map<number, T[]> to Record<number, T[]> for webview */
-function toRoundRecord<T>(
-  rounds?: Map<number, T[]>,
-): Record<number, T[]> | undefined {
-  return rounds?.size ? Object.fromEntries(rounds) : undefined;
-}
-
 function handleAddOutputFiles(
   ctx: EventHandlerContext,
   { stream, storageKey, filesByRound }: ProgressEventPayloads['addOutputFiles'],
@@ -55,11 +48,8 @@ function handleAddOutputFiles(
       if (!isWebviewAvailable(ctx)) return;
 
       const runFiles = ctx.state.outputFiles.getFiles(stream).get(storageKey);
-      const rounds = toRoundRecord(runFiles);
-      ctx.webviewUpdater.updateFiles(stream, {
-        runId: storageKey,
-        ...(rounds && { rounds }),
-      });
+      const rounds = runFiles?.size ? Object.fromEntries(runFiles) : undefined;
+      ctx.webviewUpdater.updateFiles(stream, { runId: storageKey, rounds });
     },
   );
 }
@@ -86,10 +76,12 @@ function handleUpdateMissingOutputs(
       const runMissing = ctx.state.outputFiles
         .getMissingOutputs(stream)
         .get(storageKey);
-      const rounds = toRoundRecord(runMissing);
+      const rounds = runMissing?.size
+        ? Object.fromEntries(runMissing)
+        : undefined;
       ctx.webviewUpdater.updateMissingOutputs(stream, {
         runId: storageKey,
-        ...(rounds && { rounds }),
+        rounds,
       });
     },
   );

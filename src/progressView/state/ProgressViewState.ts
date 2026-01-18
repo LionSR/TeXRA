@@ -23,7 +23,7 @@ import {
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
-import type { AgentFilter } from '@progressView/types';
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import {
   StreamTabsManager,
   TaskGroupManager,
@@ -81,7 +81,7 @@ export class ProgressViewState {
   private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
-  private _agentTypeFilter: AgentFilter = 'all';
+  private _agentTypeFilter: AgentTypeFilter = 'all';
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
 
@@ -187,11 +187,11 @@ export class ProgressViewState {
     this.saveStreamSortOrder();
   }
 
-  get agentTypeFilter(): AgentFilter {
+  get agentTypeFilter(): AgentTypeFilter {
     return this._agentTypeFilter;
   }
 
-  set agentTypeFilter(filter: AgentFilter) {
+  set agentTypeFilter(filter: AgentTypeFilter) {
     if (!isAgentTypeFilter(filter)) {
       this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
       filter = 'all';
