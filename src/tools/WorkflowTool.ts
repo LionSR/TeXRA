@@ -140,7 +140,12 @@ function proposalResultToToolResult(
 /** Schema for workflow_agent tool (document processing). */
 const WorkflowAgentInputSchema = z.object({
   agent: z.string().describe('Name of the workflow agent to execute'),
-  model: z.string().prefault('gemini3p').describe('Model to use'),
+  model: z
+    .string()
+    .prefault('gemini3p')
+    .describe(
+      'Model short name (e.g., gemini3p, sonnet45, opus45, gpt45, o3). User can change via dropdown.',
+    ),
   instruction: z
     .string()
     .describe(
@@ -173,7 +178,9 @@ const WorkflowAgentInputSchema = z.object({
   useMultipleOutputs: z
     .boolean()
     .prefault(false)
-    .describe('Enable multiple outputs mode'),
+    .describe(
+      'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
+    ),
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
@@ -314,7 +321,12 @@ Example: agent=correct, inputFile=/workspace/paper.tex, instruction="This resear
 /** Schema for delegate_agent tool (tool-use agents). */
 const DelegateAgentInputSchema = z.object({
   agent: z.string().describe('Name of the tool-use agent to delegate to'),
-  model: z.string().prefault('gemini3p').describe('Model to use'),
+  model: z
+    .string()
+    .prefault('gemini3p')
+    .describe(
+      'Model short name (e.g., gemini3p, sonnet45, opus45, gpt45, o3). User can change via dropdown.',
+    ),
   instruction: z
     .string()
     .describe(
