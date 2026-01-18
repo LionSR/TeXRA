@@ -77,20 +77,12 @@ export const StreamSessionStateSchema = z.object({
  */
 type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 
-/**
- * Schema for ProgressViewState UI defaults.
- * Single source of truth for default values - no hardcoded strings in class.
- */
-const ProgressViewStateDefaultsSchema = z.object({
-  activeStream: z.string().prefault(''),
-  streamSortOrder: z.string().prefault('time'),
-  agentTypeFilter: z
-    .enum(['all', AgentCategory.Workflow, AgentCategory.ToolUse])
-    .prefault('all'),
-});
-
-/** Parsed defaults - derived from schema */
-const PROGRESS_VIEW_DEFAULTS = ProgressViewStateDefaultsSchema.parse({});
+/** Default values for ProgressViewState UI properties */
+const PROGRESS_VIEW_DEFAULTS = {
+  activeStream: '' as StreamTabId,
+  streamSortOrder: 'time',
+  agentTypeFilter: 'all' as AgentTypeFilter,
+} as const;
 
 /**
  * Core state management for the progress view.
@@ -104,8 +96,9 @@ export class ProgressViewState {
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = PROGRESS_VIEW_DEFAULTS.activeStream;
-  private _streamSortOrder = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
-  private _agentTypeFilter: AgentTypeFilter = PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
+  private _streamSortOrder: string = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
+  private _agentTypeFilter: AgentTypeFilter =
+    PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
 
