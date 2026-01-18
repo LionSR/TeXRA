@@ -27,6 +27,7 @@ import { registerLogEventHandlers } from './LogEventHandlers';
 import { registerOutputEventHandlers } from './OutputEventHandlers';
 import { registerUsageEventHandlers } from './UsageEventHandlers';
 import { registerTodoEventHandlers } from './TodoEventHandlers';
+import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { withEventErrorHandling } from './errorHandling';
 
@@ -85,6 +86,7 @@ export class ProgressEventHandler {
    * - Output events: OutputEventHandlers.ts
    * - Usage events: UsageEventHandlers.ts
    * - Todo events: TodoEventHandlers.ts
+   * - Follow-up events: FollowUpEventHandlers.ts
    * - UI events: UIEvents.ts
    */
   setupEventListeners(): vscode.Disposable[] {
@@ -106,6 +108,7 @@ export class ProgressEventHandler {
     registerOutputEventHandlers(bus, this.ctx, signal);
     registerUsageEventHandlers(bus, this.ctx, signal);
     registerTodoEventHandlers(bus, this.ctx, signal);
+    registerFollowUpEventHandlers(bus, this.ctx, signal);
     registerUIEvents(bus, this.uiCallbacks, signal);
 
     // Single disposable that cleans up everything
