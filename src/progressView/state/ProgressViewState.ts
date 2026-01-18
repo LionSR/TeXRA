@@ -11,6 +11,7 @@ import type {
   ExecutionId,
   StorageKey,
 } from '@agent/types/IdentifierTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -307,81 +308,72 @@ export class ProgressViewState {
   }
 
   /**
-   * Resolve and optionally persist the active run ID for a stream.
+   * Switch to a specific run (user-initiated).
+   * Validates the run exists, then sets it as active.
    *
-   * Resolution strategy (in order):
-   * 1. If specific runId requested → validate it exists, return it or null
-   * 2. If previously active runId exists → return it (already persisted)
-   * 3. Auto-select: single candidate or most recent run
-   *
-   * For tool-use agents: The runId will be the executionId (same UUID)
-   * For workflow agents: The runId will be a task group ID
-   *
-   * @param stream - The stream to resolve for
-   * @param requested - Optional specific runId to use
-   * @param options.persist - Whether to save the resolved runId (default: true)
-   * @returns The resolved StorageKey, or null if none found
+   * @param stream - The stream to switch runs in
+   * @param runId - The run ID to switch to
+   * @returns The normalized StorageKey if valid, null if run doesn't exist
    */
-  resolveRunId(
-    stream: StreamTabId,
-    requested?: string | null,
-    options?: { persist?: boolean },
-  ): StorageKey | null {
-    const shouldPersist = options?.persist ?? true;
+  switchToRun(stream: StreamTabId, runId: string): StorageKey | null {
+    const candidates = this.collectRunCandidates(stream);
+    if (!candidates.has(runId)) return null;
+    const normalized = normalizeRunId(runId);
+    this.setActiveRunId(stream, normalized);
+    return normalized;
+  }
 
-    // 1. Specific runId requested - validate it exists
-    if (requested) {
-      const candidates = this.collectRunCandidates(stream);
-      if (!candidates.has(requested)) return null;
-      const normalized = normalizeRunId(requested);
-      if (shouldPersist) this.setActiveRunId(stream, normalized);
-      return normalized;
-    }
-
-    // 2. Use existing active run if already set (already normalized)
+  /**
+   * Ensure a stream has an active run ID set.
+   * Called during initialization when activeRunId might not be set yet.
+   * Uses auto-selection only if no cached value exists.
+   *
+   * @returns The active StorageKey (cached or auto-selected), or null if no runs
+   */
+  ensureActiveRunId(stream: StreamTabId): StorageKey | null {
     const current = this.getActiveRunId(stream);
     if (current) return current;
 
-    // 3. Auto-select: collect candidates once, then pick latest or single
-    const candidates = this.collectRunCandidates(stream);
+    const { candidates, groups, usageRuns } = this.collectRunData(stream);
     if (candidates.size === 0) return null;
 
     const selected =
       candidates.size === 1
         ? [...candidates][0]
-        : this.findLatestRunId(stream, candidates);
+        : this.findLatestRunId(candidates, groups, usageRuns);
 
     if (!selected) return null;
     const normalized = normalizeRunId(selected);
-    if (shouldPersist) this.setActiveRunId(stream, normalized);
+    this.setActiveRunId(stream, normalized);
     return normalized;
   }
 
   /**
-   * Collect all valid run IDs for a stream.
-   *
-   * Run candidates come from:
-   * - Root task groups (workflow runs)
-   * - Run-scoped data: instructions, output files, usage stats
-   *
-   * This is the single source of truth for run discovery.
+   * Collected run data for a stream.
+   * Groups query results to avoid redundant manager lookups.
    */
-  private collectRunCandidates(stream: StreamTabId): Set<string> {
+  private collectRunData(stream: StreamTabId): {
+    candidates: Set<string>;
+    groups: Map<string, TaskGroup>;
+    usageRuns: Map<string, TokenUsageStats>;
+  } {
     const candidates = new Set<string>();
+    const groups = this._taskGroups.getStreamGroups(stream);
 
     // Root task groups are primary run identifiers (workflow sessions)
-    for (const group of this._taskGroups.getStreamGroups(stream).values()) {
+    for (const group of groups.values()) {
       if (!group.parentGroupId) {
         candidates.add(group.id);
       }
     }
 
     // Run-scoped data sources (tool-use sessions use these)
+    const usageRuns = this._usageStats.getRunUsage(stream);
     const sources = [
       this._runInstructions.getInstructions(stream),
       this._outputFiles.getFiles(stream),
       this._outputFiles.getMissingOutputs(stream),
-      this._usageStats.getRunUsage(stream),
+      usageRuns,
     ];
 
     for (const source of sources) {
@@ -390,29 +382,33 @@ export class ProgressViewState {
       }
     }
 
-    return candidates;
+    return { candidates, groups, usageRuns };
   }
 
   /**
-   * Find the most recent run from candidates.
+   * Collect all valid run IDs for a stream.
+   * Delegates to collectRunData for shared implementation.
+   */
+  private collectRunCandidates(stream: StreamTabId): Set<string> {
+    return this.collectRunData(stream).candidates;
+  }
+
+  /**
+   * Find the most recent run from collected data.
    * Prefers task groups by startTime, falls back to usage runs for tool-use sessions.
-   *
-   * @param stream - The stream to search in
-   * @param candidates - Pre-collected run candidates (avoids redundant iteration)
+   * Uses pre-collected data to avoid redundant manager queries.
    */
   private findLatestRunId(
-    stream: StreamTabId,
-    candidates?: Set<string>,
+    candidates: Set<string>,
+    groups: Map<string, TaskGroup>,
+    usageRuns: Map<string, TokenUsageStats>,
   ): string | null {
-    const groups = this._taskGroups.getStreamGroups(stream);
     let latest: { id: string; start: number } | null = null;
 
-    // If candidates provided, only consider those; otherwise check all root groups
-    const candidateSet = candidates ?? this.collectRunCandidates(stream);
-
+    // Find latest root task group by startTime
     for (const group of groups.values()) {
       if (group.parentGroupId) continue;
-      if (!candidateSet.has(group.id)) continue;
+      if (!candidates.has(group.id)) continue;
 
       const startTime = group.startTime;
       if (!latest || startTime >= latest.start) {
@@ -420,16 +416,14 @@ export class ProgressViewState {
       }
     }
 
-    // For tool-use sessions, there are no task groups - fall back to usage runs
-    if (!latest) {
-      const usageRuns = this._usageStats.getRunUsage(stream);
-      if (usageRuns.size > 0) {
-        // Return the last key (most recently added run)
-        return [...usageRuns.keys()].at(-1) ?? null;
-      }
+    if (latest) return latest.id;
+
+    // For tool-use sessions (no task groups), fall back to usage runs
+    if (usageRuns.size > 0) {
+      return [...usageRuns.keys()].at(-1) ?? null;
     }
 
-    return latest?.id ?? null;
+    return null;
   }
 
   private loadActiveRunIds(): void {
