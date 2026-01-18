@@ -115,7 +115,10 @@ export class ReadFileTool extends defineTool({
 
     const segments: string[] = [];
     if (visibleLines.length > 0) {
-      const numberedLines = formatLinesWithNumbers(visibleLines, startIndex + 1);
+      const numberedLines = formatLinesWithNumbers(
+        visibleLines,
+        startIndex + 1,
+      );
       segments.push(numberedLines.join('\n'));
     }
     if (truncated) {
