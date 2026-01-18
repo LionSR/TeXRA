@@ -9,7 +9,6 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
 import {
-  canUpdateWebview,
   isWebviewAvailable,
   type EventHandlerContext,
 } from './EventHandlerContext';
@@ -105,7 +104,8 @@ function handleClearMissingOutputs(
     'failed to handle clearMissingOutputs',
     async () => {
       await ctx.state.outputFiles.clearMissingOutputs(stream);
-      if (canUpdateWebview(ctx, stream)) {
+      // Broadcast to webview - frontend decides which run to display
+      if (isWebviewAvailable(ctx)) {
         ctx.webviewUpdater.updateMissingOutputs(stream, { reset: true });
       }
     },
