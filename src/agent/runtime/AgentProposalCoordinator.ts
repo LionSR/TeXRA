@@ -80,30 +80,6 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
     );
   }
 
-  /** Approve a proposal. Returns true if approved, false if no pending proposal. */
-  approveProposal(proposalId: string): boolean {
-    return this.resolveRequest(proposalId, { action: 'approve' });
-  }
-
-  /** Reject a proposal with optional feedback. Returns true if rejected. */
-  rejectProposal(proposalId: string, feedback?: string): boolean {
-    return this.resolveRequest(proposalId, { action: 'reject', feedback });
-  }
-
-  /** Open proposal in main view for editing. Returns true if initiated. */
-  setupProposal(proposalId: string): boolean {
-    return this.resolveRequest(proposalId, { action: 'setup' });
-  }
-
-  /** Check if a proposal is pending. */
-  hasPendingProposal(proposalId: string): boolean {
-    return this.hasPendingRequest(proposalId);
-  }
-
-  /** Clear a pending proposal. */
-  clearProposal(proposalId: string): void {
-    this.clearRequest(proposalId);
-  }
 }
 
 // ============================================================================
