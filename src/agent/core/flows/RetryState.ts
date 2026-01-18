@@ -317,15 +317,12 @@ export abstract class RetryableInvocationNode<
 
     // Emit waiting status and wait for user action
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-    const result: RetryResult = await retryCoordinator.waitForUserAction(
-      streamId,
-      {
-        operation: operationName,
-        errorMessage: formatted.message,
-        logger,
-        errorDetails: formatted, // Pass complete ProviderError - no field loss
-      },
-    );
+    const result: RetryResult = await retryCoordinator.waitForRetry(streamId, {
+      operation: operationName,
+      errorMessage: formatted.message,
+      logger,
+      errorDetails: formatted, // Pass complete ProviderError - no field loss
+    });
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
