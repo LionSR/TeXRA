@@ -79,7 +79,7 @@ export function displayToStoragePath(displayPath: string): string {
     !displayPath.startsWith(`${MEMORY_DISPLAY_ROOT}/`)
   ) {
     throw new Error(
-      `The path ${displayPath} does not exist. Please provide a valid path.`,
+      `Invalid path "${displayPath}". All memory paths must start with /memories (e.g., /memories or /memories/notes.md).`,
     );
   }
   const suffix =
