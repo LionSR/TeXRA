@@ -25,9 +25,13 @@ export {
   RetryErrorDetailsSchema,
   ToolEditApprovalPromptSchema,
   RetryRequestPromptSchema,
+  WorkflowAgentProposalSchema,
+  WorkflowAgentProposalPromptSchema,
   type RetryErrorDetails,
   type ToolEditApprovalPrompt,
   type RetryRequestPrompt,
+  type WorkflowAgentProposal,
+  type WorkflowAgentProposalPrompt,
 } from './types';
 
 // Re-export TaskGroupStatusSchema from single source of truth

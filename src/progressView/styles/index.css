@@ -28,6 +28,7 @@
 @import './requests-shared.css';
 @import './approval-requests.css';
 @import './retry-requests.css';
+@import './workflow-proposals.css';
 @import './todo-list.css';
 @import './queued-follow-ups.css';
 @import './followup-section.css';
