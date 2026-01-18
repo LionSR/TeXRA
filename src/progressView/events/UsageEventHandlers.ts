@@ -37,33 +37,41 @@ function handleUpdateStreamUsage(
   ctx: EventHandlerContext,
   { stream, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
 ): void {
-  withEventErrorHandling('UsageEvents', 'failed to handle updateStreamUsage', async () => {
-    // usage is already typed as TokenUsageStats from the event payload
-    const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
-      stream,
-      storageKey,
-      usage,
-    );
+  withEventErrorHandling(
+    'UsageEvents',
+    'failed to handle updateStreamUsage',
+    async () => {
+      // usage is already typed as TokenUsageStats from the event payload
+      const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
+        stream,
+        storageKey,
+        usage,
+      );
 
-    // For tool-use sessions (no task groups), set active run ID from usage
-    if (!ctx.state.getActiveRunId(stream)) {
-      ctx.state.setActiveRunId(stream, storageKey);
-    }
+      // For tool-use sessions (no task groups), set active run ID from usage
+      if (!ctx.state.getActiveRunId(stream)) {
+        ctx.state.setActiveRunId(stream, storageKey);
+      }
 
-    if (canUpdateWebview(ctx, stream) && accumulatedUsage) {
-      ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
-    }
-  });
+      if (canUpdateWebview(ctx, stream) && accumulatedUsage) {
+        ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
+      }
+    },
+  );
 }
 
 function handleUpdateContextState(
   ctx: EventHandlerContext,
   { stream, contextState }: ProgressEventPayloads['updateContextState'],
 ): void {
-  withEventErrorHandling('UsageEvents', 'failed to handle updateContextState', () => {
-    ctx.state.setContextState(stream, contextState);
-    if (canUpdateWebview(ctx, stream)) {
-      ctx.webviewUpdater.updateContextState(stream, contextState);
-    }
-  });
+  withEventErrorHandling(
+    'UsageEvents',
+    'failed to handle updateContextState',
+    () => {
+      ctx.state.setContextState(stream, contextState);
+      if (canUpdateWebview(ctx, stream)) {
+        ctx.webviewUpdater.updateContextState(stream, contextState);
+      }
+    },
+  );
 }
