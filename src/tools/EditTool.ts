@@ -24,10 +24,7 @@ const EditInputSchema = z.strictObject({
   path: z.string(),
   old_string: z.string(),
   new_string: z.string(),
-  replace_all: z
-    .boolean()
-    .nullish()
-    .transform((v) => v ?? false),
+  replace_all: z.boolean().nullish(),
 });
 
 export type EditInput = z.infer<typeof EditInputSchema>;
