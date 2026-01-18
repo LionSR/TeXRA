@@ -1,69 +1,57 @@
 /**
- * InterruptManager - Centralized interrupt state management.
+ * Interrupt state manager for flow execution.
  *
- * Replaces the mutable object pattern:
- *   const interruptState = { isInterrupted: false };
- *   onInterrupt: () => { interruptState.isInterrupted = true; }
- *
- * With a proper class that:
- * - Encapsulates interrupt state
- * - Provides type-safe access
- * - Supports abort controller management
- * - Enables future extensibility (listeners, reasons, timestamps)
+ * Encapsulates interrupt state with type-safe access and abort controller management.
  */
+export interface InterruptManager {
+  /** Check if interruption has been requested. */
+  checkInterruption: () => boolean;
+  /** Set the current abort controller for cancellation. */
+  setAbortController: (controller: AbortController | null) => void;
+  /** Request interruption - called when user stops the agent. */
+  onInterrupt: () => void;
+  /** Get the current abort controller. */
+  getAbortController: () => AbortController | null;
+  /** Get interrupt-related fields for flow input. */
+  asFlowInput: () => {
+    checkInterruption: () => boolean;
+    setAbortController: (controller: AbortController | null) => void;
+    onInterrupt: () => void;
+  };
+}
 
 /**
- * Manages interrupt state for a single flow execution.
- *
- * Created per-execution in executeAgent and passed to flow runners.
- * Arrow function properties are used for callbacks to automatically bind `this`.
+ * Create an interrupt manager for a single flow execution.
  */
-export class InterruptManager {
-  private _isInterrupted = false;
-  private _abortController: AbortController | null = null;
+export function createInterruptManager(): InterruptManager {
+  let isInterrupted = false;
+  let abortController: AbortController | null = null;
 
-  // =========================================================================
-  // Callbacks - Arrow properties for BaseFlowContextInit compatibility
-  // =========================================================================
+  const checkInterruption = (): boolean => isInterrupted;
 
-  /** Check if interruption has been requested. */
-  checkInterruption = (): boolean => this._isInterrupted;
-
-  /** Set the current abort controller for cancellation. */
-  setAbortController = (controller: AbortController | null): void => {
-    this._abortController = controller;
+  const setAbortController = (controller: AbortController | null): void => {
+    abortController = controller;
   };
 
-  /** Request interruption - called when user stops the agent. */
-  onInterrupt = (): void => {
-    if (this._isInterrupted) return;
-    this._isInterrupted = true;
-    this._abortController?.abort();
+  const onInterrupt = (): void => {
+    if (isInterrupted) return;
+    isInterrupted = true;
+    abortController?.abort();
   };
 
-  // =========================================================================
-  // Additional accessors (not passed to flows)
-  // =========================================================================
+  const getAbortController = (): AbortController | null => abortController;
 
-  /**
-   * Get the current abort controller.
-   * Used by model handlers to abort ongoing requests.
-   */
-  getAbortController(): AbortController | null {
-    return this._abortController;
-  }
+  const asFlowInput = () => ({
+    checkInterruption,
+    setAbortController,
+    onInterrupt,
+  });
 
-  /**
-   * Get interrupt-related fields for flow input.
-   *
-   * Returns the interrupt-related subset of fields required by BaseFlowContextInit.
-   * Designed to be spread into flow initialization objects alongside other context fields.
-   */
-  asFlowInput() {
-    return {
-      checkInterruption: this.checkInterruption,
-      setAbortController: this.setAbortController,
-      onInterrupt: this.onInterrupt,
-    };
-  }
+  return {
+    checkInterruption,
+    setAbortController,
+    onInterrupt,
+    getAbortController,
+    asFlowInput,
+  };
 }
