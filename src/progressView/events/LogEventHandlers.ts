@@ -61,7 +61,10 @@ function handleUpdateLogMessage(
       // Skip INTERNAL messages entirely (never shown to users)
       if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
 
-      // Find existing message (also verifies stream exists via empty array return)
+      // Guard: don't create phantom streams for updates to non-existent streams
+      if (!ctx.state.streamTabs.has(stream)) return;
+
+      // Find existing message
       const messages = ctx.state.streamTabs.getMessages(stream);
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing || existing.messageType === MESSAGE_TYPES.INTERNAL) return;
