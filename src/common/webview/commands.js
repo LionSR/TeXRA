@@ -226,7 +226,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
-  WORKFLOW_AGENT_PROPOSAL_ACTION: 'workflowAgentProposalAction',
+  AGENT_PROPOSAL_ACTION: 'agentProposalAction',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',

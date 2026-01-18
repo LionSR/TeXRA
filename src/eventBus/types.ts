@@ -45,6 +45,20 @@ export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
 export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
 
+/** Agent proposal actions */
+export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
+export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
+
+/** Message schema for agent proposal action from UI */
+export const AgentProposalActionMessageSchema = z.object({
+  proposalId: z.string(),
+  action: AgentProposalActionSchema,
+  feedback: z.string().optional(),
+});
+export type AgentProposalActionMessage = z.infer<
+  typeof AgentProposalActionMessageSchema
+>;
+
 /**
  * Workflow agent proposal - includes file fields for document processing.
  * Workflow agents receive files directly and process them.
