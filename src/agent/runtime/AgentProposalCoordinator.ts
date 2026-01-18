@@ -79,7 +79,6 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
       { timeoutMs },
     );
   }
-
 }
 
 // ============================================================================
