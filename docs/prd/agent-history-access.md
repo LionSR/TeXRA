@@ -25,7 +25,9 @@ A new `runs` tool providing read-only virtual filesystem access to execution sto
 
 ```
 /runs                        → List all executions
-/runs/{id}                   → Execution detail (config + conversation)
+/runs/{id}                   → Execution summary (with navigation hints)
+/runs/{id}/config            → Agent configuration (JSON, for propose_*)
+/runs/{id}/conversation      → Message history (tool calls, responses)
 /runs/{id}/files             → List generated files
 /runs/{id}/files/{path}      → Read file content
 ```
@@ -34,11 +36,11 @@ Use `current` as `{id}` to access the active execution.
 
 ### Design Principles
 
-1. **Minimal surface** - 4 path patterns
+1. **Separation of concerns** - Config (structured) vs conversation (log) vs files (artifacts)
 2. **Read-only** - History is immutable, no `command` parameter needed
 3. **Agent-type agnostic** - Works for both tool-use and workflow agents
 4. **Single file** - `src/tools/RunsTool.ts`, no subdirectory
-5. **Config merged into detail** - `/runs/{id}` shows config + conversation together
+5. **Friendly output** - Summary shows what's available, not everything at once
 
 ## Schema
 
@@ -59,7 +61,9 @@ No `command` parameter - it's always "view" (read-only).
 | Path | Source | Returns |
 |------|--------|---------|
 | `/runs` | `AgentHistoryManager.getHistory()` | List: id, timestamp, agent, model, summary |
-| `/runs/{id}` | History + `ExecutionKVStore` | Config + conversation combined |
+| `/runs/{id}` | `AgentHistoryManager` | Summary + navigation hints |
+| `/runs/{id}/config` | `AgentHistoryManager` | `AgentConfig` as JSON |
+| `/runs/{id}/conversation` | `ExecutionKVStore` → `flow:{id}` | `conversation[]` formatted |
 | `/runs/{id}/files` | `StorageFS` → `taskRuns/{id}/` | Directory listing |
 | `/runs/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content |
 
@@ -96,21 +100,39 @@ Both agent types store accumulated messages in `shared.conversation[]`. The tool
 ```
 // List past executions
 runs({ path: '/runs' })
-→ abc123  2024-01-15T10:30:00Z  research-assistant  sonnet45  Find related work...
+→ Executions (2):
+
+  abc123  2024-01-15T10:30:00Z  research-assistant  sonnet45  Find related work...
   def456  2024-01-15T11:00:00Z  latex-rewriter      gemini3p  Fix grammar errors...
 
-// View execution detail (config + conversation)
+// View execution summary (friendly, shows what's available)
 runs({ path: '/runs/abc123' })
-→ === Config ===
+→ Execution: abc123
   Agent: research-assistant
   Model: sonnet45
   Timestamp: 2024-01-15T10:30:00Z
   Task: Find related work
-  Tools: read_file, web_search, arxiv_search
 
-  === Conversation ===
+  Available paths:
+    /runs/abc123/config - Agent configuration (JSON)
+    /runs/abc123/conversation - Message history
+    /runs/abc123/files - Generated files
 
-  [1] user:
+// Get config as JSON (for propose_workflow / propose_agent)
+runs({ path: '/runs/abc123/config' })
+→ {
+    "agent": "research-assistant",
+    "model": "sonnet45",
+    "tools": ["read_file", "web_search", "arxiv_search"],
+    "session": {
+      "taskSummary": "Find related work",
+      "inputFiles": ["paper.tex"]
+    }
+  }
+
+// View conversation history
+runs({ path: '/runs/abc123/conversation' })
+→ [1] user:
   Find papers about quantum computing...
 
   [2] assistant:
@@ -137,10 +159,6 @@ runs({ path: '/runs/abc123/files/output.tex' })
 
   \documentclass{article}
   ...
-
-// Access current session
-runs({ path: '/runs/current' })
-→ [current execution detail]
 ```
 
 ## Implementation
@@ -202,7 +220,9 @@ View execution history and generated files (read-only).
 
 Paths:
 - /runs - List all past executions
-- /runs/{id} - Execution detail with config and conversation
+- /runs/{id} - Execution summary
+- /runs/{id}/config - Agent configuration (JSON, use with propose_*)
+- /runs/{id}/conversation - Message history
 - /runs/{id}/files - List generated files
 - /runs/{id}/files/{path} - Read specific file
 
@@ -212,18 +232,14 @@ Use view_range: [start, end] to paginate large outputs.
 
 ## Integration with Agent Proposal Tools
 
-The `/runs/{id}` path shows config + conversation, enabling agents to learn and propose new executions:
+The `/runs/{id}/config` path returns clean JSON, enabling agents to learn and propose new executions:
 
 ### Tool-Use Agent History → Propose New Tool-Use Agent
 
 ```
-// View past execution (config included in output)
-runs({ path: '/runs/abc123' })
-→ === Config ===
-  Agent: search
-  Model: sonnet45
-  Task: Find papers on attention...
-  ...
+// Get past config as JSON
+runs({ path: '/runs/abc123/config' })
+→ { "agent": "search", "model": "sonnet45", ... }
 
 // Propose similar with modifications
 propose_agent({
@@ -236,13 +252,9 @@ propose_agent({
 ### Workflow Agent History → Propose New Workflow
 
 ```
-// View past execution
-runs({ path: '/runs/def456' })
-→ === Config ===
-  Agent: correct
-  Model: sonnet45
-  Input files: paper.tex
-  ...
+// Get past config as JSON
+runs({ path: '/runs/def456/config' })
+→ { "agent": "correct", "model": "sonnet45", "inputFile": "paper.tex", ... }
 
 // Propose similar with modifications
 propose_workflow({
@@ -256,9 +268,9 @@ propose_workflow({
 ### Cross-Type Learning
 
 An orchestrating tool-use agent can:
-1. Review tool-use execution history (what searches worked)
-2. Review workflow execution history (what corrections were applied)
-3. Propose either type based on current needs
+1. List executions: `/runs`
+2. Check what worked: `/runs/{id}/config` + `/runs/{id}/conversation`
+3. Propose new execution with modifications
 
 ## Future Considerations
 
