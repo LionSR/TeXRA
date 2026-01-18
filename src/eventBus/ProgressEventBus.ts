@@ -54,6 +54,7 @@ export interface ProgressEventPayloads {
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
   updateTodos: UpdateTodosPayload;
+  updateQueuedFollowUps: { streamId: StreamTabId };
   extensionDeactivating: undefined;
 }
 
