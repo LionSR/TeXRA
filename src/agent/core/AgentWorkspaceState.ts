@@ -42,6 +42,28 @@ export type ResponseAssemblyState = z.output<
   typeof ResponseAssemblyStateSchema
 >;
 
+/**
+ * Create a fresh ResponseAssemblyState with schema defaults.
+ * Single source of truth for initialization.
+ */
+export function createResponseAssemblyState(): ResponseAssemblyState {
+  return ResponseAssemblyStateSchema.parse({});
+}
+
+/**
+ * Update ResponseAssemblyState immutably with schema validation.
+ * Returns a new validated state object; original is unchanged.
+ *
+ * @example
+ * const newAssembly = updateResponseAssemblyState(current, { lastResponse: text });
+ */
+export function updateResponseAssemblyState(
+  current: ResponseAssemblyState,
+  update: Partial<ResponseAssemblyState>,
+): ResponseAssemblyState {
+  return ResponseAssemblyStateSchema.parse({ ...current, ...update });
+}
+
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
@@ -251,6 +273,14 @@ export const ReasoningCacheStateSchema = z.object({
 /** Reasoning cache state - plain object type derived from schema */
 export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
+/**
+ * Create a fresh ReasoningCacheState with schema defaults.
+ * Single source of truth for initialization.
+ */
+export function createReasoningCacheState(): ReasoningCacheState {
+  return ReasoningCacheStateSchema.parse({});
+}
+
 /** Get the primary thinking block, or null if none */
 export function getReasoningPrimaryBlock(
   state: ReasoningCacheState,
@@ -258,7 +288,11 @@ export function getReasoningPrimaryBlock(
   return state.thinkingBlocks.length > 0 ? state.thinkingBlocks[0] : null;
 }
 
-/** Reset reasoning cache state to initial values */
+/**
+ * Reset reasoning cache state to initial values.
+ * @deprecated Use createReasoningCacheState() for immutable pattern.
+ * This mutating version exists for backward compatibility.
+ */
 export function resetReasoningCacheState(state: ReasoningCacheState): void {
   state.thinkingBlocks = [];
   state.thinkingAdded = false;
@@ -284,7 +318,19 @@ export interface ServerToolContentState {
   lastAssistantContent: unknown[];
 }
 
-/** Reset server tool content state to initial values */
+/**
+ * Create a fresh ServerToolContentState.
+ * Single source of truth for initialization.
+ */
+export function createServerToolContentState(): ServerToolContentState {
+  return { contentBlocks: [], lastAssistantContent: [] };
+}
+
+/**
+ * Reset server tool content state to initial values.
+ * @deprecated Use createServerToolContentState() for immutable pattern.
+ * This mutating version exists for backward compatibility.
+ */
 export function resetServerToolContentState(
   state: ServerToolContentState,
 ): void {
@@ -422,11 +468,11 @@ export class AgentWorkspaceState {
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(
-      ResponseAssemblyStateSchema.parse({}),
+      createResponseAssemblyState(),
       new MediaAttachmentState(),
-      ReasoningCacheStateSchema.parse({}),
+      createReasoningCacheState(),
       new FileInteractionState(),
-      { contentBlocks: [], lastAssistantContent: [] },
+      createServerToolContentState(),
       new TodoState(),
     );
   }
@@ -439,7 +485,7 @@ export class AgentWorkspaceState {
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning, // Plain object - schema already validates
       FileInteractionState.fromSnapshot(parsed.interactions),
-      { contentBlocks: [], lastAssistantContent: [] }, // Ephemeral - not serialized
+      createServerToolContentState(), // Ephemeral - not serialized
       TodoState.fromSnapshot(parsed.todos),
     );
   }
