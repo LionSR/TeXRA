@@ -162,7 +162,7 @@ export abstract class BasePromiseCoordinator<
   /**
    * Resolve a pending request with a result.
    */
-  protected resolveRequest(id: string, result: TResult): boolean {
+  resolveRequest(id: string, result: TResult): boolean {
     const req = this.getPendingRequest(id);
     if (!req) return false;
 
