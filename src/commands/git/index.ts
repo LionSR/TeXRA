@@ -1,0 +1,1 @@
+export { registerGitCommands } from './gitCommands';
