@@ -50,20 +50,6 @@ export function createResponseAssemblyState(): ResponseAssemblyState {
   return ResponseAssemblyStateSchema.parse({});
 }
 
-/**
- * Update ResponseAssemblyState immutably with schema validation.
- * Returns a new validated state object; original is unchanged.
- *
- * @example
- * const newAssembly = updateResponseAssemblyState(current, { lastResponse: text });
- */
-export function updateResponseAssemblyState(
-  current: ResponseAssemblyState,
-  update: Partial<ResponseAssemblyState>,
-): ResponseAssemblyState {
-  return ResponseAssemblyStateSchema.parse({ ...current, ...update });
-}
-
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
