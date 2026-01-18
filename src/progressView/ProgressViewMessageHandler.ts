@@ -16,7 +16,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
+import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentTypeFilter,
   isAgentTypeFilter,
@@ -163,7 +163,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]:
         this.handleToggleToolEditApprovalBypass.bind(this),
       [PROGRESS_VIEW_COMMANDS.WORKFLOW_AGENT_PROPOSAL_ACTION]:
-        this.handleWorkflowAgentProposalAction.bind(this),
+        this.handleAgentProposalAction.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -454,7 +454,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await vscode.window.showInformationMessage(message);
   }
 
-  private async handleWorkflowAgentProposalAction(message: any): Promise<void> {
+  private async handleAgentProposalAction(message: any): Promise<void> {
     const { proposalId, action, feedback } = message;
     if (!proposalId || !action) {
       this.logger.warn(
@@ -473,7 +473,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         proposalCoordinator.rejectProposal(proposalId, feedback);
         break;
       case 'setup':
-        await this.handleWorkflowAgentProposalSetup(proposalId);
+        await this.handleAgentProposalSetup(proposalId);
         break;
       default:
         this.logger.warn(
@@ -488,10 +488,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Handle the "setup" action for an agent proposal.
    * Opens the proposal in the main view for editing before execution.
    */
-  private async handleWorkflowAgentProposalSetup(
+  private async handleAgentProposalSetup(
     proposalId: string,
   ): Promise<void> {
-    const proposal = this.provider.getPendingWorkflowAgentProposal(proposalId);
+    const proposal = this.provider.getPendingAgentProposal(proposalId);
     if (!proposal) {
       this.logger.warn(
         this.channel,

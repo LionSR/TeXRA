@@ -17,7 +17,7 @@ import {
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { proposalCoordinator } from '@agent/runtime/WorkflowAgentProposalCoordinator';
+import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - logger
