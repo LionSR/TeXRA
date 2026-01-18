@@ -53,7 +53,7 @@ import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
-import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type {
@@ -82,7 +82,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
-import { InterruptManager } from './InterruptManager';
+import { createInterruptManager } from './InterruptManager';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -244,7 +244,7 @@ async function resolveAgentBase(
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
-  const modelHandler = ModelFactory.createHandler(
+  const modelHandler = createModelHandler(
     MODEL_CONFIGS[fullConfig.model],
   );
 
@@ -632,7 +632,7 @@ export async function executeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      const interruptManager = new InterruptManager();
+      const interruptManager = createInterruptManager();
 
       if (setting.agentType === AgentType.ToolUse) {
         // Tool-use flow execution
@@ -709,7 +709,7 @@ export async function executeMergeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      const interruptManager = new InterruptManager();
+      const interruptManager = createInterruptManager();
 
       // Create merge-specific output file location getter
       const fileService = new TaskRunFileService(executionId);
@@ -777,7 +777,7 @@ export async function resumeToolUseFromSnapshot(
     throw new Error('Resume agent configuration is missing session metadata.');
   }
 
-  const interruptManager = new InterruptManager();
+  const interruptManager = createInterruptManager();
 
   await runFlowWithLifecycle(
     ctx,
