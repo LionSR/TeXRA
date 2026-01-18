@@ -99,7 +99,7 @@ function buildToolUseAgentsList(): string {
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
 function proposalResultToToolResult(
-  result: Awaited<ReturnType<typeof proposalCoordinator.waitForUserAction>>,
+  result: Awaited<ReturnType<typeof proposalCoordinator.waitForProposal>>,
   agentName: string,
   context: 'workflow' | 'delegation',
 ): ToolResult | null {
@@ -288,7 +288,7 @@ instruction="This is a research paper about quantum computing. Fix grammar error
     const streamId = getRequiredStreamId();
     const proposalId = randomUUID();
 
-    const result = await proposalCoordinator.waitForUserAction(streamId, {
+    const result = await proposalCoordinator.waitForProposal(streamId, {
       proposalId,
       proposal,
     });
@@ -397,7 +397,7 @@ instruction="Read the paper at /workspace/paper.tex which proposes a new attenti
     const streamId = getRequiredStreamId();
     const proposalId = randomUUID();
 
-    const result = await proposalCoordinator.waitForUserAction(streamId, {
+    const result = await proposalCoordinator.waitForProposal(streamId, {
       proposalId,
       proposal,
     });
