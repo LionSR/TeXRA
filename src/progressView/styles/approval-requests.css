@@ -85,6 +85,14 @@
   transform: rotate(180deg);
 }
 
+.approval-request__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.approval-request__feedback-input {
+  width: 100%;
+}
+
 .approval-request--feedback-active
   .approval-request__actions
   vscode-toolbar-button[data-action='reject']::part(control) {
