@@ -156,7 +156,9 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .nullable()
     .prefault(null)
-    .describe('Reference file for context'),
+    .describe(
+      'Reference file providing guidance or examples (not modified). Do not put .bib files here.',
+    ),
   referenceFiles: z
     .array(z.string())
     .prefault([])
@@ -165,7 +167,9 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .nullable()
     .prefault(null)
-    .describe('Auxiliary file for supplementary content'),
+    .describe(
+      'Auxiliary file for supplementary content like bibliographies (.bib files).',
+    ),
   auxiliaryFiles: z
     .array(z.string())
     .prefault([])
@@ -179,7 +183,12 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional media files'),
-  outputFiles: z.array(z.string()).prefault([]).describe('Output file paths'),
+  outputFiles: z
+    .array(z.string())
+    .prefault([])
+    .describe(
+      'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
+    ),
   useMultipleOutputs: z
     .boolean()
     .prefault(false)
