@@ -6,6 +6,12 @@
   margin-top: var(--spacing-medium, 8px);
 }
 
+/* Override vscode-collapsible header theming */
+.followup-collapsible::part(header) {
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+}
+
 .followup-section {
   display: flex;
   flex-direction: column;
