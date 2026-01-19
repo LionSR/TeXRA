@@ -1,9 +1,7 @@
 /**
- * Retry requests - component-specific styles only
- * Shared styles are in requests-shared.css
+ * Retry requests styles for ProgressView
  */
 
-/* Container theme - warning style */
 .retry-requests {
   border: 1px solid var(--vscode-inputValidation-warningBorder);
   background: var(--vscode-inputValidation-warningBackground);
@@ -13,12 +11,10 @@
   color: var(--color-warning);
 }
 
-/* Button flex basis */
 .retry-request__actions vscode-toolbar-button {
   flex: 1 1 8rem;
 }
 
-/* Operation label */
 .retry-request__operation {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--font-size-sm);
@@ -26,7 +22,6 @@
   font-weight: 500;
 }
 
-/* Error message */
 .retry-request__error {
   font-size: var(--font-size-xs);
   color: var(--color-error);
@@ -36,14 +31,9 @@
   text-overflow: ellipsis;
 }
 
-/* Expandable error details */
 .retry-request__error-details {
   margin-top: var(--spacing-tiny);
   font-size: var(--font-size-xs);
-}
-
-.retry-request__error-details[hidden] {
-  display: none;
 }
 
 .retry-request__error-summary {
@@ -60,7 +50,7 @@
 }
 
 .retry-request__error-body {
-  margin: var(--spacing-tiny) 0 0 0;
+  margin-top: var(--spacing-tiny);
   padding: var(--spacing-small);
   background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
   border-radius: var(--border-radius-small);
@@ -72,7 +62,6 @@
   overflow-y: auto;
 }
 
-/* Relay error styling - distinct visual indicator */
 .retry-request--relay .retry-request__operation {
   color: var(--vscode-editorWarning-foreground, #ff8c00);
 }
@@ -81,27 +70,20 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
+  inset-block: 0;
   width: 3px;
   background: var(--vscode-editorWarning-foreground, #ff8c00);
   border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
 }
 
-/* Feedback section */
 .retry-request__feedback {
   margin-top: var(--spacing-small);
-}
-
-.retry-request__feedback[hidden] {
-  display: none;
 }
 
 .retry-request__feedback-input {
   width: 100%;
 }
 
-/* Retry button when feedback is shown */
 .retry-request--feedback-active
   .retry-request__actions
   vscode-toolbar-button[data-action='retry']::part(control) {

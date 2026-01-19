@@ -1,20 +1,12 @@
 /**
  * File list styles for ProgressView
- * Styling for file list entries and file tree display
- * Uses native VS Code collapsible component
  */
 
-/* Collapsible container styling */
 .files-collapsible {
   margin: 0;
   border-top: var(--border-thin) solid var(--color-border);
 }
 
-.files-collapsible[hidden] {
-  display: none;
-}
-
-/* Override vscode-collapsible header padding and theming */
 .files-collapsible::part(header) {
   padding: var(--spacing-tiny) var(--spacing-medium);
   background-color: var(--vscode-sideBarSectionHeader-background, transparent);
@@ -25,7 +17,6 @@
   padding: 0 var(--spacing-small) var(--spacing-tiny);
 }
 
-/* File metadata styling */
 .file-list-content .file-var {
   color: var(--color-text-secondary);
   opacity: 0.8;
@@ -40,11 +31,10 @@
   font-style: italic;
 }
 
-/* XML link container for missing outputs */
 .xml-link-container {
   margin-top: var(--spacing-small);
   padding-top: var(--spacing-small);
-  border-top: 1px solid var(--vscode-widget-border);
+  border-top: var(--border-thin) solid var(--vscode-widget-border);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -55,14 +45,12 @@
   opacity: var(--opacity-subtle);
 }
 
-/* Document tag info styling */
 .xml-link-container .document-tag {
   color: var(--color-text-secondary);
   opacity: 0.8;
   font-style: italic;
 }
 
-/* Hint for fixing XML and resuming */
 .xml-link-container .xml-fix-hint {
   flex-basis: 100%;
   margin-top: var(--spacing-tiny);

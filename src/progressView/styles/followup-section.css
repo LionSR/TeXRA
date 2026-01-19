@@ -1,12 +1,11 @@
 /**
- * Followup section styles for workflow continuation
+ * Followup section styles for ProgressView
  */
 
 .followup-collapsible {
   margin-top: var(--spacing-medium);
 }
 
-/* Override vscode-collapsible header theming */
 .followup-collapsible::part(header) {
   background-color: var(--vscode-sideBarSectionHeader-background, transparent);
   color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
@@ -54,7 +53,6 @@
   min-width: 0;
 }
 
-/* Position dropdowns to open upward since section is at bottom of view */
 .followup-select-group {
   position: relative;
 }
@@ -65,13 +63,11 @@
   top: auto;
 }
 
-/* Hide agent select group in merge mode (merge always uses 'merge' agent) */
 .followup-section[data-mode='merge']
   .followup-select-group:has(.followup-agent-select) {
   display: none;
 }
 
-/* Initial question textarea - hidden by default, shown in chat mode */
 .followup-initial-question {
   display: none;
   flex-direction: column;
@@ -91,7 +87,6 @@
   gap: var(--spacing-medium);
 }
 
-/* Hide options in chat/merge modes */
 .followup-section[data-mode='chat'] .followup-options,
 .followup-section[data-mode='merge'] .followup-options {
   display: none;
@@ -108,7 +103,6 @@
   min-width: 80px;
 }
 
-/* Hide Setup button in merge mode (merge executes directly) */
 .followup-section[data-mode='merge'] #followupSetupBtn {
   display: none;
 }

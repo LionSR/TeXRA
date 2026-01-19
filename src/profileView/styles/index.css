@@ -1,9 +1,7 @@
-/*
+/**
  * Profile view styles
- * Base styles (body, badge, text-secondary) inherited from common.css
  */
 
-/* Section headers (h2) have distinct styling with bottom border */
 h2 {
   color: var(--vscode-foreground);
   margin-top: var(--spacing-xlarge);
@@ -13,13 +11,11 @@ h2 {
   padding-bottom: var(--spacing-small);
 }
 
-/* Profile container */
 .profile-container {
   max-width: 1000px;
   margin: 0 auto;
 }
 
-/* Profile info section */
 .profile-info {
   margin-bottom: var(--spacing-xlarge);
 }
@@ -41,7 +37,6 @@ h2 {
   color: var(--vscode-foreground);
 }
 
-/* Tier badge - extends .badge from common.css */
 .tier-badge {
   text-transform: uppercase;
   font-weight: 600;
@@ -66,7 +61,6 @@ h2 {
   color: var(--vscode-button-foreground);
 }
 
-/* Not authenticated state */
 .not-authenticated {
   text-align: center;
   padding: var(--spacing-xlarge);
@@ -77,12 +71,10 @@ h2 {
   color: var(--color-text-secondary);
 }
 
-/* Remote agents section */
 .remote-agents-section {
   margin-top: var(--spacing-xlarge);
 }
 
-/* Agents table */
 .agents-table {
   width: 100%;
   border-collapse: collapse;
@@ -91,7 +83,7 @@ h2 {
 
 .agents-table th,
 .agents-table td {
-  padding: var(--spacing-medium) var(--spacing-medium);
+  padding: var(--spacing-medium);
   text-align: left;
   border-bottom: var(--border-thin) solid var(--color-border);
 }
@@ -119,7 +111,6 @@ h2 {
   max-width: 300px;
 }
 
-/* Visibility badges - extends .badge.badge--small from common.css */
 .visibility-badge {
   text-transform: lowercase;
 }
@@ -134,13 +125,11 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Category badges - extends .badge.badge--small from common.css */
 .category-badge {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Multi-output badges - extends .badge.badge--small from common.css */
 .badge.multi-output-badge.supported {
   background: var(--vscode-testing-iconPassed);
   color: var(--vscode-button-foreground);
@@ -152,12 +141,10 @@ h2 {
   border: var(--border-thin) solid var(--color-border);
 }
 
-/* Select button */
 .select-btn {
   white-space: nowrap;
 }
 
-/* No agents message */
 .no-agents {
   color: var(--color-text-secondary);
   font-style: italic;
@@ -165,13 +152,11 @@ h2 {
   text-align: center;
 }
 
-/* Loading state */
 .loading {
   color: var(--color-text-secondary);
   font-style: italic;
 }
 
-/* API Access section (all authenticated users) */
 .api-access-section {
   margin-top: var(--spacing-xlarge);
   margin-bottom: var(--spacing-xlarge);
@@ -230,7 +215,6 @@ h2 {
   color: var(--color-text-secondary);
 }
 
-/* Model access info - compact summary with collapsible models */
 .model-access-info {
   margin-top: var(--spacing-medium);
 }
