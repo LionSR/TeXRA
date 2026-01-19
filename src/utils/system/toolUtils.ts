@@ -15,6 +15,7 @@ import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
+logger.initialize(CHANNEL);
 
 // Interface for tool configuration
 export interface ToolConfig {
@@ -227,28 +228,95 @@ export async function checkToolInstalled(
 
     let isInstalled = false;
 
+    const extendedPath = extendEnvPath();
     const execOptions = {
-      env: { ...process.env, PATH: extendEnvPath() },
+      env: { ...process.env, PATH: extendedPath },
       reject: false,
     };
 
     // Helper function to execute a command with fallback
     const executeWithFallback = (cmd: string, args: string[]): boolean => {
-      let result = execaSync(cmd, args, execOptions);
-      if (result.exitCode === 0) {
+      logger.debug(
+        CHANNEL,
+        `Checking tool '${cmd}' with args [${args.join(', ')}]`,
+      );
+      logger.debug(
+        CHANNEL,
+        `PATH contains ${extendedPath.split(':').length} entries, includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
+      );
+
+      let result;
+      try {
+        result = execaSync(cmd, args, execOptions);
+      } catch (execErr) {
+        logger.info(
+          CHANNEL,
+          `Exception executing '${cmd}': ${execErr instanceof Error ? execErr.message : String(execErr)}`,
+        );
+        return false;
+      }
+      logger.debug(
+        CHANNEL,
+        `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
+          `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
+          `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
+      );
+
+      // Accept if exit code is 0, OR if we got version-like output
+      // (some tools return non-zero for --version but still output version info)
+      const hasVersionOutput =
+        result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
+      if (result.exitCode === 0 || hasVersionOutput) {
+        logger.debug(CHANNEL, `Tool '${cmd}' detected successfully`);
         return true;
       }
 
       const fallback = findToolInCommonPaths(cmd);
+      logger.debug(
+        CHANNEL,
+        `Fallback search for '${cmd}': ${fallback || 'not found'}`,
+      );
+
       if (fallback) {
         const needsPerl =
           fallback.toLowerCase().endsWith('.pl') ||
           (process.platform === 'win32' && path.extname(fallback) === '');
-        result = needsPerl
-          ? execaSync('perl', [fallback, ...args], execOptions)
-          : execaSync(fallback, args, execOptions);
-        return result.exitCode === 0;
+        logger.debug(
+          CHANNEL,
+          `Running fallback '${fallback}' (needsPerl=${needsPerl})`,
+        );
+        try {
+          result = needsPerl
+            ? execaSync('perl', [fallback, ...args], execOptions)
+            : execaSync(fallback, args, execOptions);
+        } catch (fallbackErr) {
+          logger.info(
+            CHANNEL,
+            `Exception executing fallback '${fallback}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+          );
+          return false;
+        }
+        logger.debug(
+          CHANNEL,
+          `Fallback result: exitCode=${result.exitCode}, ` +
+            `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
+            `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
+        );
+
+        const fallbackHasVersion =
+          result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
+        if (result.exitCode === 0 || fallbackHasVersion) {
+          return true;
+        }
       }
+
+      // Log at info level so it shows in output channel by default
+      logger.info(
+        CHANNEL,
+        `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
+          `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
+          `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
+      );
       return false;
     };
 
