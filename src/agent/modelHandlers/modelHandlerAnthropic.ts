@@ -299,29 +299,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  private setCacheControlTarget(block: CacheControlEligibleBlock): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      return;
-    }
-
+  /**
+   * Sets or clears the cache control target block.
+   * Pass a block to set it as the cache target, or undefined/null to clear.
+   */
+  private updateCacheControlTarget(
+    block: CacheControlEligibleBlock | undefined | null,
+  ): void {
+    // Clear existing cache_control if switching to different block
     if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
       delete this.cacheControlledBlock.cache_control;
     }
 
-    block.cache_control = EPHEMERAL_CACHE_CONTROL;
-    this.cacheControlledBlock = block;
-  }
-
-  private clearCacheControlTarget(): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      this.cacheControlledBlock = undefined;
-      return;
+    if (block && this.capabilities.supportsPromptCaching) {
+      block.cache_control = EPHEMERAL_CACHE_CONTROL;
     }
 
-    if (this.cacheControlledBlock) {
-      delete this.cacheControlledBlock.cache_control;
-    }
-    this.cacheControlledBlock = undefined;
+    this.cacheControlledBlock = block ?? undefined;
   }
 
   /** Ensures a beta flag is included in options, initializing the array if needed. */
@@ -436,12 +430,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
-      this.setCacheControlTarget(target);
+      this.updateCacheControlTarget(target);
     } else if (Array.isArray(content) && content.length > 0) {
       this.logger.debug(
         'No eligible content block available for Anthropic cache control marker',
       );
-      this.clearCacheControlTarget();
+      this.updateCacheControlTarget(undefined);
     }
   }
 
@@ -1103,7 +1097,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
-    this.clearCacheControlTarget();
+    this.updateCacheControlTarget(undefined);
 
     // Create content list for the user message
     const userMessageContent: ContentBlockParam[] = [];
@@ -1457,7 +1451,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         content: [{ type: 'text', text: fileContent }],
       });
 
-      this.clearCacheControlTarget();
+      this.updateCacheControlTarget(undefined);
 
       endTurn = true;
       return [endTurn, messages];
@@ -2055,7 +2049,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ? resultMsg.content.at(-1)
       : undefined;
     if (isCacheControlEligibleBlock(toolResultBlock)) {
-      this.setCacheControlTarget(toolResultBlock);
+      this.updateCacheControlTarget(toolResultBlock);
     }
 
     return [callMsg, resultMsg];
