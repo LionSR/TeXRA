@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -234,26 +235,15 @@ Use view_range: [start, end] to paginate large outputs.`,
       return { output: '(No conversation history available)' };
     }
 
-    const lines: string[] = [];
-    for (let i = 0; i < conversation.length; i++) {
-      const msg = conversation[i] as { role?: string; content?: unknown };
-      const role = msg.role ?? 'unknown';
-      const content = this.formatMessageContent(msg.content);
-      lines.push(`[${i + 1}] ${role}:`);
-      lines.push(content);
-      lines.push('');
-    }
+    const messages = conversation.map((msg, i) => {
+      const m = msg as { role?: string; content?: unknown };
+      const role = m.role ?? 'unknown';
+      const content = this.formatMessageContent(m.content);
+      return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;
+    });
 
-    let output = lines.join('\n');
-
-    // Apply view_range if specified
-    if (viewRange) {
-      const outputLines = output.split('\n');
-      const [start, end] = viewRange;
-      const startIdx = Math.max(start - 1, 0);
-      const endIdx = Math.min(end, outputLines.length);
-      output = outputLines.slice(startIdx, endIdx).join('\n');
-    }
+    const header = `Conversation (${conversation.length} messages):\n\n`;
+    const output = this.applyViewRange(header + messages.join('\n\n'), viewRange);
 
     return { output };
   }
@@ -329,7 +319,7 @@ Use view_range: [start, end] to paginate large outputs.`,
       for (const [name, type] of entries) {
         const entryRelative = relativePath ? `${relativePath}/${name}` : name;
         const entryFull = `${basePath}/${entryRelative}`;
-        const isDir = type === 2; // vscode.FileType.Directory
+        const isDir = type === vscode.FileType.Directory;
 
         try {
           const stats = await StorageFS.stat(entryFull);
@@ -365,24 +355,17 @@ Use view_range: [start, end] to paginate large outputs.`,
     }
 
     const stats = await StorageFS.stat(fullPath);
-    if (stats.type === 2) { // Directory
+    if (stats.type === vscode.FileType.Directory) {
       throw new ToolError(`Path is a directory: /runs/${executionId}/files/${filePath}. Use without trailing path to list.`);
     }
 
-    let content = await StorageFS.read(fullPath);
+    const content = await StorageFS.read(fullPath);
+    const output = this.applyViewRange(
+      `File: /runs/${executionId}/files/${filePath}\n\n${content}`,
+      viewRange,
+    );
 
-    // Apply view_range if specified
-    if (viewRange) {
-      const lines = content.split('\n');
-      const [start, end] = viewRange;
-      const startIdx = Math.max(start - 1, 0);
-      const endIdx = Math.min(end, lines.length);
-      content = lines.slice(startIdx, endIdx).join('\n');
-    }
-
-    return {
-      output: `File: /runs/${executionId}/files/${filePath}\n\n${content}`,
-    };
+    return { output };
   }
 
   /**
@@ -392,5 +375,15 @@ Use view_range: [start, end] to paginate large outputs.`,
     if (bytes < 1024) return `${bytes}B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
+  }
+
+  /**
+   * Apply view_range to output string (line-based pagination).
+   */
+  private applyViewRange(output: string, viewRange?: [number, number]): string {
+    if (!viewRange) return output;
+    const lines = output.split('\n');
+    const [start, end] = viewRange;
+    return lines.slice(Math.max(start - 1, 0), Math.min(end, lines.length)).join('\n');
   }
 }
