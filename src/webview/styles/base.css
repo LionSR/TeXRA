@@ -1,7 +1,5 @@
 /**
  * Base styles for Webview
- * Core layout and structure
- * Note: Base body styles (margin, font-family, font-size, box-sizing) inherited from common.css
  */
 
 body {
@@ -28,7 +26,6 @@ body {
   min-height: 0;
 }
 
-/* Basic form elements */
 .select-group {
   display: flex;
   align-items: center;
@@ -47,12 +44,10 @@ body {
   height: var(--height-button);
 }
 
-/* Icon styling - extends common clickable */
 .codicon.clickable:hover {
   color: var(--button-hover-background);
 }
 
-/* Dropdown containers shared across sections */
 .dropdown-container {
   position: relative;
   display: inline-flex;
@@ -105,11 +100,8 @@ vscode-option[data-requires-key='true'] {
   color: var(--color-text-secondary);
   opacity: var(--opacity-subtle);
   font-style: italic;
-  background-color: var(--vscode-input-background);
 }
 
-/* Red × indicator for missing API keys.
-   Overrides parent opacity/font-style so the ✗ stands out clearly. */
 .api-key-missing {
   color: var(--vscode-errorForeground);
   opacity: 1;

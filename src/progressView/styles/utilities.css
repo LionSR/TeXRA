@@ -1,22 +1,6 @@
 /**
- * Utility classes for ProgressView
- * Only structural utilities that can't be expressed with CSS variables
- *
- * Spacing, colors, and sizes should use CSS variables from common.css:
- *   --spacing-tiny, --spacing-small, --spacing-medium, --spacing-large, --spacing-xlarge
- *   --font-size-sm, --font-size-lg
- *   --vscode-* color variables
+ * Copy button styles for ProgressView
  */
-
-/* ==========================================================================
-   Utilities moved to common.css - import from there
-   ========================================================================== */
-
-/* ==========================================================================
-   Interactive - Copy button behavior
-   Base .copy-button class is in common.css
-   These are view-specific selectors that extend the pattern
-   ========================================================================== */
 
 .banner-content-copy,
 .instruction-panel__copy {
