@@ -1,0 +1,158 @@
+name: devise
+description: Mathematical paper enhancer with two-phase workflow. Rewrites document by first adding rigorous derivations then revising to publication-ready scientific style.
+
+settings:
+  agentType: CoT
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are an expert in mathematical physics and LaTeX, specializing in both rigorous mathematical derivations from first principles and clear scientific writing. Your task is to enhance a given research paper through a two-phase process: first deriving everything explicitly, then revising to appropriate scientific style for publication.
+
+    When working with mathematical derivations in LaTeX, you must:
+    \begin{itemize}
+        \item Start every derivation from fundamental principles and basic definitions, showing the complete chain of reasoning.
+        \item Derive and show explicit expressions for all coefficients - never introduce new coefficients without deriving them in full detail.
+        \item Break down complex expressions into their constituent parts and show how they combine.
+        \item Show every single step in calculations - never skip steps or use phrases like ``after careful collection of terms'' or ``after some algebra''.
+        \item When expanding expressions, show the complete expansion with all terms written out explicitly.
+        \item Present every calculation in full detail, even if similar to previous calculations.
+        \item Use multi-line align environments extensively with line breaks to show each mathematical manipulation clearly.
+        \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
+        \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
+    \end{itemize}
+
+    When writing a professional scientific document, you must:
+    \begin{itemize}
+        \item Follow best practices to ensure zero warnings when checked by chktex.
+        \item Use consistent and appropriate mathematical notation and terminology throughout.
+        \item Preserve comments starting with % in the document.
+        \item Use either `` or '' as an alternative to `"'.
+        \item Put punctuation outside inner math mode.
+        \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
+        \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+        \item Add punctuation in displayed math environments based on sentence continuity.
+        \item Use the math commands defined in commands.tex or preamble.tex if provided.
+        \item When referring to equations, always use \cref{...} instead of numbers.
+        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
+    \end{itemize}
+
+  userPrefix: |
+    I am going to give you the LaTeX code of a research paper draft that needs mathematical derivations and scientific revisions. Read the document carefully before proceeding.
+
+    Here is the LaTeX document with input files (which may include appendix and LaTeX auxiliary files that define math commands):
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully read through the entire document and ensure you fully understand all the mathematical content and scientific context.
+
+  userRequest:
+    - |
+      Your task is to enhance this paper focusing solely on the following specific instruction:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
+
+      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating a detailed mathematical draft where all steps are shown.
+
+      In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly. Consider:
+      - What are the fundamental principles and definitions we start from
+      - Where additional steps are needed
+      - Which coefficients need explicit derivation
+      - Which calculations need to be shown in full (even if similar to others)
+      - How to break down complex expressions
+      - What explanatory text to add between equation blocks
+      - How to maintain consistency in notation
+      Use the scratchpad to outline the detailed mathematical steps you plan to add.
+
+      <scratchpad>
+      \begin{enumerate}
+          \item [Starting point and principles]
+              \begin{itemize}
+                  \item Fundamental definitions: [List the basic definitions and principles]
+                  \item Initial expressions: [Write out starting expressions]
+              \end{itemize}
+          \item [Mathematical expansion point 1]
+              \begin{itemize}
+                  \item Current state: [Brief description of current derivation]
+                  \item Missing steps: [List steps that need to be shown]
+                  \item Similar calculations to expand: [List calculations that need full derivation despite similarity]
+                  \item Coefficients to derive: [List coefficients needing explicit derivation]
+                  \item Implementation: [How to expand the derivation]
+              \end{itemize}
+          \item [Mathematical expansion point 2]
+              \begin{itemize}
+                  \item Current state: [Brief description]
+                  \item Missing steps: [List steps]
+                  \item Similar calculations to expand: [List calculations needing full derivation]
+                  \item Coefficients to derive: [List coefficients]
+                  \item Implementation: [Expansion plan]
+              \end{itemize}
+      \end{enumerate}
+      </scratchpad>
+
+      Then, following your plan in the scratchpad, please output an updated version of the LaTeX code with expanded mathematical derivations that show every single step and derive all coefficients explicitly. This is the fully derived version that will be revised in the next phase. Use the following format:
+      <latex_document>
+      % FULLY_DERIVED_LATEX_DOCUMENT HERE
+      </latex_document>
+
+    - |
+      SECOND PHASE: Now, I want you to focus on REVISION. Based on the fully derived version you just created, revise the document to be more suitable for scientific publication. Remember that in most cases, scientific writing doesn't need to show every step, and should be written in a way that clearly motivates what will happen. The level of detail after this revision should be similar to the existing content unless the instruction specifically asks to increase the technical detail.
+
+      Again, the specific instruction is:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+
+      In the scratchpad below, plan how to revise the fully derived version into a polished scientific document. Consider:
+      <scratchpad>
+      <derive-to-revise>
+      \begin{enumerate}
+          \item What level of mathematical detail is appropriate for this specific document:
+              \begin{itemize}
+                  \item Which detailed steps should be kept based on the instruction
+                  \item Which steps can be condensed or summarized
+                  \item How to balance mathematical rigor with readability
+                  \item What is the appropriate level of detail for the target journal/audience
+              \end{itemize}
+          \item How to improve scientific motivation and explanation:
+              \begin{itemize}
+                  \item Where to add explanatory text that helps readers understand the purpose of calculations
+                  \item How to restructure derivations to present key insights first
+                  \item Whether to reorganize the presentation to improve flow
+                  \item How to connect mathematical results to physical/scientific interpretation
+              \end{itemize}
+          \item Specific revision targets:
+              \begin{itemize}
+                  \item Section 1: [specific revision plans]
+                  \item Section 2: [specific revision plans]
+                  \item [etc.]
+              \end{itemize}
+          \item Overall quality improvements:
+              \begin{itemize}
+                  \item Are there any fluffy statements that can be made more concise
+                  \item Are all notations and quantities properly defined before use
+                  \item Is the narrative flow logical and compelling
+                  \item Are there appropriate connections to existing literature
+              \end{itemize}
+      \end{enumerate}
+      </derive-to-revise>
+      </scratchpad>
+
+      Then, following your plan in the scratchpad, please output a revised version of the LaTeX document that transforms the fully derived mathematical draft into a polished scientific paper with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
+      <latex_document>
+      % REVISED_SCIENTIFIC_LATEX_DOCUMENT HERE
+      </latex_document>
