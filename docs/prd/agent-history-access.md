@@ -176,7 +176,9 @@ const [namespace, id, resource, ...rest] = segments;
 
 if (namespace !== 'runs') throw new ToolError('Path must start with /runs');
 if (!id) return this.listRuns();
-if (!resource) return this.showExecution(id);  // Config + conversation combined
+if (!resource) return this.showSummary(id);
+if (resource === 'config') return this.showConfig(id);
+if (resource === 'conversation') return this.showConversation(id);
 if (resource === 'files') {
   if (rest.length === 0) return this.listFiles(id);
   return this.readFile(id, rest.join('/'));
@@ -186,7 +188,7 @@ if (resource === 'files') {
 ### Files Created
 
 ```
-src/tools/RunsTool.ts  # Single file, ~280 lines
+src/tools/RunsTool.ts  # Single file, ~400 lines
 ```
 
 ### Files Modified
@@ -289,12 +291,14 @@ An orchestrating tool-use agent can:
 
 ## Success Criteria
 
-1. Agent can list past executions
-2. Agent can view execution detail (config + conversation combined)
-3. Agent can read generated files from past runs
-4. Works for both tool-use and workflow agents
-5. No breaking changes to existing code
-6. Single file implementation (~280 lines)
+1. Agent can list past executions (sorted by time, most recent first)
+2. Agent can view execution summary with navigation hints
+3. Agent can get config as JSON (for propose_workflow/propose_agent)
+4. Agent can view conversation history
+5. Agent can read generated files from past runs
+6. Works for both tool-use and workflow agents
+7. No breaking changes to existing code
+8. Single file implementation (~400 lines)
 
 ## References
 
