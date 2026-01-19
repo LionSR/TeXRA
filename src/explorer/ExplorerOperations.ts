@@ -67,9 +67,9 @@ export class ExplorerOperations {
    */
   private isBuiltInPath(targetPath: string): boolean {
     return (
-      (this.builtInAgentsPath !== null &&
+      (Boolean(this.builtInAgentsPath) &&
         targetPath.startsWith(this.builtInAgentsPath)) ||
-      (this.builtInToolUsePath !== null &&
+      (Boolean(this.builtInToolUsePath) &&
         targetPath.startsWith(this.builtInToolUsePath))
     );
   }
