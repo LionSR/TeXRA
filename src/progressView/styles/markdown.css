@@ -28,27 +28,23 @@
 .markdown-content h3,
 .markdown-content h4 {
   color: var(--vscode-textLink-foreground, #3794ff);
-  margin-top: 1em;
-  margin-bottom: 0.5em;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   line-height: 1.25;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
 }
 
-.markdown-content h1:first-child,
-.markdown-content h2:first-child,
-.markdown-content h3:first-child,
-.markdown-content h4:first-child {
+.markdown-content :is(h1, h2, h3, h4):first-child {
   margin-top: 0;
 }
 
 .markdown-content h1 {
-  font-size: var(--font-size-lg);
   border-bottom: var(--border-thin) solid var(--color-border);
   padding-bottom: var(--spacing-small);
 }
 
 .markdown-content h2 {
-  font-size: var(--font-size-lg);
   padding-left: var(--spacing-medium);
   margin-top: var(--spacing-large);
   margin-bottom: var(--spacing-small);
@@ -58,14 +54,6 @@
   padding-bottom: var(--spacing-tiny);
   border-radius: var(--border-radius) 0 0 var(--border-radius);
   color: var(--color-text-link);
-}
-
-.markdown-content h3 {
-  font-size: var(--font-size-lg);
-}
-
-.markdown-content h4 {
-  font-size: var(--font-size-lg);
 }
 
 /* Add styles to control paragraph spacing */
