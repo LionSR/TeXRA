@@ -155,7 +155,8 @@ export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
   };
 });
 
-// Re-export AgentCategory for consumers that need the enum
+// Re-export AgentCategory for convenience
+// Canonical source: AgentDataclass.ts
 export { AgentCategory };
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
