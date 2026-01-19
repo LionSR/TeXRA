@@ -472,12 +472,10 @@ export class AgentWorkspaceState {
   }
 
   resetReasoning(): void {
-    this.reasoning.thinkingBlocks = [];
-    this.reasoning.thinkingAdded = false;
+    Object.assign(this.reasoning, createReasoningCacheState());
   }
 
   resetServerToolContent(): void {
-    this.serverToolContent.contentBlocks = [];
-    this.serverToolContent.lastAssistantContent = [];
+    Object.assign(this.serverToolContent, createServerToolContentState());
   }
 }
