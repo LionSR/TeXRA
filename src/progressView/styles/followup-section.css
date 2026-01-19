@@ -6,6 +6,11 @@
   margin-top: var(--spacing-medium);
 }
 
+.followup-collapsible::part(header) {
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+}
+
 .followup-section {
   display: flex;
   flex-direction: column;
@@ -16,6 +21,10 @@
 .followup-mode-toggle {
   display: flex;
   align-items: center;
+}
+
+.followup-mode-toggle vscode-radio-group {
+  display: flex;
   gap: var(--spacing-large);
 }
 
