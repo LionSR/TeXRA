@@ -27,12 +27,23 @@ const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
 
 const ArxivSearchInputSchema = z.strictObject({
   query: z.string(),
-  field: SearchFieldSchema.nullish().describe(
-    'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
-  ),
+  field: SearchFieldSchema.nullish()
+    .transform((v) => v ?? 'all')
+    .describe(
+      'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
+    ),
   categories: z.array(z.string()).nullish(),
-  maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).nullish(),
-  start: z.int().min(0).nullish(),
+  maxResults: z
+    .int()
+    .positive()
+    .max(ARXIV_CONSTANTS.MAX_RESULTS)
+    .nullish()
+    .transform((v) => v ?? ARXIV_CONSTANTS.DEFAULT_RESULTS),
+  start: z
+    .int()
+    .min(0)
+    .nullish()
+    .transform((v) => v ?? 0),
   sortBy: SortBySchema.nullish(),
   sortOrder: SortOrderSchema.nullish(),
 });
@@ -49,7 +60,7 @@ export class ArxivSearchTool extends defineTool({
     const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     // Select the query function based on the field parameter
-    const searchField = input.field ?? 'all';
+    const { field: searchField } = input;
     const fieldQueryFns = {
       author: authorQuery,
       title: titleQuery,
@@ -91,8 +102,8 @@ export class ArxivSearchTool extends defineTool({
 
     let client = createArxivClient()
       .query(query)
-      .start(input.start ?? 0)
-      .maxResults(input.maxResults ?? ARXIV_CONSTANTS.DEFAULT_RESULTS);
+      .start(input.start)
+      .maxResults(input.maxResults);
 
     if (input.sortBy) {
       client = client.sortBy(input.sortBy);
@@ -121,7 +132,7 @@ export class ArxivSearchTool extends defineTool({
     const payload = {
       query: trimmedQuery,
       field: searchField,
-      start: input.start ?? 0,
+      start: input.start,
       count: results.length,
       totalResults: null, // arxiv-client doesn't expose totalResults
       results,
