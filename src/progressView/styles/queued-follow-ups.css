@@ -5,7 +5,7 @@
 
 /* Collapsible container styling */
 .queued-follow-ups-collapsible {
-  border-radius: var(--radius);
+  border-radius: var(--border-radius);
   background-color: var(--vscode-inputValidation-infoBackground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
 }
@@ -41,7 +41,7 @@
   font-size: var(--font-size);
   line-height: 1.4;
   background-color: var(--vscode-editor-background);
-  border-radius: var(--radius-sm);
+  border-radius: var(--border-radius-small);
   border: 1px solid var(--color-border);
 }
 
@@ -57,5 +57,5 @@
   flex: 1;
   word-break: break-word;
   white-space: pre-wrap;
-  color: var(--color-text);
+  color: var(--vscode-foreground);
 }
