@@ -66,7 +66,7 @@ class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private isFlushing = false;
-  private config: UsageLogConfig = { ...DEFAULT_CONFIG };
+  private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
 
   /**
