@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import { formatZodError, showLoggedMessage } from '@common/errors';
+import { parseWithErrorDisplay } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
@@ -97,14 +97,8 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 // --- Handlers ---
 
 async function handlePack(config: unknown): Promise<void> {
-  const parsed = PackConfigSchema.safeParse(config);
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid config: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
+  const data = await parseWithErrorDisplay(CHANNEL, PackConfigSchema, config, 'config');
+  if (!data) return;
 
   const {
     agent,
@@ -114,7 +108,7 @@ async function handlePack(config: unknown): Promise<void> {
     useMultipleOutputs,
     streamId,
     skipProgressViewClear,
-  } = parsed.data;
+  } = data;
 
   if (outputFiles.length > 1 && !useMultipleOutputs) {
     logger.warn(
@@ -147,16 +141,14 @@ async function handlePackSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const parsed = PackParamsSchema.safeParse({ inputFile, agent, model });
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid params: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    PackParamsSchema,
+    { inputFile, agent, model },
+    'params',
+  );
+  if (!data) return;
 
-  const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
   showPackResult(result, data.inputFile);
   emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
@@ -168,21 +160,13 @@ async function handlePackMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const parsed = PackMultipleSchema.safeParse({
-    inputFile,
-    agent,
-    model,
-    outputFiles,
-  });
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid params: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
-
-  const data = parsed.data;
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    PackMultipleSchema,
+    { inputFile, agent, model, outputFiles },
+    'params',
+  );
+  if (!data) return;
   const result = await runPackMultiple(
     data.model,
     data.inputFile,
