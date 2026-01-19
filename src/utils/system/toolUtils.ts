@@ -234,15 +234,22 @@ export async function checkToolInstalled(
       reject: false,
     };
 
+    // Log PATH info once (not per-command)
+    logger.debug(
+      CHANNEL,
+      `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
+        `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
+    );
+
+    // Check if output contains version-like pattern (e.g., "3.7.1")
+    const hasVersionOutput = (result: { stdout?: string; stderr?: string }) =>
+      result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
+
     // Helper function to execute a command with fallback
     const executeWithFallback = (cmd: string, args: string[]): boolean => {
       logger.debug(
         CHANNEL,
         `Checking tool '${cmd}' with args [${args.join(', ')}]`,
-      );
-      logger.debug(
-        CHANNEL,
-        `PATH contains ${extendedPath.split(':').length} entries, includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
       );
 
       let result;
@@ -264,9 +271,7 @@ export async function checkToolInstalled(
 
       // Accept if exit code is 0, OR if we got version-like output
       // (some tools return non-zero for --version but still output version info)
-      const hasVersionOutput =
-        result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
-      if (result.exitCode === 0 || hasVersionOutput) {
+      if (result.exitCode === 0 || hasVersionOutput(result)) {
         logger.debug(CHANNEL, `Tool '${cmd}' detected successfully`);
         return true;
       }
@@ -303,9 +308,7 @@ export async function checkToolInstalled(
             `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
         );
 
-        const fallbackHasVersion =
-          result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
-        if (result.exitCode === 0 || fallbackHasVersion) {
+        if (result.exitCode === 0 || hasVersionOutput(result)) {
           return true;
         }
       }
