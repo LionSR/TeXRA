@@ -90,12 +90,10 @@ export class LatexMediaManager {
       texFiles.map(async (file): Promise<FileLocation | undefined> => {
         const buildDir = path.join(path.dirname(file.absolutePath), 'build');
         await flexibleFS.ensureDir(pathToLocation(buildDir));
-        const compiled = await compileLatex2Pdf(
-          file,
-          undefined,
-          buildDir,
-          true,
-        );
+        const compiled = await compileLatex2Pdf(file, {
+          outputDirectory: buildDir,
+          compiler: 'latexmk',
+        });
         if (compiled) {
           const pdfFile = path.join(
             buildDir,
