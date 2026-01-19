@@ -42,7 +42,7 @@
 .tool-use-separator {
   margin: var(--spacing-small) 0;
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
   opacity: 0.3;
 }
 

@@ -7,7 +7,7 @@
 /* Collapsible container styling */
 .files-collapsible {
   margin: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
 }
 
 .files-collapsible[hidden] {
