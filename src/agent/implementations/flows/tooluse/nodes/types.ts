@@ -93,27 +93,37 @@ export function assertPreparedShared(
 // ============================================================================
 
 /**
- * Lightweight schema for detecting flat vs legacy shared state format.
+ * Lightweight schema for detecting and migrating legacy shared state format.
  * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
  * - only validates enough to detect format, not full content.
  */
 const FlatFormatSchema = z.looseObject({ conversation: z.array(z.unknown()) });
-const LegacyFormatSchema = z.looseObject({
-  state: z.looseObject({ conversation: z.array(z.unknown()) }),
-});
-
-const MigrationSharedSchema = z
-  .union([FlatFormatSchema, LegacyFormatSchema])
-  .transform((data) => ('state' in data ? data.state : data));
+const LegacyStateSchema = z.looseObject({ conversation: z.array(z.unknown()) });
 
 /**
  * Migrate legacy shared state to current flat format.
  * Legacy: `{ state: { conversation, stateSlices, ... } }`
  * Current: `{ conversation, stateSlices, ... }` (flat)
  *
- * @returns Migrated state, or null if neither format matches
+ * @returns Object with migrated data and whether migration occurred, or null if invalid
  */
-export function migrateSharedState(shared: unknown): ToolUseRunShared | null {
-  const result = MigrationSharedSchema.safeParse(shared);
-  return result.success ? (result.data as ToolUseRunShared) : null;
+export function migrateSharedState(
+  shared: unknown,
+): { data: ToolUseRunShared; migrated: boolean } | null {
+  // Check if already flat format - return same reference (no migration needed)
+  const flatResult = FlatFormatSchema.safeParse(shared);
+  if (flatResult.success && !('state' in flatResult.data)) {
+    return { data: shared as ToolUseRunShared, migrated: false };
+  }
+
+  // Check if legacy format - extract and return nested state
+  const obj = shared as Record<string, unknown>;
+  if (obj && typeof obj === 'object' && 'state' in obj) {
+    const legacyResult = LegacyStateSchema.safeParse(obj.state);
+    if (legacyResult.success) {
+      return { data: obj.state as ToolUseRunShared, migrated: true };
+    }
+  }
+
+  return null;
 }
