@@ -274,12 +274,6 @@ export function getReasoningPrimaryBlock(
   return state.thinkingBlocks.length > 0 ? state.thinkingBlocks[0] : null;
 }
 
-/** Reset reasoning cache state to initial values */
-export function resetReasoningCacheState(state: ReasoningCacheState): void {
-  state.thinkingBlocks = [];
-  state.thinkingAdded = false;
-}
-
 // ============================================================================
 // ServerToolContentState - Plain object (no class needed)
 // ============================================================================
@@ -306,14 +300,6 @@ export interface ServerToolContentState {
  */
 export function createServerToolContentState(): ServerToolContentState {
   return { contentBlocks: [], lastAssistantContent: [] };
-}
-
-/** Reset server tool content state to initial values */
-export function resetServerToolContentState(
-  state: ServerToolContentState,
-): void {
-  state.contentBlocks = [];
-  state.lastAssistantContent = [];
 }
 
 // Import todo schemas from single source of truth (eventBus/schemas)
@@ -486,10 +472,12 @@ export class AgentWorkspaceState {
   }
 
   resetReasoning(): void {
-    resetReasoningCacheState(this.reasoning);
+    this.reasoning.thinkingBlocks = [];
+    this.reasoning.thinkingAdded = false;
   }
 
   resetServerToolContent(): void {
-    resetServerToolContentState(this.serverToolContent);
+    this.serverToolContent.contentBlocks = [];
+    this.serverToolContent.lastAssistantContent = [];
   }
 }
