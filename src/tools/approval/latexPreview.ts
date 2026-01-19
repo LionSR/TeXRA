@@ -12,6 +12,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import type { SubtypeOption } from '@latex/latexdiff/subtype';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 
 /** Interface for entries that support LaTeX preview operations */
@@ -162,8 +163,14 @@ export async function previewProposedLatex(
 
 /**
  * Run latexdiff on the original and proposed content.
+ * @param entry - The LaTeX preview entry containing original and proposed content
+ * @param options - Optional settings for the diff operation
+ * @param options.subtype - Subtype option (e.g., 'ONLYCHANGEDPAGE' to show only pages with changes)
  */
-export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
+export async function runLatexdiff(
+  entry: LatexPreviewEntry,
+  options?: { subtype?: SubtypeOption },
+): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const originalContent = await fs
       .readFile(entry.originalUri.fsPath, 'utf8')
@@ -196,7 +203,10 @@ export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
       '_diff',
       false,
       'coarse',
-      { cwd: workspacePath ?? path.dirname(original.tempPath) },
+      {
+        cwd: workspacePath ?? path.dirname(original.tempPath),
+        subtype: options?.subtype,
+      },
     );
 
     if (!result.success || !result.diffFileName) {
