@@ -58,8 +58,12 @@ h2 {
 }
 
 .tier-badge.ultra {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #ffffff;
+  background: linear-gradient(
+    135deg,
+    var(--vscode-textLink-foreground) 0%,
+    var(--vscode-textLink-activeForeground) 100%
+  );
+  color: var(--vscode-button-foreground);
 }
 
 /* Not authenticated state */
@@ -122,7 +126,7 @@ h2 {
 
 .badge.visibility-badge.public {
   background: var(--vscode-testing-iconPassed);
-  color: white;
+  color: var(--vscode-button-foreground);
 }
 
 .badge.visibility-badge.custom {

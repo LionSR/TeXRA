@@ -7,16 +7,18 @@
 /* Collapsible container styling */
 .files-collapsible {
   margin: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
 }
 
 .files-collapsible[hidden] {
   display: none;
 }
 
-/* Override vscode-collapsible header padding */
+/* Override vscode-collapsible header padding and theming */
 .files-collapsible::part(header) {
   padding: var(--spacing-tiny) var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .files-collapsible::part(body) {
