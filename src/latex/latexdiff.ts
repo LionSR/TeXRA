@@ -21,7 +21,6 @@ import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 
 // Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
-import type { SubtypeOption } from './latexdiff/subtype';
 
 // ============================================================================
 // LaTeXdiff Result Schemas
@@ -99,7 +98,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string; subtype?: SubtypeOption },
+    options?: { cwd?: string; subtype?: string },
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';

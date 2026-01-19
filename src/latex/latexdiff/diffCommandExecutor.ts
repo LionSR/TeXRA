@@ -8,7 +8,6 @@ import { getConfig } from '@utils/config';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
-import { DEFAULT_SUBTYPE, type SubtypeOption } from './subtype';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
@@ -33,13 +32,11 @@ const ERROR_MESSAGES = {
 /**
  * Options for diff execution.
  * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
- * Overrides the configured default for this execution.
- * @property subtype - Subtype controlling change boundary marking.
- * Use 'ONLYCHANGEDPAGE' to show only pages containing changes.
+ * @property subtype - Subtype for change boundary marking (e.g., 'ONLYCHANGEDPAGE').
  */
 interface DiffExecutionOptions {
   mathMarkup?: MathMarkupOption;
-  subtype?: SubtypeOption;
+  subtype?: string;
   cwd?: string;
 }
 
@@ -100,7 +97,7 @@ export class DiffCommandExecutor {
       '-c',
       `PICTUREENV=${pictureEnvs}`,
       `--math-markup=${mathMarkup}`,
-      `--subtype=${subtype}`,
+      ...(subtype ? [`--subtype=${subtype}`] : []),
       inputFile,
       editedFile,
     ];
@@ -122,7 +119,7 @@ export class DiffCommandExecutor {
       '--force',
       '--git',
       `--math-markup=${mathMarkup}`,
-      `--subtype=${subtype}`,
+      ...(subtype ? [`--subtype=${subtype}`] : []),
       '-r',
       commitHash,
       inputFile,
@@ -199,7 +196,7 @@ export class DiffCommandExecutor {
   private getLatexdiffConfig(options?: DiffExecutionOptions): {
     mathMarkup: MathMarkupOption;
     pictureEnvs: string;
-    subtype: SubtypeOption;
+    subtype?: string;
   } {
     return {
       mathMarkup:
@@ -212,9 +209,7 @@ export class DiffCommandExecutor {
         'texra.latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
       ),
-      subtype:
-        options?.subtype ??
-        getConfig<SubtypeOption>('texra.latexdiff.subtype', DEFAULT_SUBTYPE),
+      subtype: options?.subtype,
     };
   }
 }
