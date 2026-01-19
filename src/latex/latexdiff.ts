@@ -15,7 +15,7 @@ import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
-import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
+import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 
@@ -51,12 +51,10 @@ logger.initialize(CHANNEL);
 const DEFAULT_LATEXDIFF_TIMEOUT_MS = 10000;
 
 export class LaTeXdiffService {
-  private readonly fileNameManager: DiffFileNameManager;
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
   constructor(private readonly channel: string = CHANNEL) {
-    this.fileNameManager = new DiffFileNameManager();
     this.fileProcessor = new DiffFileProcessor(channel);
     this.commandExecutor = new DiffCommandExecutor(
       channel,
@@ -133,11 +131,7 @@ export class LaTeXdiffService {
         };
       }
 
-      diffFileName = this.fileNameManager.generateDiffFileName(
-        inputFile,
-        editedFile,
-        suffix,
-      );
+      diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
       outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       logger.debug(
