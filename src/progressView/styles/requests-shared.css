@@ -13,7 +13,7 @@
   margin: var(--spacing-large) 0;
   padding: var(--spacing-large);
   border-radius: var(--border-radius-large);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
   display: none;
   flex-direction: column;
   gap: var(--spacing-large);
