@@ -310,20 +310,19 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   private async ensureMissingOutputsLoaded(): Promise<void> {
-    if (this.missingOutputsLoaded) {
-      return;
-    }
+    if (this.missingOutputsLoaded) return;
 
     if (!this.missingOutputsLoadPromise) {
-      this.missingOutputsLoadPromise = this.loadMissingOutputs()
-        .then(() => {
+      this.missingOutputsLoadPromise = (async () => {
+        try {
+          await this.loadMissingOutputs();
           this.missingOutputsLoaded = true;
-        })
-        .catch((error) => {
+        } catch (error) {
           this.logger.error('Failed to load missing outputs', { data: error });
           this.missingOutputsLoadPromise = null;
           throw error;
-        });
+        }
+      })();
     }
 
     await this.missingOutputsLoadPromise;

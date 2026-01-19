@@ -40,8 +40,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     );
 
     const workspacePath = WorkspaceFS.getPath();
-    const isWorkspaceFile =
-      !!workspacePath && filePath.startsWith(workspacePath);
+    const isWorkspaceFile = workspacePath && filePath.startsWith(workspacePath);
 
     // Get latexindent config from settings
     const latexindentConfig = getConfig<string>(

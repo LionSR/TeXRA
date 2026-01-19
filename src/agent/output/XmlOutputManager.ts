@@ -33,6 +33,9 @@ import {
 // Local file imports
 import type { OutputFileInfo } from './types';
 
+/** Global version of DOCUMENT_NAME_REGEX for counting matches */
+const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
+
 /** Shared XMLParser configuration for scratchpad output extraction */
 const XML_PARSER_OPTIONS = {
   ignoreAttributes: false,
@@ -84,18 +87,18 @@ export class XmlOutputManager {
     const filename = path.basename(this.agentConfig.inputFile);
     const result = extractDocument(outputContent, documentTag, filename);
 
-    if (result.content) {
-      const suffix = XmlOutputManager.EXTRACTION_METHOD_MESSAGES[result.method];
-      if (suffix) {
-        this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
-      }
-      return result.content;
+    if (!result.content) {
+      this.logger.debugInternal(
+        `No ${documentTag} found in output file using fallback method`,
+      );
+      return null;
     }
 
-    this.logger.debugInternal(
-      `No ${documentTag} found in output file using fallback method`,
-    );
-    return null;
+    const suffix = XmlOutputManager.EXTRACTION_METHOD_MESSAGES[result.method];
+    if (suffix) {
+      this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
+    }
+    return result.content;
   }
 
   private extractMultipleDocumentsbyRegex(
@@ -170,10 +173,7 @@ export class XmlOutputManager {
    * what can actually be extracted, avoiding false warnings.
    */
   private countDocumentTags(content: string): number {
-    // Use global version of shared pattern (case-sensitive)
-    const globalPattern = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
-    const matches = content.match(globalPattern);
-    return matches ? matches.length : 0;
+    return content.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
   }
 
   /**

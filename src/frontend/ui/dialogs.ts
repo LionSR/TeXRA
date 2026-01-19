@@ -64,7 +64,7 @@ export async function selectFile(
   options: FileDialogOptions,
 ): Promise<string | null> {
   const paths = await selectFiles({ ...options, allowMany: false });
-  return paths ? paths[0] : null;
+  return paths?.[0] ?? null;
 }
 
 export interface FileSelectionResult {
