@@ -149,20 +149,23 @@ export async function runToolUseFlow<C = unknown>(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
-    if (flowRecord?.shared) {
+    let isResume = Boolean(flowRecord?.shared);
+    if (isResume) {
       logger.debug('Resuming tool-use flow from persistence');
 
       // Migrate legacy shared state format if needed.
       // Pre-flattening sessions stored shared as { state: { conversation, ... } }
       // which would cause failures when cycle node reads shared.stateSlices.
-      const migratedShared = migrateSharedState(flowRecord.shared);
+      const migratedShared = migrateSharedState(flowRecord!.shared);
       if (migratedShared === null) {
-        logger.warn(
-          'Failed to parse flow record shared state, skipping resume',
-        );
-      } else if (migratedShared !== flowRecord.shared) {
+        // Corrupted/unparseable state - delete and start fresh
+        logger.warn('Failed to parse flow record shared state, starting fresh');
+        await kv.delete(`flow:${executionId}`);
+        flowRecord = null;
+        isResume = false;
+      } else if (migratedShared !== flowRecord!.shared) {
         logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migratedShared;
+        flowRecord!.shared = migratedShared;
         // Persist the migrated format so future resumes use the new structure
         await kv.write(`flow:${executionId}`, flowRecord);
       }
