@@ -277,29 +277,3 @@ vscode-toolbar-button {
 [hidden] {
   display: none !important;
 }
-
-.collapsible-panel::part(header) {
-  padding: var(--spacing-small) var(--spacing-medium);
-  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
-  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
-}
-
-.collapsible-panel::part(body) {
-  padding: 0 var(--spacing-medium) var(--spacing-small);
-}
-
-.collapsible-panel--compact::part(header) {
-  padding: var(--spacing-tiny) var(--spacing-medium);
-}
-
-.collapsible-panel--compact::part(body) {
-  padding: 0 var(--spacing-small) var(--spacing-tiny);
-}
-
-.feedback-section {
-  margin-top: var(--spacing-small);
-}
-
-.feedback-section__input {
-  width: 100%;
-}
