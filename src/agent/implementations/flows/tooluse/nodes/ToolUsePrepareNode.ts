@@ -7,11 +7,7 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import {
-  type NodeExecResult,
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
+import { type NodeExecResult } from '@agent/implementations/flows/common';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -22,10 +18,6 @@ export class ToolUsePrepareNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   async prep(_shared: ToolUseRunShared): Promise<void> {}
 
   async exec(
