@@ -11,6 +11,7 @@ import * as tar from 'tar';
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
@@ -23,6 +24,9 @@ export interface ExtractOptions {
   timeout?: number;
   channel?: string;
 }
+
+const INVALID_ARXIV_INPUT_ERROR =
+  'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
 
 export class ArxivSourceProcessor {
   constructor(private readonly channel: string = 'arxivProcessor') {
@@ -58,13 +62,35 @@ export class ArxivSourceProcessor {
     return extractedIds.length > 0 && extractedIds.includes(id);
   }
 
-  public validateId(id: string): string | null {
-    if (!id) {
-      return 'arXiv ID is required';
+  /**
+   * Normalize input that may be a URL or plain ID into a valid arXiv ID.
+   * Accepts formats like:
+   * - Plain ID: 2404.12175, 2404.12175v2, cs/0501072
+   * - URLs: https://arxiv.org/abs/2404.12175, https://arxiv.org/pdf/2404.12175.pdf
+   * @returns The normalized arXiv ID, or null if extraction fails
+   */
+  public normalizeInput(input: string): string | null {
+    if (!input) {
+      return null;
     }
 
-    if (!this.isValidId(id)) {
-      return 'Invalid arXiv ID format. Please provide a valid arXiv ID like YYMM.NNNNN, YYMM.NNNNNvN, or category/YYMM.NNNNN';
+    const normalized = normaliseArxivIdentifier(input.trim());
+    // Verify the normalized result is a valid arXiv ID
+    return this.isValidId(normalized) ? normalized : null;
+  }
+
+  /**
+   * Validate input that may be a URL or plain arXiv ID.
+   * @returns Error message if invalid, null if valid
+   */
+  public validateId(input: string): string | null {
+    if (!input) {
+      return 'arXiv ID or URL is required';
+    }
+
+    const normalized = this.normalizeInput(input);
+    if (!normalized) {
+      return INVALID_ARXIV_INPUT_ERROR;
     }
 
     return null;
@@ -159,16 +185,17 @@ export class ArxivSourceProcessor {
   }
 
   public async downloadSource(
-    id: string,
+    input: string,
     progressCallback?: (msg: string, increment?: number) => void,
     autoIndent = true,
   ): Promise<string> {
-    logger.info(this.channel, `Downloading arXiv source for ID: ${id}`);
-
-    const validationError = this.validateId(id);
-    if (validationError) {
-      throw new Error(validationError);
+    // Normalize input (URL or ID) to plain arXiv ID
+    const id = this.normalizeInput(input);
+    if (!id) {
+      throw new Error(INVALID_ARXIV_INPUT_ERROR);
     }
+
+    logger.info(this.channel, `Downloading arXiv source for ID: ${id}`);
 
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
