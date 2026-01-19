@@ -8,6 +8,16 @@
   border-bottom: var(--border-thin) solid var(--color-border);
 }
 
+.todo-collapsible::part(header) {
+  padding: var(--spacing-small) var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+}
+
+.todo-collapsible::part(body) {
+  padding: 0 var(--spacing-medium) var(--spacing-small);
+}
+
 .todo-list {
   display: flex;
   flex-direction: column;
