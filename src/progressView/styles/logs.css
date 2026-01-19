@@ -47,24 +47,27 @@
 }
 
 /* Level colors */
+.level-debug,
+.level-info,
+.level-warn,
+.level-error {
+  font-weight: bold;
+}
+
 .level-debug {
   color: var(--vscode-debugTokenExpression-name, #4b9ef9);
-  font-weight: bold;
 }
 
 .level-info {
   color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
-  font-weight: bold;
 }
 
 .level-warn {
   color: var(--color-warning);
-  font-weight: bold;
 }
 
 .level-error {
   color: var(--color-error);
-  font-weight: bold;
 }
 
 /* Message colors */
@@ -191,8 +194,7 @@
   height: var(--spacing-medium);
   border-radius: 50%;
   display: inline-block;
-  margin-left: var(--spacing-small);
-  margin-right: var(--spacing-small);
+  margin: 0 var(--spacing-small);
   position: relative;
   opacity: var(--opacity-subtle);
   transition: all 0.3s ease;
@@ -225,14 +227,13 @@
   opacity: var(--opacity-full);
 }
 
-.status-indicator.is-ready,
-.status-indicator.is-stopped {
+.status-indicator.is-ready {
   background-color: var(--vscode-descriptionForeground);
-  box-shadow: none;
+  opacity: var(--opacity-disabled);
 }
 
-.status-indicator.is-ready {
-  opacity: var(--opacity-disabled);
+.status-indicator.is-stopped {
+  background-color: var(--vscode-descriptionForeground);
 }
 
 .status-indicator.is-running {
@@ -250,14 +251,11 @@
 .status-indicator.is-resuming {
   background-color: var(--vscode-textLink-foreground);
   box-shadow: 0 0 4px var(--vscode-textLink-foreground);
-}
-
-.status-indicator.is-waiting {
   animation: pulse-scale 3s infinite;
 }
 
 .status-indicator.is-resuming {
-  animation: pulse-scale 1.5s infinite;
+  animation-duration: 1.5s;
 }
 
 /* Generated files list - inside vscode-collapsible body */
@@ -280,10 +278,6 @@
   color: var(--color-text-secondary);
 }
 
-.usage-summary-footer[hidden] {
-  display: none;
-}
-
 .usage-summary-footer .run-summary {
   margin-left: auto;
 }
@@ -296,10 +290,6 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   opacity: 0.9;
-}
-
-.context-state[hidden] {
-  display: none;
 }
 
 .context-state .codicon {
@@ -373,27 +363,28 @@
   border-top: none;
 }
 
+/* Compact header with no body padding */
 .round-collapsible::part(header) {
   padding: var(--spacing-tiny) 0;
   font-size: var(--font-size-sm);
-  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
-  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .round-collapsible::part(body) {
   padding: 0;
 }
 
-.added {
-  color: var(--vscode-charts-green, green);
+.added,
+.removed {
   margin-left: var(--spacing-small);
   font-size: var(--font-size-sm);
 }
 
+.added {
+  color: var(--vscode-charts-green, green);
+}
+
 .removed {
   color: var(--vscode-charts-red, red);
-  margin-left: var(--spacing-small);
-  font-size: var(--font-size-sm);
 }
 
 /* Group usage display styling */

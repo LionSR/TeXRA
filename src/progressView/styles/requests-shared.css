@@ -45,26 +45,17 @@
 
 .approval-requests__list,
 .retry-requests__list,
-.workflow-proposals__list,
-.approval-request,
-.retry-request,
-.workflow-proposal,
-.approval-request__details,
-.retry-request__details,
-.workflow-proposal__details {
+.workflow-proposals__list {
   display: flex;
   flex-direction: column;
-}
-
-.approval-requests__list,
-.retry-requests__list,
-.workflow-proposals__list {
   gap: var(--spacing-large);
 }
 
 .approval-request,
 .retry-request,
 .workflow-proposal {
+  display: flex;
+  flex-direction: column;
   border-radius: var(--border-radius);
   border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
   background: var(--vscode-editorHoverWidget-background);
@@ -75,6 +66,8 @@
 .approval-request__details,
 .retry-request__details,
 .workflow-proposal__details {
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-small);
 }
 
@@ -125,8 +118,4 @@
   gap: var(--spacing-small);
 }
 
-.approval-request__actions [hidden],
-.retry-request__actions [hidden],
-.workflow-proposal__actions [hidden] {
-  display: none !important;
-}
+/* Hidden actions use global [hidden] rule from common.css */

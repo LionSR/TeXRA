@@ -102,16 +102,23 @@
   cursor: pointer;
 }
 
-/* Banners */
+/* Base banner styling */
+.api-key-banner,
+.agent-config-banner,
+.dependency-banner,
+.getting-started-banner {
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+}
+
+/* Warning banners */
 .api-key-banner,
 .agent-config-banner,
 .dependency-banner {
   background-color: var(--vscode-inputValidation-warningBackground);
   color: var(--vscode-inputValidation-warningForeground);
   border: 1px solid var(--vscode-inputValidation-warningBorder);
-  border-radius: var(--border-radius);
-  padding: var(--spacing-small) var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -122,9 +129,6 @@
   background-color: var(--vscode-inputValidation-infoBackground);
   color: var(--vscode-inputValidation-infoForeground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
-  border-radius: var(--border-radius);
-  padding: var(--spacing-small) var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
   line-height: 1.5;
 }
 
@@ -172,7 +176,6 @@
   color: var(--vscode-button-background);
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
 .login-banner-text {

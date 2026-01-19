@@ -33,14 +33,17 @@
   gap: var(--spacing-small);
 }
 
+.approval-request__diff-added,
+.approval-request__diff-removed {
+  font-size: var(--font-size-xs);
+}
+
 .approval-request__diff-added {
   color: var(--color-added);
-  font-size: var(--font-size-xs);
 }
 
 .approval-request__diff-removed {
   color: var(--color-removed);
-  font-size: var(--font-size-xs);
 }
 
 .approval-request__diff-label {
@@ -89,18 +92,7 @@
   transform: rotate(180deg);
 }
 
-/* Feedback section */
-.approval-request__feedback {
-  margin-top: var(--spacing-small);
-}
-
-.approval-request__feedback[hidden] {
-  display: none;
-}
-
-.approval-request__feedback-input {
-  width: 100%;
-}
+/* Feedback section - uses .feedback-section and .feedback-section__input from common.css */
 
 /* Reject button when feedback is shown */
 .approval-request--feedback-active
