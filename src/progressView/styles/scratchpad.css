@@ -42,7 +42,7 @@
 .tool-use-separator {
   margin: var(--spacing-small) 0;
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
   opacity: 0.3;
 }
 
@@ -63,10 +63,6 @@
     rgba(255, 0, 0, 0.1)
   );
   border-radius: var(--border-radius-small);
-}
-
-/* Pre-wrapped text content */
-.banner-content--error .error-details {
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -97,29 +93,30 @@
   color: var(--vscode-textLink-foreground, #3794ff);
 }
 
-.tool-user-feedback {
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: var(--spacing-small);
-  background-color: var(
-    --vscode-inputValidation-infoBackground,
-    rgba(55, 148, 255, 0.1)
-  );
-  border-radius: var(--border-radius-small);
-  border-left: 3px solid var(--vscode-textLink-foreground, #3794ff);
-}
-
-/* Error content styling - mirrors user feedback but with error colors */
+/* Shared content block styling */
+.tool-user-feedback,
 .tool-error-content {
   white-space: pre-wrap;
   word-break: break-word;
   padding: var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  border-left: 3px solid;
+}
+
+.tool-user-feedback {
+  background-color: var(
+    --vscode-inputValidation-infoBackground,
+    rgba(55, 148, 255, 0.1)
+  );
+  border-left-color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.tool-error-content {
   background-color: var(
     --vscode-inputValidation-errorBackground,
     rgba(255, 0, 0, 0.1)
   );
-  border-radius: var(--border-radius-small);
-  border-left: 3px solid var(--color-error);
+  border-left-color: var(--color-error);
   color: var(--color-error);
 }
 
