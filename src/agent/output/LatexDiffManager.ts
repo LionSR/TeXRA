@@ -332,12 +332,11 @@ export class LatexDiffManager {
       path.dirname(diffLocation.absolutePath),
       'build',
     );
-    await this.dependencies.compileLatex2Pdf(
-      diffLocation,
-      this.channel,
-      buildDir,
-      true,
-    );
+    await this.dependencies.compileLatex2Pdf(diffLocation, {
+      channel: this.channel,
+      outputDirectory: buildDir,
+      compiler: 'latexmk',
+    });
 
     return diffLocation;
   }

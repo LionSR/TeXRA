@@ -1,13 +1,21 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - log
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
+import {
+  LaTeXCompileOptionsSchema,
+  type LaTeXCompileOptions,
+} from '@common/schemas';
+
+// Local imports - log
 import * as logger from '@logger/logUtils';
-import { runToolWithCheck } from '@utils/system';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -17,16 +25,17 @@ logger.initialize(CHANNEL);
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
- * @param channel Optional channel for logging
- * @param outputDirectory Directory for compiled PDF (default: alongside file)
+ * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns Promise<boolean> True if compilation succeeded
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
-  channel: string = CHANNEL,
-  outputDirectory?: string,
-  useLatexmk: boolean = false,
+  options: LaTeXCompileOptions = {},
 ): Promise<boolean> {
+  // Schema provides compiler default; channel defaults to module constant
+  const parsed = LaTeXCompileOptionsSchema.parse(options);
+  const channel = parsed.channel ?? CHANNEL;
+  const { outputDirectory, compiler } = parsed;
   try {
     const latexFile = latexLocation.absolutePath;
     const outDir = outputDirectory ?? path.dirname(latexFile);
@@ -80,7 +89,7 @@ export async function compileLatex2Pdf(
     ];
 
     let result: Awaited<ReturnType<typeof runToolWithCheck>>;
-    if (useLatexmk) {
+    if (compiler === 'latexmk') {
       result = await runToolWithCheck('latexmk', latexmkArgs, {
         channel,
         env,

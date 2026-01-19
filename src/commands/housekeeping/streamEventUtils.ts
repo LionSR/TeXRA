@@ -1,20 +1,36 @@
 import { bus } from '@eventBus/ProgressEventBus';
 import { getStreamTabId } from '@/logger/streamUtils';
 
+// Local imports - common
+import type { StreamConfig } from '@common/schemas';
+
+export interface ClearMissingOutputsOptions {
+  /** Stream configuration (agent/model/file) */
+  streamConfig: StreamConfig;
+  /** Whether agent uses multiple outputs */
+  useMultipleOutputs: boolean;
+  /** Override stream ID instead of deriving from config */
+  streamIdOverride?: string;
+}
+
 /**
  * Emit clearMissingOutputs event to update the progress view.
  * Used after pack/clean operations to clear missing output indicators.
  */
 export function emitClearMissingOutputs(
-  agent: string,
-  model: string,
-  inputFile: string,
-  useMultipleOutputs: boolean,
-  streamId?: string,
+  options: ClearMissingOutputsOptions,
 ): void {
+  const { streamConfig, useMultipleOutputs, streamIdOverride } = options;
   bus.emit('clearMissingOutputs', {
     stream:
-      streamId ||
-      getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
+      streamIdOverride ||
+      getStreamTabId(
+        streamConfig.agent,
+        streamConfig.model,
+        streamConfig.inputFile,
+        {
+          useMultipleOutputs,
+        },
+      ),
   });
 }
