@@ -107,13 +107,14 @@ function proposalResultToToolResult(
 
   switch (result.action) {
     case 'reject': {
-      const feedback = result.feedback
-        ? `\n\nUser feedback: ${result.feedback}`
-        : '';
+      const feedback = result.feedback?.trim();
       return {
         summary: `User rejected '${agentName}' ${label}`,
-        output: `The ${context === 'workflow' ? 'workflow agent proposal' : 'delegation proposal'} was rejected.${feedback}`,
+        output: `The ${context === 'workflow' ? 'workflow agent proposal' : 'delegation proposal'} was rejected.`,
         isError: true,
+        ...(feedback && feedback.length > 0
+          ? { userInstruction: feedback }
+          : {}),
       };
     }
     case 'timeout':
