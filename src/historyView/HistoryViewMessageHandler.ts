@@ -63,8 +63,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       operationName,
       async ({ historyId }) => {
         try {
-          const historyItem =
-            await AgentHistoryManager.getHistoryItemById(historyId);
+          const historyItem = await AgentHistoryManager.getHistoryItemById(historyId);
           if (!historyItem) {
             await vscode.window.showErrorMessage('History item not found');
             return;
@@ -119,8 +118,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       'deleteAgent',
       async ({ historyId }) => {
         try {
-          const deleted =
-            await AgentHistoryManager.deleteHistoryItemById(historyId);
+          const deleted = await AgentHistoryManager.deleteHistoryItemById(historyId);
           if (deleted) {
             await this.sendHistoryData(view.webview);
           } else {
