@@ -119,6 +119,42 @@ export function formatZodError(error: z.ZodError): string {
 }
 
 /**
+ * Parse data with a Zod schema and show a user-friendly error if parsing fails.
+ *
+ * This consolidates the common pattern of:
+ * 1. Parse with safeParse
+ * 2. If failure, show a logged error message with formatted Zod errors
+ * 3. Return null on failure, parsed data on success
+ *
+ * @param channel - The logger channel for the error message
+ * @param schema - The Zod schema to parse against
+ * @param data - The data to parse
+ * @param context - Optional context for the error message (e.g., "config", "params")
+ * @returns The parsed data if successful, null if validation failed
+ *
+ * @example
+ * ```typescript
+ * const result = await parseWithErrorDisplay(CHANNEL, ConfigSchema, config, 'config');
+ * if (!result) return; // Validation failed, error already shown to user
+ * // Use result safely here
+ * ```
+ */
+export async function parseWithErrorDisplay<T>(
+  channel: string,
+  schema: z.ZodSchema<T>,
+  data: unknown,
+  context?: string,
+): Promise<T | null> {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const prefix = context ? `Invalid ${context}` : 'Invalid input';
+    await showLoggedMessage(channel, `${prefix}: ${formatZodError(result.error)}`);
+    return null;
+  }
+  return result.data;
+}
+
+/**
  * Check if an error represents a file-not-found condition.
  *
  * Handles both Node.js filesystem errors (ENOENT) and VS Code FileSystemError.

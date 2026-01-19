@@ -50,7 +50,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { ReasoningEffort } from '@model/ModelConfig';
 
 // Internal imports
-import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
@@ -63,11 +62,11 @@ import type { FileLocation } from '@utils/files';
 import { K_SLICE } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import {
@@ -1063,24 +1062,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Output file ${outputLocation.absolutePath} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await flexibleFS.read(outputLocation);
-    fileContent = cleanFileContent(fileContent);
 
-    // Extract any existing scratchpad content
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
-    if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
-    }
-
-    await flexibleFS.write(outputLocation, fileContent);
-    this.logger.debug(
-      `Cleaned and saved existing content to ${outputLocation.absolutePath}.`,
+    // Prepare existing file content (read, clean, extract scratchpad, update state)
+    const { content: fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
     );
-
-    // Update workspace state - critical for multi-round agents on resume
-    // so that subsequent rounds have correct context
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(

@@ -41,18 +41,17 @@ import {
 import type { ToolDefinition } from '@model';
 
 // Internal imports
-import { cleanFileContent } from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -858,23 +857,12 @@ export class ModelHandlerOpenAI<
       return [endTurn, messages];
     }
 
-    // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputLocation);
-    fileContent = cleanFileContent(fileContent);
-
-    // Extract any existing scratchpad content
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
-    if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
-    }
-
-    // Write file content to output file
-    await flexibleFS.write(outputLocation, fileContent);
-
-    // Update workspace state - critical for multi-round agents on resume
-    // so that subsequent rounds have correct context
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
+    // Prepare existing file content (read, clean, extract scratchpad, update state)
+    const { content: fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
 
     messages.push({
       role: 'assistant',
