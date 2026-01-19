@@ -10,7 +10,6 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
@@ -20,10 +19,7 @@ import {
   extractBasePaperMetadata,
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
-// eslint-disable-next-line import/order -- grouped with tools imports
-import { ToolError } from '@tools/result';
-// eslint-disable-next-line import/order -- grouped with tools imports
-import { pluralize } from '@tools/utils';
+import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
@@ -50,10 +46,7 @@ export class ArxivSearchTool extends defineTool({
   schema: ArxivSearchInputSchema,
 }) {
   protected async execute(input: ArxivSearchInput) {
-    const trimmedQuery = input.query.trim();
-    if (!trimmedQuery) {
-      throw new ToolError('Search query cannot be empty.');
-    }
+    const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     // Select the query function based on the field parameter
     const searchField = input.field ?? 'all';
@@ -109,16 +102,10 @@ export class ArxivSearchTool extends defineTool({
       client = client.sortOrder(input.sortOrder);
     }
 
-    let entries;
-    try {
-      // Respect arXiv API rate limits
+    const entries = await wrapApiCall(async () => {
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      entries = await client.execute();
-    } catch (error) {
-      throw new ToolError(
-        `Failed to query arXiv API: ${toErrorMessage(error)}`,
-      );
-    }
+      return client.execute();
+    }, 'Failed to query arXiv API');
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
       const base = extractBasePaperMetadata(entry);
