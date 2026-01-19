@@ -7,12 +7,14 @@ Give tool-use agents read-only access to execution history and generated files t
 ## Problem Statement
 
 Agents currently have:
+
 - ✅ Full access to workspace files via `read_file`, `write_file`, `ls`
 - ✅ Full access to `/memories` via `memory` tool
 - ❌ No access to execution history (past conversations, tool calls)
 - ❌ No access to task run files (generated outputs)
 
 This limits an agent's ability to:
+
 - Learn from previous attempts
 - Reference past outputs
 - Propose improved configurations based on what worked
@@ -58,14 +60,14 @@ No `command` parameter - it's always "view" (read-only).
 
 ## Path Semantics
 
-| Path | Source | Returns |
-|------|--------|---------|
-| `/runs` | `AgentHistoryManager.getHistory()` | List: id, timestamp, agent, model, summary |
-| `/runs/{id}` | `AgentHistoryManager` | Summary + navigation hints |
-| `/runs/{id}/config` | `AgentHistoryManager` | `AgentConfig` as JSON |
-| `/runs/{id}/conversation` | `ExecutionKVStore` → `flow:{id}` | `conversation[]` formatted |
-| `/runs/{id}/files` | `StorageFS` → `taskRuns/{id}/` | Directory listing |
-| `/runs/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content |
+| Path                      | Source                               | Returns                                    |
+| ------------------------- | ------------------------------------ | ------------------------------------------ |
+| `/runs`                   | `AgentHistoryManager.getHistory()`   | List: id, timestamp, agent, model, summary |
+| `/runs/{id}`              | `AgentHistoryManager`                | Summary + navigation hints                 |
+| `/runs/{id}/config`       | `AgentHistoryManager`                | `AgentConfig` as JSON                      |
+| `/runs/{id}/conversation` | `ExecutionKVStore` → `flow:{id}`     | `conversation[]` formatted                 |
+| `/runs/{id}/files`        | `StorageFS` → `taskRuns/{id}/`       | Directory listing                          |
+| `/runs/{id}/files/{path}` | `StorageFS` → `taskRuns/{id}/{path}` | File content                               |
 
 ### Special: `current`
 
@@ -80,20 +82,20 @@ runs({ path: '/runs/current/files' })
 
 The tool reads from existing storage - no refactoring required:
 
-| Component | Location | What We Read |
-|-----------|----------|--------------|
-| `AgentHistoryManager` | WorkspaceState | Execution list (id, timestamp, agentConfig) |
-| `ExecutionKVStore` | `executions/{id}/flow:{id}.json` | `conversation[]`, `agentConfig` |
-| `TaskRunFileService` | `taskRuns/{id}/` | Generated files |
+| Component             | Location                         | What We Read                                |
+| --------------------- | -------------------------------- | ------------------------------------------- |
+| `AgentHistoryManager` | WorkspaceState                   | Execution list (id, timestamp, agentConfig) |
+| `ExecutionKVStore`    | `executions/{id}/flow:{id}.json` | `conversation[]`, `agentConfig`             |
+| `TaskRunFileService`  | `taskRuns/{id}/`                 | Generated files                             |
 
 ### Tool-Use vs Workflow Agents
 
 Both agent types store accumulated messages in `shared.conversation[]`. The tool does not expose workflow-specific internals (rounds, per-round state) - these are implementation details.
 
-| Agent Type | `conversation[]` | Rounds | Exposed? |
-|------------|------------------|--------|----------|
-| Tool-use | All messages | N/A | ✅ via `/runs/{id}` |
-| Workflow | Accumulated across rounds | Internal | ✅ via `/runs/{id}` (flattened) |
+| Agent Type | `conversation[]`          | Rounds   | Exposed?                        |
+| ---------- | ------------------------- | -------- | ------------------------------- |
+| Tool-use   | All messages              | N/A      | ✅ via `/runs/{id}`             |
+| Workflow   | Accumulated across rounds | Internal | ✅ via `/runs/{id}` (flattened) |
 
 ## Example Usage
 
@@ -199,13 +201,13 @@ src/tools/registry.ts  # Import + register RunsTool
 
 ### Existing Utilities to Reuse
 
-| Utility | Location | Usage |
-|---------|----------|-------|
-| `getPathSegments` | `@utils/core/pathCore` | Parse virtual paths |
+| Utility                                | Location                                    | Usage                   |
+| -------------------------------------- | ------------------------------------------- | ----------------------- |
+| `getPathSegments`                      | `@utils/core/pathCore`                      | Parse virtual paths     |
 | `getCurrentToolFileInteractionContext` | `@agent/toolUse/ToolFileInteractionContext` | Get current executionId |
-| `getExecutionStore` | `@agent/storage/ExecutionKVStore` | Read flow records |
-| `AgentHistoryManager` | `@common/history` | List executions |
-| `StorageFS` | `@utils/files` | Read task run files |
+| `getExecutionStore`                    | `@agent/storage/ExecutionKVStore`           | Read flow records       |
+| `AgentHistoryManager`                  | `@common/history`                           | List executions         |
+| `StorageFS`                            | `@utils/files`                              | Read task run files     |
 
 ### No Changes Required
 
@@ -270,6 +272,7 @@ propose_workflow({
 ### Cross-Type Learning
 
 An orchestrating tool-use agent can:
+
 1. List executions: `/runs`
 2. Check what worked: `/runs/{id}/config` + `/runs/{id}/conversation`
 3. Propose new execution with modifications
