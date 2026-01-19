@@ -44,17 +44,18 @@ export function createInterruptManager(): InterruptManager {
 
   const getAbortController = (): AbortController | null => abortController;
 
-  const asFlowInput = (): InterruptCallbacks => ({
+  // Cache flow input since callbacks are stable references
+  const flowInput: InterruptCallbacks = {
     checkInterruption,
     setAbortController,
     onInterrupt,
-  });
+  };
 
   return {
     checkInterruption,
     setAbortController,
     onInterrupt,
     getAbortController,
-    asFlowInput,
+    asFlowInput: () => flowInput,
   };
 }

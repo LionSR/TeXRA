@@ -6,6 +6,5 @@ import mime from 'mime-types';
  * Returns null when the type cannot be resolved.
  */
 export function getMimeType(filePath: string): string | null {
-  const mimeType = mime.lookup(filePath);
-  return typeof mimeType === 'string' ? mimeType : null;
+  return mime.lookup(filePath) || null;
 }
