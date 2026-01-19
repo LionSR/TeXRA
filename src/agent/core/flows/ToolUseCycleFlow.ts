@@ -437,27 +437,17 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const endTurn = services.modelHandler.isEndTurnStop(stopReason);
-
-    if (!toolCalls || toolCalls.length === 0 || endTurn) {
-      return {
-        kind: 'success',
-        stopReason,
-        text: text ?? undefined,
-        endTurn: true,
-        serverToolContentBlocks: serverToolData.contentBlocks,
-        lastAssistantContent,
-        normalizedUsage,
-        responseTimeMs: prepRes.responseTimeMs,
-      };
-    }
+    const endTurn =
+      services.modelHandler.isEndTurnStop(stopReason) ||
+      !toolCalls ||
+      toolCalls.length === 0;
 
     return {
       kind: 'success',
-      toolCalls,
+      toolCalls: endTurn ? undefined : toolCalls,
       stopReason,
       text: text ?? undefined,
-      endTurn: false,
+      endTurn,
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,
       normalizedUsage,
