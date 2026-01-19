@@ -1,6 +1,5 @@
 /**
  * Log entry styles for ProgressView
- * Formatting of log messages and containers
  */
 
 .log-container {
@@ -28,7 +27,6 @@
   overflow: visible;
 }
 
-/* Banner copy button styling - base in utilities.css */
 .banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
@@ -41,12 +39,10 @@
   opacity: 1;
 }
 
-/* Timestamp color */
 .timestamp {
   color: var(--color-text-secondary);
 }
 
-/* Level colors */
 .level-debug,
 .level-info,
 .level-warn,
@@ -70,7 +66,6 @@
   color: var(--color-error);
 }
 
-/* Message colors */
 .message-debug {
   color: var(--vscode-textPreformat-foreground, #a9b7c6);
 }
@@ -111,7 +106,6 @@
   padding: 0;
 }
 
-/* Header layout */
 .header-left {
   display: flex;
   align-items: center;
@@ -188,7 +182,6 @@
   color: var(--vscode-foreground);
 }
 
-/* Status indicator styling */
 .status-indicator {
   width: var(--spacing-medium);
   height: var(--spacing-medium);
@@ -258,7 +251,6 @@
   animation-duration: 1.5s;
 }
 
-/* Generated files list - inside vscode-collapsible body */
 .files-container {
   padding: 0;
   font-size: var(--vscode-editor-font-size);
@@ -282,7 +274,6 @@
   margin-left: auto;
 }
 
-/* Context state display (left side of footer) */
 .context-state {
   display: inline-flex;
   align-items: center;
@@ -317,8 +308,6 @@
   min-width: 200px;
 }
 
-/* File path uses common clickable-link styles */
-
 .file-stats {
   white-space: nowrap;
   text-decoration: none;
@@ -326,7 +315,6 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
-/* Remove left spacing when only one stat is shown */
 .file-stats span:first-child {
   margin-left: 0;
 }
@@ -347,14 +335,12 @@
   flex-wrap: nowrap;
 }
 
-/* File action buttons inherit VS Code styling from the web components */
 .file-actions vscode-button,
 .file-actions vscode-toolbar-button {
   margin-right: 0;
   margin-left: var(--spacing-tiny);
 }
 
-/* Round collapsible - vscode-collapsible for workflow mode */
 .round-collapsible {
   border-top: var(--border-thin) solid var(--color-border);
 }
@@ -363,7 +349,6 @@
   border-top: none;
 }
 
-/* Compact header with no body padding */
 .round-collapsible::part(header) {
   padding: var(--spacing-tiny) 0;
   font-size: var(--font-size-sm);
@@ -387,7 +372,6 @@
   color: var(--vscode-charts-red, red);
 }
 
-/* Group usage display styling */
 .group-usage {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -395,7 +379,6 @@
   font-weight: normal;
 }
 
-/* Responsive adjustments */
 @media (max-width: 500px) {
   .file-item {
     flex-wrap: wrap;

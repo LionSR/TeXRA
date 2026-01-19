@@ -1,7 +1,6 @@
 /**
  * Base styles for ProgressView
  * Core layout and structure
- * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 body {
@@ -18,7 +17,6 @@ body {
   overflow: hidden;
 }
 
-/* vscode-split-layout styles */
 vscode-split-layout {
   display: flex;
   width: 100%;
@@ -34,9 +32,6 @@ vscode-split-layout {
   overflow: hidden;
 }
 
-/* Animations moved to common.css as pulse-scale, pulse-fade, and spin */
-
-/* Shared progress collapsible styles */
 .progress-collapsible {
   background-color: transparent;
 }

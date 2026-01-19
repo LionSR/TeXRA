@@ -1,9 +1,7 @@
 /**
- * Approval requests - component-specific styles only
- * Shared styles are in requests-shared.css
+ * Approval requests styles for ProgressView
  */
 
-/* Container theme */
 .approval-requests {
   border: 1px solid var(--vscode-input-border);
   background: var(--vscode-editor-background);
@@ -13,12 +11,10 @@
   color: var(--vscode-editor-foreground);
 }
 
-/* Button flex basis */
 .approval-request__actions vscode-toolbar-button {
   flex: 1 1 12rem;
 }
 
-/* File path styling */
 .approval-request__path {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--font-size-sm);
@@ -26,7 +22,6 @@
   word-break: break-word;
 }
 
-/* Diff stats */
 .approval-request__diff {
   display: inline-flex;
   align-items: baseline;
@@ -52,7 +47,6 @@
   opacity: 0.9;
 }
 
-/* Diff dropdown button group styling */
 .approval-request__actions .diff-dropdown {
   position: relative;
   display: inline-flex;
@@ -85,16 +79,12 @@
   min-width: 150px;
 }
 
-/* Chevron rotation for dropdown */
 .approval-request__actions
   .diff-dropdown-trigger[aria-expanded='true']
   .codicon-chevron-down {
   transform: rotate(180deg);
 }
 
-/* Feedback section - uses .feedback-section and .feedback-section__input from common.css */
-
-/* Reject button when feedback is shown */
 .approval-request--feedback-active
   .approval-request__actions
   vscode-toolbar-button[data-action='reject']::part(control) {

@@ -1,9 +1,7 @@
 /**
- * Workflow proposals - component-specific styles
- * Shared styles are in requests-shared.css
+ * Workflow proposals styles for ProgressView
  */
 
-/* Container theme - info style */
 .workflow-proposals {
   border: 1px solid var(--vscode-inputValidation-infoBorder);
   background: var(--vscode-inputValidation-infoBackground);
@@ -13,17 +11,14 @@
   color: var(--vscode-textLink-foreground);
 }
 
-/* Button flex basis */
 .workflow-proposal__actions vscode-toolbar-button {
   flex: 1 1 6rem;
 }
 
-/* Proposal card */
 .workflow-proposal {
   position: relative;
 }
 
-/* Header row with agent and model */
 .workflow-proposal__header-row {
   display: flex;
   align-items: baseline;
@@ -31,7 +26,6 @@
   flex-wrap: wrap;
 }
 
-/* Category badge */
 .workflow-proposal__category-badge {
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -69,7 +63,6 @@
   margin-right: var(--spacing-small);
 }
 
-/* Instruction - full text, scrollable */
 .workflow-proposal__instruction {
   font-size: var(--font-size-sm);
   color: var(--vscode-editor-foreground);
@@ -82,7 +75,6 @@
   border-bottom: 1px solid var(--vscode-editorWidget-border);
 }
 
-/* Files section */
 .workflow-proposal__files {
   display: flex;
   flex-direction: column;
@@ -96,13 +88,11 @@
   line-height: 1.4;
 }
 
-/* File label (Input, Reference, etc.) */
 .workflow-proposal__file-label {
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 
-/* File names - clickable to open */
 .workflow-proposal__file-name {
   font-family: var(--vscode-editor-font-family);
   color: var(--vscode-textLink-foreground);
@@ -117,19 +107,14 @@
   );
 }
 
-/* Highlight input files */
 .workflow-proposal__input-files .workflow-proposal__file-label {
   color: var(--vscode-editor-foreground);
 }
 
-/* Highlight output files */
 .workflow-proposal__output-files .workflow-proposal__file-label {
   color: var(--vscode-textLink-foreground);
 }
 
-/* Feedback section - uses .feedback-section and .feedback-section__input from common.css */
-
-/* Action button colors */
 .workflow-proposal__actions
   vscode-toolbar-button[data-action='approve']::part(control) {
   color: var(--vscode-testing-iconPassed);
@@ -145,7 +130,6 @@
   color: var(--vscode-textLink-foreground);
 }
 
-/* Reject button when feedback is shown */
 .workflow-proposal--feedback-active
   .workflow-proposal__actions
   vscode-toolbar-button[data-action='reject']::part(control) {

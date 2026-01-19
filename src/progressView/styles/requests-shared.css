@@ -1,11 +1,6 @@
 /**
  * Shared styles for approval-requests, retry-requests, and workflow-proposals
- * Uses CSS variables from common.css
  */
-
-/* ==========================================================================
-   Container Panels
-   ========================================================================== */
 
 .approval-requests,
 .retry-requests,
@@ -25,10 +20,6 @@
   display: flex;
 }
 
-/* ==========================================================================
-   Headers
-   ========================================================================== */
-
 .approval-requests__header,
 .retry-requests__header,
 .workflow-proposals__header {
@@ -38,10 +29,6 @@
   font-weight: 600;
   color: var(--vscode-editor-foreground);
 }
-
-/* ==========================================================================
-   Lists & Items
-   ========================================================================== */
 
 .approval-requests__list,
 .retry-requests__list,
@@ -71,10 +58,6 @@
   gap: var(--spacing-small);
 }
 
-/* ==========================================================================
-   Metadata
-   ========================================================================== */
-
 .approval-request__meta,
 .retry-request__meta {
   font-size: var(--font-size-sm);
@@ -84,10 +67,6 @@
   gap: var(--spacing-small);
   flex-wrap: wrap;
 }
-
-/* ==========================================================================
-   Actions
-   ========================================================================== */
 
 .approval-request__actions,
 .retry-request__actions,
@@ -118,4 +97,3 @@
   gap: var(--spacing-small);
 }
 
-/* Hidden actions use global [hidden] rule from common.css */
