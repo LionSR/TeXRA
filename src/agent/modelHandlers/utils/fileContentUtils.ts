@@ -76,20 +76,3 @@ export async function prepareExistingOutputContent(
     hadScratchpad: Boolean(scratchpad),
   };
 }
-
-/**
- * Updates workspace state with file content.
- *
- * Simplified helper for cases where only state update is needed
- * without the full preparation flow.
- *
- * @param workspaceState - Workspace state to update
- * @param content - Content to set in assembly state
- */
-export function updateWorkspaceWithContent(
-  workspaceState: AgentWorkspaceState,
-  content: string,
-): void {
-  workspaceState.assembly.accumulatedOutput = content;
-  workspaceState.assembly.lastResponse = content;
-}
