@@ -3,6 +3,7 @@ export {
   DocId,
   formatError,
   formatZodError,
+  parseWithErrorDisplay,
   isFileNotFoundError,
   toErrorMessage,
   logErrorMessage,
