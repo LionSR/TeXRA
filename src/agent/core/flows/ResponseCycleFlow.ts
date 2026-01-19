@@ -1,4 +1,4 @@
-import * as path from 'path';
+import { dirname } from 'path';
 
 import { z } from 'zod';
 
@@ -170,7 +170,7 @@ class ResponsePrepNode<C> extends BaseNode<
   }> {
     const services = this.services;
     const { prompt, userVarChannels } = services;
-    const interrupted = Boolean(await services.checkInterruption());
+    const interrupted = services.checkInterruption();
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
     const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
@@ -618,7 +618,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const outputLocation = prepRes.outputLocation;
 
-    await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
+    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
 
     if (!prepRes.outputExists) {
       logger.debug(`Creating new file: ${outputLocation.absolutePath}`);

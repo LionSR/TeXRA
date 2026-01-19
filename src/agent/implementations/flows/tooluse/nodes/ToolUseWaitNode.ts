@@ -5,10 +5,6 @@
  */
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
@@ -18,10 +14,6 @@ export class ToolUseWaitNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   async prep(_shared: ToolUseRunShared): Promise<{ interrupted: boolean }> {
     return { interrupted: this.services.checkInterruption() };
   }

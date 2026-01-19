@@ -95,6 +95,28 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
 export type { GitignoreMatcher } from './gitignore';
 
+/** Default width for line number padding */
+const LINE_NUMBER_WIDTH = 6;
+
+/**
+ * Format lines with line numbers for display in tool output.
+ * @param lines - Array of lines to format
+ * @param startingLine - 1-based line number for the first line (default: 1)
+ * @param width - Padding width for line numbers (default: 6)
+ * @returns Array of formatted lines with line number prefix and tab separator
+ */
+export function formatLinesWithNumbers(
+  lines: string[],
+  startingLine: number = 1,
+  width: number = LINE_NUMBER_WIDTH,
+): string[] {
+  return lines.map((line, index) => {
+    const lineNumber = startingLine + index;
+    const prefix = lineNumber.toString().padStart(width, ' ');
+    return `${prefix}\t${line}`;
+  });
+}
+
 /**
  * Pluralize a word based on count.
  * Returns the singular form for count === 1, plural form otherwise.
@@ -144,6 +166,36 @@ export function resolveAndFormat(path?: string): {
   const resolved = resolveWorkspaceRelativePath(path);
   const display = toPosixPath(resolved.relative);
   return { resolved, display };
+}
+
+/**
+ * Trim a string and throw a ToolError if the result is empty.
+ * Centralizes the common pattern of validating non-empty input strings.
+ */
+export function requireNonEmptyString(
+  value: string | null | undefined,
+  fieldName = 'Value',
+): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) {
+    throw new ToolError(`${fieldName} cannot be empty.`);
+  }
+  return trimmed;
+}
+
+/**
+ * Wrap an async API call and convert any error to a ToolError.
+ * Simplifies the common try-catch-rethrow-as-ToolError pattern.
+ */
+export async function wrapApiCall<T>(
+  operation: () => Promise<T>,
+  errorPrefix: string,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new ToolError(`${errorPrefix}: ${toErrorMessage(error)}`);
+  }
 }
 
 export interface BuildFileAttachmentOptions {

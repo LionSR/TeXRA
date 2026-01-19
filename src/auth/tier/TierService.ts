@@ -13,6 +13,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
 import {
@@ -122,8 +123,10 @@ export class TierService {
 
       return parsed.data;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error(CHANNEL, `Error fetching tier config: ${message}`);
+      logger.error(
+        CHANNEL,
+        `Error fetching tier config: ${toErrorMessage(error)}`,
+      );
       return null;
     }
   }
