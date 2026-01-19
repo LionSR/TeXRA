@@ -3,9 +3,9 @@ import axios from 'axios';
 import { z } from 'zod';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors';
-import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { ToolResult } from '@tools/result';
+import { wrapApiCall } from '@tools/utils';
 
 const WebSearchInputSchema = z.strictObject({
   query: z.string(),
@@ -40,17 +40,14 @@ export class WebSearchTool extends defineTool({
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query } = input;
     const max_results = input.max_results ?? 3;
-    let response;
-    try {
-      response = await axios.get<DuckDuckGoResponse>(
-        'https://api.duckduckgo.com/',
-        {
+
+    const response = await wrapApiCall(
+      () =>
+        axios.get<DuckDuckGoResponse>('https://api.duckduckgo.com/', {
           params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
-        },
-      );
-    } catch (error) {
-      throw new ToolError(`Web search failed: ${toErrorMessage(error)}`);
-    }
+        }),
+      'Web search failed',
+    );
     const data = response.data;
     const results: string[] = [];
 
