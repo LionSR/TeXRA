@@ -146,6 +146,36 @@ export function resolveAndFormat(path?: string): {
   return { resolved, display };
 }
 
+/**
+ * Trim a string and throw a ToolError if the result is empty.
+ * Centralizes the common pattern of validating non-empty input strings.
+ */
+export function requireNonEmptyString(
+  value: string | null | undefined,
+  fieldName = 'Value',
+): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) {
+    throw new ToolError(`${fieldName} cannot be empty.`);
+  }
+  return trimmed;
+}
+
+/**
+ * Wrap an async API call and convert any error to a ToolError.
+ * Simplifies the common try-catch-rethrow-as-ToolError pattern.
+ */
+export async function wrapApiCall<T>(
+  operation: () => Promise<T>,
+  errorPrefix: string,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new ToolError(`${errorPrefix}: ${toErrorMessage(error)}`);
+  }
+}
+
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
   filePath: string;

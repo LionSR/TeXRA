@@ -34,48 +34,31 @@ const PROVIDER_HANDLERS = new Map<
   [ModelProvider.OTHERS, ModelHandlerOpenRouter],
 ]);
 
-/** Check if OpenAI model should use Responses API. */
-function shouldUseResponsesAPI(config: ModelConfig): boolean {
-  // openRouterOnly models must always route through OpenRouter
-  if (config.openRouterOnly) return false;
-  if (config.requiresResponsesAPI) return true;
-  if (!getConfig<boolean>('texra.model.useOpenRouter', false)) {
-    return (
-      getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
-      config.fullName.startsWith('gpt-oss')
-    );
-  }
-  return false;
-}
-
-/** Create config with OpenRouter name for routing. */
-function withOpenRouterName(config: ModelConfig): ModelConfig {
-  return {
-    ...config,
-    openrouterFullName:
-      config.openrouterFullName || `${config.provider}/${config.fullName}`,
-  };
-}
-
 /**
  * Creates a model handler instance based on provider and routing configuration.
  */
 export function createModelHandler(config: ModelConfig): ModelHandler {
   // OpenAI Responses API (required or optional)
-  if (
-    config.provider === ModelProvider.OPENAI &&
-    shouldUseResponsesAPI(config)
-  ) {
-    logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-    return new ModelHandlerOpenAIResponse(config);
+  const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
+  if (config.provider === ModelProvider.OPENAI && !config.openRouterOnly) {
+    const useResponsesAPI =
+      config.requiresResponsesAPI ||
+      (!useOpenRouter &&
+        (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+          config.fullName.startsWith('gpt-oss')));
+    if (useResponsesAPI) {
+      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+      return new ModelHandlerOpenAIResponse(config);
+    }
   }
 
   // Route through OpenRouter if configured
-  const useOpenRouter =
-    config.openRouterOnly ||
-    getConfig<boolean>('texra.model.useOpenRouter', false);
-  if (useOpenRouter) {
-    const routerConfig = withOpenRouterName(config);
+  if (config.openRouterOnly || useOpenRouter) {
+    const routerConfig: ModelConfig = {
+      ...config,
+      openrouterFullName:
+        config.openrouterFullName || `${config.provider}/${config.fullName}`,
+    };
     if (config.provider === ModelProvider.ANTHROPIC) {
       return new ModelHandlerAnthropicViaOpenRouter(routerConfig);
     }
