@@ -25,6 +25,9 @@ export interface ExtractOptions {
   channel?: string;
 }
 
+const INVALID_ARXIV_INPUT_ERROR =
+  'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
+
 export class ArxivSourceProcessor {
   constructor(private readonly channel: string = 'arxivProcessor') {
     logger.initialize(this.channel);
@@ -87,7 +90,7 @@ export class ArxivSourceProcessor {
 
     const normalized = this.normalizeInput(input);
     if (!normalized) {
-      return 'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
+      return INVALID_ARXIV_INPUT_ERROR;
     }
 
     return null;
@@ -189,9 +192,7 @@ export class ArxivSourceProcessor {
     // Normalize input (URL or ID) to plain arXiv ID
     const id = this.normalizeInput(input);
     if (!id) {
-      throw new Error(
-        'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)',
-      );
+      throw new Error(INVALID_ARXIV_INPUT_ERROR);
     }
 
     logger.info(this.channel, `Downloading arXiv source for ID: ${id}`);
