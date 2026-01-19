@@ -97,7 +97,12 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 // --- Handlers ---
 
 async function handlePack(config: unknown): Promise<void> {
-  const data = await parseWithErrorDisplay(CHANNEL, PackConfigSchema, config, 'config');
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    PackConfigSchema,
+    config,
+    'config',
+  );
   if (!data) return;
 
   const {

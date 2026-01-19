@@ -42,13 +42,11 @@ export type ResponseAssemblyState = z.output<
   typeof ResponseAssemblyStateSchema
 >;
 
-/**
- * Create a fresh ResponseAssemblyState with schema defaults.
- * Single source of truth for initialization.
- */
-export function createResponseAssemblyState(): ResponseAssemblyState {
-  return ResponseAssemblyStateSchema.parse({});
-}
+/** Default ResponseAssemblyState values (for inline initialization). */
+const RESPONSE_ASSEMBLY_DEFAULTS: ResponseAssemblyState = {
+  lastResponse: '',
+  accumulatedOutput: '',
+};
 
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
@@ -259,13 +257,11 @@ export const ReasoningCacheStateSchema = z.object({
 /** Reasoning cache state - plain object type derived from schema */
 export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-/**
- * Create a fresh ReasoningCacheState with schema defaults.
- * Single source of truth for initialization.
- */
-export function createReasoningCacheState(): ReasoningCacheState {
-  return ReasoningCacheStateSchema.parse({});
-}
+/** Default ReasoningCacheState values (for inline initialization). */
+const REASONING_CACHE_DEFAULTS: ReasoningCacheState = {
+  thinkingBlocks: [],
+  thinkingAdded: false,
+};
 
 /** Get the primary thinking block, or null if none */
 export function getReasoningPrimaryBlock(
@@ -294,13 +290,11 @@ export interface ServerToolContentState {
   lastAssistantContent: unknown[];
 }
 
-/**
- * Create a fresh ServerToolContentState.
- * Single source of truth for initialization.
- */
-export function createServerToolContentState(): ServerToolContentState {
-  return { contentBlocks: [], lastAssistantContent: [] };
-}
+/** Default ServerToolContentState values (for inline initialization). */
+const SERVER_TOOL_CONTENT_DEFAULTS: ServerToolContentState = {
+  contentBlocks: [],
+  lastAssistantContent: [],
+};
 
 // Import todo schemas from single source of truth (eventBus/schemas)
 import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
@@ -432,11 +426,11 @@ export class AgentWorkspaceState {
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(
-      createResponseAssemblyState(),
+      { ...RESPONSE_ASSEMBLY_DEFAULTS },
       new MediaAttachmentState(),
-      createReasoningCacheState(),
+      { ...REASONING_CACHE_DEFAULTS },
       new FileInteractionState(),
-      createServerToolContentState(),
+      { ...SERVER_TOOL_CONTENT_DEFAULTS },
       new TodoState(),
     );
   }
@@ -449,7 +443,7 @@ export class AgentWorkspaceState {
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning, // Plain object - schema already validates
       FileInteractionState.fromSnapshot(parsed.interactions),
-      createServerToolContentState(), // Ephemeral - not serialized
+      { ...SERVER_TOOL_CONTENT_DEFAULTS }, // Ephemeral - not serialized
       TodoState.fromSnapshot(parsed.todos),
     );
   }
@@ -472,10 +466,12 @@ export class AgentWorkspaceState {
   }
 
   resetReasoning(): void {
-    Object.assign(this.reasoning, createReasoningCacheState());
+    this.reasoning.thinkingBlocks = [];
+    this.reasoning.thinkingAdded = false;
   }
 
   resetServerToolContent(): void {
-    Object.assign(this.serverToolContent, createServerToolContentState());
+    this.serverToolContent.contentBlocks = [];
+    this.serverToolContent.lastAssistantContent = [];
   }
 }
