@@ -375,6 +375,8 @@
 .round-collapsible::part(header) {
   padding: var(--spacing-tiny) 0;
   font-size: var(--font-size-sm);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .round-collapsible::part(body) {
