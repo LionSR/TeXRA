@@ -14,9 +14,11 @@
   display: none;
 }
 
-/* Override vscode-collapsible header padding */
+/* Override vscode-collapsible header padding and theming */
 .files-collapsible::part(header) {
   padding: var(--spacing-tiny) var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .files-collapsible::part(body) {
