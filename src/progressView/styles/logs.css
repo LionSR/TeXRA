@@ -91,7 +91,7 @@
   flex-direction: column;
   gap: var(--spacing-small);
   color: var(--color-text-secondary);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
 }
 
 .log-header__primary {
@@ -270,7 +270,7 @@
 }
 
 .usage-summary-footer {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
   background-color: var(--vscode-sideBarSectionHeader-background);
   padding: var(--spacing-small) var(--spacing-medium);
   display: flex;
@@ -366,7 +366,7 @@
 
 /* Round collapsible - vscode-collapsible for workflow mode */
 .round-collapsible {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-thin) solid var(--color-border);
 }
 
 .round-collapsible:first-child {

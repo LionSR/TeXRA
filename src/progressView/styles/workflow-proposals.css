@@ -54,7 +54,7 @@
 
 .workflow-proposal__agent {
   font-family: var(--vscode-editor-font-family);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size);
   font-weight: 600;
   color: var(--vscode-textLink-foreground);
 }
