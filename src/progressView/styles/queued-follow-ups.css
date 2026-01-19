@@ -1,16 +1,13 @@
 /**
- * Queued follow-ups styles for the ProgressView
- * Shows pending messages that will be sent when the agent resumes
+ * Queued follow-ups styles for ProgressView
  */
 
-/* Collapsible container styling */
 .queued-follow-ups-collapsible {
   border-radius: var(--border-radius);
   background-color: var(--vscode-inputValidation-infoBackground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
 }
 
-/* Extends .collapsible-panel from common.css with transparent background */
 .queued-follow-ups-collapsible::part(header) {
   font-weight: 500;
   background-color: transparent;

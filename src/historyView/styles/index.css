@@ -1,9 +1,7 @@
-/*
+/**
  * History view styles
- * Base styles (body, list-item, collapsible, text-secondary) inherited from common.css
  */
 
-/* Search container */
 .search-container {
   display: flex;
   align-items: center;
@@ -38,7 +36,6 @@
   text-align: center;
 }
 
-/* Mark.js styles */
 mark {
   background-color: var(
     --vscode-editor-findMatchHighlightBackground,
@@ -54,14 +51,12 @@ mark.current-match {
   outline: var(--border-thin) solid var(--vscode-focusBorder);
 }
 
-/* History container and items */
 .history-container {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-medium);
 }
 
-/* History item extends .list-item from common.css */
 .history-item {
   margin-bottom: var(--spacing-medium);
 }
@@ -93,7 +88,6 @@ mark.current-match {
   padding: var(--spacing-medium) var(--spacing-large);
 }
 
-/* Configuration section */
 .config-section {
   display: flex;
   flex-direction: column;
@@ -118,7 +112,6 @@ mark.current-match {
   );
 }
 
-/* Session kind badge - extends .badge from common.css */
 .session-kind-badge {
   display: inline-flex;
   align-items: center;
@@ -145,7 +138,6 @@ mark.current-match {
   color: var(--color-warning);
 }
 
-/* Empty/unset value styling */
 .history-none {
   color: var(--color-text-secondary);
   font-style: italic;
