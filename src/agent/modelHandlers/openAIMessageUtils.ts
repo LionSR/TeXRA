@@ -32,8 +32,10 @@ function mergeMessageContent(
   const prevContent = previous.content;
   const currContent = current.content;
 
+  // Note: Messages are already deep-cloned before merging, so we can safely
+  // spread arrays without additional structuredClone calls.
   if (Array.isArray(prevContent) && Array.isArray(currContent)) {
-    previous.content = [...prevContent, ...structuredClone(currContent)];
+    previous.content = [...prevContent, ...currContent];
     return;
   }
 
@@ -48,17 +50,13 @@ function mergeMessageContent(
   }
 
   if (Array.isArray(currContent)) {
-    const clonedCurrent = structuredClone(currContent);
     if (typeof prevContent === 'string' && prevContent.length > 0) {
-      previous.content = [
-        { type: 'text', text: prevContent },
-        ...clonedCurrent,
-      ];
+      previous.content = [{ type: 'text', text: prevContent }, ...currContent];
       return;
     }
 
     if (prevContent == null || prevContent === '') {
-      previous.content = clonedCurrent;
+      previous.content = currContent;
     }
     return;
   }

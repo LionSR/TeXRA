@@ -148,7 +148,10 @@ export async function parseWithErrorDisplay<T>(
   const result = schema.safeParse(data);
   if (!result.success) {
     const prefix = context ? `Invalid ${context}` : 'Invalid input';
-    await showLoggedMessage(channel, `${prefix}: ${formatZodError(result.error)}`);
+    await showLoggedMessage(
+      channel,
+      `${prefix}: ${formatZodError(result.error)}`,
+    );
     return null;
   }
   return result.data;
