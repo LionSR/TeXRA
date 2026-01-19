@@ -4,25 +4,10 @@
  * Uses native VS Code collapsible component
  */
 
-/* Collapsible container styling */
+/* Collapsible container styling - extends .collapsible-panel--compact from common.css */
 .files-collapsible {
   margin: 0;
   border-top: var(--border-thin) solid var(--color-border);
-}
-
-.files-collapsible[hidden] {
-  display: none;
-}
-
-/* Override vscode-collapsible header padding and theming */
-.files-collapsible::part(header) {
-  padding: var(--spacing-tiny) var(--spacing-medium);
-  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
-  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
-}
-
-.files-collapsible::part(body) {
-  padding: 0 var(--spacing-small) var(--spacing-tiny);
 }
 
 /* File metadata styling */
@@ -44,7 +29,7 @@
 .xml-link-container {
   margin-top: var(--spacing-small);
   padding-top: var(--spacing-small);
-  border-top: 1px solid var(--vscode-widget-border);
+  border-top: var(--border-thin) solid var(--vscode-widget-border);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

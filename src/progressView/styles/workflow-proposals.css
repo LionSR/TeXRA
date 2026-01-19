@@ -33,12 +33,12 @@
 
 /* Category badge */
 .workflow-proposal__category-badge {
-  font-size: var(--font-size-xs, 0.7rem);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   white-space: nowrap;
 }
 
@@ -96,10 +96,6 @@
   line-height: 1.4;
 }
 
-.workflow-proposal__files > div[hidden] {
-  display: none;
-}
-
 /* File label (Input, Reference, etc.) */
 .workflow-proposal__file-label {
   font-weight: 600;
@@ -131,18 +127,7 @@
   color: var(--vscode-textLink-foreground);
 }
 
-/* Feedback section */
-.workflow-proposal__feedback {
-  margin-top: var(--spacing-small);
-}
-
-.workflow-proposal__feedback[hidden] {
-  display: none;
-}
-
-.workflow-proposal__feedback-input {
-  width: 100%;
-}
+/* Feedback section - uses .feedback-section and .feedback-section__input from common.css */
 
 /* Action button colors */
 .workflow-proposal__actions

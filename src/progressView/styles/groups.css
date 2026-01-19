@@ -80,34 +80,30 @@
 
 /* Log group hierarchy styles */
 
-/* Child group headers have a different style to show hierarchy */
-.log-group-content .log-group-header {
-  border-left-width: var(--border-thin); /* Thinner border for child groups */
-  margin-left: var(--spacing-small);
-}
-
-/* Indent child group content */
-.log-group-content .log-group-content {
-  margin-left: var(--spacing-small);
-}
-
-/* Log lines within a group */
+/* Log group hierarchy - child elements get consistent indentation */
+.log-group-content > .log-group-header,
+.log-group-content > .log-group-content,
 .log-group-content > .log-line,
 .log-group-content > .banner-details {
   margin-left: var(--spacing-small);
 }
 
-/* Log lines within a nested group */
+/* Child group headers have thinner border to show hierarchy */
+.log-group-content .log-group-header {
+  border-left-width: var(--border-thin);
+}
+
+/* Nested log lines don't need extra indent */
 .log-group-content .log-group-content .log-line,
 .log-group-content .log-group-content .banner-details {
-  margin-left: 0; /* No extra indent for nested log lines */
+  margin-left: 0;
 }
 
 /* Visual indicator for nested structure */
 .log-group-content .log-group-header::before {
   content: '';
   position: absolute;
-  left: calc(0px - var(--spacing-medium));
+  left: calc(-1 * var(--spacing-medium));
   top: 50%;
   width: var(--spacing-medium);
   height: var(--border-thin);

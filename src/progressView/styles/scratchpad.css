@@ -76,8 +76,7 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
+  inset-block: 0;
   width: 3px;
   background: var(--vscode-editorWarning-foreground, #ff8c00);
   border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
