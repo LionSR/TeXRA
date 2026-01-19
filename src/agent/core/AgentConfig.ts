@@ -94,35 +94,44 @@ export type CoreWorkflowFields = z.infer<typeof CoreWorkflowFieldsSchema>;
 /** Zod schema for validating AgentConfig objects */
 const stringArrayField = () => z.array(z.string()).prefault([]);
 
-const AgentConfigBaseSchema = z
-  .object({
-    // Core workflow fields with defaults
-    agent: z.string().prefault('correct'),
-    model: z.string().prefault('gemini3p'),
-    instruction: z.string().prefault(''),
-    useMultipleOutputs: z.boolean().prefault(false),
-    inputFile: z.string().prefault(''),
-    inputFiles: stringArrayField(),
-    referenceFile: z.string().nullable().prefault(null),
-    referenceFiles: stringArrayField(),
-    auxiliaryFile: z.string().nullable().prefault(null),
-    auxiliaryFiles: stringArrayField(),
-    mediaFile: z.string().nullable().prefault(null),
-    mediaFiles: stringArrayField(),
-    outputFiles: stringArrayField(),
+/**
+ * Pure object schema without refinements.
+ * Used for .partial() since Zod v4 doesn't allow .partial() on refined schemas.
+ */
+const AgentConfigFieldsSchema = z.object({
+  // Core workflow fields with defaults
+  agent: z.string().prefault('correct'),
+  model: z.string().prefault('gemini3p'),
+  instruction: z.string().prefault(''),
+  useMultipleOutputs: z.boolean().prefault(false),
+  inputFile: z.string().prefault(''),
+  inputFiles: stringArrayField(),
+  referenceFile: z.string().nullable().prefault(null),
+  referenceFiles: stringArrayField(),
+  auxiliaryFile: z.string().nullable().prefault(null),
+  auxiliaryFiles: stringArrayField(),
+  mediaFile: z.string().nullable().prefault(null),
+  mediaFiles: stringArrayField(),
+  outputFiles: stringArrayField(),
 
-    // AgentConfig-specific fields
-    // Legacy field for backward compatibility - prefer session.agentType
-    agentType: z.enum(AgentType).optional(),
-    // Canonical session descriptor - single source of truth
-    session: AgentSessionDescriptorSchema.optional(),
-    editedFile: z.string().nullable().prefault(null),
-    editedFiles: stringArrayField(),
+  // AgentConfig-specific fields
+  // Legacy field for backward compatibility - prefer session.agentType
+  agentType: z.enum(AgentType).optional(),
+  // Canonical session descriptor - single source of truth
+  session: AgentSessionDescriptorSchema.optional(),
+  editedFile: z.string().nullable().prefault(null),
+  editedFiles: stringArrayField(),
 
-    // Defaults to all-false for tool-use agents; workflow agents populate from UI
-    toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
-  })
-  .superRefine((config, ctx) => {
+  // Defaults to all-false for tool-use agents; workflow agents populate from UI
+  toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
+});
+
+/**
+ * Base schema with output file count validation.
+ * Used for AgentConfigSchema (with transform) - full validation path.
+ */
+const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
+  (config, ctx) => {
     if (
       !validateOutputFiles({
         inputFile: config.inputFile,
@@ -137,7 +146,8 @@ const AgentConfigBaseSchema = z
           'Number of output files must not be greater than the number of input files.',
       });
     }
-  });
+  },
+);
 
 export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
   const descriptor = resolveAgentSessionDescriptor(
@@ -168,9 +178,11 @@ export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
  * Only `agent` and `model` are required - all other fields have defaults.
  * This replaces ambiguous `Partial<AgentConfig>` usage with explicit requirements.
  *
- * Use this type for function parameters that accept agent configuration input.
+ * Uses AgentConfigFieldsSchema (without refinement) since Zod v4 doesn't
+ * allow .partial() on schemas with refinements. The output file count
+ * validation is applied later when parsing with AgentConfigSchema.
  */
-export const AgentConfigPayloadSchema = AgentConfigBaseSchema.partial()
+export const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial()
   .required({
     agent: true,
     model: true,
