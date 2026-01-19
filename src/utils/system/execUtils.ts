@@ -46,11 +46,7 @@ function truncateOutput(
 }
 
 function normalizeOutput(text: string | null | undefined): string | null {
-  if (text == null) {
-    return null;
-  }
-  const trimmed = text.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  return text?.trim() || null;
 }
 
 /**
