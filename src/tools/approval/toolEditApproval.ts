@@ -66,7 +66,6 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'reject',
   'openDiff',
   'showLatexdiff',
-  'showLatexdiffChangedOnly',
   'previewProposed',
 ] as const;
 
@@ -680,10 +679,7 @@ export async function handleProgressViewToolEditApprovalAction(
       break;
 
     case 'showLatexdiff':
-      await runLatexdiff(entry);
-      break;
-
-    case 'showLatexdiffChangedOnly':
+      // Use ONLYCHANGEDPAGE for tool edit approvals to focus on changes
       await runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' });
       break;
 
