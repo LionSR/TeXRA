@@ -51,7 +51,8 @@ export abstract class BaseTool<T> implements ITool {
   async call(rawInput: unknown): Promise<ToolResult> {
     try {
       const input = this.validate(rawInput);
-      return this.execute(input);
+      // await is required here - without it, rejections bypass the catch block
+      return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
         return {
