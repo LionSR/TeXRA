@@ -35,8 +35,7 @@ export async function compileLatex2Pdf(
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
-  const outputDirectory = parsed.outputDirectory;
-  const useLatexmk = parsed.compiler === 'latexmk';
+  const { outputDirectory, compiler } = parsed;
   try {
     const latexFile = latexLocation.absolutePath;
     const outDir = outputDirectory ?? path.dirname(latexFile);
@@ -90,7 +89,7 @@ export async function compileLatex2Pdf(
     ];
 
     let result: Awaited<ReturnType<typeof runToolWithCheck>>;
-    if (useLatexmk) {
+    if (compiler === 'latexmk') {
       result = await runToolWithCheck('latexmk', latexmkArgs, {
         channel,
         env,
