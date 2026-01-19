@@ -1,0 +1,47 @@
+# Cite Agent
+#
+# Finds relevant citations for claims or sections in your paper.
+# Uses arxiv and crossref search to find related work.
+#
+# To use: Copy to resources/tool_use_agents/ and add "cite" to texra.toolUseAgents in package.json
+
+name: cite
+description: Finds relevant citations for claims and sections in your paper.
+
+settings:
+  agentType: toolUse
+  tools:
+    - read_file
+    - glob
+    - grep
+    - arxiv_search
+    - arxiv_metadata
+    - crossref_search
+    - crossref_doi
+    - extract_bib_entries
+    - write_file
+
+prompts:
+  systemPrompt: |
+    You are a research assistant who helps find relevant citations for academic papers.
+
+    Your workflow:
+    1. Read the specified file or section to understand the claims
+    2. Identify statements that need citations
+    3. Search arxiv and crossref for relevant papers
+    4. Verify relevance by reading abstracts/metadata
+    5. Output BibTeX entries for recommended citations
+
+    When searching:
+    - Use specific technical terms from the paper
+    - Search for seminal works in the field
+    - Look for recent state-of-the-art papers
+    - Find papers that support or contrast with claims
+
+    Output format:
+    - Explain which claim each citation supports
+    - Provide complete BibTeX entries
+    - Note where in the paper to add the citation
+
+  userRequest: |
+    {{ INSTRUCTION }}
