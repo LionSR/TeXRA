@@ -77,7 +77,7 @@
 }
 
 .message-warn {
-  color: var(--vscode-inputValidation-warningForeground, #dd8500d6);
+  color: var(--color-warning);
 }
 
 .message-error {
@@ -225,9 +225,13 @@
   opacity: var(--opacity-full);
 }
 
-.status-indicator.is-ready {
-  background-color: var(--vscode-descriptionForeground, #888888);
+.status-indicator.is-ready,
+.status-indicator.is-stopped {
+  background-color: var(--vscode-descriptionForeground);
   box-shadow: none;
+}
+
+.status-indicator.is-ready {
   opacity: var(--opacity-disabled);
 }
 
@@ -242,20 +246,17 @@
   box-shadow: 0 0 4px var(--color-error);
 }
 
-.status-indicator.is-stopped {
-  background-color: var(--vscode-descriptionForeground, #888888);
-  box-shadow: none;
+.status-indicator.is-waiting,
+.status-indicator.is-resuming {
+  background-color: var(--vscode-textLink-foreground);
+  box-shadow: 0 0 4px var(--vscode-textLink-foreground);
 }
 
 .status-indicator.is-waiting {
-  background-color: var(--vscode-textLink-foreground, #3794ff);
-  box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
   animation: pulse-scale 3s infinite;
 }
 
 .status-indicator.is-resuming {
-  background-color: var(--vscode-textLink-foreground, #3794ff);
-  box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
   animation: pulse-scale 1.5s infinite;
 }
 
