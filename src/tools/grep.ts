@@ -18,7 +18,10 @@ const GrepInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
   path: z.string().nullish(),
   glob: z.string().nullish(),
-  output_mode: z.enum(OUTPUT_MODES).nullish(),
+  output_mode: z
+    .enum(OUTPUT_MODES)
+    .nullish()
+    .transform((v) => v ?? 'content'),
   '-B': z.int().min(0).nullish(),
   '-A': z.int().min(0).nullish(),
   '-C': z.int().min(0).nullish(),
@@ -83,7 +86,7 @@ export class GrepTool extends defineTool({
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
-    const outputMode: OutputMode = input.output_mode ?? 'content';
+    const { output_mode: outputMode } = input;
     const { resolved: searchPath, display } = resolveAndFormat(
       input.path ?? undefined,
     );
