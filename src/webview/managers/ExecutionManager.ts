@@ -85,7 +85,7 @@ export class ExecutionManager {
       : ToolConfigSchema.parse(message);
 
     // Schema provides defaults via .prefault(), we only override conditional fields
-    const config = AgentConfigSchema.parse({
+    const parseResult = AgentConfigSchema.safeParse({
       ...message,
       session: isToolUse
         ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
@@ -102,7 +102,20 @@ export class ExecutionManager {
       editedFile: null,
     });
 
-    await vscode.commands.executeCommand('texra.execute', config);
+    if (!parseResult.success) {
+      const issue = parseResult.error.issues[0];
+      const errorPath = issue?.path.join('.') || 'unknown';
+      vscode.window.showErrorMessage(
+        `Invalid configuration (${errorPath}): ${issue?.message ?? 'validation failed'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `AgentConfig validation failed: ${parseResult.error.message}`,
+      );
+      return;
+    }
+
+    await vscode.commands.executeCommand('texra.execute', parseResult.data);
   }
 
   handleFileOperation(message: CommandMessage): void {
