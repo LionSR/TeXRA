@@ -85,7 +85,7 @@ export class Status {
    * @param {string[]} buttonIds - The button IDs currently in the toolbar
    */
   setCurrentButtonIds(buttonIds) {
-    this._currentButtonIds = buttonIds || [];
+    this._currentButtonIds = buttonIds ?? [];
   }
 
   setExecutionIdAvailability(hasExecution) {
