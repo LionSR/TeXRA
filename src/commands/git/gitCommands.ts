@@ -3,6 +3,7 @@ import { execa, execaSync } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -205,8 +206,10 @@ async function cloneOverleafProject(
     vscode.window.showErrorMessage(
       'Unable to inspect the workspace folder before cloning the Overleaf project.',
     );
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error(CHANNEL, `Failed to read workspace contents: ${message}`);
+    logger.error(
+      CHANNEL,
+      `Failed to read workspace contents: ${toErrorMessage(error)}`,
+    );
     return;
   }
 

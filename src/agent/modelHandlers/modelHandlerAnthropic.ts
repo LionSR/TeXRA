@@ -60,7 +60,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Internal imports
-import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
 // Type imports
@@ -72,11 +71,11 @@ import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import {
@@ -299,29 +298,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  private setCacheControlTarget(block: CacheControlEligibleBlock): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      return;
-    }
-
+  /**
+   * Sets or clears the cache control target block.
+   * Pass a block to set it as the cache target, or undefined/null to clear.
+   */
+  private updateCacheControlTarget(
+    block: CacheControlEligibleBlock | undefined | null,
+  ): void {
+    // Clear existing cache_control if switching to different block
     if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
       delete this.cacheControlledBlock.cache_control;
     }
 
-    block.cache_control = EPHEMERAL_CACHE_CONTROL;
-    this.cacheControlledBlock = block;
-  }
-
-  private clearCacheControlTarget(): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      this.cacheControlledBlock = undefined;
-      return;
+    if (block && this.capabilities.supportsPromptCaching) {
+      block.cache_control = EPHEMERAL_CACHE_CONTROL;
     }
 
-    if (this.cacheControlledBlock) {
-      delete this.cacheControlledBlock.cache_control;
-    }
-    this.cacheControlledBlock = undefined;
+    this.cacheControlledBlock = block ?? undefined;
   }
 
   /** Ensures a beta flag is included in options, initializing the array if needed. */
@@ -436,12 +429,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
-      this.setCacheControlTarget(target);
+      this.updateCacheControlTarget(target);
     } else if (Array.isArray(content) && content.length > 0) {
       this.logger.debug(
         'No eligible content block available for Anthropic cache control marker',
       );
-      this.clearCacheControlTarget();
+      this.updateCacheControlTarget(undefined);
     }
   }
 
@@ -1103,7 +1096,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
-    this.clearCacheControlTarget();
+    this.updateCacheControlTarget(undefined);
 
     // Create content list for the user message
     const userMessageContent: ContentBlockParam[] = [];
@@ -1429,21 +1422,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [endTurn, messages];
     }
 
-    // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputLocation);
-    fileContent = cleanFileContent(fileContent);
-
-    // Extract any existing scratchpad content
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
-    if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
-    }
-
-    await flexibleFS.write(outputLocation, fileContent);
-
-    // Update the workspaceState with the actual file content
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
+    // Prepare existing file content (read, clean, extract scratchpad, update state)
+    const { content: fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug(
@@ -1457,7 +1441,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         content: [{ type: 'text', text: fileContent }],
       });
 
-      this.clearCacheControlTarget();
+      this.updateCacheControlTarget(undefined);
 
       endTurn = true;
       return [endTurn, messages];
@@ -1633,82 +1617,86 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       return;
     }
-    this.logger.debug('Last message is a user message');
 
-    // Fix for continuation issues
-    if (lastMessage && this.containCutOffMessage(lastMessage.content)) {
-      this.logger.debug(
-        'Last message is a user message asking to continue after cutoff',
+    // Handle continuation after cutoff
+    if (this.containCutOffMessage(lastMessage.content)) {
+      this.handleCutoffContinuation(
+        messages,
+        secondLastMessage,
+        bestConnector,
+        newResponse,
       );
-
-      // The last message is a user message
-      // So the second last message must be an assistant message
-
-      if (secondLastMessage && secondLastMessage.role === 'assistant') {
-        // Preserve any thinking blocks that might exist in the content array
-        const thinkingBlocks = Array.isArray(secondLastMessage.content)
-          ? secondLastMessage.content.filter(isAnyThinkingBlockParam)
-          : [];
-
-        // Log if we have thinking blocks from previous message
-        if (thinkingBlocks.length > 0) {
-          this.logger.debug(
-            `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
-          );
-        }
-
-        // Append text content to the previous assistant message and update cache control
-        if (Array.isArray(secondLastMessage.content)) {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          } as ContentBlockParam);
-          this.assignCacheControlToLatest(secondLastMessage.content);
-        }
-
-        // Remove the user continuation prompt to keep the conversation clean
-        if (messages.at(-1)?.role === 'user') {
-          messages.pop();
-        } else {
-          this.logger.error(
-            'Last message is not a user message - unexpected format',
-          );
-        }
-      }
-    } else {
-      this.logger.debug(
-        'Last message is a request message rather than a ask to continue after cut off',
-      );
-      // Create a new assistant message with the response
-      const content: ContentBlockParam[] = [];
-
-      // Include all thinking blocks from workspaceState if available
-      if (
-        workspaceState.reasoning.thinkingBlocks &&
-        workspaceState.reasoning.thinkingBlocks.length > 0
-      ) {
-        this.logger.debug(
-          `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
-        );
-        content.push(
-          ...(workspaceState.reasoning
-            .thinkingBlocks as AnthropicThinkingContentParam[]),
-        );
-        // Clear cached thinking so the next response can store fresh blocks
-        workspaceState.resetReasoning();
-      }
-
-      // Add the text content
-      content.push({
-        type: 'text',
-        text: workspaceState.assembly.accumulatedOutput,
-      } as ContentBlockParam);
-
-      this.assignCacheControlToLatest(content);
-      messages.push({ role: 'assistant', content });
-
-      this.logger.debug('Added a new assistant message');
+      return;
     }
+
+    // Handle new request - create a new assistant message
+    this.handleNewAssistantMessage(messages, workspaceState);
+  }
+
+  /** Handle continuation after a cutoff by appending to the previous assistant message. */
+  private handleCutoffContinuation(
+    messages: MessageParam[],
+    secondLastMessage: MessageParam | undefined,
+    bestConnector: string,
+    newResponse: string,
+  ): void {
+    this.logger.debug(
+      'Last message is a user message asking to continue after cutoff',
+    );
+
+    if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
+      return;
+    }
+
+    // Log existing thinking blocks
+    if (Array.isArray(secondLastMessage.content)) {
+      const thinkingCount = secondLastMessage.content.filter(
+        isAnyThinkingBlockParam,
+      ).length;
+      if (thinkingCount > 0) {
+        this.logger.debug(
+          `Using ${thinkingCount} existing thinking blocks from previous message`,
+        );
+      }
+
+      // Append text content and update cache control
+      secondLastMessage.content.push({
+        type: 'text',
+        text: bestConnector + newResponse,
+      } as ContentBlockParam);
+      this.assignCacheControlToLatest(secondLastMessage.content);
+    }
+
+    // Remove the user continuation prompt
+    messages.pop();
+  }
+
+  /** Handle a new request by creating a fresh assistant message. */
+  private handleNewAssistantMessage(
+    messages: MessageParam[],
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    this.logger.debug('Creating new assistant message for fresh request');
+    const content: ContentBlockParam[] = [];
+
+    // Include thinking blocks from workspaceState if available
+    const thinkingBlocks = workspaceState.reasoning.thinkingBlocks;
+    if (thinkingBlocks.length > 0) {
+      this.logger.debug(
+        `Adding ${thinkingBlocks.length} thinking blocks to new assistant message`,
+      );
+      content.push(...(thinkingBlocks as AnthropicThinkingContentParam[]));
+      workspaceState.resetReasoning();
+    }
+
+    // Add the text content
+    content.push({
+      type: 'text',
+      text: workspaceState.assembly.accumulatedOutput,
+    } as ContentBlockParam);
+
+    this.assignCacheControlToLatest(content);
+    messages.push({ role: 'assistant', content });
   }
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
@@ -1975,51 +1963,47 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const unsupportedNotes: string[] = [];
 
     for (const uploaded of uploadedAttachments) {
-      if (uploaded.blockType === 'image') {
-        if (this.canProcessToolResultAttachments && uploaded.base64Data) {
-          const mediaType =
-            (uploaded.mediaType as Base64ImageSource['media_type']) ??
-            'image/png';
-          toolResultContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: uploaded.base64Data,
-            },
-          } as ImageBlockParam);
-        } else {
-          unsupportedNotes.push(
-            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-          );
-        }
-        continue;
-      }
+      const attachmentNote = `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`;
 
-      if (uploaded.blockType === 'document') {
-        if (uploaded.base64Data) {
-          const pdfMediaType =
-            (uploaded.mediaType as 'application/pdf') ?? 'application/pdf';
-          toolResultContent.push({
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: pdfMediaType,
-              data: uploaded.base64Data,
-            },
-            title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
-          } as DocumentBlockParam);
-        } else {
-          unsupportedNotes.push(
-            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-          );
-        }
-        continue;
-      }
+      switch (uploaded.blockType) {
+        case 'image':
+          if (this.canProcessToolResultAttachments && uploaded.base64Data) {
+            toolResultContent.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type:
+                  (uploaded.mediaType as Base64ImageSource['media_type']) ??
+                  'image/png',
+                data: uploaded.base64Data,
+              },
+            } as ImageBlockParam);
+          } else {
+            unsupportedNotes.push(attachmentNote);
+          }
+          break;
 
-      unsupportedNotes.push(
-        `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-      );
+        case 'document':
+          if (uploaded.base64Data) {
+            toolResultContent.push({
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type:
+                  (uploaded.mediaType as 'application/pdf') ??
+                  'application/pdf',
+                data: uploaded.base64Data,
+              },
+              title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
+            } as DocumentBlockParam);
+          } else {
+            unsupportedNotes.push(attachmentNote);
+          }
+          break;
+
+        default:
+          unsupportedNotes.push(attachmentNote);
+      }
     }
 
     if (unsupportedAttachments.length > 0) {
@@ -2055,7 +2039,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ? resultMsg.content.at(-1)
       : undefined;
     if (isCacheControlEligibleBlock(toolResultBlock)) {
-      this.setCacheControlTarget(toolResultBlock);
+      this.updateCacheControlTarget(toolResultBlock);
     }
 
     return [callMsg, resultMsg];

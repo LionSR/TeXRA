@@ -13,7 +13,10 @@ import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivDownloadInputSchema = z.strictObject({
   id: z.string(),
-  autoIndent: z.boolean().nullish(),
+  autoIndent: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? true),
 });
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
@@ -39,7 +42,7 @@ export class ArxivDownloadTool extends defineTool({
       downloadPath = await arxivProcessor.downloadSource(
         arxivId,
         undefined,
-        input.autoIndent ?? true,
+        input.autoIndent,
       );
     } catch (err) {
       throw new ToolError(
