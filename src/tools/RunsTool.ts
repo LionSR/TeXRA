@@ -34,8 +34,7 @@ const RunsToolInputSchema = z.strictObject({
 
   /** Optional line range [start, end] for large outputs */
   view_range: z
-    .array(z.int().min(1))
-    .length(2)
+    .tuple([z.int().min(1), z.int().min(1)])
     .refine(([start, end]) => end >= start, {
       message: 'view_range[1] must be >= view_range[0]',
     })
@@ -80,9 +79,7 @@ Use view_range: [start, end] to paginate large outputs.`,
     const [namespace, id, resource, ...rest] = segments;
 
     if (namespace !== 'runs') {
-      throw new ToolError(
-        `Path must start with /runs. Got: ${input.path}`,
-      );
+      throw new ToolError(`Path must start with /runs. Got: ${input.path}`);
     }
 
     // /runs - list all executions
@@ -112,7 +109,11 @@ Use view_range: [start, end] to paginate large outputs.`,
       if (rest.length === 0) {
         return this.listFiles(executionId);
       }
-      return this.readFile(executionId, rest.join('/'), input.view_range ?? undefined);
+      return this.readFile(
+        executionId,
+        rest.join('/'),
+        input.view_range ?? undefined,
+      );
     }
 
     throw new ToolError(
@@ -127,7 +128,9 @@ Use view_range: [start, end] to paginate large outputs.`,
     if (id === 'current') {
       const ctx = getCurrentToolFileInteractionContext();
       if (!ctx?.executionId) {
-        throw new ToolError('No active execution. Use a specific execution ID instead of "current".');
+        throw new ToolError(
+          'No active execution. Use a specific execution ID instead of "current".',
+        );
       }
       return ctx.executionId;
     }
@@ -147,11 +150,9 @@ Use view_range: [start, end] to paginate large outputs.`,
     const lines = history.map((item) => {
       const agent = item.agentConfig.agent;
       const model = item.agentConfig.model ?? 'unknown';
-      const summary = item.agentConfig.session?.taskSummary ?? '';
-      const shortSummary = summary.length > 40 ? summary.slice(0, 37) + '...' : summary;
       // Format timestamp: extract date and time
       const ts = item.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-      return `${item.id}  ${ts}  ${agent}  ${model}  ${shortSummary}`;
+      return `${item.id}  ${ts}  ${agent}  ${model}`;
     });
 
     return {
@@ -163,7 +164,8 @@ Use view_range: [start, end] to paginate large outputs.`,
    * Show execution summary (brief metadata).
    */
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
-    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
+    const historyItem =
+      await AgentHistoryManager.getHistoryItemById(executionId);
 
     if (!historyItem) {
       // Check if flow exists even without history entry
@@ -185,10 +187,6 @@ Use view_range: [start, end] to paginate large outputs.`,
       `Timestamp: ${historyItem.timestamp}`,
     ];
 
-    if (config.session?.taskSummary) {
-      lines.push(`Task: ${config.session.taskSummary}`);
-    }
-
     lines.push('');
     lines.push('Available paths:');
     lines.push(`  /runs/${executionId}/config - Agent configuration (JSON)`);
@@ -202,7 +200,8 @@ Use view_range: [start, end] to paginate large outputs.`,
    * Show agent configuration as JSON.
    */
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
-    const historyItem = await AgentHistoryManager.getHistoryItemById(executionId);
+    const historyItem =
+      await AgentHistoryManager.getHistoryItemById(executionId);
 
     if (!historyItem) {
       throw new ToolError(
@@ -224,7 +223,9 @@ Use view_range: [start, end] to paginate large outputs.`,
     viewRange?: [number, number],
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(`flow:${executionId}`);
+    const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(
+      `flow:${executionId}`,
+    );
 
     if (!flow) {
       throw new ToolError(`Execution not found: ${executionId}`);
@@ -243,7 +244,10 @@ Use view_range: [start, end] to paginate large outputs.`,
     });
 
     const header = `Conversation (${conversation.length} messages):\n\n`;
-    const output = this.applyViewRange(header + messages.join('\n\n'), viewRange);
+    const output = this.applyViewRange(
+      header + messages.join('\n\n'),
+      viewRange,
+    );
 
     return { output };
   }
@@ -257,21 +261,28 @@ Use view_range: [start, end] to paginate large outputs.`,
     }
     if (Array.isArray(content)) {
       // Handle content blocks (text, tool_use, tool_result)
-      return content.map((block) => {
-        if (typeof block === 'string') return block;
-        if (block?.type === 'text') return block.text ?? '';
-        if (block?.type === 'tool_use') {
-          const input = JSON.stringify(block.input ?? {});
-          const shortInput = input.length > 100 ? input.slice(0, 97) + '...' : input;
-          return `[tool_use: ${block.name}(${shortInput})]`;
-        }
-        if (block?.type === 'tool_result') {
-          const output = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
-          const shortOutput = output.length > 100 ? output.slice(0, 97) + '...' : output;
-          return `[tool_result: ${shortOutput}]`;
-        }
-        return JSON.stringify(block).slice(0, 100);
-      }).join('\n');
+      return content
+        .map((block) => {
+          if (typeof block === 'string') return block;
+          if (block?.type === 'text') return block.text ?? '';
+          if (block?.type === 'tool_use') {
+            const input = JSON.stringify(block.input ?? {});
+            const shortInput =
+              input.length > 100 ? input.slice(0, 97) + '...' : input;
+            return `[tool_use: ${block.name}(${shortInput})]`;
+          }
+          if (block?.type === 'tool_result') {
+            const output =
+              typeof block.content === 'string'
+                ? block.content
+                : JSON.stringify(block.content);
+            const shortOutput =
+              output.length > 100 ? output.slice(0, 97) + '...' : output;
+            return `[tool_result: ${shortOutput}]`;
+          }
+          return JSON.stringify(block).slice(0, 100);
+        })
+        .join('\n');
     }
     return JSON.stringify(content).slice(0, 500);
   }
@@ -282,7 +293,7 @@ Use view_range: [start, end] to paginate large outputs.`,
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = `${TASK_RUNS_DIR}/${executionId}`;
 
-    if (!await StorageFS.exists(runDir)) {
+    if (!(await StorageFS.exists(runDir))) {
       return { output: 'No files generated for this execution.' };
     }
 
@@ -326,7 +337,11 @@ Use view_range: [start, end] to paginate large outputs.`,
           results.push({ path: entryRelative, size: stats.size, isDir });
 
           if (isDir && maxDepth > 1) {
-            const children = await this.walkDirectory(basePath, entryRelative, maxDepth - 1);
+            const children = await this.walkDirectory(
+              basePath,
+              entryRelative,
+              maxDepth - 1,
+            );
             results.push(...children);
           }
         } catch {
@@ -350,13 +365,17 @@ Use view_range: [start, end] to paginate large outputs.`,
   ): Promise<ToolResult> {
     const fullPath = `${TASK_RUNS_DIR}/${executionId}/${filePath}`;
 
-    if (!await StorageFS.exists(fullPath)) {
-      throw new ToolError(`File not found: /runs/${executionId}/files/${filePath}`);
+    if (!(await StorageFS.exists(fullPath))) {
+      throw new ToolError(
+        `File not found: /runs/${executionId}/files/${filePath}`,
+      );
     }
 
     const stats = await StorageFS.stat(fullPath);
     if (stats.type === vscode.FileType.Directory) {
-      throw new ToolError(`Path is a directory: /runs/${executionId}/files/${filePath}. Use without trailing path to list.`);
+      throw new ToolError(
+        `Path is a directory: /runs/${executionId}/files/${filePath}. Use without trailing path to list.`,
+      );
     }
 
     const content = await StorageFS.read(fullPath);
@@ -384,6 +403,8 @@ Use view_range: [start, end] to paginate large outputs.`,
     if (!viewRange) return output;
     const lines = output.split('\n');
     const [start, end] = viewRange;
-    return lines.slice(Math.max(start - 1, 0), Math.min(end, lines.length)).join('\n');
+    return lines
+      .slice(Math.max(start - 1, 0), Math.min(end, lines.length))
+      .join('\n');
   }
 }
