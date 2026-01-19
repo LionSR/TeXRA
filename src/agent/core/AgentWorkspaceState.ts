@@ -255,7 +255,7 @@ export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 export function getReasoningPrimaryBlock(
   state: ReasoningCacheState,
 ): ThinkingBlock | null {
-  return state.thinkingBlocks.length > 0 ? state.thinkingBlocks[0] : null;
+  return state.thinkingBlocks[0] ?? null;
 }
 
 /** Reset reasoning cache state to initial values */
