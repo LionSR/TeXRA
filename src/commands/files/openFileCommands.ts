@@ -64,7 +64,7 @@ export const openFileCommands = {
   openLabel,
 };
 
-export function registerOpenFileCommands(context: vscode.ExtensionContext) {
+export function registerOpenFileCommands(context: vscode.ExtensionContext): typeof openFileCommands {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.openFileCompile',

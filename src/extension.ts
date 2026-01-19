@@ -58,7 +58,7 @@ function promptToOpenFolder(message: string): void {
     });
 }
 
-async function refreshApiKeyStatus() {
+async function refreshApiKeyStatus(): Promise<void> {
   if (!apiKeyStatusBarItem) {
     return;
   }
@@ -84,7 +84,7 @@ async function refreshApiKeyStatus() {
   }
 }
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
@@ -332,7 +332,7 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
-export async function deactivate() {
+export async function deactivate(): Promise<void> {
   disposeStatusListener?.();
 
   // Flush any pending usage logs before deactivating

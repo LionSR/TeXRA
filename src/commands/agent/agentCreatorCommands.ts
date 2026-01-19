@@ -178,7 +178,7 @@ function validateAgentYamlString(content: string): string | null {
   }
 }
 
-export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
+export function registerAgentCreatorCommands(context: vscode.ExtensionContext): typeof agentCreatorCommands {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       agentCreatorCommands.createAgentWithAI,
@@ -188,7 +188,7 @@ export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   return agentCreatorCommands;
 }
 
-async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
+async function handleCreateAgentWithAI(_context: vscode.ExtensionContext): Promise<void> {
   try {
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter a name for the new agent (without .yaml)',

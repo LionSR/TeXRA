@@ -18,7 +18,7 @@ export const arXivCommands = {
  * @param context The extension context
  * @returns An object with the registered commands
  */
-export function registerArXivCommands(context: vscode.ExtensionContext) {
+export function registerArXivCommands(context: vscode.ExtensionContext): void {
   logger.initialize(CHANNEL);
 
   // Register the download arXiv source command

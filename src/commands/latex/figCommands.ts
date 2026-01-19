@@ -36,7 +36,7 @@ async function runLaTeXCommand(
   }
 }
 
-export function registerFigureCommands(context: vscode.ExtensionContext) {
+export function registerFigureCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.extractFigurePaths',

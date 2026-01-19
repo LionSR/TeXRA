@@ -25,7 +25,7 @@ function logTruncatedBase64(base64String: string): void {
   );
 }
 
-export function registerImageCommands(context: vscode.ExtensionContext) {
+export function registerImageCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.countPdfPages', handleCountPdfPages),
     vscode.commands.registerCommand(

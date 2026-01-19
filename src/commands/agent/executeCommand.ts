@@ -17,7 +17,7 @@ const CHANNEL = 'ExecuteCommand';
 
 // --- Command ---
 
-export function registerExecuteCommand(context: vscode.ExtensionContext) {
+export function registerExecuteCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.execute', runExecuteCommand),
   );

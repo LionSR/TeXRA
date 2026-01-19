@@ -42,7 +42,7 @@ function postOptionsToWebview(
  * @param context - The VS Code extension context
  * @returns Object containing the registered commands
  */
-export function registerMainViewCommands(context: vscode.ExtensionContext) {
+export function registerMainViewCommands(context: vscode.ExtensionContext): typeof mainViewCommands {
   const resetCommand = vscode.commands.registerCommand(
     mainViewCommands.reset,
     async () => {
@@ -144,4 +144,6 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
     refreshAgentOptionsCommand,
     refreshAllOptionsCommand,
   );
+
+  return mainViewCommands;
 }

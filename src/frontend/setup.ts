@@ -35,7 +35,7 @@ const LEGACY_AGENT_FILES = [
  * Copies default agent files from the extension resources to the global storage directory
  * @param context The extension context
  */
-export async function copyDefaultAgents(context: vscode.ExtensionContext) {
+export async function copyDefaultAgents(context: vscode.ExtensionContext): Promise<void> {
   // Initialize StorageFS with the context
   StorageFS.initialize(context);
 
@@ -210,7 +210,7 @@ const GLOBAL_IF_UNSET = {
 /**
  * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
  */
-export async function configureLatexSettings() {
+export async function configureLatexSettings(): Promise<void> {
   try {
     // Check if latex-workshop extension is installed
     const latexWorkshop = vscode.extensions.getExtension(

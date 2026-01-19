@@ -86,7 +86,7 @@ async function setApiKeyForProvider(
   }
 }
 
-export function registerApiKeyCommands(context: vscode.ExtensionContext) {
+export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
   // Command to set API key (accepts optional provider parameter)
   const setApiKeyCommand = vscode.commands.registerCommand(
     apiKeyCommands.setApiKey,

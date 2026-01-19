@@ -15,7 +15,7 @@ logger.initialize(CHANNEL);
 /**
  * Register state restore command with VS Code
  */
-export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
+export function registerStateRestoreCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.restoreState', restoreState),
   );
@@ -28,7 +28,7 @@ export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
  * @param state - The TaskState to restore
  * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
-async function restoreState(state: TaskState, executeImmediately?: boolean) {
+async function restoreState(state: TaskState, executeImmediately?: boolean): Promise<void> {
   logger.debug(CHANNEL, 'Restoring main webview state', {
     data: { executeImmediately },
   });

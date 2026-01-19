@@ -158,7 +158,7 @@ async function handleLatexdiff(
   inputFile: string,
   baseFile: string,
   editedFile: string,
-) {
+): Promise<void> {
   if (!(baseFile || inputFile)) {
     await showLoggedMessageWithDocs(
       CHANNEL,
@@ -218,7 +218,7 @@ async function handleLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
-) {
+): Promise<void> {
   const fileToUse = baseFile ?? inputFile;
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
@@ -258,7 +258,7 @@ async function handlePackLatexdiffvc(
   baseFile: string,
   commitHash: string,
   clean: boolean,
-) {
+): Promise<void> {
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
@@ -279,7 +279,7 @@ async function handlePackLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
   clean: boolean,
-) {
+): Promise<void> {
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
@@ -300,7 +300,7 @@ async function handleCleanLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
-) {
+): Promise<void> {
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
@@ -320,7 +320,7 @@ async function handleCleanLatexdiffvc(
 async function handleCleanLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
-) {
+): Promise<void> {
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;

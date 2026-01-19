@@ -61,7 +61,7 @@ async function validateFilesExist(
 /**
  * Register comparison related commands
  */
-export function registerCompareCommands(context: vscode.ExtensionContext) {
+export function registerCompareCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.compare', handleCompare),
     vscode.commands.registerCommand('texra.acceptEdited', handleAcceptEdited),

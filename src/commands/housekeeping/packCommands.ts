@@ -156,10 +156,10 @@ async function handlePackSingle(
     return;
   }
 
-  const data = parsed.data;
-  const result = await runPackSingle(data.model, data.inputFile, data.agent);
-  showPackResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
+  const packParams = parsed.data;
+  const result = await runPackSingle(packParams.model, packParams.inputFile, packParams.agent);
+  showPackResult(result, packParams.inputFile);
+  emitClearMissingOutputs(packParams.agent, packParams.model, packParams.inputFile, false);
 }
 
 async function handlePackMultiple(
@@ -182,15 +182,15 @@ async function handlePackMultiple(
     return;
   }
 
-  const data = parsed.data;
+  const packParams = parsed.data;
   const result = await runPackMultiple(
-    data.model,
-    data.inputFile,
-    data.agent,
-    data.outputFiles,
+    packParams.model,
+    packParams.inputFile,
+    packParams.agent,
+    packParams.outputFiles,
   );
-  showPackResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
+  showPackResult(result, packParams.inputFile);
+  emitClearMissingOutputs(packParams.agent, packParams.model, packParams.inputFile, true);
 }
 
 // --- Registration ---

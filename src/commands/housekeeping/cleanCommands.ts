@@ -96,17 +96,17 @@ async function handleCleanSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const data = await validateCleanParams(
+  const cleanParams = await validateCleanParams(
     inputFile,
     agent,
     model,
     'cleanSingle',
   );
-  if (!data) return;
+  if (!cleanParams) return;
 
-  const result = await runCleanSingle(data.model, data.inputFile, data.agent);
-  showCleanResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, false);
+  const result = await runCleanSingle(cleanParams.model, cleanParams.inputFile, cleanParams.agent);
+  showCleanResult(result, cleanParams.inputFile);
+  emitClearMissingOutputs(cleanParams.agent, cleanParams.model, cleanParams.inputFile, false);
 }
 
 async function handleCleanMultiple(
@@ -115,24 +115,24 @@ async function handleCleanMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const data = await validateCleanParams(
+  const cleanParams = await validateCleanParams(
     inputFile,
     agent,
     model,
     'cleanMultiple',
   );
-  if (!data) return;
+  if (!cleanParams) return;
 
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   const result = await runCleanMultiple(
-    data.model,
-    data.inputFile,
-    data.agent,
+    cleanParams.model,
+    cleanParams.inputFile,
+    cleanParams.agent,
     outputFiles,
   );
-  showCleanResult(result, data.inputFile);
-  emitClearMissingOutputs(data.agent, data.model, data.inputFile, true);
+  showCleanResult(result, cleanParams.inputFile);
+  emitClearMissingOutputs(cleanParams.agent, cleanParams.model, cleanParams.inputFile, true);
 }
 
 export async function handleClean(config: unknown): Promise<void> {

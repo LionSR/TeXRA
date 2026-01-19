@@ -174,7 +174,7 @@ async function handleFollowUpResult(
   }
 }
 
-export function registerFollowUpCommand(context: vscode.ExtensionContext) {
+export function registerFollowUpCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.sendFollowUp',

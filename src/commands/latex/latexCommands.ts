@@ -14,7 +14,7 @@ import { runIndentTeX } from '@housekeeping';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-export function registerLatexCommands(context: vscode.ExtensionContext) {
+export function registerLatexCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.indentCurrentTeX',
