@@ -72,12 +72,8 @@ export class LatexDiffManager {
    * Resolve symlinks for latexdiff compatibility.
    * (latexdiff may have issues with symlinks in some configurations)
    */
-  private async resolveSymlinks(target: string): Promise<string> {
-    try {
-      return await fs.realpath(target);
-    } catch (_err) {
-      return target;
-    }
+  private resolveSymlinks(target: string): Promise<string> {
+    return fs.realpath(target).catch(() => target);
   }
 
   /**
