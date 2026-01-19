@@ -9,11 +9,9 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
-// eslint-disable-next-line import/order -- grouped by semantic meaning
 import { defineTool } from '@tools/core/define';
 import { ToolError } from '@tools/result';
-import { pluralize } from '@tools/utils';
+import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS } from './constants';
@@ -48,10 +46,7 @@ export class CrossrefSearchTool extends defineTool({
   schema: CrossrefSearchInputSchema,
 }) {
   protected async execute(input: CrossrefSearchInput) {
-    const trimmedQuery = input.query.trim();
-    if (!trimmedQuery) {
-      throw new ToolError('Search query cannot be empty.');
-    }
+    const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
@@ -64,17 +59,13 @@ export class CrossrefSearchTool extends defineTool({
       ...(input.filter && { filter: input.filter }),
     };
 
-    let response: Awaited<ReturnType<typeof crossrefClient.works>>;
-    try {
-      // Respect Crossref API rate limits
+    const response = await wrapApiCall(async () => {
       await waitForRateLimit(
         'crossref',
         CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       );
-      response = await crossrefClient.works(options);
-    } catch (error) {
-      throw new ToolError(`Crossref search failed: ${toErrorMessage(error)}`);
-    }
+      return crossrefClient.works(options);
+    }, 'Crossref search failed');
 
     if (!response.ok || !response.content || !response.content.message) {
       throw new ToolError('Crossref search did not return any items.');
