@@ -35,7 +35,9 @@ function convertToolSchema(
   def: ToolDefinition,
 ): Record<string, unknown> | null {
   if (def.zodSchema) {
-    return toJSONSchema(def.zodSchema) as Record<string, unknown>;
+    return toJSONSchema(def.zodSchema, {
+      unrepresentable: 'any',
+    }) as Record<string, unknown>;
   }
   return (def.parameters ?? null) as Record<string, unknown> | null;
 }
@@ -164,6 +166,7 @@ export function toAnthropicTools(
     const params = d.zodSchema
       ? (toJSONSchema(d.zodSchema, {
           reused: 'ref',
+          unrepresentable: 'any',
         }) as AnthropicTool['input_schema'])
       : (d.parameters as AnthropicTool['input_schema'] | undefined);
 
