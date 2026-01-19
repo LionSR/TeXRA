@@ -115,15 +115,15 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     // - O1-style models: use reasoning.effort + include_reasoning
     // - DeepSeek V3.2: use reasoning.enabled (no include_reasoning needed,
     //   reasoning_details is returned automatically when enabled)
-    if (this.config.capabilities.supportsReasoning) {
+    if (this.capabilities.supportsReasoning) {
       if (
-        this.config.capabilities.supportsReasoningEffort &&
-        this.config.capabilities.reasoningEffort
+        this.capabilities.supportsReasoningEffort &&
+        this.capabilities.reasoningEffort
       ) {
         // O1-style models with effort levels
         kwargs.reasoning = {
           effort: this.validateReasoningEffort(
-            this.config.capabilities.reasoningEffort,
+            this.capabilities.reasoningEffort,
           ),
         };
         kwargs.include_reasoning = true;

@@ -2046,7 +2046,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
-    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
     const lastUserMsg = messages.findLast(
       (m) => (m as { role?: string }).role === 'user',

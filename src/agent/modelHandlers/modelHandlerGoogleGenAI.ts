@@ -161,8 +161,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private supportsFileUploads(): boolean {
     return (
-      this.config.capabilities.supportsVision ||
-      this.config.capabilities.supportsNativeAudio
+      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio
     );
   }
 
@@ -1474,7 +1473,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
-    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
     const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
     if (!lastUserMsg?.parts) return;
