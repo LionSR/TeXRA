@@ -60,7 +60,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Internal imports
-import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
 // Type imports
@@ -72,11 +71,11 @@ import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import {
@@ -1423,21 +1422,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [endTurn, messages];
     }
 
-    // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputLocation);
-    fileContent = cleanFileContent(fileContent);
-
-    // Extract any existing scratchpad content
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
-    if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
-    }
-
-    await flexibleFS.write(outputLocation, fileContent);
-
-    // Update the workspaceState with the actual file content
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
+    // Prepare existing file content (read, clean, extract scratchpad, update state)
+    const { content: fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug(
