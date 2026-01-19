@@ -26,10 +26,10 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
     arXivCommands.downloadArXivSource,
     async () => {
       try {
-        // Ask for arXiv ID
+        // Ask for arXiv ID or URL
         const arxivId = await vscode.window.showInputBox({
-          placeHolder: 'e.g., 2404.12175',
-          prompt: 'Enter arXiv ID',
+          placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
+          prompt: 'Enter arXiv ID or URL',
           validateInput: arxivProcessor.validateId.bind(arxivProcessor),
         });
 
