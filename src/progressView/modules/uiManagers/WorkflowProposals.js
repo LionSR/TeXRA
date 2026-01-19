@@ -80,7 +80,7 @@ export class WorkflowProposals extends BaseUIRequestManager {
     // File fields only exist for workflow agent proposals (agentCategory === 'workflow')
     // Tool-use agent proposals access files via their own tools (read_file, etc.)
     // The schema enforces this - tool-use proposals simply don't have file fields
-    const combine = (single, arr) => [single, ...(arr || [])].filter((f) => f);
+    const combine = (single, arr) => [single, ...(arr ?? [])].filter(Boolean);
 
     this._setFileInfo(
       element,

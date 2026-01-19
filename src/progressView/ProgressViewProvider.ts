@@ -394,7 +394,7 @@ export class ProgressViewProvider
    * Check if any view is visible (sidebar or panel)
    */
   public isViewVisible(): boolean {
-    return !!this._view?.visible || !!this._panelView?.visible;
+    return this._view?.visible === true || this._panelView?.visible === true;
   }
 
   // ===== IRunStorageService implementation =====

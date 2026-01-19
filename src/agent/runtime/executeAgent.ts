@@ -457,12 +457,13 @@ function showAgentNotification(config: AgentConfig): void {
     ? path.basename(config.inputFile)
     : 'selected input';
   const outputFiles = config.outputFiles ?? [];
-  const outputInfo =
-    config.useMultipleOutputs && outputFiles.length > 1
-      ? `to ${outputFiles.length} files`
-      : outputFiles[0]
-        ? `to ${path.basename(outputFiles[0])}`
-        : '';
+
+  let outputInfo = '';
+  if (config.useMultipleOutputs && outputFiles.length > 1) {
+    outputInfo = `to ${outputFiles.length} files`;
+  } else if (outputFiles[0]) {
+    outputInfo = `to ${path.basename(outputFiles[0])}`;
+  }
 
   void vscode.window
     .showInformationMessage(

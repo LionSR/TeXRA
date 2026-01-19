@@ -701,7 +701,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const entry = Object.entries(AGENT_SELECT_IDS).find(
       ([, id]) => id === selectElement.id,
     );
-    return entry ? entry[0] : null;
+    return entry?.[0] ?? null;
   }
 
   _getSavedAgentValue(sessionType) {
