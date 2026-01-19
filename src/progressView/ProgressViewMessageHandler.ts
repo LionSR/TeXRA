@@ -569,7 +569,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Build the appropriate TaskState variant based on agent category
     // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
-    // Cast needed because agentConfig.session.agentCategory is typed as the general
+    // Cast needed because agentConfig.agentCategory is typed as the general
     // AgentCategory enum, not the specific literal type that TaskState requires
     const taskState = (
       isWorkflow ? { agentConfig, activeFiles } : { agentConfig }

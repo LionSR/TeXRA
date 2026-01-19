@@ -37,7 +37,11 @@ import {
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+  type AgentConfigPayload,
+} from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
@@ -52,6 +56,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
+  type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
@@ -91,9 +96,13 @@ const logger = new AgentLogger(CHANNEL);
 // Types
 // ============================================================================
 
-export interface AgentResolveOptions {
-  preferMultiple?: boolean;
-}
+// Re-export for API compatibility
+// Canonical source: agentLoad.ts
+export type { AgentLoadOptions };
+
+// Re-export for callers that need to build agent configurations
+// Canonical source: AgentConfig.ts
+export type { AgentConfigPayload };
 
 /**
  * Common base for flow inputs after agent resolution.
@@ -127,7 +136,7 @@ interface ResolvedAgentBase extends StorageKeyManager {
  * to get agentType synchronously, avoiding the need for YAML loading.
  */
 function computePreliminaryStreamId(
-  configPayload: Partial<AgentConfig>,
+  configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
 ): StreamTabId {
   const { agent, model, inputFile, useMultipleOutputs } = configPayload;
@@ -154,7 +163,7 @@ function computePreliminaryStreamId(
 
 export async function getAgentPath(
   agentIdentifier: string,
-  options?: AgentResolveOptions,
+  options?: AgentLoadOptions,
 ): Promise<ResolvedAgent> {
   const result = resolveAgent(agentIdentifier, options?.preferMultiple);
   if (result) return result;
@@ -209,7 +218,7 @@ interface ResolveAgentOptions {
  */
 async function resolveAgentBase(
   agentName: string,
-  configPayload: Partial<AgentConfig>,
+  configPayload: AgentConfigPayload,
   providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
@@ -218,10 +227,8 @@ async function resolveAgentBase(
     providedExecutionId ?? (randomUUID() as ExecutionId);
 
   // 1. Resolve agent definition
-  const fullConfig = AgentConfigSchema.parse({
-    agent: agentName,
-    ...configPayload,
-  });
+  // configPayload already contains agent (required by AgentConfigPayload)
+  const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
@@ -242,6 +249,7 @@ async function resolveAgentBase(
   const config: AgentConfig = {
     ...fullConfig,
     agentType: sessionDescriptor.agentType,
+    agentCategory: sessionDescriptor.agentCategory,
     session: sessionDescriptor,
   };
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
@@ -537,7 +545,7 @@ async function handleFlowError(
  * For resuming paused tool-use sessions, use resumeToolUseFromSnapshot instead.
  */
 export async function executeAgent(
-  configPayload: Partial<AgentConfig>,
+  configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
 ): Promise<void> {
   if (!configPayload.model || !configPayload.agent) {

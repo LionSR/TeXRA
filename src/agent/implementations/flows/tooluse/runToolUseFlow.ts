@@ -149,16 +149,23 @@ export async function runToolUseFlow<C = unknown>(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
-    if (flowRecord?.shared) {
+    let isResume = Boolean(flowRecord?.shared);
+    if (isResume) {
       logger.debug('Resuming tool-use flow from persistence');
 
       // Migrate legacy shared state format if needed.
       // Pre-flattening sessions stored shared as { state: { conversation, ... } }
       // which would cause failures when cycle node reads shared.stateSlices.
-      const migratedShared = migrateSharedState(flowRecord.shared);
-      if (migratedShared !== flowRecord.shared) {
+      const migrationResult = migrateSharedState(flowRecord!.shared);
+      if (migrationResult === null) {
+        // Corrupted/unparseable state - delete and start fresh
+        logger.warn('Failed to parse flow record shared state, starting fresh');
+        await kv.delete(`flow:${executionId}`);
+        flowRecord = null;
+        isResume = false;
+      } else if (migrationResult.migrated) {
         logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migratedShared;
+        flowRecord!.shared = migrationResult.data;
         // Persist the migrated format so future resumes use the new structure
         await kv.write(`flow:${executionId}`, flowRecord);
       }
@@ -207,10 +214,11 @@ export async function runToolUseFlow<C = unknown>(
       const kv = getExecutionStore(executionId);
       const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
       // Handle both legacy { state: { userCancelledRetry } } and new flat format
-      const migratedShared = flowRecord?.shared
+      const migrationResult = flowRecord?.shared
         ? migrateSharedState(flowRecord.shared)
-        : undefined;
-      const userCancelledRetry = migratedShared?.userCancelledRetry === true;
+        : null;
+      const userCancelledRetry =
+        migrationResult?.data?.userCancelledRetry === true;
 
       if (userCancelledRetry) {
         // Preserve flow record for resume - user can continue from last successful breakpoint

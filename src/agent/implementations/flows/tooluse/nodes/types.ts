@@ -3,6 +3,8 @@
  *
  * Contains state types, result types, and guards used across nodes.
  */
+import { z } from 'zod';
+
 import type {
   AgentRunState,
   AgentRunStateSnapshot,
@@ -12,6 +14,7 @@ import type {
   AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // ============================================================================
@@ -51,11 +54,11 @@ export interface PrepareResult {
   shouldSkipCycle: boolean;
 }
 
-export type CycleExecResult =
-  | { kind: 'success'; messages: ProviderMessage[] }
-  | { kind: 'skipped' }
-  | { kind: 'failed'; message: string }
-  | { kind: 'cancelled' };
+/**
+ * Result type for tool-use cycle execution.
+ * Uses InvocationResult as the single source of truth for result patterns.
+ */
+export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
 
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
@@ -90,56 +93,37 @@ export function assertPreparedShared(
 // ============================================================================
 
 /**
- * Legacy shared state format (pre-flattening).
- * Used for migration from persisted sessions created before the flat structure.
+ * Lightweight schema for detecting and migrating legacy shared state format.
+ * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
+ * - only validates enough to detect format, not full content.
  */
-interface LegacyToolUseRunShared {
-  state: {
-    conversation: ProviderMessage[];
-    shouldSkipCycle: boolean;
-    stateSlices: StateSlicesSnapshot | null;
-    userCancelledRetry?: boolean;
-  };
-}
-
-/**
- * Check if shared state is in legacy format (wrapped in `state` property).
- */
-function isLegacyFormat(shared: unknown): shared is LegacyToolUseRunShared {
-  return (
-    typeof shared === 'object' &&
-    shared !== null &&
-    'state' in shared &&
-    typeof (shared as LegacyToolUseRunShared).state === 'object' &&
-    (shared as LegacyToolUseRunShared).state !== null &&
-    'conversation' in (shared as LegacyToolUseRunShared).state
-  );
-}
+const FlatFormatSchema = z.looseObject({ conversation: z.array(z.unknown()) });
+const LegacyStateSchema = z.looseObject({ conversation: z.array(z.unknown()) });
 
 /**
  * Migrate legacy shared state to current flat format.
+ * Legacy: `{ state: { conversation, stateSlices, ... } }`
+ * Current: `{ conversation, stateSlices, ... }` (flat)
  *
- * PersistedFlow loads shared state from disk on resume. If a user upgrades
- * with an in-progress tool-use session, the stored shared still has the old
- * `{ state: { conversation, stateSlices, ... } }` structure.
- *
- * This function detects and migrates legacy format to prevent failures when
- * the cycle node tries to read `shared.stateSlices` (which would be undefined
- * in legacy format).
- *
- * @param shared - The shared state loaded from persistence (may be legacy format)
- * @returns Shared state in current flat format
+ * @returns Object with migrated data and whether migration occurred, or null if invalid
  */
-export function migrateSharedState(shared: unknown): ToolUseRunShared {
-  if (isLegacyFormat(shared)) {
-    return {
-      conversation: shared.state.conversation,
-      shouldSkipCycle: shared.state.shouldSkipCycle,
-      stateSlices: shared.state.stateSlices,
-      userCancelledRetry: shared.state.userCancelledRetry,
-    };
+export function migrateSharedState(
+  shared: unknown,
+): { data: ToolUseRunShared; migrated: boolean } | null {
+  // Check if already flat format - return same reference (no migration needed)
+  const flatResult = FlatFormatSchema.safeParse(shared);
+  if (flatResult.success && !('state' in flatResult.data)) {
+    return { data: shared as ToolUseRunShared, migrated: false };
   }
 
-  // Already in current format or fresh start
-  return shared as ToolUseRunShared;
+  // Check if legacy format - extract and return nested state
+  const obj = shared as Record<string, unknown>;
+  if (obj && typeof obj === 'object' && 'state' in obj) {
+    const legacyResult = LegacyStateSchema.safeParse(obj.state);
+    if (legacyResult.success) {
+      return { data: obj.state as ToolUseRunShared, migrated: true };
+    }
+  }
+
+  return null;
 }
