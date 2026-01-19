@@ -27,33 +27,32 @@ import type { EventHandlerContext } from './EventHandlerContext';
 
 /**
  * Register follow-up queue event handlers on the event bus.
- *
- * @param bus - Progress event bus
- * @param ctx - Event handler context with state and webview updater
- * @param signal - AbortController signal for cleanup
  */
 export function registerFollowUpEventHandlers(
   bus: ProgressEventBusLike,
   ctx: EventHandlerContext,
   signal: AbortSignal,
 ): void {
-  bus.on('updateQueuedFollowUps', handleUpdateQueuedFollowUps(ctx), { signal });
+  bus.on(
+    'updateQueuedFollowUps',
+    (payload) => handleUpdateQueuedFollowUps(ctx, payload),
+    { signal },
+  );
 }
 
-function handleUpdateQueuedFollowUps(ctx: EventHandlerContext) {
-  return ({
-    streamId,
-  }: ProgressEventPayloads['updateQueuedFollowUps']): void => {
-    withEventErrorHandling(
-      'FollowUpEvents',
-      'failed to handle updateQueuedFollowUps',
-      () => {
-        // Don't filter by active stream - see module docstring for rationale
-        if (ctx.webviewUpdater.isAvailable()) {
-          const messages = ToolUseFollowUpQueue.getAll(streamId);
-          ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
-        }
-      },
-    );
-  };
+function handleUpdateQueuedFollowUps(
+  ctx: EventHandlerContext,
+  { streamId }: ProgressEventPayloads['updateQueuedFollowUps'],
+): void {
+  withEventErrorHandling(
+    'FollowUpEvents',
+    'failed to handle updateQueuedFollowUps',
+    () => {
+      // Don't filter by active stream - see module docstring for rationale
+      if (ctx.webviewUpdater.isAvailable()) {
+        const messages = ToolUseFollowUpQueue.getAll(streamId);
+        ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
+      }
+    },
+  );
 }
