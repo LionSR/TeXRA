@@ -679,7 +679,8 @@ export async function handleProgressViewToolEditApprovalAction(
       break;
 
     case 'showLatexdiff':
-      await runLatexdiff(entry);
+      // Use ONLYCHANGEDPAGE for tool edit approvals to focus on changes
+      await runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' });
       break;
 
     case 'previewProposed':
