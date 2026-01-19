@@ -14,7 +14,7 @@
 
 .search-input {
   flex-grow: 1;
-  padding: var(--spacing-medium) var(--spacing-medium);
+  padding: var(--spacing-medium);
   font-size: var(--font-size);
 }
 
@@ -106,7 +106,6 @@ mark.current-match {
 
 .config-item {
   display: flex;
-  flex-direction: row;
   gap: var(--spacing-medium);
   align-items: baseline;
 }

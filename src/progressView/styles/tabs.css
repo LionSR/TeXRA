@@ -71,8 +71,7 @@
 }
 
 .tab-header .tab-status {
-  margin-left: 0;
-  margin-right: 0;
+  margin: 0;
 }
 
 .tab-title {
@@ -108,8 +107,7 @@
   width: var(--height-control);
   min-width: var(--height-control);
   height: var(--height-control);
-  margin: 0;
-  margin-right: var(--spacing-small);
+  margin: 0 var(--spacing-small) 0 0;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
   transition: color 120ms ease;
 }

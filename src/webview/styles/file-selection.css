@@ -29,8 +29,6 @@
 
 .file-select-header label {
   margin-right: var(--spacing-small);
-  display: flex;
-  align-items: center;
 }
 
 .file-select-label-group {

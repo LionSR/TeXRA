@@ -23,20 +23,12 @@
   white-space: pre-wrap;
 }
 
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3,
-.markdown-content h4 {
+.markdown-content :is(h1, h2, h3, h4) {
   color: var(--vscode-textLink-foreground, #3794ff);
   font-size: var(--font-size-lg);
   font-weight: 600;
   line-height: 1.25;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-
-.markdown-content :is(h1, h2, h3, h4):first-child {
-  margin-top: 0;
+  margin: 1em 0 0.5em;
 }
 
 .markdown-content h1 {
@@ -56,10 +48,8 @@
   color: var(--color-text-link);
 }
 
-/* Add styles to control paragraph spacing */
 .markdown-content p {
   margin: 0.5em 0;
-  padding: 0;
 }
 
 .markdown-content p:last-child {
@@ -68,8 +58,7 @@
 
 .markdown-content ul,
 .markdown-content ol {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin: 0.5em 0;
   padding-left: 1.5em;
 }
 
@@ -175,18 +164,7 @@
   color: var(--vscode-editorInfo-foreground);
 }
 
-/* Additional enhancements for scratchpad content */
-.markdown-content p:first-child {
-  margin-top: 0;
-}
-
-.markdown-content pre:first-child {
-  margin-top: 0;
-}
-
-.markdown-content pre:last-child {
-  margin-bottom: 0;
-}
+/* First/last child margin resets are handled by > :first-child and > :last-child above */
 
 /* Scratchpad reflection patterns */
 .banner-content--scratchpad p:has(strong:first-child) {
@@ -205,10 +183,7 @@
   margin-top: 0.3em;
 }
 
-/* Remove extra space between consecutive elements of the same type */
-.markdown-content h1 + h1,
-.markdown-content h2 + h2,
-.markdown-content h3 + h3,
-.markdown-content h4 + h4 {
+/* Remove extra space between consecutive headings of the same type */
+.markdown-content :is(h1, h2, h3, h4) + :is(h1, h2, h3, h4) {
   margin-top: 0.3em;
 }

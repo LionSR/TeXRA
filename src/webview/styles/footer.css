@@ -33,9 +33,6 @@
   flex: 0 1 auto;
   min-width: 10rem;
   max-width: 14rem;
-}
-
-.agent-select-dropdowns {
   position: relative;
 }
 

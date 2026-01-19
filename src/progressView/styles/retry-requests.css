@@ -42,10 +42,6 @@
   font-size: var(--font-size-xs);
 }
 
-.retry-request__error-details[hidden] {
-  display: none;
-}
-
 .retry-request__error-summary {
   cursor: pointer;
   color: var(--vscode-descriptionForeground);
@@ -60,7 +56,7 @@
 }
 
 .retry-request__error-body {
-  margin: var(--spacing-tiny) 0 0 0;
+  margin-top: var(--spacing-tiny);
   padding: var(--spacing-small);
   background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
   border-radius: var(--border-radius-small);
@@ -81,25 +77,13 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
+  inset-block: 0;
   width: 3px;
   background: var(--vscode-editorWarning-foreground, #ff8c00);
   border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
 }
 
-/* Feedback section */
-.retry-request__feedback {
-  margin-top: var(--spacing-small);
-}
-
-.retry-request__feedback[hidden] {
-  display: none;
-}
-
-.retry-request__feedback-input {
-  width: 100%;
-}
+/* Feedback section - uses .feedback-section and .feedback-section__input from common.css */
 
 /* Retry button when feedback is shown */
 .retry-request--feedback-active
