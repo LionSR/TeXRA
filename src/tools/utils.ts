@@ -95,6 +95,28 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
 export type { GitignoreMatcher } from './gitignore';
 
+/** Default width for line number padding */
+const LINE_NUMBER_WIDTH = 6;
+
+/**
+ * Format lines with line numbers for display in tool output.
+ * @param lines - Array of lines to format
+ * @param startingLine - 1-based line number for the first line (default: 1)
+ * @param width - Padding width for line numbers (default: 6)
+ * @returns Array of formatted lines with line number prefix and tab separator
+ */
+export function formatLinesWithNumbers(
+  lines: string[],
+  startingLine: number = 1,
+  width: number = LINE_NUMBER_WIDTH,
+): string[] {
+  return lines.map((line, index) => {
+    const lineNumber = startingLine + index;
+    const prefix = lineNumber.toString().padStart(width, ' ');
+    return `${prefix}\t${line}`;
+  });
+}
+
 /**
  * Pluralize a word based on count.
  * Returns the singular form for count === 1, plural form otherwise.
