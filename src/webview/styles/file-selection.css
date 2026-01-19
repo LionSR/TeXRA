@@ -1,13 +1,11 @@
 /**
- * File Selection styles for Webview
- * File inputs, selectors, and related components
+ * File selection styles for Webview
  */
 
 .file-select {
   margin-bottom: var(--spacing-large);
 }
 
-/* Make optional sections more compact */
 .file-select:has(.optional-label) {
   margin-bottom: var(--spacing-tiny);
 }
@@ -29,8 +27,6 @@
 
 .file-select-header label {
   margin-right: var(--spacing-small);
-  display: flex;
-  align-items: center;
 }
 
 .file-select-label-group {
@@ -57,7 +53,6 @@
   margin-right: var(--spacing-small);
 }
 
-/* !important needed to override vscode-toolbar-container's internal flex-direction: row */
 .file-select-actions,
 vscode-toolbar-container.file-select-actions {
   flex-direction: column !important;
@@ -103,29 +98,24 @@ vscode-toolbar-container.file-select-actions {
   height: var(--height-control);
 }
 
-/* When toggled (input is visible), make the label more prominent */
 .file-select[data-expanded='true'] .optional-label,
 .file-select[data-expanded='true'] .toggle-icon {
   color: var(--vscode-foreground);
 }
 
-/* Hide multiple file operation buttons when containers are collapsed */
 .file-select:not([data-expanded='true']) .file-action-button {
   display: none;
 }
 
-/* LaTeX diffs section header styling */
 .latexdiffs-section .file-select-header {
   margin-bottom: 0;
 }
 
-/* Show/hide behavior for LaTeX diffs */
 .latexdiffs-section[data-expanded='true'] .optional-label,
 .latexdiffs-section[data-expanded='true'] .toggle-icon {
   color: var(--vscode-foreground);
 }
 
-/* Ensure commit dropdown can extend beyond container */
 #commit {
   position: relative;
 }
