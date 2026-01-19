@@ -149,16 +149,18 @@ export async function runToolUseFlow<C = unknown>(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
-    if (flowRecord?.shared) {
+    const isResume = Boolean(flowRecord?.shared);
+    if (isResume) {
       logger.debug('Resuming tool-use flow from persistence');
 
       // Migrate legacy shared state format if needed.
       // Pre-flattening sessions stored shared as { state: { conversation, ... } }
       // which would cause failures when cycle node reads shared.stateSlices.
-      const migratedShared = migrateSharedState(flowRecord.shared);
-      if (migratedShared !== flowRecord.shared) {
+      // Note: flowRecord is guaranteed non-null when isResume is true
+      const migratedShared = migrateSharedState(flowRecord!.shared);
+      if (migratedShared !== flowRecord!.shared) {
         logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migratedShared;
+        flowRecord!.shared = migratedShared;
         // Persist the migrated format so future resumes use the new structure
         await kv.write(`flow:${executionId}`, flowRecord);
       }
@@ -182,7 +184,7 @@ export async function runToolUseFlow<C = unknown>(
     // Inject services (never persisted - runtime dependencies)
     pf.setServices(flowContext.services);
 
-    if (flowRecord?.shared) {
+    if (isResume) {
       logger.debug('PersistedFlow will resume from last node');
     }
 
