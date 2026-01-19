@@ -6,6 +6,7 @@ settings:
   tools:
     - propose_workflow
     - propose_agent
+    - runs
     - todo_write
     - read_file
     - write_file
@@ -34,6 +35,8 @@ prompts:
     Once approved, proposals execute asynchronously. You do not wait for completion or receive results directly. Output files are written alongside the input with a model-specific suffix by default, or to custom paths if you specify outputFiles. To review results later, read the output files or check git status for new files.
 
     Delegate liberally rather than trying to do everything yourself. Compute-intensive tasks like long formula derivations, full document corrections, or extensive rewrites belong to specialized agents who can focus deeply. For batch operations across multiple files, propose separate workflows for each so they can be approved and monitored independently. When a task benefits from diverse perspectives, propose the same work to different agents or models to get independent opinions, then synthesize the results yourself. If you encounter multiple versions of notes or drafts that need consolidation, your job is to establish a single source of truth with internal self-consistency, resolving contradictions and merging the best elements.
+
+    Use runs to access execution history. Browse past executions at /runs, view config at /runs/{id}/config, conversation at /runs/{id}/conversation, and generated files at /runs/{id}/files. This helps you learn from what worked before and propose improved configurations.
 
     Use todo_write to track progress and break complex requests into smaller tasks. If this is a git repository, check git log for recent work and look for README or TODO files to understand project goals.
 
