@@ -816,29 +816,11 @@
             "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
             "order": 3
           },
-          "texra.latexdiff.subtype": {
-            "type": "string",
-            "default": "SAFE",
-            "enum": [
-              "SAFE",
-              "ONLYCHANGEDPAGE",
-              "COLOR",
-              "MARGIN"
-            ],
-            "enumDescriptions": [
-              "Default safe markup that works with all document types.",
-              "Only show pages containing changes. Best for reviewing proposed edits, but may not work reliably with floating material (figures, tables).",
-              "Simple color-based change marking.",
-              "Show change markers in the margin."
-            ],
-            "description": "Subtype controlling how change boundaries are marked. ONLYCHANGEDPAGE is ideal for reviewing proposed changes.",
-            "order": 4
-          },
           "texra.latexdiff.generateBetweenRoundDiffs": {
             "type": "boolean",
             "default": false,
             "description": "Generate diffs between consecutive agent rounds in addition to comparing each round to the original input.",
-            "order": 5
+            "order": 4
           },
           "texra.latexdiff.tempFileLocation": {
             "type": "string",
@@ -852,7 +834,7 @@
             ],
             "default": "sameDirectory",
             "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
-            "order": 6
+            "order": 5
           }
         }
       },
