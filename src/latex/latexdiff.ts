@@ -98,7 +98,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string },
+    options?: { cwd?: string; subtype?: string },
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';
@@ -148,7 +148,7 @@ export class LaTeXdiffService {
       const result = await this.commandExecutor.executeDiff(
         inputFile,
         editedFile,
-        { mathMarkup, cwd: options?.cwd },
+        { mathMarkup, subtype: options?.subtype, cwd: options?.cwd },
       );
       if (!result.stdout) {
         throw new Error('Latexdiff produced no output');
