@@ -1298,8 +1298,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!runOutputs) return [];
     return [...runOutputs.values()].flatMap((infos) =>
       infos
-        .filter((info) => info.location?.absolutePath)
-        .map((info) => info.location!.absolutePath),
+        .map((info) => info.location?.absolutePath)
+        .filter((path): path is string => Boolean(path)),
     );
   }
 }

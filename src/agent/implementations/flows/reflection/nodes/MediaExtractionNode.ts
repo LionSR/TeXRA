@@ -4,10 +4,6 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
@@ -35,10 +31,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, context } = shared;
