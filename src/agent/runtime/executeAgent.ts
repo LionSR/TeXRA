@@ -448,10 +448,31 @@ async function runFlowWithLifecycle(
       );
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
-  } catch (error) {
+  } catch (err) {
     ctx.runStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(error, agentName, ctx.logger);
+
+    // Handle flow error inline
+    const rawMsg = toErrorMessage(err);
+    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
+
+    // Show appropriate notification based on error type
+    const isApiKeyError =
+      rawMsg.includes('Missing API key') ||
+      rawMsg.includes('API key not found');
+    if (isApiKeyError) {
+      await showApiKeyErrorNotification();
+    } else {
+      vscode.window.showErrorMessage(errorMsg);
+    }
+
+    // Log error directly without creating a new visible group
+    // (error is already captured in runStage with ERROR status)
+    await ctx.logger.logError(errorMsg, err, {
+      operation: `execute ${agentName}`,
+    });
+
+    throw new Error(errorMsg);
   }
 }
 
@@ -506,32 +527,6 @@ async function showApiKeyErrorNotification(): Promise<void> {
     ],
     false,
   );
-}
-
-async function handleFlowError(
-  err: unknown,
-  agentName: string,
-  agentLogger: AgentLogger,
-): Promise<never> {
-  const rawMsg = toErrorMessage(err);
-  const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
-
-  // Show appropriate notification based on error type
-  const isApiKeyError =
-    rawMsg.includes('Missing API key') || rawMsg.includes('API key not found');
-  if (isApiKeyError) {
-    await showApiKeyErrorNotification();
-  } else {
-    vscode.window.showErrorMessage(errorMsg);
-  }
-
-  // Log error directly without creating a new visible group
-  // (error is already captured in runStage with ERROR status)
-  await agentLogger.logError(errorMsg, err, {
-    operation: `execute ${agentName}`,
-  });
-
-  throw new Error(errorMsg);
 }
 
 // ============================================================================
