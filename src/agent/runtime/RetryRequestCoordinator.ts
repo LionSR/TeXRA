@@ -149,11 +149,6 @@ class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     this.loggers.delete(streamId);
     super.clearRequest(streamId);
   }
-
-  // Legacy alias for backwards compatibility
-  hasPendingRequest(streamId: string): boolean {
-    return super.hasPendingRequest(streamId);
-  }
 }
 
 // ============================================================================
