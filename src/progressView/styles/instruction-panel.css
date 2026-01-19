@@ -1,5 +1,5 @@
 /**
- * Instruction panel styles for the ProgressView
+ * Instruction panel styles for ProgressView
  */
 
 .instruction-panel {
@@ -40,7 +40,6 @@
   gap: var(--spacing-small);
 }
 
-/* Copy button - transition/success handled in utilities.css */
 .instruction-panel__copy {
   opacity: 0.65;
 }

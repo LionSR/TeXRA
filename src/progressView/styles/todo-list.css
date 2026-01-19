@@ -1,9 +1,7 @@
 /**
- * Todo list styles for the ProgressView
- * Uses native VS Code collapsible component
+ * Todo list styles for ProgressView
  */
 
-/* Collapsible container styling - extends .collapsible-panel from common.css */
 .todo-collapsible {
   margin: var(--spacing-small) 0;
   border-top: var(--border-thin) solid var(--color-border);
@@ -37,7 +35,6 @@
   word-break: break-word;
 }
 
-/* Status-specific styles */
 .todo-item--pending {
   opacity: 0.7;
 }

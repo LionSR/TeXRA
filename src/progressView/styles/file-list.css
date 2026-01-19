@@ -1,16 +1,12 @@
 /**
  * File list styles for ProgressView
- * Styling for file list entries and file tree display
- * Uses native VS Code collapsible component
  */
 
-/* Collapsible container styling - extends .collapsible-panel--compact from common.css */
 .files-collapsible {
   margin: 0;
   border-top: var(--border-thin) solid var(--color-border);
 }
 
-/* File metadata styling */
 .file-list-content .file-var {
   color: var(--color-text-secondary);
   opacity: 0.8;
@@ -25,7 +21,6 @@
   font-style: italic;
 }
 
-/* XML link container for missing outputs */
 .xml-link-container {
   margin-top: var(--spacing-small);
   padding-top: var(--spacing-small);
@@ -40,14 +35,12 @@
   opacity: var(--opacity-subtle);
 }
 
-/* Document tag info styling */
 .xml-link-container .document-tag {
   color: var(--color-text-secondary);
   opacity: 0.8;
   font-style: italic;
 }
 
-/* Hint for fixing XML and resuming */
 .xml-link-container .xml-fix-hint {
   flex-basis: 100%;
   margin-top: var(--spacing-tiny);
