@@ -534,6 +534,7 @@
                       aria-label="Workflow agent"
                       tabindex="-1"
                       aria-hidden="true"
+                      position="above"
                     >
                       ${workflowAgentOptions}
                     </vscode-single-select>
@@ -542,6 +543,7 @@
                       class="agent-select agent-select--active"
                       data-session-type="toolUse"
                       aria-label="Tool-use agent"
+                      position="above"
                     >
                       ${toolUseAgentOptions}
                     </vscode-single-select>
@@ -554,7 +556,7 @@
                   class="codicon codicon-robot clickable"
                   title="Model settings"
                 ></i>
-                <vscode-single-select id="model">
+                <vscode-single-select id="model" position="above">
                   ${modelOptions}
                 </vscode-single-select>
               </div>
