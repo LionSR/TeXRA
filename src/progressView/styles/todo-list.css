@@ -10,9 +10,11 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-/* Override vscode-collapsible header padding */
+/* Override vscode-collapsible header padding and theming */
 .todo-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .todo-collapsible::part(body) {
