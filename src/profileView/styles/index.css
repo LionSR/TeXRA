@@ -91,7 +91,7 @@ h2 {
 
 .agents-table th,
 .agents-table td {
-  padding: var(--spacing-medium) var(--spacing-medium);
+  padding: var(--spacing-medium);
   text-align: left;
   border-bottom: var(--border-thin) solid var(--color-border);
 }

@@ -14,23 +14,17 @@
 
 /* ==========================================================================
    Interactive - Copy button behavior
-   Base .copy-button class is in common.css
-   These are view-specific selectors that extend the pattern
    ========================================================================== */
 
-.banner-content-copy,
-.instruction-panel__copy {
+.copy-button {
   transition: opacity 0.2s ease;
 }
 
-.banner-content-copy:focus-visible,
-.banner-content-copy.copy-success,
-.instruction-panel__copy:focus-visible,
-.instruction-panel__copy.copy-success {
+.copy-button:focus-visible,
+.copy-button.copy-success {
   opacity: 1;
 }
 
-.banner-content-copy.copy-success,
-.instruction-panel__copy.copy-success {
+.copy-button.copy-success {
   color: var(--color-success);
 }

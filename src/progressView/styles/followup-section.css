@@ -2,14 +2,9 @@
  * Followup section styles for workflow continuation
  */
 
+/* Extends .collapsible-panel from common.css */
 .followup-collapsible {
   margin-top: var(--spacing-medium);
-}
-
-/* Override vscode-collapsible header theming */
-.followup-collapsible::part(header) {
-  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
-  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .followup-section {
@@ -22,10 +17,6 @@
 .followup-mode-toggle {
   display: flex;
   align-items: center;
-}
-
-.followup-mode-toggle vscode-radio-group {
-  display: flex;
   gap: var(--spacing-large);
 }
 

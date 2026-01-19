@@ -11,8 +11,7 @@
 
 #instruction {
   width: 100%;
-  margin-top: var(--spacing-medium);
-  margin-bottom: var(--spacing-medium);
+  margin: var(--spacing-medium) 0;
 }
 
 /* Auto-resize is handled by JavaScript, but set a max-height limit */

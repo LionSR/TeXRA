@@ -105,7 +105,6 @@ vscode-option[data-requires-key='true'] {
   color: var(--color-text-secondary);
   opacity: var(--opacity-subtle);
   font-style: italic;
-  background-color: var(--vscode-input-background);
 }
 
 /* Red × indicator for missing API keys.
