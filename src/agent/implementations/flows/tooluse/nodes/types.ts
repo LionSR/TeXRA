@@ -3,6 +3,8 @@
  *
  * Contains state types, result types, and guards used across nodes.
  */
+import { z } from 'zod';
+
 import type {
   AgentRunState,
   AgentRunStateSnapshot,
@@ -90,20 +92,28 @@ export function assertPreparedShared(
 // State Migration (Legacy Support)
 // ============================================================================
 
-/** Legacy format had fields nested under `state` property */
-type LegacyShared = { state: ToolUseRunShared };
+/**
+ * Lightweight schema for detecting flat vs legacy shared state format.
+ * Validates only the minimum needed to determine format - full content
+ * validation happens in SessionResumeRetrieval.ts during session resume.
+ */
+const FlatFormatSchema = z.object({ conversation: z.array(z.unknown()) });
+const LegacyFormatSchema = z.object({
+  state: z.object({ conversation: z.array(z.unknown()) }),
+});
+
+const MigrationSharedSchema = z
+  .union([FlatFormatSchema, LegacyFormatSchema])
+  .transform((data) => ('state' in data ? data.state : data));
 
 /**
  * Migrate legacy shared state to current flat format.
  * Legacy: `{ state: { conversation, stateSlices, ... } }`
  * Current: `{ conversation, stateSlices, ... }` (flat)
+ *
+ * @returns Migrated state, or null if neither format matches
  */
-export function migrateSharedState(shared: unknown): ToolUseRunShared {
-  const obj = shared as Record<string, unknown>;
-  const legacy = obj?.state as LegacyShared['state'] | undefined;
-
-  // Flatten if legacy format (has nested state.conversation)
-  return legacy?.conversation !== undefined
-    ? legacy
-    : (shared as ToolUseRunShared);
+export function migrateSharedState(shared: unknown): ToolUseRunShared | null {
+  const result = MigrationSharedSchema.safeParse(shared);
+  return result.success ? (result.data as ToolUseRunShared) : null;
 }

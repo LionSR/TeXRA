@@ -96,12 +96,12 @@ const logger = new AgentLogger(CHANNEL);
 // Types
 // ============================================================================
 
-// AgentLoadOptions is imported from agentLoad.ts (single source of truth)
 // Re-export for API compatibility
+// Canonical source: agentLoad.ts
 export type { AgentLoadOptions };
 
-// AgentConfigPayload is imported from AgentConfig.ts - explicit required fields
 // Re-export for callers that need to build agent configurations
+// Canonical source: AgentConfig.ts
 export type { AgentConfigPayload };
 
 /**
