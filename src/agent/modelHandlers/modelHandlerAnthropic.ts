@@ -1617,82 +1617,86 @@ export class ModelHandlerAnthropic extends ModelHandler<
       );
       return;
     }
-    this.logger.debug('Last message is a user message');
 
-    // Fix for continuation issues
-    if (lastMessage && this.containCutOffMessage(lastMessage.content)) {
-      this.logger.debug(
-        'Last message is a user message asking to continue after cutoff',
+    // Handle continuation after cutoff
+    if (this.containCutOffMessage(lastMessage.content)) {
+      this.handleCutoffContinuation(
+        messages,
+        secondLastMessage,
+        bestConnector,
+        newResponse,
       );
-
-      // The last message is a user message
-      // So the second last message must be an assistant message
-
-      if (secondLastMessage && secondLastMessage.role === 'assistant') {
-        // Preserve any thinking blocks that might exist in the content array
-        const thinkingBlocks = Array.isArray(secondLastMessage.content)
-          ? secondLastMessage.content.filter(isAnyThinkingBlockParam)
-          : [];
-
-        // Log if we have thinking blocks from previous message
-        if (thinkingBlocks.length > 0) {
-          this.logger.debug(
-            `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
-          );
-        }
-
-        // Append text content to the previous assistant message and update cache control
-        if (Array.isArray(secondLastMessage.content)) {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          } as ContentBlockParam);
-          this.assignCacheControlToLatest(secondLastMessage.content);
-        }
-
-        // Remove the user continuation prompt to keep the conversation clean
-        if (messages.at(-1)?.role === 'user') {
-          messages.pop();
-        } else {
-          this.logger.error(
-            'Last message is not a user message - unexpected format',
-          );
-        }
-      }
-    } else {
-      this.logger.debug(
-        'Last message is a request message rather than a ask to continue after cut off',
-      );
-      // Create a new assistant message with the response
-      const content: ContentBlockParam[] = [];
-
-      // Include all thinking blocks from workspaceState if available
-      if (
-        workspaceState.reasoning.thinkingBlocks &&
-        workspaceState.reasoning.thinkingBlocks.length > 0
-      ) {
-        this.logger.debug(
-          `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
-        );
-        content.push(
-          ...(workspaceState.reasoning
-            .thinkingBlocks as AnthropicThinkingContentParam[]),
-        );
-        // Clear cached thinking so the next response can store fresh blocks
-        workspaceState.resetReasoning();
-      }
-
-      // Add the text content
-      content.push({
-        type: 'text',
-        text: workspaceState.assembly.accumulatedOutput,
-      } as ContentBlockParam);
-
-      this.assignCacheControlToLatest(content);
-      messages.push({ role: 'assistant', content });
-
-      this.logger.debug('Added a new assistant message');
+      return;
     }
+
+    // Handle new request - create a new assistant message
+    this.handleNewAssistantMessage(messages, workspaceState);
+  }
+
+  /** Handle continuation after a cutoff by appending to the previous assistant message. */
+  private handleCutoffContinuation(
+    messages: MessageParam[],
+    secondLastMessage: MessageParam | undefined,
+    bestConnector: string,
+    newResponse: string,
+  ): void {
+    this.logger.debug(
+      'Last message is a user message asking to continue after cutoff',
+    );
+
+    if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
+      return;
+    }
+
+    // Log existing thinking blocks
+    if (Array.isArray(secondLastMessage.content)) {
+      const thinkingCount = secondLastMessage.content.filter(
+        isAnyThinkingBlockParam,
+      ).length;
+      if (thinkingCount > 0) {
+        this.logger.debug(
+          `Using ${thinkingCount} existing thinking blocks from previous message`,
+        );
+      }
+
+      // Append text content and update cache control
+      secondLastMessage.content.push({
+        type: 'text',
+        text: bestConnector + newResponse,
+      } as ContentBlockParam);
+      this.assignCacheControlToLatest(secondLastMessage.content);
+    }
+
+    // Remove the user continuation prompt
+    messages.pop();
+  }
+
+  /** Handle a new request by creating a fresh assistant message. */
+  private handleNewAssistantMessage(
+    messages: MessageParam[],
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    this.logger.debug('Creating new assistant message for fresh request');
+    const content: ContentBlockParam[] = [];
+
+    // Include thinking blocks from workspaceState if available
+    const thinkingBlocks = workspaceState.reasoning.thinkingBlocks;
+    if (thinkingBlocks.length > 0) {
+      this.logger.debug(
+        `Adding ${thinkingBlocks.length} thinking blocks to new assistant message`,
+      );
+      content.push(...(thinkingBlocks as AnthropicThinkingContentParam[]));
+      workspaceState.resetReasoning();
+    }
+
+    // Add the text content
+    content.push({
+      type: 'text',
+      text: workspaceState.assembly.accumulatedOutput,
+    } as ContentBlockParam);
+
+    this.assignCacheControlToLatest(content);
+    messages.push({ role: 'assistant', content });
   }
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
@@ -1959,51 +1963,47 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const unsupportedNotes: string[] = [];
 
     for (const uploaded of uploadedAttachments) {
-      if (uploaded.blockType === 'image') {
-        if (this.canProcessToolResultAttachments && uploaded.base64Data) {
-          const mediaType =
-            (uploaded.mediaType as Base64ImageSource['media_type']) ??
-            'image/png';
-          toolResultContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: uploaded.base64Data,
-            },
-          } as ImageBlockParam);
-        } else {
-          unsupportedNotes.push(
-            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-          );
-        }
-        continue;
-      }
+      const attachmentNote = `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`;
 
-      if (uploaded.blockType === 'document') {
-        if (uploaded.base64Data) {
-          const pdfMediaType =
-            (uploaded.mediaType as 'application/pdf') ?? 'application/pdf';
-          toolResultContent.push({
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: pdfMediaType,
-              data: uploaded.base64Data,
-            },
-            title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
-          } as DocumentBlockParam);
-        } else {
-          unsupportedNotes.push(
-            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-          );
-        }
-        continue;
-      }
+      switch (uploaded.blockType) {
+        case 'image':
+          if (this.canProcessToolResultAttachments && uploaded.base64Data) {
+            toolResultContent.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type:
+                  (uploaded.mediaType as Base64ImageSource['media_type']) ??
+                  'image/png',
+                data: uploaded.base64Data,
+              },
+            } as ImageBlockParam);
+          } else {
+            unsupportedNotes.push(attachmentNote);
+          }
+          break;
 
-      unsupportedNotes.push(
-        `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
-      );
+        case 'document':
+          if (uploaded.base64Data) {
+            toolResultContent.push({
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type:
+                  (uploaded.mediaType as 'application/pdf') ??
+                  'application/pdf',
+                data: uploaded.base64Data,
+              },
+              title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
+            } as DocumentBlockParam);
+          } else {
+            unsupportedNotes.push(attachmentNote);
+          }
+          break;
+
+        default:
+          unsupportedNotes.push(attachmentNote);
+      }
     }
 
     if (unsupportedAttachments.length > 0) {

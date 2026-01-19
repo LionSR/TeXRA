@@ -171,7 +171,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         if (aIsFolder !== bIsFolder) {
           return bIsFolder ? 1 : -1;
         }
-        return a.label!.toString().localeCompare(b.label!.toString());
+        const aLabel = String(a.label ?? '');
+        const bLabel = String(b.label ?? '');
+        return aLabel.localeCompare(bLabel);
       });
     } catch (err) {
       logger.error(CHANNEL, `Error reading directory: ${err}`);
