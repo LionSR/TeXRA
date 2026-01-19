@@ -101,7 +101,7 @@ export class TextEditorTool extends defineTool({
     // Execute the appropriate command
     switch (command) {
       case 'view':
-        return await this.view(filePath, input.view_range ?? undefined);
+        return this.view(filePath, input.view_range ?? undefined);
       case 'create':
         if (!input.file_text) {
           throw new ToolError(
@@ -109,7 +109,7 @@ export class TextEditorTool extends defineTool({
           );
         }
         logger.info(CHANNEL, `create: ${filePath}`);
-        return await this.create(filePath, input.file_text);
+        return this.create(filePath, input.file_text);
       case 'str_replace':
         if (!input.old_str) {
           throw new ToolError(
@@ -120,11 +120,7 @@ export class TextEditorTool extends defineTool({
           CHANNEL,
           `str_replace: ${input.old_str} -> ${input.new_str}`,
         );
-        return await this.strReplace(
-          filePath,
-          input.old_str,
-          input.new_str ?? '',
-        );
+        return this.strReplace(filePath, input.old_str, input.new_str ?? '');
 
       case 'insert':
         // eslint-disable-next-line eqeqeq
@@ -142,7 +138,7 @@ export class TextEditorTool extends defineTool({
           CHANNEL,
           `insert: ${input.insert_line} -> ${input.new_str}`,
         );
-        return await this.insert(filePath, input.insert_line, input.new_str);
+        return this.insert(filePath, input.insert_line, input.new_str);
       case 'undo_edit':
         // Claude 4 models don't support undo_edit command
         if (this.apiType === 'text_editor_20250429') {
@@ -151,7 +147,7 @@ export class TextEditorTool extends defineTool({
           );
         }
         logger.info(CHANNEL, `undo_edit: ${filePath}`);
-        return await this.undoEdit(filePath);
+        return this.undoEdit(filePath);
       default:
         const allowedCommands =
           this.apiType === 'text_editor_20250429'
