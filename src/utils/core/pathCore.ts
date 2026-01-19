@@ -30,13 +30,9 @@ export function getPathSegments(input: string): string[] {
 
 /** Normalize a path for LaTeX \input commands (strips leading ./). */
 export function normalizeLatexPath(value: string): string {
-  if (!value) {
-    return '';
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
+  const trimmed = value?.trim();
+  if (!trimmed) return '';
+
   const posix = toPosixPath(trimmed);
   // Strip leading ./ for LaTeX compatibility
   return posix.startsWith('./') ? posix.slice(2) : posix;
