@@ -1,16 +1,13 @@
 /**
- * Todo list styles for the ProgressView
- * Uses native VS Code collapsible component
+ * Todo list styles for ProgressView
  */
 
-/* Collapsible container styling */
 .todo-collapsible {
   margin: var(--spacing-small) 0;
   border-top: var(--border-thin) solid var(--color-border);
   border-bottom: var(--border-thin) solid var(--color-border);
 }
 
-/* Override vscode-collapsible header padding and theming */
 .todo-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
   background-color: var(--vscode-sideBarSectionHeader-background, transparent);
@@ -48,7 +45,6 @@
   word-break: break-word;
 }
 
-/* Status-specific styles */
 .todo-item--pending {
   opacity: 0.7;
 }
@@ -74,6 +70,5 @@
 }
 
 .todo-item--completed .todo-item__content {
-  text-decoration: line-through;
-  text-decoration-color: var(--color-text-secondary);
+  text-decoration: line-through var(--color-text-secondary);
 }

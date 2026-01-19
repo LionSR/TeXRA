@@ -1,9 +1,7 @@
 /**
  * Container styles for Webview
- * Boxes, panels, and content containers
  */
 
-/* File selection group */
 .file-selection-group {
   background-color: var(--background-color);
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
@@ -17,7 +15,6 @@
   display: none;
 }
 
-/* LaTeX diffs section */
 .latexdiffs-section {
   margin-top: auto;
   padding: var(--spacing-large) 0 0;
@@ -26,7 +23,6 @@
   margin-bottom: var(--spacing-large);
 }
 
-/* Only add background when expanded */
 .latexdiffs-section[data-expanded='true'] {
   background-color: var(--background-color);
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
@@ -39,8 +35,6 @@
   overflow: visible;
 }
 
-/* Icon button sizing - uses .icon-button from common.css
-   Apply class in HTML or use these selectors for legacy compatibility */
 .latexdiffs-section vscode-button,
 .latexdiffs-section vscode-toolbar-button,
 .file-select-actions vscode-button,
@@ -51,7 +45,6 @@
   min-height: var(--height-control);
 }
 
-/* Container for multiple files */
 .multiple-files-container {
   display: flex;
   justify-content: space-between;
@@ -102,29 +95,30 @@
   cursor: pointer;
 }
 
-/* Banners */
+.api-key-banner,
+.agent-config-banner,
+.dependency-banner,
+.getting-started-banner {
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+}
+
 .api-key-banner,
 .agent-config-banner,
 .dependency-banner {
   background-color: var(--vscode-inputValidation-warningBackground);
   color: var(--vscode-inputValidation-warningForeground);
   border: 1px solid var(--vscode-inputValidation-warningBorder);
-  border-radius: var(--border-radius);
-  padding: var(--spacing-small) var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Getting started banner - informational style */
 .getting-started-banner {
   background-color: var(--vscode-inputValidation-infoBackground);
   color: var(--vscode-inputValidation-infoForeground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
-  border-radius: var(--border-radius);
-  padding: var(--spacing-small) var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
   line-height: 1.5;
 }
 
@@ -137,7 +131,6 @@
   text-decoration: underline;
 }
 
-/* Login banner - promotional style */
 .login-banner {
   background: linear-gradient(
     135deg,
@@ -172,7 +165,6 @@
   color: var(--vscode-button-background);
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
 .login-banner-text {

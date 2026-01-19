@@ -1,11 +1,6 @@
 /**
  * Shared styles for approval-requests, retry-requests, and workflow-proposals
- * Uses CSS variables from common.css
  */
-
-/* ==========================================================================
-   Container Panels
-   ========================================================================== */
 
 .approval-requests,
 .retry-requests,
@@ -25,10 +20,6 @@
   display: flex;
 }
 
-/* ==========================================================================
-   Headers
-   ========================================================================== */
-
 .approval-requests__header,
 .retry-requests__header,
 .workflow-proposals__header {
@@ -39,32 +30,19 @@
   color: var(--vscode-editor-foreground);
 }
 
-/* ==========================================================================
-   Lists & Items
-   ========================================================================== */
-
-.approval-requests__list,
-.retry-requests__list,
-.workflow-proposals__list,
-.approval-request,
-.retry-request,
-.workflow-proposal,
-.approval-request__details,
-.retry-request__details,
-.workflow-proposal__details {
-  display: flex;
-  flex-direction: column;
-}
-
 .approval-requests__list,
 .retry-requests__list,
 .workflow-proposals__list {
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-large);
 }
 
 .approval-request,
 .retry-request,
 .workflow-proposal {
+  display: flex;
+  flex-direction: column;
   border-radius: var(--border-radius);
   border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
   background: var(--vscode-editorHoverWidget-background);
@@ -75,12 +53,10 @@
 .approval-request__details,
 .retry-request__details,
 .workflow-proposal__details {
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-small);
 }
-
-/* ==========================================================================
-   Metadata
-   ========================================================================== */
 
 .approval-request__meta,
 .retry-request__meta {
@@ -91,10 +67,6 @@
   gap: var(--spacing-small);
   flex-wrap: wrap;
 }
-
-/* ==========================================================================
-   Actions
-   ========================================================================== */
 
 .approval-request__actions,
 .retry-request__actions,
@@ -125,8 +97,3 @@
   gap: var(--spacing-small);
 }
 
-.approval-request__actions [hidden],
-.retry-request__actions [hidden],
-.workflow-proposal__actions [hidden] {
-  display: none !important;
-}
