@@ -130,6 +130,14 @@
   color: var(--vscode-textLink-foreground);
 }
 
+.workflow-proposal__feedback {
+  margin-top: var(--spacing-small);
+}
+
+.workflow-proposal__feedback-input {
+  width: 100%;
+}
+
 .workflow-proposal--feedback-active
   .workflow-proposal__actions
   vscode-toolbar-button[data-action='reject']::part(control) {
