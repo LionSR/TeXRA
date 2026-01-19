@@ -3,14 +3,20 @@
  */
 
 .followup-collapsible {
-  margin-top: var(--spacing-medium, 8px);
+  margin-top: var(--spacing-medium);
+}
+
+/* Override vscode-collapsible header theming */
+.followup-collapsible::part(header) {
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .followup-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-medium, 8px);
-  padding: var(--spacing-small, 4px) 0;
+  gap: var(--spacing-medium);
+  padding: var(--spacing-small) 0;
 }
 
 .followup-mode-toggle {
@@ -20,19 +26,19 @@
 
 .followup-mode-toggle vscode-radio-group {
   display: flex;
-  gap: var(--spacing-large, 16px);
+  gap: var(--spacing-large);
 }
 
 .followup-selects {
   display: flex;
-  gap: var(--spacing-medium, 8px);
+  gap: var(--spacing-medium);
   flex-wrap: wrap;
 }
 
 .followup-select-group {
   display: flex;
   align-items: center;
-  gap: var(--spacing-small, 4px);
+  gap: var(--spacing-small);
   flex: 1;
   min-width: 120px;
 }
@@ -82,7 +88,7 @@
 .followup-options {
   display: flex;
   align-items: center;
-  gap: var(--spacing-medium, 8px);
+  gap: var(--spacing-medium);
 }
 
 /* Hide options in chat/merge modes */
@@ -94,8 +100,8 @@
 .followup-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-small, 4px);
-  margin-top: var(--spacing-small, 4px);
+  gap: var(--spacing-small);
+  margin-top: var(--spacing-small);
 }
 
 .followup-actions vscode-button {
