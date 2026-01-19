@@ -1,6 +1,7 @@
-/* Shared markdown content styles */
+/**
+ * Markdown content styles for ProgressView
+ */
 
-/* Base layout for markdown containers */
 .markdown-content {
   overflow: visible;
 }
@@ -13,7 +14,6 @@
   margin-bottom: 0;
 }
 
-/* Banner content for model responses - uses normal whitespace handling */
 .banner-content--model {
   padding: 0;
   white-space: normal;
@@ -96,7 +96,6 @@
   line-height: 1.4;
 }
 
-/* LaTeX references use VS Code symbol keyword color */
 .markdown-content .latex-ref {
   font-family: var(--font-family);
   color: var(--vscode-symbolIcon-keywordForeground);
@@ -141,7 +140,6 @@
   max-width: 100%;
 }
 
-/* Markdown text styling */
 .markdown-content strong {
   color: var(--vscode-editor-foreground);
   font-weight: 600;
@@ -158,32 +156,25 @@
   border: none;
 }
 
-/* Reflection sections use info color */
 .markdown-content em strong,
 .markdown-content strong em {
   color: var(--vscode-editorInfo-foreground);
 }
 
-/* First/last child margin resets are handled by > :first-child and > :last-child above */
-
-/* Scratchpad reflection patterns */
 .banner-content--scratchpad p:has(strong:first-child) {
   border-left: calc(var(--spacing-small) - 1px) solid
     var(--vscode-notificationsInfoIcon-foreground);
   padding-left: var(--spacing-medium);
 }
 
-/* Paragraph spacing */
 .markdown-content h2 + p {
   margin-top: 0.3em;
 }
 
-/* Reduce spacing between paragraphs */
 .markdown-content p + p {
   margin-top: 0.3em;
 }
 
-/* Remove extra space between consecutive headings of the same type */
 .markdown-content :is(h1, h2, h3, h4) + :is(h1, h2, h3, h4) {
   margin-top: 0.3em;
 }

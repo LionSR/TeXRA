@@ -1,19 +1,15 @@
 /**
  * Scratchpad styles for ProgressView
- * Markdown and content formatting for scratchpad entries
  */
 
-/* Banner block container - minimalist style */
 .banner-details {
   margin: var(--spacing-small) 0;
 }
 
-/* Tool use formatting */
 .tool-use-section {
   margin: var(--spacing-small) 0;
 }
 
-/* Tool use title - single line with ellipsis */
 .tool-use-title {
   flex: 1;
   white-space: nowrap;
@@ -46,7 +42,6 @@
   opacity: 0.3;
 }
 
-/* Error styling - shared across tool-use and banner errors */
 .tool-use-error > .details-summary .tool-use-title,
 .tool-use-error > .details-summary .codicon,
 .banner-details--error > .details-summary .label,
@@ -67,7 +62,6 @@
   word-break: break-word;
 }
 
-/* Relay error styling - distinct orange/warning color to indicate relay origin */
 .banner-details--relay-error {
   position: relative;
 }
@@ -86,13 +80,11 @@
   color: var(--vscode-editorWarning-foreground, #ff8c00);
 }
 
-/* User feedback styling - distinct from errors */
 .tool-use-user-feedback > .details-summary .tool-use-title,
 .tool-use-user-feedback > .details-summary .codicon {
   color: var(--vscode-textLink-foreground, #3794ff);
 }
 
-/* Shared content block styling */
 .tool-user-feedback,
 .tool-error-content {
   white-space: pre-wrap;
@@ -126,7 +118,6 @@
   overflow: auto;
 }
 
-/* Diff line highlighting */
 .diff-add {
   color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
 }

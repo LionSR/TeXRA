@@ -1,9 +1,7 @@
 /**
  * Log Group styles for ProgressView
- * Styling for grouped log entries and hierarchy
  */
 
-/* Log Group Styles */
 .log-group-header {
   padding: var(--spacing-tiny) var(--spacing-medium);
   margin: var(--spacing-tiny) 0;
@@ -15,7 +13,6 @@
   border-left: var(--border-medium) solid var(--color-border);
 }
 
-/* Minimal styling for top-level task headers */
 .log-group-header.is-running {
   border-left-color: var(--vscode-statusBarItem-warningBackground);
 }
@@ -67,20 +64,15 @@
   margin: 0 var(--spacing-tiny);
 }
 
-/* Use the spin animation defined in base.css */
 .spin {
   animation: spin 2s linear infinite;
 }
 
-/* Make sure log lines in groups are associated */
 .log-line[data-group-id],
 .banner-details[data-group-id] {
   border-left: var(--border-medium) solid transparent;
 }
 
-/* Log group hierarchy styles */
-
-/* Log group hierarchy - child elements get consistent indentation */
 .log-group-content > .log-group-header,
 .log-group-content > .log-group-content,
 .log-group-content > .log-line,
@@ -88,18 +80,15 @@
   margin-left: var(--spacing-small);
 }
 
-/* Child group headers have thinner border to show hierarchy */
 .log-group-content .log-group-header {
   border-left-width: var(--border-thin);
 }
 
-/* Nested log lines don't need extra indent */
 .log-group-content .log-group-content .log-line,
 .log-group-content .log-group-content .banner-details {
   margin-left: 0;
 }
 
-/* Visual indicator for nested structure */
 .log-group-content .log-group-header::before {
   content: '';
   position: absolute;
@@ -108,5 +97,5 @@
   width: var(--spacing-medium);
   height: var(--border-thin);
   background-color: var(--color-border);
-  display: none; /* Start hidden, only show on advanced view option */
+  display: none;
 }
