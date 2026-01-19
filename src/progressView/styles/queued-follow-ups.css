@@ -15,10 +15,12 @@
   display: none;
 }
 
-/* Override vscode-collapsible header padding */
+/* Override vscode-collapsible header padding and theming */
 .queued-follow-ups-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
   font-weight: 500;
+  background-color: transparent;
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
 }
 
 .queued-follow-ups-collapsible::part(body) {
