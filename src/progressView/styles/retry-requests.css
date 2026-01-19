@@ -5,8 +5,8 @@
 
 /* Container theme - warning style */
 .retry-requests {
-  border: 1px solid var(--vscode-inputValidation-warningBorder, #856404);
-  background: var(--vscode-inputValidation-warningBackground, #fff3cd);
+  border: 1px solid var(--vscode-inputValidation-warningBorder);
+  background: var(--vscode-inputValidation-warningBackground);
 }
 
 .retry-requests__header .codicon {
@@ -38,7 +38,7 @@
 
 /* Expandable error details */
 .retry-request__error-details {
-  margin-top: var(--spacing-xs);
+  margin-top: var(--spacing-tiny);
   font-size: var(--font-size-xs);
 }
 
@@ -51,7 +51,7 @@
   color: var(--vscode-descriptionForeground);
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-tiny);
   user-select: none;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .retry-request__error-body {
-  margin: var(--spacing-xs) 0 0 0;
+  margin: var(--spacing-tiny) 0 0 0;
   padding: var(--spacing-small);
   background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
   border-radius: var(--border-radius-small);
