@@ -10,21 +10,10 @@
   border: 1px solid var(--vscode-inputValidation-infoBorder);
 }
 
-/* Override vscode-collapsible display to respect hidden attribute */
-.queued-follow-ups-collapsible[hidden] {
-  display: none;
-}
-
-/* Override vscode-collapsible header padding and theming */
+/* Extends .collapsible-panel from common.css with transparent background */
 .queued-follow-ups-collapsible::part(header) {
-  padding: var(--spacing-small) var(--spacing-medium);
   font-weight: 500;
   background-color: transparent;
-  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
-}
-
-.queued-follow-ups-collapsible::part(body) {
-  padding: 0 var(--spacing-medium) var(--spacing-small);
 }
 
 .queued-follow-ups-list {

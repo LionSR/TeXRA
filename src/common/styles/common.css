@@ -106,8 +106,6 @@ body {
   vertical-align: middle;
   display: inline-flex;
   align-items: center;
-  position: relative;
-  top: 0;
 }
 
 /* VSCode Elements toolbar styling */
@@ -329,4 +327,47 @@ vscode-toolbar-button {
 
 .btn-secondary:hover {
   opacity: var(--opacity-full);
+}
+
+/* ==========================================================================
+   Hidden Utility - Standard hidden attribute behavior
+   ========================================================================== */
+
+[hidden] {
+  display: none !important;
+}
+
+/* ==========================================================================
+   vscode-collapsible Base Styles - Shared across views
+   ========================================================================== */
+
+.collapsible-panel::part(header) {
+  padding: var(--spacing-small) var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+}
+
+.collapsible-panel::part(body) {
+  padding: 0 var(--spacing-medium) var(--spacing-small);
+}
+
+/* Compact variant - less padding */
+.collapsible-panel--compact::part(header) {
+  padding: var(--spacing-tiny) var(--spacing-medium);
+}
+
+.collapsible-panel--compact::part(body) {
+  padding: 0 var(--spacing-small) var(--spacing-tiny);
+}
+
+/* ==========================================================================
+   Feedback Input - Shared pattern for approval/retry/proposal feedback
+   ========================================================================== */
+
+.feedback-section {
+  margin-top: var(--spacing-small);
+}
+
+.feedback-section__input {
+  width: 100%;
 }

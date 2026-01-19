@@ -40,7 +40,3 @@ vscode-split-layout {
 .progress-collapsible {
   background-color: transparent;
 }
-
-.progress-collapsible[hidden] {
-  display: none;
-}
