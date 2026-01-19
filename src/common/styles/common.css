@@ -1,15 +1,6 @@
 /**
  * Common CSS styles for TeXRA UI components
- * Used by both the main WebView and ProgressView interfaces
- * 
- * This file centralizes shared styling to ensure consistency
- * and make the codebase more maintainable.
  */
-
-/* ==========================================================================
-   Body Reset - Base styling shared across all views
-   Each view can override with layout-specific properties
-   ========================================================================== */
 
 body {
   margin: 0;
@@ -22,10 +13,6 @@ body {
 }
 
 :root {
-  /* ==========================================================================
-     Semantic Color Aliases - Single source of truth for VS Code theme colors
-     ========================================================================== */
-
   /* Text colors */
   --color-text-secondary: var(--vscode-descriptionForeground);
   --color-text-link: var(--vscode-textLink-foreground);
@@ -37,20 +24,20 @@ body {
   /* Border colors */
   --color-border: var(--vscode-panel-border);
 
-  /* Status colors - semantic aliases with fallbacks */
+  /* Status colors */
   --color-success: var(--vscode-testing-iconPassed, #2ea043);
   --color-error: var(--vscode-editorError-foreground, #f14c4c);
   --color-warning: var(--vscode-editorWarning-foreground, #cca700);
   --color-added: var(--vscode-charts-green, #4caf50);
   --color-removed: var(--vscode-charts-red, #f44336);
 
-  /* Aliases used by components */
+  /* Component aliases */
   --background-color: var(--color-bg-secondary);
   --text-color: var(--vscode-sideBar-foreground);
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
 
-  /* Typography - text: lg (1.2x), sm (0.9x), xs (0.8x); icons reuse lg and base */
+  /* Typography */
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
@@ -98,7 +85,6 @@ body {
   --opacity-full: 1;
 }
 
-/* Common codicon styling */
 .codicon {
   font-family: codicon;
   font-size: var(--font-size);
@@ -108,7 +94,6 @@ body {
   align-items: center;
 }
 
-/* VSCode Elements toolbar styling */
 vscode-toolbar-container {
   display: flex;
   align-items: center;
@@ -120,7 +105,6 @@ vscode-toolbar-button {
   flex-shrink: 0;
 }
 
-/* Common clickable link style (used in progressView) */
 .clickable-link {
   cursor: pointer;
   color: var(--color-text-link);
@@ -132,7 +116,6 @@ vscode-toolbar-button {
   text-decoration: underline;
 }
 
-/* Shared layout for expandable detail sections */
 .detail-section {
   margin: var(--spacing-small) 0;
 }
@@ -152,7 +135,6 @@ vscode-toolbar-button {
   gap: var(--spacing-small);
 }
 
-/* Shared styling for expandable summary blocks */
 .details-summary {
   display: flex;
   align-items: center;
@@ -177,10 +159,6 @@ vscode-toolbar-button {
   font-size: var(--font-size-sm);
 }
 
-/* ==========================================================================
-   View Header - Shared page header styling for history/profile/memory views
-   ========================================================================== */
-
 .view-header {
   display: flex;
   justify-content: space-between;
@@ -196,10 +174,6 @@ vscode-toolbar-button {
 .view-header h1 {
   color: var(--color-text-link);
 }
-
-/* ==========================================================================
-   List Item Card - Shared card styling for history/memory item lists
-   ========================================================================== */
 
 .list-item {
   border: var(--border-thin) solid var(--vscode-panelSection-border);
@@ -218,10 +192,6 @@ vscode-toolbar-button {
   align-items: center;
 }
 
-/* ==========================================================================
-   Collapsible - Shared styling for vscode-collapsible elements
-   ========================================================================== */
-
 .collapsible {
   margin-top: var(--spacing-small);
 }
@@ -236,29 +206,16 @@ vscode-toolbar-button {
   max-height: var(--height-max);
 }
 
-/* ==========================================================================
-   Secondary Text - For timestamps, metadata, descriptions
-   ========================================================================== */
-
 .text-secondary {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
-
-/* ==========================================================================
-   Empty State - Shown when lists have no items
-   ========================================================================== */
 
 .empty-state {
   text-align: center;
   margin-top: calc(var(--spacing-xlarge) * 2);
   color: var(--color-text-secondary);
 }
-
-/* ==========================================================================
-   Badge Base - Common styling for badge components
-   Addresses duplication in profileView and historyView
-   ========================================================================== */
 
 .badge {
   display: inline-block;
@@ -273,11 +230,6 @@ vscode-toolbar-button {
   border-radius: var(--border-radius-small);
 }
 
-/* ==========================================================================
-   Animations
-   ========================================================================== */
-
-/* Pulse animation with scale - for status indicators */
 @keyframes pulse-scale {
   0% {
     transform: scale(1);
@@ -293,7 +245,6 @@ vscode-toolbar-button {
   }
 }
 
-/* Pulse animation with fade - for recording indicators */
 @keyframes pulse-fade {
   0% {
     opacity: 1;
@@ -306,7 +257,6 @@ vscode-toolbar-button {
   }
 }
 
-/* Spin animation - for loading indicators */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -316,11 +266,6 @@ vscode-toolbar-button {
   }
 }
 
-/* ==========================================================================
-   Button Variants
-   ========================================================================== */
-
-/* Secondary button style - less prominent than primary */
 .btn-secondary {
   opacity: var(--opacity-normal);
 }
@@ -329,17 +274,9 @@ vscode-toolbar-button {
   opacity: var(--opacity-full);
 }
 
-/* ==========================================================================
-   Hidden Utility - Standard hidden attribute behavior
-   ========================================================================== */
-
 [hidden] {
   display: none !important;
 }
-
-/* ==========================================================================
-   vscode-collapsible Base Styles - Shared across views
-   ========================================================================== */
 
 .collapsible-panel::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
@@ -351,7 +288,6 @@ vscode-toolbar-button {
   padding: 0 var(--spacing-medium) var(--spacing-small);
 }
 
-/* Compact variant - less padding */
 .collapsible-panel--compact::part(header) {
   padding: var(--spacing-tiny) var(--spacing-medium);
 }
@@ -359,10 +295,6 @@ vscode-toolbar-button {
 .collapsible-panel--compact::part(body) {
   padding: 0 var(--spacing-small) var(--spacing-tiny);
 }
-
-/* ==========================================================================
-   Feedback Input - Shared pattern for approval/retry/proposal feedback
-   ========================================================================== */
 
 .feedback-section {
   margin-top: var(--spacing-small);

@@ -1,6 +1,5 @@
 /**
- * Instruction Box styles for Webview
- * Instruction textarea and related components
+ * Instruction box styles for Webview
  */
 
 .instruction-box {
@@ -14,7 +13,6 @@
   margin: var(--spacing-medium) 0;
 }
 
-/* Auto-resize is handled by JavaScript, but set a max-height limit */
 #instruction::part(control) {
   max-height: var(--height-xlarge);
   transition: height 0.1s ease-out;
@@ -65,7 +63,6 @@
   align-self: center;
 }
 
-/* Recording button states - icon change is enough, no red background needed */
 #recordInstructionButton.recording .codicon-stop-circle {
   animation: pulse-fade 1.5s ease-in-out infinite;
 }
