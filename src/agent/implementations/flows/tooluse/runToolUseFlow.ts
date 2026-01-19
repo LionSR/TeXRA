@@ -156,7 +156,11 @@ export async function runToolUseFlow<C = unknown>(
       // Pre-flattening sessions stored shared as { state: { conversation, ... } }
       // which would cause failures when cycle node reads shared.stateSlices.
       const migratedShared = migrateSharedState(flowRecord.shared);
-      if (migratedShared !== flowRecord.shared) {
+      if (migratedShared === null) {
+        logger.warn(
+          'Failed to parse flow record shared state, skipping resume',
+        );
+      } else if (migratedShared !== flowRecord.shared) {
         logger.debug('Migrated legacy shared state to flat format');
         flowRecord.shared = migratedShared;
         // Persist the migrated format so future resumes use the new structure
