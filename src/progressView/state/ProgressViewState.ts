@@ -3,27 +3,31 @@ import { z } from 'zod';
 
 // Local imports - agent metadata
 import { AgentCategory } from '@agent/core/AgentDataclass';
-// Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
+import {
+  StorageKeySchema,
+  type StreamTabId,
+  type ExecutionId,
+  type StorageKey,
 } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger, type ContextStateData } from '@logger/AgentLogger';
+import {
+  AgentLogger,
+  ContextStateDataSchema,
+  type ContextStateData,
+} from '@logger/AgentLogger';
 import {
   TaskState,
   TaskStateSchema,
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import {
   StreamTabsManager,
   TaskGroupManager,
@@ -34,7 +38,7 @@ import {
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getConfig } from '@utils/config';
-import type { TodoItem } from '@eventBus/schemas';
+import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 
 /**
  * Schema for ephemeral stream metadata hints.
@@ -49,24 +53,36 @@ export const StreamHintsSchema = z.object({
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
 /**
- * Consolidated session state for a single stream.
+ * Schema for consolidated session state per stream.
+ * Single source of truth for defaults via .prefault().
  *
- * Groups per-stream state that doesn't belong in separate managers.
  * Contains both ephemeral (session-only) and persisted fields:
- *
  * - Ephemeral (not persisted): hints, todos, contextState
  * - Persisted: activeRunId (saved to workspace storage)
  */
-interface StreamSessionState {
+export const StreamSessionStateSchema = z.object({
   /** UI hints before TaskState is fully populated (ephemeral) */
-  hints: StreamHints;
+  hints: StreamHintsSchema.prefault({}),
   /** Todos from agent, replayed on stream switch (ephemeral) */
-  todos: TodoItem[];
+  todos: z.array(TodoItemSchema).prefault([]),
   /** Context utilization (input tokens vs context window) (ephemeral) */
-  contextState: ContextStateData | null;
+  contextState: ContextStateDataSchema.nullable().prefault(null),
   /** Most recently viewed run for this stream (persisted) */
-  activeRunId: StorageKey | null;
-}
+  activeRunId: StorageKeySchema.nullable().prefault(null),
+});
+
+/**
+ * Consolidated session state for a single stream.
+ * Type derived from schema - schema is the single source of truth.
+ */
+type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
+
+/** Default values for ProgressViewState UI properties */
+const PROGRESS_VIEW_DEFAULTS = {
+  activeStream: '' as StreamTabId,
+  streamSortOrder: 'time',
+  agentTypeFilter: 'all' as AgentTypeFilter,
+} as const;
 
 /**
  * Core state management for the progress view.
@@ -79,9 +95,10 @@ export class ProgressViewState {
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
-  private _activeStream: StreamTabId = '';
-  private _streamSortOrder = 'time';
-  private _agentTypeFilter: AgentTypeFilter = 'all';
+  private _activeStream: StreamTabId = PROGRESS_VIEW_DEFAULTS.activeStream;
+  private _streamSortOrder: string = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
+  private _agentTypeFilter: AgentTypeFilter =
+    PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
 
@@ -193,8 +210,10 @@ export class ProgressViewState {
 
   set agentTypeFilter(filter: AgentTypeFilter) {
     if (!isAgentTypeFilter(filter)) {
-      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
-      filter = 'all';
+      this.logger.warn(
+        `Invalid agent filter: ${filter}, defaulting to '${PROGRESS_VIEW_DEFAULTS.agentTypeFilter}'`,
+      );
+      filter = PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
     }
     this._agentTypeFilter = filter;
     this.saveAgentTypeFilter();
@@ -204,20 +223,22 @@ export class ProgressViewState {
   // Session State Management (per-stream ephemeral + persisted fields)
   // ============================================================================
 
-  /** Get or create session state for a stream */
+  /** Get or create session state for a stream. Uses schema defaults. */
   private getOrCreateSession(stream: StreamTabId): StreamSessionState {
     let state = this._sessionState.get(stream);
     if (!state) {
-      state = { hints: {}, todos: [], contextState: null, activeRunId: null };
+      // Schema provides defaults via .prefault() - single source of truth
+      state = StreamSessionStateSchema.parse({});
       this._sessionState.set(stream, state);
     }
     return state;
   }
 
-  /** Update stream hints (merges with existing) */
+  /** Update stream hints (merges with existing, validates result) */
   updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
     const state = this.getOrCreateSession(streamTabId);
-    state.hints = { ...state.hints, ...hints };
+    // Validate merged hints against schema
+    state.hints = StreamHintsSchema.parse({ ...state.hints, ...hints });
   }
 
   /** Get stream hints */
@@ -477,7 +498,8 @@ export class ProgressViewState {
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
-      this._activeStream = this._streamTabs.keys()[0] || '';
+      this._activeStream =
+        this._streamTabs.keys()[0] || PROGRESS_VIEW_DEFAULTS.activeStream;
       this.saveActiveStream();
     }
 
@@ -501,7 +523,7 @@ export class ProgressViewState {
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionState.clear();
-    this._activeStream = '';
+    this._activeStream = PROGRESS_VIEW_DEFAULTS.activeStream;
     this.saveActiveStream();
     this.saveTaskStates();
     this.saveExecutionIds();
@@ -537,13 +559,14 @@ export class ProgressViewState {
   private loadActiveStream(): void {
     const savedActiveStream = this.storage.get<string>(
       WorkspaceStateKey.ACTIVE_STREAM_TAB,
-      '',
+      PROGRESS_VIEW_DEFAULTS.activeStream,
     );
 
     if (savedActiveStream && this._streamTabs.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
-      this._activeStream = this._streamTabs.keys()[0] || '';
+      this._activeStream =
+        this._streamTabs.keys()[0] || PROGRESS_VIEW_DEFAULTS.activeStream;
     }
   }
 
@@ -671,7 +694,7 @@ export class ProgressViewState {
   private loadStreamSortOrder(): void {
     const configDefault = getConfig(
       'texra.progressBoard.streamSortOrder',
-      'time',
+      PROGRESS_VIEW_DEFAULTS.streamSortOrder,
     );
     this._streamSortOrder = this.storage.get(
       WorkspaceStateKey.STREAM_SORT_ORDER,
@@ -689,11 +712,11 @@ export class ProgressViewState {
   private loadAgentTypeFilter(): void {
     const savedFilter = this.storage.get<string>(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
-      'all',
+      PROGRESS_VIEW_DEFAULTS.agentTypeFilter,
     );
     this._agentTypeFilter = isAgentTypeFilter(savedFilter)
       ? savedFilter
-      : 'all';
+      : PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
   }
 
   private saveAgentTypeFilter(): void {

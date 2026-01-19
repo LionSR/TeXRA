@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
-import { buildFileAttachment } from '@tools/utils';
+import { buildFileAttachment, formatLinesWithNumbers } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
@@ -115,7 +115,7 @@ export class ReadFileTool extends defineTool({
 
     const segments: string[] = [];
     if (visibleLines.length > 0) {
-      const numberedLines = this.formatWithLineNumbers(
+      const numberedLines = formatLinesWithNumbers(
         visibleLines,
         startIndex + 1,
       );
@@ -148,18 +148,6 @@ export class ReadFileTool extends defineTool({
       summary,
       output: segments.join('\n'),
     };
-  }
-
-  private formatWithLineNumbers(
-    lines: string[],
-    startingLine: number,
-  ): string[] {
-    const width = 6;
-    return lines.map((line, index) => {
-      const lineNumber = startingLine + index;
-      const prefix = lineNumber.toString().padStart(width, ' ');
-      return `${prefix}\t${line}`;
-    });
   }
 
   private buildSummary({

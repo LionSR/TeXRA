@@ -68,6 +68,26 @@ async function ensureLatexdiffToolInstalled(
 }
 
 /**
+ * Wraps a latexdiff operation with tool verification and error handling.
+ * Eliminates repetitive try-catch patterns across handlers.
+ */
+async function withLatexdiffTool<T>(
+  tool: LatexdiffTool,
+  errorMessage: string,
+  action: () => Promise<T>,
+): Promise<T | undefined> {
+  try {
+    if (!(await ensureLatexdiffToolInstalled(tool))) {
+      return undefined;
+    }
+    return await action();
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, errorMessage, err);
+    return undefined;
+  }
+}
+
+/**
  * Prompts the user to select a math markup granularity for latexdiff operations.
  * @returns The selected math markup option, or undefined if the user cancels.
  */
@@ -179,39 +199,36 @@ async function handleLatexdiff(
   }
 
   const fileToUse = baseFile ?? inputFile;
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff'))) {
-      return;
-    }
+  await withLatexdiffTool(
+    'latexdiff',
+    'Error creating LaTeX diff',
+    async () => {
+      const mathMarkup = await promptForLatexdiffMathMarkup();
+      if (!mathMarkup) {
+        logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+        return;
+      }
+      logger.info(
+        CHANNEL,
+        `Running latexdiff with math markup mode: ${mathMarkup}`,
+      );
 
-    const mathMarkup = await promptForLatexdiffMathMarkup();
-    if (!mathMarkup) {
-      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
-      return;
-    }
-    logger.info(
-      CHANNEL,
-      `Running latexdiff with math markup mode: ${mathMarkup}`,
-    );
+      const fileToUseLocation = pathToLocation(fileToUse);
+      const result = await service.runDiff(
+        fileToUseLocation,
+        pathToLocation(editedFile),
+        '_diff',
+        false,
+        mathMarkup,
+      );
 
-    // Get the result from LaTeXdiffService
-    const fileToUseLocation = pathToLocation(fileToUse);
-    const result = await service.runDiff(
-      fileToUseLocation,
-      pathToLocation(editedFile),
-      '_diff',
-      false,
-      mathMarkup,
-    );
+      if (!result.success || !result.diffFileName) {
+        throw new Error(result.message ?? 'Failed to generate diff file');
+      }
 
-    if (!result.success || !result.diffFileName) {
-      throw new Error(result.message ?? 'Failed to generate diff file');
-    }
-
-    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
-  }
+      await openLatexdiffResult(fileToUseLocation, result.diffFileName);
+    },
+  );
 }
 
 async function handleLatexdiffvc(
@@ -220,37 +237,34 @@ async function handleLatexdiffvc(
   commitHash: string,
 ) {
   const fileToUse = baseFile ?? inputFile;
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
-      return;
-    }
+  await withLatexdiffTool(
+    'latexdiff-vc',
+    'Error creating LaTeX diff',
+    async () => {
+      const mathMarkup = await promptForLatexdiffMathMarkup();
+      if (!mathMarkup) {
+        logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+        return;
+      }
+      logger.info(
+        CHANNEL,
+        `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
+      );
 
-    const mathMarkup = await promptForLatexdiffMathMarkup();
-    if (!mathMarkup) {
-      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
-      return;
-    }
-    logger.info(
-      CHANNEL,
-      `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
-    );
+      const fileToUseLocation = pathToLocation(fileToUse);
+      const result = await service.runDiffVc(
+        fileToUseLocation,
+        commitHash,
+        mathMarkup,
+      );
 
-    // Get the result from LaTeXdiffService
-    const fileToUseLocation = pathToLocation(fileToUse);
-    const result = await service.runDiffVc(
-      fileToUseLocation,
-      commitHash,
-      mathMarkup,
-    );
+      if (!result.success || !result.diffFileName) {
+        throw new Error(result.message ?? 'Failed to generate diff file');
+      }
 
-    if (!result.success || !result.diffFileName) {
-      throw new Error(result.message ?? 'Failed to generate diff file');
-    }
-
-    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
-  }
+      await openLatexdiffResult(fileToUseLocation, result.diffFileName);
+    },
+  );
 }
 
 async function handlePackLatexdiffvc(
@@ -259,20 +273,18 @@ async function handlePackLatexdiffvc(
   commitHash: string,
   clean: boolean,
 ) {
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
-      return;
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
-    );
-    const fileToUse = baseFile ?? inputFile;
-    await runPackLatexdiffvc(fileToUse, commitHash, clean);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diff', err);
-  }
+  await withLatexdiffTool(
+    'latexdiff-vc',
+    'Error packing LaTeX diff',
+    async () => {
+      logger.debug(
+        CHANNEL,
+        `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
+      );
+      const fileToUse = baseFile ?? inputFile;
+      await runPackLatexdiffvc(fileToUse, commitHash, clean);
+    },
+  );
 }
 
 async function handlePackLatexdiffvcMultiple(
@@ -280,20 +292,18 @@ async function handlePackLatexdiffvcMultiple(
   commitHash: string,
   clean: boolean,
 ) {
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
-      return;
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Command called with: commitHash=${commitHash}, clean=${clean}`,
-    );
-    logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-    await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diffs', err);
-  }
+  await withLatexdiffTool(
+    'latexdiff-vc',
+    'Error packing LaTeX diffs',
+    async () => {
+      logger.debug(
+        CHANNEL,
+        `Command called with: commitHash=${commitHash}, clean=${clean}`,
+      );
+      logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+      await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean);
+    },
+  );
 }
 
 async function handleCleanLatexdiffvc(
@@ -301,37 +311,33 @@ async function handleCleanLatexdiffvc(
   baseFile: string,
   commitHash: string,
 ) {
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
-      return;
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
-    );
-    const fileToUse = baseFile ?? inputFile;
-    await runCleanLatexdiffvc(fileToUse, commitHash);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diff', err);
-  }
+  await withLatexdiffTool(
+    'latexdiff-vc',
+    'Error cleaning LaTeX diff',
+    async () => {
+      logger.debug(
+        CHANNEL,
+        `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
+      );
+      const fileToUse = baseFile ?? inputFile;
+      await runCleanLatexdiffvc(fileToUse, commitHash);
+    },
+  );
 }
 
 async function handleCleanLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
 ) {
-  try {
-    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
-      return;
-    }
-
-    logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
-    logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-    await runCleanLatexdiffvcMultiple(inputFiles, commitHash);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diffs', err);
-  }
+  await withLatexdiffTool(
+    'latexdiff-vc',
+    'Error cleaning LaTeX diffs',
+    async () => {
+      logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
+      logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+      await runCleanLatexdiffvcMultiple(inputFiles, commitHash);
+    },
+  );
 }
 
 /**

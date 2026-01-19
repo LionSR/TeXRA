@@ -274,8 +274,7 @@ export async function runPack(
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return await runPackMultiple(model, inputFile, agent, outputFiles);
-  } else {
-    return await runPackSingle(model, inputFile, agent);
+    return runPackMultiple(model, inputFile, agent, outputFiles);
   }
+  return runPackSingle(model, inputFile, agent);
 }

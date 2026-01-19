@@ -12,9 +12,6 @@ export const MEMORY_STORAGE_ROOT = 'memories';
 /** Maximum lines to display in tool view output */
 export const MAX_VIEW_LINES = 999_999;
 
-/** Line number padding width for formatted output */
-export const LINE_NUMBER_WIDTH = 6;
-
 /** Maximum directory depth for listings */
 export const DIRECTORY_LISTING_DEPTH = 2;
 
