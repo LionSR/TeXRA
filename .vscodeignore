@@ -91,3 +91,4 @@ CLAUDE.md
 .env
 
 supabase/**
+releases/**
