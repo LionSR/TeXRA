@@ -224,9 +224,8 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // \alpha -> \al
     // \theta -> \ta
 
-    // Make a copy of GREEK_LETTER_SHORTCUTS and remove Delta to avoid shortening it
-    const greekShortcuts = { ...GREEK_LETTER_SHORTCUTS };
-    delete greekShortcuts['Delta']; // Prevent Delta from being shortened to De
+    // Exclude Delta to prevent it from being shortened to De
+    const { Delta: _, ...greekShortcuts } = GREEK_LETTER_SHORTCUTS;
 
     Object.assign(patterns, generateMathCommandShortcuts(greekShortcuts));
 

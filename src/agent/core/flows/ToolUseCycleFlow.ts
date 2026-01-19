@@ -20,6 +20,7 @@ import {
 } from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
+import { toErrorMessage } from '@common/errors';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
@@ -102,8 +103,7 @@ function normalizeToolCallError(
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
   if (!hasZodIssues(error)) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return { message: `${toolName}: ${errorMessage}` };
+    return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
   const issues = error.issues as ValidationErrorDiagnostics['issues'];
@@ -192,7 +192,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleServices<C>
 > {
   async prep(shared: ToolUseCycleShared): Promise<{ interrupted: boolean }> {
-    const interrupted = Boolean(await this.services.checkInterruption());
+    const interrupted = this.services.checkInterruption();
     return { interrupted };
   }
 

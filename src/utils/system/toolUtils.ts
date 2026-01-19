@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { ExecResult } from '@agent/types/ResultTypes';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
@@ -403,8 +404,10 @@ export async function checkCoreDependencies(
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error(CHANNEL, `Failed to check core dependencies: ${message}`);
+    logger.error(
+      CHANNEL,
+      `Failed to check core dependencies: ${toErrorMessage(error)}`,
+    );
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }

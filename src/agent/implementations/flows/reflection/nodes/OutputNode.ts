@@ -8,10 +8,6 @@
 import { Node } from '@agent/node';
 import type { RoundOutput } from '@agent/output';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
 import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
@@ -67,10 +63,6 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     const { baseFiles, shouldEnsureXmlStructure } = this.services;
     const { currentRound, outputLocation, endTurn } = shared;
