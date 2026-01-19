@@ -100,6 +100,9 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const latexdiffMenuItem = element.querySelector(
       'vscode-context-menu-item[value="showLatexdiff"]',
     );
+    const latexdiffChangedOnlyMenuItem = element.querySelector(
+      'vscode-context-menu-item[value="showLatexdiffChangedOnly"]',
+    );
     element.dataset.streamId = request.streamId || '';
 
     if (pathElem) {
@@ -112,7 +115,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     // Set requestId on all diff-related elements
     this._setRequestId(
-      [mainDiffButton, previewMenuItem, latexdiffMenuItem],
+      [mainDiffButton, previewMenuItem, latexdiffMenuItem, latexdiffChangedOnlyMenuItem],
       request.requestId,
     );
 
@@ -283,6 +286,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
       'approve',
       'reject',
       'showLatexdiff',
+      'showLatexdiffChangedOnly',
       'previewProposed',
     ];
     if (!validActions.includes(mappedAction)) return false;
