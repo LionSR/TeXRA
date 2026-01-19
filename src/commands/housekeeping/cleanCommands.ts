@@ -118,7 +118,12 @@ async function handleCleanMultiple(
 }
 
 export async function handleClean(config: unknown): Promise<void> {
-  const data = await parseWithErrorDisplay(CHANNEL, CleanConfigSchema, config, 'config');
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    CleanConfigSchema,
+    config,
+    'config',
+  );
   if (!data) return;
 
   const {

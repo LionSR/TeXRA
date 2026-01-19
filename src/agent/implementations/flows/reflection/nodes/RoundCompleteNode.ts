@@ -7,10 +7,6 @@
 
 import { Node } from '@agent/node';
 import { isRoundAtOrBeyondLimit } from '@agent/node/round-bounds';
-import {
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -42,10 +38,6 @@ export class RoundCompleteNode<C = unknown> extends Node<
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
     return {
       currentRound: shared.currentRound,
