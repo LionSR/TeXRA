@@ -5,8 +5,8 @@
 
 /* Container theme - warning style */
 .retry-requests {
-  border: 1px solid var(--vscode-inputValidation-warningBorder, #856404);
-  background: var(--vscode-inputValidation-warningBackground, #fff3cd);
+  border: 1px solid var(--vscode-inputValidation-warningBorder);
+  background: var(--vscode-inputValidation-warningBackground);
 }
 
 .retry-requests__header .codicon {

@@ -5,8 +5,8 @@
 
 /* Container theme - info style */
 .workflow-proposals {
-  border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
-  background: var(--vscode-inputValidation-infoBackground, #d6ecf2);
+  border: 1px solid var(--vscode-inputValidation-infoBorder);
+  background: var(--vscode-inputValidation-infoBackground);
 }
 
 .workflow-proposals__header .codicon {
