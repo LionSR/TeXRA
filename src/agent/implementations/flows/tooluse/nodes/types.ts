@@ -94,12 +94,12 @@ export function assertPreparedShared(
 
 /**
  * Lightweight schema for detecting flat vs legacy shared state format.
- * Validates only the minimum needed to determine format - full content
- * validation happens in SessionResumeRetrieval.ts during session resume.
+ * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
+ * - only validates enough to detect format, not full content.
  */
-const FlatFormatSchema = z.object({ conversation: z.array(z.unknown()) });
-const LegacyFormatSchema = z.object({
-  state: z.object({ conversation: z.array(z.unknown()) }),
+const FlatFormatSchema = z.looseObject({ conversation: z.array(z.unknown()) });
+const LegacyFormatSchema = z.looseObject({
+  state: z.looseObject({ conversation: z.array(z.unknown()) }),
 });
 
 const MigrationSharedSchema = z
