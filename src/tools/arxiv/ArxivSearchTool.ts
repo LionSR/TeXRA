@@ -10,7 +10,6 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { toErrorMessage } from '@common/errors';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
@@ -20,10 +19,7 @@ import {
   extractBasePaperMetadata,
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
-// eslint-disable-next-line import/order -- grouped with tools imports
-import { ToolError } from '@tools/result';
-// eslint-disable-next-line import/order -- grouped with tools imports
-import { pluralize } from '@tools/utils';
+import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
@@ -31,12 +27,23 @@ const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
 
 const ArxivSearchInputSchema = z.strictObject({
   query: z.string(),
-  field: SearchFieldSchema.nullish().describe(
-    'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
-  ),
+  field: SearchFieldSchema.nullish()
+    .transform((v) => v ?? 'all')
+    .describe(
+      'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
+    ),
   categories: z.array(z.string()).nullish(),
-  maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).nullish(),
-  start: z.int().min(0).nullish(),
+  maxResults: z
+    .int()
+    .positive()
+    .max(ARXIV_CONSTANTS.MAX_RESULTS)
+    .nullish()
+    .transform((v) => v ?? ARXIV_CONSTANTS.DEFAULT_RESULTS),
+  start: z
+    .int()
+    .min(0)
+    .nullish()
+    .transform((v) => v ?? 0),
   sortBy: SortBySchema.nullish(),
   sortOrder: SortOrderSchema.nullish(),
 });
@@ -50,13 +57,10 @@ export class ArxivSearchTool extends defineTool({
   schema: ArxivSearchInputSchema,
 }) {
   protected async execute(input: ArxivSearchInput) {
-    const trimmedQuery = input.query.trim();
-    if (!trimmedQuery) {
-      throw new ToolError('Search query cannot be empty.');
-    }
+    const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     // Select the query function based on the field parameter
-    const searchField = input.field ?? 'all';
+    const { field: searchField } = input;
     const fieldQueryFns = {
       author: authorQuery,
       title: titleQuery,
@@ -98,8 +102,8 @@ export class ArxivSearchTool extends defineTool({
 
     let client = createArxivClient()
       .query(query)
-      .start(input.start ?? 0)
-      .maxResults(input.maxResults ?? ARXIV_CONSTANTS.DEFAULT_RESULTS);
+      .start(input.start)
+      .maxResults(input.maxResults);
 
     if (input.sortBy) {
       client = client.sortBy(input.sortBy);
@@ -109,16 +113,10 @@ export class ArxivSearchTool extends defineTool({
       client = client.sortOrder(input.sortOrder);
     }
 
-    let entries;
-    try {
-      // Respect arXiv API rate limits
+    const entries = await wrapApiCall(async () => {
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
-      entries = await client.execute();
-    } catch (error) {
-      throw new ToolError(
-        `Failed to query arXiv API: ${toErrorMessage(error)}`,
-      );
-    }
+      return client.execute();
+    }, 'Failed to query arXiv API');
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
       const base = extractBasePaperMetadata(entry);
@@ -134,7 +132,7 @@ export class ArxivSearchTool extends defineTool({
     const payload = {
       query: trimmedQuery,
       field: searchField,
-      start: input.start ?? 0,
+      start: input.start,
       count: results.length,
       totalResults: null, // arxiv-client doesn't expose totalResults
       results,

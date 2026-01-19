@@ -5,7 +5,8 @@ import { strict as assert } from 'assert';
 import { buildArguments, type GrepInput } from '@tools/grep';
 
 describe('buildArguments', () => {
-  const baseInput: GrepInput = { pattern: 'example' };
+  // output_mode is required after transform normalizes nullish to 'content'
+  const baseInput: GrepInput = { pattern: 'example', output_mode: 'content' };
 
   it('omits --files-with-matches when using content mode', () => {
     const args = buildArguments(baseInput, 'content');
