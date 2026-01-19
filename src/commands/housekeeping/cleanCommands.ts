@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import { formatZodError, showLoggedMessage } from '@common/errors';
+import { parseWithErrorDisplay } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   runCleanSingle,
@@ -63,24 +63,6 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-/** Validate clean params and log error if invalid. Returns parsed data or null. */
-async function validateCleanParams(
-  inputFile: string,
-  agent: string,
-  model: string,
-  commandName: string,
-): Promise<z.infer<typeof CleanParamsSchema> | null> {
-  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid params for ${commandName}: ${formatZodError(parsed.error)}`,
-    );
-    return null;
-  }
-  return parsed.data;
-}
-
 export function registerCleanCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.clean', handleClean),
@@ -96,11 +78,11 @@ async function handleCleanSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const data = await validateCleanParams(
-    inputFile,
-    agent,
-    model,
-    'cleanSingle',
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    CleanParamsSchema,
+    { inputFile, agent, model },
+    'cleanSingle params',
   );
   if (!data) return;
 
@@ -122,11 +104,11 @@ async function handleCleanMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const data = await validateCleanParams(
-    inputFile,
-    agent,
-    model,
-    'cleanMultiple',
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    CleanParamsSchema,
+    { inputFile, agent, model },
+    'cleanMultiple params',
   );
   if (!data) return;
 
@@ -150,14 +132,13 @@ async function handleCleanMultiple(
 }
 
 export async function handleClean(config: unknown): Promise<void> {
-  const parsed = CleanConfigSchema.safeParse(config);
-  if (!parsed.success) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Invalid config: ${formatZodError(parsed.error)}`,
-    );
-    return;
-  }
+  const data = await parseWithErrorDisplay(
+    CHANNEL,
+    CleanConfigSchema,
+    config,
+    'config',
+  );
+  if (!data) return;
 
   const {
     agent,
@@ -167,11 +148,11 @@ export async function handleClean(config: unknown): Promise<void> {
     useMultipleOutputs,
     streamId,
     skipProgressViewClear,
-  } = parsed.data;
+  } = data;
 
   logger.debug(
     CHANNEL,
-    `Clean command called with config: ${JSON.stringify(parsed.data)}`,
+    `Clean command called with config: ${JSON.stringify(data)}`,
   );
 
   const result =

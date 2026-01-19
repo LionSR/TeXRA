@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptions, refresh } from '@agent/index';
+import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
@@ -21,7 +22,7 @@ export const mainViewCommands = {
  * Log a refresh error and notify the user.
  */
 function logRefreshError(error: unknown, context: string): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorMessage(error);
   logger.error(CHANNEL, `Failed to ${context}: ${message}`);
   vscode.window.showErrorMessage(`Failed to ${context}: ${message}`);
 }

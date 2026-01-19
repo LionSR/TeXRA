@@ -24,9 +24,6 @@ import {
 // Type imports
 import type { ModelConfig } from '@model';
 
-// Internal imports
-import { cleanFileContent } from '@replacement/engine';
-
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
@@ -36,11 +33,11 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { sleepWithAbort } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   computeCachePercentage,
   nonZeroOrUndefined,
 } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import {
@@ -1366,20 +1363,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    let fileContent = await flexibleFS.read(outputLocation);
-    fileContent = cleanFileContent(fileContent);
-
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
-    if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
-    }
-
-    await flexibleFS.write(outputLocation, fileContent);
-
-    // Update workspace state - critical for multi-round agents on resume
-    // so that subsequent rounds have correct context
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
+    // Prepare existing file content (read, clean, extract scratchpad, update state)
+    const { content: fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
 
     messages.push(this.createAssistantMessage(fileContent));
 

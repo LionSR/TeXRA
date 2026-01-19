@@ -23,10 +23,6 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  NODE_NO_RETRY,
-  NODE_NO_WAIT,
-} from '@agent/implementations/flows/common';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
@@ -75,10 +71,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  constructor() {
-    super(NODE_NO_RETRY, NODE_NO_WAIT);
-  }
-
   /**
    * Reconstruct state slices and prepare for cycle execution.
    * Also stores shared reference for native nesting in exec().
