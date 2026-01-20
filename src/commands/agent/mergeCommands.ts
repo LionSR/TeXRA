@@ -30,7 +30,7 @@ async function handleMerge(
     return;
   }
 
-  const modelToUse = model ?? getConfig('texra.merge.defaultModel', 'sonnet37');
+  const modelToUse = model ?? getConfig('texra.merge.defaultModel', 'gemini3f');
   const fileToUse = baseFile ?? inputFile;
 
   await executeMergeAgent(modelToUse, fileToUse, editedFile);
