@@ -214,32 +214,31 @@ const buildLatexdiffEntryHtml = (entry) => {
   const revisedPath = toStringOrEmpty(entry.revisedPath);
   const diffPath = toStringOrEmpty(entry.diffPath);
   const msg = toStringOrEmpty(entry.message);
-  const baseLabel = toStringOrEmpty(entry.baseLabel);
-  const revisedLabel = toStringOrEmpty(entry.revisedLabel);
   const runId = toStringOrEmpty(entry.runId);
+
+  // Source of truth (new): originalFileName from LatexDiffManager
+  // Fallback (legacy): baseLabel for backward compatibility with existing entries
+  const originalFileName = toStringOrEmpty(entry.originalFileName);
+  const baseLabel = toStringOrEmpty(entry.baseLabel);
 
   const baseFile = pickAbsolutePath(baseLocation, basePath);
   const revisedFile = pickAbsolutePath(revisedLocation, revisedPath);
   const diffFile = pickAbsolutePath(diffLocation, diffPath);
 
-  const baseDisplayRaw =
-    describeLocation(baseLocation) || baseLabel || getBasename(baseFile);
-  const revisedDisplayRaw =
-    describeLocation(revisedLocation) ||
-    revisedLabel ||
-    getBasename(revisedFile || baseFile);
-  const diffDisplayRaw =
-    describeLocation(diffLocation) ||
-    (diffFile ? getBasename(diffFile) : '') ||
-    'diff';
+  // Display name priority: originalFileName > baseLabel > location path > basename
+  const displayName =
+    originalFileName ||
+    baseLabel ||
+    describeLocation(baseLocation) ||
+    getBasename(baseFile);
 
   const icon = getLatexdiffStatusIcon(entry.status);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
   const runAttr = runId ? ` data-run-id="${encodeHtml(runId)}"` : '';
 
-  const baseLink = buildFileLink(baseFile, baseDisplayRaw);
-  const revisedLink = buildFileLink(revisedFile, revisedDisplayRaw);
-  const diffLink = buildFileLink(diffFile, diffDisplayRaw);
+  const baseLink = buildFileLink(baseFile, displayName);
+  const revisedLink = buildFileLink(revisedFile, displayName);
+  const diffLink = buildFileLink(diffFile, 'diff');
 
   return `<li class="detail-item"${runAttr}><i class="codicon ${icon}"${titleAttr}></i> ${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})</li>`;
 };
