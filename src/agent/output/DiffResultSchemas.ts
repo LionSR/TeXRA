@@ -66,22 +66,22 @@ export const DiffEntrySchema = z.union([
   DiffResultSchema,
 
   // Legacy format - transform to DiffResult
+  // Note: locations.base IS the original file - use it directly, no fake FileLocation from strings
   LegacyDiffEntrySchema.transform((e): DiffResult => {
-    const originalName = e.originalFileName ?? e.baseLabel ?? null;
+    const base = e.locations.base;
+    const revised = e.locations.revised;
     return {
-      baseLocation: e.locations.base,
+      baseLocation: base,
       baseRound: null,
       revised: {
         source: '',
         round: 0,
-        location: e.locations.revised ?? { kind: 'external', absolutePath: '' },
-        lineage: originalName
-          ? {
-              original: { kind: 'external', absolutePath: originalName },
-              diffBase: e.locations.base,
-              diffFile: e.locations.diff,
-            }
-          : null,
+        location: revised ?? { kind: 'external', absolutePath: '' },
+        lineage: {
+          original: base, // base IS the original file location
+          diffBase: base,
+          diffFile: e.locations.diff,
+        },
         diff: null,
       },
       diffLocation: e.locations.diff,
