@@ -34,7 +34,8 @@ const RunsToolInputSchema = z.strictObject({
 
   /** Optional line range [start, end] for large outputs */
   view_range: z
-    .tuple([z.int().min(1), z.int().min(1)])
+    .array(z.int().min(1))
+    .length(2)
     .refine(([start, end]) => end >= start, {
       message: 'view_range[1] must be >= view_range[0]',
     })
