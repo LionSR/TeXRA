@@ -115,6 +115,26 @@ export class AnthropicStreamHandler {
   }
 
   /**
+   * Returns diagnostic information about the streaming state.
+   * Useful for debugging stream failures - shows how much was received before error.
+   */
+  getDiagnostics(): {
+    blocksReceived: number;
+    hasActiveOutputStream: boolean;
+    hasActiveThinkingStreams: boolean;
+    pendingSearchCount: number;
+    finalized: boolean;
+  } {
+    return {
+      blocksReceived: this.state.lastBlockIndex + 1,
+      hasActiveOutputStream: this.state.outputStream !== null,
+      hasActiveThinkingStreams: this.thinkingStreams.size > 0,
+      pendingSearchCount: this.state.pendingSearches.size,
+      finalized: this.state.finalized,
+    };
+  }
+
+  /**
    * Finalizes all remaining streams and clears state.
    * Call this after stream.finalMessage() completes.
    * Sets finalized flag to prevent processing any subsequent events.
