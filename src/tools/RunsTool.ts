@@ -221,7 +221,7 @@ Use view_range: [start, end] to paginate large outputs.`,
    */
   private async showConversation(
     executionId: ExecutionId,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
     const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(
@@ -362,7 +362,7 @@ Use view_range: [start, end] to paginate large outputs.`,
   private async readFile(
     executionId: ExecutionId,
     filePath: string,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     const fullPath = `${TASK_RUNS_DIR}/${executionId}/${filePath}`;
 
@@ -400,8 +400,8 @@ Use view_range: [start, end] to paginate large outputs.`,
   /**
    * Apply view_range to output string (line-based pagination).
    */
-  private applyViewRange(output: string, viewRange?: [number, number]): string {
-    if (!viewRange) return output;
+  private applyViewRange(output: string, viewRange?: number[]): string {
+    if (!viewRange || viewRange.length < 2) return output;
     const lines = output.split('\n');
     const [start, end] = viewRange;
     return lines
