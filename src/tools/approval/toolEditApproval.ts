@@ -696,18 +696,7 @@ export async function handleProgressViewToolEditApprovalAction(
     }
 
     case 'reject': {
-      let userMessage = payload.feedback?.trim();
-      if (!userMessage) {
-        // Fallback to VS Code input box if no feedback provided via progress view
-        const feedback = await vscode.window.showInputBox({
-          prompt: 'Optionally share why the change was rejected',
-          placeHolder: 'Add guidance for the assistant (press Enter to skip)',
-        });
-        if (feedback === undefined) {
-          return;
-        }
-        userMessage = feedback.trim();
-      }
+      const userMessage = payload.feedback?.trim();
       entry.settle({
         accepted: false,
         userMessage: userMessage || undefined,
