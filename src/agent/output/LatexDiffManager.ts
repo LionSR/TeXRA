@@ -181,7 +181,6 @@ export class LatexDiffManager {
           outputPath,
           baseLocation,
           outputByPath,
-          currRound,
           originalLocation: baseLocation,
           baseRound: null,
           runDiff: (base, revised, cwd) =>
@@ -217,7 +216,6 @@ export class LatexDiffManager {
           outputPath,
           baseLocation: prevLocation,
           outputByPath,
-          currRound,
           originalLocation,
           baseRound: currRound - 1,
           runDiff: (base, revised, cwd) =>
@@ -268,7 +266,6 @@ export class LatexDiffManager {
     outputPath: string;
     baseLocation: FileLocation;
     outputByPath: Map<string, OutputFileInfo>;
-    currRound: number;
     originalLocation: FileLocation | null;
     baseRound: number | null;
     runDiff: (
