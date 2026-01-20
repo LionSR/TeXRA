@@ -2,6 +2,8 @@
  * Dedicated stream handler for Anthropic responses.
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
+import { z } from 'zod';
+
 import {
   extractDomain,
   type WebSearchResult,
@@ -51,6 +53,58 @@ interface AnthropicStreamState {
 }
 
 /**
+ * Base schema for diagnostic metrics (single source of truth for shared fields).
+ */
+const StreamDiagnosticsBaseSchema = z.object({
+  /** Characters of thinking content received */
+  thinkingChars: z.number(),
+  /** Characters of text content received */
+  textChars: z.number(),
+  /** Characters of tool input JSON received */
+  toolInputChars: z.number(),
+  /** Total events processed */
+  eventsProcessed: z.number(),
+  /** Last event type (e.g., 'content_block_delta') */
+  lastEventType: z.string().nullable(),
+});
+
+/**
+ * Schema for diagnostic output when debugging stream failures.
+ * Extends base with serializable computed fields.
+ */
+export const StreamDiagnosticsOutputSchema = StreamDiagnosticsBaseSchema.extend(
+  {
+    /** Block types seen (e.g., ['thinking', 'text']) */
+    blockTypesSeen: z.array(z.string()),
+    /** Seconds since stream started */
+    elapsedSecs: z.number(),
+    /** Seconds since last event (stall detection) */
+    secsSinceLastEvent: z.number(),
+    /** Whether handler was finalized */
+    finalized: z.boolean(),
+  },
+);
+
+export type StreamDiagnosticsOutput = z.infer<
+  typeof StreamDiagnosticsOutputSchema
+>;
+
+/**
+ * Schema for internal mutable state during streaming.
+ * Extends base with Set/timestamp fields for efficient tracking.
+ */
+const StreamDiagnosticsStateSchema = StreamDiagnosticsBaseSchema.extend({
+  /** Block types seen during streaming */
+  blockTypesSeen: z.instanceof(Set<string>),
+  /** Timestamp when streaming started */
+  startTime: z.number(),
+  /** Timestamp of last event received */
+  lastEventTime: z.number(),
+});
+
+type StreamDiagnosticsState = z.infer<typeof StreamDiagnosticsStateSchema>;
+
+/**
  * Configuration for the stream handler.
  */
 interface StreamHandlerConfig {
@@ -91,6 +145,16 @@ export class AnthropicStreamHandler {
     emittedSearchIds: new Set(),
     finalized: false,
   };
+  private readonly diagnostics: StreamDiagnosticsState = {
+    thinkingChars: 0,
+    textChars: 0,
+    toolInputChars: 0,
+    blockTypesSeen: new Set(),
+    eventsProcessed: 0,
+    lastEventType: null,
+    startTime: Date.now(),
+    lastEventTime: Date.now(),
+  };
 
   constructor(
     private readonly logger: AgentLogger,
@@ -112,6 +176,27 @@ export class AnthropicStreamHandler {
    */
   getEmittedSearchIds(): Set<string> {
     return this.state.emittedSearchIds;
+  }
+
+  /**
+   * Returns diagnostic information about the streaming state.
+   * Useful for debugging stream failures - shows what was received before error.
+   */
+  getDiagnostics(): StreamDiagnosticsOutput {
+    const now = Date.now();
+    return {
+      thinkingChars: this.diagnostics.thinkingChars,
+      textChars: this.diagnostics.textChars,
+      toolInputChars: this.diagnostics.toolInputChars,
+      blockTypesSeen: Array.from(this.diagnostics.blockTypesSeen),
+      eventsProcessed: this.diagnostics.eventsProcessed,
+      lastEventType: this.diagnostics.lastEventType,
+      elapsedSecs: Math.round((now - this.diagnostics.startTime) / 1000),
+      secsSinceLastEvent: Math.round(
+        (now - this.diagnostics.lastEventTime) / 1000,
+      ),
+      finalized: this.state.finalized,
+    };
   }
 
   /**
@@ -146,6 +231,11 @@ export class AnthropicStreamHandler {
     // Ignore events after finalization to prevent processing stale events
     if (this.state.finalized) return;
 
+    // Track diagnostic metrics for all events
+    this.diagnostics.eventsProcessed++;
+    this.diagnostics.lastEventType = event.type;
+    this.diagnostics.lastEventTime = Date.now();
+
     switch (event.type) {
       case 'content_block_start':
         this.handleBlockStart(event);
@@ -167,6 +257,9 @@ export class AnthropicStreamHandler {
   ): void {
     const blockType = event.content_block.type;
     const blockIndex = event.index;
+
+    // Track block type for diagnostics
+    this.diagnostics.blockTypesSeen.add(blockType);
 
     if (blockType === 'thinking') {
       // Finalize any pending text stream before starting thinking
@@ -224,12 +317,15 @@ export class AnthropicStreamHandler {
   ): void {
     switch (event.delta.type) {
       case 'thinking_delta':
+        this.diagnostics.thinkingChars += event.delta.thinking.length;
         this.thinkingStreams.get(event.index)?.append(event.delta.thinking);
         break;
       case 'text_delta':
+        this.diagnostics.textChars += event.delta.text.length;
         this.state.outputStream?.append(event.delta.text);
         break;
       case 'input_json_delta':
+        this.diagnostics.toolInputChars += event.delta.partial_json.length;
         // Accumulate input JSON for web search to get query (with size limit)
         for (const [, searchData] of this.state.pendingSearches) {
           if (searchData.index === event.index) {
