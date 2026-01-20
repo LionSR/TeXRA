@@ -904,7 +904,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const models = getConfig<string[]>('texra.models', []);
       const defaultMergeModel = getConfig<string>(
         'texra.merge.defaultModel',
-        'sonnet37',
+        'gemini3f',
       );
 
       view.webview.postMessage({
