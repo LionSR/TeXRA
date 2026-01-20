@@ -150,42 +150,16 @@ const toStringOrEmpty = (value) =>
   typeof value === 'string' && value.length > 0 ? value : '';
 
 /**
- * Convert value to location object if valid
- * @param {*} value - Value to convert
- * @returns {object|null} Location object or null
- */
-const toLocation = (value) =>
-  value && typeof value === 'object' ? value : null;
-
-/**
  * Get display path from a location object
  * @param {object|null} location - Location object with kind and relativePath
  * @returns {string} Relative path or empty string
  */
 const describeLocation = (location) => {
   if (!location) return '';
-  // Trust the discriminated union - kind field is the source of truth
   if (location.kind === 'workspace' || location.kind === 'runStorage') {
     return location.relativePath || '';
   }
   return '';
-};
-
-/**
- * Get absolute path from location or fallback
- * @param {object|null} location - Location object with absolutePath
- * @param {string} fallback - Fallback path if location is invalid
- * @returns {string} Absolute path
- */
-const pickAbsolutePath = (location, fallback) => {
-  if (
-    location &&
-    typeof location.absolutePath === 'string' &&
-    location.absolutePath
-  ) {
-    return location.absolutePath;
-  }
-  return fallback;
 };
 
 /**
@@ -200,102 +174,35 @@ const getLatexdiffStatusIcon = (status) => {
 };
 
 /**
- * Normalize diff entry from either new or legacy format.
- * New format has `revised` (OutputFileInfo), legacy has `locations` + labels.
- * @param {object} entry - Raw diff entry
- * @returns {object} Normalized entry
- */
-const normalizeDiffEntry = (entry) => {
-  if (!entry || typeof entry !== 'object') {
-    return null;
-  }
-
-  // New format: has `revised` (OutputFileInfo with round, location, lineage)
-  if (entry.revised && typeof entry.revised === 'object') {
-    const revised = entry.revised;
-    const originalPath =
-      revised.lineage?.original?.relativePath ||
-      revised.lineage?.original?.absolutePath ||
-      null;
-    return {
-      originalName: originalPath ? getBasename(originalPath) : null,
-      baseRound: entry.baseRound ?? null,
-      revisedRound: revised.round ?? 0,
-      baseLocation: toLocation(entry.baseLocation),
-      revisedLocation: toLocation(revised.location),
-      diffLocation: toLocation(entry.diffLocation),
-      status: entry.status,
-      message: entry.message,
-      runId: entry.runId,
-    };
-  }
-
-  // Legacy format: has `locations` + labels
-  const locations = entry.locations || {};
-  return {
-    originalName: entry.originalFileName || entry.baseLabel || null,
-    baseRound: null,
-    revisedRound: 0,
-    baseLocation: toLocation(locations.base),
-    revisedLocation: toLocation(locations.revised),
-    diffLocation: toLocation(locations.diff),
-    status: entry.status,
-    message: entry.message,
-    runId: entry.runId,
-    // Legacy path fallbacks
-    _basePath: entry.basePath,
-    _revisedPath: entry.revisedPath,
-    _diffPath: entry.diffPath,
-  };
-};
-
-/**
- * Build HTML for a single latexdiff entry
- * @param {object} rawEntry - Latexdiff entry data (new or legacy format)
+ * Build HTML for a latexdiff entry.
+ * Format: DiffResult { baseLocation, baseRound, revised: OutputFileInfo, diffLocation, status, message, runId }
+ * @param {object} entry - Latexdiff entry (DiffResult format)
  * @returns {string} HTML string for the entry
  */
-const buildLatexdiffEntryHtml = (rawEntry) => {
-  const entry = normalizeDiffEntry(rawEntry);
-  if (!entry) return '';
+const buildLatexdiffEntryHtml = (entry) => {
+  if (!entry?.revised) return '';
 
-  const {
-    originalName,
-    baseRound,
-    revisedRound,
-    baseLocation,
-    revisedLocation,
-    diffLocation,
-    status,
-    message,
-    runId,
-  } = entry;
+  const { baseLocation, baseRound, revised, diffLocation, status, message, runId } = entry;
 
-  // Get file paths with legacy fallbacks
-  const baseFile = pickAbsolutePath(baseLocation, entry._basePath || '');
-  const revisedFile = pickAbsolutePath(
-    revisedLocation,
-    entry._revisedPath || '',
-  );
-  const diffFile = pickAbsolutePath(diffLocation, entry._diffPath || '');
+  // Extract paths
+  const baseFile = baseLocation?.absolutePath || '';
+  const revisedFile = revised.location?.absolutePath || '';
+  const diffFile = diffLocation?.absolutePath || '';
 
-  // Display name from original or fallback to basename
-  const displayName =
-    originalName ||
-    describeLocation(baseLocation) ||
-    getBasename(baseFile) ||
-    'unknown';
+  // Display name from original lineage or fallback to base
+  const originalPath = revised.lineage?.original?.relativePath || revised.lineage?.original?.absolutePath;
+  const displayName = originalPath
+    ? getBasename(originalPath)
+    : describeLocation(baseLocation) || getBasename(baseFile) || 'unknown';
 
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId
-    ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"`
-    : '';
+  const runAttr = runId ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"` : '';
 
-  // Build display with round info: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
-  const baseLabel =
-    baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
-  const revisedLabel = `[r${revisedRound}]`;
+  // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
+  const baseLabel = baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
+  const revisedLabel = `[r${revised.round ?? 0}]`;
 
   const baseLink = buildFileLink(baseFile, baseLabel);
   const revisedLink = buildFileLink(revisedFile, revisedLabel);
