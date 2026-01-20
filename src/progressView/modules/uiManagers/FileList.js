@@ -90,14 +90,18 @@ export class FileList {
 
     const relativePath = file.location.relativePath;
     // Display name: prefer original file name when available, fallback to output path
-    const displayPath = file.lineage?.original?.relativePath || relativePath;
+    const originalPath = file.lineage?.original?.relativePath || relativePath;
+    // Use round from file if available, otherwise from parameter
+    const fileRound = file.round ?? round;
+    // Format: "{originalName} [r{round}]"
+    const displayPath = `${originalPath} [r${fileRound}]`;
 
     // Set file data attributes using new structure
     if (fileItem) {
       fileItem.dataset.file = file.location.absolutePath;
       fileItem.dataset.original = file.lineage?.original?.absolutePath || '';
       fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
-      fileItem.dataset.round = round;
+      fileItem.dataset.round = fileRound;
       if (file.location.kind === 'workspace') {
         fileItem.dataset.workspace = file.location.absolutePath;
       }
@@ -109,7 +113,7 @@ export class FileList {
       }
     }
 
-    // Set the file path display - show original file name when available
+    // Set the file path display - show original file name with round
     if (basenameSpan) basenameSpan.textContent = displayPath;
     if (dirSpan) dirSpan.textContent = '';
     if (filePathSpan) {

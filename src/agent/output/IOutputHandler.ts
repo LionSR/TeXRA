@@ -42,7 +42,10 @@ export interface IOutputHandler {
   ): Promise<void>;
 
   /** Gather mapping and diff stats for output files of a round. */
-  gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
+  gatherOutputFileInfo(
+    currRound: number,
+    precomputedMapping?: RoundFileMapping,
+  ): Promise<OutputFileInfo[]>;
 
   /** Retrieve the cached mapping metadata for a round. */
   getRoundMapping(currRound: number): RoundFileMapping;
@@ -61,6 +64,7 @@ export interface IOutputHandler {
     options: {
       endTurn: boolean;
       stage?: AgentLogStage;
+      mapping?: RoundFileMapping;
     },
   ): Promise<void>;
 
