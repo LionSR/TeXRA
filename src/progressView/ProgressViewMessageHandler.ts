@@ -1201,11 +1201,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // When attachAgentOutputs is enabled, output to original input locations
     // This allows apply agents to write changes back to the original files
+    // Note: outputFiles includes all files (inputFile + inputFiles) for consistent handling
     const outputFile = attachAgentOutputs
       ? WorkspaceFS.relativePath(originalConfig.inputFile)
       : originalConfig.outputFile;
     const outputFiles = attachAgentOutputs
-      ? originalConfig.inputFiles.map((p) => WorkspaceFS.relativePath(p))
+      ? [originalConfig.inputFile, ...originalConfig.inputFiles]
+          .filter(Boolean)
+          .map((p) => WorkspaceFS.relativePath(p))
       : originalConfig.outputFiles;
 
     const newConfig = {
@@ -1226,9 +1229,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;
     }
+
+    // Update activeFiles.reference visibility when reference files are added
+    const activeFiles =
+      outputsAsReference.length > 0
+        ? { ...originalTaskState.activeFiles, reference: true }
+        : originalTaskState.activeFiles;
+
     return {
       agentConfig: newConfig,
-      activeFiles: originalTaskState.activeFiles,
+      activeFiles,
     } as TaskState;
   }
 
