@@ -208,7 +208,7 @@ export class WorkflowAgentTool extends defineTool({
 Available agents:
 ${buildWorkflowAgentsList()}
 
-Example: agent=correct, inputFile=/workspace/paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -355,7 +355,7 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${buildToolUseAgentsList()}
 
-Example: agent=search, instruction="The paper at /workspace/paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
+Example: agent=search, instruction="The paper at paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
