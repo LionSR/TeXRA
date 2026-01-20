@@ -30,7 +30,11 @@ import type { OutputFileInfo, RoundFileMapping } from './types';
  * Result of a latexdiff operation with file locations.
  */
 interface DiffOperationResult {
+  /** Original input file name for display (source of truth when available) */
+  originalFileName?: string;
+  /** @deprecated Use originalFileName. Kept for backward compatibility. */
   baseLabel: string;
+  /** @deprecated Use originalFileName. Kept for backward compatibility. */
   revisedLabel: string;
   status: 'success' | 'error';
   message?: string;
@@ -226,6 +230,7 @@ export class LatexDiffManager {
         );
 
         aggregated.push({
+          originalFileName: this.getDisplayLabel(baseLocation),
           baseLabel: this.getDisplayLabel(baseLocation),
           revisedLabel: this.getDisplayLabel(revisedLocation),
           status: result.success ? 'success' : 'error',
@@ -291,7 +296,14 @@ export class LatexDiffManager {
           prevLocation ?? currLocation,
         );
 
+        // Look up the original file from the mapping
+        const originalLocation = mapping.originByOutput.get(outputPath);
+        const originalFileName = originalLocation
+          ? this.getDisplayLabel(originalLocation)
+          : this.getDisplayLabel(currLocation);
+
         aggregated.push({
+          originalFileName,
           baseLabel: this.getDisplayLabel(prevLocation),
           revisedLabel: this.getDisplayLabel(currLocation),
           status: result.success ? 'success' : 'error',
