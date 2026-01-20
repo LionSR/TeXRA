@@ -1145,16 +1145,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       options;
     const isChat = mode === 'chat';
 
-    // Map input files: outputs become new inputs
-    const mapToRelative = (p: string): string =>
+    // Map input files: by default, outputs become new inputs
+    // When attachAgentOutputs is enabled, keep originals as inputs and add outputs as reference
+    const mapOutputToRelative = (p: string): string =>
       WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
-    const newInputFile = mapToRelative(originalConfig.inputFile);
-    const newInputFiles = originalConfig.inputFiles.map(mapToRelative);
+    const keepOriginalRelative = (p: string): string =>
+      WorkspaceFS.relativePath(p);
 
-    // When attachAgentOutputs is enabled, add original input files as reference
-    // This allows agents like 'apply' to see both the annotated output (input) and the original
-    const originalsAsReference = attachAgentOutputs
-      ? [...fileMapping.keys()].map((p) => WorkspaceFS.relativePath(p))
+    const newInputFile = attachAgentOutputs
+      ? keepOriginalRelative(originalConfig.inputFile)
+      : mapOutputToRelative(originalConfig.inputFile);
+    const newInputFiles = attachAgentOutputs
+      ? originalConfig.inputFiles.map(keepOriginalRelative)
+      : originalConfig.inputFiles.map(mapOutputToRelative);
+
+    // When attachAgentOutputs is enabled, add agent outputs as reference
+    // This allows agents like 'apply' to see the annotated output while modifying the original
+    const outputsAsReference = attachAgentOutputs
+      ? [...fileMapping.values()].map((p) => WorkspaceFS.relativePath(p))
       : [];
 
     // Build instruction from template
@@ -1185,10 +1193,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
-    // When attachAgentOutputs is enabled, merge original inputs into reference files
+    // When attachAgentOutputs is enabled, merge agent outputs into reference files
     const mergedReferenceFiles = [
       ...(originalConfig.referenceFiles ?? []),
-      ...originalsAsReference,
+      ...outputsAsReference,
     ];
 
     // When attachAgentOutputs is enabled, output to original input locations
