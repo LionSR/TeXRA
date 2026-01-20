@@ -90,11 +90,10 @@ export class FileList {
 
     const relativePath = file.location.relativePath;
     // Display name: prefer original file name when available, fallback to output path
-    const originalPath = file.lineage?.original?.relativePath || relativePath;
+    // Note: round is shown in the collapsible section header, no need to repeat
+    const displayPath = file.lineage?.original?.relativePath || relativePath;
     // Use round from file if available, otherwise from parameter
     const fileRound = file.round ?? round;
-    // Format: "{originalName} [r{round}]"
-    const displayPath = `${originalPath} [r${fileRound}]`;
 
     // Set file data attributes using new structure
     if (fileItem) {
@@ -113,16 +112,16 @@ export class FileList {
       }
     }
 
-    // Set the file path display - show original file name with round
+    // Set the file path display - show original file name
     if (basenameSpan) basenameSpan.textContent = displayPath;
     if (dirSpan) dirSpan.textContent = '';
     if (filePathSpan) {
-      const displayPath =
+      const tooltipPath =
         file.location.kind === 'workspace' ||
         file.location.kind === 'runStorage'
           ? file.location.relativePath
           : file.location.absolutePath;
-      filePathSpan.title = displayPath;
+      filePathSpan.title = tooltipPath;
     }
 
     // Handle diff stats (use schema field names: added/removed)
