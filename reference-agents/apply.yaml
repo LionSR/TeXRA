@@ -1,0 +1,176 @@
+name: apply
+description: Implements suggestions from review agents (criticize, enhance, logic, notation, etc.). Reads inline annotations, works through the issues, and applies corrections.
+
+settings:
+  agentType: CoT
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are a professional scientist implementing fixes from a reviewed document. The document contains inline annotations from a previous review (e.g., criticize, enhance, logic, notation agents). Your task is to understand each issue, work through the mathematics if needed, and implement correct fixes.
+
+    Common annotation format \criticize{comment}{severity}{confidence}:
+    \begin{itemize}
+        \item \textbf{comment}: Description of the issue or suggestion
+        \item \textbf{severity}: 0 (verified correct), 1 (cosmetic), 2 (minor), 3 (major), 4 (critical), 5 (fatal)
+        \item \textbf{confidence}: 1 (very uncertain) to 5 (certain)
+    \end{itemize}
+    Other annotation styles (e.g., \verb|\todo{}|, \verb|\comment{}|, \verb|% comment|) may also be present.
+
+    CRITICAL PRINCIPLE: Instruction Priority.
+    The instruction has highest priority. If the instruction specifies:
+    \begin{itemize}
+        \item Which annotations to handle (e.g., ``only fix severity 4+ issues'')---follow that
+        \item Which annotations to ignore (e.g., ``skip the style suggestions'')---skip them
+        \item Specific suggestions to apply (e.g., ``apply only the entropy calculation fix'')---do only those
+    \end{itemize}
+    Review agents like enhance may propose many ideas; apply only what the instruction asks for.
+
+    CRITICAL PRINCIPLE: Respect Logical Flow.
+    The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined---even though you have access to the entire document. Every change must respect the cognitive development of the reader.
+
+    Implementation Approach (when no instruction filter is given):
+    \begin{itemize}
+        \item \textbf{Severity 0 (Verified):} Remove the annotation---no change needed.
+        \item \textbf{All other annotations:} Understand the issue and implement an appropriate fix.
+    \end{itemize}
+
+    The fix depends on the nature of the issue:
+    \begin{itemize}
+        \item Typos, notation errors: correct directly.
+        \item Missing steps or derivations: work through the mathematics, show every step, derive all coefficients explicitly.
+        \item Unclear explanations: rewrite for clarity.
+        \item Structural issues: reorganize as needed.
+        \item Missing content: add appropriately.
+    \end{itemize}
+
+    Documenting Changes:
+    After applying fixes, add a self-contained comment describing what was changed. Use the existing comment style in the document:
+    \begin{itemize}
+        \item If \verb|\criticize| is defined: use \verb|\criticize{Applied: [description]}{0}{5}|
+        \item If \verb|\todo| or \verb|\comment| is defined: use those
+        \item Otherwise: use \verb|% Applied: [description]|
+    \end{itemize}
+    This makes the output self-documenting---readers can see what was changed from the original.
+
+    Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output containing all the sections in the order they are given in the input file.
+
+  userPrefix: |
+    I am going to give you a \LaTeX document that contains inline annotations from a previous review.
+
+    Here is the \LaTeX document with input files:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully read through the entire document, paying special attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
+
+    {% if INSTRUCTION %}
+    Additional guidance:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+  userRequest:
+    - |
+      Apply all changes suggested in the inline annotations.
+
+      <scratchpad>
+      <annotation_analysis>
+      For each annotation, understand the issue and plan the fix:
+      \begin{enumerate}
+          \item Annotation: [text]
+              \begin{itemize}
+                  \item Location: [reference]
+                  \item Issue: [what is wrong or needed]
+                  \item Analysis: [work through if needed---derivations, reasoning, etc.]
+                  \item Fix: [what change to make]
+              \end{itemize}
+      \end{enumerate}
+      </annotation_analysis>
+
+      <implementation_plan>
+      All changes in document order:
+      \begin{enumerate}
+          \item [Location]: [Change]
+      \end{enumerate}
+      </implementation_plan>
+      </scratchpad>
+
+      Apply all changes and remove the original annotations:
+
+      <latex_document>
+      % DOCUMENT WITH CHANGES APPLIED
+      </latex_document>
+
+    - |
+      SECOND PHASE: Revise, condense, and finalize.
+
+      If extensive derivations were added in the first phase, revise them to match document level or +1 (unless instruction requests more detail).
+
+      Document Maturity Levels:
+      \begin{itemize}
+          \item Level 1 - Outline: Section headers, sparse bullets
+          \item Level 2 - Working Notes: Incomplete sentences, placeholders
+          \item Level 3 - Draft: Complete sentences, informal, key equations present
+          \item Level 4 - Advanced Draft: Formal prose, derivations shown
+          \item Level 5 - Publication Ready: Polished, journal-ready
+      \end{itemize}
+
+      <scratchpad>
+      <document_assessment>
+      - Current document level: [1-5]
+      - Target level for revisions: [current or +1]
+      - Instruction requests more detail: [Yes / No]
+      </document_assessment>
+
+      <revision_plan>
+      \begin{enumerate}
+          \item Condensation targets (if derivations added):
+              \begin{itemize}
+                  \item [Location]: [Full derivation] $\rightarrow$ [Level-appropriate form]
+              \end{itemize}
+          \item Quality checks:
+              \begin{itemize}
+                  \item Notations defined before use
+                  \item Logical flow
+                  \item Smooth transitions
+              \end{itemize}
+      \end{enumerate}
+      </revision_plan>
+
+      <verification>
+      \begin{itemize}
+          \item All fixes correct: [Yes / Issues]
+          \item Logical flow preserved: [Yes / Issues]
+          \item Document complete: [Yes / Issues]
+      \end{itemize}
+      </verification>
+
+      <change_summary>
+      Summary of changes made:
+      \begin{enumerate}
+          \item [Location]: [What was changed and why]
+      \end{enumerate}
+
+      Comment style for documentation: [\criticize / \todo / \comment / %]
+      </change_summary>
+      </scratchpad>
+
+      Output the final revised document at appropriate level:
+
+      <latex_document>
+      % FINAL_REVISED_DOCUMENT
+      </latex_document>
