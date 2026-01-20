@@ -960,12 +960,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: string;
       model: string;
       includeInstruction?: boolean;
+      attachAgentOutputs?: boolean;
       initialQuestion?: string;
     },
     executeImmediately: boolean,
   ): Promise<void> {
-    const { stream, mode, agent, model, includeInstruction, initialQuestion } =
-      data;
+    const {
+      stream,
+      mode,
+      agent,
+      model,
+      includeInstruction,
+      attachAgentOutputs,
+      initialQuestion,
+    } = data;
     const streamId = stream as StreamTabId;
 
     // Validate prerequisites
@@ -1010,7 +1018,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         taskState,
         originalConfig,
         fileMapping,
-        { mode, agent, model, includeInstruction, initialQuestion },
+        { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion },
       );
 
       await vscode.commands.executeCommand('texra.mainView.focus');
@@ -1129,10 +1137,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: string;
       model: string;
       includeInstruction?: boolean;
+      attachAgentOutputs?: boolean;
       initialQuestion?: string;
     },
   ): Promise<TaskState> {
-    const { mode, agent, model, includeInstruction, initialQuestion } = options;
+    const { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion } =
+      options;
     const isChat = mode === 'chat';
 
     // Map input files: outputs become new inputs
@@ -1140,6 +1150,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
     const newInputFile = mapToRelative(originalConfig.inputFile);
     const newInputFiles = originalConfig.inputFiles.map(mapToRelative);
+
+    // When attachAgentOutputs is enabled, add original input files as reference
+    // This allows agents like 'apply' to see both the annotated output (input) and the original
+    const originalsAsReference = attachAgentOutputs
+      ? [...fileMapping.keys()].map((p) => WorkspaceFS.relativePath(p))
+      : [];
 
     // Build instruction from template
     const template = isChat
@@ -1169,12 +1185,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
+    // When attachAgentOutputs is enabled, merge original inputs into reference files
+    const mergedReferenceFiles = [
+      ...(originalConfig.referenceFiles ?? []),
+      ...originalsAsReference,
+    ];
     const newConfig = {
       ...originalConfig,
       agent,
       model,
       inputFile: newInputFile,
       inputFiles: newInputFiles,
+      referenceFiles: mergedReferenceFiles,
       instruction,
       session,
       agentType: session.agentType,

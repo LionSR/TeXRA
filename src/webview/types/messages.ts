@@ -252,6 +252,7 @@ export const FollowupTaskMessageSchema = z.object({
   model: z.string().min(1),
   includeInstruction: z.boolean().optional(),
   initialQuestion: z.string().optional(),
+  attachAgentOutputs: z.boolean().optional(),
   // Note: workflowContext is computed in backend (ProgressViewMessageHandler)
   // from originalConfig, not passed from frontend
 });
