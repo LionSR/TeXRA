@@ -272,7 +272,10 @@ const buildLatexdiffEntryHtml = (rawEntry) => {
 
   // Get file paths with legacy fallbacks
   const baseFile = pickAbsolutePath(baseLocation, entry._basePath || '');
-  const revisedFile = pickAbsolutePath(revisedLocation, entry._revisedPath || '');
+  const revisedFile = pickAbsolutePath(
+    revisedLocation,
+    entry._revisedPath || '',
+  );
   const diffFile = pickAbsolutePath(diffLocation, entry._diffPath || '');
 
   // Display name from original or fallback to basename
@@ -285,7 +288,9 @@ const buildLatexdiffEntryHtml = (rawEntry) => {
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"` : '';
+  const runAttr = runId
+    ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"`
+    : '';
 
   // Build display with round info: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
   const baseLabel =
