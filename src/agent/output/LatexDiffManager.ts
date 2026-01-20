@@ -206,7 +206,10 @@ export class LatexDiffManager {
 
     if (generateBetweenRoundDiffs && currRound > 0) {
       const prevPairs = [...mapping.prevToOutput.entries()];
-      this.logPairMatches(prevPairs, 'previous round files to current round files');
+      this.logPairMatches(
+        prevPairs,
+        'previous round files to current round files',
+      );
 
       for (const [outputPath, prevLocation] of prevPairs) {
         const originalLocation = mapping.originByOutput.get(outputPath) ?? null;
@@ -218,9 +221,14 @@ export class LatexDiffManager {
           originalLocation,
           baseRound: currRound - 1,
           runDiff: (base, revised, cwd) =>
-            this.latexdiffService.runDiffBetweenRounds(base, revised, undefined, {
-              cwd,
-            }),
+            this.latexdiffService.runDiffBetweenRounds(
+              base,
+              revised,
+              undefined,
+              {
+                cwd,
+              },
+            ),
           label: 'between-rounds-diff',
         });
         if (result) aggregated.push(result);
@@ -295,7 +303,10 @@ export class LatexDiffManager {
     const result = await runDiff(baseLocation, revisedFile.location, cwd);
     this.logLatexdiffResult(result, label);
 
-    const diffLocation = await this.compileDiffIfSuccessful(result, baseLocation);
+    const diffLocation = await this.compileDiffIfSuccessful(
+      result,
+      baseLocation,
+    );
 
     const revisedWithLineage: OutputFileInfo = {
       ...revisedFile,
