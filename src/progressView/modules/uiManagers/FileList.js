@@ -89,6 +89,8 @@ export class FileList {
     const statsSpan = clone.querySelector('.file-stats');
 
     const relativePath = file.location.relativePath;
+    // Display name: prefer original file name when available, fallback to output path
+    const displayPath = file.lineage?.original?.relativePath || relativePath;
 
     // Set file data attributes using new structure
     if (fileItem) {
@@ -107,8 +109,8 @@ export class FileList {
       }
     }
 
-    // Set the file path display - simplified, no color coding for directory
-    if (basenameSpan) basenameSpan.textContent = relativePath;
+    // Set the file path display - show original file name when available
+    if (basenameSpan) basenameSpan.textContent = displayPath;
     if (dirSpan) dirSpan.textContent = '';
     if (filePathSpan) {
       const displayPath =
