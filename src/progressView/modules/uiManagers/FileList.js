@@ -61,9 +61,7 @@ export class FileList {
         container.appendChild(roundGroup);
       }
 
-      files.forEach((file) =>
-        this._renderFileItem(template, target, file, round),
-      );
+      files.forEach((file) => this._renderFileItem(template, target, file));
     }
 
     // Show/hide collapsible based on whether files were actually rendered
@@ -74,7 +72,7 @@ export class FileList {
    * Render a single file item and append it to the parent element
    * @private
    */
-  _renderFileItem(template, parent, file, round) {
+  _renderFileItem(template, parent, file) {
     // Skip invalid file entries - trust the data structure
     if (!file || !file.location) {
       console.warn('FileList.update: Invalid file entry:', file);
@@ -90,17 +88,13 @@ export class FileList {
 
     const relativePath = file.location.relativePath;
     // Display name: prefer original file name when available, fallback to output path
-    // Note: round is shown in the collapsible section header, no need to repeat
     const displayPath = file.lineage?.original?.relativePath || relativePath;
-    // Use round from file if available, otherwise from parameter
-    const fileRound = file.round ?? round;
 
-    // Set file data attributes using new structure
+    // Set file data attributes
     if (fileItem) {
       fileItem.dataset.file = file.location.absolutePath;
       fileItem.dataset.original = file.lineage?.original?.absolutePath || '';
       fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
-      fileItem.dataset.round = fileRound;
       if (file.location.kind === 'workspace') {
         fileItem.dataset.workspace = file.location.absolutePath;
       }
