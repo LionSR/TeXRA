@@ -770,7 +770,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             data: {
               isUsingRelay,
               baseUrl: baseUrl ?? 'default',
-              model: this.config.modelApiName,
+              model: this.config.fullName,
               streamDiagnostics: diagnostics,
             },
           },
