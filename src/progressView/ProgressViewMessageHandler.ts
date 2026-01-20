@@ -1276,13 +1276,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       await safeExecuteCommand('texra.execute', [
         {
           config: {
-            agent: 'merge_multiple',
+            agent: 'merge',
             model,
             inputFile: baseFiles[0],
             inputFiles: baseFiles.slice(1),
             editedFile: editedFiles[0],
             editedFiles: editedFiles.slice(1),
+            outputFiles: baseFiles,
             instruction: '',
+            useMultipleOutputs: true,
           },
         },
       ]);
