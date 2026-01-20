@@ -118,12 +118,13 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (outputHandler.hasRoundOutputs(currentRound)) {
-        // Calculate mapping ONCE
-        mapping = outputHandler.getRoundMapping(currentRound);
+        // Calculate mapping ONCE - capture in const for type safety
+        const roundMapping = outputHandler.getRoundMapping(currentRound);
+        mapping = roundMapping;
 
         await tryOperation(
           'Latexdiff',
-          () => this.handleLatexdiff(currentRound, baseFiles, mapping!),
+          () => this.handleLatexdiff(currentRound, baseFiles, roundMapping),
           logger,
         );
       }
