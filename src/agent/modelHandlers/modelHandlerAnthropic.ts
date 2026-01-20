@@ -758,6 +758,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
+      } catch (streamError) {
+        // Log enhanced diagnostics for stream failures, especially useful for relay debugging
+        const baseUrl = this.getBaseUrl();
+        const isUsingRelay = this.shouldUseServerSideKeys();
+        const diagnostics = streamHandler.getDiagnostics();
+
+        this.logger.error(
+          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
+          {
+            data: {
+              isUsingRelay,
+              baseUrl: baseUrl ?? 'default',
+              model: this.config.modelApiName,
+              streamDiagnostics: diagnostics,
+            },
+          },
+        );
+
+        throw streamError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
