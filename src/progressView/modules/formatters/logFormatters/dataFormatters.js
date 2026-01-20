@@ -175,25 +175,50 @@ const getLatexdiffStatusIcon = (status) => {
 
 /**
  * Build HTML for a latexdiff entry.
- * Format: DiffResult { baseLocation, baseRound, revised: OutputFileInfo, diffLocation, status, message, runId }
- * @param {object} entry - Latexdiff entry (DiffResult format)
+ * Handles both new format (DiffResult with revised) and legacy format (locations + labels).
+ * @param {object} entry - Latexdiff entry
  * @returns {string} HTML string for the entry
  */
 const buildLatexdiffEntryHtml = (entry) => {
-  if (!entry?.revised) return '';
+  if (!entry) return '';
 
-  const { baseLocation, baseRound, revised, diffLocation, status, message, runId } = entry;
+  // Detect format and extract fields
+  let baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId;
 
-  // Extract paths
-  const baseFile = baseLocation?.absolutePath || '';
-  const revisedFile = revised.location?.absolutePath || '';
-  const diffFile = diffLocation?.absolutePath || '';
+  if (entry.revised && typeof entry.revised === 'object') {
+    // New format: DiffResult with revised (OutputFileInfo)
+    const { baseLocation, revised, diffLocation } = entry;
+    baseFile = baseLocation?.absolutePath || '';
+    revisedFile = revised.location?.absolutePath || '';
+    diffFile = diffLocation?.absolutePath || '';
+    baseRound = entry.baseRound ?? null;
+    revisedRound = revised.round ?? 0;
+    status = entry.status;
+    message = entry.message;
+    runId = entry.runId;
 
-  // Display name from original lineage or fallback to base
-  const originalPath = revised.lineage?.original?.relativePath || revised.lineage?.original?.absolutePath;
-  const displayName = originalPath
-    ? getBasename(originalPath)
-    : describeLocation(baseLocation) || getBasename(baseFile) || 'unknown';
+    // Display name from lineage
+    const originalPath = revised.lineage?.original?.relativePath || revised.lineage?.original?.absolutePath;
+    displayName = originalPath
+      ? getBasename(originalPath)
+      : describeLocation(baseLocation) || getBasename(baseFile) || 'unknown';
+  } else if (entry.locations) {
+    // Legacy format: locations + labels
+    const { locations } = entry;
+    baseFile = locations.base?.absolutePath || entry.basePath || '';
+    revisedFile = locations.revised?.absolutePath || entry.revisedPath || '';
+    diffFile = locations.diff?.absolutePath || entry.diffPath || '';
+    baseRound = null;
+    revisedRound = 0;
+    status = entry.status;
+    message = entry.message;
+    runId = entry.runId;
+
+    // Display name from legacy fields
+    displayName = entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown';
+  } else {
+    return '';
+  }
 
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
@@ -202,7 +227,7 @@ const buildLatexdiffEntryHtml = (entry) => {
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
   const baseLabel = baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
-  const revisedLabel = `[r${revised.round ?? 0}]`;
+  const revisedLabel = `[r${revisedRound}]`;
 
   const baseLink = buildFileLink(baseFile, baseLabel);
   const revisedLink = buildFileLink(revisedFile, revisedLabel);
