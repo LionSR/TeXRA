@@ -20,6 +20,7 @@ export const FileLineageSchema = z.strictObject({
 
 /** Complete output file metadata (extends OutputFileSchema) */
 export const OutputFileInfoSchema = OutputFileSchema.extend({
+  round: z.number(),
   lineage: FileLineageSchema.nullable(),
   diff: DiffStatsSchema.nullable(),
 });
