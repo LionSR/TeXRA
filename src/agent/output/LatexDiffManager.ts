@@ -150,161 +150,80 @@ export class LatexDiffManager {
     }
 
     const outputFiles = this.getOutputFiles()[currRound] ?? [];
-    const outputPaths = outputFiles.map((entry) => entry.location.absolutePath);
-    if (outputPaths.length === 0) {
+    if (outputFiles.length === 0) {
       this.logger.warn(
         `No output files found for round ${currRound}, skipping latexdiff operations`,
       );
       return;
     }
 
+    // O(1) lookup map instead of O(n) find in loop
+    const outputByPath = new Map(
+      outputFiles.map((f) => [getComparablePath(f.location), f]),
+    );
+
     this.logger.debug(
       `Base files: ${this.baseFiles.map((f) => f.absolutePath).join(', ')}`,
     );
-    this.logger.debug(`r${currRound} output files: ${outputPaths}`);
-
-    const basePairs = [...mapping.baseToOutput.entries()];
-    if (basePairs.length > 0) {
-      this.logger.debug(
-        `Matched base files to output files: ${basePairs
-          .map(
-            ([outputPath, base]) =>
-              `${this.getDisplayLabel(base)} -> ${path.basename(outputPath)}`,
-          )
-          .join(', ')}`,
-      );
-    } else if (this.baseFiles.length > 0) {
-      this.logger.debug(
-        'No base file mappings found for current round outputs',
-      );
-    }
+    this.logger.debug(
+      `r${currRound} output files: ${outputFiles.map((f) => f.location.absolutePath)}`,
+    );
 
     const aggregated: DiffResult[] = [];
 
+    // Round-based diffs (original → r0)
     if (this.agentSetting.isRewrite) {
-      this.logger.debug('Running round-based latexdiff operations');
+      const basePairs = [...mapping.baseToOutput.entries()];
+      this.logPairMatches(basePairs, 'base files to output files');
+
       for (const [outputPath, baseLocation] of basePairs) {
-        const revisedFile = outputFiles.find(
-          (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
-        );
-        if (!revisedFile) {
-          this.logger.debug(
-            `Skipping diff: output file not found for path ${outputPath}`,
-          );
-          continue;
-        }
-        await this.ensureWorkspaceDependency(baseLocation);
-        await this.ensureWorkspaceDependency(revisedFile.location);
-
-        const cwd = await this.getWorkingDirectory(revisedFile.location);
-        const result = await this.latexdiffService.runDiffForRound(
+        const result = await this.runSingleDiff({
+          outputPath,
           baseLocation,
-          revisedFile.location,
+          outputByPath,
           currRound,
-          undefined,
-          { cwd },
-        );
-        this.logLatexdiffResult(result, 'round-diff');
-
-        const diffLocation = await this.compileDiffIfSuccessful(
-          result,
-          baseLocation,
-        );
-
-        // Enrich revised with lineage from base
-        const revisedWithLineage: OutputFileInfo = {
-          ...revisedFile,
-          lineage: {
-            original: baseLocation,
-            diffBase: baseLocation,
-            diffFile: diffLocation,
-          },
-        };
-
-        aggregated.push({
-          baseLocation,
-          baseRound: null, // Original input, not a round output
-          revised: revisedWithLineage,
-          diffLocation,
-          status: result.success ? 'success' : 'error',
-          message: result.success ? undefined : result.message,
+          originalLocation: baseLocation,
+          baseRound: null,
+          runDiff: (base, revised, cwd) =>
+            this.latexdiffService.runDiffForRound(
+              base,
+              revised,
+              currRound,
+              undefined,
+              { cwd },
+            ),
+          label: 'round-diff',
         });
+        if (result) aggregated.push(result);
       }
     }
 
+    // Between-round diffs (r0 → r1)
     const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
-      this.logger.debug('Running between-rounds latexdiff operations');
       const prevPairs = [...mapping.prevToOutput.entries()];
-
-      if (prevPairs.length > 0) {
-        this.logger.debug(
-          `Matched previous round files to current round files: ${prevPairs
-            .map(
-              ([outputPath, prev]) =>
-                `${this.getDisplayLabel(prev)} -> ${path.basename(outputPath)}`,
-            )
-            .join(', ')}`,
-        );
-      } else {
-        this.logger.debug(
-          'No previous round mappings found for current round outputs',
-        );
-      }
+      this.logPairMatches(prevPairs, 'previous round files to current round files');
 
       for (const [outputPath, prevLocation] of prevPairs) {
-        const currFile = outputFiles.find(
-          (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
-        );
-
-        if (!currFile) {
-          this.logger.debug(
-            `Skipping diff: current round file not found for path ${outputPath}`,
-          );
-          continue;
-        }
-        await this.ensureWorkspaceDependency(prevLocation);
-        await this.ensureWorkspaceDependency(currFile.location);
-
-        const cwd = await this.getWorkingDirectory(currFile.location);
-        const result = await this.latexdiffService.runDiffBetweenRounds(
-          prevLocation,
-          currFile.location,
-          undefined,
-          { cwd },
-        );
-        this.logLatexdiffResult(result, 'between-rounds-diff');
-
-        const diffLocation = await this.compileDiffIfSuccessful(
-          result,
-          prevLocation ?? currFile.location,
-        );
-
-        // Look up the original file from the mapping for lineage
         const originalLocation = mapping.originByOutput.get(outputPath) ?? null;
-
-        // Enrich revised with lineage
-        const revisedWithLineage: OutputFileInfo = {
-          ...currFile,
-          lineage: {
-            original: originalLocation,
-            diffBase: prevLocation,
-            diffFile: diffLocation,
-          },
-        };
-
-        aggregated.push({
+        const result = await this.runSingleDiff({
+          outputPath,
           baseLocation: prevLocation,
-          baseRound: currRound - 1, // Previous round
-          revised: revisedWithLineage,
-          diffLocation,
-          status: result.success ? 'success' : 'error',
-          message: result.success ? undefined : result.message,
+          outputByPath,
+          currRound,
+          originalLocation,
+          baseRound: currRound - 1,
+          runDiff: (base, revised, cwd) =>
+            this.latexdiffService.runDiffBetweenRounds(base, revised, undefined, {
+              cwd,
+            }),
+          label: 'between-rounds-diff',
         });
+        if (result) aggregated.push(result);
       }
     } else if (!generateBetweenRoundDiffs) {
       this.logger.debug(
@@ -317,6 +236,84 @@ export class LatexDiffManager {
     } else {
       this.logger.debug('No latexdiff results to report');
     }
+  }
+
+  private logPairMatches(
+    pairs: [string, FileLocation][],
+    description: string,
+  ): void {
+    if (pairs.length > 0) {
+      this.logger.debug(
+        `Matched ${description}: ${pairs
+          .map(
+            ([outputPath, loc]) =>
+              `${this.getDisplayLabel(loc)} -> ${path.basename(outputPath)}`,
+          )
+          .join(', ')}`,
+      );
+    } else if (this.baseFiles.length > 0) {
+      this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
+    }
+  }
+
+  private async runSingleDiff(params: {
+    outputPath: string;
+    baseLocation: FileLocation;
+    outputByPath: Map<string, OutputFileInfo>;
+    currRound: number;
+    originalLocation: FileLocation | null;
+    baseRound: number | null;
+    runDiff: (
+      base: FileLocation,
+      revised: FileLocation,
+      cwd: string,
+    ) => Promise<LaTeXdiffResult>;
+    label: string;
+  }): Promise<DiffResult | null> {
+    const {
+      outputPath,
+      baseLocation,
+      outputByPath,
+      originalLocation,
+      baseRound,
+      runDiff,
+      label,
+    } = params;
+
+    const revisedFile = outputByPath.get(outputPath);
+    if (!revisedFile) {
+      this.logger.debug(
+        `Skipping diff: output file not found for path ${outputPath}`,
+      );
+      return null;
+    }
+
+    await this.ensureWorkspaceDependency(baseLocation);
+    await this.ensureWorkspaceDependency(revisedFile.location);
+
+    const cwd = await this.getWorkingDirectory(revisedFile.location);
+    const result = await runDiff(baseLocation, revisedFile.location, cwd);
+    this.logLatexdiffResult(result, label);
+
+    const diffLocation = await this.compileDiffIfSuccessful(result, baseLocation);
+
+    const revisedWithLineage: OutputFileInfo = {
+      ...revisedFile,
+      lineage: {
+        original: originalLocation,
+        diffBase: baseLocation,
+        diffFile: diffLocation,
+      },
+    };
+
+    return {
+      baseLocation,
+      baseRound,
+      revised: revisedWithLineage,
+      diffLocation,
+      status: result.success ? 'success' : 'error',
+      message: result.success ? undefined : result.message,
+    };
   }
 
   private async compileDiffIfSuccessful(
