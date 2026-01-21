@@ -609,6 +609,28 @@
         "properties": {}
       },
       {
+        "title": "Bibliography",
+        "properties": {
+          "texra.bib.defaultPath": {
+            "type": "string",
+            "default": "",
+            "description": "Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.",
+            "editPresentation": "singlelineText",
+            "scope": "resource",
+            "order": 1
+          },
+          "texra.bib.zoteroPort": {
+            "type": "number",
+            "default": 23119,
+            "description": "Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.",
+            "minimum": 1,
+            "maximum": 65535,
+            "scope": "resource",
+            "order": 2
+          }
+        }
+      },
+      {
         "title": "LaTeX Formatter",
         "properties": {
           "texra.latex.formatter": {
