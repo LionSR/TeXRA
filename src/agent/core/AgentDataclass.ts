@@ -78,18 +78,11 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
+  /** Minimum rounds (default 2). Actual rounds = max(rounds, userRequest.length) */
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
-
-  /**
-   * Maximum rounds to execute. When set, caps the computed rounds.
-   * Computed rounds = max(rounds, userRequest.length)
-   * - undefined: No cap (use computed rounds)
-   * - N: Cap at N rounds (e.g., maxRounds=1 for single-pass)
-   */
-  maxRounds: z.number().optional(),
 
   /**
    * XML structure enforcement mode.
