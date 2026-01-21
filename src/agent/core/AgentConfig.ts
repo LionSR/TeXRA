@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 // Local imports - agent components
 import { AgentCategory } from './AgentDataclass';
-import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
@@ -111,8 +110,7 @@ const AgentConfigFieldsSchema = z.object({
   outputFiles: stringArrayField(),
 
   // AgentConfig-specific fields
-  // Canonical session descriptor - single source of truth
-  session: AgentSessionDescriptorSchema.optional(),
+  agentCategory: z.nativeEnum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFile: z.string().nullable().prefault(null),
   editedFiles: stringArrayField(),
 
@@ -143,20 +141,7 @@ const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
   },
 );
 
-export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
-  // Default to Workflow category if session is not provided
-  const agentCategory =
-    config.session?.agentCategory ?? AgentCategory.Workflow;
-  const session = { agentCategory };
-
-  return {
-    ...config,
-    // Lift agentCategory to top level for easier access (reduces nesting)
-    // Access via config.agentCategory instead of config.session.agentCategory
-    agentCategory,
-    session,
-  };
-});
+export const AgentConfigSchema = AgentConfigBaseSchema;
 
 // Re-export AgentCategory for convenience
 // Canonical source: AgentDataclass.ts
