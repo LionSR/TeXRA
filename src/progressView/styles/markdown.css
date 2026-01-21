@@ -2,6 +2,16 @@
  * Markdown content styles for ProgressView
  */
 
+/**
+ * KaTeX CDN fallback: Hide MathML container when external katex.min.css
+ * fails to load (common in VS Code webviews with network/proxy issues).
+ * MathML is kept for accessibility and copy-tex LaTeX extraction.
+ * See: https://github.com/KaTeX/KaTeX/issues/645
+ */
+.markdown-content .katex-mathml {
+  display: none;
+}
+
 .markdown-content {
   overflow: visible;
 }
