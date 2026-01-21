@@ -128,6 +128,10 @@ function shouldEnforceXmlStructure(
       return false;
     case 'scratchpadOnly':
       return useScratchpad;
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
+    }
   }
 }
 

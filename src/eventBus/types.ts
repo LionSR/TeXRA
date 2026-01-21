@@ -3,8 +3,8 @@
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
-  AgentCategory,
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from '@agent/core/AgentConfig';
