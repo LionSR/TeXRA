@@ -1707,7 +1707,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@cantoo/pdf-lib": "^2.5.3",
-    "@google/genai": "^1.37.0",
+    "@google/genai": "^1.38.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@openrouter/sdk": "^0.3.15",
@@ -1744,7 +1744,7 @@
     "perfect-debounce": "^2.0.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
-    "tar": "^7.5.4",
+    "tar": "^7.5.6",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.19.0",
