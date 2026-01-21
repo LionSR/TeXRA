@@ -36,7 +36,7 @@ const ActiveFilesSchema = z.partialRecord(
  */
 const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
-  z.looseObject({ agentCategory: z.enum(AgentCategory) }),
+  z.looseObject({ agentCategory: z.nativeEnum(AgentCategory) }),
 );
 
 /** Schema for workflow task state */
