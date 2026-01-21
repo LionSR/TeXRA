@@ -9,6 +9,10 @@ import {
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
+import {
+  StreamDiagnosticsSchema,
+  type StreamDiagnostics,
+} from '@common/errors';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
@@ -52,10 +56,15 @@ interface AnthropicStreamState {
   finalized: boolean;
 }
 
+// Re-export for backward compatibility (getDiagnostics return type)
+export { StreamDiagnosticsSchema as StreamDiagnosticsOutputSchema };
+export type StreamDiagnosticsOutput = StreamDiagnostics;
+
 /**
- * Base schema for diagnostic metrics (single source of truth for shared fields).
+ * Schema for internal mutable state during streaming.
+ * Uses Set/timestamp fields for efficient tracking during stream processing.
  */
-const StreamDiagnosticsBaseSchema = z.object({
+const StreamDiagnosticsStateSchema = z.object({
   /** Characters of thinking content received */
   thinkingChars: z.number(),
   /** Characters of text content received */
@@ -66,34 +75,6 @@ const StreamDiagnosticsBaseSchema = z.object({
   eventsProcessed: z.number(),
   /** Last event type (e.g., 'content_block_delta') */
   lastEventType: z.string().nullable(),
-});
-
-/**
- * Schema for diagnostic output when debugging stream failures.
- * Extends base with serializable computed fields.
- */
-export const StreamDiagnosticsOutputSchema = StreamDiagnosticsBaseSchema.extend(
-  {
-    /** Block types seen (e.g., ['thinking', 'text']) */
-    blockTypesSeen: z.array(z.string()),
-    /** Seconds since stream started */
-    elapsedSecs: z.number(),
-    /** Seconds since last event (stall detection) */
-    secsSinceLastEvent: z.number(),
-    /** Whether handler was finalized */
-    finalized: z.boolean(),
-  },
-);
-
-export type StreamDiagnosticsOutput = z.infer<
-  typeof StreamDiagnosticsOutputSchema
->;
-
-/**
- * Schema for internal mutable state during streaming.
- * Extends base with Set/timestamp fields for efficient tracking.
- */
-const StreamDiagnosticsStateSchema = StreamDiagnosticsBaseSchema.extend({
   /** Block types seen during streaming */
   blockTypesSeen: z.instanceof(Set<string>),
   /** Timestamp when streaming started */
