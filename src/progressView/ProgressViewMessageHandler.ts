@@ -76,6 +76,7 @@ import type { ProgressViewProvider } from './ProgressViewProvider';
 
 interface FileCommandMessage {
   file: string;
+  line?: number;
 }
 
 interface BaseFileCommandMessage extends FileCommandMessage {
@@ -653,7 +654,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleOpenFile(message: FileCommandMessage): Promise<void> {
-    await vscode.commands.executeCommand('texra.openFile', message.file);
+    await vscode.commands.executeCommand(
+      'texra.openFile',
+      message.file,
+      message.line,
+    );
   }
 
   private async handleOpenFileCompile(

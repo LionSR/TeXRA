@@ -15,9 +15,24 @@ import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'openFileCommands';
 
-export async function openFile(file: string): Promise<void> {
-  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
-  await vscode.commands.executeCommand('vscode.open', uri);
+export async function openFile(file: string, line?: number): Promise<void> {
+  const absolutePath = WorkspaceFS.toAbsolute(file);
+  const uri = vscode.Uri.file(absolutePath);
+
+  if (line !== undefined && line > 0) {
+    // Open file and navigate to specific line
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc, { preview: true });
+    // Line numbers are 1-based from user, VS Code Position is 0-based
+    const pos = new vscode.Position(line - 1, 0);
+    editor.revealRange(
+      new vscode.Range(pos, pos),
+      vscode.TextEditorRevealType.InCenter,
+    );
+    editor.selection = new vscode.Selection(pos, pos);
+  } else {
+    await vscode.commands.executeCommand('vscode.open', uri);
+  }
 }
 
 export async function openLabel(label: string): Promise<void> {

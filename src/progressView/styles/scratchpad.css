@@ -129,3 +129,36 @@
 .diff-hunk {
   color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
+
+/* Edit diff container - stacked old/new blocks. Colors say it all. */
+.edit-diff-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+}
+
+.diff-block {
+  margin: 0;
+  border-radius: var(--border-radius-small);
+}
+
+.diff-block-old {
+  border-left: 3px solid var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.1));
+}
+
+.diff-block-new {
+  border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
+}
+
+/* Syntax highlighted code blocks */
+pre.hljs {
+  padding: var(--spacing-small);
+  overflow-x: auto;
+}
+
+pre.hljs code {
+  background: transparent;
+  padding: 0;
+}
