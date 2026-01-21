@@ -101,4 +101,23 @@ export const TOOL_ICON_MAP = {
 
   // Memory
   memory: 'codicon-database',
+
+  // Zotero
+  zotero_add: 'codicon-library',
+  zotero_search: 'codicon-library',
+  zotero_export: 'codicon-library',
+
+  // Lean 4
+  lean_diagnostics: 'codicon-warning',
+  lean_file: 'codicon-file-code',
+  lean_project: 'codicon-folder-library',
+  lean_inspect: 'codicon-inspect',
+  lean_loogle: 'codicon-search',
+
+  // Workflow/delegation
+  propose_workflow: 'codicon-list-tree',
+  propose_agent: 'codicon-account',
+
+  // History
+  runs: 'codicon-history',
 };
