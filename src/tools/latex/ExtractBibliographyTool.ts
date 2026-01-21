@@ -6,6 +6,7 @@ import { ToolError } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -50,8 +51,11 @@ export class ExtractBibliographyTool extends defineTool({
     const missingBibliographyFiles = [...context.missingBibliographyFiles];
     let citationKeys = [...context.citationKeys];
 
-    if (bibPath) {
-      const { resolved: bibResolved } = resolveAndFormat(bibPath);
+    // Use provided bibPath, or fall back to configured default
+    const effectiveBibPath = bibPath || getConfig<string>('texra.bib.defaultPath', '');
+
+    if (effectiveBibPath) {
+      const { resolved: bibResolved } = resolveAndFormat(effectiveBibPath);
       const candidate = bibResolved.relative;
       const exists = await WorkspaceFS.exists(candidate);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
@@ -60,7 +64,7 @@ export class ExtractBibliographyTool extends defineTool({
       }
     }
 
-    if (bibPath && citationKeys.length === 0) {
+    if (effectiveBibPath && citationKeys.length === 0) {
       citationKeys = ['*'];
     }
 
