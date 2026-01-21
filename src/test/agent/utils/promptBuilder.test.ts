@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - prompt utilities
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 // Type imports
 import type {
   AgentPrompt,
@@ -12,7 +12,6 @@ import { PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {
   const baseSetting: AgentWorkflowSetting = {
-    agentType: AgentType.CoT,
     agentCategory: AgentCategory.Workflow,
     documentTag: 'document',
     endTag: '</document>',

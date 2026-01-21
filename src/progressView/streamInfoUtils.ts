@@ -85,7 +85,6 @@ function buildStreamInfo(
     label,
     model: config?.model,
     agent: config?.agent,
-    agentType: config?.session?.agentType ?? config?.agentType,
     agentSessionKind: sessionCategory,
     uiTraits: { sessionKind: sessionCategory, isToolAgent },
     hasMultipleOutputs:

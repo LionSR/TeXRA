@@ -43,11 +43,10 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
   AgentCategory,
   getAgentSessionDescriptor,
+  type AgentSetting,
+  type AgentPrompt,
   type AgentWorkflowSetting,
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
@@ -55,7 +54,7 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   loadAgentSettingAndPrompts,
-  ensureAgentTypeForSource,
+  ensureAgentCategoryForSource,
   type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
@@ -133,7 +132,7 @@ interface ResolvedAgentBase extends StorageKeyManager {
  * Used for early duplicate detection to prevent race conditions.
  *
  * This mirrors the logic in getStreamTabId() but uses the agent registry cache
- * to get agentType synchronously, avoiding the need for YAML loading.
+ * to get agentCategory synchronously, avoiding the need for YAML loading.
  */
 function computePreliminaryStreamId(
   configPayload: AgentConfigPayload,
@@ -145,13 +144,13 @@ function computePreliminaryStreamId(
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  // Get agent type from registry cache (fast synchronous lookup)
+  // Get agent category from registry cache (fast synchronous lookup)
   const agentEntry = getAgent(agent);
-  const agentType = agentEntry?.agentType ?? AgentType.CoT;
+  const agentCategory = agentEntry?.category ?? AgentCategory.Workflow;
 
   // Delegate to canonical implementation
   return getStreamTabId(agent, model, inputFile ?? '', {
-    agentType,
+    agentCategory,
     executionId,
     useMultipleOutputs,
   });
@@ -237,7 +236,7 @@ async function resolveAgentBase(
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const setting = ensureAgentTypeForSource(
+  const setting = ensureAgentCategoryForSource(
     loadedSettings,
     resolution.entry.source,
   );
@@ -248,7 +247,6 @@ async function resolveAgentBase(
   await validateAndGetModelConfig(fullConfig.model);
   const config: AgentConfig = {
     ...fullConfig,
-    agentType: sessionDescriptor.agentType,
     agentCategory: sessionDescriptor.agentCategory,
     session: sessionDescriptor,
   };
@@ -259,7 +257,7 @@ async function resolveAgentBase(
   const streamId =
     options?.streamTabIdOverride ??
     getStreamTabId(config.agent, fullConfig.model, config.inputFile, {
-      agentType: setting.agentType,
+      agentCategory: setting.agentCategory,
       executionId,
       useMultipleOutputs: config.useMultipleOutputs,
     });
@@ -272,10 +270,10 @@ async function resolveAgentBase(
     sessionDescriptor.agentCategory,
   );
 
-  // Configure model handler with agent type and logger
+  // Configure model handler with agent category and logger
   // This enables provider-specific behavior (e.g., Anthropic context management beta
   // for tool-use agents, OpenAI Response API background mode detection)
-  modelHandler.setAgentType(setting.agentType);
+  modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
   // Emit setActiveStream BEFORE stage creation.
@@ -332,7 +330,7 @@ async function resolveAgentBase(
     );
 
   const baseVars =
-    setting.agentType === AgentType.ToolUse
+    setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
       : await (await runStage.stage('Init')).run(buildVars);
   const userVarChannels: UserVariableChannels = {
@@ -636,7 +634,7 @@ export async function executeAgent(
 
       const interruptManager = createInterruptManager();
 
-      if (setting.agentType === AgentType.ToolUse) {
+      if (setting.agentCategory === AgentCategory.ToolUse) {
         // Tool-use flow execution
         const result = await runToolUseFlow({
           ...ctx,
@@ -768,8 +766,8 @@ export async function resumeToolUseFromSnapshot(
   );
   const { setting, streamId: streamTabId, config } = ctx;
 
-  // Validate agent type and session
-  if (setting.agentType !== 'toolUse') {
+  // Validate agent category and session
+  if (setting.agentCategory !== AgentCategory.ToolUse) {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
