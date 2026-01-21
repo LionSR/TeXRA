@@ -137,6 +137,7 @@ const baseConfig = {
             },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
             { text: 'Tool Integration', link: '/guide/tool-integration' },
+            { text: 'Research Tools', link: '/guide/research-tools' },
           ],
         },
         {
@@ -164,6 +165,13 @@ const baseConfig = {
         },
       ],
       '/reference/': [
+        {
+          text: 'Technical Reference',
+          items: [
+            { text: 'Tool-Use Agents', link: '/reference/tool-use-agents' },
+            { text: 'Tools Reference', link: '/reference/tools' },
+          ],
+        },
         {
           text: 'Resources',
           items: [
