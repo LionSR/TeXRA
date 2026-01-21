@@ -54,24 +54,23 @@ export async function compileLatex2Pdf(
     );
 
     // Build TEXINPUTS from configured paths
-    const texInputParts = ['.'];
-    if (includeWorkspace) {
-      const workspacePath = WorkspaceFS.getPath();
-      if (workspacePath) texInputParts.push(workspacePath);
-    }
-    if (tikzInputDirectory?.trim()) {
-      texInputParts.push(tikzInputDirectory);
-    }
+    const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
+    const texInputParts = [
+      '.',
+      ...(workspacePath ? [workspacePath] : []),
+      ...(tikzInputDirectory?.trim() ? [tikzInputDirectory] : []),
+    ];
 
-    const env: Record<string, string> = {};
-    if (texInputParts.length > 1 || process.env.TEXINPUTS) {
-      // Build base path, append existing TEXINPUTS verbatim (preserving its trailing colon behavior)
-      let texInputs = texInputParts.join(':') + ':';
-      if (process.env.TEXINPUTS) {
-        texInputs += process.env.TEXINPUTS;
-      }
-      env.TEXINPUTS = texInputs;
-      logger.debug(channel, `Setting TEXINPUTS to: ${env.TEXINPUTS}`);
+    // Build environment with TEXINPUTS if we have custom paths or existing TEXINPUTS
+    const needsTexInputs = texInputParts.length > 1 || process.env.TEXINPUTS;
+    const texInputs = needsTexInputs
+      ? texInputParts.join(':') + ':' + (process.env.TEXINPUTS ?? '')
+      : undefined;
+    const env: Record<string, string> = {
+      ...(texInputs && { TEXINPUTS: texInputs }),
+    };
+    if (texInputs) {
+      logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
     }
 
     const latexmkArgs = [
