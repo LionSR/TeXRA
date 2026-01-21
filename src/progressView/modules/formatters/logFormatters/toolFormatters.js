@@ -10,8 +10,17 @@ import {
   buildToolUseSection,
   wrapInPre,
   getToolIconClass,
+  buildFileLinkWithLines,
+  buildEditDiffSection,
+  wrapInHighlightedPre,
+  detectLanguageFromPath,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
+
+// Tools that benefit from specialized formatting
+const EDIT_TOOLS = new Set(['edit_file', 'write_file']);
+const READ_TOOLS = new Set(['read_file']);
+const CODE_OUTPUT_TOOLS = new Set(['bash', 'execute', 'run']);
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -131,19 +140,82 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   const sections = [];
 
-  // Show full input (key info is already in header summary)
-  if (input !== undefined && input !== null) {
+  // Get file path from input for specialized formatting
+  const filePath =
+    typeof input === 'object' && input !== null ? input.path : '';
+
+  // Handle edit tools with inline diff display
+  if (EDIT_TOOLS.has(toolName) && input?.old_string && input?.new_string) {
+    // Show file path as link
+    if (filePath) {
+      sections.push(
+        buildToolUseSection(
+          'File:',
+          buildFileLinkWithLines(filePath, {}),
+        ),
+      );
+    }
+    // Show inline diff for old_string → new_string
+    sections.push(
+      buildToolUseSection(
+        'Changes:',
+        buildEditDiffSection(input.old_string, input.new_string, filePath),
+      ),
+    );
+  }
+  // Handle read tools with file link instead of full content
+  else if (READ_TOOLS.has(toolName) && filePath) {
+    // Parse line info from output summary or input range
+    const range = input?.range;
+    const startLine = range?.start ?? 1;
+    const endLine = range?.end;
+
+    // Count total lines from output if available
+    const outputLines = outputText ? outputText.split('\n').length : undefined;
+
+    sections.push(
+      buildToolUseSection(
+        'File:',
+        buildFileLinkWithLines(filePath, {
+          startLine,
+          endLine,
+          totalLines: outputLines,
+        }),
+      ),
+    );
+
+    // Don't show full file content - just the link
+    // Output is available via the file link click
+  }
+  // Default handling for other tools
+  else if (input !== undefined && input !== null) {
     const inputValue = stringifyForDisplay(input);
     if (inputValue) {
-      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+      // Use syntax highlighting for code-related tools
+      if (CODE_OUTPUT_TOOLS.has(toolName)) {
+        sections.push(
+          buildToolUseSection('Input:', wrapInHighlightedPre(inputValue, 'bash')),
+        );
+      } else {
+        sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+      }
     }
   }
 
   // Show output if present (primary result from tool)
-  if (outputText) {
-    sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
-    );
+  // Skip for read tools (already shown as file link)
+  if (outputText && !READ_TOOLS.has(toolName)) {
+    // Use syntax highlighting for code outputs
+    const language = detectLanguageFromPath(filePath) || (CODE_OUTPUT_TOOLS.has(toolName) ? 'bash' : '');
+    if (language) {
+      sections.push(
+        buildToolUseSection('Output:', wrapInHighlightedPre(outputText, language, 'tool-output-full')),
+      );
+    } else {
+      sections.push(
+        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      );
+    }
   }
 
   // Show error if present and not superseded by user feedback

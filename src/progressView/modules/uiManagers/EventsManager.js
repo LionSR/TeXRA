@@ -178,10 +178,15 @@ export class EventsManager {
       // File link clicks
       const fileLink = e.target.closest('.file-link');
       if (fileLink?.dataset.file) {
-        vscode.postMessage({
+        const message = {
           command: COMMANDS.OPEN_FILE,
           file: fileLink.dataset.file,
-        });
+        };
+        // Include line number if specified
+        if (fileLink.dataset.fileLine) {
+          message.line = parseInt(fileLink.dataset.fileLine, 10);
+        }
+        vscode.postMessage(message);
         return;
       }
 
