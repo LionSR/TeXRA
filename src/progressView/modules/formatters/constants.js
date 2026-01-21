@@ -37,6 +37,26 @@ export const TIME_FORMAT_OPTIONS = {
   hour12: false,
 };
 
+// ============================================================================
+// Tool Categories for Specialized Formatting
+// ============================================================================
+
+/**
+ * Tools that show old/new diff display for their input.
+ * Output is human-readable status, NOT code (don't syntax highlight output).
+ */
+export const TOOLS_WITH_DIFF_INPUT = new Set(['edit_file']);
+
+/**
+ * Tools that read files and should show file link instead of content.
+ */
+export const TOOLS_WITH_FILE_LINK = new Set(['read_file']);
+
+/**
+ * Tools whose input AND output are code that benefits from syntax highlighting.
+ */
+export const TOOLS_WITH_CODE_OUTPUT = new Set(['bash', 'execute', 'run']);
+
 /**
  * Tool icon mapping for different tool types.
  * Maps tool names to VS Code codicon classes.
