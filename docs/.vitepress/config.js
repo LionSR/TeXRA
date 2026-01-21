@@ -108,7 +108,10 @@ const baseConfig = {
           text: 'Tutorials',
           items: [
             { text: 'Quick Start', link: '/guide/quick-start' },
-            { text: 'Working with Figures', link: '/guide/working-with-figures.md' },
+            {
+              text: 'Working with Figures',
+              link: '/guide/working-with-figures.md',
+            },
             { text: 'TikZ Figures', link: '/guide/tikz-figures' },
           ],
         },
@@ -138,7 +141,10 @@ const baseConfig = {
           text: 'Explanation',
           items: [
             { text: 'Introduction', link: '/guide/' },
-            { text: 'Agent Architecture', link: '/guide/agent-architecture.md' },
+            {
+              text: 'Agent Architecture',
+              link: '/guide/agent-architecture.md',
+            },
             { text: 'Best Practices', link: '/guide/best-practices.md' },
           ],
         },

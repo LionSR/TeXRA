@@ -6,20 +6,21 @@ TeXRA integrates specialized external tools for LaTeX processing.
 
 LaTeX documents require precision in formatting, compilation, and analysis. Rather than relying solely on the LLM, TeXRA leverages dedicated tools for these tasks:
 
-| Tool | Purpose |
-|------|---------|
-| `latexindent` / `tex-fmt` | Code formatting |
-| `latexdiff` | Version comparison |
-| `texcount` | Document statistics |
-| `extract_figures` | Figure asset extraction |
-| `extract_tikz_figures` | TikZ compilation |
-| `extract_bib_entries` | Bibliography resolution |
+| Tool                      | Purpose                 |
+| ------------------------- | ----------------------- |
+| `latexindent` / `tex-fmt` | Code formatting         |
+| `latexdiff`               | Version comparison      |
+| `texcount`                | Document statistics     |
+| `extract_figures`         | Figure asset extraction |
+| `extract_tikz_figures`    | TikZ compilation        |
+| `extract_bib_entries`     | Bibliography resolution |
 
 ## Formatting Tools
 
 TeXRA uses formatters to ensure consistent, readable LaTeX code.
 
 **Supported formatters:**
+
 - **latexindent** - The default formatter, highly configurable
 - **tex-fmt** - A faster alternative with simpler configuration
 
@@ -32,6 +33,7 @@ Formatting runs automatically after agent execution and is available via the `Te
 The `latexdiff` tool visualizes changes between document versions, generating a PDF with additions and deletions clearly marked. TeXRA can automatically generate diffs after agent runs.
 
 **Usage:**
+
 - After an agent modifies your document, a diff PDF shows exactly what changed
 - Use `latexdiff-vc` to compare against git history
 
@@ -42,10 +44,12 @@ The `latexdiff` tool visualizes changes between document versions, generating a 
 `texcount` provides document statistics including word counts, heading counts, and math element counts. This information helps the LLM understand document scale and structure.
 
 **Enabling texcount:**
+
 1. **For context:** Enable "Attach TeX Count" in the Tool Configuration dropdown (see [File Management](./file-management.md#tool-config-dropdown))
 2. **As a tool:** Tool-use agents can invoke `texcount` directly to analyze files on demand
 
 **Modes:**
+
 - `separate` (default) - Count each file independently
 - `include` - Follow `\input{}`/`\include{}` directives from the main file
 - `sum` - Aggregate totals across multiple top-level files
@@ -53,7 +57,6 @@ The `latexdiff` tool visualizes changes between document versions, generating a 
 ::: warning Requirement
 Ensure `texcount` is in your system's PATH. It's typically included with TeX distributions.
 :::
-
 
 ## Figure Extraction
 
@@ -70,6 +73,7 @@ The `extract_figures` tool finds figure references (`\includegraphics`) and retu
 The `extract_tikz_figures` tool discovers TikZ environments, compiles them to standalone PDFs, and returns the rendered output.
 
 **Requirements:**
+
 - `latexmk` (preferred) or `pdflatex`
 - `GraphicsMagick` or `ImageMagick` (for conversion)
 - `Ghostscript` (for PDF processing)
@@ -86,11 +90,9 @@ The `extract_bib_entries` tool resolves bibliography context for your LaTeX docu
 
 This is useful when the agent needs exact citation records to edit, format, or validate references.
 
-
 ## Symbolic Math with Wolfram
 
 The `wolfram` tool executes Wolfram Language code through `wolframscript`, letting agents verify calculations or perform symbolic algebra. While not LaTeX-specific, it's particularly useful for validating mathematical content in your documents.
-
 
 ## Configuring Tool Usage
 
