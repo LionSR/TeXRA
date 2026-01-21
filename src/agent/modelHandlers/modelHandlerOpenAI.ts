@@ -106,7 +106,7 @@ export interface StreamingAggregator {
   finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
-export const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
+export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const choice = chunk.choices[0];
   if (!choice) return '';
 
@@ -114,7 +114,7 @@ export const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   if (!('reasoning_content' in delta)) return '';
 
   return extractReasoningText(delta.reasoning_content);
-};
+}
 
 /**
  * OpenAI-specific handlers.

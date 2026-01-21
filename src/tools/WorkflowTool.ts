@@ -67,34 +67,19 @@ function getRequiredStreamId(): string {
   return streamId;
 }
 
-/** Format agent entry for description. */
-function formatAgentEntry(agent: {
-  name: string;
-  description?: string;
-  tools?: string[];
-}): string {
-  const desc = agent.description || 'No description';
-  if (agent.tools?.length) {
-    return `- ${agent.name}: ${desc}\n  Tools: ${agent.tools.join(', ')}`;
-  }
-  return `- ${agent.name}: ${desc}`;
-}
-
-/** Format agent list for tool descriptions. */
+/** Format an agent list for tool descriptions. */
 function formatAgentList(
   agents: { name: string; description?: string; tools?: string[] }[],
 ): string {
-  return agents.map(formatAgentEntry).join('\n');
-}
-
-/** Build workflow agents list for description. */
-function buildWorkflowAgentsList(): string {
-  return formatAgentList(getVisibleWorkflowAgents());
-}
-
-/** Build tool-use agents list for description. */
-function buildToolUseAgentsList(): string {
-  return formatAgentList(getVisibleToolUseAgents());
+  return agents
+    .map((agent) => {
+      const desc = agent.description || 'No description';
+      const toolsSuffix = agent.tools?.length
+        ? `\n  Tools: ${agent.tools.join(', ')}`
+        : '';
+      return `- ${agent.name}: ${desc}${toolsSuffix}`;
+    })
+    .join('\n');
 }
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
@@ -206,7 +191,7 @@ export class WorkflowAgentTool extends defineTool({
   description: () => `Propose a workflow agent for document processing.
 
 Available agents:
-${buildWorkflowAgentsList()}
+${formatAgentList(getVisibleWorkflowAgents())}
 
 Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
@@ -353,7 +338,7 @@ export class DelegateAgentTool extends defineTool({
     () => `Propose a tool-use agent for exploration or research tasks.
 
 Available agents:
-${buildToolUseAgentsList()}
+${formatAgentList(getVisibleToolUseAgents())}
 
 Example: agent=search, instruction="The paper at paper.tex proposes a new attention mechanism called FlashAttention-3 that reduces memory complexity from quadratic to linear. Please search the web for three to five related papers on efficient transformer attention mechanisms, particularly those addressing memory efficiency or linear attention, that we should cite in the related work section."`,
   schema: DelegateAgentInputSchema,
