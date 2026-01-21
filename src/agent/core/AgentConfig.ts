@@ -14,18 +14,18 @@ import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
  * Checks that the number of output files does not exceed the number of input files.
  * Extracted as a separate function for clarity and reusability.
  */
-export const validateOutputFiles = (cfg: {
+export function validateOutputFiles(cfg: {
   inputFile: string;
   inputFiles: string[];
   outputFiles: string[];
-}): boolean => {
+}): boolean {
   if (cfg.outputFiles.length === 0) {
     return true;
   }
 
   const inputs = [cfg.inputFile, ...cfg.inputFiles];
   return cfg.outputFiles.length <= inputs.length;
-};
+}
 
 /**
  * Base proposal fields shared by both workflow and tool-use agent proposals.
