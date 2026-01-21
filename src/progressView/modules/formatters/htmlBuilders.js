@@ -3,12 +3,19 @@
  * These functions create HTML fragments from normalized data.
  */
 
+import hljs from 'highlight.js';
+import { diff_match_patch } from 'diff-match-patch';
 import { encodeHtml } from '@common/htmlEncoding.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { TOOL_ICON_MAP } from './constants.js';
+
+// diff-match-patch constants
+const DIFF_DELETE = -1;
+const DIFF_INSERT = 1;
+const DIFF_EQUAL = 0;
 
 /**
  * Build a tool-use section HTML block
@@ -192,4 +199,201 @@ export function buildDetailItem(iconClass, content, options = {}) {
 export function getToolIconClass(toolName, isError = false) {
   if (isError) return 'codicon-error';
   return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
+}
+
+// ============================================================================
+// Syntax Highlighting
+// ============================================================================
+
+/**
+ * Wrap code in a pre element with syntax highlighting using highlight.js
+ * @param {string} text - Code text to highlight
+ * @param {string} [language] - Optional language hint (e.g., 'bash', 'json')
+ * @param {string} [className] - Optional additional CSS class
+ * @returns {string} HTML string with syntax highlighting
+ */
+export function wrapInHighlightedPre(text, language = '', className = '') {
+  const classes = ['hljs', className].filter(Boolean).join(' ');
+  const classAttr = classes ? ` class="${classes}"` : '';
+
+  try {
+    let result;
+    if (language && hljs.getLanguage(language)) {
+      result = hljs.highlight(text, { language, ignoreIllegals: true });
+    } else {
+      result = hljs.highlightAuto(text);
+    }
+    return `<pre${classAttr}><code>${result.value}</code></pre>`;
+  } catch {
+    // Fallback to plain text if highlighting fails
+    return `<pre${classAttr}><code>${encodeHtml(text)}</code></pre>`;
+  }
+}
+
+/**
+ * Detect language from file path extension
+ * @param {string} filePath - File path to check
+ * @returns {string} Language identifier for highlight.js
+ */
+export function detectLanguageFromPath(filePath) {
+  if (!filePath) return '';
+
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  const langMap = {
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    py: 'python',
+    rb: 'ruby',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    tex: 'latex',
+    latex: 'latex',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    xml: 'xml',
+    html: 'html',
+    css: 'css',
+    md: 'markdown',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    sql: 'sql',
+  };
+
+  return langMap[ext] || '';
+}
+
+// ============================================================================
+// File Links with Line Numbers
+// ============================================================================
+
+/**
+ * Build a file link with optional line number for VS Code navigation
+ * @param {string} filePath - Absolute file path
+ * @param {object} [options] - Options
+ * @param {number} [options.startLine] - Starting line number (1-based)
+ * @param {number} [options.endLine] - Ending line number (1-based)
+ * @param {number} [options.totalLines] - Total lines in file
+ * @returns {string} HTML string for the file link
+ */
+export function buildFileLinkWithLines(filePath, options = {}) {
+  if (!filePath) return '';
+
+  const { startLine, endLine, totalLines } = options;
+  const fileName = filePath.split('/').pop() || filePath;
+
+  // Build line info string
+  let lineInfo = '';
+  if (startLine && endLine && startLine !== endLine) {
+    lineInfo = `:${startLine}-${endLine}`;
+  } else if (startLine) {
+    lineInfo = `:${startLine}`;
+  }
+
+  // Build display text
+  let displayText = fileName + lineInfo;
+  if (totalLines !== undefined) {
+    displayText += ` (${totalLines} lines)`;
+  }
+
+  // data-file-line attribute enables opening at specific line
+  const lineAttr = startLine ? ` data-file-line="${startLine}"` : '';
+
+  return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}"${lineAttr}><i class="codicon codicon-file"></i> ${encodeHtml(displayText)}</span>`;
+}
+
+// ============================================================================
+// Inline Character Diff Rendering
+// ============================================================================
+
+/**
+ * Create inline character-level diff HTML between old and new strings
+ * Uses diff-match-patch for semantic diff computation
+ * @param {string} oldText - Original text
+ * @param {string} newText - New text
+ * @returns {string} HTML with inline diff highlighting
+ */
+export function renderInlineDiff(oldText, newText) {
+  if (!oldText && !newText) return '';
+  if (!oldText) {
+    return `<pre class="inline-diff"><span class="diff-add">${encodeHtml(newText)}</span></pre>`;
+  }
+  if (!newText) {
+    return `<pre class="inline-diff"><span class="diff-remove">${encodeHtml(oldText)}</span></pre>`;
+  }
+
+  try {
+    const dmp = new diff_match_patch();
+    const diffs = dmp.diff_main(oldText, newText);
+    dmp.diff_cleanupSemantic(diffs);
+
+    const html = diffs
+      .map(([op, text]) => {
+        const encoded = encodeHtml(text);
+        switch (op) {
+          case DIFF_DELETE:
+            return `<del class="diff-remove">${encoded}</del>`;
+          case DIFF_INSERT:
+            return `<ins class="diff-add">${encoded}</ins>`;
+          default:
+            return encoded;
+        }
+      })
+      .join('');
+
+    return `<pre class="inline-diff">${html}</pre>`;
+  } catch {
+    // Fallback: show old and new separately
+    return `<pre class="inline-diff"><del class="diff-remove">${encodeHtml(oldText)}</del><ins class="diff-add">${encodeHtml(newText)}</ins></pre>`;
+  }
+}
+
+/**
+ * Build edit diff section showing old_string → new_string transformation
+ * @param {string} oldString - Original text being replaced
+ * @param {string} newString - Replacement text
+ * @param {string} [filePath] - Optional file path for syntax hint
+ * @returns {string} HTML for the diff display
+ */
+export function buildEditDiffSection(oldString, newString, filePath = '') {
+  const language = detectLanguageFromPath(filePath);
+
+  // For very short strings, show simple inline diff
+  const isShort = oldString.length < 200 && newString.length < 200;
+  const lineCountOld = oldString.split('\n').length;
+  const lineCountNew = newString.split('\n').length;
+  const isMultiLine = lineCountOld > 3 || lineCountNew > 3;
+
+  if (isShort && !isMultiLine) {
+    return renderInlineDiff(oldString, newString);
+  }
+
+  // For longer content, use stacked blocks with syntax highlighting
+  const oldHtml = language
+    ? wrapInHighlightedPre(oldString, language, 'diff-block diff-block-old')
+    : `<pre class="diff-block diff-block-old">${encodeHtml(oldString)}</pre>`;
+
+  const newHtml = language
+    ? wrapInHighlightedPre(newString, language, 'diff-block diff-block-new')
+    : `<pre class="diff-block diff-block-new">${encodeHtml(newString)}</pre>`;
+
+  return `
+    <div class="edit-diff-container">
+      <div class="edit-diff-old">
+        <span class="edit-diff-label diff-remove"><i class="codicon codicon-remove"></i> Old</span>
+        ${oldHtml}
+      </div>
+      <div class="edit-diff-new">
+        <span class="edit-diff-label diff-add"><i class="codicon codicon-add"></i> New</span>
+        ${newHtml}
+      </div>
+    </div>`;
 }
