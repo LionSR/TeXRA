@@ -4,18 +4,12 @@
  */
 
 import hljs from 'highlight.js';
-import { diff_match_patch } from 'diff-match-patch';
 import { encodeHtml } from '@common/htmlEncoding.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { TOOL_ICON_MAP } from './constants.js';
-
-// diff-match-patch constants
-const DIFF_DELETE = -1;
-const DIFF_INSERT = 1;
-const DIFF_EQUAL = 0;
 
 /**
  * Build a tool-use section HTML block
@@ -311,53 +305,13 @@ export function buildFileLinkWithLines(filePath, options = {}) {
 }
 
 // ============================================================================
-// Inline Character Diff Rendering
+// Edit Diff Display (Stacked Blocks)
 // ============================================================================
 
 /**
- * Create inline character-level diff HTML between old and new strings
- * Uses diff-match-patch for semantic diff computation
- * @param {string} oldText - Original text
- * @param {string} newText - New text
- * @returns {string} HTML with inline diff highlighting
- */
-export function renderInlineDiff(oldText, newText) {
-  if (!oldText && !newText) return '';
-  if (!oldText) {
-    return `<pre class="inline-diff"><span class="diff-add">${encodeHtml(newText)}</span></pre>`;
-  }
-  if (!newText) {
-    return `<pre class="inline-diff"><span class="diff-remove">${encodeHtml(oldText)}</span></pre>`;
-  }
-
-  try {
-    const dmp = new diff_match_patch();
-    const diffs = dmp.diff_main(oldText, newText);
-    dmp.diff_cleanupSemantic(diffs);
-
-    const html = diffs
-      .map(([op, text]) => {
-        const encoded = encodeHtml(text);
-        switch (op) {
-          case DIFF_DELETE:
-            return `<del class="diff-remove">${encoded}</del>`;
-          case DIFF_INSERT:
-            return `<ins class="diff-add">${encoded}</ins>`;
-          default:
-            return encoded;
-        }
-      })
-      .join('');
-
-    return `<pre class="inline-diff">${html}</pre>`;
-  } catch {
-    // Fallback: show old and new separately
-    return `<pre class="inline-diff"><del class="diff-remove">${encodeHtml(oldText)}</del><ins class="diff-add">${encodeHtml(newText)}</ins></pre>`;
-  }
-}
-
-/**
- * Build edit diff section showing old_string → new_string transformation
+ * Build edit diff section showing old_string → new_string as stacked blocks.
+ * Uses simple stacked display with syntax highlighting.
+ * TODO: Consider integrating diff2html for richer diff rendering.
  * @param {string} oldString - Original text being replaced
  * @param {string} newString - Replacement text
  * @param {string} [filePath] - Optional file path for syntax hint
@@ -366,17 +320,7 @@ export function renderInlineDiff(oldText, newText) {
 export function buildEditDiffSection(oldString, newString, filePath = '') {
   const language = detectLanguageFromPath(filePath);
 
-  // For very short strings, show simple inline diff
-  const isShort = oldString.length < 200 && newString.length < 200;
-  const lineCountOld = oldString.split('\n').length;
-  const lineCountNew = newString.split('\n').length;
-  const isMultiLine = lineCountOld > 3 || lineCountNew > 3;
-
-  if (isShort && !isMultiLine) {
-    return renderInlineDiff(oldString, newString);
-  }
-
-  // For longer content, use stacked blocks with syntax highlighting
+  // Use stacked blocks with syntax highlighting
   const oldHtml = language
     ? wrapInHighlightedPre(oldString, language, 'diff-block diff-block-old')
     : `<pre class="diff-block diff-block-old">${encodeHtml(oldString)}</pre>`;
