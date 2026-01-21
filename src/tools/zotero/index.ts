@@ -1,1 +1,0 @@
-export { ZoteroAddTool } from './ZoteroAddTool';
