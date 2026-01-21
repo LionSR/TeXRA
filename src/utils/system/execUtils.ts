@@ -153,6 +153,7 @@ export async function executeCommand(
       stdout: null,
       stderr: normalizedError,
       timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
+      exitCode: 127, // Convention for command not found / execution failure
     };
   }
 }
