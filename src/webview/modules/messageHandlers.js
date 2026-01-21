@@ -1018,19 +1018,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles ?? {};
-    // config.session is the single source of truth for session metadata
-    const canonicalSession = config.session;
 
     // Block saves during restoration - _setAgentValue dispatches change events
     // which trigger save(), and we don't want to capture incomplete DOM state
     mainViewState.blockSave();
     try {
       const savedState = {};
-      const sessionType = this._restoreFormFields(
-        config,
-        savedState,
-        canonicalSession,
-      );
+      const sessionType = this._restoreFormFields(config, savedState);
       this._restoreFileArrays(config, savedState, activeFiles);
 
       // Store state for persistence and future restoration
@@ -1049,14 +1043,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   /**
    * Determine session type from state, with clear priority order.
+   * @param {Object} state - AgentConfig or state object
    * @returns {'workflow' | 'toolUse'} The normalized session type
    */
-  _determineSessionType(canonicalSession, state) {
+  _determineSessionType(state) {
     const isValidSessionType = (value) =>
       value === SESSION_TYPES.TOOL_USE || value === SESSION_TYPES.WORKFLOW;
 
-    // Priority order: canonical > explicit > legacy flag > default
-    const candidates = [canonicalSession?.agentCategory, state.sessionType];
+    // Priority order: agentCategory > sessionType > legacy flag > default
+    // agentCategory is now at top level of AgentConfig
+    const candidates = [state.agentCategory, state.sessionType];
 
     for (const candidate of candidates) {
       if (isValidSessionType(candidate)) {
@@ -1094,8 +1090,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * Restore form field values from state to DOM.
    * @returns {string} The normalized session type
    */
-  _restoreFormFields(state, savedState, canonicalSession) {
-    const sessionType = this._determineSessionType(canonicalSession, state);
+  _restoreFormFields(state, savedState) {
+    const sessionType = this._determineSessionType(state);
     const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
 
     // Extract agent values with clear logic
