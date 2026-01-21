@@ -2,7 +2,6 @@ name: research
 description: Research assistant for analytical derivations and numerical programming with Wolfram Language support.
 
 settings:
-  agentType: toolUse
   tools:
     - wolfram
     - todo_write

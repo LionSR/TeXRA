@@ -2,7 +2,6 @@ name: logic
 description: Logical flow analyzer for research papers. Improves argument structure and coherence.
 
 settings:
-  agentType: CoT
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
