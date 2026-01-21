@@ -278,7 +278,8 @@ export class RemoteAgentLoader {
           metadata: RemoteAgentMetadataSchema.parse({
             id: '',
             name: responseName || agentName,
-            description,
+            // YAML is source of truth for description; response is fallback
+            description: validated.description ?? description,
             visibility,
             agentCategory,
           }),
