@@ -13,6 +13,15 @@ import axios from 'axios';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
+import { getConfig } from '@utils/config';
+
+/**
+ * Get the configured Zotero port.
+ * Used by both Connector API and Better BibTeX JSON-RPC (same port, different paths).
+ */
+export function getZoteroPort(): number {
+  return getConfig<number>('texra.bib.zoteroPort', 23119);
+}
 
 /**
  * JSON-RPC response envelope.
