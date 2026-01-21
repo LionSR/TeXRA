@@ -1,9 +1,6 @@
 import * as path from 'path';
 
-import {
-  AgentType,
-  type AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
@@ -146,10 +143,10 @@ export class OutputFileProcessor {
           SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
       const hasDocumentTag = Boolean(agentSetting.documentTag);
+      const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       const shouldProcessXml =
-        agentSetting.agentType === AgentType.CoT ||
-        (agentSetting.agentType === AgentType.Direct &&
-          (hasDocumentTag || hasScratchpadPrefill));
+        xmlMode === 'always' ||
+        (xmlMode === 'scratchpadOnly' && (hasDocumentTag || hasScratchpadPrefill));
 
       if (shouldProcessXml) {
         processed = await xmlManager.processSingleXmlOutput(
