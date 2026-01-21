@@ -18,8 +18,8 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
-  AgentTypeFilter,
-  isAgentTypeFilter,
+  AgentCategoryFilter,
+  isAgentCategoryFilter,
 } from '@agent/types/AgentStreamTypes';
 import type {
   ExecutionId,
@@ -354,7 +354,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleFilterStreams(message: any): Promise<void> {
-    this.provider.state.agentTypeFilter = isAgentTypeFilter(message.filter)
+    this.provider.state.agentCategoryFilter = isAgentCategoryFilter(
+      message.filter,
+    )
       ? message.filter
       : 'all';
     this.provider.updateWebview();

@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -27,7 +27,7 @@ const sortComparators: Record<
  */
 function matchesFilter(
   category: AgentCategory | undefined,
-  filter: AgentTypeFilter,
+  filter: AgentCategoryFilter,
 ): AgentCategory | null {
   if (filter === 'all') {
     return category ?? AgentCategory.Workflow;
@@ -51,7 +51,7 @@ function buildStreamInfo(
   state: ProgressViewState,
   id: string,
   statuses: Map<string, string> | undefined,
-  filter: AgentTypeFilter,
+  filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
   const taskState = state.getTaskState(id);
   const hints = state.getStreamHints(id);
@@ -106,7 +106,7 @@ function buildStreamInfo(
 export function buildStreamInfos(
   state: ProgressViewState,
   statuses?: Map<string, string>,
-  filter: AgentTypeFilter = 'all',
+  filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs
     .keys()
