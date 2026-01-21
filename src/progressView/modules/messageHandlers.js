@@ -249,8 +249,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   _resolveSessionKind(streamInfo) {
     if (!streamInfo) return state.activeSessionKind || 'workflow';
     return (
-      streamInfo.agentSessionKind ||
-      streamInfo.uiTraits?.sessionKind ||
+      streamInfo.agentCategory ||
+      streamInfo.uiTraits?.agentCategory ||
       'workflow'
     );
   }
