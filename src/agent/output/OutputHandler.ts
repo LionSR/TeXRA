@@ -258,9 +258,10 @@ export class OutputHandler implements IOutputHandler {
 
   public async gatherOutputFileInfo(
     currRound: number,
+    precomputedMapping?: RoundFileMapping,
   ): Promise<OutputFileInfo[]> {
     const roundOutputs = this.ensureRound(currRound);
-    const mapping = this.getRoundMapping(currRound);
+    const mapping = precomputedMapping ?? this.getRoundMapping(currRound);
 
     const infos = await Promise.all(
       roundOutputs.map(async (output) => {
@@ -284,6 +285,7 @@ export class OutputHandler implements IOutputHandler {
 
         return {
           source: output.source,
+          round: output.round,
           location,
           lineage: {
             original: originalLocation,
@@ -380,9 +382,13 @@ export class OutputHandler implements IOutputHandler {
   public async finalizeRound(
     outputFile: FileLocation,
     currRound: number,
-    options: { endTurn: boolean; stage?: AgentLogStage },
+    options: {
+      endTurn: boolean;
+      stage?: AgentLogStage;
+      mapping?: RoundFileMapping;
+    },
   ): Promise<void> {
-    const { endTurn, stage } = options;
+    const { endTurn, stage, mapping } = options;
     await this.withOutputStage(
       `Finalize r${currRound}`,
       stage,
@@ -390,7 +396,7 @@ export class OutputHandler implements IOutputHandler {
         const data = this.ensureRoundData(currRound);
         data.rawOutput ??= outputFile;
 
-        const fileInfos = await this.gatherOutputFileInfo(currRound);
+        const fileInfos = await this.gatherOutputFileInfo(currRound, mapping);
         data.outputs = fileInfos;
         const storageKey = this.getStorageKey();
 
