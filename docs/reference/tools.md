@@ -1,10 +1,6 @@
 # Tools Overview
 
-Tool-use agents in TeXRA have access to various capabilities for research, file manipulation, and computation. This page provides a high-level overview of what's available.
-
-::: tip
-You don't need to know individual tool names to use TeXRA effectively. Simply describe what you want to accomplish, and the agent will use the appropriate tools automatically.
-:::
+Tool-use agents in TeXRA have access to various capabilities for research, file manipulation, and computation.
 
 ## Capability Categories
 
