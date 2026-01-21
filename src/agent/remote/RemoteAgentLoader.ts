@@ -275,8 +275,10 @@ export class RemoteAgentLoader {
         );
 
         // Update registry cache with description from YAML
+        // Use base name since registry stores entries under base name only
         if (validated.description) {
-          updateAgentDescription(`remote:${agentName}`, validated.description);
+          const baseName = getBaseName(agentName);
+          updateAgentDescription(`remote:${baseName}`, validated.description);
         }
 
         return {
