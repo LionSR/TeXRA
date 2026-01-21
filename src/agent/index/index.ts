@@ -16,6 +16,7 @@ export {
   ensureAgentsLoaded,
   isAgentCacheInitialized,
   getAgent,
+  updateAgentDescription,
   resolveAgent,
   getWorkflowAgents,
   getToolUseAgents,
