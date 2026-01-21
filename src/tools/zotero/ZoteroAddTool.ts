@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { wrapApiCall, pluralize } from '@tools/utils';
+import { pluralize } from '@tools/utils';
 import { getConfig } from '@utils/config';
 
 /**
@@ -84,15 +84,22 @@ interface ConnectorResult {
 
 /**
  * Check if Zotero is running by pinging the connector.
+ * Throws a user-friendly ToolError if not reachable.
  */
 async function checkZoteroRunning(port: number): Promise<void> {
-  const pingUrl = `http://127.0.0.1:${port}/connector/ping`;
-  await wrapApiCall(async () => {
-    const response = await axios.get(pingUrl, { timeout: 2000 });
+  try {
+    const response = await axios.get(
+      `http://127.0.0.1:${port}/connector/ping`,
+      { timeout: 2000 },
+    );
     if (response.status !== 200) {
-      throw new Error('Zotero Connector not responding');
+      throw new Error('Unexpected response');
     }
-  }, `Zotero is not running or the Connector is not enabled on port ${port}`);
+  } catch {
+    throw new ToolError(
+      `Please start Zotero desktop app. The Connector API is not responding on port ${port}.`,
+    );
+  }
 }
 
 /**
