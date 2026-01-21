@@ -292,32 +292,6 @@ The `transcribe_audio` agent converts audio files (like lectures, podcasts, or p
 Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
 
-## Utility Agents
-
-### `xml_validator`
-
-The `xml_validator` agent detects and fixes XML syntax errors using the `str_replace_editor` tool. It iterates until the XML file is valid.
-
-**Tools available:** `str_replace_editor`
-
-**Best for:**
-
-- Fixing malformed XML configuration files
-- Repairing XML parsing errors
-- Validating XML syntax before processing
-
-### `tex_linter_fix`
-
-The `tex_linter_fix` agent automatically resolves LaTeX linter warnings and errors. It can analyze figure references, bibliography entries, and TikZ code to understand context.
-
-**Tools available:** `str_replace_editor`, `diagnostics`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`
-
-**Best for:**
-
-- Fixing chktex and other linter warnings
-- Cleaning up LaTeX style issues
-- Resolving missing reference warnings
-
 ## Next Steps
 
 Now that you've met the built-in crew, you may want to learn more:
