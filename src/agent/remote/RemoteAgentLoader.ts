@@ -6,6 +6,7 @@ import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 
 import {
+  AgentCategory,
   AgentSetting,
   AgentPrompt,
   AgentPromptSchema,
@@ -109,12 +110,15 @@ function parseListItemRow(row: {
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
+  // Default NULL agent_category to Workflow for backward compatibility
+  const agentCategory = row.agent_category ?? AgentCategory.Workflow;
+
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
     description: row.description,
     visibility: row.visibility,
-    agentCategory: row.agent_category,
+    agentCategory,
   });
 
   if (!result.success) {
@@ -292,7 +296,8 @@ export class RemoteAgentLoader {
             name: responseName || agentName,
             description: validated.description,
             visibility,
-            agentCategory,
+            // Default null agentCategory to Workflow for backward compatibility
+            agentCategory: agentCategory ?? AgentCategory.Workflow,
           }),
         };
       } catch (error) {
