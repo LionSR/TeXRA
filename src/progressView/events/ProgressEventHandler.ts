@@ -133,14 +133,13 @@ export class ProgressEventHandler {
     const { stream, agentCategory, isRemote, hasMultipleOutputs } = payload;
     if (!stream) return;
 
-    // Initialize stream state (convert null to undefined for sessionCategory)
     await this.state.streamTabs.ensureStream(stream);
     this.state.updateStreamHints(stream, {
-      sessionCategory: agentCategory ?? undefined,
+      agentCategory,
       isRemote,
       hasMultipleOutputs,
     });
-    this.maybeUpdateFilterForCategory(agentCategory ?? undefined);
+    this.maybeUpdateFilterForCategory(agentCategory);
     this.state.activeStream = stream;
     this.replayPendingTaskGroups(stream);
 
@@ -471,13 +470,13 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get the session category for a stream from taskState or hints.
+   * Get the agent category for a stream from taskState or hints.
    */
   private getStreamCategory(stream: string): AgentCategory | undefined {
     const taskState = this.state.getTaskState(stream);
     return (
       taskState?.agentConfig?.agentCategory ??
-      this.state.getStreamHints(stream).sessionCategory
+      this.state.getStreamHints(stream).agentCategory
     );
   }
 
@@ -530,7 +529,7 @@ export class ProgressEventHandler {
     }
 
     this.state.updateStreamHints(stream, {
-      sessionCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
     });
     this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
     this.state.activeStream = stream;
