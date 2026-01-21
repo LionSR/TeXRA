@@ -145,10 +145,11 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   // Handle edit tools with diff display for input
   // Note: edit_file uses old_str/new_str field names
+  // old_str must be non-empty, but new_str can be empty (deletion operation)
   if (
     TOOLS_WITH_DIFF_INPUT.has(toolName) &&
     input?.old_str &&
-    input?.new_str
+    typeof input?.new_str === 'string'
   ) {
     if (filePath) {
       sections.push(
