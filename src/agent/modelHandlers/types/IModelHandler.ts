@@ -1,7 +1,7 @@
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
@@ -176,11 +176,11 @@ export interface IModelHandler<
   /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
 
-  /** Inform the handler about the active agent type. */
-  setAgentType(agentType?: AgentType | null): void;
+  /** Inform the handler about the active agent category. */
+  setAgentCategory(agentCategory?: AgentCategory | null): void;
 
-  /** Retrieve the agent type currently associated with the handler, if any. */
-  getAgentType(): AgentType | undefined;
+  /** Retrieve the agent category currently associated with the handler, if any. */
+  getAgentCategory(): AgentCategory | undefined;
 
   /** Retrieve an authenticated client instance. */
   getClient(): Promise<C>;

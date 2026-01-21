@@ -3,19 +3,14 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent components
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentType,
-  AgentCategory,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 // Type imports
-import type { AgentPrompt } from '@agent/core/AgentDataclass';
+import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 // Internal imports
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
 import * as configModule from '@utils/config';
 
 const baseSetting: AgentSetting = {
-  agentType: AgentType.CoT,
   agentCategory: AgentCategory.Workflow,
   documentTag: 'document',
   temperature: 0,

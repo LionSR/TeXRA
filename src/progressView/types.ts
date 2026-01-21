@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ExecutionIdSchema } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
@@ -19,7 +19,6 @@ export const StreamTabInfoSchema = z.object({
   label: z.string(),
   model: z.string().optional(),
   agent: z.string().optional(),
-  agentType: z.nativeEnum(AgentType).optional(),
   agentSessionKind: z.nativeEnum(AgentCategory),
   uiTraits: StreamUITraitsSchema,
   hasMultipleOutputs: z.boolean().optional(),
