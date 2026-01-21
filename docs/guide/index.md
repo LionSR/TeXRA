@@ -26,10 +26,18 @@ TeXRA offers a comprehensive set of features designed for academic workflows:
 
 ### Specialized AI Agents
 
-- **Correction**: Fix errors and improve formatting
-- **Enhancement**: Polish writing style and clarity
-- **Creation**: Generate figures, tables, and new content
-- **Transformation**: Convert between different document formats
+TeXRA provides two categories of agents for different use cases:
+
+**Workflow Agents** - Structured document processing with reflection:
+- **Correction & Polishing**: Fix errors, improve formatting, and enhance writing clarity
+- **Content Generation**: Create slides, posters, lecture notes, and cover letters from papers
+- **Figure & Media**: Generate TikZ figures, OCR images, and transcribe audio
+
+**Tool-Use Agents** - Interactive, multi-turn research collaboration:
+- **Chat & Ask**: General-purpose assistants for research tasks and document exploration
+- **Search & Discuss**: Literature discovery, paper synthesis, and academic brainstorming
+- **Research**: Computational research with Wolfram Language for symbolic math
+- **Lean**: Formal proof development with Lean 4 integration
 
 ### LaTeX Integration
 
@@ -44,15 +52,20 @@ TeXRA offers a comprehensive set of features designed for academic workflows:
 - Create and modify visual elements within documents
 - Handle mathematical notation with precision
 
-### Workflow Tools
+### Research Tools
 
-- Version management and comparison
-- File organization and batch processing
-- Integration with external academic tools
+- Literature discovery via arXiv and Crossref integration
+- Web search and content fetching for research
+- Bibliography extraction and citation management
+- File exploration with glob and grep tools
 
 ## How TeXRA Works
 
-At its core, TeXRA follows an iterative process inspired by expert workflows:
+TeXRA supports two execution models depending on your task:
+
+### Workflow Agents
+
+Workflow agents follow an iterative process for document transformation, with optional self-reflection:
 
 ```mermaid
 graph LR
@@ -68,7 +81,23 @@ graph LR
     F -- No --> J[End];
 ```
 
-This process leverages the strengths of language models while addressing their limitations through structured workflows, optional self-reflection, and specialized tools.
+### Tool-Use Agents
+
+Tool-use agents enable interactive, multi-turn conversations where the AI can call tools to accomplish tasks:
+
+```mermaid
+graph LR
+    A[User Request] --> B[Model Call with Tools];
+    B --> C{Tool Calls?};
+    C -- Yes --> D[Execute Tools];
+    D --> B;
+    C -- No --> E[Display Response];
+    E --> F{Follow-up?};
+    F -- Yes --> B;
+    F -- No --> G[Session End];
+```
+
+Both approaches leverage the strengths of language models while addressing their limitations through structured workflows, tool integration, and optional self-reflection.
 
 ## Who Should Use TeXRA?
 
@@ -86,8 +115,10 @@ Ready to enhance your academic research with TeXRA? The next sections will guide
 
 - [Installation](/guide/installation): Setting up TeXRA and its dependencies
 - [Quick Start](/guide/quick-start): Your first steps with TeXRA
-- [Core Concepts](/guide/built-in-agents.md): Understanding the fundamental components
-- [Advanced Usage](/guide/latex-diff): Leveraging powerful features
+- [Agent Architecture](/guide/agent-architecture): Understanding how agents work
+- [Built-in Agents](/guide/built-in-agents): Reference for all available agents
+- [Research Tools](/guide/research-tools): Using literature discovery and web tools
+- [Advanced Usage](/guide/latex-diff): Leveraging LaTeX diff and comparison features
 - [Customization](/guide/configuration): Tailoring TeXRA to your needs
 
 ## Data Privacy & Security
