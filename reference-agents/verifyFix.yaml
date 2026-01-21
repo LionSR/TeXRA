@@ -2,6 +2,7 @@ name: verifyFix
 description: Three-phase verification and fix agent for research papers. Expands, critiques with verification, then fixes with documentation.
 
 settings:
+  agentCategory: workflow
   rounds: 3
   documentTag: latex_document
   endTag: </latex_document>
