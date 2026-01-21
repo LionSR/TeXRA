@@ -960,12 +960,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: string;
       model: string;
       includeInstruction?: boolean;
+      attachAgentOutputs?: boolean;
       initialQuestion?: string;
     },
     executeImmediately: boolean,
   ): Promise<void> {
-    const { stream, mode, agent, model, includeInstruction, initialQuestion } =
-      data;
+    const {
+      stream,
+      mode,
+      agent,
+      model,
+      includeInstruction,
+      attachAgentOutputs,
+      initialQuestion,
+    } = data;
     const streamId = stream as StreamTabId;
 
     // Validate prerequisites
@@ -1010,7 +1018,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         taskState,
         originalConfig,
         fileMapping,
-        { mode, agent, model, includeInstruction, initialQuestion },
+        { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion },
       );
 
       await vscode.commands.executeCommand('texra.mainView.focus');
@@ -1129,17 +1137,33 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: string;
       model: string;
       includeInstruction?: boolean;
+      attachAgentOutputs?: boolean;
       initialQuestion?: string;
     },
   ): Promise<TaskState> {
-    const { mode, agent, model, includeInstruction, initialQuestion } = options;
+    const { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion } =
+      options;
     const isChat = mode === 'chat';
 
-    // Map input files: outputs become new inputs
-    const mapToRelative = (p: string): string =>
+    // Map input files: by default, outputs become new inputs
+    // When attachAgentOutputs is enabled, keep originals as inputs and add outputs as reference
+    const mapOutputToRelative = (p: string): string =>
       WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
-    const newInputFile = mapToRelative(originalConfig.inputFile);
-    const newInputFiles = originalConfig.inputFiles.map(mapToRelative);
+    const keepOriginalRelative = (p: string): string =>
+      WorkspaceFS.relativePath(p);
+
+    const newInputFile = attachAgentOutputs
+      ? keepOriginalRelative(originalConfig.inputFile)
+      : mapOutputToRelative(originalConfig.inputFile);
+    const newInputFiles = attachAgentOutputs
+      ? originalConfig.inputFiles.map(keepOriginalRelative)
+      : originalConfig.inputFiles.map(mapOutputToRelative);
+
+    // When attachAgentOutputs is enabled, add agent outputs as reference
+    // This allows agents like 'apply' to see the annotated output while modifying the original
+    const outputsAsReference = attachAgentOutputs
+      ? [...fileMapping.values()].map((p) => WorkspaceFS.relativePath(p))
+      : [];
 
     // Build instruction from template
     const template = isChat
@@ -1169,12 +1193,40 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
+    // When attachAgentOutputs is enabled, merge agent outputs into reference files
+    const mergedReferenceFiles = [
+      ...(originalConfig.referenceFiles ?? []),
+      ...outputsAsReference,
+    ];
+
+    // When attachAgentOutputs is enabled, output to original input locations
+    // This allows apply agents to write changes back to the original files
+    // Note: outputFiles includes all unique files (inputFile + inputFiles), preserving insertion order
+    const outputFiles = attachAgentOutputs
+      ? [
+          ...new Set(
+            [originalConfig.inputFile, ...originalConfig.inputFiles]
+              .filter(Boolean)
+              .map((p) => WorkspaceFS.relativePath(p)),
+          ),
+        ]
+      : originalConfig.outputFiles;
+
+    // Set useMultipleOutputs when we have multiple output files
+    const useMultipleOutputs =
+      attachAgentOutputs && outputFiles.length > 1
+        ? true
+        : originalConfig.useMultipleOutputs;
+
     const newConfig = {
       ...originalConfig,
       agent,
       model,
       inputFile: newInputFile,
       inputFiles: newInputFiles,
+      outputFiles,
+      useMultipleOutputs,
+      referenceFiles: mergedReferenceFiles,
       instruction,
       session,
       agentType: session.agentType,
@@ -1184,9 +1236,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;
     }
+
+    // Update activeFiles visibility when reference/output files are added
+    const activeFiles = {
+      ...originalTaskState.activeFiles,
+      ...(outputsAsReference.length > 0 && { reference: true }),
+      ...(attachAgentOutputs && outputFiles.length > 0 && { output: true }),
+    };
+
     return {
       agentConfig: newConfig,
-      activeFiles: originalTaskState.activeFiles,
+      activeFiles,
     } as TaskState;
   }
 
