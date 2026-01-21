@@ -1,10 +1,6 @@
 # Reference
 
-Welcome to the TeXRA reference section. This area provides detailed technical information, specifications, and resources to help you get the most out of the extension.
-
-## What's in this Section
-
-The reference section contains comprehensive technical details about TeXRA's components, including:
+Technical details organized by topic. For step-by-step guides, see the [Guide](/guide/) section.
 
 ### Agent Reference
 
@@ -75,19 +71,6 @@ Definitions of technical terms used throughout the documentation:
 - Academic publishing terms
 
 [View Glossary →](/reference/glossary)
-
-## API Reference
-
-::: warning Note
-The API reference is primarily intended for extension developers and those who want to integrate with TeXRA programmatically.
-:::
-
-Documentation of TeXRA's internal APIs:
-
-- Command API
-- Extension API
-- Model handler APIs (`IModelHandler` interface)
-- Agent framework interfaces
 
 ## Additional Resources
 

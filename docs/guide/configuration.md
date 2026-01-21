@@ -8,6 +8,18 @@ TeXRA settings are accessible through VS Code:
 
 All settings have sensible defaults - most users won't need to change anything.
 
+## Setting Up API Keys
+
+1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run: **TeXRA: Set API Key**
+3. Select provider (Anthropic, OpenAI, Google, DeepSeek, etc.)
+4. Paste your API key
+
+Keys are stored securely in VS Code's built-in Secret Storage. Get API keys from:
+- [Anthropic Console](https://console.anthropic.com/)
+- [OpenAI Platform](https://platform.openai.com/)
+- [Google AI Studio](https://aistudio.google.com/)
+
 ## Key Settings
 
 ### API Providers
