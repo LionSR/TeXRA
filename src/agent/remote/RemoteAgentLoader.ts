@@ -20,7 +20,9 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 
 import {
+  RemoteAgentListItemSchema,
   RemoteAgentMetadataSchema,
+  type RemoteAgentListItem,
   type RemoteAgentMetadata,
   type RemoteAgentConfig,
   type RemoteAgentLoadOptions,
@@ -95,15 +97,14 @@ function mapHttpError(
   };
 }
 
-/** Maps a database row to RemoteAgentMetadata using schema validation. */
-function parseMetadataRow(row: {
+/** Maps a database row to RemoteAgentListItem using schema validation. */
+function parseListItemRow(row: {
   id: string;
   name: string;
   visibility?: string[] | null;
   agent_category?: string | null;
-}): RemoteAgentMetadata | null {
-  // Description comes from YAML (when agent is loaded), not from DB
-  const result = RemoteAgentMetadataSchema.safeParse({
+}): RemoteAgentListItem | null {
+  const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
     visibility: row.visibility,
@@ -308,7 +309,7 @@ export class RemoteAgentLoader {
   }
 
   /** List all available remote agents for the current user. */
-  static async listRemoteAgents(): Promise<RemoteAgentMetadata[]> {
+  static async listRemoteAgents(): Promise<RemoteAgentListItem[]> {
     if (!(await SupabaseClient.isAuthenticated())) return [];
 
     try {
@@ -326,8 +327,8 @@ export class RemoteAgentLoader {
       }
 
       return (data ?? [])
-        .map(parseMetadataRow)
-        .filter((item): item is RemoteAgentMetadata => item !== null);
+        .map(parseListItemRow)
+        .filter((item): item is RemoteAgentListItem => item !== null);
     } catch (error) {
       logger.error(
         CHANNEL,
@@ -337,10 +338,10 @@ export class RemoteAgentLoader {
     }
   }
 
-  /** Get metadata for a specific remote agent. */
+  /** Get list item for a specific remote agent (without description). */
   static async getAgentMetadata(
     agentName: string,
-  ): Promise<RemoteAgentMetadata | null> {
+  ): Promise<RemoteAgentListItem | null> {
     try {
       const supabase = await getAuthenticatedClient();
       if (!supabase) return null;
@@ -359,7 +360,7 @@ export class RemoteAgentLoader {
         return null;
       }
 
-      return parseMetadataRow(data);
+      return parseListItemRow(data);
     } catch (error) {
       logger.error(
         CHANNEL,
