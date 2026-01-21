@@ -2,7 +2,6 @@ name: ocr
 description: Converts handwritten mathematical content from images into LaTeX.
 
 settings:
-  agentType: CoT
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
