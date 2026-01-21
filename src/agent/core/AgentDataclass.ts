@@ -103,27 +103,27 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 /**
  * Normalize input to ensure agentCategory discriminator is present.
  * Handles backward compatibility for legacy agentType field.
+ * Strips agentType after migration (strictObject rejects unknown keys).
  * Defaults to Workflow when not specified.
  */
 const normalizeAgentSettingInput = (input: unknown): unknown => {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  const obj = input as Record<string, unknown>;
-  if (obj.agentCategory !== undefined) {
-    return input;
+  const { agentType, ...rest } = input as Record<string, unknown>;
+
+  // If agentCategory already present, just strip legacy agentType
+  if (rest.agentCategory !== undefined) {
+    return rest;
   }
+
   // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
-  if (obj.agentType === 'toolUse') {
-    return {
-      ...obj,
-      agentCategory: AgentCategory.ToolUse,
-    };
+  if (agentType === 'toolUse') {
+    return { ...rest, agentCategory: AgentCategory.ToolUse };
   }
-  return {
-    ...obj,
-    agentCategory: AgentCategory.Workflow,
-  };
+
+  // Default to Workflow
+  return { ...rest, agentCategory: AgentCategory.Workflow };
 };
 
 /**
