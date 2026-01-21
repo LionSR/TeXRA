@@ -434,6 +434,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       if (!primary) continue;
 
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
+      // Description not available at list time - comes from YAML when agent is loaded
       entries.push({
         name: base ? baseName : primary.name,
         source: 'remote' as AgentSource,
@@ -441,7 +442,6 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         multiplePath: multiple?.name,
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         agentType: isToolUse ? AgentType.ToolUse : AgentType.CoT,
-        description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
       });
     }
