@@ -65,7 +65,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: polish_multiple',
         'settings:',
-        '  maxRounds: 1',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: multiple variant',
         '',
@@ -77,7 +77,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: polish',
         'settings:',
-        '  maxRounds: 1',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: base variant',
         '',
@@ -111,7 +111,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: summarize',
         'settings:',
-        '  maxRounds: 1',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: base only',
         '',
