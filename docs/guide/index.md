@@ -23,13 +23,36 @@ graph LR
 
 Structured document processing with optional self-reflection:
 
+```mermaid
+graph LR
+    A[Input Document] --> B[Round 0: Process]
+    B --> C[Save Output *_r0_*]
+    C --> D{Reflect?}
+    D -->|Yes| E[Round 1: Refine]
+    E --> F[Save Output *_r1_*]
+    F --> G[Done]
+    D -->|No| G
+```
+
 - **Correction and Polishing**: Fix errors, improve formatting, enhance clarity
 - **Content Generation**: Create slides, posters, lecture notes from papers
 - **Figure and Media**: Generate TikZ figures, OCR images, transcribe audio
 
 ### Tool-Use Agents
 
-Interactive research collaboration:
+Interactive research collaboration with tool access:
+
+```mermaid
+graph LR
+    A[User Request] --> B[Model + Tools]
+    B --> C{Tool Calls?}
+    C -->|Yes| D[Execute Tools]
+    D --> B
+    C -->|No| E[Response]
+    E --> F{Follow-up?}
+    F -->|Yes| B
+    F -->|No| G[Done]
+```
 
 - **Chat and Ask**: General-purpose assistants for research tasks
 - **Search and Discuss**: Literature discovery, paper synthesis
