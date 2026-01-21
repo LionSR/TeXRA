@@ -4,9 +4,6 @@ import { z } from 'zod';
 // Local imports - model types
 import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 
-// Local imports - session schema (imported for local use, re-exported below)
-import type { AgentSessionDescriptor } from './AgentSessionSchema';
-
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
@@ -36,9 +33,6 @@ export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
 }
-
-// Re-export AgentSessionDescriptor from schema (single source of truth)
-export type { AgentSessionDescriptor } from './AgentSessionSchema';
 
 /** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
@@ -152,17 +146,6 @@ export type AgentToolUseSetting = Extract<
   AgentSetting,
   { agentCategory: AgentCategory.ToolUse }
 >;
-
-/**
- * Return the canonical session descriptor for an agent setting.
- */
-export function getAgentSessionDescriptor(
-  setting: AgentSetting,
-): AgentSessionDescriptor {
-  return {
-    agentCategory: setting.agentCategory,
-  };
-}
 
 /** Type guard for workflow settings. */
 export function isWorkflowSetting(
