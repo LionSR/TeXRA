@@ -203,7 +203,7 @@ export class ProgressViewState {
      */
     this.lastRenderedStream = '';
     this.streams = new Set();
-    this.agentTypeFilter = 'all';
+    this.agentCategoryFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;

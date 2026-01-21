@@ -262,7 +262,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const radioGroup = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
-    setRadioGroupValue(radioGroup, state.agentTypeFilter);
+    setRadioGroupValue(radioGroup, state.agentCategoryFilter);
   }
 
   /**
@@ -421,9 +421,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (
       !state.pendingFilterUpdate &&
       message.agentFilter !== undefined &&
-      message.agentFilter !== state.agentTypeFilter
+      message.agentFilter !== state.agentCategoryFilter
     ) {
-      state.agentTypeFilter = message.agentFilter;
+      state.agentCategoryFilter = message.agentFilter;
     }
     state.pendingFilterUpdate = false;
     state.resetExecutionIdAvailability();

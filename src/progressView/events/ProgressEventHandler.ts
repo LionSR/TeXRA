@@ -61,7 +61,7 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Update agentTypeFilter to match the session category if needed.
+   * Update agentCategoryFilter to match the session category if needed.
    * Only updates when filter is not 'all' and doesn't already match.
    */
   private maybeUpdateFilterForCategory(
@@ -69,10 +69,10 @@ export class ProgressEventHandler {
   ): void {
     if (
       category &&
-      this.state.agentTypeFilter !== 'all' &&
-      this.state.agentTypeFilter !== category
+      this.state.agentCategoryFilter !== 'all' &&
+      this.state.agentCategoryFilter !== category
     ) {
-      this.state.agentTypeFilter = category;
+      this.state.agentCategoryFilter = category;
     }
   }
 
@@ -181,7 +181,7 @@ export class ProgressEventHandler {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
         const category = taskState.agentConfig.agentCategory;
-        const previousFilter = this.state.agentTypeFilter;
+        const previousFilter = this.state.agentCategoryFilter;
 
         this.state.setTaskState(streamTabId, taskState);
 
@@ -201,7 +201,8 @@ export class ProgressEventHandler {
         // 1. Filter changed (affects visible streams)
         // 2. Active stream's task state changed (label needs inputFile, agent, etc.)
         if (this.webviewUpdater.isAvailable()) {
-          const filterChanged = this.state.agentTypeFilter !== previousFilter;
+          const filterChanged =
+            this.state.agentCategoryFilter !== previousFilter;
           if (filterChanged || isActiveStream) {
             this.webviewUpdater.updateAll(
               this.state,
