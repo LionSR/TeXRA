@@ -398,10 +398,14 @@ async function scanYaml(
       )
       .filter((t): t is string => t !== null);
 
-    // Determine category from source or explicit agentCategory setting
+    // Determine category from source or explicit setting
+    // Backward compatibility: check both agentCategory and legacy agentType
     const rawCategory = rawSettings.agentCategory as string | undefined;
+    const rawAgentType = rawSettings.agentType as string | undefined;
     const category =
-      source === 'builtInToolUse' || rawCategory === 'toolUse'
+      source === 'builtInToolUse' ||
+      rawCategory === 'toolUse' ||
+      rawAgentType === 'toolUse'
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
