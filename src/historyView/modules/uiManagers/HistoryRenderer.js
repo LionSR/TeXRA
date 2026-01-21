@@ -14,7 +14,7 @@ import {
 } from '@common/domUtils.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
-import { getSessionKindDecorator } from '@common/iconConstants.js';
+import { getAgentCategoryDecorator } from '@common/iconConstants.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 
@@ -63,15 +63,13 @@ export class HistoryRenderer {
   _createHistoryItemElement(item) {
     // Use agentConfig as primary (consistent with TaskState), with fallback for legacy data
     const config = item.agentConfig || item.config;
-    // Session is accessed via config.session - single source of truth
-    const session = config?.session;
     const date = new Date(item.timestamp).toLocaleString();
 
-    // Determine session kind display using shared config
-    const isToolUse = session?.agentCategory === AGENT_CATEGORY.TOOL_USE;
-    const sessionKind = isToolUse ? 'toolUse' : 'workflow';
+    // Determine agent category display
+    const isToolUse = config?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+    const category = isToolUse ? 'toolUse' : 'workflow';
     const { icon: kindIcon, label: kindLabel } =
-      getSessionKindDecorator(sessionKind);
+      getAgentCategoryDecorator(category);
     const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
 
     const container = createFromTemplate('historyItemTemplate', {
