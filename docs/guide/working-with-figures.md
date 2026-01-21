@@ -1,97 +1,93 @@
 # Working with Figures
 
-TeXRA integrates seamlessly with visual and audio media, allowing AI agents to analyze, reference, or even generate figures directly within your documents. This guide covers how to manage media files (your paper's eye candy!) and leverage automatic extraction features.
+TeXRA allows AI agents to analyze, reference, and generate figures within your documents.
 
-## The "Media" Section in TeXRA UI
+## Quick Task: Add a Figure Caption
 
-The main TeXRA panel includes a dedicated "Media" section for managing relevant files:
+1. Select the `polish` agent from the dropdown
+2. Choose a vision-capable model (e.g., `gemini25p`, `gpt4o`)
+3. Select your figure in the **Media** section
+4. Enter instruction: "Write a detailed caption for this figure"
+5. Click Execute
 
-![Media Section UI Placeholder](/images/media-section.png)
+## The Media Section
 
-- **Dropdown**: Select a primary media file (image, PDF, audio).
-- **Multiple Files Toggle (`▼`)**: Expand to select multiple media files. Useful when an agent needs to analyze several images or audio clips.
-- **Buttons**: Add (<i class="codicon codicon-add"></i>), Empty Single (<i class="codicon codicon-close"></i>), Empty List (<i class="codicon codicon-trash"></i>) work similarly to other file sections. See [File Management](./file-management.md).
-- **Auto Extract Dropdown**: Configure automatic extraction of figures referenced in your LaTeX source.
+The main TeXRA panel includes a "Media" section for managing figure files:
+
+- **Dropdown**: Select a primary media file
+- **Multiple Toggle**: Expand to select multiple files
+- **Auto Extract Dropdown**: Configure automatic figure extraction
 
 ## Supported File Types
 
-TeXRA supports a range of common media types (configurable via `texra.files.included.mediaExtensions` in settings):
+Configurable via `texra.files.included.mediaExtensions`:
 
 - **Images**: `.png`, `.jpeg`, `.jpg`, `.gif`, `.heic`, `.heif`, `.webp`
-- **Documents (as images/source)**: `.pdf` (can be treated as images or potentially passed directly to models supporting native PDF)
-- **Audio (Experimental)**: `.wav`, `.m4a`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac` (requires models with native audio support, currently primarily available via the **experimental** native Google Gemini SDK - see [Configuration](./configuration.md)).
+- **Documents**: `.pdf` (native or converted to images)
+- **Audio** (experimental): `.wav`, `.m4a`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac`
 
-::: info PDF Handling
-TeXRA prioritizes native PDF processing for models that support it (like Anthropic/Gemini/OpenAI). If a model doesn't support native PDFs, TeXRA uses external tools (GraphicsMagick/ImageMagick and Ghostscript) as a fallback to convert PDF pages to images for analysis. See the [Installation Guide](./installation.md) for dependency details.
-:::
+PDFs are processed natively when supported (Anthropic/Gemini/OpenAI). Otherwise, TeXRA uses GraphicsMagick/ImageMagick + Ghostscript for conversion.
 
-## Quick Image Insertion via Clipboard
+## Clipboard Images
 
-You can quickly add images to your TeXRA instructions by pasting directly from your clipboard:
+Paste images directly into the instruction area:
 
-1. **Copy any image** (screenshot, diagram, etc.) to your clipboard
-2. **Paste in the instruction area** using Ctrl/Cmd+V
-3. The image is automatically saved and referenced as `[pasted_timestamp_hash.ext]`
-4. The Media Files section is automatically updated with the pasted image
+1. Copy any image to clipboard
+2. Paste with Ctrl/Cmd+V
+3. Image is saved and referenced as `[pasted_timestamp_hash.ext]`
+4. Media Files list updates automatically
 
-While the clipboard accepts many image formats (JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, PSD), the actual formats that can be processed depend on the AI model you're using. Most vision models support common formats like JPEG, PNG, GIF, and WebP. Pasted images are stored temporarily in workspace storage and cleaned up after 3 days.
+Pasted images are stored temporarily and cleaned up after 3 days.
 
 ## Automatic Figure Extraction
 
-TeXRA includes an "Auto-extract" feature to automatically identify and include figures from your input `.tex` document, reducing manual selection. This feature is accessible via the dropdown next to the Media label (<i class="codicon codicon-file-media"></i>) in the main file selection area:
+Enable via the Auto-extract dropdown near the Media label:
 
-1.  Click the Auto-extract toggle button (<i class="codicon codicon-wand"></i> ○<i class="codicon codicon-chevron-down"></i>) to reveal the options.
-2.  Select the types of figures to extract:
-    - **Figures** (<i class="codicon codicon-file-media"></i>): Extracts standard image files (`.png`, `.jpg`, `.pdf`, etc.) referenced via `\includegraphics`.
-    - **TikZ Figures** (<i class="codicon codicon-file-code"></i>): Extracts code within `tikzpicture` environments.
+- **Figures**: Extracts images from `\includegraphics` commands
+- **TikZ Figures**: Extracts `tikzpicture` environments as `.tikz` files
 
-When enabled, TeXRA parses the input `.tex` file(s) before agent execution:
+## Figure Extraction Tools
 
-- Referenced image/PDF files are added to the Media Files list.
-- Detected `tikzpicture` code blocks are saved as separate `.tikz` files and added to the Media Files list.
+Tool-use agents can extract figures programmatically:
 
-This ensures the agent receives all relevant visual context automatically.
+### `extract_figures`
 
-## Figure Extraction Tools for Agents
-
-When you are running a tool-use agent outside the UI controls, you can explicitly request figure assets via two dedicated tools:
-
-- `extract_figures` – scans a LaTeX file for `\includegraphics` and related commands. It returns a newline-delimited list of referenced files and attaches each existing asset. Options:
-  - `texPath` (required): workspace path to the primary `.tex` file.
-  - Attachments are automatically capped to the first 20 figures to avoid overwhelming downstream providers.
-- `extract_tikz_figures` – extracts `tikzpicture` environments and, by default, compiles each one into a standalone PDF attachment. Options:
-  - `texPath` (required): workspace path to the source `.tex` file.
-  - `compile` (default `true`): set to `false` to skip compilation and just receive a summary of discovered figures.
-  - Attachments are limited to the first 12 compiled PDFs to keep responses lightweight.
-
-Need the accompanying references as well? Use the complementary `extract_bib_entries` tool to pull the BibTeX records for every citation found in the same LaTeX file. See the [Tool Integration guide](./tool-integration.md#bibliography-extraction) for details and a sample payload.
-
-Example tool call payload for `extract_figures`:
+Scans for `\includegraphics` and returns referenced files (max 20 attachments):
 
 ```json
 {
   "name": "extract_figures",
-  "arguments": {
-    "texPath": "paper/main.tex"
-  }
+  "arguments": { "texPath": "paper/main.tex" }
 }
 ```
 
-The tool response includes a `summary`, formatted output listing each figure, and (when files are found) structured attachments that downstream model handlers pass to OpenAI Responses and Anthropic APIs as native file/image results. Providers without file-output support receive a textual summary with workspace paths so the agent can fetch the assets using `read_file`.
+### `extract_tikz_figures`
 
-## Manually Selecting Figures
+Extracts and optionally compiles TikZ environments (max 12 PDFs):
 
-When you provide media files (manually or via auto-extract):
+```json
+{
+  "name": "extract_tikz_figures",
+  "arguments": { "texPath": "paper/main.tex", "compile": true }
+}
+```
 
-- **Vision Models:** For models like GPT-4o or Gemini, TeXRA converts images/PDF pages to a format the model can understand (usually base64 encoded data) and includes them alongside the text prompt. This allows agents to "see" the figures or document pages.
-- **Audio Models (Experimental):** For models supporting native audio input (primarily via the experimental native Google SDK), TeXRA uploads the audio file and provides a reference to the model. This enables agents like `transcribe_audio`.
-- **File References:** Even for non-multimodal models, the _filenames_ provided in the "Media" section can give context to the agent (e.g., "Refer to figure `diagram.pdf`").
+### `extract_bib_entries`
 
-Using the Media section effectively allows you to perform powerful tasks like:
+Retrieves BibTeX records for citations.
 
-- Asking an agent to write a caption for an image (`polish` agent).
-- Having an agent verify if the text description matches a figure (`correct` agent).
-- Generating text based on the content of images or PDFs (`ocr` agent or vision models).
-- Creating transcriptions from audio files (`transcribe_audio` agent).
+## Using Media Files
 
-For specifics on creating and manipulating TikZ figures using the `draw` agent, please refer to the dedicated [TikZ Figures](./tikz-figures.md) guide.
+When you provide media files:
+
+- **Vision models** (GPT-4o, Gemini): Images are encoded and included with the prompt
+- **Audio models**: Audio files are uploaded for transcription
+- **Non-multimodal models**: Filenames provide context
+
+Common use cases:
+- Write captions for images (`polish` agent)
+- Verify text matches figures (`correct` agent)
+- Generate text from images/PDFs (`ocr` agent)
+- Transcribe audio (`transcribe_audio` agent)
+
+For TikZ-specific workflows, see [TikZ Figures](./tikz-figures.md).
