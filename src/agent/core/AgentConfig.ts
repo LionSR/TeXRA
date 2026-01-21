@@ -121,8 +121,10 @@ const AgentConfigFieldsSchema = z.object({
 /**
  * Lift legacy session.agentCategory to top level for backward compatibility.
  * Persisted data may have { session: { agentCategory } } format.
+ *
+ * Exported for reuse in TaskState.ts to maintain single source of truth.
  */
-const liftLegacyAgentCategory = (input: unknown): unknown => {
+export const liftLegacyAgentCategory = (input: unknown): unknown => {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
 
