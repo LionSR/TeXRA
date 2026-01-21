@@ -64,6 +64,7 @@
   text-align: left;
   font-family: var(--font-family);
   min-width: 0;
+  overflow: hidden;
 }
 
 .tab-header {
