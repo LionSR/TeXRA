@@ -269,8 +269,16 @@ export function buildFileLinkWithLines(filePath, options = {}) {
  */
 export function buildEditDiffSection(oldString, newString) {
   // Let highlight.js auto-detect language
-  const oldHtml = wrapInHighlightedPre(oldString, '', 'diff-block diff-block-old');
-  const newHtml = wrapInHighlightedPre(newString, '', 'diff-block diff-block-new');
+  const oldHtml = wrapInHighlightedPre(
+    oldString,
+    '',
+    'diff-block diff-block-old',
+  );
+  const newHtml = wrapInHighlightedPre(
+    newString,
+    '',
+    'diff-block diff-block-new',
+  );
 
   return `<div class="edit-diff-container">${oldHtml}${newHtml}</div>`;
 }
