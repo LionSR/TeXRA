@@ -99,14 +99,13 @@ function mapHttpError(
 function parseMetadataRow(row: {
   id: string;
   name: string;
-  description?: string | null;
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentMetadata | null {
+  // Description comes from YAML (when agent is loaded), not from DB
   const result = RemoteAgentMetadataSchema.safeParse({
     id: row.id,
     name: row.name,
-    description: row.description,
     visibility: row.visibility,
     agentCategory: row.agent_category,
   });
@@ -237,7 +236,6 @@ export class RemoteAgentLoader {
         const {
           config: yamlContent,
           name: responseName,
-          description,
           visibility,
           agentCategory,
         } = await response.json();
@@ -278,8 +276,7 @@ export class RemoteAgentLoader {
           metadata: RemoteAgentMetadataSchema.parse({
             id: '',
             name: responseName || agentName,
-            // YAML is source of truth for description; response is fallback
-            description: validated.description ?? description,
+            description: validated.description,
             visibility,
             agentCategory,
           }),
@@ -320,7 +317,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_category')
+        .select('id, name, visibility, agent_category')
         .order('name');
 
       if (error) {
@@ -350,7 +347,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_category')
+        .select('id, name, visibility, agent_category')
         .eq('name', agentName)
         .single();
 
