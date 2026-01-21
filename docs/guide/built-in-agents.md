@@ -292,11 +292,7 @@ Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as 
 
 ## Next Steps
 
-Now that you've met the built-in crew, you may want to learn more:
-
-- [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
-- [Tool-Use Agents Reference](/reference/tool-use-agents) - Deep dive into tool-use agent architecture.
-- [Tools Reference](/reference/tools) - Complete reference for all available tools.
-- [Research Tools Guide](./research-tools) - Using research and literature discovery tools.
-- [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.
-- [Models](./models.md) - Learn about the different AI models and their capabilities.
+- [Agent Architecture](./agent-architecture.md) - How agents work internally
+- [Research Tools](./research-tools) - Literature discovery and web tools
+- [Custom Agents](./custom-agents.md) - Create your own agents
+- [Models](./models.md) - AI model selection
