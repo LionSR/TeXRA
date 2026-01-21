@@ -39,6 +39,7 @@ import {
   type ProviderError,
   type ErrorLogData,
   type ErrorContext,
+  type StreamDiagnostics,
 } from './schemas';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
@@ -345,6 +346,54 @@ function detectRawErrorBody(err: unknown): unknown {
   );
 }
 
+// ============================================================================
+// Stream Diagnostics (Anthropic-specific)
+// ============================================================================
+
+/**
+ * Symbol key for attaching stream diagnostics to errors.
+ * Using a symbol prevents property name collisions and keeps it internal.
+ */
+const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
+
+/**
+ * Attaches stream diagnostics to an error before throwing.
+ * Call this in the catch block before rethrowing stream errors.
+ *
+ * @example
+ * ```ts
+ * catch (streamError) {
+ *   const diagnostics = streamHandler.getDiagnostics();
+ *   attachStreamDiagnostics(streamError, diagnostics);
+ *   throw streamError;
+ * }
+ * ```
+ */
+export function attachStreamDiagnostics(
+  err: unknown,
+  diagnostics: StreamDiagnostics,
+): void {
+  if (isObject(err)) {
+    (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY] = diagnostics;
+  }
+}
+
+/**
+ * Extracts stream diagnostics from an error object.
+ * Returns undefined if no diagnostics are attached.
+ */
+function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
+  if (!isObject(err)) {
+    return undefined;
+  }
+  const diagnostics = (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY];
+  // Basic type check - diagnostics should be an object with expected fields
+  if (isObject(diagnostics) && 'eventsProcessed' in diagnostics) {
+    return diagnostics as StreamDiagnostics;
+  }
+  return undefined;
+}
+
 /**
  * Anthropic error type strings (no dedicated SDK classes for these).
  * @see https://docs.anthropic.com/en/api/errors
@@ -394,6 +443,8 @@ function determineRetryable(
 export function formatProviderHttpError(err: unknown): ProviderError {
   // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
+  // Extract stream diagnostics if attached (Anthropic streaming errors)
+  const streamDiagnostics = detectStreamDiagnostics(err);
 
   // Detect DOMException AbortError (from AbortController.abort())
   // This covers providers without SDK-specific abort error classes (e.g., Google)
@@ -403,6 +454,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       retryable: false,
       isRelayError: false,
       rawErrorBody,
+      streamDiagnostics,
     };
   }
 
@@ -414,7 +466,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     const retryable =
       determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
       sdkMatch.retryable;
-    return { ...sdkMatch, retryable, isRelayError: isRelay, rawErrorBody };
+    return {
+      ...sdkMatch,
+      retryable,
+      isRelayError: isRelay,
+      rawErrorBody,
+      streamDiagnostics,
+    };
   }
 
   // Fallback for unrecognized errors
@@ -442,6 +500,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       isRelayError: isRelay,
       requestId,
       rawErrorBody,
+      streamDiagnostics,
     };
   }
 
@@ -455,6 +514,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     isRelayError: isRelay,
     requestId,
     rawErrorBody,
+    streamDiagnostics,
   };
 }
 

@@ -25,6 +25,33 @@ import { z } from 'zod';
  * - Retry request UI (errorDetails)
  * - Progress view error display
  */
+/**
+ * Stream diagnostics for debugging Anthropic streaming failures.
+ * Shows what was received before the stream errored.
+ */
+export const StreamDiagnosticsSchema = z.object({
+  /** Characters of thinking content received */
+  thinkingChars: z.number(),
+  /** Characters of text content received */
+  textChars: z.number(),
+  /** Characters of tool input JSON received */
+  toolInputChars: z.number(),
+  /** Block types seen (e.g., ['thinking', 'text']) */
+  blockTypesSeen: z.array(z.string()),
+  /** Total events processed */
+  eventsProcessed: z.number(),
+  /** Last event type (e.g., 'content_block_delta') */
+  lastEventType: z.string().nullable(),
+  /** Seconds since stream started */
+  elapsedSecs: z.number(),
+  /** Seconds since last event (stall detection) */
+  secsSinceLastEvent: z.number(),
+  /** Whether handler was finalized */
+  finalized: z.boolean(),
+});
+
+export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
+
 export const ProviderErrorSchema = z.object({
   /** Human-readable error message (includes HTTP prefix when applicable) */
   message: z.string(),
@@ -50,6 +77,11 @@ export const ProviderErrorSchema = z.object({
   requestId: z.string().optional(),
   /** Raw error body from provider API response */
   rawErrorBody: z.unknown().optional(),
+  /**
+   * Stream diagnostics for Anthropic streaming failures.
+   * Shows what was received before the stream errored (thinking chars, text chars, etc.)
+   */
+  streamDiagnostics: StreamDiagnosticsSchema.optional(),
 });
 
 /** Core error details from a provider/SDK */
