@@ -130,26 +130,6 @@
   color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
-/* Inline diff styles for character-level diffs */
-.inline-diff {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
-}
-
-.inline-diff del,
-.inline-diff .diff-remove {
-  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2));
-  text-decoration: line-through;
-  text-decoration-color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
-}
-
-.inline-diff ins,
-.inline-diff .diff-add {
-  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.2));
-  text-decoration: none;
-}
-
 /* Edit diff container for stacked old/new blocks */
 .edit-diff-container {
   display: flex;
