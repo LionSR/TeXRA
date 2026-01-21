@@ -195,7 +195,7 @@ const extractNewFormat = (entry) => {
         'unknown',
     baseRound: entry.baseRound ?? null,
     revisedRound: revised.round ?? 0,
-    status: entry.status,
+    status: entry.status || 'error',
     message: entry.message,
     runId: entry.runId,
   };
@@ -218,7 +218,7 @@ const extractLegacyFormat = (entry) => {
       entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown',
     baseRound: null,
     revisedRound: 0,
-    status: entry.status,
+    status: entry.status || 'error',
     message: entry.message,
     runId: entry.runId,
   };
