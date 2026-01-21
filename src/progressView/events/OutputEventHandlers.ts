@@ -13,6 +13,13 @@ import {
   type EventHandlerContext,
 } from './EventHandlerContext';
 
+/** Convert Map to record if non-empty, otherwise undefined. */
+function mapToRecordIfNonEmpty<K, V>(
+  map: Map<K, V> | undefined,
+): Record<string, V> | undefined {
+  return map?.size ? (Object.fromEntries(map) as Record<string, V>) : undefined;
+}
+
 /**
  * Register output event handlers on the event bus.
  */
@@ -48,7 +55,7 @@ function handleAddOutputFiles(
       if (!isWebviewAvailable(ctx)) return;
 
       const runFiles = ctx.state.outputFiles.getFiles(stream).get(storageKey);
-      const rounds = runFiles?.size ? Object.fromEntries(runFiles) : undefined;
+      const rounds = mapToRecordIfNonEmpty(runFiles);
       ctx.webviewUpdater.updateFiles(stream, { runId: storageKey, rounds });
     },
   );
@@ -76,9 +83,7 @@ function handleUpdateMissingOutputs(
       const runMissing = ctx.state.outputFiles
         .getMissingOutputs(stream)
         .get(storageKey);
-      const rounds = runMissing?.size
-        ? Object.fromEntries(runMissing)
-        : undefined;
+      const rounds = mapToRecordIfNonEmpty(runMissing);
       ctx.webviewUpdater.updateMissingOutputs(stream, {
         runId: storageKey,
         rounds,
