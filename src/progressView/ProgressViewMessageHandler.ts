@@ -60,10 +60,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import {
-  AgentProposalActionMessageSchema,
-  AgentProposalCategorySchema,
-} from '@eventBus/types';
+import { AgentProposalActionMessageSchema } from '@eventBus/types';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
