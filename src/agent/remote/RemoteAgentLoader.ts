@@ -105,12 +105,14 @@ function mapHttpError(
 function parseListItemRow(row: {
   id: string;
   name: string;
+  description?: string | null;
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
+    description: row.description,
     visibility: row.visibility,
     agentCategory: row.agent_category,
   });
@@ -329,7 +331,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, visibility, agent_category')
+        .select('id, name, description, visibility, agent_category')
         .order('name');
 
       if (error) {
