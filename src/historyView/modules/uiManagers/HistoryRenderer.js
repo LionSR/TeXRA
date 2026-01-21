@@ -68,9 +68,9 @@ export class HistoryRenderer {
     // Determine agent category display
     const isToolUse = config?.agentCategory === AGENT_CATEGORY.TOOL_USE;
     const category = isToolUse ? 'toolUse' : 'workflow';
-    const { icon: kindIcon, label: kindLabel } =
+    const { icon: categoryIcon, label: categoryLabel } =
       getAgentCategoryDecorator(category);
-    const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
+    const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
 
     const container = createFromTemplate('historyItemTemplate', {
       text: {
@@ -111,13 +111,13 @@ export class HistoryRenderer {
         ? encodeHtml(instructionText)
         : '<em class="history-none">Not set</em>';
 
-    // Build session kind badge with icon
-    const kindIconEl = createCodicon(kindIcon);
-    const kindIconHtml = kindIconEl ? kindIconEl.outerHTML : '';
+    // Build agent category badge with icon
+    const categoryIconEl = createCodicon(categoryIcon);
+    const categoryIconHtml = categoryIconEl ? categoryIconEl.outerHTML : '';
 
     let basicHTML = `
-      <span class="history-label">Kind:</span>
-      <span class="history-value"><span class="badge session-kind-badge ${kindClass}">${kindIconHtml} ${kindLabel}</span></span>
+      <span class="history-label">Category:</span>
+      <span class="history-value"><span class="badge agent-category-badge ${categoryClass}">${categoryIconHtml} ${categoryLabel}</span></span>
       <span class="history-label">Agent:</span>
       <span class="history-value">${encodedAgent}</span>
       <span class="history-label">Model:</span>
