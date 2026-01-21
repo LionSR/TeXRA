@@ -105,10 +105,10 @@ export class GrepTool extends defineTool({
       truncate: false,
     });
 
-    if (!result.success) {
-      throw new ToolError(
-        `ripgrep error: ${result.stderr || 'No error output available'}`,
-      );
+    // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
+    // Only treat as error if stderr is present (real errors have stderr)
+    if (!result.success && result.stderr) {
+      throw new ToolError(`ripgrep error: ${result.stderr}`);
     }
 
     const limitedOutput = applyHeadLimit(
