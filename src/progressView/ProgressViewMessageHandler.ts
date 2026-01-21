@@ -500,20 +500,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Look up the agent to get the agentType
-    const agentEntry = getAgent(proposal.agent);
-    const agentType = agentEntry?.agentType;
-
     // Map proposal category string to AgentCategory enum
     const agentCategory =
       proposal.agentCategory === 'toolUse'
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const session = {
-      agentType,
-      agentCategory,
-    };
+    const session = { agentCategory };
 
     // Build the agentConfig based on proposal type
     // Workflow proposals have file fields; tool-use proposals don't
@@ -545,7 +538,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
-      agentType,
       session,
       // File fields only present for workflow agents
       ...(isWorkflow && {
@@ -1208,7 +1200,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const agentCategory = isChat
       ? AgentCategory.ToolUse
       : AgentCategory.Workflow;
-    const session = { agentType: newAgentEntry?.agentType, agentCategory };
+    const session = { agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
     // When attachAgentOutputs is enabled, merge agent outputs into reference files
@@ -1247,7 +1239,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       referenceFiles: mergedReferenceFiles,
       instruction,
       session,
-      agentType: session.agentType,
+      agentCategory,
     } as AgentConfig;
 
     // Chat mode returns minimal TaskState, workflow preserves activeFiles

@@ -2,12 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
-import {
-  AgentCategory,
-  AgentPrompt,
-  AgentSetting,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
@@ -147,7 +143,6 @@ describe('BashTool', () => {
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       setting: {
-        agentType: AgentType.ToolUse,
         agentCategory: AgentCategory.ToolUse,
         documentTag: 'doc',
         temperature: 0,
