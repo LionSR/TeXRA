@@ -29,7 +29,7 @@ prompts:
     Research Workflow:
     (1) Use web_search and web_fetch to find current information, news, and general resources.
     (2) Use arxiv_search and arxiv_metadata for preprints and recent academic work.
-    (3) Use download_arxiv_source to download LaTeX source files from arXiv for detailed analysis.
+    (3) Use download_arxiv_source to download LaTeX source files from arXiv only when explicitly requested by the user or for extremely relevant papers that require detailed analysis.
     (4) Use crossref_search and crossref_doi for published literature and citations.
     (5) Use zotero_add to save references to the user's Zotero library (requires Zotero to be running).
     (6) Cross-reference multiple sources to verify information.
