@@ -148,18 +148,8 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     // Accumulate: add delta to existing values
-    const existing = current.get(storageKey);
-    const accumulated: TokenUsageStats = {
-      inputTokens: (existing?.inputTokens ?? 0) + delta.inputTokens,
-      outputTokens: (existing?.outputTokens ?? 0) + delta.outputTokens,
-      cost: (existing?.cost ?? 0) + delta.cost,
-      cacheReadInputTokens:
-        (existing?.cacheReadInputTokens ?? 0) +
-        (delta.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens:
-        (existing?.cacheCreationInputTokens ?? 0) +
-        (delta.cacheCreationInputTokens ?? 0),
-    };
+    const existing = current.get(storageKey) ?? emptyUsageStats();
+    const accumulated = sumUsageStats([existing, delta]);
 
     current.set(storageKey, accumulated);
     this.items.set(stream, current);
