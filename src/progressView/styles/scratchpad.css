@@ -130,34 +130,43 @@
   color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
-/* Edit diff container - stacked old/new blocks. Colors say it all. */
+/* Edit diff container - inline word-level diff view */
 .edit-diff-container {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-small);
 }
 
-.diff-block {
+.diff-inline-view {
   margin: 0;
+  padding: var(--spacing-small);
   border-radius: var(--border-radius-small);
+  background-color: var(--vscode-editor-background, #1e1e1e);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
-.diff-block-old {
-  border-left: 3px solid
-    var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+/* Inline diff: deleted text - red with strikethrough */
+.diff-inline-del {
   background-color: var(
     --vscode-diffEditor-removedTextBackground,
-    rgba(255, 0, 0, 0.1)
+    rgba(255, 0, 0, 0.2)
   );
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 0 2px;
 }
 
-.diff-block-new {
-  border-left: 3px solid
-    var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+/* Inline diff: added text - green highlight */
+.diff-inline-add {
   background-color: var(
     --vscode-diffEditor-insertedTextBackground,
-    rgba(0, 255, 0, 0.1)
+    rgba(0, 255, 0, 0.2)
   );
+  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+  border-radius: 2px;
+  padding: 0 2px;
 }
 
 /* Syntax highlighted code blocks */
