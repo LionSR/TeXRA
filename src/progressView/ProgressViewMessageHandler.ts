@@ -505,8 +505,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const session = { agentCategory };
-
     // Build the agentConfig based on proposal type
     // Workflow proposals have file fields; tool-use proposals don't
     const isWorkflow = proposal.agentCategory === 'workflow';
@@ -537,7 +535,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
-      session,
+      agentCategory,
       // File fields only present for workflow agents
       ...(isWorkflow && {
         inputFile: proposal.inputFile,
@@ -1194,12 +1192,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? `${context}\n\n${originalConfig.instruction}`
       : context;
 
-    // Build session with category based on mode
+    // Determine category based on mode
     const newAgentEntry = getAgent(agent);
     const agentCategory = isChat
       ? AgentCategory.ToolUse
       : AgentCategory.Workflow;
-    const session = { agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
     // When attachAgentOutputs is enabled, merge agent outputs into reference files
@@ -1237,7 +1234,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       useMultipleOutputs,
       referenceFiles: mergedReferenceFiles,
       instruction,
-      session,
       agentCategory,
     } as AgentConfig;
 

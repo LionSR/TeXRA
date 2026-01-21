@@ -29,7 +29,7 @@ export const RemoteAgentListItemSchema = z.object({
   /** Visibility can be NULL in the database */
   visibility: z.array(z.string()).nullish(),
   /** Agent category: 'workflow' or 'toolUse' */
-  agentCategory: z.enum(AgentCategory).nullish(),
+  agentCategory: z.nativeEnum(AgentCategory).optional(),
 });
 
 export type RemoteAgentListItem = z.infer<typeof RemoteAgentListItemSchema>;
