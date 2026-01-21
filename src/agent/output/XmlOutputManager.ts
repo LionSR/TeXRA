@@ -302,6 +302,7 @@ export class XmlOutputManager {
       await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
       outputFiles.push({
         source,
+        round: currRound,
         location: texLocation,
         lineage: null,
         diff: null,
@@ -316,6 +317,7 @@ export class XmlOutputManager {
 
   async processSingleXmlOutput(
     outputLocation: FileLocation,
+    round: number,
   ): Promise<OutputFileInfo> {
     this.logger.debug(
       `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
@@ -335,6 +337,7 @@ export class XmlOutputManager {
 
     return {
       source: original || this.agentConfig.inputFile,
+      round,
       location: processedTexLocation,
       lineage: null,
       diff: null,
