@@ -2,6 +2,11 @@
 
 TeXRA supports models from multiple providers. Select models from the dropdown in the TeXRA UI. Hover over options to see context window and cost estimates.
 
+**Model ID suffixes:**
+- `T` = Thinking/reasoning mode enabled (shows chain-of-thought)
+- `-` = Lighter/faster variant
+- Numbers indicate version (e.g., `45` = 4.5, `25` = 2.5)
+
 ## Anthropic Models
 
 | Model ID | Use Case | Cost | Speed |
