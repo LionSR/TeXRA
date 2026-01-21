@@ -13,14 +13,13 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   wrapInHighlightedPre,
-  detectLanguageFromPath,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-
-// Tools that benefit from specialized formatting
-const EDIT_TOOLS = new Set(['edit_file', 'write_file']);
-const READ_TOOLS = new Set(['read_file']);
-const CODE_OUTPUT_TOOLS = new Set(['bash', 'execute', 'run']);
+import {
+  TOOLS_WITH_DIFF_INPUT,
+  TOOLS_WITH_FILE_LINK,
+  TOOLS_WITH_CODE_OUTPUT,
+} from '../constants.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -144,8 +143,8 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const filePath =
     typeof input === 'object' && input !== null ? input.path : '';
 
-  // Handle edit tools with inline diff display
-  if (EDIT_TOOLS.has(toolName) && input?.old_string && input?.new_string) {
+  // Handle edit tools with diff display for input
+  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && input?.old_string && input?.new_string) {
     // Show file path as link
     if (filePath) {
       sections.push(
@@ -155,7 +154,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
         ),
       );
     }
-    // Show inline diff for old_string → new_string
+    // Show diff for old_string → new_string
     sections.push(
       buildToolUseSection(
         'Changes:',
@@ -164,7 +163,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     );
   }
   // Handle read tools with file link instead of full content
-  else if (READ_TOOLS.has(toolName) && filePath) {
+  else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
     // Only use line info if explicitly provided in range
     // Don't default to line 1 - this breaks binary files (PDFs, images)
     const range = input?.range;
@@ -193,7 +192,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     const inputValue = stringifyForDisplay(input);
     if (inputValue) {
       // Use syntax highlighting for code-related tools
-      if (CODE_OUTPUT_TOOLS.has(toolName)) {
+      if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
         sections.push(
           buildToolUseSection('Input:', wrapInHighlightedPre(inputValue, 'bash')),
         );
@@ -204,13 +203,13 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   }
 
   // Show output if present (primary result from tool)
-  // Skip for read tools (already shown as file link)
-  if (outputText && !READ_TOOLS.has(toolName)) {
-    // Use syntax highlighting for code outputs
-    const language = detectLanguageFromPath(filePath) || (CODE_OUTPUT_TOOLS.has(toolName) ? 'bash' : '');
-    if (language) {
+  // Skip for read/file-link tools (already shown as file link)
+  if (outputText && !TOOLS_WITH_FILE_LINK.has(toolName)) {
+    // Only syntax highlight output for tools with actual code output
+    // Edit tools output human-readable status like "Replaced 1 occurrence." - not code
+    if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
       sections.push(
-        buildToolUseSection('Output:', wrapInHighlightedPre(outputText, language, 'tool-output-full')),
+        buildToolUseSection('Output:', wrapInHighlightedPre(outputText, 'bash', 'tool-output-full')),
       );
     } else {
       sections.push(
