@@ -136,7 +136,7 @@ const baseConfig = {
               link: '/guide/working-with-figures.md',
             },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
-            { text: 'Tool Integration', link: '/guide/tool-integration' },
+            { text: 'LaTeX Tools', link: '/guide/latex-tools' },
             { text: 'Research Tools', link: '/guide/research-tools' },
           ],
         },
