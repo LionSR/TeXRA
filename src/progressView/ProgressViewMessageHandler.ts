@@ -1023,7 +1023,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         taskState,
         originalConfig,
         fileMapping,
-        { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion },
+        {
+          mode,
+          agent,
+          model,
+          includeInstruction,
+          attachAgentOutputs,
+          initialQuestion,
+        },
       );
 
       await vscode.commands.executeCommand('texra.mainView.focus');
@@ -1146,8 +1153,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       initialQuestion?: string;
     },
   ): Promise<TaskState> {
-    const { mode, agent, model, includeInstruction, attachAgentOutputs, initialQuestion } =
-      options;
+    const {
+      mode,
+      agent,
+      model,
+      includeInstruction,
+      attachAgentOutputs,
+      initialQuestion,
+    } = options;
     const isChat = mode === 'chat';
 
     // Map input files: by default, outputs become new inputs
