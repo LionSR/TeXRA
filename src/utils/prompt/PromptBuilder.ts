@@ -19,6 +19,7 @@ Never mention tool names when speaking to the user.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
+The current working directory is {{ CWD }}. Use relative paths when working with files.
 </tool_use_instructions>`;
 
 /** Instructions appended when memory tool is enabled */
@@ -196,6 +197,6 @@ export async function buildInitialToolUsePrompts(
 
   return {
     ...initial,
-    instructionSuffix: suffixParts.join('\n'),
+    instructionSuffix: await renderPrompt(suffixParts.join('\n'), userVars),
   };
 }

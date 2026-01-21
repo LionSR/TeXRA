@@ -20,15 +20,6 @@ export class RetryRequests extends BaseUIRequestManager {
     });
   }
 
-  _getFeedbackConfig() {
-    return {
-      containerClass: 'retry-request',
-      feedbackClass: 'retry-request__feedback',
-      inputClass: 'retry-request__feedback-input',
-      activeClass: 'retry-request--feedback-active',
-    };
-  }
-
   /** @override */
   _createRequestElement(request) {
     const element = createFromTemplate('retryRequestTemplate');
@@ -164,17 +155,6 @@ export class RetryRequests extends BaseUIRequestManager {
     const action = button.dataset.action;
     if (!streamId || !action) {
       return;
-    }
-
-    // Handle retry with optional feedback (uses shared base class logic)
-    if (action === 'retry') {
-      const handled = this._handleRejectWithFeedback(
-        button,
-        streamId,
-        COMMANDS.RETRY_STREAM_REQUEST,
-        'stream',
-      );
-      if (handled) return;
     }
 
     const actionCommands = {
