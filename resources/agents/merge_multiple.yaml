@@ -3,7 +3,7 @@ inherits: merge
 description: Merges multiple partial edits back into their full original documents.
 
 settings:
-  agentType: direct
+  maxRounds: 1
   isMultipleOutput: true
   documentTag: merged_documents
   endTag: </merged_documents>

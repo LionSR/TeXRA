@@ -140,10 +140,6 @@ function computeTotalRounds(
     return setting.maxRounds;
   }
 
-  if (setting.agentType === 'direct') {
-    return 1;
-  }
-
   let requests: string[];
   if (Array.isArray(prompt.userRequest)) {
     requests = prompt.userRequest;
