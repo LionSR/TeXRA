@@ -60,6 +60,7 @@
   text-align: left;
   font-family: var(--font-family);
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .tab-header {
@@ -108,7 +109,9 @@
   height: var(--height-control);
   margin: 0 var(--spacing-small) 0 0;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  transition: color 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .tab-container:hover {
@@ -126,6 +129,11 @@
 .tab-delete::part(control) {
   padding: 0;
   border-radius: var(--border-radius-small);
+  background-color: color-mix(
+    in srgb,
+    var(--vscode-icon-foreground, var(--vscode-foreground)) 10%,
+    transparent
+  );
 }
 
 .tab-delete:hover::part(control),
