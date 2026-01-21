@@ -18,19 +18,27 @@ import {
 export type { AgentLoadOptions as RemoteAgentLoadOptions } from '@agent/runtime/agentLoad';
 
 /**
- * Schema for remote agent metadata.
- * Uses .nullish() to accept null from database and normalize to undefined.
+ * Schema for remote agent list items (from DB queries).
+ * Description from DB serves as cache; authoritative value comes from YAML when loaded.
  */
-export const RemoteAgentMetadataSchema = z.object({
+export const RemoteAgentListItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** Description can be NULL in the database */
+  /** Cached description from DB (YAML is source of truth) */
   description: z.string().nullish(),
   /** Visibility can be NULL in the database */
   visibility: z.array(z.string()).nullish(),
   /** Agent category: 'workflow' or 'toolUse' */
   agentCategory: z.enum(AgentCategory).nullish(),
 });
+
+export type RemoteAgentListItem = z.infer<typeof RemoteAgentListItemSchema>;
+
+/**
+ * Full remote agent metadata. Same shape as list item.
+ * When loaded via loadRemoteAgent(), description comes from YAML.
+ */
+export const RemoteAgentMetadataSchema = RemoteAgentListItemSchema;
 
 export type RemoteAgentMetadata = z.infer<typeof RemoteAgentMetadataSchema>;
 

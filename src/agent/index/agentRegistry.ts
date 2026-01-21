@@ -215,6 +215,20 @@ export function getAgent(identifier: string): AgentEntry | undefined {
 }
 
 /**
+ * Update an agent's description in the cache.
+ * Used to populate descriptions for remote agents after YAML is loaded.
+ */
+export function updateAgentDescription(
+  identifier: string,
+  description: string | undefined,
+): void {
+  const entry = getAgent(identifier);
+  if (entry && description) {
+    entry.description = description;
+  }
+}
+
+/**
  * Resolve an agent to its definition path, handling _multiple variant logic.
  */
 export function resolveAgent(
@@ -434,6 +448,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       if (!primary) continue;
 
       const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
+      // Description from DB is cache; updated from YAML when agent is loaded
       entries.push({
         name: base ? baseName : primary.name,
         source: 'remote' as AgentSource,

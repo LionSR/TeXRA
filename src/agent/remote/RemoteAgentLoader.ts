@@ -12,7 +12,11 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
+import {
+  getMultipleName,
+  getBaseName,
+  updateAgentDescription,
+} from '@agent/index/agentRegistry';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -20,7 +24,9 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 
 import {
+  RemoteAgentListItemSchema,
   RemoteAgentMetadataSchema,
+  type RemoteAgentListItem,
   type RemoteAgentMetadata,
   type RemoteAgentConfig,
   type RemoteAgentLoadOptions,
@@ -95,15 +101,15 @@ function mapHttpError(
   };
 }
 
-/** Maps a database row to RemoteAgentMetadata using schema validation. */
-function parseMetadataRow(row: {
+/** Maps a database row to RemoteAgentListItem using schema validation. */
+function parseListItemRow(row: {
   id: string;
   name: string;
   description?: string | null;
   visibility?: string[] | null;
   agent_category?: string | null;
-}): RemoteAgentMetadata | null {
-  const result = RemoteAgentMetadataSchema.safeParse({
+}): RemoteAgentListItem | null {
+  const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
     description: row.description,
@@ -237,7 +243,6 @@ export class RemoteAgentLoader {
         const {
           config: yamlContent,
           name: responseName,
-          description,
           visibility,
           agentCategory,
         } = await response.json();
@@ -271,6 +276,13 @@ export class RemoteAgentLoader {
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
 
+        // Update registry cache with description from YAML
+        // Use base name since registry stores entries under base name only
+        if (validated.description) {
+          const baseName = getBaseName(agentName);
+          updateAgentDescription(`remote:${baseName}`, validated.description);
+        }
+
         return {
           name: validated.name || responseName || agentName,
           settings: parseAgentSetting(settings),
@@ -278,7 +290,7 @@ export class RemoteAgentLoader {
           metadata: RemoteAgentMetadataSchema.parse({
             id: '',
             name: responseName || agentName,
-            description,
+            description: validated.description,
             visibility,
             agentCategory,
           }),
@@ -310,7 +322,7 @@ export class RemoteAgentLoader {
   }
 
   /** List all available remote agents for the current user. */
-  static async listRemoteAgents(): Promise<RemoteAgentMetadata[]> {
+  static async listRemoteAgents(): Promise<RemoteAgentListItem[]> {
     if (!(await SupabaseClient.isAuthenticated())) return [];
 
     try {
@@ -328,46 +340,14 @@ export class RemoteAgentLoader {
       }
 
       return (data ?? [])
-        .map(parseMetadataRow)
-        .filter((item): item is RemoteAgentMetadata => item !== null);
+        .map(parseListItemRow)
+        .filter((item): item is RemoteAgentListItem => item !== null);
     } catch (error) {
       logger.error(
         CHANNEL,
         `Error listing remote agents: ${toErrorMessage(error)}`,
       );
       return [];
-    }
-  }
-
-  /** Get metadata for a specific remote agent. */
-  static async getAgentMetadata(
-    agentName: string,
-  ): Promise<RemoteAgentMetadata | null> {
-    try {
-      const supabase = await getAuthenticatedClient();
-      if (!supabase) return null;
-
-      const { data, error } = await supabase
-        .from('remote_agents')
-        .select('id, name, description, visibility, agent_category')
-        .eq('name', agentName)
-        .single();
-
-      if (error || !data) {
-        logger.warn(
-          CHANNEL,
-          `No metadata found for remote agent: ${agentName}`,
-        );
-        return null;
-      }
-
-      return parseMetadataRow(data);
-    } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Error fetching metadata for ${agentName}: ${toErrorMessage(error)}`,
-      );
-      return null;
     }
   }
 }
