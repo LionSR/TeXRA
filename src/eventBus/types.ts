@@ -42,10 +42,6 @@ export const RetryRequestPromptSchema = z.strictObject({
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 
-/** Agent category for proposals */
-export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
-export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
-
 /** Agent proposal actions */
 export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
 export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
