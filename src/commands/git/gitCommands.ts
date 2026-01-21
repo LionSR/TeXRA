@@ -169,27 +169,24 @@ async function promptInput(
   return trimmed;
 }
 
-async function getOverleafCredentials(
+async function getGitToken(
   secrets: vscode.SecretStorage,
+  key: string,
+  title: string,
+  validate?: (t: string) => boolean,
 ): Promise<{ remote: string; sensitive: string[] } | null> {
-  const key = 'overleaf.gitToken';
-
   let token = (await secrets.get(key))?.trim() ?? '';
-  if (token && !token.startsWith('olp_')) {
+  if (token && validate && !validate(token)) {
     await secrets.delete(key);
     token = '';
   }
 
   if (!token) {
-    const input = await promptInput(
-      'Overleaf Git Token',
-      'Enter your Overleaf Git token (starts with "olp_").',
-      true,
-    );
+    const input = await promptInput(title, 'Enter your Git authentication token.', true);
     if (!input) return null;
 
-    if (!input.startsWith('olp_')) {
-      vscode.window.showErrorMessage('Invalid token. Must start with "olp_".');
+    if (validate && !validate(input)) {
+      vscode.window.showErrorMessage('Invalid token format.');
       return null;
     }
     token = input;
@@ -198,40 +195,6 @@ async function getOverleafCredentials(
 
   const enc = encodeURIComponent(token);
   return { remote: `git:${enc}`, sensitive: [token, enc] };
-}
-
-async function getShareLatexCredentials(
-  secrets: vscode.SecretStorage,
-  host: string,
-): Promise<{ remote: string; sensitive: string[] } | null> {
-  const key = `sharelatex.${host}.credentials`;
-
-  let user = '',
-    pass = '';
-  const stored = await secrets.get(key);
-  if (stored) {
-    try {
-      const c = JSON.parse(stored);
-      user = c.username ?? '';
-      pass = c.password ?? '';
-    } catch {
-      await secrets.delete(key);
-    }
-  }
-
-  if (!user || !pass) {
-    const u = await promptInput(`ShareLaTeX (${host})`, 'Username or email');
-    if (!u) return null;
-    const p = await promptInput(`ShareLaTeX (${host})`, 'Password', true);
-    if (!p) return null;
-    user = u;
-    pass = p;
-    await secrets.store(key, JSON.stringify({ username: user, password: pass }));
-  }
-
-  const encU = encodeURIComponent(user);
-  const encP = encodeURIComponent(pass);
-  return { remote: `${encU}:${encP}`, sensitive: [user, pass, encU, encP] };
 }
 
 async function cloneOverleafProject(
@@ -257,8 +220,8 @@ async function cloneOverleafProject(
 
   // Get credentials
   const creds = parsed.isOverleaf
-    ? await getOverleafCredentials(context.secrets)
-    : await getShareLatexCredentials(context.secrets, parsed.host);
+    ? await getGitToken(context.secrets, 'overleaf.gitToken', 'Overleaf Git Token', (t) => t.startsWith('olp_'))
+    : await getGitToken(context.secrets, `sharelatex.${parsed.host}.token`, `ShareLaTeX Token (${parsed.host})`);
   if (!creds) return;
 
   // Check preconditions
