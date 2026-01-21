@@ -1,3 +1,19 @@
+/**
+ * Zotero integration via the local Connector API (port 23119).
+ *
+ * Current capabilities (Zotero Connector):
+ * - Add items by DOI, URL, or manual metadata
+ *
+ * Future enhancement: Better BibTeX plugin support
+ * If the user has Better BibTeX installed, its JSON-RPC API at
+ * http://localhost:23119/better-bibtex/json-rpc enables:
+ * - item.search: Search library by citation key, title, author, year
+ * - item.export: Export BibTeX/BibLaTeX by citation keys
+ * - item.attachments: Get PDF attachments for an item
+ * - collection.scanAUX: Find citations referenced in a .aux file
+ * See: https://retorque.re/zotero-better-bibtex/exporting/json-rpc/
+ */
+
 // Third-party imports
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
