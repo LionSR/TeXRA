@@ -1,6 +1,6 @@
 # ProgressBoard
 
-The ProgressBoard is TeXRA's central hub for monitoring agent execution, viewing detailed logs, and managing past runs. Think of it as the mission control center for your AI assistant – essential for understanding what's happening under the hood and troubleshooting when things go sideways.
+The ProgressBoard monitors agent execution, displays logs, and manages past runs.
 
 ## Accessing the ProgressBoard
 
@@ -43,8 +43,7 @@ The header provides a summary and actions for the selected stream:
   - **Grey (Stopped)**: The agent finished successfully or was stopped manually before completion.
   - **Red (Error)**: The agent encountered an error during execution.
   - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
-- **Token & Cost Summary**: Displays the combined input and output token counts
-  from all completed rounds (`r0` and `r1`) along with the estimated cost.
+- **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (`r0` and `r1`) along with the estimated cost.
 - **Stream Header Actions**:
   - <i class="codicon codicon-debug-stop"></i> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
   - <i class="codicon codicon-debug-rerun"></i> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.

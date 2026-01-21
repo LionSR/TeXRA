@@ -28,11 +28,9 @@ TeXRA will then invoke the specialized `merge` agent:
 
 ## What Happens Behind the Scenes
 
-When you click the Merge button (prepare for some AI wizardry):
-
-1.  TeXRA sends the content of both the Base File and the Edited File to a selected AI model (defaults can be configured in settings, `sonnet45` is often a good choice).
-2.  The model is instructed to intelligently synthesize a new, complete document that preserves the structure and unchanged content of the Base File while incorporating the modifications present in the Edited File.
-3.  TeXRA saves this synthesized result.
+1. TeXRA sends both files to the selected AI model
+2. The model synthesizes a complete document preserving the Base File structure while incorporating Edited File changes
+3. TeXRA saves the result
 
 ## The Output: A Complete, Merged File
 

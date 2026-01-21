@@ -207,3 +207,21 @@ A snapshot of changes made to files in a Git repository, representing a specific
 Software suites for creating, editing, and converting images in various formats, used by TeXRA for processing figures and diagrams.
 
 ### Ghostscript
+
+An interpreter for PostScript and PDF files, used by TeXRA for processing and converting PDF documents.
+
+### latexmk
+
+A Perl script for automating the compilation of LaTeX documents, handling multiple passes and auxiliary tools automatically.
+
+### Streaming
+
+A mode where AI model responses are delivered progressively as they're generated, rather than waiting for the complete response. Enables faster perceived response times.
+
+### Context Overflow
+
+Occurs when the combined size of input documents and prompts exceeds a model's context window. TeXRA handles this with automatic continuation prompts.
+
+### VSIX
+
+The file format for VS Code extensions. TeXRA is distributed as a `.vsix` file that can be installed in VS Code.
