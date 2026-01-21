@@ -1,5 +1,6 @@
 // Third-party imports
 import { toJSONSchema } from 'zod';
+import { zodFunction } from 'openai/helpers/zod';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -12,7 +13,10 @@ import type {
   FunctionDeclaration,
   Schema,
 } from '@google/genai/dist/genai';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionTool,
+  ChatCompletionFunctionTool,
+} from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
   WebSearchTool,
@@ -49,16 +53,39 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
+ *
+ * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which:
+ * - Converts Zod schema to JSON Schema using SDK's optimized conversion
+ * - Enables strict mode for better type safety
+ *
+ * Note: zodFunction() may throw for invalid schemas - this is intentional fail-fast
+ * behavior since invalid tool schemas are programming errors caught during development.
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    function: {
-      name: d.name,
-      description: d.description,
-      parameters: convertToolSchema(d),
-    },
-  })) as ChatCompletionTool[];
+  return defs.map((d) => {
+    // Use native SDK Zod conversion when schema is available
+    // zodFunction() returns AutoParseableTool which extends ChatCompletionFunctionTool
+    // with additional parsing metadata - structurally compatible with ChatCompletionTool
+    if (d.zodSchema) {
+      return zodFunction({
+        name: d.name,
+        description: d.description,
+        parameters: d.zodSchema,
+      }) as ChatCompletionTool;
+    }
+
+    // Fallback to manual conversion for legacy definitions
+    // Cast to ChatCompletionFunctionTool since ToolDefinition.parameters
+    // is a union type that includes provider-specific schemas
+    return {
+      type: 'function',
+      function: {
+        name: d.name,
+        description: d.description,
+        parameters: d.parameters,
+      },
+    } as ChatCompletionFunctionTool;
+  });
 }
 
 /**
