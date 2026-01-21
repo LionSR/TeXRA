@@ -10,10 +10,13 @@ import { z } from 'zod';
 
 // Local imports - core
 import { defineTool } from '@tools/core/define';
-import { getConfig } from '@utils/config';
 
 // Local imports - zotero
-import { callBetterBibTeX, type BbtSearchResultItem } from './bbtClient';
+import {
+  callBetterBibTeX,
+  getZoteroPort,
+  type BbtSearchResultItem,
+} from './bbtClient';
 
 const ZoteroSearchInputSchema = z.strictObject({
   query: z
@@ -41,7 +44,7 @@ export class ZoteroSearchTool extends defineTool({
   schema: ZoteroSearchInputSchema,
 }) {
   protected async execute({ query, library }: ZoteroSearchInput) {
-    const port = getConfig<number>('texra.bib.zoteroConnectorPort', 23119);
+    const port = getZoteroPort();
 
     const params: unknown[] = [query];
     if (library) {
