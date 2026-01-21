@@ -138,6 +138,21 @@ export class RetryRequests extends BaseUIRequestManager {
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 
+    // Add stream diagnostics if present (Anthropic streaming errors)
+    if (details.streamDiagnostics) {
+      const diag = details.streamDiagnostics;
+      lines.push('--- Stream Diagnostics ---');
+      lines.push(`  thinkingChars: ${diag.thinkingChars}`);
+      lines.push(`  textChars: ${diag.textChars}`);
+      lines.push(`  toolInputChars: ${diag.toolInputChars}`);
+      lines.push(`  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`);
+      lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
+      lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
+      lines.push(`  elapsedSecs: ${diag.elapsedSecs}`);
+      lines.push(`  secsSinceLastEvent: ${diag.secsSinceLastEvent}`);
+      lines.push(`  finalized: ${diag.finalized}`);
+    }
+
     return lines.length > 0 ? lines.join('\n') : null;
   }
 
