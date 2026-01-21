@@ -4,6 +4,19 @@ TeXRA is a VS Code extension that uses large language models to help academics w
 
 <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
 
+## How It Works
+
+```mermaid
+graph LR
+    A[Select Files] --> B[Choose Agent & Model]
+    B --> C[Provide Instruction]
+    C --> D[Execute]
+    D --> E[Review Output]
+    E --> F{Satisfied?}
+    F -->|No| C
+    F -->|Yes| G[Done]
+```
+
 ## Key Features
 
 ### Workflow Agents
