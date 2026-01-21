@@ -60,6 +60,8 @@ prompts:
 
     Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output for each document containing all sections in order.
 
+    Note: The LaTeX preamble (documentclass, packages, macros) is typically extracted separately and does not need to be included in output files. Focus only on the document content.
+
   userPrefix: |
     I am going to give you multiple \LaTeX documents that contain inline annotations from a previous review.
 
