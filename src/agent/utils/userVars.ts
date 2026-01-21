@@ -105,6 +105,9 @@ function getBasicVars(
   const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
   const toolUseAgentsList = formatAgentList(getVisibleToolUseAgents());
 
+  // Get default bib path from settings (empty string if not configured)
+  const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
+
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
@@ -114,6 +117,7 @@ function getBasicVars(
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
     CWD: WorkspaceFS.getPath() ?? '.',
+    DEFAULT_BIB_PATH: defaultBibPath,
   };
 }
 
