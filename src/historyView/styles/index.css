@@ -112,17 +112,17 @@ mark.current-match {
   );
 }
 
-.session-kind-badge {
+.agent-category-badge {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-small);
 }
 
-.session-kind-badge .codicon {
+.agent-category-badge .codicon {
   font-size: var(--font-size-sm);
 }
 
-.kind-workflow {
+.category-workflow {
   background-color: var(
     --vscode-editorInfo-background,
     rgba(0, 127, 212, 0.15)
@@ -130,7 +130,7 @@ mark.current-match {
   color: var(--vscode-editorInfo-foreground, #3794ff);
 }
 
-.kind-tool-use {
+.category-tool-use {
   background-color: var(
     --vscode-editorWarning-background,
     rgba(255, 204, 0, 0.15)
