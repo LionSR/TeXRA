@@ -130,39 +130,16 @@
   color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
-/* Edit diff container for stacked old/new blocks */
+/* Edit diff container - stacked old/new blocks. Colors say it all. */
 .edit-diff-container {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-small);
 }
 
-.edit-diff-old,
-.edit-diff-new {
-  position: relative;
-}
-
-.edit-diff-label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
-}
-
-.edit-diff-label.diff-remove {
-  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2));
-}
-
-.edit-diff-label.diff-add {
-  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.2));
-}
-
 .diff-block {
   margin: 0;
-  border-radius: 0 var(--border-radius-small) var(--border-radius-small) var(--border-radius-small);
+  border-radius: var(--border-radius-small);
 }
 
 .diff-block-old {
