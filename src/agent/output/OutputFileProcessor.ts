@@ -133,6 +133,7 @@ export class OutputFileProcessor {
       const processedLocation = rawLocation ?? outputLocation;
       let processed: OutputFileInfo = {
         source: path.basename(outputLocation.absolutePath),
+        round: currRound,
         location: processedLocation,
         lineage: null,
         diff: null,
@@ -149,7 +150,10 @@ export class OutputFileProcessor {
           (hasDocumentTag || hasScratchpadPrefill));
 
       if (shouldProcessXml) {
-        processed = await xmlManager.processSingleXmlOutput(outputLocation);
+        processed = await xmlManager.processSingleXmlOutput(
+          outputLocation,
+          currRound,
+        );
       }
 
       const hasProcessedPath = Boolean(processed.location.absolutePath);

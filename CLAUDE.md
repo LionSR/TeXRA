@@ -98,6 +98,33 @@ Use Zod schemas as the single source of truth for data structures:
 
 This project uses **Zod v4**. See AGENTS.md for idiomatic Zod v4 patterns including `.prefault()`, `.catch()`, and `.nullish()` for tool schemas.
 
+### Backward Compatibility with Zod
+
+When evolving data formats while maintaining backward compatibility:
+
+- **Use `z.union()` with `.transform()`** to handle multiple formats in one schema
+- **New format first** in the union (Zod tries in order)
+- **Legacy format transforms** into the canonical structure
+- **Handle legacy at entry point** using `safeParse`, not scattered fallbacks in consumers
+- **One canonical format** for all downstream code—no conditional handling based on format version
+
+Example pattern:
+
+```typescript
+// Canonical format (new)
+const NewFormatSchema = z.object({ revised: OutputFileInfoSchema, ... });
+
+// Legacy format transforms to canonical
+const LegacyFormatSchema = z.object({ baseLabel: z.string(), ... })
+  .transform((e): NewFormat => ({ /* map to canonical */ }));
+
+// Single entry point handles both
+const EntrySchema = z.union([NewFormatSchema, LegacyFormatSchema]);
+
+// Usage: always returns canonical format
+const result = EntrySchema.safeParse(raw);
+```
+
 ### Flattening Abstraction Layers
 
 When refactoring, eliminate unnecessary wrapper functions and indirection layers:
