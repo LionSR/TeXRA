@@ -9,7 +9,6 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -204,6 +203,7 @@ export class XmlOutputManager {
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     documentTag: string,
+    round: number,
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
@@ -225,7 +225,11 @@ export class XmlOutputManager {
           expectedDocumentCount,
           fallbackDocs.length,
         );
-        return this.processMultipleLatexDocuments(fallbackDocs, outputLocation);
+        return this.processMultipleLatexDocuments(
+          fallbackDocs,
+          outputLocation,
+          round,
+        );
       }
       this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
       return null;
@@ -242,7 +246,11 @@ export class XmlOutputManager {
           expectedDocumentCount,
           documents.length,
         );
-        return this.processMultipleLatexDocuments(documents, outputLocation);
+        return this.processMultipleLatexDocuments(
+          documents,
+          outputLocation,
+          round,
+        );
       }
 
       this.logger.debugInternal(
@@ -262,14 +270,12 @@ export class XmlOutputManager {
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputLocation: FileLocation,
+    round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
     const outputParts = path.basename(outputLocation.absolutePath).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
-
-    const lastRoundMatch = extractLastRoundMatch(outputLocation.absolutePath);
-    const currRound = lastRoundMatch ? parseInt(lastRoundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -287,13 +293,7 @@ export class XmlOutputManager {
 
       const { ext } = path.parse(source);
       const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(
-        source,
-        agent,
-        model,
-        extension,
-        currRound,
-      );
+      const texFile = getOutputFileName(source, agent, model, extension, round);
       const texLocation = this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
@@ -302,7 +302,7 @@ export class XmlOutputManager {
       await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
       outputFiles.push({
         source,
-        round: currRound,
+        round,
         location: texLocation,
         lineage: null,
         diff: null,
@@ -346,6 +346,7 @@ export class XmlOutputManager {
 
   async processMultipleXmlOutputs(
     outputLocation: FileLocation,
+    round: number,
   ): Promise<OutputFileInfo[]> {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
@@ -353,6 +354,7 @@ export class XmlOutputManager {
     return this.splitScratchpadMultipleOutputXml(
       outputLocation,
       this.agentSetting.documentTag,
+      round,
     );
   }
 
