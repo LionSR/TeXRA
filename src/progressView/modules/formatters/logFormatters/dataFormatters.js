@@ -215,7 +215,10 @@ const extractLegacyFormat = (entry) => {
     revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
     diffFile: locations.diff?.absolutePath || entry.diffPath || '',
     displayName:
-      entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown',
+      entry.originalFileName ||
+      entry.baseLabel ||
+      getBasename(baseFile) ||
+      'unknown',
     baseRound: null,
     revisedRound: 0,
     status: entry.status || 'error',
@@ -234,23 +237,37 @@ const buildLatexdiffEntryHtml = (entry) => {
   if (!entry) return '';
 
   // Extract fields based on format
-  const data = entry.revised && typeof entry.revised === 'object'
-    ? extractNewFormat(entry)
-    : entry.locations
-      ? extractLegacyFormat(entry)
-      : null;
+  const data =
+    entry.revised && typeof entry.revised === 'object'
+      ? extractNewFormat(entry)
+      : entry.locations
+        ? extractLegacyFormat(entry)
+        : null;
 
   if (!data) return '';
 
-  const { baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId } = data;
+  const {
+    baseFile,
+    revisedFile,
+    diffFile,
+    displayName,
+    baseRound,
+    revisedRound,
+    status,
+    message,
+    runId,
+  } = data;
 
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"` : '';
+  const runAttr = runId
+    ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"`
+    : '';
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
-  const baseLabel = baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
+  const baseLabel =
+    baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
   const revisedLabel = `[r${revisedRound}]`;
 
   const baseLink = buildFileLink(baseFile, baseLabel);
