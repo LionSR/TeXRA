@@ -12,91 +12,91 @@ For details on the underlying structure and execution flow common to all agents,
 
 ### `chat`
 
-The `chat` agent acts as a friendly scientist focused on careful reasoning during conversation.
-It can execute `bash` commands and manipulate files using the `read_file`,
-`write_file`, and `edit_file` tools.
-Whenever an agent proposes a workspace edit, TeXRA opens VS Code's native diff
-view so you can review and approve (or reject with feedback) before the change
-touches disk.
+A general-purpose research assistant that can read, write, and edit files in your workspace. It acts as a friendly scientist focused on careful reasoning.
 
-You can disable this approval checkpoint through the
-`texra.toolUse.requireEditApproval` setting if you prefer edits to apply
-immediately.
-Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving the sandbox.
-When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
-to keep mathematical discussions accurate.
+**Capabilities:**
+- Read and analyze your documents
+- Edit files with your approval (via VS Code diff view)
+- Run shell commands for compilation or other tasks
+- Search through your project files
 
-> **Heads up:** `read_file` returns at most the first 2,000 lines of a file and prefixes each line with a `cat -n` style line number so tool outputs stay readable.
+**Best for:** General research assistance, code/LaTeX editing, running compilations
+
+**Example instruction:**
+```
+Review my introduction in paper.tex and suggest improvements for clarity.
+Then update the file with your changes.
+```
 
 ### `ask`
 
-The `ask` agent provides a read-only workspace companion for exploratory
-questions.
-It is limited to the `read_file`, `glob`, `grep`, and `ls` tools so it can
-inspect project files without modifying them or running arbitrary shell
-commands.
-Pick this agent when you want to look up details in the repository without the
-risk of accidental edits.
+A read-only assistant for exploring your workspace without risk of modifications.
+
+**Capabilities:**
+- Read and analyze documents
+- Search through project files
+- Answer questions about your codebase
+
+**Best for:** Quick questions, understanding existing code, safe exploration
+
+**Example instruction:**
+```
+What packages does this LaTeX project use? Summarize the document structure.
+```
 
 ## Research & Discovery Agents
 
 ### `search`
 
-The `search` agent specializes in web search and academic literature discovery. It provides read-only research capabilities with access to arXiv, Crossref, and web search tools.
+Specializes in finding academic literature and web content. Read-only - cannot modify your files.
 
-**Tools available:** `web_search`, `web_fetch`, `arxiv_search`, `arxiv_metadata`, `crossref_search`, `crossref_doi`, `read_file`, `glob`, `grep`, `ls`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`
+**Capabilities:**
+- Search arXiv for preprints and papers
+- Look up publications via Crossref/DOI
+- Fetch and summarize web pages
+- Cross-reference multiple sources
 
-**Best for:**
-
-- Literature reviews and finding relevant papers
-- Verifying facts and finding citations
-- Exploring a research topic across multiple sources
-- Cross-referencing academic databases
+**Best for:** Literature reviews, finding citations, fact-checking
 
 **Example instruction:**
-
 ```
 Find recent papers on transformer architectures for scientific document understanding.
-Focus on papers from 2023-2024 that specifically address mathematical equation handling.
+Focus on papers from 2023-2024 that address mathematical equation handling.
 ```
 
 ### `research`
 
-The `research` agent combines analytical derivations with computational verification using Wolfram Language. Unlike `search`, this agent can edit files and execute complex computations.
+Combines file editing with computational verification using Wolfram Language for symbolic mathematics.
 
-**Tools available:** `wolfram`, `todo_write`, `read_file`, `write_file`, `edit_file`, `bash`, `glob`, `grep`, `ls`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`, `texcount`
+**Capabilities:**
+- Perform symbolic and numerical calculations
+- Verify mathematical derivations step-by-step
+- Edit files with computational results
+- Track progress on complex tasks
 
-**Best for:**
-
-- Symbolic mathematics and analytical derivations
-- Numerical verification of calculations
-- Step-by-step mathematical proofs with verification
-- Complex multi-step research workflows
+**Best for:** Mathematical derivations, computational verification, multi-step research
 
 **Example instruction:**
-
 ```
 Derive the variational equations for the Lagrangian in equations.tex.
-Verify each step using Wolfram Language and convert the final results to LaTeX.
+Verify each step computationally and update the file with results.
 ```
 
 ### `discuss`
 
-The `discuss` agent serves as an academic discussion partner for exploring ideas, critiquing approaches, and brainstorming research directions. It has read-only file access plus literature tools.
+An academic discussion partner for brainstorming and exploring research directions. Read-only with literature access.
 
-**Tools available:** `read_file`, `glob`, `grep`, `ls`, `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_search`, `crossref_doi`, `extract_bib_entries`
+**Capabilities:**
+- Engage in substantive intellectual discourse
+- Find and synthesize relevant literature
+- Offer counterarguments and alternative perspectives
+- Connect ideas across papers
 
-**Best for:**
-
-- Brainstorming research directions
-- Critical discussion of methodologies
-- Connecting ideas across different papers
-- Getting feedback on research approaches
+**Best for:** Brainstorming, methodology critique, research direction guidance
 
 **Example instruction:**
-
 ```
-I'm considering using attention mechanisms for my theorem prover. What are the
+I'm considering attention mechanisms for my theorem prover. What are the
 tradeoffs compared to tree-based approaches? What does the literature say?
 ```
 
@@ -104,22 +104,20 @@ tradeoffs compared to tree-based approaches? What does the literature say?
 
 ### `lean`
 
-Lean 4 proof assistant with VS Code extension integration and CLI fallback. Uses
-dedicated tools (`lean_diagnostics`, `lean_inspect`, `lean_project`, `lean_loogle`)
-for verification, with bash `lake`/`lean` commands as fallback when needed.
+Interactive Lean 4 proof assistant with VS Code integration.
 
-**Best for:**
+**Capabilities:**
+- Get real-time diagnostics and error feedback
+- Inspect proof state and types at any position
+- Search Mathlib for relevant lemmas
+- Build and verify proofs
 
-- Interactive proof development with real-time feedback
-- Inspecting proof state and types at specific positions
-- Projects using Mathlib (with `lean_loogle` search)
-- Building and verifying via CLI when extension tools are insufficient
+**Best for:** Formalizing proofs, Lean 4 development, Mathlib projects
 
 **Example instruction:**
-
 ```
-Formalize the proof of the theorem in `Proofs/GroupTheory.lean`. Start with an
-informal outline, then produce Lean code and iterate until it passes.
+Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
+informal outline, then produce Lean code and iterate until it compiles.
 ```
 
 ## Correction & Polishing Agents
