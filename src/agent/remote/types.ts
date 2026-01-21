@@ -28,8 +28,14 @@ export const RemoteAgentListItemSchema = z.object({
   description: z.string().nullish(),
   /** Visibility can be NULL in the database */
   visibility: z.array(z.string()).nullish(),
-  /** Agent category: 'workflow' or 'toolUse' (required) */
-  agentCategory: z.nativeEnum(AgentCategory),
+  /**
+   * Agent category: 'workflow' or 'toolUse'.
+   * Defaults NULL to Workflow for backward compatibility with existing DB rows.
+   */
+  agentCategory: z
+    .nativeEnum(AgentCategory)
+    .nullish()
+    .transform((val) => val ?? AgentCategory.Workflow),
 });
 
 export type RemoteAgentListItem = z.infer<typeof RemoteAgentListItemSchema>;
