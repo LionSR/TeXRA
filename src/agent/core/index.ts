@@ -11,7 +11,6 @@ export type {
   AgentSetting,
   AgentPrompt,
   AgentWorkflowSetting,
-  AgentSessionDescriptor,
 } from './AgentDataclass';
 
 // Config types

@@ -44,7 +44,6 @@ import {
 } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
-  getAgentSessionDescriptor,
   type AgentSetting,
   type AgentPrompt,
   type AgentWorkflowSetting,
@@ -240,15 +239,13 @@ async function resolveAgentBase(
     loadedSettings,
     resolution.entry.source,
   );
-  const sessionDescriptor = getAgentSessionDescriptor(setting);
   const agentPath = path.dirname(resolution.definitionPath);
 
   // 2. Validate and create model handler
   await validateAndGetModelConfig(fullConfig.model);
   const config: AgentConfig = {
     ...fullConfig,
-    agentCategory: sessionDescriptor.agentCategory,
-    session: sessionDescriptor,
+    agentCategory: setting.agentCategory,
   };
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
 
@@ -267,7 +264,7 @@ async function resolveAgentBase(
   const usageReporter = new AgentUsageReporter(
     agentLogger,
     streamId,
-    sessionDescriptor.agentCategory,
+    setting.agentCategory,
   );
 
   // Configure model handler with agent category and logger
@@ -281,7 +278,7 @@ async function resolveAgentBase(
   // preventing the race condition where groups are dropped.
   bus.emit('setActiveStream', {
     stream: streamId,
-    session: sessionDescriptor,
+    agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
   });
@@ -405,18 +402,6 @@ function acquireStreamOrThrow(
   throw new Error(
     `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
   );
-}
-
-/** Validate that config has session metadata, releasing stream on failure. */
-function ensureSessionMetadata(
-  config: AgentConfig,
-  streamId: StreamTabId,
-  agentType: string = 'Agent',
-): void {
-  if (!config.session) {
-    StreamStatusService.releaseIfInitializing(streamId);
-    throw new Error(`${agentType} configuration is missing session metadata.`);
-  }
 }
 
 /** Create a usage recorder callback for flow execution. */
@@ -575,8 +560,6 @@ export async function executeAgent(
   const { setting, streamId: streamTabId, config } = ctx;
   const agentName = config.agent;
 
-  ensureSessionMetadata(config, preliminaryStreamId);
-
   // Verify stream IDs match (paranoid check for ID computation consistency)
   if (streamTabId !== preliminaryStreamId) {
     logger.warn(
@@ -700,8 +683,6 @@ export async function executeMergeAgent(
 
   const { streamId: streamTabId, config, executionId } = ctx;
 
-  ensureSessionMetadata(config, preliminaryStreamId, 'Merge agent');
-
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
     StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 
@@ -766,15 +747,11 @@ export async function resumeToolUseFromSnapshot(
   );
   const { setting, streamId: streamTabId, config } = ctx;
 
-  // Validate agent category and session
+  // Validate agent category
   if (setting.agentCategory !== AgentCategory.ToolUse) {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
-  }
-
-  if (!config.session) {
-    throw new Error('Resume agent configuration is missing session metadata.');
   }
 
   const interruptManager = createInterruptManager();
