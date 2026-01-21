@@ -10,7 +10,6 @@ Tool-use agents enable interactive, multi-turn conversations where the AI can ca
 | File editing with back-and-forth refinement | `chat`, `research` |
 | Formal proof development in Lean 4 | `lean` |
 | Quick questions about your documents | `ask` |
-| Automated linting fixes | `xml_validator`, `tex_linter_fix` |
 | Computational research with symbolic math | `research` |
 
 ## Architecture Overview
@@ -223,22 +222,6 @@ settings:
 **Tools**: Literature discovery (`arxiv_*`, `crossref_*`, `download_arxiv_source`), file reading
 
 **Best for**: Intellectual discourse, literature exploration, research direction guidance
-
-### xml_validator
-
-**Purpose**: Validates and fixes XML syntax errors.
-
-**Tools**: `str_replace_editor` only
-
-**Best for**: Automated XML repair (typically invoked internally)
-
-### tex_linter_fix
-
-**Purpose**: Automatically fixes LaTeX linter warnings.
-
-**Tools**: `str_replace_editor`, `diagnostics`, LaTeX extraction tools
-
-**Best for**: Automated linting fixes (typically invoked internally)
 
 ## Available Tools Reference
 
