@@ -343,6 +343,9 @@ export class FollowupSectionManager {
     const includeInstructionCheckbox = safeGetElementById(
       ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION,
     );
+    const attachOutputsCheckbox = safeGetElementById(
+      ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS,
+    );
     const initialQuestionTextarea = safeGetElementById(
       ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION,
     );
@@ -352,6 +355,8 @@ export class FollowupSectionManager {
     const model = modelSelect?.value;
     const includeInstruction =
       mode === 'workflow' && includeInstructionCheckbox?.checked;
+    const attachAgentOutputs =
+      mode === 'workflow' && attachOutputsCheckbox?.checked;
     const initialQuestion = initialQuestionTextarea?.value?.trim() || '';
 
     if (!agent) {
@@ -372,6 +377,7 @@ export class FollowupSectionManager {
       agent,
       model,
       includeInstruction,
+      attachAgentOutputs,
       initialQuestion,
     };
   }

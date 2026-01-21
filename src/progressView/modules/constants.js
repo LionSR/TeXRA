@@ -69,6 +69,7 @@ export const ELEMENT_IDS = {
   FOLLOWUP_MODEL: 'followupModel',
   FOLLOWUP_INITIAL_QUESTION: 'followupInitialQuestion',
   FOLLOWUP_INCLUDE_INSTRUCTION: 'followupIncludeInstruction',
+  FOLLOWUP_ATTACH_OUTPUTS: 'followupAttachOutputs',
   FOLLOWUP_SETUP_BTN: 'followupSetupBtn',
   FOLLOWUP_RUN_BTN: 'followupRunBtn',
 };
