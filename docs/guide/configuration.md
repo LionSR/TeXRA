@@ -21,18 +21,12 @@ Control which agents are available in the dropdown menu. Below is the default li
 ```json
 "texra.agents": [
   "correct",
-  "derive",
   "polish",
   "draw",
   "ocr",
-  "paper2cover",
   "paper2slide",
   "paper2poster",
-  "paper2note",
-  "polish_cover",
-  "solve_qi",
-"transcribe_audio"
-  // Additional custom agents can be added here
+  "transcribe_audio"
 ]
 ```
 
