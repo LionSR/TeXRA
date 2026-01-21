@@ -10,6 +10,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { TOOL_ICON_MAP } from './constants.js';
+import { generateInlineDiff } from './wordDiff.js';
 
 /**
  * Build a tool-use section HTML block
@@ -257,28 +258,17 @@ export function buildFileLinkWithLines(filePath, options = {}) {
 }
 
 // ============================================================================
-// Edit Diff Display (Stacked Blocks)
+// Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
 /**
- * Build edit diff section showing old_string → new_string as stacked blocks.
- * Red = old, Green = new. Colors communicate; labels don't.
+ * Build edit diff section showing old_string → new_string with inline highlighting.
+ * Deleted text shown with red strikethrough, added text shown with green highlight.
  * @param {string} oldString - Original text being replaced
  * @param {string} newString - Replacement text
  * @returns {string} HTML for the diff display
  */
 export function buildEditDiffSection(oldString, newString) {
-  // Let highlight.js auto-detect language
-  const oldHtml = wrapInHighlightedPre(
-    oldString,
-    '',
-    'diff-block diff-block-old',
-  );
-  const newHtml = wrapInHighlightedPre(
-    newString,
-    '',
-    'diff-block diff-block-new',
-  );
-
-  return `<div class="edit-diff-container">${oldHtml}${newHtml}</div>`;
+  const diffHtml = generateInlineDiff(oldString, newString);
+  return `<div class="edit-diff-container"><pre class="diff-inline-view">${diffHtml}</pre></div>`;
 }
