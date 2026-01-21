@@ -32,10 +32,11 @@ const ERROR_MESSAGES = {
 /**
  * Options for diff execution.
  * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
- * Overrides the configured default for this execution.
+ * @property subtype - Subtype for change boundary marking (e.g., 'ONLYCHANGEDPAGE').
  */
 interface DiffExecutionOptions {
   mathMarkup?: MathMarkupOption;
+  subtype?: string;
   cwd?: string;
 }
 
@@ -52,12 +53,7 @@ export class DiffCommandExecutor {
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffCommand(
-          inputFile,
-          editedFile,
-          useFlatten,
-          options?.mathMarkup,
-        ),
+        this.buildLatexdiffCommand(inputFile, editedFile, useFlatten, options),
       'latexdiff',
       options?.cwd,
     );
@@ -74,7 +70,7 @@ export class DiffCommandExecutor {
           inputFile,
           commitHash,
           useFlatten,
-          options?.mathMarkup,
+          options,
         ),
       'latexdiff-vc',
       options?.cwd,
@@ -97,16 +93,17 @@ export class DiffCommandExecutor {
     inputFile: string,
     editedFile: string,
     useFlatten = true,
-    mathMarkupOverride?: MathMarkupOption,
+    options?: DiffExecutionOptions,
   ): string[] {
-    const { mathMarkup, pictureEnvs } =
-      this.getLatexdiffConfig(mathMarkupOverride);
+    const { mathMarkup, pictureEnvs, subtype } =
+      this.getLatexdiffConfig(options);
     const command = [
       'latexdiff',
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
       `--math-markup=${mathMarkup}`,
+      ...(subtype ? [`--subtype=${subtype}`] : []),
       inputFile,
       editedFile,
     ];
@@ -117,10 +114,10 @@ export class DiffCommandExecutor {
     inputFile: string,
     commitHash: string,
     useFlatten = true,
-    mathMarkupOverride?: MathMarkupOption,
+    options?: DiffExecutionOptions,
   ): string[] {
-    const { mathMarkup, pictureEnvs } =
-      this.getLatexdiffConfig(mathMarkupOverride);
+    const { mathMarkup, pictureEnvs, subtype } =
+      this.getLatexdiffConfig(options);
     const command = [
       'latexdiff-vc',
       '--encoding=utf8',
@@ -129,6 +126,7 @@ export class DiffCommandExecutor {
       '--force',
       '--git',
       `--math-markup=${mathMarkup}`,
+      ...(subtype ? [`--subtype=${subtype}`] : []),
       '-r',
       commitHash,
       inputFile,
@@ -202,13 +200,14 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(mathMarkupOverride?: MathMarkupOption): {
+  private getLatexdiffConfig(options?: DiffExecutionOptions): {
     mathMarkup: MathMarkupOption;
     pictureEnvs: string;
+    subtype?: string;
   } {
     return {
       mathMarkup:
-        mathMarkupOverride ??
+        options?.mathMarkup ??
         getConfig<MathMarkupOption>(
           'texra.latexdiff.mathMarkup',
           DEFAULT_MATH_MARKUP,
@@ -217,6 +216,7 @@ export class DiffCommandExecutor {
         'texra.latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
       ),
+      subtype: options?.subtype,
     };
   }
 }

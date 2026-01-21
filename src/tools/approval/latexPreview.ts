@@ -162,8 +162,12 @@ export async function previewProposedLatex(
 
 /**
  * Run latexdiff on the original and proposed content.
+ * @param options.subtype - e.g., 'ONLYCHANGEDPAGE' to show only pages with changes
  */
-export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
+export async function runLatexdiff(
+  entry: LatexPreviewEntry,
+  options?: { subtype?: string },
+): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const originalContent = await fs
       .readFile(entry.originalUri.fsPath, 'utf8')
@@ -196,7 +200,10 @@ export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
       '_diff',
       false,
       'coarse',
-      { cwd: workspacePath ?? path.dirname(original.tempPath) },
+      {
+        cwd: workspacePath ?? path.dirname(original.tempPath),
+        subtype: options?.subtype,
+      },
     );
 
     if (!result.success || !result.diffFileName) {
