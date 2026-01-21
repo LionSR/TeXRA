@@ -118,144 +118,189 @@ function findCommitInHistory(commitHash: string): string | null {
   return label || sanitizedCommit;
 }
 
-async function cloneOverleafProject(
-  context: vscode.ExtensionContext,
-): Promise<void> {
-  const input = await vscode.window.showInputBox({
-    title: 'Clone Overleaf Project',
-    prompt: 'Enter an Overleaf project URL or 24-character project ID.',
-    placeHolder: 'https://git.overleaf.com/<project-id>',
+/**
+ * Parse Overleaf or ShareLaTeX git URL. Returns null if invalid.
+ * Accepts:
+ *   - https://git.overleaf.com/<24-char-hex>
+ *   - https://sharelatex.example.com/git/<24-char-hex>
+ *   - https://git@sharelatex.example.com/git/<24-char-hex>
+ *   - bare 24-char hex (assumes Overleaf)
+ */
+function parseLatexGitUrl(
+  input: string,
+): { host: string; path: string; isOverleaf: boolean } | null {
+  const trimmed = input.trim();
+
+  // Full URL
+  const m = trimmed.match(/^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i);
+  if (m) {
+    const [, host, hasGit, id] = m;
+    return {
+      host,
+      path: hasGit ? `/git/${id}` : `/${id}`,
+      isOverleaf: host === 'git.overleaf.com',
+    };
+  }
+
+  // Bare project ID -> Overleaf
+  if (/^[a-f0-9]{24}$/i.test(trimmed)) {
+    return { host: 'git.overleaf.com', path: `/${trimmed}`, isOverleaf: true };
+  }
+
+  return null;
+}
+
+async function promptInput(
+  title: string,
+  prompt: string,
+  password = false,
+): Promise<string | null> {
+  const val = await vscode.window.showInputBox({
+    title,
+    prompt,
+    password,
     ignoreFocusOut: true,
   });
-
-  if (!input) {
-    return;
+  const trimmed = val?.trim();
+  if (!trimmed) {
+    if (val !== undefined) vscode.window.showWarningMessage('Clone cancelled.');
+    return null;
   }
+  return trimmed;
+}
 
-  const match = input.trim().match(/[a-f0-9]{24}/i);
-  if (!match) {
-    vscode.window.showErrorMessage(
-      'Enter a valid Overleaf project URL or 24-character project ID.',
-    );
-    return;
-  }
+async function getOverleafCredentials(
+  secrets: vscode.SecretStorage,
+): Promise<{ remote: string; sensitive: string[] } | null> {
+  const key = 'overleaf.gitToken';
 
-  const projectId = match[0];
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    vscode.window.showErrorMessage(
-      'Open a workspace folder before cloning an Overleaf project.',
-    );
-    return;
-  }
-
-  const tokenKey = 'overleaf.gitToken';
-  const validateToken = (value: string): boolean => value.startsWith('olp_');
-
-  let token = (await context.secrets.get(tokenKey))?.trim() ?? '';
-  if (token && !validateToken(token)) {
-    await context.secrets.delete(tokenKey);
+  let token = (await secrets.get(key))?.trim() ?? '';
+  if (token && !token.startsWith('olp_')) {
+    await secrets.delete(key);
     token = '';
   }
 
   if (!token) {
-    const tokenInput = await vscode.window.showInputBox({
-      title: 'Overleaf Git Token',
-      prompt: 'Enter your Overleaf Git token (starts with "olp_").',
-      ignoreFocusOut: true,
-      password: true,
-    });
+    const input = await promptInput(
+      'Overleaf Git Token',
+      'Enter your Overleaf Git token (starts with "olp_").',
+      true,
+    );
+    if (!input) return null;
 
-    if (!tokenInput) {
-      vscode.window.showWarningMessage('Overleaf clone cancelled.');
-      return;
+    if (!input.startsWith('olp_')) {
+      vscode.window.showErrorMessage('Invalid token. Must start with "olp_".');
+      return null;
     }
-
-    const trimmedToken = tokenInput.trim();
-    if (!trimmedToken) {
-      vscode.window.showWarningMessage('Overleaf clone cancelled.');
-      return;
-    }
-
-    if (!validateToken(trimmedToken)) {
-      vscode.window.showErrorMessage(
-        'Enter a valid Overleaf Git token. Tokens start with "olp_".',
-      );
-      return;
-    }
-
-    token = trimmedToken;
-    await context.secrets.store(tokenKey, token);
+    token = input;
+    await secrets.store(key, token);
   }
 
-  const encodedToken = encodeURIComponent(token);
-  const remote = `https://git:${encodedToken}@git.overleaf.com/${projectId}`;
+  const enc = encodeURIComponent(token);
+  return { remote: `git:${enc}`, sensitive: [token, enc] };
+}
 
-  const gitCheck = execaSync('git', ['--version'], { reject: false });
-  if (gitCheck.exitCode !== 0) {
-    vscode.window.showErrorMessage(
-      'Git must be installed and available in PATH to clone an Overleaf project.',
-    );
-    return;
+async function getShareLatexCredentials(
+  secrets: vscode.SecretStorage,
+  host: string,
+): Promise<{ remote: string; sensitive: string[] } | null> {
+  const key = `sharelatex.${host}.credentials`;
+
+  let user = '',
+    pass = '';
+  const stored = await secrets.get(key);
+  if (stored) {
+    try {
+      const c = JSON.parse(stored);
+      user = c.username ?? '';
+      pass = c.password ?? '';
+    } catch {
+      await secrets.delete(key);
+    }
   }
 
-  let directoryEntries: [string, vscode.FileType][];
-  try {
-    directoryEntries = await WorkspaceFS.readDir(workspacePath);
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      'Unable to inspect the workspace folder before cloning the Overleaf project.',
-    );
-    logger.error(
-      CHANNEL,
-      `Failed to read workspace contents: ${toErrorMessage(error)}`,
-    );
-    return;
+  if (!user || !pass) {
+    const u = await promptInput(`ShareLaTeX (${host})`, 'Username or email');
+    if (!u) return null;
+    const p = await promptInput(`ShareLaTeX (${host})`, 'Password', true);
+    if (!p) return null;
+    user = u;
+    pass = p;
+    await secrets.store(key, JSON.stringify({ username: user, password: pass }));
   }
 
-  const ignoredWorkspaceEntries = new Set(['.DS_Store', 'Thumbs.db']);
-  const nonIgnoredEntries = directoryEntries.filter(
-    ([name]) => !ignoredWorkspaceEntries.has(name),
+  const encU = encodeURIComponent(user);
+  const encP = encodeURIComponent(pass);
+  return { remote: `${encU}:${encP}`, sensitive: [user, pass, encU, encP] };
+}
+
+async function cloneOverleafProject(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const input = await promptInput(
+    'Clone Overleaf/ShareLaTeX Project',
+    'Enter project URL or 24-character project ID.',
   );
+  if (!input) return;
 
-  if (nonIgnoredEntries.length > 0) {
-    vscode.window.showErrorMessage(
-      'The workspace folder must be empty before cloning an Overleaf project.',
-    );
+  const parsed = parseLatexGitUrl(input);
+  if (!parsed) {
+    vscode.window.showErrorMessage('Invalid project URL or ID.');
     return;
   }
+
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    vscode.window.showErrorMessage('Open a workspace folder first.');
+    return;
+  }
+
+  // Get credentials
+  const creds = parsed.isOverleaf
+    ? await getOverleafCredentials(context.secrets)
+    : await getShareLatexCredentials(context.secrets, parsed.host);
+  if (!creds) return;
+
+  // Check preconditions
+  if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
+    vscode.window.showErrorMessage('Git not found in PATH.');
+    return;
+  }
+
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await WorkspaceFS.readDir(workspacePath);
+  } catch (e) {
+    vscode.window.showErrorMessage('Cannot read workspace folder.');
+    logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
+    return;
+  }
+
+  const dominated = new Set(['.DS_Store', 'Thumbs.db']);
+  if (entries.some(([n]) => !dominated.has(n))) {
+    vscode.window.showErrorMessage('Workspace folder must be empty.');
+    return;
+  }
+
+  // Clone
+  const remote = `https://${creds.remote}@${parsed.host}${parsed.path}`;
+  const label = parsed.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
   try {
     await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Cloning Overleaf project…',
-      },
-      async () => {
-        await execa('git', ['clone', remote, '.'], {
-          cwd: workspacePath,
-          env: { GIT_TERMINAL_PROMPT: '0' },
-        });
-      },
+      { location: vscode.ProgressLocation.Notification, title: `Cloning ${label}…` },
+      () => execa('git', ['clone', remote, '.'], {
+        cwd: workspacePath,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+      }),
     );
-    vscode.window.showInformationMessage(
-      'Overleaf project cloned into the workspace root.',
-    );
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      'Failed to clone Overleaf project. Check your connection, token, and workspace folder.',
-    );
-
-    if (error instanceof Error) {
-      const sanitizedMessage = error.message
-        .replaceAll(token, '********')
-        .replaceAll(encodedToken, '********');
-      logger.error(CHANNEL, `Overleaf clone failed: ${sanitizedMessage}`);
-    } else {
-      logger.error(
-        CHANNEL,
-        `Overleaf clone failed with non-error value: ${String(error)}`,
-      );
+    vscode.window.showInformationMessage(`${label} project cloned.`);
+  } catch (e) {
+    vscode.window.showErrorMessage(`Clone failed. Check credentials and connection.`);
+    if (e instanceof Error) {
+      let msg = e.message;
+      for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');
+      logger.error(CHANNEL, `Clone failed: ${msg}`);
     }
   }
 }
