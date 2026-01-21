@@ -105,61 +105,50 @@ const baseConfig = {
     sidebar: {
       '/guide/': [
         {
-          text: 'Getting Started',
+          text: 'Tutorials',
           items: [
-            { text: 'Introduction', link: '/guide/' },
-            { text: 'Installation', link: '/guide/installation' },
             { text: 'Quick Start', link: '/guide/quick-start' },
-            {
-              text: 'LaTeX Compilation Setup',
-              link: '/guide/latex-compilation.md',
-            },
-            {
-              text: 'Acknowledgments & Inspirations',
-              link: '/guide/acknowledgments.md',
-            },
-          ],
-        },
-        {
-          text: 'Core Concepts',
-          items: [
-            {
-              text: 'Agent Architecture',
-              link: '/guide/agent-architecture.md',
-            },
-            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
-            { text: 'Remote Agents', link: '/guide/remote-agents' },
-            { text: 'Models', link: '/guide/models' },
-            { text: 'File Management', link: '/guide/file-management' },
-            {
-              text: 'Working with Figures',
-              link: '/guide/working-with-figures.md',
-            },
-            { text: 'ProgressBoard', link: '/guide/progress-board' },
-            { text: 'Tool Integration', link: '/guide/tool-integration' },
-          ],
-        },
-        {
-          text: 'Advanced Usage',
-          items: [
+            { text: 'Working with Figures', link: '/guide/working-with-figures.md' },
             { text: 'TikZ Figures', link: '/guide/tikz-figures' },
+          ],
+        },
+        {
+          text: 'How-to Guides',
+          items: [
             { text: 'LaTeX Diff', link: '/guide/latex-diff' },
             { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
+            { text: 'Research Tools', link: '/guide/research-tools' },
+            { text: 'LaTeX Tools', link: '/guide/latex-tools' },
+            { text: 'File Management', link: '/guide/file-management' },
             { text: 'Multiple Output', link: '/guide/multiple-output' },
+            { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
         },
         {
-          text: 'Customization',
+          text: 'Reference',
           items: [
+            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+            { text: 'Models', link: '/guide/models' },
             { text: 'Configuration', link: '/guide/configuration' },
-            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
             { text: 'Custom Agents', link: '/guide/custom-agents' },
+            { text: 'Remote Agents', link: '/guide/remote-agents' },
           ],
         },
         {
-          text: 'Best Practices',
+          text: 'Explanation',
           items: [
-            { text: 'General Workflow', link: '/guide/best-practices.md' },
+            { text: 'Introduction', link: '/guide/' },
+            { text: 'Agent Architecture', link: '/guide/agent-architecture.md' },
+            { text: 'Best Practices', link: '/guide/best-practices.md' },
+          ],
+        },
+        {
+          text: 'Setup',
+          items: [
+            { text: 'Installation', link: '/guide/installation' },
+            { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
+            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
+            { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
           ],
         },
       ],
