@@ -131,8 +131,8 @@ export const AGENT_DECORATORS = {
     },
   },
 
-  // Session kinds (workflow vs tool-use category)
-  sessionKinds: {
+  // Agent categories (workflow vs tool-use)
+  agentCategories: {
     workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
     toolUse: { icon: 'tools', unicode: '🔧', label: 'Tool Use' },
   },
@@ -166,13 +166,13 @@ export function getAgentTypeDecorator(agentType) {
 }
 
 /**
- * Get the decorator config for a session kind.
- * @param {string} sessionKind - Session kind key (workflow, toolUse)
+ * Get the decorator config for an agent category.
+ * @param {string} agentCategory - Agent category key (workflow, toolUse)
  * @returns {{ icon: string, label: string }}
  */
-export function getSessionKindDecorator(sessionKind) {
+export function getAgentCategoryDecorator(agentCategory) {
   return (
-    AGENT_DECORATORS.sessionKinds[sessionKind] ||
-    AGENT_DECORATORS.sessionKinds.workflow
+    AGENT_DECORATORS.agentCategories[agentCategory] ||
+    AGENT_DECORATORS.agentCategories.workflow
   );
 }

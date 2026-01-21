@@ -15,25 +15,25 @@ import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js'
 import { vscode } from '@common/webviewContext.js';
 import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 
-// Session kind values match TypeScript AgentSessionKind enum
+// Agent category values match TypeScript AgentCategory enum
 // No need to duplicate - we use the actual values from messages
 
 /**
- * ARCHITECTURAL NOTE: Task Groups have different semantics per session kind
+ * ARCHITECTURAL NOTE: Task Groups have different semantics per agent category
  *
  * The "task group" abstraction is currently overloaded:
  *
- * - Workflow sessions: Each group is a distinct "run" (user can switch between runs,
+ * - Workflow agents: Each group is a distinct "run" (user can switch between runs,
  *   only one visible at a time via run selector dropdown)
  *
- * - ToolUse sessions: Each group is a conversation "turn" (user message → agent
+ * - ToolUse agents: Each group is a conversation "turn" (user message → agent
  *   response with tool calls). All turns should always be visible as continuous
  *   conversation history.
  *
  * This semantic mismatch requires special handling throughout (checking isToolUse
  * before calling showRun). A cleaner design would separate these concepts:
- * - WorkflowRunManager for workflow sessions (switching between runs)
- * - ConversationTurnManager for toolUse sessions (append-only history)
+ * - WorkflowRunManager for workflow agents (switching between runs)
+ * - ConversationTurnManager for toolUse agents (append-only history)
  *
  * TODO: Consider refactoring to separate these concerns in a future PR.
  */
@@ -109,7 +109,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _refreshInstructionForActiveRun(runId) {
     // Tool-use agents don't use instruction panel
-    if (state.activeSessionKind === 'toolUse')
+    if (state.activeAgentCategory === 'toolUse')
       return dom.instructionPanel.hide();
 
     const ctx = this._getActiveRunContext(runId);
@@ -131,7 +131,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ? (state.getRunFiles(ctx.stream, ctx.runId) ?? {})
       : {};
     // Hide round headers for tool-use agents where round numbers don't have meaning
-    const showRoundHeaders = state.activeSessionKind !== 'toolUse';
+    const showRoundHeaders = state.activeAgentCategory !== 'toolUse';
     dom.fileList.update(filesByRound, { showRoundHeaders });
   }
 
@@ -176,23 +176,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Clear stale state when switching between session kinds.
-   * Different session kinds have incompatible task group structures:
-   * - Workflow sessions create hierarchical task groups
-   * - Tool-use sessions don't create task groups at all
-   * Stale groups from previous sessions interfere with run ID resolution.
+   * Clear stale state when switching between agent categories.
+   * Different categories have incompatible task group structures:
+   * - Workflow agents create hierarchical task groups
+   * - Tool-use agents don't create task groups at all
+   * Stale groups from previous streams interfere with run ID resolution.
    *
    * NOTE: Log content is NOT cleared here. It's handled by handleUpdateLogs
    * with forceRebuild: true, which properly coordinates clearing with
    * re-rendering. Clearing here would cause data loss when UPDATE_LOGS
    * arrives with forceRebuild: false (same stream, incremental update).
    *
-   * @param {string} newSessionKind - The new session kind being switched to
+   * @param {string} newCategory - The new agent category being switched to
    * @returns {boolean} true if state was cleared
    */
-  _clearSessionKindState(newSessionKind) {
+  _clearAgentCategoryState(newCategory) {
     const shouldClear =
-      newSessionKind !== state.activeSessionKind && state.activeSessionKind;
+      newCategory !== state.activeAgentCategory && state.activeAgentCategory;
     if (shouldClear) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
@@ -242,12 +242,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Determine session kind from stream info with fallback to current state.
+   * Determine agent category from stream info with fallback to current state.
    * @param {Object|undefined} streamInfo - The active stream's info object
-   * @returns {string} The session kind ('workflow' or 'toolUse')
+   * @returns {string} The agent category ('workflow' or 'toolUse')
    */
-  _resolveSessionKind(streamInfo) {
-    if (!streamInfo) return state.activeSessionKind || 'workflow';
+  _resolveAgentCategory(streamInfo) {
+    if (!streamInfo) return state.activeAgentCategory || 'workflow';
     return (
       streamInfo.agentCategory ||
       streamInfo.uiTraits?.agentCategory ||
@@ -448,14 +448,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = streams.find(
       (s) => s.name === message.activeStream,
     );
-    const sessionKind = this._resolveSessionKind(activeStreamInfo);
-    const isToolAgent = sessionKind === 'toolUse';
+    const category = this._resolveAgentCategory(activeStreamInfo);
+    const isToolAgent = category === 'toolUse';
 
-    // Only clear session state if we have confirmed stream info for the session kind change
+    // Only clear state if we have confirmed stream info for the category change
     if (activeStreamInfo) {
-      this._clearSessionKindState(sessionKind);
+      this._clearAgentCategoryState(category);
     }
-    state.activeSessionKind = sessionKind;
+    state.activeAgentCategory = category;
 
     dom.runSelector.setDisplayEnabled(
       Boolean(message.activeStream) && !isToolAgent,
@@ -477,7 +477,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.workflowProposals.setActiveStream(message.activeStream, isToolAgent);
 
-    dom.toolbar.render(sessionKind);
+    dom.toolbar.render(category);
 
     const hasExecution = state.hasExecutionId(message.activeStream);
     dom.status.setExecutionIdAvailability(Boolean(hasExecution));
@@ -585,7 +585,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const groups = message.groups ?? [];
 
     // Always update run metadata (instructions, usage, files) regardless of groups
-    // Tool-use sessions don't create task groups but still have usage data
+    // Tool-use agents don't create task groups but still have usage data
     this._updateRunMetadata(message.stream, message);
 
     if (groups.length > 0) {
@@ -990,13 +990,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const text = message.instruction?.text ?? '';
     const metadata = message.instruction?.metadata;
-    const sessionKind =
-      message.sessionKind || state.activeSessionKind || 'workflow';
-    const isToolUseAgent = sessionKind === 'toolUse';
+    const category =
+      message.agentCategory || state.activeAgentCategory || 'workflow';
+    const isToolUseAgent = category === 'toolUse';
     const hasText = typeof text === 'string' && text.trim();
 
-    if (message.sessionKind) this._clearSessionKindState(sessionKind);
-    state.activeSessionKind = sessionKind;
+    if (message.agentCategory) this._clearAgentCategoryState(category);
+    state.activeAgentCategory = category;
 
     // Resolve active run ID
     let activeRunId =
@@ -1201,7 +1201,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     const streamStatus = state.streamStatuses.get(activeStream);
-    const sessionKind = state.activeSessionKind || 'workflow';
+    const category = state.activeAgentCategory || 'workflow';
     const hasOutputFiles = this._hasOutputFilesForActiveStream();
 
     // Extract agent name from stream ID (format: "agentName@timestamp")
@@ -1228,7 +1228,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       : 0;
 
     dom.followupSection?.updateForStream?.({
-      agentCategory: sessionKind,
+      agentCategory: category,
       status: streamStatus,
       hasOutputFiles,
       agentName,
