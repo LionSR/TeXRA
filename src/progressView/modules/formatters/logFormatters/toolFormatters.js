@@ -144,10 +144,11 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     typeof input === 'object' && input !== null ? input.path : '';
 
   // Handle edit tools with diff display for input
+  // Note: edit_file uses old_str/new_str field names
   if (
     TOOLS_WITH_DIFF_INPUT.has(toolName) &&
-    input?.old_string &&
-    input?.new_string
+    input?.old_str &&
+    input?.new_str
   ) {
     if (filePath) {
       sections.push(
@@ -157,7 +158,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     sections.push(
       buildToolUseSection(
         'Changes:',
-        buildEditDiffSection(input.old_string, input.new_string),
+        buildEditDiffSection(input.old_str, input.new_str),
       ),
     );
   }
