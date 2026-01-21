@@ -12,10 +12,9 @@ import { z } from 'zod';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@tools/utils';
-import { getConfig } from '@utils/config';
 
 // Local imports - zotero
-import { callBetterBibTeX } from './bbtClient';
+import { callBetterBibTeX, getZoteroPort } from './bbtClient';
 
 const ZoteroExportInputSchema = z.strictObject({
   citekeys: z
@@ -45,7 +44,7 @@ export class ZoteroExportTool extends defineTool({
   schema: ZoteroExportInputSchema,
 }) {
   protected async execute({ citekeys, format, library }: ZoteroExportInput) {
-    const port = getConfig<number>('texra.bib.zoteroConnectorPort', 23119);
+    const port = getZoteroPort();
     const translator = format || 'biblatex';
 
     const params: unknown[] = [citekeys, translator];
