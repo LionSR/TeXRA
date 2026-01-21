@@ -87,10 +87,14 @@ export const processMarkdownContent = (content, renderer) => {
   // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
   const protectedContent = protectLatexReferences(content);
 
+  // Add line break before bold text starting a new sentence (capital letter after period)
+  // This fixes OpenAI reasoning summary output which omits line breaks before bold headers
+  const formattedContent = protectedContent.replace(/\.(\*\*[A-Z])/g, '.\n$1');
+
   const md = renderer || getMarkdownRenderer();
 
   // Process content as markdown
-  let parsedMarkdown = md.render(protectedContent);
+  let parsedMarkdown = md.render(formattedContent);
 
   // Post-process to restore and style LaTeX references
   return restoreLatexReferences(parsedMarkdown);
