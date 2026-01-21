@@ -2,7 +2,6 @@ name: orchestrator
 description: AI scientist that analyzes documents, tracks progress, and proposes agent tasks.
 
 settings:
-  agentType: toolUse
   tools:
     - propose_workflow
     - propose_agent

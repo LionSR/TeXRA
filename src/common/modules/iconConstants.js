@@ -103,34 +103,6 @@ export const AGENT_DECORATORS = {
     },
   },
 
-  // Agent types (reasoning strategy)
-  types: {
-    CoT: {
-      icon: 'list-tree',
-      unicode: '⛓',
-      label: 'Chain of Thought',
-      hint: 'Shows reasoning in scratchpad before final response',
-    },
-    direct: {
-      icon: 'lightbulb',
-      unicode: '⚡',
-      label: 'Direct',
-      hint: 'Responds directly without scratchpad',
-    },
-    toolUse: {
-      icon: 'tools',
-      unicode: '🔧',
-      label: 'Tool Use',
-      hint: 'Can execute tools and code',
-    },
-    unknown: {
-      icon: 'question',
-      unicode: '?',
-      label: 'Unknown',
-      hint: 'Unknown agent type',
-    },
-  },
-
   // Agent categories (workflow vs tool-use)
   agentCategories: {
     workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
@@ -154,15 +126,6 @@ export function getCodiconClass(iconName) {
  */
 export function applyCodiconClass(element, iconName) {
   element.classList.add('codicon', `codicon-${iconName}`);
-}
-
-/**
- * Get the decorator config for an agent type.
- * @param {string} agentType - Agent type key (CoT, direct, toolUse)
- * @returns {{ icon: string, label: string }}
- */
-export function getAgentTypeDecorator(agentType) {
-  return AGENT_DECORATORS.types[agentType] || AGENT_DECORATORS.types.unknown;
 }
 
 /**

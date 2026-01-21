@@ -2,7 +2,6 @@ name: apply
 description: Implements suggestions from review agents (criticize, enhance, logic, notation, etc.). Reads inline annotations, works through the issues, and applies corrections.
 
 settings:
-  agentType: CoT
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex

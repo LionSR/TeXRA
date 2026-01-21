@@ -46,7 +46,6 @@ import {
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
-  getAgentTypeDecorator,
   getModelProviderDecorator,
 } from '@common/iconConstants.js';
 
@@ -489,24 +488,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const {
-      label,
-      isMultiple,
-      isToolUse,
-      isRemote,
-      isCustom,
-      description,
-      agentType,
-    } = this._readAgentOptionMetadata(opt);
+    const { label, isMultiple, isToolUse, isRemote, isCustom, description } =
+      this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
-
-    // Add agent type hint to tooltip (no unicode icon - too confusing)
-    if (agentType) {
-      const decorator = getAgentTypeDecorator(agentType);
-      hints.push(decorator.hint || `Type: ${decorator.label}`);
-    }
 
     // Add cloud icon for remote agents (visible indicator, at end)
     if (isRemote) {
@@ -540,9 +526,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       displayLabel = `${displayLabel} ${unicode}`;
     }
 
-    // Add tool-use hint only if not already covered by agentType
-    // (avoid duplicate "Can execute tools and code" when agentType is toolUse)
-    if (isToolUse && agentType !== 'toolUse') {
+    // Add tool-use hint
+    if (isToolUse) {
       hints.push('Can execute tools and code');
     }
 
@@ -579,7 +564,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       isRemote: dataset.remote === 'true',
       isCustom: dataset.custom === 'true',
       description: dataset.description ?? '',
-      agentType: dataset.agentType ?? '',
     };
   }
 
