@@ -619,10 +619,10 @@
             "scope": "resource",
             "order": 1
           },
-          "texra.bib.zoteroConnectorPort": {
+          "texra.bib.zoteroPort": {
             "type": "number",
             "default": 23119,
-            "description": "Port number for Zotero Connector API (default: 23119). Change this if you have configured Zotero to use a different port.",
+            "description": "Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.",
             "minimum": 1,
             "maximum": 65535,
             "scope": "resource",
