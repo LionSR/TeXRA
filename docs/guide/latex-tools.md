@@ -1,10 +1,6 @@
 # LaTeX Tools
 
-TeXRA integrates specialized external tools for LaTeX processing to ensure high-quality results with academic documents. This guide covers LaTeX-specific tools and how they work together in your workflow.
-
-::: tip Full Tool Reference
-For complete documentation of all tools available to TeXRA agents (including file operations, research tools, and more), see the [Tools Reference](/reference/tools).
-:::
+TeXRA integrates specialized external tools for LaTeX processing.
 
 ## Overview
 
@@ -58,7 +54,6 @@ The `latexdiff` tool visualizes changes between document versions, generating a 
 Ensure `texcount` is in your system's PATH. It's typically included with TeX distributions.
 :::
 
-For complete parameter documentation, see [texcount in the Tools Reference](/reference/tools#texcount).
 
 ## Figure Extraction
 
@@ -91,13 +86,11 @@ The `extract_bib_entries` tool resolves bibliography context for your LaTeX docu
 
 This is useful when the agent needs exact citation records to edit, format, or validate references.
 
-For parameter details, see [extract_bib_entries in the Tools Reference](/reference/tools#extract_bib_entries).
 
 ## Symbolic Math with Wolfram
 
 The `wolfram` tool executes Wolfram Language code through `wolframscript`, letting agents verify calculations or perform symbolic algebra. While not LaTeX-specific, it's particularly useful for validating mathematical content in your documents.
 
-See [wolfram in the Tools Reference](/reference/tools#wolfram) for usage details.
 
 ## Configuring Tool Usage
 
@@ -110,7 +103,6 @@ For detailed tool settings (formatter paths, TikZ processing options, etc.), see
 
 ## Next Steps
 
-- [Tools Reference](/reference/tools) - Complete tool documentation
 - [TikZ Figures](./tikz-figures.md) - Advanced TikZ workflows
 - [LaTeX Diff](./latex-diff.md) - Version comparison in detail
 - [Research Tools](./research-tools.md) - arXiv, Crossref, and web search
