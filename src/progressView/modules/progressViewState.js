@@ -207,7 +207,7 @@ export class ProgressViewState {
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
-    this.activeSessionKind = 'workflow';
+    this.activeAgentCategory = 'workflow';
     this.pendingInstructions = new Map();
 
     this.activeRunIds = new Map();
