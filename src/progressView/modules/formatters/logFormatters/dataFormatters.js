@@ -174,51 +174,75 @@ const getLatexdiffStatusIcon = (status) => {
 };
 
 /**
+ * Extract display data from new DiffResult format.
+ * @param {object} entry - DiffResult entry
+ * @returns {object} Extracted fields for rendering
+ */
+const extractNewFormat = (entry) => {
+  const { baseLocation, revised, diffLocation } = entry;
+  const originalPath =
+    revised.lineage?.original?.relativePath ||
+    revised.lineage?.original?.absolutePath;
+
+  return {
+    baseFile: baseLocation?.absolutePath || '',
+    revisedFile: revised.location?.absolutePath || '',
+    diffFile: diffLocation?.absolutePath || '',
+    displayName: originalPath
+      ? getBasename(originalPath)
+      : describeLocation(baseLocation) ||
+        getBasename(baseLocation?.absolutePath || '') ||
+        'unknown',
+    baseRound: entry.baseRound ?? null,
+    revisedRound: revised.round ?? 0,
+    status: entry.status,
+    message: entry.message,
+    runId: entry.runId,
+  };
+};
+
+/**
+ * Extract display data from legacy format (locations + labels).
+ * @param {object} entry - Legacy entry
+ * @returns {object} Extracted fields for rendering
+ */
+const extractLegacyFormat = (entry) => {
+  const { locations } = entry;
+  const baseFile = locations.base?.absolutePath || entry.basePath || '';
+
+  return {
+    baseFile,
+    revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
+    diffFile: locations.diff?.absolutePath || entry.diffPath || '',
+    displayName:
+      entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown',
+    baseRound: null,
+    revisedRound: 0,
+    status: entry.status,
+    message: entry.message,
+    runId: entry.runId,
+  };
+};
+
+/**
  * Build HTML for a latexdiff entry.
- * Handles both new format (DiffResult with revised) and legacy format (locations + labels).
+ * Handles both new format (DiffResult) and legacy format (locations + labels).
  * @param {object} entry - Latexdiff entry
  * @returns {string} HTML string for the entry
  */
 const buildLatexdiffEntryHtml = (entry) => {
   if (!entry) return '';
 
-  // Detect format and extract fields
-  let baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId;
+  // Extract fields based on format
+  const data = entry.revised && typeof entry.revised === 'object'
+    ? extractNewFormat(entry)
+    : entry.locations
+      ? extractLegacyFormat(entry)
+      : null;
 
-  if (entry.revised && typeof entry.revised === 'object') {
-    // New format: DiffResult with revised (OutputFileInfo)
-    const { baseLocation, revised, diffLocation } = entry;
-    baseFile = baseLocation?.absolutePath || '';
-    revisedFile = revised.location?.absolutePath || '';
-    diffFile = diffLocation?.absolutePath || '';
-    baseRound = entry.baseRound ?? null;
-    revisedRound = revised.round ?? 0;
-    status = entry.status;
-    message = entry.message;
-    runId = entry.runId;
+  if (!data) return '';
 
-    // Display name from lineage
-    const originalPath = revised.lineage?.original?.relativePath || revised.lineage?.original?.absolutePath;
-    displayName = originalPath
-      ? getBasename(originalPath)
-      : describeLocation(baseLocation) || getBasename(baseFile) || 'unknown';
-  } else if (entry.locations) {
-    // Legacy format: locations + labels
-    const { locations } = entry;
-    baseFile = locations.base?.absolutePath || entry.basePath || '';
-    revisedFile = locations.revised?.absolutePath || entry.revisedPath || '';
-    diffFile = locations.diff?.absolutePath || entry.diffPath || '';
-    baseRound = null;
-    revisedRound = 0;
-    status = entry.status;
-    message = entry.message;
-    runId = entry.runId;
-
-    // Display name from legacy fields
-    displayName = entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown';
-  } else {
-    return '';
-  }
+  const { baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId } = data;
 
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
