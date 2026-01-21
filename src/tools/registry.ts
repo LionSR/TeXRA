@@ -32,6 +32,7 @@ import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
+import { ZoteroAddTool } from './zotero';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -70,6 +71,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       extract_tikz_figures: new ExtractTikzFiguresTool(),
       crossref_doi: new CrossrefDoiTool(),
       crossref_search: new CrossrefSearchTool(),
+      zotero_add: new ZoteroAddTool(),
       wolfram: new WolframTool(),
       texcount: new TexcountTool(),
       web_fetch: new WebFetchTool(),
