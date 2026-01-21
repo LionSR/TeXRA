@@ -144,11 +144,22 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     typeof input === 'object' && input !== null ? input.path : '';
 
   // Handle edit tools with diff display for input
-  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && input?.old_string && input?.new_string) {
+  if (
+    TOOLS_WITH_DIFF_INPUT.has(toolName) &&
+    input?.old_string &&
+    input?.new_string
+  ) {
     if (filePath) {
-      sections.push(buildToolUseSection('File:', buildFileLinkWithLines(filePath)));
+      sections.push(
+        buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
+      );
     }
-    sections.push(buildToolUseSection('Changes:', buildEditDiffSection(input.old_string, input.new_string)));
+    sections.push(
+      buildToolUseSection(
+        'Changes:',
+        buildEditDiffSection(input.old_string, input.new_string),
+      ),
+    );
   }
   // Handle read tools with file link instead of full content
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
@@ -156,7 +167,10 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     sections.push(
       buildToolUseSection(
         'File:',
-        buildFileLinkWithLines(filePath, { startLine: range?.start, endLine: range?.end }),
+        buildFileLinkWithLines(filePath, {
+          startLine: range?.start,
+          endLine: range?.end,
+        }),
       ),
     );
   }
@@ -167,7 +181,10 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
       // Use syntax highlighting for code-related tools
       if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
         sections.push(
-          buildToolUseSection('Input:', wrapInHighlightedPre(inputValue, 'bash')),
+          buildToolUseSection(
+            'Input:',
+            wrapInHighlightedPre(inputValue, 'bash'),
+          ),
         );
       } else {
         sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
@@ -182,11 +199,17 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     // Edit tools output human-readable status like "Replaced 1 occurrence." - not code
     if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
       sections.push(
-        buildToolUseSection('Output:', wrapInHighlightedPre(outputText, 'bash', 'tool-output-full')),
+        buildToolUseSection(
+          'Output:',
+          wrapInHighlightedPre(outputText, 'bash', 'tool-output-full'),
+        ),
       );
     } else {
       sections.push(
-        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+        buildToolUseSection(
+          'Output:',
+          wrapInPre(outputText, 'tool-output-full'),
+        ),
       );
     }
   }

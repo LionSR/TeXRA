@@ -143,13 +143,21 @@
 }
 
 .diff-block-old {
-  border-left: 3px solid var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
-  background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.1));
+  border-left: 3px solid
+    var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+  background-color: var(
+    --vscode-diffEditor-removedTextBackground,
+    rgba(255, 0, 0, 0.1)
+  );
 }
 
 .diff-block-new {
-  border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
-  background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
+  border-left: 3px solid
+    var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+  background-color: var(
+    --vscode-diffEditor-insertedTextBackground,
+    rgba(0, 255, 0, 0.1)
+  );
 }
 
 /* Syntax highlighted code blocks */
