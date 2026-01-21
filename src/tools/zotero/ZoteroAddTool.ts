@@ -25,7 +25,9 @@ import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@tools/utils';
-import { getConfig } from '@utils/config';
+
+// Local imports - zotero
+import { getZoteroPort } from './bbtClient';
 
 /**
  * Schema for a single item to add to Zotero.
@@ -216,7 +218,7 @@ export class ZoteroAddTool extends defineTool({
   schema: ZoteroAddInputSchema,
 }) {
   protected async execute({ items, collection }: ZoteroAddInput) {
-    const port = getConfig<number>('texra.bib.zoteroConnectorPort', 23119);
+    const port = getZoteroPort();
 
     // Check if Zotero is running (throws ToolError if not)
     await checkZoteroRunning(port);
