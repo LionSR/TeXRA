@@ -40,21 +40,54 @@ See [Custom Agents](./custom-agents.md) for full details on creating agent defin
 
 ### Workflow Agents
 
-1. Load agent definition and read selected files
-2. Construct prompt from templates
-3. Send to LLM, receive response with reasoning and output
-4. Save output to file (e.g., `filename_agent_r0_model.tex`)
-5. For multi-round agents, run reflection rounds
+```mermaid
+sequenceDiagram
+    participant User
+    participant TeXRA
+    participant LLM
+
+    User->>TeXRA: Select files, agent, instruction
+    User->>TeXRA: Click Execute
+    TeXRA->>TeXRA: Load agent, construct prompt
+    TeXRA->>LLM: Send prompt (Round 0)
+    LLM-->>TeXRA: Response with reasoning + output
+    TeXRA->>TeXRA: Save output file (*_r0_*)
+    opt Reflection rounds
+        TeXRA->>LLM: Send reflection prompt (Round 1+)
+        LLM-->>TeXRA: Refined output
+        TeXRA->>TeXRA: Save refined file (*_r1_*)
+    end
+    TeXRA-->>User: Complete
+```
 
 If output gets cut off by token limits, TeXRA automatically sends a continuation prompt.
 
 ### Tool-Use Agents
 
-1. Initialize session and resolve available tools
-2. Send conversation to LLM with tool definitions
-3. If model requests tools, execute them and continue
-4. When model completes without tool calls, wait for user follow-up
-5. Resume on follow-up or end session
+```mermaid
+sequenceDiagram
+    participant User
+    participant TeXRA
+    participant LLM
+    participant Tools
+
+    User->>TeXRA: Provide instruction
+    TeXRA->>LLM: Send with tool definitions
+    loop Until task complete
+        LLM-->>TeXRA: Response (text or tool calls)
+        alt Tool calls
+            TeXRA->>Tools: Execute tools
+            Tools-->>TeXRA: Results
+            TeXRA->>LLM: Continue with results
+        else No tool calls
+            TeXRA-->>User: Wait for follow-up
+            User->>TeXRA: Follow-up message
+            TeXRA->>LLM: Continue conversation
+        end
+    end
+```
+
+Sessions persist and can be resumed after VS Code restarts.
 
 ## Summary
 
