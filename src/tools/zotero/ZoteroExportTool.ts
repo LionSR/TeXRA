@@ -6,15 +6,16 @@
  */
 
 // Third-party imports
-import axios from 'axios';
 import { z } from 'zod';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@tools/utils';
 import { getConfig } from '@utils/config';
+
+// Local imports - zotero
+import { callBetterBibTeX } from './bbtClient';
 
 const ZoteroExportInputSchema = z.strictObject({
   citekeys: z
@@ -36,59 +37,6 @@ const ZoteroExportInputSchema = z.strictObject({
 
 export type ZoteroExportInput = z.infer<typeof ZoteroExportInputSchema>;
 
-interface JsonRpcResponse {
-  jsonrpc: string;
-  id?: number;
-  result?: unknown;
-  error?: { code: number; message: string };
-}
-
-/**
- * Call Better BibTeX JSON-RPC endpoint.
- */
-async function callBetterBibTeX(
-  method: string,
-  params: unknown[],
-  port: number,
-): Promise<unknown> {
-  const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
-
-  try {
-    const response = await axios.post<JsonRpcResponse>(
-      url,
-      {
-        jsonrpc: '2.0',
-        method,
-        params,
-        id: 1,
-      },
-      {
-        timeout: 30000,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
-
-    return response.data.result;
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
-      throw new ToolError(
-        'Please start Zotero desktop app. The Connector API is not responding.',
-      );
-    }
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      throw new ToolError(
-        'Better BibTeX plugin is not installed. ' +
-          'Install it from https://retorque.re/zotero-better-bibtex/',
-      );
-    }
-    throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
-  }
-}
-
 export class ZoteroExportTool extends defineTool({
   name: 'zotero_export',
   description:
@@ -105,7 +53,12 @@ export class ZoteroExportTool extends defineTool({
       params.push(library);
     }
 
-    const result = await callBetterBibTeX('item.export', params, port);
+    const result = await callBetterBibTeX<string>(
+      'item.export',
+      params,
+      port,
+      30000, // Longer timeout for export
+    );
 
     if (typeof result !== 'string' || result.trim() === '') {
       throw new ToolError(
