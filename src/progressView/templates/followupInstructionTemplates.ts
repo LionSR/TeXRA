@@ -34,16 +34,11 @@ export const CHAT_INSTRUCTION_TEMPLATE =
 Question:
 {{ question }}`;
 
-const PREAMBLE_NOTE = `
-
-Note: LaTeX preamble (documentclass, packages, macros) is typically extracted separately and does not need to be included in output files.`;
-
 /**
  * Template for workflow mode context.
  * Excludes instruction (may be appended separately).
  */
-export const WORKFLOW_CONTEXT_TEMPLATE =
-  WORKFLOW_CONTEXT_BASE + FILES_SECTION + PREAMBLE_NOTE;
+export const WORKFLOW_CONTEXT_TEMPLATE = WORKFLOW_CONTEXT_BASE + FILES_SECTION;
 
 /**
  * Variables for rendering followup instruction templates.
