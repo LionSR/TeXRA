@@ -2,6 +2,14 @@
 
 TeXRA allows AI agents to analyze, reference, and generate figures within your documents.
 
+## Quick Task: Add a Figure Caption
+
+1. Select the `polish` agent from the dropdown
+2. Choose a vision-capable model (e.g., `gemini25p`, `gpt4o`)
+3. Select your figure in the **Media** section
+4. Enter instruction: "Write a detailed caption for this figure"
+5. Click Execute
+
 ## The Media Section
 
 The main TeXRA panel includes a "Media" section for managing figure files:
