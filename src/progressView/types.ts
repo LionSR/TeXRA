@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ExecutionIdSchema } from '@agent/types/IdentifierTypes';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // ============================================================================
 // Progress View Schemas

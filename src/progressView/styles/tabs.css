@@ -92,7 +92,7 @@
 }
 
 .tab-meta .remote-agent,
-.tab-meta .agent-type,
+.tab-meta .agent-category,
 .tab-meta .multi-file {
   margin-left: var(--spacing-small);
 }

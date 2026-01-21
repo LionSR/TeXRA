@@ -1055,12 +1055,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const isValidSessionType = (value) =>
       value === SESSION_TYPES.TOOL_USE || value === SESSION_TYPES.WORKFLOW;
 
-    // Priority order: canonical > explicit > inferred > default
-    const candidates = [
-      canonicalSession?.agentCategory,
-      state.sessionType,
-      canonicalSession?.agentType ?? state.agentType,
-    ];
+    // Priority order: canonical > explicit > legacy flag > default
+    const candidates = [canonicalSession?.agentCategory, state.sessionType];
 
     for (const candidate of candidates) {
       if (isValidSessionType(candidate)) {
