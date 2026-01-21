@@ -84,10 +84,10 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   isMultipleOutput: z.boolean().prefault(false),
 
   /**
-   * Maximum rounds to execute. When set, overrides the default calculation.
-   * - undefined: Use max(rounds, userRequest.length) (default)
-   * - 1: Single-pass processing
-   * - N: Fixed number of rounds
+   * Maximum rounds to execute. When set, caps the computed rounds.
+   * Computed rounds = max(rounds, userRequest.length)
+   * - undefined: No cap (use computed rounds)
+   * - N: Cap at N rounds (e.g., maxRounds=1 for single-pass)
    */
   maxRounds: z.number().optional(),
 
