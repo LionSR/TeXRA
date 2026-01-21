@@ -166,13 +166,6 @@ const baseConfig = {
       ],
       '/reference/': [
         {
-          text: 'Technical Reference',
-          items: [
-            { text: 'Tool-Use Agents', link: '/reference/tool-use-agents' },
-            { text: 'Tools Reference', link: '/reference/tools' },
-          ],
-        },
-        {
           text: 'Resources',
           items: [
             { text: 'Troubleshooting', link: '/reference/troubleshooting' },
