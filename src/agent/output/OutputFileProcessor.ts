@@ -146,7 +146,8 @@ export class OutputFileProcessor {
       const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       const shouldProcessXml =
         xmlMode === 'always' ||
-        (xmlMode === 'scratchpadOnly' && (hasDocumentTag || hasScratchpadPrefill));
+        (xmlMode === 'scratchpadOnly' &&
+          (hasDocumentTag || hasScratchpadPrefill));
 
       if (shouldProcessXml) {
         processed = await xmlManager.processSingleXmlOutput(

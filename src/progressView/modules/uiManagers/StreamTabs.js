@@ -194,7 +194,7 @@ export class StreamTabs {
    */
   _applyAgentDecorators(tabEl, info) {
     // Agent category icon (workflow, toolUse)
-    const agentIcon = tabEl.querySelector('.agent-type');
+    const agentIcon = tabEl.querySelector('.agent-category');
     if (agentIcon) {
       const decorator = getAgentCategoryDecorator(info.agentCategory);
       applyCodiconClass(agentIcon, decorator.icon);
