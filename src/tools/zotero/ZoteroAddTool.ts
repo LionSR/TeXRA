@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import { wrapApiCall } from '@tools/utils';
+import { wrapApiCall, pluralize } from '@tools/utils';
 import { getConfig } from '@utils/config';
 
 /**
@@ -247,14 +247,14 @@ export class ZoteroAddTool extends defineTool({
     // Throw ToolError if all items failed
     if (successCount === 0 && items.length > 0) {
       throw new ToolError(
-        `Failed to add all ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero:\n${output}`,
+        `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
       );
     }
 
     const summary =
       errorCount === 0
-        ? `Successfully added ${successCount} item${successCount === 1 ? '' : 's'} to Zotero.`
-        : `Added ${successCount} item${successCount === 1 ? '' : 's'}, failed to add ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero.`;
+        ? `Successfully added ${successCount} ${pluralize(successCount, 'item')} to Zotero.`
+        : `Added ${successCount} ${pluralize(successCount, 'item')}, failed to add ${errorCount} ${pluralize(errorCount, 'item')} to Zotero.`;
 
     return {
       summary,
