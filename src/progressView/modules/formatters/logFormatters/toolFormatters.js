@@ -165,9 +165,10 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   }
   // Handle read tools with file link instead of full content
   else if (READ_TOOLS.has(toolName) && filePath) {
-    // Parse line info from output summary or input range
+    // Only use line info if explicitly provided in range
+    // Don't default to line 1 - this breaks binary files (PDFs, images)
     const range = input?.range;
-    const startLine = range?.start ?? 1;
+    const startLine = range?.start;
     const endLine = range?.end;
 
     // Count total lines from output if available
