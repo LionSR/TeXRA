@@ -618,6 +618,15 @@
             "editPresentation": "singlelineText",
             "scope": "resource",
             "order": 1
+          },
+          "texra.bib.zoteroConnectorPort": {
+            "type": "number",
+            "default": 23119,
+            "description": "Port number for Zotero Connector API (default: 23119). Change this if you have configured Zotero to use a different port.",
+            "minimum": 1,
+            "maximum": 65535,
+            "scope": "resource",
+            "order": 2
           }
         }
       },
