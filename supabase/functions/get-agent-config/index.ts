@@ -8,6 +8,7 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { parse as parseYaml } from 'jsr:@std/yaml@1';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 
 // =============================================================================
@@ -121,15 +122,24 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Failed to load agent configuration', 500);
     }
 
-    // 6. Return config
+    // 6. Parse YAML and extract description (YAML is source of truth)
     const yamlContent = await fileData.text();
+    let yamlDescription: string | undefined;
+    try {
+      const parsed = parseYaml(yamlContent) as Record<string, unknown>;
+      yamlDescription =
+        typeof parsed?.description === 'string' ? parsed.description : undefined;
+    } catch {
+      // If YAML parsing fails, continue without description
+      console.warn('[GET_AGENT_CONFIG] Failed to parse YAML for description extraction');
+    }
 
     return jsonResponse(
       req,
       {
         config: yamlContent,
         name: agent.name,
-        description: agent.description,
+        description: yamlDescription,
         visibility: agent.visibility,
         agentCategory: agent.agent_category,
       },
