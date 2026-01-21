@@ -38,7 +38,7 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 ### From VSIX File
 
 1. Open VS Code
-2. Obtain the newest release (`.vsix` file, e.g., `texra-0.28.0.vsix`)
+2. Obtain the newest release (`.vsix` file, e.g., `texra-0.35.7.vsix`)
 3. Find the `.vsix` file in the VS Code file explorer
 4. Right-click on the `.vsix` file
 5. From the context menu, select "Install Extension VSIX"
@@ -172,7 +172,7 @@ TeXRA requires API keys to access language models. Here's how to set them up:
 1. Open VS Code with TeXRA installed
 2. Click on the TeXRA icon in the Activity Bar
 3. Click "Set API Key" in the TeXRA panel
-4. Select the provider (OpenAI or Anthropic)
+4. Select your provider (Anthropic, OpenAI, Google, xAI, DeepSeek, OpenRouter, Moonshot, DashScope, or Wolfram)
 5. Enter your API key when prompted
 
 Alternatively, you can access the extension settings (including API key setup) by clicking the gear icon (<i class="codicon codicon-gear"></i>) in the TeXRA webview panel.
@@ -211,7 +211,7 @@ If any component is missing, TeXRA will typically show an error message indicati
 ### Common Installation Issues
 
 1. **Extension Not Loading**:
-   - Check VS Code's minimum version requirement (1.94.2+)
+   - Check VS Code's minimum version requirement (1.99+)
    - Look for errors in the Output panel (select "TeXRA" in the dropdown)
    - Try reinstalling the extension
 
