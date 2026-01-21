@@ -1201,18 +1201,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // When attachAgentOutputs is enabled, output to original input locations
     // This allows apply agents to write changes back to the original files
-    // Note: outputFiles includes all unique files (inputFile + inputFiles)
+    // Note: outputFiles includes all unique files (inputFile + inputFiles), preserving order
     const outputFile = attachAgentOutputs
       ? WorkspaceFS.relativePath(originalConfig.inputFile)
       : originalConfig.outputFile;
     const outputFiles = attachAgentOutputs
-      ? [
-          ...new Set(
-            [originalConfig.inputFile, ...originalConfig.inputFiles]
-              .filter(Boolean)
-              .map((p) => WorkspaceFS.relativePath(p)),
-          ),
-        ]
+      ? [originalConfig.inputFile, ...originalConfig.inputFiles]
+          .filter(Boolean)
+          .map((p) => WorkspaceFS.relativePath(p))
+          .filter((p, i, arr) => arr.indexOf(p) === i)
       : originalConfig.outputFiles;
 
     const newConfig = {
