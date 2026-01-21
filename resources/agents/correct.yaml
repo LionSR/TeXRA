@@ -2,6 +2,7 @@ name: correct
 description: Corrects typos, grammar, and LaTeX formatting issues in your document.
 
 settings:
+  agentCategory: workflow
   maxRounds: 1
   documentTag: latex_document
   endTag: </latex_document>

@@ -2,6 +2,7 @@ name: lean
 description: Lean 4 proof assistant with VS Code integration and CLI fallback.
 
 settings:
+  agentCategory: toolUse
   tools:
     - todo_write
     - lean_diagnostics

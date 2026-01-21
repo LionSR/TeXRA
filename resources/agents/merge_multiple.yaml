@@ -3,6 +3,7 @@ inherits: merge
 description: Merges multiple partial edits back into their full original documents.
 
 settings:
+  agentCategory: workflow
   maxRounds: 1
   isMultipleOutput: true
   documentTag: merged_documents

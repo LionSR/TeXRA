@@ -3,6 +3,7 @@ description: Multi-document logical flow analyzer for research papers. Ensures c
 inherits: logic
 
 settings:
+  agentCategory: workflow
   documentTag: latex_documents
   endTag: </latex_documents>
   isMultipleOutput: true
