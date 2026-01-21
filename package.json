@@ -1084,7 +1084,7 @@
       },
       {
         "command": "texra.cloneOverleafProject",
-        "title": "Clone Overleaf Project",
+        "title": "Clone Overleaf/ShareLaTeX Project",
         "category": "TeXRA",
         "icon": "$(repo-clone)"
       },
