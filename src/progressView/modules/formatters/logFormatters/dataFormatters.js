@@ -202,6 +202,17 @@ const extractNewFormat = (entry) => {
 };
 
 /**
+ * Extract round number from a label like "[r1]" or "file.tex [r2]"
+ * @param {string|undefined} label - Label that might contain round info
+ * @returns {number|null} Round number or null if not found
+ */
+const parseRoundFromLabel = (label) => {
+  if (typeof label !== 'string') return null;
+  const match = label.match(/\[r(\d+)\]/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+/**
  * Extract display data from legacy format (locations + labels).
  * @param {object} entry - Legacy entry
  * @returns {object} Extracted fields for rendering
@@ -210,14 +221,23 @@ const extractLegacyFormat = (entry) => {
   const { locations } = entry;
   const baseFile = locations.base?.absolutePath || entry.basePath || '';
 
+  // Try to get round info from entry fields first, then parse from labels
+  const baseRound =
+    entry.baseRound ?? parseRoundFromLabel(entry.baseLabel) ?? null;
+  const revisedRound =
+    entry.revisedRound ?? parseRoundFromLabel(entry.revisedLabel) ?? 0;
+
   return {
     baseFile,
     revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
     diffFile: locations.diff?.absolutePath || entry.diffPath || '',
     displayName:
-      entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown',
-    baseRound: null,
-    revisedRound: 0,
+      entry.originalFileName ||
+      entry.baseLabel?.replace(/\s*\[r\d+\]/, '') || // Strip round from label
+      getBasename(baseFile) ||
+      'unknown',
+    baseRound,
+    revisedRound,
     status: entry.status || 'error',
     message: entry.message,
     runId: entry.runId,
@@ -234,23 +254,37 @@ const buildLatexdiffEntryHtml = (entry) => {
   if (!entry) return '';
 
   // Extract fields based on format
-  const data = entry.revised && typeof entry.revised === 'object'
-    ? extractNewFormat(entry)
-    : entry.locations
-      ? extractLegacyFormat(entry)
-      : null;
+  const data =
+    entry.revised && typeof entry.revised === 'object'
+      ? extractNewFormat(entry)
+      : entry.locations
+        ? extractLegacyFormat(entry)
+        : null;
 
   if (!data) return '';
 
-  const { baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId } = data;
+  const {
+    baseFile,
+    revisedFile,
+    diffFile,
+    displayName,
+    baseRound,
+    revisedRound,
+    status,
+    message,
+    runId,
+  } = data;
 
   const icon = getLatexdiffStatusIcon(status);
   const msg = toStringOrEmpty(message);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"` : '';
+  const runAttr = runId
+    ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"`
+    : '';
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
-  const baseLabel = baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
+  const baseLabel =
+    baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
   const revisedLabel = `[r${revisedRound}]`;
 
   const baseLink = buildFileLink(baseFile, baseLabel);
