@@ -103,7 +103,7 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 /**
  * Normalize input to ensure agentCategory discriminator is present.
  * Handles backward compatibility for legacy agentType field.
- * Strips agentType after migration (strictObject rejects unknown keys).
+ * Strips agentType during preprocessing (before strictObject validation).
  * Defaults to Workflow when not specified.
  */
 const normalizeAgentSettingInput = (input: unknown): unknown => {
