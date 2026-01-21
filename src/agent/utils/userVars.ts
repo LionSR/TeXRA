@@ -113,6 +113,7 @@ function getBasicVars(
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
+    CWD: WorkspaceFS.getPath() ?? '.',
   };
 }
 

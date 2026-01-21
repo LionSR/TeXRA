@@ -34,7 +34,8 @@ const RunsToolInputSchema = z.strictObject({
 
   /** Optional line range [start, end] for large outputs */
   view_range: z
-    .tuple([z.int().min(1), z.int().min(1)])
+    .array(z.int().min(1))
+    .length(2)
     .refine(([start, end]) => end >= start, {
       message: 'view_range[1] must be >= view_range[0]',
     })
@@ -220,7 +221,7 @@ Use view_range: [start, end] to paginate large outputs.`,
    */
   private async showConversation(
     executionId: ExecutionId,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
     const flow = await store.read<{ shared?: { conversation?: unknown[] } }>(
@@ -361,7 +362,7 @@ Use view_range: [start, end] to paginate large outputs.`,
   private async readFile(
     executionId: ExecutionId,
     filePath: string,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     const fullPath = `${TASK_RUNS_DIR}/${executionId}/${filePath}`;
 
@@ -399,8 +400,8 @@ Use view_range: [start, end] to paginate large outputs.`,
   /**
    * Apply view_range to output string (line-based pagination).
    */
-  private applyViewRange(output: string, viewRange?: [number, number]): string {
-    if (!viewRange) return output;
+  private applyViewRange(output: string, viewRange?: number[]): string {
+    if (!viewRange || viewRange.length < 2) return output;
     const lines = output.split('\n');
     const [start, end] = viewRange;
     return lines
