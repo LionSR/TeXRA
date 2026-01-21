@@ -446,6 +446,6 @@ Common error scenarios and solutions:
 
 Now that you understand the research tools, explore:
 
-- [Tool Integration](./tool-integration.md) - How tools enhance AI agents
+- [LaTeX Tools](./latex-tools.md) - LaTeX-specific tools and workflows
 - [Best Practices](./best-practices.md) - Optimize your research workflow
 - [Custom Agents](./custom-agents.md) - Build agents that use these tools

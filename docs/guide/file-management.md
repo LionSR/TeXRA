@@ -272,6 +272,6 @@ Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and loc
 
 Now that you understand how to manage files in TeXRA, you might want to learn about:
 
-- [Tool Integration](/guide/tool-integration) - Learn how TeXRA leverages external tools
+- [LaTeX Tools](/guide/latex-tools) - Learn how TeXRA leverages LaTeX tools
 - [LaTeX Diff](/guide/latex-diff) - Understand how to compare document versions
 - [Intelligent Merge](/guide/intelligent-merge) - Learn about merging edited documents
