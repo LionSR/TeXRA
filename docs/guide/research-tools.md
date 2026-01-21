@@ -50,10 +50,3 @@ Find the official PyTorch documentation for attention mechanisms.
 | `search` | Finding papers, literature reviews, fact-checking |
 | `discuss` | Brainstorming research directions with literature context |
 | `ask` | Quick lookups about your documents and related work |
-
-## Tips
-
-- **Be specific**: "graph neural networks for molecular properties" beats "machine learning"
-- **Mention dates**: "papers from 2023-2024" helps filter recent work
-- **Cross-reference**: The agent can check both arXiv and Crossref for preprint vs. published versions
-- **Download selectively**: Source downloads are useful for studying figures and document structure
