@@ -6,14 +6,14 @@
  */
 
 // Third-party imports
-import axios from 'axios';
 import { z } from 'zod';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { getConfig } from '@utils/config';
+
+// Local imports - zotero
+import { callBetterBibTeX, type BbtSearchResultItem } from './bbtClient';
 
 const ZoteroSearchInputSchema = z.strictObject({
   query: z
@@ -33,59 +33,6 @@ const ZoteroSearchInputSchema = z.strictObject({
 
 export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
-interface JsonRpcResponse {
-  jsonrpc: string;
-  id?: number;
-  result?: unknown;
-  error?: { code: number; message: string };
-}
-
-/**
- * Call Better BibTeX JSON-RPC endpoint.
- */
-async function callBetterBibTeX(
-  method: string,
-  params: unknown[],
-  port: number,
-): Promise<unknown> {
-  const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
-
-  try {
-    const response = await axios.post<JsonRpcResponse>(
-      url,
-      {
-        jsonrpc: '2.0',
-        method,
-        params,
-        id: 1,
-      },
-      {
-        timeout: 10000,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
-
-    return response.data.result;
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
-      throw new ToolError(
-        'Please start Zotero desktop app. The Connector API is not responding.',
-      );
-    }
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      throw new ToolError(
-        'Better BibTeX plugin is not installed. ' +
-          'Install it from https://retorque.re/zotero-better-bibtex/',
-      );
-    }
-    throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
-  }
-}
-
 export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   description:
@@ -101,7 +48,11 @@ export class ZoteroSearchTool extends defineTool({
       params.push(library);
     }
 
-    const result = await callBetterBibTeX('item.search', params, port);
+    const result = await callBetterBibTeX<BbtSearchResultItem[]>(
+      'item.search',
+      params,
+      port,
+    );
 
     if (!Array.isArray(result) || result.length === 0) {
       return {
@@ -111,18 +62,37 @@ export class ZoteroSearchTool extends defineTool({
     }
 
     // Format results
-    const items = result.map((item: Record<string, unknown>) => {
-      const citekey = item.citekey || item.citationKey || 'unknown';
+    const items = result.map((item) => {
+      const citekey = item.citekey || 'unknown';
       const title = item.title || 'Untitled';
-      const creators = Array.isArray(item.creators)
-        ? item.creators
-            .map((c: Record<string, string>) =>
-              c.lastName ? `${c.lastName}, ${c.firstName || ''}`.trim() : c.name,
-            )
-            .join('; ')
-        : '';
-      const year = item.date || item.year || '';
-      const type = item.itemType || 'item';
+
+      // Handle both CSL JSON (author) and Zotero (creators) formats
+      const creatorList = item.author || item.creators || [];
+      const creators = creatorList
+        .map((c) => {
+          // CSL JSON format: family/given
+          if (c.family) {
+            return `${c.family}${c.given ? `, ${c.given}` : ''}`;
+          }
+          // Zotero format: lastName/firstName
+          if (c.lastName) {
+            return `${c.lastName}${c.firstName ? `, ${c.firstName}` : ''}`;
+          }
+          // Single name format
+          return c.name || '';
+        })
+        .filter(Boolean)
+        .join('; ');
+
+      // Handle date from CSL JSON or Zotero format
+      let year = '';
+      if (item.issued?.['date-parts']?.[0]?.[0]) {
+        year = String(item.issued['date-parts'][0][0]);
+      } else if (item.date) {
+        year = item.date;
+      }
+
+      const type = item.type || item.itemType || 'item';
 
       return `[${citekey}] ${title}${creators ? ` - ${creators}` : ''}${year ? ` (${year})` : ''} [${type}]`;
     });
