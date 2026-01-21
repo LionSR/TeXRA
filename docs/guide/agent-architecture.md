@@ -2,6 +2,28 @@
 
 At its core, a TeXRA agent is a recipe for instructing a Large Language Model (LLM) to perform a specific academic research task. This guide provides a high-level overview of how these agents are defined and how they execute your requests.
 
+## Agent Categories
+
+TeXRA agents are organized into two categories, each designed for different use cases:
+
+| Category | Agent Types | Best For |
+|----------|-------------|----------|
+| **Workflow** | `CoT` (Chain-of-Thought), `direct` | Structured document transformations with predictable outputs |
+| **ToolUse** | `toolUse` | Interactive research tasks requiring external tools |
+
+### Workflow Agents
+
+Workflow agents run for a predetermined number of rounds and produce structured output files. They are ideal for document processing tasks like polishing, summarizing, or reviewing LaTeX papers.
+
+- **CoT (Chain-of-Thought)**: Multi-round agents that "think" step-by-step using `<scratchpad>` reasoning, then refine their output through reflection rounds. Default: 2+ rounds with XML structure enforcement.
+- **Direct**: Single-pass agents optimized for quick transformations with minimal overhead. Default: 1 round, XML structure only when scratchpad prefill is used.
+
+### Tool-Use Agents
+
+Tool-use agents run interactive sessions where the model can call external tools (file operations, web search, code execution, etc.) and wait for user follow-up messages. They continue looping until the task is complete or the user ends the session.
+
+- **toolUse**: Interactive agents with tool-calling capabilities. Sessions persist across follow-up messages and can be resumed after interruption.
+
 ## Agent Definition Files (`.yaml`)
 
 The core of TeXRA's agent definition lies in a combination of YAML for structure, Jinja2 for templating, and often XML within the prompts for guiding the LLM's output. Each agent's behavior is defined in a `.yaml` file located in the built-in or custom agent directories.
@@ -12,40 +34,45 @@ These `.yaml` files have two main parts (and thankfully, YAML is usually less pr
 
 1.  **`settings`**: Define general operational parameters. For example:
     - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, a simpler `direct` agent, or a `toolUse` agent designed to call model-integrated tools?
-    - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`).
+    - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`). _(Workflow agents only)_
+    - `tools`: Array of tool definitions the agent can invoke. _(Tool-use agents only)_
     - _(Other settings control output format, inheritance, etc. See [Configuration](./configuration.md) and [Custom Agents](./custom-agents.md) for full details)._
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
     - `systemPrompt`: Sets the overall role and high-level instructions for the LLM.
     - `userPrefix`: Provides the main context, including your input file(s) (available via e.g., `{{ INPUT_CONTENT }}`) and the specific instruction you typed in the UI (available via `{{ INSTRUCTION }}`).
-    - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped within the XML tags defined by `settings.documentTag` (e.g., `<document>...</document>`). You can also provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
+    - `userRequest`: Asks the LLM to perform the initial task (Round 0). For workflow agents, you can provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
 
-\_(Prompts use Jinja2 templating. For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)\*
+_(Prompts use Jinja2 templating. For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)_
 
 ::: tip Transparency & Customization
 The prompts described above (`systemPrompt`, `userPrefix`, etc.) represent TeXRA's structured approach to guiding the LLM. This structured, template-based system means the agent's behavior is transparent and highly customizable through the `.yaml` file, not a hidden black box.
 :::
 
-## Basic Execution Flow
+## Execution Flows
 
-When you click "Execute" in the TeXRA UI, TeXRA uses the selected agent's definition (`.yaml`) and your UI inputs to interact with the chosen LLM:
+TeXRA uses different execution flows depending on the agent category. When you click "Execute" in the TeXRA UI, the system routes to the appropriate flow based on the `agentType` setting.
+
+### Workflow Agent Execution (CoT and Direct)
+
+Workflow agents use the **Reflection Flow**, which runs for a fixed number of rounds and produces structured output files:
 
 ```mermaid
 sequenceDiagram
     participant User
     participant TeXRA UI
-    participant Agent Backend
+    participant Reflection Flow
     participant LLM API
 
     User->>TeXRA UI: Selects files, agent, instruction, model
     User->>TeXRA UI: Clicks Execute
-    TeXRA UI->>Agent Backend: run(config)
-    Agent Backend->>Agent Backend: Initialize (Load agent definition, read files)
-    Note over Agent Backend: Constructs prompt from systemPrompt, userPrefix, userRequest templates + User Input
-    Agent Backend->>LLM API: Create Response (Round 0 Prompt)
+    TeXRA UI->>Reflection Flow: run(config)
+    Reflection Flow->>Reflection Flow: Initialize (Load agent definition, read files)
+    Note over Reflection Flow: Constructs prompt from systemPrompt, userPrefix, userRequest templates + User Input
+    Reflection Flow->>LLM API: Create Response (Round 0 Prompt)
     Note over LLM API: Processes request based on prompts
-    LLM API-->>Agent Backend: Response (Text + Usage + StopReason)
-    Agent Backend->>Agent Backend: Process Response (Save *_r0_* output, check for continuation)
-    Agent Backend-->>TeXRA UI: Update ProgressBoard / Signal Completion
+    LLM API-->>Reflection Flow: Response (Text + Usage + StopReason)
+    Reflection Flow->>Reflection Flow: Process Response (Save *_r0_* output, check for continuation)
+    Reflection Flow-->>TeXRA UI: Update ProgressBoard / Signal Completion
 ```
 
 **Key Stages:**
@@ -57,39 +84,108 @@ sequenceDiagram
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
-### Prompt Composition and Message Flow
+### Tool-Use Agent Execution
 
-TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between—for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system–user–system" pattern: attachments or tool results can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.
+Tool-use agents use the **ToolUse Run Flow**, which loops continuously until the task completes or the user ends the session:
 
-### PromptBuilder utility
+```mermaid
+sequenceDiagram
+    participant User
+    participant TeXRA UI
+    participant ToolUse Flow
+    participant LLM API
+    participant Tools
 
-Internally, TeXRA now assembles these prompt segments through the `PromptBuilder` helper. The builder collects the agent's templates and rendered variables once and exposes focused methods:
+    User->>TeXRA UI: Selects agent, provides instruction
+    User->>TeXRA UI: Clicks Execute
+    TeXRA UI->>ToolUse Flow: run(config)
+    ToolUse Flow->>ToolUse Flow: Prepare (Initialize session, resolve tools)
+
+    loop Tool-Use Cycle
+        ToolUse Flow->>LLM API: Send messages with tool definitions
+        LLM API-->>ToolUse Flow: Response (text and/or tool calls)
+        alt Tool calls present
+            ToolUse Flow->>Tools: Execute tool calls
+            Tools-->>ToolUse Flow: Tool results
+            Note over ToolUse Flow: Append results to conversation, continue cycle
+        else No tool calls (end turn)
+            ToolUse Flow->>ToolUse Flow: Wait for follow-up
+        end
+    end
+
+    alt User sends follow-up
+        User->>TeXRA UI: Types follow-up message
+        TeXRA UI->>ToolUse Flow: Resume with follow-up
+        Note over ToolUse Flow: Continue tool-use cycle
+    else User ends session
+        ToolUse Flow-->>TeXRA UI: Session complete
+    end
+```
+
+**Key Stages:**
+
+1.  **Prepare:** Initialize session state and resolve the available tools from the agent's `tools` configuration.
+2.  **Cycle:** Send the conversation (including tool definitions) to the LLM. Process the response:
+    - If the model requests tool calls, execute them and append results to the conversation, then continue the cycle.
+    - If the model completes its turn without tool calls, move to the wait stage.
+3.  **Wait:** Pause execution and wait for user follow-up. The session state is persisted, allowing the user to continue the conversation or end the session.
+4.  **Resume/Complete:** If the user provides a follow-up message, append it to the conversation and return to the cycle stage. Otherwise, finalize the session.
+
+**Session Persistence:** Tool-use agents automatically persist their state between cycles. If VS Code reloads or the session is interrupted, you can resume from the last checkpoint rather than starting over.
+
+### Prompt Composition and Message Flow (Workflow Agents)
+
+For workflow agents, TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between---for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system-user-system" pattern: attachments can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.
+
+### PromptBuilder Utility (Workflow Agents)
+
+Internally, TeXRA assembles these prompt segments through the `PromptBuilder` helper. The builder collects the agent's templates and rendered variables once and exposes focused methods:
 
 - `buildInitialPrompts()` returns the trio of system, prefix, and request messages used for round 0.
 - `buildUserRequest(round)` renders the appropriate request template for the supplied round, falling back to the first reflection template when later rounds are undefined.
 - `getPrefill(round)` provides the prefill seed that is streamed to the assistant before each model turn.
 
-Agents that inherit from `BaseReflectionAgent` can override the protected `getPromptBuilder()` hook to supply a subclassed builder. This makes it easy to add new phases (e.g., a planning stage) or to customize how prefills are computed without rewriting the round-processing logic. When you introduce a specialised agent, create a derived `PromptBuilder` that extends the base implementation, override or add the necessary methods, and return it from your agent's `getPromptBuilder()` override so the lifecycle automatically uses your custom prompts.
+### Reflection Rounds (Round 1+) - Workflow Agents Only
 
-**Reflection Rounds (Round 1+):**
-
-When an agent definition includes multiple `userRequest` entries (or increases `settings.rounds`), TeXRA automatically performs additional passes after Round 0 completes:
+When a workflow agent definition includes multiple `userRequest` entries (or increases `settings.rounds`), TeXRA automatically performs additional passes after Round 0 completes:
 
 1.  **Reflection Prompt:** It renders the appropriate reflection template from subsequent `userRequest` entries to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
 2.  **LLM Interaction (Round 1):** The LLM generates a revised response.
 3.  **Processing:** TeXRA saves this refined output to a separate file (e.g., `filename_agent_r1_model.ext`).
 
-You can control how many rounds execute by editing the agent YAML—either adjust `settings.rounds` for the maximum number of passes or add more entries to `userRequest`. The run stops early whenever the model signals it is finished or when no reflection prompt content is supplied.
+You can control how many rounds execute by editing the agent YAML---either adjust `settings.rounds` for the maximum number of passes or add more entries to `userRequest`. The run stops early whenever the model signals it is finished or when no reflection prompt content is supplied.
 
-This basic flow, potentially with the reflection rounds, allows TeXRA agents to perform targeted tasks based on their specific definitions and your instructions. For concrete examples of built-in agents, see the [Built-in Agent Reference](./built-in-agents.md).
+### Tool Execution (Tool-Use Agents Only)
 
-::: warning Potential XML Issues
-Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing tags), especially with very long or complex outputs. If TeXRA fails to extract content from an agent's output (`_r0_*.xml` or `_r1_*.xml` file), you might need to manually inspect the `.xml` file and correct any structural errors (like adding a missing `</document>` tag) before TeXRA can process it correctly. See the [Troubleshooting guide](../reference/troubleshooting.md#output-file-corruption) for more details.
+Tool-use agents do not use the PromptBuilder or reflection rounds. Instead, they:
+
+1. **Resolve tools** from the `settings.tools` array at session start
+2. **Include tool definitions** in each API request, allowing the model to call them
+3. **Execute tool calls** returned by the model and append results to the conversation
+4. **Loop** until the model completes its turn without requesting more tools
+
+The conversation grows organically through tool interactions rather than following a predetermined round structure. Each tool result is appended as a new message, and the model decides when the task is complete.
+
+## Summary
+
+Workflow agents (CoT, Direct) and tool-use agents serve different purposes:
+
+| Aspect | Workflow Agents | Tool-Use Agents |
+|--------|-----------------|-----------------|
+| **Rounds** | Fixed (1 for Direct, 2+ for CoT) | Dynamic (loops until complete) |
+| **Output** | Structured files (`_r0_`, `_r1_`, etc.) | Conversational with tool results |
+| **Session** | Single execution | Persistent, resumable sessions |
+| **Use Case** | Document transformation | Interactive research tasks |
+
+For concrete examples of built-in agents, see the [Built-in Agent Reference](./built-in-agents.md).
+
+::: warning Potential XML Issues (Workflow Agents)
+Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing tags), especially with very long or complex outputs. If TeXRA fails to extract content from a workflow agent's output (`_r0_*.xml` or `_r1_*.xml` file), you might need to manually inspect the `.xml` file and correct any structural errors (like adding a missing `</document>` tag) before TeXRA can process it correctly. See the [Troubleshooting guide](../reference/troubleshooting.md#output-file-corruption) for more details.
 :::
 
-### Reflection
+### Reflection Example (Workflow Agents)
 
-After generating an initial output (Round 0), TeXRA agents that define reflection prompts evaluate and refine their work (Round 1):
+After generating an initial output (Round 0), workflow agents that define reflection prompts evaluate and refine their work (Round 1):
 
 <div class="reflection-pdf-viewer">
   <div class="pdf-tabs">
