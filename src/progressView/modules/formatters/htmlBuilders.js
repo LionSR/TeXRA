@@ -258,7 +258,7 @@ export function buildFileLinkWithLines(filePath, options = {}) {
 }
 
 // ============================================================================
-// Edit Diff Display (Stacked Blocks)
+// Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
 /**
