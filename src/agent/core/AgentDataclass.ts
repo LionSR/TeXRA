@@ -66,8 +66,8 @@ export const AgentSettingBaseSchema = z.strictObject({
 
 /** XML structure enforcement modes for workflow agents. */
 export const XmlStructureMode = z.enum([
-  'never', // Never ensure XML structure (default)
-  'scratchpadOnly', // Only when useScratchpad is true
+  'never', // Never ensure XML structure
+  'scratchpadOnly', // Only when useScratchpad is true (runtime default)
   'always', // Always ensure XML structure
 ]);
 export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
@@ -109,6 +109,7 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 
 /**
  * Normalize input to ensure agentCategory discriminator is present.
+ * Handles backward compatibility for legacy agentType field.
  * Defaults to Workflow when not specified.
  */
 const normalizeAgentSettingInput = (input: unknown): unknown => {
@@ -118,6 +119,13 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
   const obj = input as Record<string, unknown>;
   if (obj.agentCategory !== undefined) {
     return input;
+  }
+  // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
+  if (obj.agentType === 'toolUse') {
+    return {
+      ...obj,
+      agentCategory: AgentCategory.ToolUse,
+    };
   }
   return {
     ...obj,
