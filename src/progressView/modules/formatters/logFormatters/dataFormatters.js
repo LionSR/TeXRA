@@ -150,42 +150,16 @@ const toStringOrEmpty = (value) =>
   typeof value === 'string' && value.length > 0 ? value : '';
 
 /**
- * Convert value to location object if valid
- * @param {*} value - Value to convert
- * @returns {object|null} Location object or null
- */
-const toLocation = (value) =>
-  value && typeof value === 'object' ? value : null;
-
-/**
  * Get display path from a location object
  * @param {object|null} location - Location object with kind and relativePath
  * @returns {string} Relative path or empty string
  */
 const describeLocation = (location) => {
   if (!location) return '';
-  // Trust the discriminated union - kind field is the source of truth
   if (location.kind === 'workspace' || location.kind === 'runStorage') {
     return location.relativePath || '';
   }
   return '';
-};
-
-/**
- * Get absolute path from location or fallback
- * @param {object|null} location - Location object with absolutePath
- * @param {string} fallback - Fallback path if location is invalid
- * @returns {string} Absolute path
- */
-const pickAbsolutePath = (location, fallback) => {
-  if (
-    location &&
-    typeof location.absolutePath === 'string' &&
-    location.absolutePath
-  ) {
-    return location.absolutePath;
-  }
-  return fallback;
 };
 
 /**
@@ -200,46 +174,88 @@ const getLatexdiffStatusIcon = (status) => {
 };
 
 /**
- * Build HTML for a single latexdiff entry
- * @param {object} entry - Latexdiff entry data
+ * Extract display data from new DiffResult format.
+ * @param {object} entry - DiffResult entry
+ * @returns {object} Extracted fields for rendering
+ */
+const extractNewFormat = (entry) => {
+  const { baseLocation, revised, diffLocation } = entry;
+  const originalPath =
+    revised.lineage?.original?.relativePath ||
+    revised.lineage?.original?.absolutePath;
+
+  return {
+    baseFile: baseLocation?.absolutePath || '',
+    revisedFile: revised.location?.absolutePath || '',
+    diffFile: diffLocation?.absolutePath || '',
+    displayName: originalPath
+      ? getBasename(originalPath)
+      : describeLocation(baseLocation) ||
+        getBasename(baseLocation?.absolutePath || '') ||
+        'unknown',
+    baseRound: entry.baseRound ?? null,
+    revisedRound: revised.round ?? 0,
+    status: entry.status || 'error',
+    message: entry.message,
+    runId: entry.runId,
+  };
+};
+
+/**
+ * Extract display data from legacy format (locations + labels).
+ * @param {object} entry - Legacy entry
+ * @returns {object} Extracted fields for rendering
+ */
+const extractLegacyFormat = (entry) => {
+  const { locations } = entry;
+  const baseFile = locations.base?.absolutePath || entry.basePath || '';
+
+  return {
+    baseFile,
+    revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
+    diffFile: locations.diff?.absolutePath || entry.diffPath || '',
+    displayName:
+      entry.originalFileName || entry.baseLabel || getBasename(baseFile) || 'unknown',
+    baseRound: null,
+    revisedRound: 0,
+    status: entry.status || 'error',
+    message: entry.message,
+    runId: entry.runId,
+  };
+};
+
+/**
+ * Build HTML for a latexdiff entry.
+ * Handles both new format (DiffResult) and legacy format (locations + labels).
+ * @param {object} entry - Latexdiff entry
  * @returns {string} HTML string for the entry
  */
 const buildLatexdiffEntryHtml = (entry) => {
-  const locations = entry && typeof entry === 'object' ? entry.locations : null;
-  const baseLocation = toLocation(locations ? locations.base : null);
-  const revisedLocation = toLocation(locations ? locations.revised : null);
-  const diffLocation = toLocation(locations ? locations.diff : null);
+  if (!entry) return '';
 
-  const basePath = toStringOrEmpty(entry.basePath);
-  const revisedPath = toStringOrEmpty(entry.revisedPath);
-  const diffPath = toStringOrEmpty(entry.diffPath);
-  const msg = toStringOrEmpty(entry.message);
-  const baseLabel = toStringOrEmpty(entry.baseLabel);
-  const revisedLabel = toStringOrEmpty(entry.revisedLabel);
-  const runId = toStringOrEmpty(entry.runId);
+  // Extract fields based on format
+  const data = entry.revised && typeof entry.revised === 'object'
+    ? extractNewFormat(entry)
+    : entry.locations
+      ? extractLegacyFormat(entry)
+      : null;
 
-  const baseFile = pickAbsolutePath(baseLocation, basePath);
-  const revisedFile = pickAbsolutePath(revisedLocation, revisedPath);
-  const diffFile = pickAbsolutePath(diffLocation, diffPath);
+  if (!data) return '';
 
-  const baseDisplayRaw =
-    describeLocation(baseLocation) || baseLabel || getBasename(baseFile);
-  const revisedDisplayRaw =
-    describeLocation(revisedLocation) ||
-    revisedLabel ||
-    getBasename(revisedFile || baseFile);
-  const diffDisplayRaw =
-    describeLocation(diffLocation) ||
-    (diffFile ? getBasename(diffFile) : '') ||
-    'diff';
+  const { baseFile, revisedFile, diffFile, displayName, baseRound, revisedRound, status, message, runId } = data;
 
-  const icon = getLatexdiffStatusIcon(entry.status);
+  const icon = getLatexdiffStatusIcon(status);
+  const msg = toStringOrEmpty(message);
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId ? ` data-run-id="${encodeHtml(runId)}"` : '';
+  const runAttr = runId ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"` : '';
 
-  const baseLink = buildFileLink(baseFile, baseDisplayRaw);
-  const revisedLink = buildFileLink(revisedFile, revisedDisplayRaw);
-  const diffLink = buildFileLink(diffFile, diffDisplayRaw);
+  // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
+  const baseLabel = baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
+  const revisedLabel = `[r${revisedRound}]`;
+
+  const baseLink = buildFileLink(baseFile, baseLabel);
+  const revisedLink = buildFileLink(revisedFile, revisedLabel);
+  const diffLink = buildFileLink(diffFile, 'diff');
 
   return `<li class="detail-item"${runAttr}><i class="codicon ${icon}"${titleAttr}></i> ${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})</li>`;
 };

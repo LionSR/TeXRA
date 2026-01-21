@@ -61,9 +61,7 @@ export class FileList {
         container.appendChild(roundGroup);
       }
 
-      files.forEach((file) =>
-        this._renderFileItem(template, target, file, round),
-      );
+      files.forEach((file) => this._renderFileItem(template, target, file));
     }
 
     // Show/hide collapsible based on whether files were actually rendered
@@ -74,7 +72,7 @@ export class FileList {
    * Render a single file item and append it to the parent element
    * @private
    */
-  _renderFileItem(template, parent, file, round) {
+  _renderFileItem(template, parent, file) {
     // Skip invalid file entries - trust the data structure
     if (!file || !file.location) {
       console.warn('FileList.update: Invalid file entry:', file);
@@ -89,13 +87,14 @@ export class FileList {
     const statsSpan = clone.querySelector('.file-stats');
 
     const relativePath = file.location.relativePath;
+    // Display name: prefer original file name when available, fallback to output path
+    const displayPath = file.lineage?.original?.relativePath || relativePath;
 
-    // Set file data attributes using new structure
+    // Set file data attributes
     if (fileItem) {
       fileItem.dataset.file = file.location.absolutePath;
       fileItem.dataset.original = file.lineage?.original?.absolutePath || '';
       fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
-      fileItem.dataset.round = round;
       if (file.location.kind === 'workspace') {
         fileItem.dataset.workspace = file.location.absolutePath;
       }
@@ -107,16 +106,16 @@ export class FileList {
       }
     }
 
-    // Set the file path display - simplified, no color coding for directory
-    if (basenameSpan) basenameSpan.textContent = relativePath;
+    // Set the file path display - show original file name
+    if (basenameSpan) basenameSpan.textContent = displayPath;
     if (dirSpan) dirSpan.textContent = '';
     if (filePathSpan) {
-      const displayPath =
+      const tooltipPath =
         file.location.kind === 'workspace' ||
         file.location.kind === 'runStorage'
           ? file.location.relativePath
           : file.location.absolutePath;
-      filePathSpan.title = displayPath;
+      filePathSpan.title = tooltipPath;
     }
 
     // Handle diff stats (use schema field names: added/removed)
