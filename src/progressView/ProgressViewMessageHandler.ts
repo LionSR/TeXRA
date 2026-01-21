@@ -1212,6 +1212,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           .filter((p, i, arr) => arr.indexOf(p) === i)
       : originalConfig.outputFiles;
 
+    // Set useMultipleOutputs when we have multiple output files
+    const useMultipleOutputs =
+      attachAgentOutputs && outputFiles.length > 1
+        ? true
+        : originalConfig.useMultipleOutputs;
+
     const newConfig = {
       ...originalConfig,
       agent,
@@ -1220,6 +1226,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       inputFiles: newInputFiles,
       outputFile,
       outputFiles,
+      useMultipleOutputs,
       referenceFiles: mergedReferenceFiles,
       instruction,
       session,
@@ -1231,11 +1238,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return { agentConfig: newConfig } as TaskState;
     }
 
-    // Update activeFiles.reference visibility when reference files are added
-    const activeFiles =
-      outputsAsReference.length > 0
-        ? { ...originalTaskState.activeFiles, reference: true }
-        : originalTaskState.activeFiles;
+    // Update activeFiles visibility when reference/output files are added
+    const activeFiles = {
+      ...originalTaskState.activeFiles,
+      ...(outputsAsReference.length > 0 && { reference: true }),
+      ...(attachAgentOutputs && outputFiles.length > 0 && { output: true }),
+    };
 
     return {
       agentConfig: newConfig,
