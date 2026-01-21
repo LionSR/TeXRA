@@ -192,17 +192,23 @@ export class FollowupSectionManager {
       const currentValue = modelSelect.value;
       // Use current stream's model as default, or defaultMergeModel for merge mode
       // Fall back to first available model if no default is set
-      const defaultModel =
+      const preferredModel =
         this._getMode() === 'merge'
           ? defaultMergeModel || models[0]
           : this._currentStreamData?.model || currentValue || models[0];
+      const hasValidSelection =
+        preferredModel && models.includes(preferredModel);
 
-      modelSelect.innerHTML = models
+      // Build options: none option first, then models
+      const noneOption = `<vscode-option value=""${!hasValidSelection ? ' selected' : ''}>Select model</vscode-option>`;
+      const modelOptions = models
         .map(
           (model) =>
-            `<vscode-option value="${model}"${model === defaultModel ? ' selected' : ''}>${model}</vscode-option>`,
+            `<vscode-option value="${model}"${model === preferredModel ? ' selected' : ''}>${model}</vscode-option>`,
         )
         .join('');
+
+      modelSelect.innerHTML = noneOption + modelOptions;
     }
 
     this._defaultMergeModel = defaultMergeModel;
@@ -223,22 +229,26 @@ export class FollowupSectionManager {
 
     // Clear dropdown if no agents available for this mode
     if (!agents || agents.length === 0) {
-      agentSelect.innerHTML = '';
+      agentSelect.innerHTML =
+        '<vscode-option value="">Select agent</vscode-option>';
       return;
     }
 
-    // Preserve current selection if valid in the new list
+    // Preserve current selection only if it exists in the new list
     const currentValue = agentSelect.value;
-    const isCurrentValid = agents.includes(currentValue);
+    const hasValidSelection = currentValue && agents.includes(currentValue);
 
-    agentSelect.innerHTML = agents
+    // Build options: none option first, then agents
+    const noneOption = `<vscode-option value=""${!hasValidSelection ? ' selected' : ''}>Select agent</vscode-option>`;
+    const agentOptions = agents
       .map((agent) => {
-        // Extract display name from source:name format
         const displayName = agent.includes(':') ? agent.split(':')[1] : agent;
-        const isSelected = isCurrentValid && agent === currentValue;
+        const isSelected = agent === currentValue;
         return `<vscode-option value="${agent}"${isSelected ? ' selected' : ''}>${displayName}</vscode-option>`;
       })
       .join('');
+
+    agentSelect.innerHTML = noneOption + agentOptions;
   }
 
   /**
