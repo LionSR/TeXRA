@@ -58,9 +58,9 @@ function buildStreamInfo(
   const config = taskState?.agentConfig;
 
   // Determine category and check filter
-  const rawCategory = config?.agentCategory ?? hints.sessionCategory;
-  const sessionCategory = matchesFilter(rawCategory, filter);
-  if (sessionCategory === null) return null;
+  const rawCategory = config?.agentCategory ?? hints.agentCategory;
+  const category = matchesFilter(rawCategory, filter);
+  if (category === null) return null;
 
   // Extract timestamps from logs
   const logs = state.streamTabs.getMessages(id);
@@ -72,7 +72,7 @@ function buildStreamInfo(
   const inputFile = config?.inputFile ?? '';
   const rawAgentName = config?.agent ?? id.split('@')[0];
   const agentName = getCleanAgentName(rawAgentName);
-  const isToolAgent = sessionCategory === AgentCategory.ToolUse;
+  const isToolAgent = category === AgentCategory.ToolUse;
 
   // Build display label
   const label =
@@ -85,8 +85,8 @@ function buildStreamInfo(
     label,
     model: config?.model,
     agent: config?.agent,
-    agentSessionKind: sessionCategory,
-    uiTraits: { sessionKind: sessionCategory, isToolAgent },
+    agentCategory: category,
+    uiTraits: { agentCategory: category, isToolAgent },
     hasMultipleOutputs:
       config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
     isRemote: taskState

@@ -9,7 +9,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // ============================================================================
 
 export const StreamUITraitsSchema = z.object({
-  sessionKind: z.nativeEnum(AgentCategory),
+  agentCategory: z.nativeEnum(AgentCategory),
   isToolAgent: z.boolean(),
 });
 export type StreamUITraits = z.infer<typeof StreamUITraitsSchema>;
@@ -19,7 +19,7 @@ export const StreamTabInfoSchema = z.object({
   label: z.string(),
   model: z.string().optional(),
   agent: z.string().optional(),
-  agentSessionKind: z.nativeEnum(AgentCategory),
+  agentCategory: z.nativeEnum(AgentCategory),
   uiTraits: StreamUITraitsSchema,
   hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),
