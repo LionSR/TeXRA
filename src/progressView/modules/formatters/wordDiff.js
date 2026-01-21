@@ -3,24 +3,24 @@
  * Provides clean inline highlighting for text changes.
  */
 
-import DiffMatchPatch from 'diff-match-patch';
+import {
+  diff_match_patch,
+  DIFF_DELETE,
+  DIFF_INSERT,
+} from 'diff-match-patch';
 import { encodeHtml } from '@common/htmlEncoding.js';
-
-const DIFF_DELETE = -1;
-const DIFF_INSERT = 1;
-const DIFF_EQUAL = 0;
 
 /**
  * Generate inline diff HTML showing changes between old and new text.
  * Uses Google's diff-match-patch for reliable diffing.
  *
- * @param {string} oldText - Original text
- * @param {string} newText - New text
+ * @param {string} oldText - Original text (null/undefined treated as empty)
+ * @param {string} newText - New text (null/undefined treated as empty)
  * @returns {string} HTML string with inline diff highlighting
  */
 export function generateInlineDiff(oldText, newText) {
-  const dmp = new DiffMatchPatch();
-  const diffs = dmp.diff_main(oldText, newText);
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(oldText ?? '', newText ?? '');
   dmp.diff_cleanupSemantic(diffs);
 
   return diffs
