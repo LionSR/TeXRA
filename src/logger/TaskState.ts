@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
-  AgentCategory,
   liftLegacyAgentCategory,
   type AgentConfig,
 } from '@agent/core/AgentConfig';
