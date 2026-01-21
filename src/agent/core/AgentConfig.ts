@@ -119,10 +119,9 @@ const AgentConfigFieldsSchema = z.object({
 });
 
 /**
- * Base schema with output file count validation.
- * Used for AgentConfigSchema (with transform) - full validation path.
+ * Agent configuration schema with output file count validation.
  */
-const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
+export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
   (config, ctx) => {
     if (
       !validateOutputFiles({
@@ -140,8 +139,6 @@ const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
     }
   },
 );
-
-export const AgentConfigSchema = AgentConfigBaseSchema;
 
 // Re-export AgentCategory for convenience
 // Canonical source: AgentDataclass.ts
