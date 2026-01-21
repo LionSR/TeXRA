@@ -337,36 +337,4 @@ export class RemoteAgentLoader {
       return [];
     }
   }
-
-  /** Get list item for a specific remote agent (without description). */
-  static async getAgentMetadata(
-    agentName: string,
-  ): Promise<RemoteAgentListItem | null> {
-    try {
-      const supabase = await getAuthenticatedClient();
-      if (!supabase) return null;
-
-      const { data, error } = await supabase
-        .from('remote_agents')
-        .select('id, name, visibility, agent_category')
-        .eq('name', agentName)
-        .single();
-
-      if (error || !data) {
-        logger.warn(
-          CHANNEL,
-          `No metadata found for remote agent: ${agentName}`,
-        );
-        return null;
-      }
-
-      return parseListItemRow(data);
-    } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Error fetching metadata for ${agentName}: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
 }
