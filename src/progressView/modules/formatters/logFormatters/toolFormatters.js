@@ -145,47 +145,20 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   // Handle edit tools with diff display for input
   if (TOOLS_WITH_DIFF_INPUT.has(toolName) && input?.old_string && input?.new_string) {
-    // Show file path as link
     if (filePath) {
-      sections.push(
-        buildToolUseSection(
-          'File:',
-          buildFileLinkWithLines(filePath, {}),
-        ),
-      );
+      sections.push(buildToolUseSection('File:', buildFileLinkWithLines(filePath)));
     }
-    // Show diff for old_string → new_string
-    sections.push(
-      buildToolUseSection(
-        'Changes:',
-        buildEditDiffSection(input.old_string, input.new_string, filePath),
-      ),
-    );
+    sections.push(buildToolUseSection('Changes:', buildEditDiffSection(input.old_string, input.new_string)));
   }
   // Handle read tools with file link instead of full content
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
-    // Only use line info if explicitly provided in range
-    // Don't default to line 1 - this breaks binary files (PDFs, images)
     const range = input?.range;
-    const startLine = range?.start;
-    const endLine = range?.end;
-
-    // Count total lines from output if available
-    const outputLines = outputText ? outputText.split('\n').length : undefined;
-
     sections.push(
       buildToolUseSection(
         'File:',
-        buildFileLinkWithLines(filePath, {
-          startLine,
-          endLine,
-          totalLines: outputLines,
-        }),
+        buildFileLinkWithLines(filePath, { startLine: range?.start, endLine: range?.end }),
       ),
     );
-
-    // Don't show full file content - just the link
-    // Output is available via the file link click
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {

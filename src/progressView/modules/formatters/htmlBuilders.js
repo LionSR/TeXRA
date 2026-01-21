@@ -224,47 +224,6 @@ export function wrapInHighlightedPre(text, language = '', className = '') {
   }
 }
 
-/**
- * Detect language from file path extension
- * @param {string} filePath - File path to check
- * @returns {string} Language identifier for highlight.js
- */
-export function detectLanguageFromPath(filePath) {
-  if (!filePath) return '';
-
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  const langMap = {
-    js: 'javascript',
-    jsx: 'javascript',
-    ts: 'typescript',
-    tsx: 'typescript',
-    py: 'python',
-    rb: 'ruby',
-    sh: 'bash',
-    bash: 'bash',
-    zsh: 'bash',
-    tex: 'latex',
-    latex: 'latex',
-    json: 'json',
-    yaml: 'yaml',
-    yml: 'yaml',
-    xml: 'xml',
-    html: 'html',
-    css: 'css',
-    md: 'markdown',
-    rs: 'rust',
-    go: 'go',
-    java: 'java',
-    c: 'c',
-    cpp: 'cpp',
-    h: 'c',
-    hpp: 'cpp',
-    sql: 'sql',
-  };
-
-  return langMap[ext] || '';
-}
-
 // ============================================================================
 // File Links with Line Numbers
 // ============================================================================
@@ -275,16 +234,15 @@ export function detectLanguageFromPath(filePath) {
  * @param {object} [options] - Options
  * @param {number} [options.startLine] - Starting line number (1-based)
  * @param {number} [options.endLine] - Ending line number (1-based)
- * @param {number} [options.totalLines] - Total lines in file
  * @returns {string} HTML string for the file link
  */
 export function buildFileLinkWithLines(filePath, options = {}) {
   if (!filePath) return '';
 
-  const { startLine, endLine, totalLines } = options;
+  const { startLine, endLine } = options;
   const fileName = filePath.split('/').pop() || filePath;
 
-  // Build line info string
+  // Build line info string (only if range explicitly provided)
   let lineInfo = '';
   if (startLine && endLine && startLine !== endLine) {
     lineInfo = `:${startLine}-${endLine}`;
@@ -292,13 +250,7 @@ export function buildFileLinkWithLines(filePath, options = {}) {
     lineInfo = `:${startLine}`;
   }
 
-  // Build display text
-  let displayText = fileName + lineInfo;
-  if (totalLines !== undefined) {
-    displayText += ` (${totalLines} lines)`;
-  }
-
-  // data-file-line attribute enables opening at specific line
+  const displayText = fileName + lineInfo;
   const lineAttr = startLine ? ` data-file-line="${startLine}"` : '';
 
   return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}"${lineAttr}><i class="codicon codicon-file"></i> ${encodeHtml(displayText)}</span>`;
@@ -310,34 +262,15 @@ export function buildFileLinkWithLines(filePath, options = {}) {
 
 /**
  * Build edit diff section showing old_string → new_string as stacked blocks.
- * Uses simple stacked display with syntax highlighting.
- * TODO: Consider integrating diff2html for richer diff rendering.
+ * Red = old, Green = new. Colors communicate; labels don't.
  * @param {string} oldString - Original text being replaced
  * @param {string} newString - Replacement text
- * @param {string} [filePath] - Optional file path for syntax hint
  * @returns {string} HTML for the diff display
  */
-export function buildEditDiffSection(oldString, newString, filePath = '') {
-  const language = detectLanguageFromPath(filePath);
+export function buildEditDiffSection(oldString, newString) {
+  // Let highlight.js auto-detect language
+  const oldHtml = wrapInHighlightedPre(oldString, '', 'diff-block diff-block-old');
+  const newHtml = wrapInHighlightedPre(newString, '', 'diff-block diff-block-new');
 
-  // Use stacked blocks with syntax highlighting
-  const oldHtml = language
-    ? wrapInHighlightedPre(oldString, language, 'diff-block diff-block-old')
-    : `<pre class="diff-block diff-block-old">${encodeHtml(oldString)}</pre>`;
-
-  const newHtml = language
-    ? wrapInHighlightedPre(newString, language, 'diff-block diff-block-new')
-    : `<pre class="diff-block diff-block-new">${encodeHtml(newString)}</pre>`;
-
-  return `
-    <div class="edit-diff-container">
-      <div class="edit-diff-old">
-        <span class="edit-diff-label diff-remove"><i class="codicon codicon-remove"></i> Old</span>
-        ${oldHtml}
-      </div>
-      <div class="edit-diff-new">
-        <span class="edit-diff-label diff-add"><i class="codicon codicon-add"></i> New</span>
-        ${newHtml}
-      </div>
-    </div>`;
+  return `<div class="edit-diff-container">${oldHtml}${newHtml}</div>`;
 }
