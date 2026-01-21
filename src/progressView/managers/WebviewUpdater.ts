@@ -280,13 +280,13 @@ export class WebviewUpdater {
   updateInstruction(
     stream: StreamTabId | '',
     instruction: InstructionUpdate | null,
-    sessionKind?: string,
+    agentCategory?: string,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
-      sessionKind,
+      agentCategory,
     });
   }
 

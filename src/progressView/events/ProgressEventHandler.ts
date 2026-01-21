@@ -180,13 +180,13 @@ export class ProgressEventHandler {
       () => {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
-        const sessionKind = taskState.agentConfig.agentCategory;
+        const category = taskState.agentConfig.agentCategory;
         const previousFilter = this.state.agentTypeFilter;
 
         this.state.setTaskState(streamTabId, taskState);
 
         if (isActiveStream) {
-          this.maybeUpdateFilterForCategory(sessionKind);
+          this.maybeUpdateFilterForCategory(category);
         }
 
         if (executionId) {
@@ -302,7 +302,7 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
-    const sessionKind = this.getStreamCategory(stream);
+    const category = this.getStreamCategory(stream);
 
     // Use provided runId or read cached activeRunId (no expensive resolution)
     const runId =
@@ -320,7 +320,7 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateInstruction(
       stream,
       instructionUpdate ?? null,
-      sessionKind,
+      category,
     );
   }
 
