@@ -70,11 +70,10 @@ const MAX_ERROR_LENGTH = 500;
  */
 export function formatError(prefix: string, err: unknown): string {
   const detail = toErrorMessage(err);
-  const truncated =
-    detail.length > MAX_ERROR_LENGTH
-      ? `${detail.substring(0, MAX_ERROR_LENGTH)}...`
-      : detail;
-  return `${prefix}: ${truncated}`;
+  if (detail.length > MAX_ERROR_LENGTH) {
+    return `${prefix}: ${detail.substring(0, MAX_ERROR_LENGTH)}...`;
+  }
+  return `${prefix}: ${detail}`;
 }
 
 /**
