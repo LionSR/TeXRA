@@ -38,6 +38,68 @@ commands.
 Pick this agent when you want to look up details in the repository without the
 risk of accidental edits.
 
+## Research & Discovery Agents
+
+### `search`
+
+The `search` agent specializes in web search and academic literature discovery. It provides read-only research capabilities with access to arXiv, Crossref, and web search tools.
+
+**Tools available:** `web_search`, `web_fetch`, `arxiv_search`, `arxiv_metadata`, `crossref_search`, `crossref_doi`, `read_file`, `glob`, `grep`, `ls`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`
+
+**Best for:**
+
+- Literature reviews and finding relevant papers
+- Verifying facts and finding citations
+- Exploring a research topic across multiple sources
+- Cross-referencing academic databases
+
+**Example instruction:**
+
+```
+Find recent papers on transformer architectures for scientific document understanding.
+Focus on papers from 2023-2024 that specifically address mathematical equation handling.
+```
+
+### `research`
+
+The `research` agent combines analytical derivations with computational verification using Wolfram Language. Unlike `search`, this agent can edit files and execute complex computations.
+
+**Tools available:** `wolfram`, `todo_write`, `read_file`, `write_file`, `edit_file`, `bash`, `glob`, `grep`, `ls`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`, `texcount`
+
+**Best for:**
+
+- Symbolic mathematics and analytical derivations
+- Numerical verification of calculations
+- Step-by-step mathematical proofs with verification
+- Complex multi-step research workflows
+
+**Example instruction:**
+
+```
+Derive the variational equations for the Lagrangian in equations.tex.
+Verify each step using Wolfram Language and convert the final results to LaTeX.
+```
+
+### `discuss`
+
+The `discuss` agent serves as an academic discussion partner for exploring ideas, critiquing approaches, and brainstorming research directions. It has read-only file access plus literature tools.
+
+**Tools available:** `read_file`, `glob`, `grep`, `ls`, `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_search`, `crossref_doi`, `extract_bib_entries`
+
+**Best for:**
+
+- Brainstorming research directions
+- Critical discussion of methodologies
+- Connecting ideas across different papers
+- Getting feedback on research approaches
+
+**Example instruction:**
+
+```
+I'm considering using attention mechanisms for my theorem prover. What are the
+tradeoffs compared to tree-based approaches? What does the literature say?
+```
+
 ## Formal Methods Agents
 
 ### `lean`
@@ -230,10 +292,39 @@ The `transcribe_audio` agent converts audio files (like lectures, podcasts, or p
 Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
 
+## Utility Agents
+
+### `xml_validator`
+
+The `xml_validator` agent detects and fixes XML syntax errors using the `str_replace_editor` tool. It iterates until the XML file is valid.
+
+**Tools available:** `str_replace_editor`
+
+**Best for:**
+
+- Fixing malformed XML configuration files
+- Repairing XML parsing errors
+- Validating XML syntax before processing
+
+### `tex_linter_fix`
+
+The `tex_linter_fix` agent automatically resolves LaTeX linter warnings and errors. It can analyze figure references, bibliography entries, and TikZ code to understand context.
+
+**Tools available:** `str_replace_editor`, `diagnostics`, `extract_figures`, `extract_bib_entries`, `extract_tikz_figures`
+
+**Best for:**
+
+- Fixing chktex and other linter warnings
+- Cleaning up LaTeX style issues
+- Resolving missing reference warnings
+
 ## Next Steps
 
 Now that you've met the built-in crew, you may want to learn more:
 
 - [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
+- [Tool-Use Agents Reference](/reference/tool-use-agents) - Deep dive into tool-use agent architecture.
+- [Tools Reference](/reference/tools) - Complete reference for all available tools.
+- [Research Tools Guide](./research-tools) - Using research and literature discovery tools.
 - [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.
 - [Models](./models.md) - Learn about the different AI models and their capabilities.
