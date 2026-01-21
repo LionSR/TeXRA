@@ -119,10 +119,34 @@ const AgentConfigFieldsSchema = z.object({
 });
 
 /**
- * Agent configuration schema with output file count validation.
+ * Lift legacy session.agentCategory to top level for backward compatibility.
+ * Persisted data may have { session: { agentCategory } } format.
  */
-export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
-  (config, ctx) => {
+const liftLegacyAgentCategory = (input: unknown): unknown => {
+  if (typeof input !== 'object' || input === null) return input;
+  const obj = input as Record<string, unknown>;
+
+  // If agentCategory already exists at top level, no migration needed
+  if ('agentCategory' in obj && obj.agentCategory !== undefined) {
+    return input;
+  }
+
+  // Lift from session.agentCategory if present (legacy format)
+  const session = obj.session as Record<string, unknown> | undefined;
+  if (session && typeof session === 'object' && 'agentCategory' in session) {
+    return { ...obj, agentCategory: session.agentCategory };
+  }
+
+  return input;
+};
+
+/**
+ * Agent configuration schema with output file count validation.
+ * Includes backward compatibility for legacy { session: { agentCategory } } format.
+ */
+export const AgentConfigSchema = z.preprocess(
+  liftLegacyAgentCategory,
+  AgentConfigFieldsSchema.superRefine((config, ctx) => {
     if (
       !validateOutputFiles({
         inputFile: config.inputFile,
@@ -137,7 +161,7 @@ export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
           'Number of output files must not be greater than the number of input files.',
       });
     }
-  },
+  }),
 );
 
 // Re-export AgentCategory for convenience
@@ -145,7 +169,8 @@ export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
 export { AgentCategory };
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
-export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+// Use AgentConfigFieldsSchema for input type since preprocess makes input `unknown`
+export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
 
 /**
  * Schema for agent configuration payload passed to executeAgent.
