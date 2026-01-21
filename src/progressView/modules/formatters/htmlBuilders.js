@@ -3,6 +3,7 @@
  * These functions create HTML fragments from normalized data.
  */
 
+import hljs from 'highlight.js';
 import { encodeHtml } from '@common/htmlEncoding.js';
 import {
   CHEVRON_RIGHT_CLASS,
@@ -192,4 +193,84 @@ export function buildDetailItem(iconClass, content, options = {}) {
 export function getToolIconClass(toolName, isError = false) {
   if (isError) return 'codicon-error';
   return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
+}
+
+// ============================================================================
+// Syntax Highlighting
+// ============================================================================
+
+/**
+ * Wrap code in a pre element with syntax highlighting using highlight.js
+ * @param {string} text - Code text to highlight
+ * @param {string} [language] - Optional language hint (e.g., 'bash', 'json')
+ * @param {string} [className] - Optional additional CSS class
+ * @returns {string} HTML string with syntax highlighting
+ */
+export function wrapInHighlightedPre(text, language = '', className = '') {
+  const classes = ['hljs', className].filter(Boolean).join(' ');
+  const classAttr = classes ? ` class="${classes}"` : '';
+
+  try {
+    let result;
+    if (language && hljs.getLanguage(language)) {
+      result = hljs.highlight(text, { language, ignoreIllegals: true });
+    } else {
+      result = hljs.highlightAuto(text);
+    }
+    return `<pre${classAttr}><code>${result.value}</code></pre>`;
+  } catch {
+    // Fallback to plain text if highlighting fails
+    return `<pre${classAttr}><code>${encodeHtml(text)}</code></pre>`;
+  }
+}
+
+// ============================================================================
+// File Links with Line Numbers
+// ============================================================================
+
+/**
+ * Build a file link with optional line number for VS Code navigation
+ * @param {string} filePath - Absolute file path
+ * @param {object} [options] - Options
+ * @param {number} [options.startLine] - Starting line number (1-based)
+ * @param {number} [options.endLine] - Ending line number (1-based)
+ * @returns {string} HTML string for the file link
+ */
+export function buildFileLinkWithLines(filePath, options = {}) {
+  if (!filePath) return '';
+
+  const { startLine, endLine } = options;
+  const fileName = filePath.split('/').pop() || filePath;
+
+  // Build line info string (only if range explicitly provided)
+  let lineInfo = '';
+  if (startLine && endLine && startLine !== endLine) {
+    lineInfo = `:${startLine}-${endLine}`;
+  } else if (startLine) {
+    lineInfo = `:${startLine}`;
+  }
+
+  const displayText = fileName + lineInfo;
+  const lineAttr = startLine ? ` data-file-line="${startLine}"` : '';
+
+  return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}"${lineAttr}><i class="codicon codicon-file"></i> ${encodeHtml(displayText)}</span>`;
+}
+
+// ============================================================================
+// Edit Diff Display (Stacked Blocks)
+// ============================================================================
+
+/**
+ * Build edit diff section showing old_string → new_string as stacked blocks.
+ * Red = old, Green = new. Colors communicate; labels don't.
+ * @param {string} oldString - Original text being replaced
+ * @param {string} newString - Replacement text
+ * @returns {string} HTML for the diff display
+ */
+export function buildEditDiffSection(oldString, newString) {
+  // Let highlight.js auto-detect language
+  const oldHtml = wrapInHighlightedPre(oldString, '', 'diff-block diff-block-old');
+  const newHtml = wrapInHighlightedPre(newString, '', 'diff-block diff-block-new');
+
+  return `<div class="edit-diff-container">${oldHtml}${newHtml}</div>`;
 }

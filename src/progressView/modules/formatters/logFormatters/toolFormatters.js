@@ -10,8 +10,16 @@ import {
   buildToolUseSection,
   wrapInPre,
   getToolIconClass,
+  buildFileLinkWithLines,
+  buildEditDiffSection,
+  wrapInHighlightedPre,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
+import {
+  TOOLS_WITH_DIFF_INPUT,
+  TOOLS_WITH_FILE_LINK,
+  TOOLS_WITH_CODE_OUTPUT,
+} from '../constants.js';
 
 // Web search provider display names
 const PROVIDER_LABELS = {
@@ -131,19 +139,56 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
 
   const sections = [];
 
-  // Show full input (key info is already in header summary)
-  if (input !== undefined && input !== null) {
+  // Get file path from input for specialized formatting
+  const filePath =
+    typeof input === 'object' && input !== null ? input.path : '';
+
+  // Handle edit tools with diff display for input
+  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && input?.old_string && input?.new_string) {
+    if (filePath) {
+      sections.push(buildToolUseSection('File:', buildFileLinkWithLines(filePath)));
+    }
+    sections.push(buildToolUseSection('Changes:', buildEditDiffSection(input.old_string, input.new_string)));
+  }
+  // Handle read tools with file link instead of full content
+  else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
+    const range = input?.range;
+    sections.push(
+      buildToolUseSection(
+        'File:',
+        buildFileLinkWithLines(filePath, { startLine: range?.start, endLine: range?.end }),
+      ),
+    );
+  }
+  // Default handling for other tools
+  else if (input !== undefined && input !== null) {
     const inputValue = stringifyForDisplay(input);
     if (inputValue) {
-      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+      // Use syntax highlighting for code-related tools
+      if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
+        sections.push(
+          buildToolUseSection('Input:', wrapInHighlightedPre(inputValue, 'bash')),
+        );
+      } else {
+        sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+      }
     }
   }
 
   // Show output if present (primary result from tool)
-  if (outputText) {
-    sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
-    );
+  // Skip for read/file-link tools (already shown as file link)
+  if (outputText && !TOOLS_WITH_FILE_LINK.has(toolName)) {
+    // Only syntax highlight output for tools with actual code output
+    // Edit tools output human-readable status like "Replaced 1 occurrence." - not code
+    if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
+      sections.push(
+        buildToolUseSection('Output:', wrapInHighlightedPre(outputText, 'bash', 'tool-output-full')),
+      );
+    } else {
+      sections.push(
+        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      );
+    }
   }
 
   // Show error if present and not superseded by user feedback
