@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 import {
+  AgentCategory,
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from '@agent/core/AgentConfig';
@@ -64,7 +65,7 @@ export type AgentProposalActionMessage = z.infer<
  * Workflow agents receive files directly and process them.
  */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal('workflow'),
+  agentCategory: z.literal(AgentCategory.Workflow),
   ...WorkflowSpecificFieldsSchema.shape,
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
@@ -75,7 +76,7 @@ export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
  * File paths are mentioned in the instruction text.
  */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal('toolUse'),
+  agentCategory: z.literal(AgentCategory.ToolUse),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
