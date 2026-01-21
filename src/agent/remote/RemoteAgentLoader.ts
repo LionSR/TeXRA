@@ -110,15 +110,13 @@ function parseListItemRow(row: {
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
-  // Default NULL agent_category to Workflow for backward compatibility
-  const agentCategory = row.agent_category ?? AgentCategory.Workflow;
-
+  // Schema handles NULL -> Workflow defaulting via transform
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
     description: row.description,
     visibility: row.visibility,
-    agentCategory,
+    agentCategory: row.agent_category,
   });
 
   if (!result.success) {
@@ -291,13 +289,13 @@ export class RemoteAgentLoader {
           name: validated.name || responseName || agentName,
           settings: parseAgentSetting(settings),
           prompts: AgentPromptSchema.parse(validated.prompts),
+          // Schema handles NULL -> Workflow defaulting via transform
           metadata: RemoteAgentMetadataSchema.parse({
             id: '',
             name: responseName || agentName,
             description: validated.description,
             visibility,
-            // Default null agentCategory to Workflow for backward compatibility
-            agentCategory: agentCategory ?? AgentCategory.Workflow,
+            agentCategory,
           }),
         };
       } catch (error) {
