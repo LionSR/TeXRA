@@ -23,15 +23,16 @@ const DEFAULT_SERVICE: IRunStorageService = {
   isViewVisible: () => false,
 };
 
-export const setRunStorageService = (s: IRunStorageService): void => {
+export function setRunStorageService(s: IRunStorageService): void {
   service = s;
-};
+}
 
 /** Returns service or safe defaults if not registered */
-export const getRunStorageService = (): IRunStorageService =>
-  service ?? DEFAULT_SERVICE;
+export function getRunStorageService(): IRunStorageService {
+  return service ?? DEFAULT_SERVICE;
+}
 
 /** Reset to default state (for testing) */
-export const resetRunStorageService = (): void => {
+export function resetRunStorageService(): void {
   service = null;
-};
+}

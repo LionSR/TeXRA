@@ -118,22 +118,27 @@ export class OutputHandler implements IOutputHandler {
 
   private collectRunSupportFiles(): FileLocation[] {
     const extras = new Map<string, FileLocation>();
-    const add = (value?: string | FileLocation | null) => {
-      if (!value) return;
+    const cfg = this.agentConfig;
+
+    // Collect all file paths from config
+    const allPaths = [
+      cfg.referenceFile,
+      ...cfg.referenceFiles,
+      cfg.auxiliaryFile,
+      ...cfg.auxiliaryFiles,
+      cfg.mediaFile,
+      ...cfg.mediaFiles,
+      cfg.inputFile,
+      ...cfg.inputFiles,
+    ];
+
+    // Deduplicate by comparable path
+    for (const value of allPaths) {
+      if (!value) continue;
       const location =
         typeof value === 'string' ? pathToLocation(value) : value;
       extras.set(getComparablePath(location), location);
-    };
-
-    const cfg = this.agentConfig;
-    add(cfg.referenceFile ?? undefined);
-    cfg.referenceFiles.forEach((file) => add(file));
-    add(cfg.auxiliaryFile ?? undefined);
-    cfg.auxiliaryFiles.forEach((file) => add(file));
-    add(cfg.mediaFile ?? undefined);
-    cfg.mediaFiles.forEach((file) => add(file));
-    add(cfg.inputFile ?? undefined);
-    cfg.inputFiles.forEach((file) => add(file));
+    }
 
     return [...extras.values()];
   }

@@ -141,15 +141,17 @@ export class OutputFileProcessor {
         diff: null,
       };
 
+      const isCoTAgent = agentSetting.agentType === AgentType.CoT;
+      const isDirectAgent = agentSetting.agentType === AgentType.Direct;
+      const hasDocumentTag = Boolean(agentSetting.documentTag);
       const hasScratchpadPrefill =
         agentSetting.prefills?.some((prefill) =>
           SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
-      const hasDocumentTag = Boolean(agentSetting.documentTag);
+
+      // CoT agents always process XML; Direct agents only when they have XML structure
       const shouldProcessXml =
-        agentSetting.agentType === AgentType.CoT ||
-        (agentSetting.agentType === AgentType.Direct &&
-          (hasDocumentTag || hasScratchpadPrefill));
+        isCoTAgent || (isDirectAgent && (hasDocumentTag || hasScratchpadPrefill));
 
       if (shouldProcessXml) {
         processed = await xmlManager.processSingleXmlOutput(
