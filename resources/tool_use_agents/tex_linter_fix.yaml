@@ -2,6 +2,7 @@ name: tex_linter_fix
 description: Automatically fixes LaTeX linter warnings and errors.
 
 settings:
+  agentCategory: toolUse
   tools:
     - str_replace_editor
     - diagnostics

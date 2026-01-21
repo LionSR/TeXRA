@@ -2,6 +2,7 @@ name: enhance
 description: Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.
 
 settings:
+  agentCategory: workflow
   rounds: 2
   documentTag: latex_document
   endTag: </latex_document>
