@@ -12,7 +12,11 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
+import {
+  getMultipleName,
+  getBaseName,
+  updateAgentDescription,
+} from '@agent/index/agentRegistry';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -269,6 +273,11 @@ export class RemoteAgentLoader {
           CHANNEL,
           `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
         );
+
+        // Update registry cache with description from YAML
+        if (validated.description) {
+          updateAgentDescription(`remote:${agentName}`, validated.description);
+        }
 
         return {
           name: validated.name || responseName || agentName,
