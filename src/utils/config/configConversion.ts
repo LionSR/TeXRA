@@ -33,18 +33,12 @@ function createActiveFilesFromArrays(
 
 /**
  * Converts an AgentConfig object to a TaskState object.
- * Session metadata comes from config.session (single source of truth).
  *
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  const { session } = config;
-  if (!session) {
-    throw new Error('AgentConfig is missing canonical session metadata.');
-  }
-
-  switch (session.agentCategory) {
+  switch (config.agentCategory) {
     case AgentCategory.ToolUse:
       return {
         agentConfig: config as ToolUseTaskState['agentConfig'],
@@ -56,7 +50,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
         activeFiles: createActiveFilesFromArrays(config),
       };
     default: {
-      const _exhaustive: never = session.agentCategory;
+      const _exhaustive: never = config.agentCategory;
       throw new Error(`Unknown agent category: ${_exhaustive}`);
     }
   }

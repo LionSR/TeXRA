@@ -58,7 +58,7 @@ function buildStreamInfo(
   const config = taskState?.agentConfig;
 
   // Determine category and check filter
-  const rawCategory = config?.session?.agentCategory ?? hints.sessionCategory;
+  const rawCategory = config?.agentCategory ?? hints.sessionCategory;
   const sessionCategory = matchesFilter(rawCategory, filter);
   if (sessionCategory === null) return null;
 

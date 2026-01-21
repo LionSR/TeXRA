@@ -46,13 +46,12 @@ describe('AgentConfigSchema', () => {
       'usePrefillFromInput' in (parsed.toolConfig as Record<string, unknown>),
       false,
     );
-    assert.strictEqual(parsed.session?.agentCategory, AgentCategory.Workflow);
+    assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
   });
 
-  it('derives workflow metadata when session is omitted', () => {
+  it('defaults to Workflow category when agentCategory is omitted', () => {
     const parsed = AgentConfigSchema.parse({});
 
-    assert.ok(parsed.session);
-    assert.strictEqual(parsed.session?.agentCategory, AgentCategory.Workflow);
+    assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
   });
 });
