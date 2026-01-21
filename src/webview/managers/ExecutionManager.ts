@@ -87,9 +87,9 @@ export class ExecutionManager {
     // Schema provides defaults via .prefault(), we only override conditional fields
     const parseResult = AgentConfigSchema.safeParse({
       ...message,
-      session: isToolUse
-        ? { agentCategory: AgentCategory.ToolUse }
-        : { agentCategory: AgentCategory.Workflow },
+      agentCategory: isToolUse
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow,
       outputFiles,
       useMultipleOutputs:
         !isToolUse &&
