@@ -8,7 +8,6 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
-import { parse as parseYaml } from 'jsr:@std/yaml@1';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 
 // =============================================================================
@@ -102,9 +101,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // 4. Fetch agent metadata (RLS enforces access control)
+    // Description comes from YAML (parsed client-side), not DB
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
-      .select('id, name, description, storage_path, visibility, agent_category')
+      .select('id, name, storage_path, visibility, agent_category')
       .eq('name', body.agentName)
       .single();
 
@@ -122,24 +122,14 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Failed to load agent configuration', 500);
     }
 
-    // 6. Parse YAML and extract description (YAML is source of truth)
+    // 6. Return config (client parses YAML and extracts description)
     const yamlContent = await fileData.text();
-    let yamlDescription: string | undefined;
-    try {
-      const parsed = parseYaml(yamlContent) as Record<string, unknown>;
-      yamlDescription =
-        typeof parsed?.description === 'string' ? parsed.description : undefined;
-    } catch {
-      // If YAML parsing fails, continue without description
-      console.warn('[GET_AGENT_CONFIG] Failed to parse YAML for description extraction');
-    }
 
     return jsonResponse(
       req,
       {
         config: yamlContent,
         name: agent.name,
-        description: yamlDescription,
         visibility: agent.visibility,
         agentCategory: agent.agent_category,
       },
