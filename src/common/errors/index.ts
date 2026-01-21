@@ -20,11 +20,13 @@ export {
   ErrorContextSchema,
   ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
+  StreamDiagnosticsSchema,
   type ProviderError,
   type ErrorLogData,
   type ErrorContext,
   type ProviderErrorPartial,
   type RetryErrorInfo,
+  type StreamDiagnostics,
 } from './schemas';
 
 // Error utility functions
@@ -34,4 +36,5 @@ export {
   isContextWindowError,
   isPreviousResponseIdError,
   buildErrorLogData,
+  attachStreamDiagnostics,
 } from './sdkErrorUtils';
