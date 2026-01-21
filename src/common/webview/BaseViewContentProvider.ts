@@ -184,7 +184,7 @@ export abstract class BaseViewContentProvider {
       { key: 'clipboardUtilsUri', path: 'modules/clipboardUtils.js' },
       { key: 'streamStatusUri', path: 'constants/streamStatus.js' },
       { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
-      { key: 'agentTypesUri', path: 'constants/agentTypes.js' },
+      { key: 'agentCategoriesUri', path: 'constants/agentTypes.js' },
       { key: 'toggleStateStoreUri', path: 'modules/ToggleStateStore.js' },
       { key: 'streamScopedMapUri', path: 'modules/StreamScopedMap.js' },
     ];

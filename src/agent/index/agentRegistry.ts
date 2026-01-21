@@ -404,8 +404,8 @@ async function scanYaml(
     const rawAgentType = rawSettings.agentType as string | undefined;
     const category =
       source === 'builtInToolUse' ||
-      rawCategory === 'toolUse' ||
-      rawAgentType === 'toolUse'
+      rawCategory === AgentCategory.ToolUse ||
+      rawAgentType === AgentCategory.ToolUse
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
