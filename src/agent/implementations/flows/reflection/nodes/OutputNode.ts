@@ -6,7 +6,7 @@
  */
 
 import { Node } from '@agent/node';
-import type { RoundOutput } from '@agent/output';
+import type { RoundOutput, RoundFileMapping } from '@agent/output';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
@@ -92,6 +92,9 @@ export class OutputNode<C = unknown> extends Node<
       ensureXmlStructure,
     } = prepRes;
 
+    // Calculate mapping once for both latexdiff and finalization
+    let mapping: RoundFileMapping | undefined;
+
     // Only process if turn ended (model completed response)
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
@@ -115,9 +118,13 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (outputHandler.hasRoundOutputs(currentRound)) {
+        // Calculate mapping ONCE - capture in const for type safety
+        const roundMapping = outputHandler.getRoundMapping(currentRound);
+        mapping = roundMapping;
+
         await tryOperation(
           'Latexdiff',
-          () => this.handleLatexdiff(currentRound, baseFiles),
+          () => this.handleLatexdiff(currentRound, baseFiles, roundMapping),
           logger,
         );
       }
@@ -126,7 +133,10 @@ export class OutputNode<C = unknown> extends Node<
     await tryOperation(
       'Round finalization',
       () =>
-        outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+        outputHandler.finalizeRound(outputLocation, currentRound, {
+          endTurn,
+          mapping,
+        }),
       logger,
     );
 
@@ -167,6 +177,7 @@ export class OutputNode<C = unknown> extends Node<
   private async handleLatexdiff(
     currentRound: number,
     baseFiles: FileLocation[],
+    mapping: RoundFileMapping,
   ): Promise<void> {
     const { outputHandler, logger } = this.services;
 
@@ -178,7 +189,6 @@ export class OutputNode<C = unknown> extends Node<
       return;
     }
 
-    const mapping = outputHandler.getRoundMapping(currentRound);
     await outputHandler.diffManager.handleLatexdiffofOutput(
       currentRound,
       mapping,
