@@ -31,17 +31,17 @@ export enum AgentCategory {
  *
  * ## Workflow Agent Types
  *
+ * Both workflow types use `xmlStructureMode: 'scratchpadOnly'` by default,
+ * meaning XML structure is enforced only when scratchpad prefill is present.
+ * Override with explicit `xmlStructureMode` in YAML.
+ *
  * **CoT (Chain-of-Thought)**: Multi-round reflection with iterative refinement.
- * - Default: 2+ rounds (max of configured rounds and userRequest length)
- * - Default: Always enforces XML structure for reasoning
+ * - Default rounds: max(configured rounds, userRequest length)
  * - Best for: Complex tasks requiring step-by-step reasoning and revision
- * - Override with: `maxRounds` and `xmlStructureMode` in YAML
  *
  * **Direct**: Single-pass execution with minimal overhead.
- * - Default: 1 round (single-pass processing)
- * - Default: XML structure only when scratchpad prefill is used
+ * - Default rounds: 1 (single-pass processing)
  * - Best for: Simple corrections, quick transformations, merge operations
- * - Override with: `maxRounds` and `xmlStructureMode` in YAML
  *
  * ## Tool-Use Agent Types
  *
@@ -52,13 +52,13 @@ export enum AgentCategory {
 export enum AgentType {
   /**
    * Chain-of-Thought: Multi-round reflection agent.
-   * Implies: xmlStructureMode='always', maxRounds=max(rounds, requests)
+   * Default maxRounds: max(rounds, requests.length)
    */
   CoT = 'CoT',
 
   /**
    * Direct: Single-round fast execution agent.
-   * Implies: xmlStructureMode='scratchpadOnly', maxRounds=1
+   * Default maxRounds: 1
    */
   Direct = 'direct',
 
