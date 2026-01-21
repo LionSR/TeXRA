@@ -57,6 +57,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  attachStreamDiagnostics,
 } from '@common/errors/sdkErrorUtils';
 
 // Internal imports
@@ -776,6 +777,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           },
         );
 
+        // Attach diagnostics to error for retry UI display
+        attachStreamDiagnostics(streamError, diagnostics);
         throw streamError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
