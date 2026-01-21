@@ -2,7 +2,6 @@ name: xml_validator
 description: Validates and fixes XML syntax errors.
 
 settings:
-  agentType: toolUse
   tools:
     - str_replace_editor
 prompts:
