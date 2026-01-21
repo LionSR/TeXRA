@@ -3,7 +3,7 @@
  *
  * Executes workflow-style agents that run for a fixed number of rounds,
  * producing structured output. Behavior is configuration-driven:
- * - `setting.maxRounds`: Number of reflection rounds
+ * - Total rounds = max(setting.rounds, userRequest.length)
  * - `setting.xmlStructureMode`: 'never' | 'scratchpadOnly' | 'always'
  *
  * The flow manages:
@@ -131,12 +131,11 @@ function shouldEnforceXmlStructure(
   }
 }
 
-/** Compute the total number of rounds based on settings and prompt. */
+/** Compute the total number of rounds: max(setting.rounds, userRequest.length) */
 function computeTotalRounds(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): number {
-  // Primary: determine rounds from userRequest length
   let requests: string[];
   if (Array.isArray(prompt.userRequest)) {
     requests = prompt.userRequest;
@@ -146,15 +145,7 @@ function computeTotalRounds(
     requests = [];
   }
 
-  // Use userRequest length, with setting.rounds as minimum
-  const baseRounds = Math.max(setting.rounds ?? 2, requests.length);
-
-  // Optional: cap at maxRounds if set
-  if (setting.maxRounds !== undefined) {
-    return Math.min(setting.maxRounds, baseRounds);
-  }
-
-  return baseRounds;
+  return Math.max(setting.rounds ?? 2, requests.length);
 }
 
 /** Derive configuration values from settings and prompts. */

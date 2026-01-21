@@ -3,7 +3,7 @@ description: Corrects typos, grammar, and LaTeX formatting issues in your docume
 
 settings:
   agentCategory: workflow
-  maxRounds: 1
+  rounds: 1
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
