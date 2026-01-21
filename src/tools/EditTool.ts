@@ -22,8 +22,8 @@ import { defineTool } from './core/define';
 
 const EditInputSchema = z.strictObject({
   path: z.string(),
-  old_string: z.string(),
-  new_string: z.string(),
+  old_str: z.string(),
+  new_str: z.string(),
   replace_all: z.boolean().nullish(),
 });
 
@@ -47,11 +47,11 @@ export class EditFileTool extends defineTool({
   schema: EditInputSchema,
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
-    const { path: targetPath, old_string, new_string, replace_all } = input;
+    const { path: targetPath, old_str, new_str, replace_all } = input;
 
-    if (old_string.length === 0) {
+    if (old_str.length === 0) {
       throw new ToolError(
-        `old_string must not be empty for ${targetPath}. Provide the exact text to replace from read_file output after the line-number prefix.`,
+        `old_str must not be empty for ${targetPath}. Provide the exact text to replace from read_file output after the line-number prefix.`,
       );
     }
 
@@ -62,23 +62,23 @@ export class EditFileTool extends defineTool({
     }
 
     const currentContent = await WorkspaceFS.read(targetPath);
-    const occurrences = countOccurrences(currentContent, old_string);
+    const occurrences = countOccurrences(currentContent, old_str);
 
     if (occurrences === 0) {
       throw new ToolError(
-        `The provided old_string was not found in ${targetPath}. Ensure it matches the read_file output exactly after the line-number prefix.`,
+        `The provided old_str was not found in ${targetPath}. Ensure it matches the read_file output exactly after the line-number prefix.`,
       );
     }
 
     if (!replace_all && occurrences > 1) {
       throw new ToolError(
-        `old_string is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
+        `old_str is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
       );
     }
 
     const updatedContent = replace_all
-      ? currentContent.replaceAll(old_string, new_string)
-      : currentContent.replace(old_string, new_string);
+      ? currentContent.replaceAll(old_str, new_str)
+      : currentContent.replace(old_str, new_str);
 
     const approval = await requestToolEditApproval({
       path: targetPath,

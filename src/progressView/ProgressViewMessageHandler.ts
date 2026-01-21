@@ -904,7 +904,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const models = getConfig<string[]>('texra.models', []);
       const defaultMergeModel = getConfig<string>(
         'texra.merge.defaultModel',
-        'sonnet37',
+        'gemini3f',
       );
 
       view.webview.postMessage({
@@ -1276,13 +1276,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       await safeExecuteCommand('texra.execute', [
         {
           config: {
-            agent: 'merge_multiple',
+            agent: 'merge',
             model,
             inputFile: baseFiles[0],
             inputFiles: baseFiles.slice(1),
             editedFile: editedFiles[0],
             editedFiles: editedFiles.slice(1),
+            outputFiles: baseFiles,
             instruction: '',
+            useMultipleOutputs: true,
           },
         },
       ]);
