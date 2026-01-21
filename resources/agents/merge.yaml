@@ -2,6 +2,7 @@ name: merge
 description: Merges partial edits back into the full original document.
 
 settings:
+  agentCategory: workflow
   maxRounds: 1
   documentTag: full_edited_latex
   endTag: </full_edited_latex>
