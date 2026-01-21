@@ -2,6 +2,8 @@
 
 ## Effective Prompting
 
+Specific instructions reduce ambiguity - the model doesn't have to guess your intent and uses tokens more efficiently for your actual goal.
+
 ### Be Specific
 
 Instead of "Make this better", try:
@@ -28,6 +30,8 @@ For complex tasks:
 > 4. Improve transitions between sections
 
 ## Model Selection
+
+Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
 
 - **Simple tasks** (corrections): Use fast, cheap models (`gemini25f-`, `gpt5--`)
 - **Complex tasks** (transformations): Use powerful models (`opus45`, `gpt52pro`)

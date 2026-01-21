@@ -1,6 +1,24 @@
 # Built-in Agent Reference
 
-TeXRA provides a variety of built-in AI agents, each like a specialized research assistant ready for a specific task. Choosing the right one from the dropdown menu in the TeXRA UI is the first step to AI-powered productivity (or at least, less painful editing).
+TeXRA provides built-in AI agents, each specialized for specific research tasks. Choose from the dropdown menu in the TeXRA UI.
+
+## Quick Reference
+
+| Agent | Type | Purpose |
+|-------|------|---------|
+| `chat` | Tool-use | General assistance, file editing |
+| `ask` | Tool-use | Read-only questions and exploration |
+| `search` | Tool-use | Literature discovery, web search |
+| `research` | Tool-use | Computational verification with Wolfram |
+| `discuss` | Tool-use | Academic brainstorming with literature |
+| `lean` | Tool-use | Lean 4 proof development |
+| `correct` | Workflow | Fix errors without style changes |
+| `polish` | Workflow | Improve writing quality |
+| `paper2slide` | Workflow | Convert papers to beamer slides |
+| `paper2poster` | Workflow | Create academic posters |
+| `draw` | Workflow | Create/enhance TikZ figures |
+| `ocr` | Workflow | Extract text from images/PDFs |
+| `transcribe_audio` | Workflow | Transcribe audio to text |
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
