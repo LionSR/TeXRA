@@ -202,6 +202,17 @@ const extractNewFormat = (entry) => {
 };
 
 /**
+ * Extract round number from a label like "[r1]" or "file.tex [r2]"
+ * @param {string|undefined} label - Label that might contain round info
+ * @returns {number|null} Round number or null if not found
+ */
+const parseRoundFromLabel = (label) => {
+  if (typeof label !== 'string') return null;
+  const match = label.match(/\[r(\d+)\]/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+/**
  * Extract display data from legacy format (locations + labels).
  * @param {object} entry - Legacy entry
  * @returns {object} Extracted fields for rendering
@@ -210,17 +221,23 @@ const extractLegacyFormat = (entry) => {
   const { locations } = entry;
   const baseFile = locations.base?.absolutePath || entry.basePath || '';
 
+  // Try to get round info from entry fields first, then parse from labels
+  const baseRound =
+    entry.baseRound ?? parseRoundFromLabel(entry.baseLabel) ?? null;
+  const revisedRound =
+    entry.revisedRound ?? parseRoundFromLabel(entry.revisedLabel) ?? 0;
+
   return {
     baseFile,
     revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
     diffFile: locations.diff?.absolutePath || entry.diffPath || '',
     displayName:
       entry.originalFileName ||
-      entry.baseLabel ||
+      entry.baseLabel?.replace(/\s*\[r\d+\]/, '') || // Strip round from label
       getBasename(baseFile) ||
       'unknown',
-    baseRound: null,
-    revisedRound: 0,
+    baseRound,
+    revisedRound,
     status: entry.status || 'error',
     message: entry.message,
     runId: entry.runId,

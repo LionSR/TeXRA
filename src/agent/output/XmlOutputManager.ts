@@ -293,13 +293,7 @@ export class XmlOutputManager {
 
       const { ext } = path.parse(source);
       const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(
-        source,
-        agent,
-        model,
-        extension,
-        round,
-      );
+      const texFile = getOutputFileName(source, agent, model, extension, round);
       const texLocation = this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
