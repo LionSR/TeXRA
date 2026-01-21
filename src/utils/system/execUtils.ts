@@ -130,6 +130,7 @@ export async function executeCommand(
       stdout: normalizedStdout,
       stderr: normalizedStderr,
       timedOut,
+      exitCode,
     };
   } catch (err) {
     logger.error(
