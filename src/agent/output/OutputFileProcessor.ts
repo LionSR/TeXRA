@@ -57,8 +57,10 @@ export class OutputFileProcessor {
     );
 
     try {
-      const processedPairs =
-        await xmlManager.processMultipleXmlOutputs(outputLocation);
+      const processedPairs = await xmlManager.processMultipleXmlOutputs(
+        outputLocation,
+        currRound,
+      );
 
       if (processedPairs.length > 0) {
         await indentLatexFiles(
