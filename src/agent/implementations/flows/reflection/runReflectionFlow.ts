@@ -114,36 +114,21 @@ interface DerivedConfig {
   outputExt: string;
 }
 
-/** XML structure mode lookup - explicit setting takes precedence. */
-const XML_STRUCTURE_MODE_MAP: Record<
-  NonNullable<AgentWorkflowSetting['xmlStructureMode']>,
-  boolean | 'scratchpad'
-> = {
-  always: true,
-  scratchpadOnly: 'scratchpad',
-  never: false,
-};
-
-/** Agent type defaults when xmlStructureMode is not set. */
-const AGENT_TYPE_XML_DEFAULTS: Record<string, boolean | 'scratchpad'> = {
-  CoT: true,
-  direct: 'scratchpad',
-};
-
 /** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
 function shouldEnforceXmlStructure(
   setting: AgentWorkflowSetting,
   useScratchpad: boolean,
 ): boolean {
-  const mode =
-    setting.xmlStructureMode !== undefined
-      ? XML_STRUCTURE_MODE_MAP[setting.xmlStructureMode]
-      : (AGENT_TYPE_XML_DEFAULTS[setting.agentType] ?? false);
+  const mode = setting.xmlStructureMode ?? 'scratchpadOnly';
 
-  if (mode === 'scratchpad') {
-    return useScratchpad;
+  switch (mode) {
+    case 'always':
+      return true;
+    case 'never':
+      return false;
+    case 'scratchpadOnly':
+      return useScratchpad;
   }
-  return mode;
 }
 
 /** Compute the total number of rounds based on settings and prompt. */
