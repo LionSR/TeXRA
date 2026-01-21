@@ -22,7 +22,7 @@ export type AgentSource = z.infer<typeof AgentSource>;
  *
  * **Workflow**: Document processing agents that run for a fixed number of rounds.
  * - Default rounds: max(configured rounds, userRequest length)
- * - Use `maxRounds: 1` for single-pass processing
+ * - Use `rounds: 1` for single-pass processing
  * - XML structure enforcement controlled by `xmlStructureMode` (default: 'scratchpadOnly')
  *
  * **ToolUse**: Interactive agents with tool-calling capabilities.

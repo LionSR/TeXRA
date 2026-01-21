@@ -7,9 +7,9 @@ import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
  * Checks that the number of output files does not exceed the number of input files.
- * Extracted as a separate function for clarity and reusability.
+ * Used internally by AgentConfigSchema refinement.
  */
-export const validateOutputFiles = (cfg: {
+const validateOutputFiles = (cfg: {
   inputFile: string;
   inputFiles: string[];
   outputFiles: string[];
@@ -31,13 +31,13 @@ export const BaseProposalFieldsSchema = z.object({
   model: z.string().describe('Model to use for agent execution'),
   instruction: z.string().describe('Instruction for the agent'),
 });
-export type BaseProposalFields = z.infer<typeof BaseProposalFieldsSchema>;
 
 /**
  * File path fields for workflow agents only.
  * Tool-use agents access files through their own tools instead.
+ * Used internally to compose WorkflowSpecificFieldsSchema.
  */
-export const FileFieldsSchema = z.object({
+const FileFieldsSchema = z.object({
   inputFile: z.string().describe('Path to the primary input file'),
   inputFiles: z.array(z.string()).describe('Additional input file paths'),
   referenceFile: z
@@ -61,7 +61,6 @@ export const FileFieldsSchema = z.object({
   mediaFiles: z.array(z.string()).describe('Additional media file paths'),
   outputFiles: z.array(z.string()).describe('Desired output file paths'),
 });
-export type FileFields = z.infer<typeof FileFieldsSchema>;
 
 /**
  * Workflow-specific fields: file fields + multiple outputs flag.
@@ -72,19 +71,6 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
     .boolean()
     .describe('Enable multiple outputs mode for agents that support it'),
 });
-export type WorkflowSpecificFields = z.infer<
-  typeof WorkflowSpecificFieldsSchema
->;
-
-/**
- * Core workflow fields - combines base fields with workflow-specific fields.
- * Used by AgentConfig and WorkflowAgentProposal (workflow category only).
- * No defaults - consumers add their own via .extend() or .prefault().
- */
-export const CoreWorkflowFieldsSchema = BaseProposalFieldsSchema.extend({
-  ...WorkflowSpecificFieldsSchema.shape,
-});
-export type CoreWorkflowFields = z.infer<typeof CoreWorkflowFieldsSchema>;
 
 /** Zod schema for validating AgentConfig objects */
 const stringArrayField = () => z.array(z.string()).prefault([]);
@@ -167,10 +153,6 @@ export const AgentConfigSchema = z.preprocess(
     }
   }),
 );
-
-// Re-export AgentCategory for convenience
-// Canonical source: AgentDataclass.ts
-export { AgentCategory };
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
 // Use AgentConfigFieldsSchema for input type since preprocess makes input `unknown`
