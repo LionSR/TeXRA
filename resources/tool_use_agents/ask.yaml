@@ -2,6 +2,7 @@ name: ask
 description: Read-only assistant for answering questions about your documents.
 
 settings:
+  agentCategory: toolUse
   tools:
     - read_file
     - glob

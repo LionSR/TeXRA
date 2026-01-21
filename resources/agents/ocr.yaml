@@ -2,6 +2,7 @@ name: ocr
 description: Converts handwritten mathematical content from images into LaTeX.
 
 settings:
+  agentCategory: workflow
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
