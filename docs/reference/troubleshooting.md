@@ -490,6 +490,6 @@ If you can't resolve an issue using this guide:
 
 If you've resolved your issue or want to learn more about TeXRA:
 
-- [Best Practices](/reference/best-practices) - Learn how to use TeXRA effectively
+- [Best Practices](/guide/best-practices) - Learn how to use TeXRA effectively
 - [Configuration](/guide/configuration) - Customize TeXRA for your needs
-- [Agent Reference](/reference/agents) - Explore the different agents available
+- [Agent Reference](/guide/built-in-agents) - Explore the different agents available

@@ -15,7 +15,7 @@ Detailed documentation on each built-in agent, including:
 - Input/output specifications
 - Implementation details
 
-[Read the Agent Reference →](/reference/agents)
+[Read the Agent Reference →](/guide/built-in-agents)
 
 ### Model Reference
 
@@ -27,7 +27,7 @@ Technical specifications for all supported AI models:
 - Special capabilities
 - Performance benchmarks
 
-[Read the Model Reference →](/reference/models)
+[Read the Model Reference →](/guide/models)
 
 ### Settings Reference
 
@@ -39,7 +39,7 @@ Complete documentation of all TeXRA configuration options:
 - Setting dependencies
 - OS-specific considerations
 
-[Read the Settings Reference →](/reference/settings)
+[Read the Settings Reference →](/guide/configuration)
 
 ## Troubleshooting
 
@@ -63,7 +63,7 @@ Recommended approaches for effective use of TeXRA:
 - Effective prompting techniques
 - Collaborative usage patterns
 
-[View Best Practices →](/reference/best-practices)
+[View Best Practices →](/guide/best-practices)
 
 ## Glossary
 
