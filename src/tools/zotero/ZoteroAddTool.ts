@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { wrapApiCall } from '@tools/utils';
 import { getConfig } from '@utils/config';
 
 /**
@@ -84,16 +85,14 @@ interface ConnectorResult {
 /**
  * Check if Zotero is running by pinging the connector.
  */
-async function isZoteroRunning(port: number): Promise<boolean> {
-  try {
-    const response = await axios.get(
-      `http://127.0.0.1:${port}/connector/ping`,
-      { timeout: 2000 },
-    );
-    return response.status === 200;
-  } catch {
-    return false;
-  }
+async function checkZoteroRunning(port: number): Promise<void> {
+  const pingUrl = `http://127.0.0.1:${port}/connector/ping`;
+  await wrapApiCall(async () => {
+    const response = await axios.get(pingUrl, { timeout: 2000 });
+    if (response.status !== 200) {
+      throw new Error('Zotero Connector not responding');
+    }
+  }, `Zotero is not running or the Connector is not enabled on port ${port}`);
 }
 
 /**
@@ -194,16 +193,8 @@ export class ZoteroAddTool extends defineTool({
   protected async execute({ items, collection }: ZoteroAddInput) {
     const port = getConfig<number>('texra.bib.zoteroConnectorPort', 23119);
 
-    // Check if Zotero is running
-    const running = await isZoteroRunning(port);
-    if (!running) {
-      throw new ToolError(
-        'Zotero is not running or the Connector is not enabled. ' +
-          'Please start Zotero and ensure the Connector is active on port ' +
-          `${port}. You can change the port in VS Code settings under ` +
-          '"texra.bib.zoteroConnectorPort".',
-      );
-    }
+    // Check if Zotero is running (throws ToolError if not)
+    await checkZoteroRunning(port);
 
     const results: Array<{
       item: string;
@@ -244,15 +235,6 @@ export class ZoteroAddTool extends defineTool({
     const successCount = results.filter((r) => r.status === 'success').length;
     const errorCount = results.filter((r) => r.status === 'error').length;
 
-    let summary: string;
-    if (errorCount === 0) {
-      summary = `Successfully added ${successCount} item${successCount === 1 ? '' : 's'} to Zotero.`;
-    } else if (successCount === 0) {
-      summary = `Failed to add ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero.`;
-    } else {
-      summary = `Added ${successCount} item${successCount === 1 ? '' : 's'}, failed to add ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero.`;
-    }
-
     const output = results
       .map((r) => {
         if (r.status === 'success') {
@@ -261,6 +243,18 @@ export class ZoteroAddTool extends defineTool({
         return `✗ ${r.item}: ${r.message}`;
       })
       .join('\n');
+
+    // Throw ToolError if all items failed
+    if (successCount === 0 && items.length > 0) {
+      throw new ToolError(
+        `Failed to add all ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero:\n${output}`,
+      );
+    }
+
+    const summary =
+      errorCount === 0
+        ? `Successfully added ${successCount} item${successCount === 1 ? '' : 's'} to Zotero.`
+        : `Added ${successCount} item${successCount === 1 ? '' : 's'}, failed to add ${errorCount} item${errorCount === 1 ? '' : 's'} to Zotero.`;
 
     return {
       summary,
