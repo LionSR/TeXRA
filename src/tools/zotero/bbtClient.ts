@@ -25,13 +25,19 @@ interface JsonRpcResponse<T = unknown> {
 }
 
 /**
- * CSL JSON creator format returned by Better BibTeX.
+ * CSL JSON name/creator format.
  * See: https://citeproc-js.readthedocs.io/en/latest/csl-json/markup.html
+ *
+ * From BBT source: Zotero.Utilities.Item.itemToCSLJSON(item)
  */
 export interface CslCreator {
+  /** Family name (surname) in CSL format */
   family?: string;
+  /** Given name (first name) in CSL format */
   given?: string;
-  // Legacy Zotero format
+  /** Institutional or single-field name */
+  literal?: string;
+  // Zotero native format (may appear in some responses)
   lastName?: string;
   firstName?: string;
   name?: string;
@@ -39,35 +45,85 @@ export interface CslCreator {
 }
 
 /**
- * CSL JSON item format with Better BibTeX extensions.
- * Better BibTeX returns standard CSL JSON plus `library` and `citekey` fields.
+ * CSL JSON date format.
+ */
+export interface CslDate {
+  /** Date parts as [[year, month?, day?]] */
+  'date-parts'?: number[][];
+  /** Raw date string */
+  raw?: string;
+  /** Literal date text */
+  literal?: string;
+}
+
+/**
+ * CSL JSON item returned by Better BibTeX item.search.
+ *
+ * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON)
+ * plus BBT-specific `library` and `citekey` fields.
+ *
+ * Reference: https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
  */
 export interface BbtSearchResultItem {
-  // Better BibTeX additions
+  // ─── Better BibTeX additions ───────────────────────────────────────
+  /** Citation key from Better BibTeX KeyManager */
   citekey: string;
+  /** Library name or fallback `library#${libraryID}` */
   library: string;
 
-  // Core CSL JSON fields
+  // ─── CSL JSON core fields ──────────────────────────────────────────
+  /** Internal Zotero item ID (as URI or number) */
   id?: string | number;
+  /** CSL item type (article-journal, book, chapter, etc.) */
   type?: string;
+  /** Item title */
   title?: string;
+  /** Authors */
   author?: CslCreator[];
-  issued?: { 'date-parts'?: number[][] };
+  /** Editors */
+  editor?: CslCreator[];
+  /** Publication/issue date */
+  issued?: CslDate;
+  /** Access date */
+  accessed?: CslDate;
 
-  // Zotero-style fields (also present in some responses)
+  // ─── Zotero-style fields (legacy, may appear) ──────────────────────
   itemType?: string;
   creators?: CslCreator[];
   date?: string;
 
-  // Additional common fields
+  // ─── Identifiers ───────────────────────────────────────────────────
   DOI?: string;
+  ISBN?: string;
+  ISSN?: string;
+  PMID?: string;
+  PMCID?: string;
   URL?: string;
-  abstract?: string;
+
+  // ─── Publication info ──────────────────────────────────────────────
+  /** Journal/book title */
   'container-title'?: string;
+  /** Short container title */
+  'container-title-short'?: string;
+  /** Publisher name */
   publisher?: string;
+  /** Publisher location */
+  'publisher-place'?: string;
+  /** Volume number */
   volume?: string;
+  /** Issue number */
   issue?: string;
+  /** Page range */
   page?: string;
+  /** Number of pages */
+  'number-of-pages'?: string;
+  /** Edition */
+  edition?: string;
+
+  // ─── Content ───────────────────────────────────────────────────────
+  abstract?: string;
+  note?: string;
+  language?: string;
 }
 
 /**
