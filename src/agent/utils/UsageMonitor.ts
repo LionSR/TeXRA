@@ -143,7 +143,9 @@ export class UsageMonitor {
 
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number((stateGlobal.totalResponseTimeMs / 1000).toFixed(1)),
+        elapsedTime: Number(
+          (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
+        ),
       };
       if (cachingStats) {
         payload.percentageCached = Number((percentageCached ?? 0).toFixed(2));

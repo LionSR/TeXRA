@@ -258,34 +258,42 @@ Use view_range: [start, end] to paginate large outputs.`,
    */
   private formatMessageContent(content: unknown): string {
     if (typeof content === 'string') {
-      return content.length > 500 ? content.slice(0, 497) + '...' : content;
+      return this.truncate(content, 500);
     }
     if (Array.isArray(content)) {
-      // Handle content blocks (text, tool_use, tool_result)
-      return content
-        .map((block) => {
-          if (typeof block === 'string') return block;
-          if (block?.type === 'text') return block.text ?? '';
-          if (block?.type === 'tool_use') {
-            const input = JSON.stringify(block.input ?? {});
-            const shortInput =
-              input.length > 100 ? input.slice(0, 97) + '...' : input;
-            return `[tool_use: ${block.name}(${shortInput})]`;
-          }
-          if (block?.type === 'tool_result') {
-            const output =
-              typeof block.content === 'string'
-                ? block.content
-                : JSON.stringify(block.content);
-            const shortOutput =
-              output.length > 100 ? output.slice(0, 97) + '...' : output;
-            return `[tool_result: ${shortOutput}]`;
-          }
-          return JSON.stringify(block).slice(0, 100);
-        })
-        .join('\n');
+      return content.map((block) => this.formatBlock(block)).join('\n');
     }
-    return JSON.stringify(content).slice(0, 500);
+    return this.truncate(JSON.stringify(content), 500);
+  }
+
+  /**
+   * Format a single content block.
+   */
+  private formatBlock(block: unknown): string {
+    if (typeof block === 'string') {
+      return block;
+    }
+    const b = block as Record<string, unknown>;
+    switch (b?.type) {
+      case 'text':
+        return (b.text as string) ?? '';
+      case 'tool_use':
+        return `[tool_use: ${b.name}(${this.truncate(JSON.stringify(b.input ?? {}), 100)})]`;
+      case 'tool_result': {
+        const output =
+          typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+        return `[tool_result: ${this.truncate(output, 100)}]`;
+      }
+      default:
+        return this.truncate(JSON.stringify(block), 100);
+    }
+  }
+
+  /**
+   * Truncate string with ellipsis if too long.
+   */
+  private truncate(str: string, maxLen: number): string {
+    return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
   }
 
   /**

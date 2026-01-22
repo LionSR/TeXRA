@@ -249,12 +249,9 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     if (occurrences > 1) {
       const lines = content.split(/\r?\n/);
-      const lineNumbers: number[] = [];
-      lines.forEach((line, index) => {
-        if (line.includes(oldStr)) {
-          lineNumbers.push(index + 1);
-        }
-      });
+      const lineNumbers = lines
+        .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
+        .filter((n) => n !== -1);
       throw new ToolError(
         `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines: ${lineNumbers.join(
           ', ',

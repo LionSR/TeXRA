@@ -135,9 +135,10 @@ export function buildFileListRender(files) {
         );
       }
       if (file.source && file.source !== 'unknown') {
+        const sourceDisplay = encodeHtml(file.sourceDisplay);
         const sourceText = file.internal
-          ? `${encodeHtml(file.sourceDisplay)}, internal`
-          : encodeHtml(file.sourceDisplay);
+          ? `${sourceDisplay}, internal`
+          : sourceDisplay;
         metaParts.push(`<span class="file-source">(${sourceText})</span>`);
       }
 
