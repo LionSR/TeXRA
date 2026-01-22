@@ -371,7 +371,10 @@ export abstract class ModelHandler<
   }
 
   /** Provider to config suffix mapping for streaming settings */
-  private static readonly PROVIDER_STREAMING_SUFFIX: Record<ModelProvider, string> = {
+  private static readonly PROVIDER_STREAMING_SUFFIX: Record<
+    ModelProvider,
+    string
+  > = {
     [ModelProvider.ANTHROPIC]: 'Anthropic',
     [ModelProvider.OPENAI]: 'Openai',
     [ModelProvider.GOOGLE]: 'Google',
@@ -390,14 +393,23 @@ export abstract class ModelHandler<
   public getStreamingConfig(): boolean {
     const globalDefault = getConfig<boolean>('texra.model.useStreaming', false);
 
-    if (this.config.openRouterOnly || getConfig<boolean>('texra.model.useOpenRouter', false)) {
-      return getConfig<boolean>('texra.model.useStreamingOpenrouter', globalDefault);
+    if (
+      this.config.openRouterOnly ||
+      getConfig<boolean>('texra.model.useOpenRouter', false)
+    ) {
+      return getConfig<boolean>(
+        'texra.model.useStreamingOpenrouter',
+        globalDefault,
+      );
     }
 
     const suffix = ModelHandler.PROVIDER_STREAMING_SUFFIX[this.config.provider];
     if (!suffix) return globalDefault;
 
-    return getConfig<boolean>(`texra.model.useStreaming${suffix}`, globalDefault);
+    return getConfig<boolean>(
+      `texra.model.useStreaming${suffix}`,
+      globalDefault,
+    );
   }
 
   get isOReasoningModel(): boolean {

@@ -89,6 +89,16 @@ export class TextEditorTool extends defineTool({
   }
 
   /**
+   * Get the list of allowed commands for this API version.
+   */
+  private getAllowedCommands(): string {
+    if (this.apiType === 'text_editor_20250429') {
+      return 'view, create, str_replace, insert';
+    }
+    return 'view, create, str_replace, insert, undo_edit';
+  }
+
+  /**
    * Execute the tool with the given arguments
    * @param input - Tool call input parameters
    */
@@ -149,12 +159,8 @@ export class TextEditorTool extends defineTool({
         logger.info(CHANNEL, `undo_edit: ${filePath}`);
         return this.undoEdit(filePath);
       default:
-        const allowedCommands =
-          this.apiType === 'text_editor_20250429'
-            ? 'view, create, str_replace, insert'
-            : 'view, create, str_replace, insert, undo_edit';
         throw new ToolError(
-          `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
+          `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${this.getAllowedCommands()}`,
         );
     }
   }
