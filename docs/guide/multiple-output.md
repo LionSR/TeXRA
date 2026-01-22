@@ -1,53 +1,70 @@
-# Handling Multiple Files
+# Handling Multiple Files (Inputs & Outputs)
 
-TeXRA can process multiple input files and generate multiple output files in a single agent run.
+TeXRA excels at managing complex academic projects often split across multiple files, like a paper with several chapters or appendices. This guide explains how to work with multiple input files and how agents can generate multiple, distinct output files in a single run.
 
-## When to Use
+## Why Use Multiple Files?
 
-- Source document split across files (chapters, appendices)
-- Applying consistent changes across related documents
-- Targeting modifications to specific files within a project
+Working with multiple files is often necessary when:
 
-## UI Controls
+- Your source document is split (e.g., `chapter1.tex`, `chapter2.tex`, `appendixA.tex`).
+- You need to apply consistent changes (like polishing or correcting) across related documents.
+- You only want an agent to modify specific parts (e.g., only update `chapter2.tex` and `appendixA.tex` based on the full context).
+- An agent needs to generate distinct outputs based on a single input (less common, but possible).
 
-**Input Files**: Use the toggle to add multiple source files. They are concatenated and provided as context.
+## UI for Multiple Files
 
-**Multiple Outputs**:
-1. Click toggle to activate
-2. Use "+" to add exact output filenames (order matters)
-3. If not activated, TeXRA produces a single output
+The TeXRA UI provides dedicated sections for managing multiple files:
 
-See [File Management](./file-management.md) for general UI controls.
+<!-- ![Multiple Files UI Placeholder](/images/multiple-files-ui.png) _(Placeholder: Screenshot highlighting Input Files & Multiple Outputs sections)_ -->
 
-## How It Works
+- **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent.
+  - **Multiple Outputs**:
+    - Use the "▼" toggle to activate multiple output mode.
+    - Use the "+" button (<i class="codicon codicon-add"></i>) to list the _exact filenames_ you expect the agent to generate. **Order matters** if the agent references them by position.
+    - The list can be cleared (<i class="codicon codicon-trash"></i>).
+    - If this section is _not_ toggled/activated, TeXRA expects the agent to produce only a single output file, named based on the primary input file.
 
-### Input
+_(See [File Management](./file-management.md) for general UI controls.)_
 
-Multiple input files are wrapped in `<document name="...">` tags and combined in the prompt.
+## How It Works: Agent Input
 
-### Output
+When you provide multiple input files, TeXRA typically combines their content (often wrapping each in `<document name=\"...\">` tags within a parent `<documents>` tag) and includes it in the prompt sent to the selected agent. The agent receives the combined context to inform its processing.
 
-1. You specify output filenames in the UI
-2. Agent generates XML with `<document name="filename">` blocks:
+## How It Works: Agent Output & Extraction
 
-```xml
-<latex_documents>
-  <document name="chapter2_polish_r0_model.tex">
-    % content for first file
-  </document>
-  <document name="appendixA_polish_r0_model.tex">
-    % content for second file
-  </document>
-</latex_documents>
-```
+This is the crucial part for generating multiple distinct files:
 
-3. TeXRA extracts content from tags matching your specified filenames
+1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2_polish_r0_model.tex`, `appendixA_polish_r0_model.tex`).
+2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
-The agent must be designed (via prompts) to generate this structure.
+   ```xml
+   <latex_documents>  <!-- Or agent's specific documentTag -->
+     <document name="chapter2_polish_r0_model.tex">
+       % ... content for the first output file ...
+     </document>
+     <document name="appendixA_polish_r0_model.tex">
+       % ... content for the second output file ...
+     </document>
+     ...
+   </latex_documents>
+   ```
 
-## Declaring Multi-Output Agents
+3. **TeXRA Extracts:** The TeXRA backend (`OutputHandler.ts`) parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the filenames you listed in the UI.
+4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
-Custom agents can declare multi-output support in YAML:
+**Key Point:** The agent doesn't magically know how to split output (it hasn't mastered telepathy... yet). It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
+
+## Tracking Multi-Output Runs
+
+TeXRA records whether a run expects multiple files through the `useMultipleOutputs` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
+
+### Declaring multi-output agents in YAML
+
+Custom agents can advertise that they always expect multiple outputs by setting
+`settings.isMultipleOutput: true` in their YAML definition. This flag is
+workflow-specific—it is ignored for tool-use agents—and it enables frontend
+affordances like the "∶∶" dropdown badge even when a sibling `_multiple.yaml`
+file is not present.
 
 ```yaml
 name: my_agent_multiple
@@ -58,21 +75,56 @@ settings:
     - appendix.tex
 ```
 
-This enables the UI badge even without a `_multiple.yaml` file.
+Agents that inherit from a single-output variant should also set this field so
+the registry watcher can skip duplicate prompts when the base agent is already
+configured. The legacy `useMultipleOutputs` field is no longer supported—update
+existing YAML files to declare `isMultipleOutput` explicitly to opt into the
+multiple-output affordances.
 
-## Example: `polish_multiple`
+## Example: `polish_multiple` Agent Prompts
 
-The `polish_multiple` agent prompts the model to use `{{ OUTPUT_FILES_ORDER }}`:
+The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which contains the comma-separated list of filenames from the UI:
 
 ```yaml
+# (Inside polish_multiple.yaml userRequest prompt)
+# ... instructions ...
+# Use the following format:
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
-% UPDATED CONTENT HERE
+% 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
 </document>
+<document name="{OUTPUT_FILES_ORDER[1]}">
+% 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
+</document>
+... (repeat for all output files)
 </latex_documents>
 ```
 
+This instructs the LLM to generate the necessary XML structure that TeXRA's `OutputHandler` can parse.
+
+## When to Use
+
+- Applying consistent edits (e.g., `polish`, `correct`) across multiple related `.tex` files.
+- Tasks where an agent naturally produces distinct outputs (though less common than editing existing files).
+- Targeting agent modifications to specific files within a larger project.
+
 ## Next Steps
 
-- [Custom Agents](./custom-agents.md) - Design multi-output agent prompts
-- [File Management](./file-management.md) - File selection UI details
+- [Custom Agents](./custom-agents.md): Learn how to design prompts for agents handling multiple outputs.
+- [File Management](./file-management.md): Review the file selection UI in detail.
+- [Agent Architecture](./agent-architecture.md): Understand the overall agent execution flow.
+
+## Enabling Multiple Outputs
+
+To enable multiple output files, simply click the toggle icon (▼) next to the "Multiple Outputs" label in the main TeXRA interface file selection area. This will expand the section, allowing you to manage the output file list.
+
+## Managing Output Files
+
+Once expanded, you can manage the output files:
+
+1.  **Add Files**: Use the "Add" button (<i class="codicon codicon-add"></i>) to specify output filenames. You typically need one output file for each corresponding input file.
+2.  **Remove Files**: Click the "-" button next to a file to remove it.
+3.  **Reorder Files**: Drag and drop files to ensure the order matches the input file order.
+4.  **Clear List**: Use the "Empty List" button (<i class="codicon codicon-trash"></i>) to remove all specified output files.
+
+## Output Naming

@@ -36,8 +36,8 @@ interface UploadedAnthropicAttachment {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import {
-  AgentSetting,
-  AgentType,
+  AgentCategory,
+  type AgentSetting,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
@@ -338,7 +338,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     supportsReasoning,
     thresholdPercent,
   }: ContextManagementSetupOptions): void {
-    if (this.agentType !== AgentType.ToolUse) {
+    if (this.agentCategory !== AgentCategory.ToolUse) {
       return;
     }
 

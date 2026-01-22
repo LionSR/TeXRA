@@ -4,21 +4,21 @@ TeXRA provides built-in AI agents, each specialized for specific research tasks.
 
 ## Quick Reference
 
-| Agent | Type | Purpose |
-|-------|------|---------|
-| `chat` | Tool-use | General assistance, file editing |
-| `ask` | Tool-use | Read-only questions and exploration |
-| `search` | Tool-use | Literature discovery, web search |
-| `research` | Tool-use | Computational verification with Wolfram |
-| `discuss` | Tool-use | Academic brainstorming with literature |
-| `lean` | Tool-use | Lean 4 proof development |
-| `correct` | Workflow | Fix errors without style changes |
-| `polish` | Workflow | Improve writing quality |
-| `paper2slide` | Workflow | Convert papers to beamer slides |
-| `paper2poster` | Workflow | Create academic posters |
-| `draw` | Workflow | Create/enhance TikZ figures |
-| `ocr` | Workflow | Extract text from images/PDFs |
-| `transcribe_audio` | Workflow | Transcribe audio to text |
+| Agent              | Type     | Purpose                                 |
+| ------------------ | -------- | --------------------------------------- |
+| `chat`             | Tool-use | General assistance, file editing        |
+| `ask`              | Tool-use | Read-only questions and exploration     |
+| `search`           | Tool-use | Literature discovery, web search        |
+| `research`         | Tool-use | Computational verification with Wolfram |
+| `discuss`          | Tool-use | Academic brainstorming with literature  |
+| `lean`             | Tool-use | Lean 4 proof development                |
+| `correct`          | Workflow | Fix errors without style changes        |
+| `polish`           | Workflow | Improve writing quality                 |
+| `paper2slide`      | Workflow | Convert papers to beamer slides         |
+| `paper2poster`     | Workflow | Create academic posters                 |
+| `draw`             | Workflow | Create/enhance TikZ figures             |
+| `ocr`              | Workflow | Extract text from images/PDFs           |
+| `transcribe_audio` | Workflow | Transcribe audio to text                |
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
@@ -33,6 +33,7 @@ For details on the underlying structure and execution flow common to all agents,
 A general-purpose research assistant that can read, write, and edit files in your workspace. It acts as a friendly scientist focused on careful reasoning.
 
 **Capabilities:**
+
 - Read and analyze your documents
 - Edit files with your approval (via VS Code diff view)
 - Run shell commands for compilation or other tasks
@@ -41,6 +42,7 @@ A general-purpose research assistant that can read, write, and edit files in you
 **Best for:** General research assistance, code/LaTeX editing, running compilations
 
 **Example instruction:**
+
 ```
 Review my introduction in paper.tex and suggest improvements for clarity.
 Then update the file with your changes.
@@ -51,6 +53,7 @@ Then update the file with your changes.
 A read-only assistant for exploring your workspace without risk of modifications.
 
 **Capabilities:**
+
 - Read and analyze documents
 - Search through project files
 - Answer questions about your codebase
@@ -58,6 +61,7 @@ A read-only assistant for exploring your workspace without risk of modifications
 **Best for:** Quick questions, understanding existing code, safe exploration
 
 **Example instruction:**
+
 ```
 What packages does this LaTeX project use? Summarize the document structure.
 ```
@@ -69,6 +73,7 @@ What packages does this LaTeX project use? Summarize the document structure.
 Specializes in finding academic literature and web content. Read-only - cannot modify your files.
 
 **Capabilities:**
+
 - Search arXiv for preprints and papers
 - Look up publications via Crossref/DOI
 - Fetch and summarize web pages
@@ -77,6 +82,7 @@ Specializes in finding academic literature and web content. Read-only - cannot m
 **Best for:** Literature reviews, finding citations, fact-checking
 
 **Example instruction:**
+
 ```
 Find recent papers on transformer architectures for scientific document understanding.
 Focus on papers from 2023-2024 that address mathematical equation handling.
@@ -87,6 +93,7 @@ Focus on papers from 2023-2024 that address mathematical equation handling.
 Combines file editing with computational verification using Wolfram Language for symbolic mathematics.
 
 **Capabilities:**
+
 - Perform symbolic and numerical calculations
 - Verify mathematical derivations step-by-step
 - Edit files with computational results
@@ -95,6 +102,7 @@ Combines file editing with computational verification using Wolfram Language for
 **Best for:** Mathematical derivations, computational verification, multi-step research
 
 **Example instruction:**
+
 ```
 Derive the variational equations for the Lagrangian in equations.tex.
 Verify each step computationally and update the file with results.
@@ -105,6 +113,7 @@ Verify each step computationally and update the file with results.
 An academic discussion partner for brainstorming and exploring research directions. Read-only with literature access.
 
 **Capabilities:**
+
 - Engage in substantive intellectual discourse
 - Find and synthesize relevant literature
 - Offer counterarguments and alternative perspectives
@@ -113,6 +122,7 @@ An academic discussion partner for brainstorming and exploring research directio
 **Best for:** Brainstorming, methodology critique, research direction guidance
 
 **Example instruction:**
+
 ```
 I'm considering attention mechanisms for my theorem prover. What are the
 tradeoffs compared to tree-based approaches? What does the literature say?
@@ -125,6 +135,7 @@ tradeoffs compared to tree-based approaches? What does the literature say?
 Interactive Lean 4 proof assistant with VS Code integration.
 
 **Capabilities:**
+
 - Get real-time diagnostics and error feedback
 - Inspect proof state and types at any position
 - Search Mathlib for relevant lemmas
@@ -133,6 +144,7 @@ Interactive Lean 4 proof assistant with VS Code integration.
 **Best for:** Formalizing proofs, Lean 4 development, Mathlib projects
 
 **Example instruction:**
+
 ```
 Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.

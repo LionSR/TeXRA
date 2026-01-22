@@ -2,7 +2,7 @@ name: chat
 description: Interactive assistant with file editing and research tools.
 
 settings:
-  agentType: toolUse
+  agentCategory: toolUse
   tools:
     - bash
     - read_file

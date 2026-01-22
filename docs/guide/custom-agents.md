@@ -1,116 +1,276 @@
 # Custom Agents
 
-Create your own agents by writing YAML definition files. TeXRA supports two types:
+TeXRA is a VS Code extension that orchestrates AI-driven writing tools using YAML agent files. Each agent follows a chain-of-thought workflow with scratchpad planning and a final XML-wrapped output. This guide focuses on creating those definition (`.yaml`) files so you can tailor TeXRA to your research needs (or make an agent that writes everything in pirate speak—we won't judge).
 
-- **Workflow agents** (`agentType: CoT` or `direct`) - Structured document processing
-- **Tool-use agents** (`agentType: toolUse`) - Interactive sessions with tool access
+::: info Agent Fundamentals
+Before creating a custom agent, it's highly recommended to understand the underlying concepts:
 
-## Getting Started
+- **Agent Architecture & Execution Flow**: Learn about the `.yaml` structure, settings, prompts, and how agents run. See the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+- **Built-in Agents**: Review the standard agents provided by TeXRA for examples and potential inheritance parents. See the [Built-in Agent Reference](./built-in-agents.md).
+- **Agent Explorer**: Learn how to browse and manage agent files using the [Agent Explorer](./agent-explorer.md) view in the TeXRA sidebar.
+  :::
 
-1. Open the **Agent Explorer** in the TeXRA sidebar
-2. Find your "Custom Agents" folder
-3. Create a new `.yaml` file
-4. Define your agent using the schema below
+## Creating a Custom Agent File
 
-Or use the **Create AI Agent** button to have Claude generate a starter template.
+Follow these steps to create a new custom agent:
 
-## Basic Structure
+### Step 1: Locate or Configure the Custom Agents Directory
+
+Custom agents reside in a dedicated directory that TeXRA prepares for you.
+
+1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Look for the "Custom Agents" section in the [Agent Explorer](./agent-explorer.md); it points to this location by default.
+2.  **Override (Optional)**: If you prefer to manage agents elsewhere, set an absolute path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`. TeXRA will ensure that directory exists and use it instead of the default.
+
+### Automatic Creation
+
+If you'd like TeXRA to draft an agent for you, use the **Create AI Agent** <i class="codicon codicon-sparkle"></i> button in the Agent Explorer title bar. The wizard only asks for a short description and the default output filenames. TeXRA sends this information to a Claude model, which replies with the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
+
+### Step 2: Create a New YAML File
+
+1.  Using the [Agent Explorer](./agent-explorer.md), right-click within your "Custom Agents" directory (or a subfolder).
+2.  Select "New File".
+3.  You'll be prompted for a name. Choose a descriptive name using underscores and ending with `.yaml` (e.g., `literature_review_generator.yaml`).
+
+### Step 3: Define the Agent
+
+Open the newly created `.yaml` file and you'll find a starter template already inserted. Customize it to define your agent's structure. Here are the key fields:
 
 ```yaml
-name: my_agent
-description: What this agent does
+# --- Agent Inheritance (Optional) ---
+# Specify a built-in or other custom agent to inherit settings and prompts from.
+# See guide/built-in-agents.md for potential parents.
+inherits: base # Or polish, correct, etc.
 
+# --- Agent Settings ---
+# Define the agent's core behavior and operational parameters.
+# Override parent settings here if inheriting.
 settings:
-  agentType: CoT    # or 'direct' or 'toolUse'
-  # ... type-specific settings
+  # Core Behavior
+  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, 'direct' for simpler direct output, or 'toolUse' for agents that call model tools.
+  temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
+  isRewrite: true # Boolean: Does the agent primarily rewrite existing content (true) or generate new content (false)? Affects some internal handling.
 
+  # Output Handling
+  documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
+  endTag: '</document>' # The closing tag that signals the agent has finished its main output.
+  outputExt: tex # Default file extension for the output file (e.g., tex, md, txt).
+  prefills:
+    - "<document>\n" # List of strings the AI should start its response(s) with.
+      # Item [0] is for Round 0, Item [1] is for Round 1 (reflection).
+      # Crucial for models needing specific start formats (e.g., XML tags).
+
+  # File Handling (Optional - Advanced)
+  # requiredFiles:
+  #   TEMPLATE: path/to/template.tex # Map variable names to required file paths relative to workspace.
+  # requiredFilesInternal:
+  #   STYLE_GUIDE: styles/internal_style.css # Map variable names to files relative to the agent's YAML file location.
+  # filePatternsContain:
+  #   - pattern: 'bibliography' # Find files whose names contain this pattern.
+  #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
+  #     categories: ['auxiliaryFile', 'auxiliaryFiles'] # Search within these UI file categories.
+  # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
+  #   - 'introduction.tex'
+  #   - 'methods.tex'
+
+# --- Agent Prompts ---
+# Define the text templates used to instruct the LLM.
+# Override parent prompts here if inheriting.
 prompts:
   systemPrompt: |
-    Define the AI's role here.
-  userRequest: |
-    {{ INSTRUCTION }}
+    # Defines the AI's role, core instructions, constraints, overall persona.
+    # Sent once at the beginning (for supported models).
+    [Define the AI's role and core instructions]
+
+  userPrefix: |
+    # Provides introductory text, main context (input files, user instruction).
+    # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ BIBLIOGRAPHY_CONTENT }}` (from filePatternsContain) are substituted here.
+    [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
+
+  userRequest:
+    - |
+      # The prompt for the AI's first round of work (Round 0).
+      # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
+      [Define the initial task prompt, potentially including scratchpad guidance]
+    - |
+      # Optional follow-up prompt for reflection rounds (Round 1+).
+      # Duplicate or remove items to control how many reflections TeXRA schedules automatically.
+      [Define how the model should critique or iterate on its previous output]
 ```
 
-## Inheriting from Built-in Agents
+> **Reflection Tips:** When `userRequest` is an array, TeXRA takes the first
+> entry as the initial request and treats the remaining entries as reflection
+> prompts. If a run requests more reflections than the list provides, the first
+> reflection template is reused.
 
-Extend an existing agent and override only what you need:
+#### Using Variables in Prompts (Jinja2 Templating)
+
+Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
+
+This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` while the full list of selected files can be accessed through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
+
+**Common Variables:**
+
+- &#123;&#123; INSTRUCTION &#125;&#125;: The text entered into the "Instruction" box in the UI.
+- &#123;&#123; INPUT_FILE &#125;&#125;: The path of the primary input file.
+- &#123;&#123; INPUT_CONTENT &#125;&#125;: The full text content of the primary input file.
+- &#123;&#123; REFERENCE_FILE &#125;&#125;: Path of the primary reference file.
+- &#123;&#123; REFERENCE_CONTENT &#125;&#125;: Content of the primary reference file.
+- &#123;&#123; AUXILIARY_FILE &#125;&#125;: Path of the primary auxiliary file.
+- &#123;&#123; AUXILIARY_CONTENT &#125;&#125;: Content of the primary auxiliary file.
+- &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
+- &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
+- &#123;&#123; MEDIA*FILE &#125;&#125;: Path of the primary media file.
+  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).*
+
+**Multiple File Variables:**
+
+- &#123;&#123; ALL_INPUTS &#125;&#125;: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
+- &#123;&#123; ALL_REFERENCES &#125;&#125;: Similar XML string for all reference files.
+- &#123;&#123; ALL_AUXILIARYS &#125;&#125;: Similar XML string for all auxiliary files.
+- &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
+- &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125;: Similar comma-separated list for reference files.
+- &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125;: Similar comma-separated list for auxiliary files.
+
+**Multiple Output Variable:**
+
+- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
+
+**Custom Variables (from `settings`):**
+
+- Files specified in `requiredFiles` or `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
+- Files matched by `filePatternsContain` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ BIBLIOGRAPHY_CONTENT }}`).
+- When agents finish, TeXRA automatically captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
+
+**Example Usage in `userPrefix`:**
 
 ```yaml
-name: formal_polish
-inherits: polish
-settings:
-  temperature: 0.0
-prompts:
-  systemPrompt: |
-    You are a formal academic editor...
+userPrefix: |
+  Please process the main document: {{ INPUT_FILE }}
+  <document name="{{ INPUT_FILE }}">
+  {{ INPUT_CONTENT }}
+  </document>
+
+  Refer to these auxiliary files:
+  {{ ALL_AUXILIARYS }}
+
+  Apply the following instruction:
+  <instruction>{{ INSTRUCTION }}</instruction>
 ```
 
-**Available for inheritance:**
-- Workflow: `polish`, `correct`, `merge`, `draw`, `ocr`, `transcribe_audio`
-- Tool-use: `ask`, `chat`, `research`, `discuss`, `search`
+**Key Considerations:**
 
-## Workflow Agents
+- **Architecture Overview:** For a high-level understanding of the execution flow and how prompts/settings interact, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+- **Inheritance:** Inheriting from a relevant built-in agent (like `correct` or `polish`) can save significant effort. Only define the settings and prompts you need to change.
+- **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
+- **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
+- **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
 
-For document transformation with optional reflection rounds.
+### Runtime XML exports
 
-```yaml
-settings:
-  agentType: CoT          # or 'direct' for single-pass
-  documentTag: latex_document
-  outputExt: tex
-  rounds: 2               # reflection rounds (CoT only)
-```
+Reflection-style agents automatically collect a lightweight summary of the XML they generate. The summary is exposed as
+`runtimeXmlExports` on the agent instance so pipeline orchestrators can forward the results to follow-up steps.
 
-Key prompts:
-- `systemPrompt` - AI's role and constraints
-- `userPrefix` - Document context with `{{ INPUT_CONTENT }}`
-- `userRequest` - Task instructions (array for multi-round)
+The structure includes three simple fields:
 
-## Tool-Use Agents
+- `tagContents`: a dictionary of detected XML tags. For `<document>` outputs this contains either a single string or an array of strings (when the model generated multiple named documents). A `<scratchpad>` tag is captured when present.
+- `documents`: a list of serialized `<document>` elements suitable for pasting directly into the next prompt.
+- `singleOutputFile`: the processed output path when the agent produced exactly one LaTeX document.
 
-For interactive sessions with file/web access.
+Because this data lives alongside the run state, orchestrators can choose how to apply it—for example, by inserting the serialized documents straight into the next request or by handing off the processed file path to a critique step.
+
+### Tool-Use Agents
+
+Tools live under `src/tools/` and each one defines its input schema with Zod.
+List the desired tools by name in your agent YAML. The registry includes
+workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
+`glob`, `grep`, and `ls` alongside domain-specific helpers such as
+`str_replace_editor`, `wolfram`,
+`web_fetch`, and `web_search`.
+
+> **Tip:** The `read_file` tool returns only the first 2,000 lines of a file (per request) to prevent massive responses from overwhelming the progress log. Provide an optional `range` object (for example, `{"start": 401, "end": 450}`) to page through a file beyond the first 2,000 lines. The tool enforces the same 2,000-line limit on each requested window, prefixes each line with a `cat -n` style line number, reports the specific line range that was returned, and notes when the requested end exceeds the file length so you know the response was clipped. When copying text for `edit_file`, use only the content after the line-number prefix.
+
+For a minimal read-only configuration, see the built-in `ask` agent
+(`resources/tool_use_agents/ask.yaml`), which only grants `read_file`, `glob`,
+`grep`, and `ls` access.
+
+Common workspace helpers:
+
+- `glob` — Quickly list files matching a pattern, sorted by modification time.
+- `grep` — Run ripgrep searches without leaving the workspace sandbox. By default it returns matching content lines; switch the `output_mode` to `files_with_matches` or `count` to change the response format.
+- `ls` — Inspect directory contents with optional ignore globs.
+
+Example:
 
 ```yaml
 settings:
   agentType: toolUse
   tools:
+    - str_replace_editor
+    - wolfram
+    - glob
+    - grep
+    - ls
+    - bash
     - read_file
     - write_file
     - edit_file
-    - glob
-    - grep
-    - bash
+    - web_fetch
+    - web_search
 ```
 
-Key prompts:
-- `systemPrompt` - Role and tool usage guidelines
-- `userRequest` - Usually just `{{ INSTRUCTION }}`
+The ProgressBoard shows the JSON passed to each tool along with the tool's
+response.
 
-## Template Variables
+### Example: Multiple Output Agent
 
-Use `{{ variable }}` syntax in prompts:
-
-| Variable | Description |
-|----------|-------------|
-| `{{ INSTRUCTION }}` | User's instruction text |
-| `{{ INPUT_FILE }}` | Primary input file path |
-| `{{ INPUT_CONTENT }}` | Primary input file content |
-| `{{ ALL_INPUTS }}` | All input files as XML |
-| `{{ ALL_REFERENCES }}` | All reference files as XML |
-
-Jinja2 conditionals work too:
+If your workflow requires several output files, your agent must structure its
+response using the `OUTPUT_FILES_ORDER` variable. Below is a simplified template
+similar to the built-in `polish_multiple.yaml`:
 
 ```yaml
-{% if INSTRUCTION %}
-Follow: {{ INSTRUCTION }}
-{% endif %}
+inherits: polish
+settings:
+  agentType: CoT
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  defaultOutputFiles:
+    - introduction.tex
+    - conclusion.tex
+
+prompts:
+  userRequest: |
+    {% if OUTPUT_FILES_ORDER %}
+    The output files should be in this order: {{ OUTPUT_FILES_ORDER }}.
+    {% endif %}
+
+    <scratchpad>
+    - Plan revisions for each file
+    </scratchpad>
+
+    <latex_documents>
+    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+    % UPDATED_FILE_1
+    </document>
+    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+    % UPDATED_FILE_2
+    </document>
+    </latex_documents>
 ```
 
-## Examples
+This structure lets TeXRA save each `<document>` block to the corresponding
+filename from the UI list. See [Handling Multiple Files](./multiple-output.md)
+for more details.
 
-The best way to learn is by reading the built-in agents:
+### Step 4: Save and Reload
 
-- **Workflow agents**: `resources/agents/` in the TeXRA installation
-- **Tool-use agents**: `resources/tool_use_agents/`
+1.  Save your `.yaml` file.
+2.  Reload the VS Code window (Command Palette > `Developer: Reload Window`).
+3.  Your new custom agent should now appear in the "Agent" dropdown menu in the TeXRA UI.
 
-Use the Agent Explorer to browse and copy from these files.
+### Strict XML Extraction
+
+TeXRA's `XmlOutputManager` parses the `<latex_document>` or `<latex_documents>` blocks in the AI output.
+It requires properly closed tags and, for multiple outputs, each `<document>` must include a `name` attribute that matches a filename from the UI.
+If tags are mismatched or a filename is wrong, extraction fails and no files are saved.
+
+For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).
