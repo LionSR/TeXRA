@@ -39,7 +39,7 @@ export class AgentUsageReporter {
    */
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     bus.emit('updateStreamUsage', {
-      stream: this.streamId,
+      streamId: this.streamId,
       storageKey,
       usage: {
         inputTokens: stats.inputTokens,
