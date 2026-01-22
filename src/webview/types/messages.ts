@@ -2,8 +2,11 @@
  * Zod schemas for webview message types.
  * Types are derived from schemas using z.infer<> for single source of truth.
  */
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { PROGRESS_VIEW_APPROVAL_ACTIONS } from '@tools/approval/toolEditApproval';
 
 // --- Base Schemas (composable building blocks) ---
@@ -258,6 +261,72 @@ export const FollowupTaskMessageSchema = z.object({
 });
 
 export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;
+
+/** Stream-only message */
+export const StreamMessageSchema = z.object({
+  stream: z.string().min(1),
+});
+
+export type StreamMessage = z.infer<typeof StreamMessageSchema>;
+
+/** Retry message with optional feedback */
+export const RetryStreamMessageSchema = StreamMessageSchema.extend({
+  feedback: z.string().optional(),
+});
+
+export type RetryStreamMessage = z.infer<typeof RetryStreamMessageSchema>;
+
+/** Send follow-up message */
+export const SendFollowUpMessageSchema = StreamMessageSchema.extend({
+  text: TrimmedStringSchema,
+});
+
+export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
+
+/** Sort streams message */
+export const SortStreamsMessageSchema = z.object({
+  sortBy: z.enum(['time', 'inputFile', 'agent']).default('time'),
+});
+
+export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
+
+/** Filter streams message */
+export const FilterStreamsMessageSchema = z.object({
+  filter: z.union([z.literal('all'), z.nativeEnum(AgentCategory)]),
+});
+
+export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
+
+/** File command message for progress view */
+export const FileCommandMessageSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().int().nonnegative().optional(),
+});
+
+export type FileCommandMessage = z.infer<typeof FileCommandMessageSchema>;
+
+/** File command message requiring a base file */
+export const BaseFileCommandMessageSchema = FileCommandMessageSchema.extend({
+  base: z.string().min(1).optional(),
+});
+
+export type BaseFileCommandMessage = z.infer<
+  typeof BaseFileCommandMessageSchema
+>;
+
+/** File compare message with optional previous file */
+export const CompareMessageSchema = BaseFileCommandMessageSchema.extend({
+  prev: z.string().min(1).optional(),
+});
+
+export type CompareMessage = z.infer<typeof CompareMessageSchema>;
+
+/** Open label message */
+export const OpenLabelMessageSchema = z.object({
+  label: z.string().min(1),
+});
+
+export type OpenLabelMessage = z.infer<typeof OpenLabelMessageSchema>;
 
 // --- History View Schemas ---
 
