@@ -259,6 +259,72 @@ export const FollowupTaskMessageSchema = z.object({
 
 export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;
 
+/** Stream-only message */
+export const StreamMessageSchema = z.object({
+  stream: z.string().min(1),
+});
+
+export type StreamMessage = z.infer<typeof StreamMessageSchema>;
+
+/** Retry message with optional feedback */
+export const RetryStreamMessageSchema = StreamMessageSchema.extend({
+  feedback: z.string().optional(),
+});
+
+export type RetryStreamMessage = z.infer<typeof RetryStreamMessageSchema>;
+
+/** Send follow-up message */
+export const SendFollowUpMessageSchema = StreamMessageSchema.extend({
+  text: TrimmedStringSchema,
+});
+
+export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
+
+/** Sort streams message */
+export const SortStreamsMessageSchema = z.object({
+  sortBy: z.enum(['time', 'inputFile', 'agent']).optional(),
+});
+
+export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
+
+/** Filter streams message */
+export const FilterStreamsMessageSchema = z.object({
+  filter: z.enum(['all', 'workflow', 'toolUse']),
+});
+
+export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
+
+/** File command message for progress view */
+export const FileCommandMessageSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().int().nonnegative().optional(),
+});
+
+export type FileCommandMessage = z.infer<typeof FileCommandMessageSchema>;
+
+/** File command message requiring a base file */
+export const BaseFileCommandMessageSchema = FileCommandMessageSchema.extend({
+  base: z.string().min(1).optional(),
+});
+
+export type BaseFileCommandMessage = z.infer<
+  typeof BaseFileCommandMessageSchema
+>;
+
+/** File compare message with optional previous file */
+export const CompareMessageSchema = BaseFileCommandMessageSchema.extend({
+  prev: z.string().min(1).optional(),
+});
+
+export type CompareMessage = z.infer<typeof CompareMessageSchema>;
+
+/** Open label message */
+export const OpenLabelMessageSchema = z.object({
+  label: z.string().min(1),
+});
+
+export type OpenLabelMessage = z.infer<typeof OpenLabelMessageSchema>;
+
 // --- History View Schemas ---
 
 /** History ID message for history operations */
