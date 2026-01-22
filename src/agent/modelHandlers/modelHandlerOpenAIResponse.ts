@@ -908,16 +908,44 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             );
             return pendingResponse;
           } else {
-            // Response failed or was cancelled - clear and proceed with new request
+            // Response failed, was cancelled, or is incomplete on the remote side
+            // Extract error details if available for better diagnostics
+            const errorDetail =
+              pendingResponse.error?.message ??
+              pendingResponse.incomplete_details?.reason ??
+              'no additional details';
             this.logger.warn(
-              `Pending background response ${pendingId} has terminal status ${pendingResponse.status}, creating new request`,
+              `Pending background response ${pendingId} failed remotely ` +
+                `(status: ${pendingResponse.status}, reason: ${errorDetail}). ` +
+                'Creating new request.',
+              {
+                data: {
+                  responseId: pendingId,
+                  status: pendingResponse.status,
+                  error: pendingResponse.error ?? undefined,
+                  incompleteDetails: pendingResponse.incomplete_details ?? undefined,
+                },
+              },
             );
             this.pendingBackgroundResponseId = null;
+            // Fall through to create a new request
           }
         } catch (retrieveError) {
-          // Failed to retrieve the pending response - clear and proceed with new request
+          // Failed to retrieve the pending response
+          // This could be due to:
+          // 1. Network error - the pending response might still be running
+          // 2. API error (404) - the response expired or was deleted
+          // In either case, we clear the pending ID and create a new request
+          // to ensure the user gets a response (even if it means a duplicate job)
           this.logger.warn(
-            `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(retrieveError)}. Creating new request.`,
+            `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(retrieveError)}. ` +
+              'Creating new request (original may still be running on server).',
+            {
+              data: {
+                responseId: pendingId,
+                errorMessage: getSdkErrorMessage(retrieveError),
+              },
+            },
           );
           this.pendingBackgroundResponseId = null;
         }
