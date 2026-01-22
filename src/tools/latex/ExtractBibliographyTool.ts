@@ -121,24 +121,16 @@ export class ExtractBibliographyTool extends defineTool({
       summary = `Resolved ${entryCount} bibliography ${entryWord} for ${citationCount} citation key${keyPlural} in ${display}.`;
     }
 
-    const instructions: string[] = [];
-    if (missingBibliographyFiles.length > 0) {
-      instructions.push(
+    const instructions = [
+      missingBibliographyFiles.length > 0 &&
         `Missing bibliography files: ${missingBibliographyFiles
-          .map((file) => resolveAndFormat(file).display)
+          .map((f) => resolveAndFormat(f).display)
           .join(', ')}.`,
-      );
-    }
-    if (missingKeys.length > 0) {
-      instructions.push(
-        `Missing citation keys: ${missingKeys
-          .map((key) => `\`${key}\``)
-          .join(', ')}.`,
-      );
-    }
-    if (entries.size > DEFAULT_MAX_ENTRIES) {
-      instructions.push(`Limited output to ${DEFAULT_MAX_ENTRIES} entries.`);
-    }
+      missingKeys.length > 0 &&
+        `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
+      entries.size > DEFAULT_MAX_ENTRIES &&
+        `Limited output to ${DEFAULT_MAX_ENTRIES} entries.`,
+    ].filter((x): x is string => Boolean(x));
 
     return {
       summary,

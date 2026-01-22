@@ -200,27 +200,22 @@ export class OutputFilesManager extends PersistentMapManager<
   ): Set<string> {
     const paths = new Set<string>();
     const runs = this.items.get(stream);
-    if (!runs) {
-      return paths;
-    }
+    if (!runs) return paths;
 
-    // storageKey is THE single source of truth
     const targetRunIds =
       options.storageKey != null ? [options.storageKey] : [...runs.keys()];
+    const workspaceOnly = options.workspaceOnly ?? false;
 
     for (const target of targetRunIds) {
       const runRounds = runs.get(target);
-      if (!runRounds) {
-        continue;
-      }
+      if (!runRounds) continue;
 
       for (const infos of runRounds.values()) {
         for (const info of infos) {
-          this.collectPaths(paths, info, options.workspaceOnly ?? false);
+          this.collectPaths(paths, info, workspaceOnly);
         }
       }
     }
-
     return paths;
   }
 
@@ -235,17 +230,16 @@ export class OutputFilesManager extends PersistentMapManager<
     info: OutputFileInfo,
     workspaceOnly: boolean,
   ): void {
-    // All locations to check: main file and lineage files
+    const { lineage } = info;
     const locations = [
       info.location,
-      info.lineage?.original,
-      info.lineage?.diffBase,
-      info.lineage?.diffFile,
+      lineage?.original,
+      lineage?.diffBase,
+      lineage?.diffFile,
     ];
 
     for (const loc of locations) {
-      if (!loc?.absolutePath) continue;
-      if (!workspaceOnly || loc.kind === 'workspace') {
+      if (loc?.absolutePath && (!workspaceOnly || loc.kind === 'workspace')) {
         target.add(loc.absolutePath);
       }
     }

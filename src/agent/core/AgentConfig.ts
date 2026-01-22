@@ -123,7 +123,7 @@ export const liftLegacyAgentCategory = (input: unknown): unknown => {
   // Note: The `session` field is left in place but is ignored by the schema.
   // AgentConfigFieldsSchema uses z.object() which strips unknown fields.
   const session = obj.session as Record<string, unknown> | undefined;
-  if (session && typeof session === 'object' && 'agentCategory' in session) {
+  if (session && 'agentCategory' in session) {
     return { ...obj, agentCategory: session.agentCategory };
   }
 

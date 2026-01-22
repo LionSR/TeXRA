@@ -115,17 +115,19 @@ export class UsageMonitor {
       const totalCacheReadTokens = totals.totalCacheReadInputTokens;
       const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
 
-      const totalCacheableTokens = cachingStats
-        ? this.modelInfo.capabilities.supportsPromptCaching
+      let totalCacheableTokens = 0;
+      if (cachingStats) {
+        totalCacheableTokens = this.modelInfo.capabilities.supportsPromptCaching
           ? totalCacheCreationTokens + totalCacheReadTokens
-          : totals.totalInputTokens
-        : 0;
+          : totals.totalInputTokens;
+      }
 
-      const percentageCached = cachingStats
-        ? totalCacheableTokens > 0
-          ? (totalCacheReadTokens / totalCacheableTokens) * 100
-          : 0
-        : undefined;
+      let percentageCached: number | undefined;
+      if (cachingStats && totalCacheableTokens > 0) {
+        percentageCached = (totalCacheReadTokens / totalCacheableTokens) * 100;
+      } else if (cachingStats) {
+        percentageCached = 0;
+      }
 
       // Send per-round deltas - storage will accumulate them
       const baseStats: TokenUsageStats = {
@@ -141,20 +143,18 @@ export class UsageMonitor {
 
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number(
-          (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
-        ),
-        ...(cachingStats && {
-          percentageCached: Number((percentageCached ?? 0).toFixed(2)),
-        }),
-        ...(this.modelInfo.capabilities.supportsReasoning && {
-          reasoningTokens: roundReasoningTokens,
-        }),
-        // Include tool usage if any is present
-        ...((latestUsage?.toolUsePromptTokens ?? 0) > 0 && {
-          toolUseTokens: latestUsage?.toolUsePromptTokens ?? 0,
-        }),
+        elapsedTime: Number((stateGlobal.totalResponseTimeMs / 1000).toFixed(1)),
       };
+      if (cachingStats) {
+        payload.percentageCached = Number((percentageCached ?? 0).toFixed(2));
+      }
+      if (this.modelInfo.capabilities.supportsReasoning) {
+        payload.reasoningTokens = roundReasoningTokens;
+      }
+      const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
+      if (toolUseTokens > 0) {
+        payload.toolUseTokens = toolUseTokens;
+      }
 
       // Get current storageKey via callback - handles mutable state correctly
       const storageKey = this.context.getStorageKey();

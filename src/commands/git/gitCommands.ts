@@ -38,45 +38,31 @@ function isGitRepository(): boolean {
 }
 
 function getRecentCommits(): string[] | null {
-  if (!isGitRepository()) {
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath || !isGitRepository()) {
     return null;
   }
 
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return [];
-  }
-
   const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
-
-  // Validate numberOfCommits to prevent injection
   if (
     typeof numberOfCommits !== 'number' ||
     numberOfCommits <= 0 ||
     numberOfCommits > 1000
   ) {
     throw new Error(
-      'Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.',
+      'Invalid numberOfCommits value. Must be a positive integer between 1 and 1000.',
     );
   }
 
   const result = execaSync(
     'git',
-    [
-      'log',
-      '-n',
-      numberOfCommits.toString(),
-      `--pretty=format:${COMMIT_LABEL_FORMAT}`,
-    ],
+    ['log', '-n', String(numberOfCommits), `--pretty=format:${COMMIT_LABEL_FORMAT}`],
     { cwd: workspacePath, reject: false },
   );
   if (result.exitCode !== 0) {
     return [];
   }
-  return result.stdout
-    .toString()
-    .split('\n')
-    .map((line) => line.trim());
+  return result.stdout.toString().split('\n').map((line) => line.trim());
 }
 
 function findCommitInHistory(commitHash: string): string | null {
