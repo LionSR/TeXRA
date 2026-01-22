@@ -232,11 +232,8 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/** Success data for tool-use call. */
-type ToolUseCallSuccessData = BaseInvocationSuccessData;
-
 /** Result type for tool-use call. */
-type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
+type ToolUseCallResult = InvocationResult<BaseInvocationSuccessData>;
 
 /**
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.

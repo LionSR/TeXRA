@@ -4,13 +4,15 @@ export type MathMarkupOption = (typeof MATH_MARKUP_OPTIONS)[number];
 
 export const DEFAULT_MATH_MARKUP: MathMarkupOption = 'coarse';
 
-const MATH_MARKUP_DESCRIPTIONS: Record<MathMarkupOption, string> = {
-  coarse: 'Default - recommended for most documents',
-  fine: 'Detailed math markup',
-  whole: 'Mark entire math environments',
-  off: 'No math markup',
-};
-
 export function describeMathMarkupOption(option: MathMarkupOption): string {
-  return MATH_MARKUP_DESCRIPTIONS[option];
+  switch (option) {
+    case 'coarse':
+      return 'Default - recommended for most documents';
+    case 'fine':
+      return 'Detailed math markup';
+    case 'whole':
+      return 'Mark entire math environments';
+    case 'off':
+      return 'No math markup';
+  }
 }
