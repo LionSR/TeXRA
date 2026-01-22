@@ -705,7 +705,7 @@ export function buildApprovalRejectedResult(
     summary: baseMessage,
     error: baseMessage,
     isError: true,
-    ...(feedback && feedback.length > 0 ? { userInstruction: feedback } : {}),
+    ...(feedback ? { userInstruction: feedback } : {}),
   };
 
   // No file attachments for user feedback; treated purely as guidance via fields.
