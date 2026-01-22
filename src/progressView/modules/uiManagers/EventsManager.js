@@ -220,6 +220,25 @@ export class EventsManager {
             'Copy content',
           successTitle: copyButton.dataset.successTitle || 'Copied!',
         });
+        return;
+      }
+
+      // Code block copy button
+      const codeBlockCopy = e.target.closest('.code-block-copy');
+      if (codeBlockCopy) {
+        e.stopPropagation();
+        const codeBlock = codeBlockCopy.closest('.code-block');
+        const codeElem = codeBlock?.querySelector('code');
+        if (!codeElem) return;
+
+        const textToCopy = codeElem.textContent ?? '';
+        if (!textToCopy.trim()) return;
+
+        await copyWithFeedback(codeBlockCopy, textToCopy, {
+          defaultTitle: 'Copy to clipboard',
+          successTitle: 'Copied!',
+          successClass: 'copied',
+        });
       }
     });
   }
