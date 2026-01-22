@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -27,7 +27,7 @@ const sortComparators: Record<
  */
 function matchesFilter(
   category: AgentCategory | undefined,
-  filter: AgentTypeFilter,
+  filter: AgentCategoryFilter,
 ): AgentCategory | null {
   if (filter === 'all') {
     return category ?? AgentCategory.Workflow;
@@ -51,16 +51,16 @@ function buildStreamInfo(
   state: ProgressViewState,
   id: string,
   statuses: Map<string, string> | undefined,
-  filter: AgentTypeFilter,
+  filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
   const taskState = state.getTaskState(id);
   const hints = state.getStreamHints(id);
   const config = taskState?.agentConfig;
 
   // Determine category and check filter
-  const rawCategory = config?.session?.agentCategory ?? hints.sessionCategory;
-  const sessionCategory = matchesFilter(rawCategory, filter);
-  if (sessionCategory === null) return null;
+  const rawCategory = config?.agentCategory ?? hints.agentCategory;
+  const category = matchesFilter(rawCategory, filter);
+  if (category === null) return null;
 
   // Extract timestamps from logs
   const logs = state.streamTabs.getMessages(id);
@@ -72,7 +72,7 @@ function buildStreamInfo(
   const inputFile = config?.inputFile ?? '';
   const rawAgentName = config?.agent ?? id.split('@')[0];
   const agentName = getCleanAgentName(rawAgentName);
-  const isToolAgent = sessionCategory === AgentCategory.ToolUse;
+  const isToolAgent = category === AgentCategory.ToolUse;
 
   // Build display label
   const label =
@@ -85,9 +85,8 @@ function buildStreamInfo(
     label,
     model: config?.model,
     agent: config?.agent,
-    agentType: config?.session?.agentType ?? config?.agentType,
-    agentSessionKind: sessionCategory,
-    uiTraits: { sessionKind: sessionCategory, isToolAgent },
+    agentCategory: category,
+    uiTraits: { agentCategory: category, isToolAgent },
     hasMultipleOutputs:
       config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
     isRemote: taskState
@@ -107,7 +106,7 @@ function buildStreamInfo(
 export function buildStreamInfos(
   state: ProgressViewState,
   statuses?: Map<string, string>,
-  filter: AgentTypeFilter = 'all',
+  filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs
     .keys()

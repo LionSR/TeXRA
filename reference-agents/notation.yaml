@@ -2,7 +2,7 @@ name: notation
 description: Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.
 
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex

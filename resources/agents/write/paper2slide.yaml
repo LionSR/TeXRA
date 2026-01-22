@@ -1,5 +1,6 @@
 name: paper2slide
 settings:
+  agentCategory: workflow
   documentTag: beamer_presentation
   endTag: </beamer_presentation>
   outputExt: tex

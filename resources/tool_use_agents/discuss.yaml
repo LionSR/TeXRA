@@ -2,7 +2,7 @@ name: discuss
 description: Academic discussion agent for exploring ideas, literature, and research directions.
 
 settings:
-  agentType: toolUse
+  agentCategory: toolUse
   tools:
     - read_file
     - glob

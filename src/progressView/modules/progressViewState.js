@@ -203,11 +203,11 @@ export class ProgressViewState {
      */
     this.lastRenderedStream = '';
     this.streams = new Set();
-    this.agentTypeFilter = 'all';
+    this.agentCategoryFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
-    this.activeSessionKind = 'workflow';
+    this.activeAgentCategory = 'workflow';
     this.pendingInstructions = new Map();
 
     this.activeRunIds = new Map();

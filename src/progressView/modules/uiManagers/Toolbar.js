@@ -15,16 +15,16 @@ export class Toolbar {
     this._status = status;
   }
 
-  render(sessionKind = 'workflow') {
+  render(agentCategory = 'workflow') {
     const container = safeGetElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!container) {
       console.error('Toolbar.render: toolbarContainer not found');
       return;
     }
     container.innerHTML = '';
-    const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    const buttons = TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
     const buttonIds = buttons.map((btn) => btn.id);
-    container.dataset.agentMode = sessionKind;
+    container.dataset.agentMode = agentCategory;
     // Notify Status of new button IDs to keep them in sync
     this._status?.setCurrentButtonIds(buttonIds);
     buttons.forEach((def) => {

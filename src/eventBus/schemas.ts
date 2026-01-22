@@ -3,7 +3,7 @@
  * Types are derived from schemas for single source of truth.
  */
 import { z } from 'zod';
-import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   StreamTabIdSchema,
   ExecutionIdSchema,
@@ -107,10 +107,10 @@ export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
 // Stream State Payloads
 // =============================================================================
 
-/** Payload for setting the active stream with optional session metadata */
+/** Payload for setting the active stream with optional category hint */
 export const SetActiveStreamPayloadSchema = z.strictObject({
   stream: StreamTabIdSchema.nullable(),
-  session: AgentSessionDescriptorSchema.nullish(),
+  agentCategory: z.nativeEnum(AgentCategory).optional(),
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote: z.boolean().optional(),
   /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
