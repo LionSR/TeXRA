@@ -1,4 +1,4 @@
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -206,8 +206,8 @@ class Node<
             return await this.execFallback(prepRes, e as Error);
           }
           if (this.wait > 0) {
-            await sleep(this.wait * 1000);
-            // Check abort after sleep to exit quickly if cancelled during wait
+            await delay(this.wait * 1000);
+            // Check abort after delay to exit quickly if cancelled during wait
             if (this.signal?.aborted) {
               return await this.execFallback(prepRes, e as Error);
             }

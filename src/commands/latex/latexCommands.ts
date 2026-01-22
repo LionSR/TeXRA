@@ -6,7 +6,7 @@ import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import { runIndentTeX } from '@housekeeping';
@@ -82,7 +82,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
         if (success) {
           // Instead of trying to modify the document directly,
           // let VS Code handle the file change notification
-          await sleep(100); // Small delay to ensure file is written
+          await delay(100); // Small delay to ensure file is written
           await showLoggedInfoMessage(
             CHANNEL,
             'LaTeX file indented successfully',
