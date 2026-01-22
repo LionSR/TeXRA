@@ -18,7 +18,6 @@ import { z } from 'zod';
 import { encode as encodeHtml } from 'he';
 
 import {
-  AgentType,
   AgentCategory,
   AgentSource,
   AgentDefinitionSchema,
@@ -61,7 +60,6 @@ export interface AgentEntry {
   path: string; // absolute path to YAML (empty for remote)
   multiplePath?: string; // path to _multiple variant if exists
   category: AgentCategory;
-  agentType: AgentType;
   description?: string;
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
@@ -388,7 +386,6 @@ async function scanYaml(
 
     // Extract lightweight metadata
     const rawSettings = (validated.settings ?? {}) as Record<string, unknown>;
-    const agentType = mapAgentType(rawSettings.agentType as string | undefined);
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
       | string[]
       | undefined;
@@ -401,9 +398,14 @@ async function scanYaml(
       )
       .filter((t): t is string => t !== null);
 
-    // Determine category
+    // Determine category from source or explicit setting
+    // Backward compatibility: check both agentCategory and legacy agentType
+    const rawCategory = rawSettings.agentCategory as string | undefined;
+    const rawAgentType = rawSettings.agentType as string | undefined;
     const category =
-      source === 'builtInToolUse' || agentType === AgentType.ToolUse
+      source === 'builtInToolUse' ||
+      rawCategory === AgentCategory.ToolUse ||
+      rawAgentType === AgentCategory.ToolUse
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
@@ -413,7 +415,6 @@ async function scanYaml(
       path: yamlPath,
       multiplePath,
       category,
-      agentType,
       description: validated.description,
       tools: tools?.length ? tools : undefined,
       defaultOutputFiles: defaultOutputFiles?.length
@@ -424,13 +425,6 @@ async function scanYaml(
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
     return null;
   }
-}
-
-function mapAgentType(value: string | undefined): AgentType {
-  if (value === 'toolUse' || value === AgentType.ToolUse)
-    return AgentType.ToolUse;
-  if (value === 'direct' || value === AgentType.Direct) return AgentType.Direct;
-  return AgentType.CoT;
 }
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
@@ -455,7 +449,6 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         path: '',
         multiplePath: multiple?.name,
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-        agentType: isToolUse ? AgentType.ToolUse : AgentType.CoT,
         description: primary.description ?? undefined,
         visibility: primary.visibility ?? undefined,
       });
@@ -671,7 +664,6 @@ function renderOption(entry: AgentEntry): string {
     entry.source === 'remote' && 'data-remote="true"',
     entry.source === 'custom' && 'data-custom="true"',
     entry.description && `data-description="${encodeHtml(entry.description)}"`,
-    entry.agentType && `data-agent-type="${encodeHtml(entry.agentType)}"`,
   ].filter(Boolean);
 
   return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;

@@ -6,7 +6,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -99,7 +99,7 @@ export abstract class ModelHandler<
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
-  protected agentType?: AgentType;
+  protected agentCategory?: AgentCategory;
   protected mediaProcessor: MediaAttachmentProcessor;
 
   /**
@@ -142,17 +142,17 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Records the active agent type so provider handlers can adjust behaviour per session.
+   * Records the active agent category so provider handlers can adjust behaviour per session.
    */
-  public setAgentType(agentType?: AgentType | null): void {
-    this.agentType = agentType ?? undefined;
+  public setAgentCategory(agentCategory?: AgentCategory | null): void {
+    this.agentCategory = agentCategory ?? undefined;
   }
 
   /**
-   * Returns the agent type that is currently driving the handler, if any.
+   * Returns the agent category that is currently driving the handler, if any.
    */
-  public getAgentType(): AgentType | undefined {
-    return this.agentType;
+  public getAgentCategory(): AgentCategory | undefined {
+    return this.agentCategory;
   }
 
   /**

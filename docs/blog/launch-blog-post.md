@@ -256,7 +256,7 @@ All agents are defined in YAML. Want a custom agent for your subfield? Create `m
 ```yaml
 name: quantum_polish
 settings:
-  agentType: cot # Chain-of-thought
+  agentCategory: workflow
   outputExt: tex
 prompts:
   systemPrompt: |

@@ -85,6 +85,7 @@ When you provide media files:
 - **Non-multimodal models**: Filenames provide context
 
 Common use cases:
+
 - Write captions for images (`polish` agent)
 - Verify text matches figures (`correct` agent)
 - Generate text from images/PDFs (`ocr` agent)
