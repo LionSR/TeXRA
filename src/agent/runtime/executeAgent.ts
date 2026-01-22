@@ -31,6 +31,7 @@ import {
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
+import type { AgentCore } from '@agent/implementations/flows/common';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -97,23 +98,19 @@ export type { AgentLoadOptions };
 export type { AgentConfigPayload };
 
 /**
- * Common base for flow inputs after agent resolution.
- * This is NOT passed to flows - it's used to build flow-specific inputs.
+ * Resolution output after agent loading and initialization.
+ *
+ * Extends AgentCore with resolution-specific fields:
+ * - usageMonitor: For tracking token usage
+ * - storageKey: For file organization
+ * - parentStage: For logging hierarchy
  */
-interface ResolvedAgentBase {
-  modelHandler: IModelHandler<any, any, any, any, any>;
-  config: AgentConfig;
-  setting: AgentSetting;
-  prompt: AgentPrompt;
-  logger: AgentLogger;
-  streamId: StreamTabId;
-  executionId: ExecutionId;
-  userVarChannels: UserVariableChannels;
+interface ResolvedAgentBase extends AgentCore {
   usageMonitor: UsageMonitor;
   /** Storage key for file organization (computed once, immutable). */
   storageKey: StorageKey;
-  /** Parent stage for flow execution. Init stage is a child of this. */
-  runStage: AgentLogStage;
+  /** Parent stage for flow execution. Round stages are children of this. */
+  parentStage: AgentLogStage;
 }
 
 // ============================================================================
@@ -267,10 +264,10 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  // Create run stage and compute storage key (immutable after this point)
-  const runStage = await agentLogger.stage(`Run: ${config.agent}`);
-  const storageKey: StorageKey = runStage.id
-    ? normalizeRunId(runStage.id)
+  // Create parent stage and compute storage key (immutable after this point)
+  const parentStage = await agentLogger.stage(`Run: ${config.agent}`);
+  const storageKey: StorageKey = parentStage.id
+    ? normalizeRunId(parentStage.id)
     : (executionId as StorageKey);
 
   // Build user variables (workflow agents wrap in Init stage for grouping)
@@ -292,7 +289,7 @@ async function resolveAgentBase(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await (await runStage.stage('Init')).run(buildVars);
+      : await (await parentStage.stage('Init')).run(buildVars);
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze({ ...baseVars }),
@@ -320,7 +317,7 @@ async function resolveAgentBase(
     streamId,
     executionId,
     logger: agentLogger,
-    runStage,
+    parentStage,
     storageKey,
     userVarChannels,
     usageMonitor,
@@ -364,7 +361,7 @@ async function runFlowWithLifecycle(
 ): Promise<void> {
   try {
     const flowStatus = await runner();
-    ctx.runStage.end(flowStatus);
+    ctx.parentStage.end(flowStatus);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamTabId)) {
       StreamStatusService.set(
@@ -374,7 +371,7 @@ async function runFlowWithLifecycle(
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (err) {
-    ctx.runStage.end(END_GROUP_STATUS.ERROR);
+    ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
 
     // Handle flow error inline
@@ -392,7 +389,7 @@ async function runFlowWithLifecycle(
     }
 
     // Log error directly without creating a new visible group
-    // (error is already captured in runStage with ERROR status)
+    // (error is already captured in parentStage with ERROR status)
     await ctx.logger.logError(errorMsg, err, {
       operation: `execute ${agentName}`,
     });
@@ -509,8 +506,8 @@ export async function executeAgent(
     try {
       acquireStreamOrThrow(streamTabId);
     } catch (err) {
-      // Clean up runStage if reacquisition fails (resolved stream already in use)
-      ctx.runStage.end(END_GROUP_STATUS.ERROR);
+      // Clean up parentStage if reacquisition fails (resolved stream already in use)
+      ctx.parentStage.end(END_GROUP_STATUS.ERROR);
       throw err;
     }
   }
@@ -579,14 +576,14 @@ export async function executeAgent(
       }
 
       // Reflection flow execution (direct/CoT/workflow)
-      // Pass runStage as parentStage so r0, r1 become children of it
+      // Pass parentStage so r0, r1 become children of it
       const result = await runReflectionFlow({
         ...ctx,
         ...interruptManager.asFlowInput(),
         getUsageRecorder: () => (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
-        parentStage: ctx.runStage,
+        parentStage: ctx.parentStage,
       });
       return result.status;
     });
@@ -650,7 +647,7 @@ export async function executeMergeAgent(
       );
 
       // Run reflection flow with custom file naming
-      // Pass runStage as parentStage so r0, r1 become children of it
+      // Pass parentStage so r0, r1 become children of it
       const result = await runReflectionFlow({
         ...ctx,
         ...interruptManager.asFlowInput(),
@@ -658,7 +655,7 @@ export async function executeMergeAgent(
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
-        parentStage: ctx.runStage,
+        parentStage: ctx.parentStage,
       });
 
       return result.status;

@@ -15,7 +15,7 @@
  *
  * Following koala's approach:
  * - shared state is natively serializable (snapshots, not class instances)
- * - services contain runtime dependencies (runStage, logger, etc.)
+ * - services contain runtime dependencies (parentStage, logger, etc.)
  * - PersistedFlow handles persistence transparently
  */
 
@@ -25,7 +25,6 @@ import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -84,9 +83,6 @@ export interface RunReflectionFlowInput<
 
   /** Parent log stage for creating round stages. */
   parentStage: AgentLogStage;
-
-  /** Usage recorder callback. If not provided, usage is not tracked. */
-  getUsageRecorder?: () => RoundFinalizedCallback;
 
   /** Optional custom output file location getter (used by merge). */
   getOutputFileLocation?: (round: number) => AgentFileLocation;
@@ -347,7 +343,7 @@ export async function runReflectionFlow<C = unknown>(
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      runStage: parentStage,
+      parentStage,
       baseFiles,
     };
     pf.setServices(services);
