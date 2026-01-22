@@ -31,7 +31,7 @@ import type { BaseFlowContextInit } from '../common/BaseFlowServices';
  * - latexMediaManager: Figure/TikZ/PDF extraction
  * - promptBuilder: Message construction
  * - fileService: Location resolution
- * - runStage: Parent logging stage for round stages (runtime-only)
+ * - parentStage: Parent logging stage for round stages (runtime-only)
  * - Configuration-driven behavior delegates
  */
 export interface ReflectionServices<
@@ -39,6 +39,7 @@ export interface ReflectionServices<
 > extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
+
   /** Output handler for file processing and artifacts */
   readonly outputHandler: IOutputHandler;
 
@@ -59,12 +60,7 @@ export interface ReflectionServices<
    * RoundPersistedFlow, not by services. This keeps round lifecycle
    * as a flow-level concern, invisible to individual nodes.
    */
-  readonly runStage: AgentLogStage;
-
-  // =========================================================================
-  // Agent method delegates
-  // These delegate to agent methods to preserve polymorphism (subclass overrides)
-  // =========================================================================
+  readonly parentStage: AgentLogStage;
 
   /**
    * Get output file location for a round.
@@ -79,8 +75,10 @@ export interface ReflectionServices<
    */
   readonly shouldEnsureXmlStructure: boolean;
 
-  readonly getUsageRecorder: () => RoundFinalizedCallback;
   readonly baseFiles: WorkspaceFileLocation[];
+
+  /** Usage recorder callback (required for reflection flows). */
+  readonly getUsageRecorder: () => RoundFinalizedCallback;
 }
 
 /**
