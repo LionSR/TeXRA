@@ -231,9 +231,7 @@ export async function handleTestYamlBrackets(
   }
 }
 
-export function registerYamlCommands(
-  context: vscode.ExtensionContext,
-): void {
+export function registerYamlCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       yamlCommands.testAgentLoading,
