@@ -308,3 +308,64 @@ export const MemoryEnabledMessageSchema = z.object({
 });
 
 export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
+
+// --- Progress View Stream Message Schemas ---
+
+/** Stream ID message for stream operations */
+export const StreamIdMessageSchema = z.object({
+  stream: z.string().min(1),
+});
+
+export type StreamIdMessage = z.infer<typeof StreamIdMessageSchema>;
+
+/** Retry stream request message */
+export const RetryStreamMessageSchema = StreamIdMessageSchema.extend({
+  feedback: z.string().optional(),
+});
+
+export type RetryStreamMessage = z.infer<typeof RetryStreamMessageSchema>;
+
+/** Sort streams message */
+export const SortStreamsMessageSchema = z.object({
+  sortBy: z.enum(['time', 'inputFile', 'agent']).optional(),
+});
+
+export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
+
+/** Filter streams message */
+export const FilterStreamsMessageSchema = z.object({
+  filter: z.enum(['all', 'workflow', 'toolUse']).optional(),
+});
+
+export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
+
+/** File command message */
+export const FileCommandMessageSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().optional(),
+});
+
+export type FileCommandMessage = z.infer<typeof FileCommandMessageSchema>;
+
+/** Base file command message (extends file command with base path) */
+export const BaseFileCommandMessageSchema = FileCommandMessageSchema.extend({
+  base: z.string().optional(),
+});
+
+export type BaseFileCommandMessage = z.infer<
+  typeof BaseFileCommandMessageSchema
+>;
+
+/** Compare message (extends base file command with prev path) */
+export const CompareMessageSchema = BaseFileCommandMessageSchema.extend({
+  prev: z.string().optional(),
+});
+
+export type CompareMessage = z.infer<typeof CompareMessageSchema>;
+
+/** Open label message */
+export const OpenLabelMessageSchema = z.object({
+  label: z.string().min(1),
+});
+
+export type OpenLabelMessage = z.infer<typeof OpenLabelMessageSchema>;

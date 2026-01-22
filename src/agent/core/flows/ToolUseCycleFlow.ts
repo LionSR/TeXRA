@@ -97,13 +97,24 @@ function hasZodIssues(
   );
 }
 
+/** Result of normalizing a tool call error. */
+interface NormalizedToolError {
+  message: string;
+  diagnostics?: ValidationErrorDiagnostics;
+  /** Original error preserved for debugging/logging. */
+  cause?: unknown;
+}
+
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
-): { message: string; diagnostics?: ValidationErrorDiagnostics } {
+): NormalizedToolError {
   if (!hasZodIssues(error)) {
-    return { message: `${toolName}: ${toErrorMessage(error)}` };
+    return {
+      message: `${toolName}: ${toErrorMessage(error)}`,
+      cause: error,
+    };
   }
 
   const issues = error.issues as ValidationErrorDiagnostics['issues'];
@@ -114,6 +125,7 @@ function normalizeToolCallError(
       issues,
       formatted: formatZodIssuesForDiagnostics(issues),
     },
+    cause: error,
   };
 }
 
@@ -648,11 +660,17 @@ class ToolUseDispatchNode<C> extends BaseNode<
           () => tool.call(parsedInput),
         );
       } catch (err) {
-        const { message, diagnostics } = normalizeToolCallError(call.name, err);
+        const { message, diagnostics, cause } = normalizeToolCallError(
+          call.name,
+          err,
+        );
+        // Include cause in diagnostics for debugging/logging while keeping
+        // structured validation info when available
+        const enrichedDiagnostics = diagnostics ?? { cause };
         result = {
           error: message,
           isError: true,
-          diagnostics,
+          diagnostics: enrichedDiagnostics,
         };
       }
     }
