@@ -351,14 +351,11 @@ export async function showLoggedMessageWithDocs(
 ): Promise<void> {
   logger.error(channel, message);
   const selection = await vscode.window.showErrorMessage(message, actionLabel);
-  if (selection === actionLabel) {
-    // Use try-catch to prevent uncaught errors if the command fails
-    // (e.g., during activation race conditions or if the command is not registered)
-    try {
-      await vscode.commands.executeCommand('texra.openDoc', docId);
-    } catch (err) {
-      // Log the error but don't show another error message to avoid error cascade
-      logger.error(channel, `Failed to open documentation: ${err}`);
-    }
+  if (selection !== actionLabel) return;
+
+  try {
+    await vscode.commands.executeCommand('texra.openDoc', docId);
+  } catch (err) {
+    logger.error(channel, `Failed to open documentation: ${err}`);
   }
 }

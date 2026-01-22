@@ -111,10 +111,9 @@ export abstract class BaseViewContentProvider {
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
   ): Record<string, vscode.Uri> {
-    return descriptors.reduce<Record<string, vscode.Uri>>((acc, d) => {
-      acc[d.key] = this.getWebviewUri(webview, d.path);
-      return acc;
-    }, {});
+    return Object.fromEntries(
+      descriptors.map((d) => [d.key, this.getWebviewUri(webview, d.path)]),
+    );
   }
 
   /** URIs shared by all views */
@@ -207,11 +206,9 @@ export abstract class BaseViewContentProvider {
     descriptors: readonly ModuleDescriptor[],
     resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
   ): Record<string, vscode.Uri> {
-    const uris: Record<string, vscode.Uri> = {};
-    for (const { key, path } of descriptors) {
-      uris[key] = resolver.call(this, webview, path);
-    }
-    return uris;
+    return Object.fromEntries(
+      descriptors.map(({ key, path }) => [key, resolver.call(this, webview, path)]),
+    );
   }
 
   /** Common URIs used by all views (from src/common and node_modules) */
