@@ -48,7 +48,12 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
       return;
     }
 
-    await storeStateForLater(state, executeImmediately);
+    // Store the state in memory for the MainViewProvider to pick up
+    setPendingState(state, executeImmediately);
+    await vscode.commands.executeCommand('texra.mainView.focus');
+    logger.info(CHANNEL, 'State stored for later restoration', {
+      data: { executeImmediately },
+    });
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }
@@ -57,15 +62,3 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
 export const stateRestoreCommand = {
   restoreState,
 };
-
-async function storeStateForLater(
-  state: TaskState,
-  executeImmediately?: boolean,
-): Promise<void> {
-  // Store the state in memory for the MainViewProvider to pick up
-  setPendingState(state, executeImmediately);
-  await vscode.commands.executeCommand('texra.mainView.focus');
-  logger.info(CHANNEL, 'State stored for later restoration', {
-    data: { executeImmediately },
-  });
-}

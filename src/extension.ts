@@ -45,19 +45,6 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
 
-function promptToOpenFolder(message: string): void {
-  const openAction = 'Open Folder';
-  void vscode.window
-    .showInformationMessage(message, openAction)
-    .then((choice) => {
-      if (choice === openAction) {
-        void vscode.commands.executeCommand(
-          'workbench.action.files.openFolder',
-        );
-      }
-    });
-}
-
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
     return;
@@ -92,7 +79,15 @@ export async function activate(context: vscode.ExtensionContext) {
       !workspaceFolders || workspaceFolders.length === 0
         ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
         : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
-    promptToOpenFolder(message);
+    void vscode.window
+      .showInformationMessage(message, 'Open Folder')
+      .then((choice) => {
+        if (choice === 'Open Folder') {
+          void vscode.commands.executeCommand(
+            'workbench.action.files.openFolder',
+          );
+        }
+      });
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
