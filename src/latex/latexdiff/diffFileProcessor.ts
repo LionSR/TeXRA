@@ -4,6 +4,32 @@ import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS, type FileLocation } from '@utils/files';
 
+/** LaTeX starred math environments that need label removal during diff processing. */
+const STAR_ENVIRONMENTS = [
+  'align\\*',
+  'equation\\*',
+  'gather\\*',
+  'multline\\*',
+  'flalign\\*',
+  'alignat\\*',
+];
+
+/** Packages that need extra newlines added before them for readability. */
+const PACKAGES_NEEDING_NEWLINE = [
+  '\\usepackage{tikz}',
+  '\\usepackage{pgfplots}',
+  '\\providecommand{\\DIFaddbegin}',
+  '\\RequirePackage[normalem]{ulem}',
+  '\\usetikzlibrary',
+  '\\RequirePackage{color}',
+];
+
+/** Patterns to fix broken document endings after latexdiff processing. */
+const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
+  [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
+  [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
+];
+
 export class DiffFileProcessor {
   constructor(private readonly channel: string) {}
 
@@ -24,16 +50,7 @@ export class DiffFileProcessor {
   }
 
   private processStarEnvironments(content: string): string {
-    const starEnvironments = [
-      'align\\*',
-      'equation\\*',
-      'gather\\*',
-      'multline\\*',
-      'flalign\\*',
-      'alignat\\*',
-    ];
-
-    const envPattern = starEnvironments.join('|');
+    const envPattern = STAR_ENVIRONMENTS.join('|');
     const starEnvRegex = new RegExp(
       `\\\\begin\\{(${envPattern})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
       'g',
@@ -51,15 +68,6 @@ export class DiffFileProcessor {
     let addBlock = false;
     let documentStarted = false;
 
-    const packagesToAddNewline = [
-      '\\usepackage{tikz}',
-      '\\usepackage{pgfplots}',
-      '\\providecommand{\\DIFaddbegin}',
-      '\\RequirePackage[normalem]{ulem}',
-      '\\usetikzlibrary',
-      '\\RequirePackage{color}',
-    ];
-
     for (const line of lines) {
       // Skip TEX root comments (handles various spacing: %!TEX, % !TEX, %! TEX)
       if (/^%\s?!\s?TEX root/.test(line)) {
@@ -67,7 +75,7 @@ export class DiffFileProcessor {
       }
 
       // Add newlines before specific packages
-      if (packagesToAddNewline.some((pkg) => line.includes(pkg))) {
+      if (PACKAGES_NEEDING_NEWLINE.some((pkg) => line.includes(pkg))) {
         newContent += '\n';
       }
 
@@ -101,18 +109,12 @@ export class DiffFileProcessor {
   private async processTikzPictureEndings(
     fileLocation: FileLocation,
   ): Promise<void> {
-    const content = await flexibleFS.read(fileLocation);
-    let newContent = content;
+    let content = await flexibleFS.read(fileLocation);
 
-    const patterns = [
-      [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
-      [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
-    ];
-
-    for (const [pattern, replacement] of patterns) {
-      newContent = newContent.replace(pattern, replacement as string);
+    for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
+      content = content.replace(pattern, replacement);
     }
 
-    await flexibleFS.write(fileLocation, newContent);
+    await flexibleFS.write(fileLocation, content);
   }
 }

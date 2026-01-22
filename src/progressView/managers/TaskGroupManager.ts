@@ -73,10 +73,11 @@ export class TaskGroupManager extends PersistentMapManager<
     }
 
     // Apply updates - only include endTime if explicitly provided
-    const updated: TaskGroup = { ...group, status };
-    if (endTime !== undefined) {
-      updated.endTime = endTime;
-    }
+    const updated: TaskGroup = {
+      ...group,
+      status,
+      ...(endTime !== undefined && { endTime }),
+    };
     streamGroups.set(id, updated);
     await this.save();
   }
