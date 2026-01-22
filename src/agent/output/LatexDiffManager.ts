@@ -126,10 +126,14 @@ export class LatexDiffManager {
     mapping: RoundFileMapping,
     stage?: AgentLogStage,
   ): Promise<void> {
-    const execute = () => this.performLatexdiffOperations(currRound, mapping);
-
     try {
-      await (stage ? stage.within(execute) : execute());
+      if (stage) {
+        await stage.within(() =>
+          this.performLatexdiffOperations(currRound, mapping),
+        );
+      } else {
+        await this.performLatexdiffOperations(currRound, mapping);
+      }
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${toErrorMessage(err)}`,

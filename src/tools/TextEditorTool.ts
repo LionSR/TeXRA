@@ -272,16 +272,18 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        if (endLine !== -1 && endLine > numLines) {
-          throw new ToolError(
-            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${numLines}\``,
-          );
-        }
-
-        if (endLine !== -1 && endLine < startLine) {
-          throw new ToolError(
-            `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
-          );
+        // Validate endLine when specified (not -1)
+        if (endLine !== -1) {
+          if (endLine > numLines) {
+            throw new ToolError(
+              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be smaller than the number of lines in the file: \`${numLines}\``,
+            );
+          }
+          if (endLine < startLine) {
+            throw new ToolError(
+              `Invalid \`view_range\`: [${startLine}, ${endLine}]. Its second element \`${endLine}\` should be larger or equal than its first \`${startLine}\``,
+            );
+          }
         }
 
         initLine = startLine;
@@ -292,16 +294,12 @@ export class TextEditorTool extends defineTool({
       // Record read only after successful validation
       recordToolFileRead(filePath);
 
-      let rangeSummary: string | undefined;
-      if (viewRange) {
-        const [startLine, endLine] = viewRange;
-        rangeSummary = `${startLine}-${endLine === -1 ? 'end' : endLine}`;
-      }
+      const summary = viewRange
+        ? `View ${filePath} (${viewRange[0]}-${viewRange[1] === -1 ? 'end' : viewRange[1]})`
+        : `View ${filePath}`;
 
       return {
-        summary: rangeSummary
-          ? `View ${filePath} (${rangeSummary})`
-          : `View ${filePath}`,
+        summary,
         output: this.makeOutput(fileContent, filePath, initLine),
       };
     } catch (error) {
