@@ -292,7 +292,7 @@ export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
 
 /** Filter streams message */
 export const FilterStreamsMessageSchema = z.object({
-  filter: z.union([z.literal('all'), z.enum(AgentCategory)]),
+  filter: z.union([z.literal('all'), z.nativeEnum(AgentCategory)]),
 });
 
 export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
