@@ -46,14 +46,14 @@ export { TaskGroupStatusSchema, type TaskGroupStatus };
  * Uses TaskGroupSchema fields directly - no field renaming to avoid mapping overhead.
  */
 export const AddTaskGroupPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema,
+  streamId: StreamTabIdSchema,
   ...TaskGroupSchema.shape,
 });
 export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
 
 /** Payload for updating a task group (subset of AddTaskGroupPayload) */
 export const UpdateTaskGroupPayloadSchema = AddTaskGroupPayloadSchema.pick({
-  stream: true,
+  streamId: true,
   id: true,
   status: true,
   endTime: true,
@@ -64,7 +64,7 @@ export type UpdateTaskGroupPayload = z.infer<
 
 /** Base payload for storage-scoped events (files, usage, etc.) */
 export const RunScopedPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema,
+  streamId: StreamTabIdSchema,
   storageKey: StorageKeySchema,
   executionId: ExecutionIdSchema.optional(),
 });
@@ -102,7 +102,7 @@ export type TodoItem = z.infer<typeof TodoItemSchema>;
 
 /** Payload for updating todos in a stream */
 export const UpdateTodosPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema,
+  streamId: StreamTabIdSchema,
   todos: z.array(TodoItemSchema),
 });
 export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
@@ -113,7 +113,7 @@ export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
 
 /** Payload for setting the active stream with optional category hint */
 export const SetActiveStreamPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema.nullable(),
+  streamId: StreamTabIdSchema.nullable(),
   agentCategory: z.nativeEnum(AgentCategory).optional(),
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote: z.boolean().optional(),
@@ -133,7 +133,7 @@ export type SetActiveStreamPayload = z.infer<
  * error messages from the underlying schema.
  */
 export const SetTaskStatePayloadSchema = z.strictObject({
-  streamTabId: StreamTabIdSchema,
+  streamId: StreamTabIdSchema,
   executionId: ExecutionIdSchema.optional(),
   // Validate with TaskStateSchema, then cast output to full TaskState type
   taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),

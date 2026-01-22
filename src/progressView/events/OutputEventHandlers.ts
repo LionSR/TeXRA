@@ -45,18 +45,22 @@ export function registerOutputEventHandlers(
 
 function handleAddOutputFiles(
   ctx: EventHandlerContext,
-  { stream, storageKey, filesByRound }: ProgressEventPayloads['addOutputFiles'],
+  {
+    streamId,
+    storageKey,
+    filesByRound,
+  }: ProgressEventPayloads['addOutputFiles'],
 ): void {
   withEventErrorHandling(
     'OutputEvents',
     'failed to handle addOutputFiles',
     async () => {
-      await ctx.state.outputFiles.addFiles(stream, storageKey, filesByRound);
+      await ctx.state.outputFiles.addFiles(streamId, storageKey, filesByRound);
       if (!isWebviewAvailable(ctx)) return;
 
-      const runFiles = ctx.state.outputFiles.getFiles(stream).get(storageKey);
+      const runFiles = ctx.state.outputFiles.getFiles(streamId).get(storageKey);
       const rounds = mapToRecordIfNonEmpty(runFiles);
-      ctx.webviewUpdater.updateFiles(stream, { runId: storageKey, rounds });
+      ctx.webviewUpdater.updateFiles(streamId, { runId: storageKey, rounds });
     },
   );
 }
@@ -64,7 +68,7 @@ function handleAddOutputFiles(
 function handleUpdateMissingOutputs(
   ctx: EventHandlerContext,
   {
-    stream,
+    streamId,
     storageKey,
     filesByRound,
   }: ProgressEventPayloads['updateMissingOutputs'],
@@ -74,17 +78,17 @@ function handleUpdateMissingOutputs(
     'failed to handle updateMissingOutputs',
     async () => {
       await ctx.state.outputFiles.updateMissingOutputs(
-        stream,
+        streamId,
         storageKey,
         filesByRound,
       );
       if (!isWebviewAvailable(ctx)) return;
 
       const runMissing = ctx.state.outputFiles
-        .getMissingOutputs(stream)
+        .getMissingOutputs(streamId)
         .get(storageKey);
       const rounds = mapToRecordIfNonEmpty(runMissing);
-      ctx.webviewUpdater.updateMissingOutputs(stream, {
+      ctx.webviewUpdater.updateMissingOutputs(streamId, {
         runId: storageKey,
         rounds,
       });
@@ -94,16 +98,16 @@ function handleUpdateMissingOutputs(
 
 function handleClearMissingOutputs(
   ctx: EventHandlerContext,
-  { stream }: ProgressEventPayloads['clearMissingOutputs'],
+  { streamId }: ProgressEventPayloads['clearMissingOutputs'],
 ): void {
   withEventErrorHandling(
     'OutputEvents',
     'failed to handle clearMissingOutputs',
     async () => {
-      await ctx.state.outputFiles.clearMissingOutputs(stream);
+      await ctx.state.outputFiles.clearMissingOutputs(streamId);
       // Broadcast to webview - frontend decides which run to display
       if (isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.updateMissingOutputs(stream, { reset: true });
+        ctx.webviewUpdater.updateMissingOutputs(streamId, { reset: true });
       }
     },
   );
