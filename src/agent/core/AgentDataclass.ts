@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 // Local imports - model types
 import { ToolDefinitionSchema, type ToolDefinition } from '@model';
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'AgentDataclass';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
@@ -117,17 +120,26 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
 
   // Migrate maxRounds to rounds (if rounds not already set)
   if (maxRounds !== undefined && rest.rounds === undefined) {
+    logger.debug(CHANNEL, `Migrating legacy maxRounds (${maxRounds}) to rounds`);
     rest.rounds = maxRounds;
   }
 
   // If agentCategory already present, we're done
   if (rest.agentCategory !== undefined) {
+    if (agentType !== undefined) {
+      logger.debug(CHANNEL, `Stripping legacy agentType: ${agentType}`);
+    }
     return rest;
   }
 
   // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
   if (agentType === 'toolUse') {
+    logger.debug(CHANNEL, `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`);
     return { ...rest, agentCategory: AgentCategory.ToolUse };
+  }
+
+  if (agentType !== undefined) {
+    logger.debug(CHANNEL, `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`);
   }
 
   // Default to Workflow
