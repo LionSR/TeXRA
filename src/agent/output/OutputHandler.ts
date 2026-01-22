@@ -461,7 +461,11 @@ export class OutputHandler implements IOutputHandler {
         data.rawOutput ??= outputLocation;
         const rawLocation = data.rawOutput;
 
+        // Route to multiple outputs only when explicitly enabled AND files are specified.
+        // This ensures agents without _multiple variants use single output processing
+        // even if output files were specified in the config.
         if (
+          this.agentConfig.useMultipleOutputs &&
           Array.isArray(this.agentConfig.outputFiles) &&
           this.agentConfig.outputFiles.length > 0
         ) {

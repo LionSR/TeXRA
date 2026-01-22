@@ -44,6 +44,7 @@ import {
 } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
+  isWorkflowSetting,
   type AgentSetting,
   type AgentPrompt,
   type AgentWorkflowSetting,
@@ -243,8 +244,20 @@ async function resolveAgentBase(
 
   // 2. Validate and create model handler
   await validateAndGetModelConfig(fullConfig.model);
+
+  // Only enable multiple outputs if:
+  // 1. User requested it (fullConfig.useMultipleOutputs)
+  // 2. The loaded agent actually supports it (isMultipleOutput in settings)
+  // This handles both local agents (where _multiple variant may not exist)
+  // and remote agents (where fallback happens inside RemoteAgentLoader)
+  const agentSupportsMultiple =
+    isWorkflowSetting(setting) && setting.isMultipleOutput;
+  const useMultipleOutputs =
+    fullConfig.useMultipleOutputs && agentSupportsMultiple;
+
   const config: AgentConfig = {
     ...fullConfig,
+    useMultipleOutputs,
     agentCategory: setting.agentCategory,
   };
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
@@ -280,7 +293,7 @@ async function resolveAgentBase(
     stream: streamId,
     agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
-    hasMultipleOutputs: fullConfig.useMultipleOutputs,
+    hasMultipleOutputs: config.useMultipleOutputs,
   });
 
   // 5. Define mutable storage key with callbacks
@@ -552,12 +565,21 @@ export async function executeAgent(
   const { setting, streamId: streamTabId, config } = ctx;
   const agentName = config.agent;
 
-  // Verify stream IDs match (paranoid check for ID computation consistency)
+  // Handle stream ID mismatch when useMultipleOutputs was corrected based on agent support.
+  // Release the preliminary stream and acquire the correct one.
   if (streamTabId !== preliminaryStreamId) {
-    logger.warn(
-      `Stream ID mismatch: preliminary=${preliminaryStreamId}, resolved=${streamTabId}. ` +
-        'This may indicate a bug in stream ID computation.',
+    logger.debug(
+      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${streamTabId}. ` +
+        'Corrected useMultipleOutputs based on agent support.',
     );
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+    try {
+      acquireStreamOrThrow(streamTabId);
+    } catch (err) {
+      // Clean up runStage if reacquisition fails (resolved stream already in use)
+      ctx.runStage.end(END_GROUP_STATUS.ERROR);
+      throw err;
+    }
   }
 
   await runFlowWithLifecycle(ctx, streamTabId, agentName, async () => {
