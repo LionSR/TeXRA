@@ -36,6 +36,44 @@ const ZoteroSearchInputSchema = z.strictObject({
 
 export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
+/**
+ * Format a single search result item for display.
+ */
+function formatSearchResult(item: BbtSearchResultItem): string {
+  const citekey = item.citekey || 'unknown';
+  const title = item.title || 'Untitled';
+
+  // Handle both CSL JSON (author) and Zotero (creators) formats
+  const creatorList = item.author || item.creators || [];
+  const creators = creatorList
+    .map((c) => {
+      if (c.family) {
+        return c.given ? `${c.family}, ${c.given}` : c.family;
+      }
+      if (c.lastName) {
+        return c.firstName ? `${c.lastName}, ${c.firstName}` : c.lastName;
+      }
+      return c.name || '';
+    })
+    .filter(Boolean)
+    .join('; ');
+
+  // Handle date from CSL JSON or Zotero format
+  let year = '';
+  if (item.issued?.['date-parts']?.[0]?.[0]) {
+    year = String(item.issued['date-parts'][0][0]);
+  } else if (item.date) {
+    year = item.date;
+  }
+
+  const type = item.type || item.itemType || 'item';
+
+  // Build formatted string with optional parts
+  const creatorPart = creators ? ` - ${creators}` : '';
+  const yearPart = year ? ` (${year})` : '';
+  return `[${citekey}] ${title}${creatorPart}${yearPart} [${type}]`;
+}
+
 export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   description:
@@ -65,40 +103,7 @@ export class ZoteroSearchTool extends defineTool({
     }
 
     // Format results
-    const items = result.map((item) => {
-      const citekey = item.citekey || 'unknown';
-      const title = item.title || 'Untitled';
-
-      // Handle both CSL JSON (author) and Zotero (creators) formats
-      const creatorList = item.author || item.creators || [];
-      const creators = creatorList
-        .map((c) => {
-          // CSL JSON format: family/given
-          if (c.family) {
-            return `${c.family}${c.given ? `, ${c.given}` : ''}`;
-          }
-          // Zotero format: lastName/firstName
-          if (c.lastName) {
-            return `${c.lastName}${c.firstName ? `, ${c.firstName}` : ''}`;
-          }
-          // Single name format
-          return c.name || '';
-        })
-        .filter(Boolean)
-        .join('; ');
-
-      // Handle date from CSL JSON or Zotero format
-      let year = '';
-      if (item.issued?.['date-parts']?.[0]?.[0]) {
-        year = String(item.issued['date-parts'][0][0]);
-      } else if (item.date) {
-        year = item.date;
-      }
-
-      const type = item.type || item.itemType || 'item';
-
-      return `[${citekey}] ${title}${creators ? ` - ${creators}` : ''}${year ? ` (${year})` : ''} [${type}]`;
-    });
+    const items = result.map((item) => formatSearchResult(item));
 
     return {
       summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching "${query}"`,

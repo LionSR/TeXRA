@@ -40,6 +40,22 @@ const STATUS_ICONS = {
 };
 
 /**
+ * Build a tool section with appropriate code highlighting based on tool type.
+ * @param {string} label - Section label (e.g., 'Input:', 'Output:')
+ * @param {string} text - Content text to display
+ * @param {string} toolName - Name of the tool
+ * @param {string} [extraClass] - Additional CSS class for the content
+ * @returns {string} HTML for the section
+ */
+function buildToolSection(label, text, toolName, extraClass = '') {
+  const useHighlighting = TOOLS_WITH_CODE_OUTPUT.has(toolName);
+  const content = useHighlighting
+    ? wrapInHighlightedPre(text, 'bash', extraClass)
+    : wrapInPre(text, extraClass);
+  return buildToolUseSection(label, content);
+}
+
+/**
  * Determine the title prefix based on tool state.
  * @param {boolean} isUserFeedback - Whether this is user feedback
  * @param {boolean} isError - Whether this is an error state
@@ -180,40 +196,16 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   else if (input !== undefined && input !== null) {
     const inputValue = stringifyForDisplay(input);
     if (inputValue) {
-      // Use syntax highlighting for code-related tools
-      if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
-        sections.push(
-          buildToolUseSection(
-            'Input:',
-            wrapInHighlightedPre(inputValue, 'bash'),
-          ),
-        );
-      } else {
-        sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
-      }
+      sections.push(buildToolSection('Input:', inputValue, toolName));
     }
   }
 
   // Show output if present (primary result from tool)
   // Skip for read/file-link tools (already shown as file link)
   if (outputText && !TOOLS_WITH_FILE_LINK.has(toolName)) {
-    // Only syntax highlight output for tools with actual code output
-    // Edit tools output human-readable status like "Replaced 1 occurrence." - not code
-    if (TOOLS_WITH_CODE_OUTPUT.has(toolName)) {
-      sections.push(
-        buildToolUseSection(
-          'Output:',
-          wrapInHighlightedPre(outputText, 'bash', 'tool-output-full'),
-        ),
-      );
-    } else {
-      sections.push(
-        buildToolUseSection(
-          'Output:',
-          wrapInPre(outputText, 'tool-output-full'),
-        ),
-      );
-    }
+    sections.push(
+      buildToolSection('Output:', outputText, toolName, 'tool-output-full'),
+    );
   }
 
   // Show error if present and not superseded by user feedback

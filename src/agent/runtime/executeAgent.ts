@@ -441,7 +441,8 @@ async function runFlowWithLifecycle(
 
     // Show appropriate notification based on error type
     const hasApiKeyError =
-      rawMsg.includes('Missing API key') || rawMsg.includes('API key not found');
+      rawMsg.includes('Missing API key') ||
+      rawMsg.includes('API key not found');
     if (hasApiKeyError) {
       await showApiKeyErrorNotification();
     } else {
