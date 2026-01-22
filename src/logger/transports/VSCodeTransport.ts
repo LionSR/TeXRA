@@ -63,7 +63,7 @@ export class VSCodeTransport extends Transport {
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
     if (this.isAgentChannel) {
       bus.emit('addTaskGroup', {
-        stream: this.streamName,
+        streamId: this.streamName,
         id,
         name: groupName,
         startTime: Date.now(),
@@ -78,7 +78,7 @@ export class VSCodeTransport extends Transport {
   endGroup(groupId: string, status: EndGroupStatus): void {
     if (!this.isAgentChannel) return;
     bus.emit('updateTaskGroup', {
-      stream: this.streamName,
+      streamId: this.streamName,
       id: groupId,
       status,
       endTime: Date.now(),
@@ -129,7 +129,7 @@ export class VSCodeTransport extends Transport {
     if (!shouldEmit) return;
 
     bus.emit('addLogMessage', {
-      stream: this.streamName,
+      streamId: this.streamName,
       logMessage: {
         id: randomUUID(),
         text: event.message,
@@ -172,7 +172,7 @@ export class VSCodeTransport extends Transport {
    */
   private emitContextState(contextState: ContextStateData): void {
     bus.emit('updateContextState', {
-      stream: this.streamName,
+      streamId: this.streamName,
       contextState,
     });
   }

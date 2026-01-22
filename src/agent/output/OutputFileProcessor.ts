@@ -209,7 +209,7 @@ export class OutputFileProcessor {
       };
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
-        stream: channel,
+        streamId: channel,
         storageKey,
         filesByRound: { [currRound]: [] },
       });

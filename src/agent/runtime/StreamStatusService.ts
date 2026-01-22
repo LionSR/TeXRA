@@ -91,7 +91,7 @@ export const StreamStatusService = {
     }
 
     if (emit) {
-      bus.emit('updateStreamStatus', { stream, status, previousStatus });
+      bus.emit('updateStreamStatus', { streamId: stream, status, previousStatus });
     }
   },
 

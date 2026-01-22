@@ -277,7 +277,7 @@ async function resolveAgentBase(
   // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
   // preventing the race condition where groups are dropped.
   bus.emit('setActiveStream', {
-    stream: streamId,
+    streamId,
     agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: fullConfig.useMultipleOutputs,

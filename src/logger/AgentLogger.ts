@@ -623,7 +623,7 @@ export class AgentLogger {
     const emitMessage = (isNew: boolean, text: string): void => {
       if (isNew) {
         bus.emit('addLogMessage', {
-          stream: emitStreamId,
+          streamId: emitStreamId,
           logMessage: {
             id,
             text,
@@ -636,7 +636,7 @@ export class AgentLogger {
         });
       } else {
         bus.emit('updateLogMessage', {
-          stream: emitStreamId,
+          streamId: emitStreamId,
           logMessage: { id, text, groupId, messageType: type },
         });
       }

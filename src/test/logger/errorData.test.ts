@@ -11,7 +11,7 @@ describe('AgentLogger error data', () => {
     const err = new Error('test failure');
     let captured: any;
     const off = bus.on('addLogMessage', (payload) => {
-      if (payload.stream === 'TestErrorLogger') {
+      if (payload.streamId === 'TestErrorLogger') {
         captured = payload.logMessage;
       }
     });
