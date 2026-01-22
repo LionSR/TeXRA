@@ -6,9 +6,6 @@
 
 import { z } from 'zod';
 
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import { isString, isObject } from '@utils/core';
@@ -195,45 +192,37 @@ export function extractContentFromXMLbyTagMultiple(
   root: Record<string, unknown>,
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
-  try {
-    if (!isObject(root)) {
-      logger.error(
-        CHANNEL,
-        `Invalid root object. Structure: ${getObjectStructure(root)}`,
-      );
-      return null;
-    }
-
-    if (documentTag in root) {
-      const container = root[documentTag];
-      if (isObject(container) && 'document' in container) {
-        const documents = container.document;
-        if (Array.isArray(documents)) {
-          return documents.map((doc) => ({
-            content:
-              (doc as Record<string, unknown>).content?.toString().trim() ?? '',
-            name: (doc as Record<string, unknown>).name as string,
-          }));
-        }
-        logger.error(
-          CHANNEL,
-          `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
-        );
-      }
-    }
-
+  if (!isObject(root)) {
     logger.error(
       CHANNEL,
-      `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
+      `Invalid root object. Structure: ${getObjectStructure(root)}`,
     );
     return null;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error extracting multiple content from tag: ${toErrorMessage(err)}. Structure: ${getObjectStructure(root)}`,
-    );
-    throw err;
   }
+
+  if (documentTag in root) {
+    const container = root[documentTag];
+    if (isObject(container) && 'document' in container) {
+      const documents = container.document;
+      if (Array.isArray(documents)) {
+        return documents.map((doc) => ({
+          content:
+            (doc as Record<string, unknown>).content?.toString().trim() ?? '',
+          name: (doc as Record<string, unknown>).name as string,
+        }));
+      }
+      logger.error(
+        CHANNEL,
+        `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
+      );
+    }
+  }
+
+  logger.error(
+    CHANNEL,
+    `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
+  );
+  return null;
 }
 
 /**
