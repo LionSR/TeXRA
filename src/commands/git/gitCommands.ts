@@ -132,7 +132,9 @@ function parseLatexGitUrl(
   const trimmed = input.trim();
 
   // Full URL
-  const m = trimmed.match(/^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i);
+  const m = trimmed.match(
+    /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i,
+  );
   if (m) {
     const [, host, hasGit, id] = m;
     return {
@@ -182,7 +184,11 @@ async function getGitToken(
   }
 
   if (!token) {
-    const input = await promptInput(title, 'Enter your Git authentication token.', true);
+    const input = await promptInput(
+      title,
+      'Enter your Git authentication token.',
+      true,
+    );
     if (!input) return null;
 
     if (validate && !validate(input)) {
@@ -220,8 +226,17 @@ async function cloneOverleafProject(
 
   // Get credentials
   const creds = parsed.isOverleaf
-    ? await getGitToken(context.secrets, 'overleaf.gitToken', 'Overleaf Git Token', (t) => t.startsWith('olp_'))
-    : await getGitToken(context.secrets, `sharelatex.${parsed.host}.token`, `ShareLaTeX Token (${parsed.host})`);
+    ? await getGitToken(
+        context.secrets,
+        'overleaf.gitToken',
+        'Overleaf Git Token',
+        (t) => t.startsWith('olp_'),
+      )
+    : await getGitToken(
+        context.secrets,
+        `sharelatex.${parsed.host}.token`,
+        `ShareLaTeX Token (${parsed.host})`,
+      );
   if (!creds) return;
 
   // Check preconditions
@@ -251,15 +266,21 @@ async function cloneOverleafProject(
 
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Cloning ${label}…` },
-      () => execa('git', ['clone', remote, '.'], {
-        cwd: workspacePath,
-        env: { GIT_TERMINAL_PROMPT: '0' },
-      }),
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Cloning ${label}…`,
+      },
+      () =>
+        execa('git', ['clone', remote, '.'], {
+          cwd: workspacePath,
+          env: { GIT_TERMINAL_PROMPT: '0' },
+        }),
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
   } catch (e) {
-    vscode.window.showErrorMessage(`Clone failed. Check credentials and connection.`);
+    vscode.window.showErrorMessage(
+      `Clone failed. Check credentials and connection.`,
+    );
     if (e instanceof Error) {
       let msg = e.message;
       for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');
