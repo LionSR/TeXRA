@@ -2,6 +2,9 @@
 import * as path from 'path';
 import { Buffer } from 'buffer';
 
+// Third-party imports
+import pMap from 'p-map';
+
 // Local imports - agent utils
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -151,16 +154,33 @@ export class MediaAttachmentProcessor {
       return { entries: [], results: [] };
     }
 
-    const settledResults = await Promise.allSettled(
-      mediaFiles.map((location) => this.loadMediaEntry(location)),
+    // Use pMap with concurrency control for I/O-intensive media loading
+    const MEDIA_CONCURRENCY = 4;
+
+    const loadResults = await pMap(
+      mediaFiles,
+      async (
+        location,
+      ): Promise<
+        | { ok: true; entry: MediaEntry | MediaEntry[] | undefined; result: MediaFileResult }
+        | { ok: false; location: FileLocation; reason: unknown }
+      > => {
+        try {
+          const { entry, result } = await this.loadMediaEntry(location);
+          return { ok: true, entry, result };
+        } catch (reason) {
+          return { ok: false, location, reason };
+        }
+      },
+      { concurrency: MEDIA_CONCURRENCY, stopOnError: false },
     );
 
     const entries: MediaEntry[] = [];
     const results: MediaFileResult[] = [];
 
-    settledResults.forEach((settledResult, index) => {
-      if (settledResult.status === 'fulfilled') {
-        const { entry, result } = settledResult.value;
+    for (const loadResult of loadResults) {
+      if (loadResult.ok) {
+        const { entry, result } = loadResult;
         results.push(result);
 
         if (entry) {
@@ -168,8 +188,7 @@ export class MediaAttachmentProcessor {
           entries.push(...entryList);
         }
       } else {
-        const reason = settledResult.reason;
-        const location = mediaFiles[index];
+        const { location, reason } = loadResult;
         const displayPath = getShortDisplayPath(location);
         this.logger.error(
           `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
@@ -177,7 +196,7 @@ export class MediaAttachmentProcessor {
         );
         results.push({ path: displayPath, ok: false });
       }
-    });
+    }
 
     return { entries, results };
   }
