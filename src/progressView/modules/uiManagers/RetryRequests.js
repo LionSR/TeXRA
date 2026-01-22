@@ -145,7 +145,9 @@ export class RetryRequests extends BaseUIRequestManager {
       lines.push(`  thinkingChars: ${diag.thinkingChars}`);
       lines.push(`  textChars: ${diag.textChars}`);
       lines.push(`  toolInputChars: ${diag.toolInputChars}`);
-      lines.push(`  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`);
+      lines.push(
+        `  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`,
+      );
       lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
       lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
       lines.push(`  elapsedSecs: ${diag.elapsedSecs}`);

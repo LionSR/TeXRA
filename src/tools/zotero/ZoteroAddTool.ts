@@ -156,57 +156,33 @@ async function callZoteroConnector(
  * Convert our item schema to Zotero Connector format.
  */
 function toZoteroItem(item: z.infer<typeof ZoteroItemSchema>): object {
+  // Parse authors into Zotero creator format
+  const creators = item.authors?.length
+    ? item.authors.map((name) => {
+        const parts = name.trim().split(/\s+/);
+        if (parts.length === 1) {
+          return { name: parts[0], creatorType: 'author' };
+        }
+        const lastName = parts.pop();
+        const firstName = parts.join(' ');
+        return { firstName, lastName, creatorType: 'author' };
+      })
+    : undefined;
+
+  // Build Zotero item, filtering out undefined values
   const zoteroItem: Record<string, unknown> = {
     itemType: item.itemType || 'journalArticle',
+    ...(item.title && { title: item.title }),
+    ...(item.doi && { DOI: item.doi }),
+    ...(item.url && { url: item.url }),
+    ...(creators && { creators }),
+    ...(item.year && { date: item.year }),
+    ...(item.abstract && { abstractNote: item.abstract }),
+    ...(item.publicationTitle && { publicationTitle: item.publicationTitle }),
+    ...(item.volume && { volume: item.volume }),
+    ...(item.issue && { issue: item.issue }),
+    ...(item.pages && { pages: item.pages }),
   };
-
-  if (item.title) {
-    zoteroItem.title = item.title;
-  }
-
-  if (item.doi) {
-    zoteroItem.DOI = item.doi;
-  }
-
-  if (item.url) {
-    zoteroItem.url = item.url;
-  }
-
-  if (item.authors && item.authors.length > 0) {
-    zoteroItem.creators = item.authors.map((name) => {
-      const parts = name.trim().split(/\s+/);
-      if (parts.length === 1) {
-        return { name: parts[0], creatorType: 'author' };
-      }
-      const lastName = parts.pop();
-      const firstName = parts.join(' ');
-      return { firstName, lastName, creatorType: 'author' };
-    });
-  }
-
-  if (item.year) {
-    zoteroItem.date = item.year;
-  }
-
-  if (item.abstract) {
-    zoteroItem.abstractNote = item.abstract;
-  }
-
-  if (item.publicationTitle) {
-    zoteroItem.publicationTitle = item.publicationTitle;
-  }
-
-  if (item.volume) {
-    zoteroItem.volume = item.volume;
-  }
-
-  if (item.issue) {
-    zoteroItem.issue = item.issue;
-  }
-
-  if (item.pages) {
-    zoteroItem.pages = item.pages;
-  }
 
   return zoteroItem;
 }
