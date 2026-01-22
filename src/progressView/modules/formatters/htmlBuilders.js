@@ -246,7 +246,7 @@ export function buildCodeBlock(text, options = {}) {
     showCopy = false,
   } = options;
 
-  const classes = ['code-block', className].filter(Boolean).join(' ');
+  const classes = ['code-block'].filter(Boolean).join(' ');
   const preClasses = ['hljs', className].filter(Boolean).join(' ');
 
   // Build code content with or without highlighting
@@ -268,7 +268,9 @@ export function buildCodeBlock(text, options = {}) {
   const headerParts = [];
   if (showLanguage) {
     const label = getLanguageLabel(language);
-    headerParts.push(`<span class="code-block-language">${encodeHtml(label)}</span>`);
+    headerParts.push(
+      `<span class="code-block-language">${encodeHtml(label)}</span>`,
+    );
   }
   if (showCopy) {
     headerParts.push(
@@ -282,31 +284,6 @@ export function buildCodeBlock(text, options = {}) {
       : '';
 
   return `<div class="${classes}" data-language="${encodeHtml(language)}">${header}<pre class="${preClasses}"><code>${codeContent}</code></pre></div>`;
-}
-
-/**
- * Wrap code in a pre element with syntax highlighting using highlight.js.
- * Legacy API - prefer buildCodeBlock for new code.
- *
- * @param {string} text - Code text to highlight
- * @param {string} [language='plaintext'] - Language hint (e.g., 'bash', 'json', 'yaml')
- * @param {string} [className] - Optional additional CSS class
- * @returns {string} HTML string with syntax highlighting
- */
-export function wrapInHighlightedPre(text, language = 'plaintext', className = '') {
-  // Delegate to buildCodeBlock without header elements for backwards compatibility
-  const preClasses = ['hljs', className].filter(Boolean).join(' ');
-
-  if (language && language !== 'plaintext' && hljs.getLanguage(language)) {
-    try {
-      const result = hljs.highlight(text, { language, ignoreIllegals: true });
-      return `<pre class="${preClasses}"><code>${result.value}</code></pre>`;
-    } catch {
-      // Fall through to plaintext
-    }
-  }
-
-  return `<pre class="${preClasses}"><code>${encodeHtml(text)}</code></pre>`;
 }
 
 // ============================================================================
