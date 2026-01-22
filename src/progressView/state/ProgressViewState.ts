@@ -37,6 +37,7 @@ import {
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import type { InstructionUpdate } from '@progressView/types';
 import { getConfig } from '@utils/config';
 import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 
@@ -327,9 +328,7 @@ export class ProgressViewState {
   // ============================================================================
 
   /** Get all instructions for a stream */
-  getRunInstructions(
-    stream: StreamTabId,
-  ): Map<string, import('@progressView/types').InstructionUpdate> {
+  getRunInstructions(stream: StreamTabId): Map<string, InstructionUpdate> {
     return this._runInstructions.getInstructions(stream);
   }
 
@@ -337,7 +336,7 @@ export class ProgressViewState {
   async setRunInstruction(
     stream: StreamTabId,
     runId: StorageKey,
-    instruction: import('@progressView/types').InstructionUpdate | null,
+    instruction: InstructionUpdate | null,
   ): Promise<void> {
     await this._runInstructions.setInstruction(stream, runId, instruction);
   }
