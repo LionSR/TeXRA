@@ -172,7 +172,7 @@ export class VSCodeTransport extends Transport {
    */
   private emitContextState(contextState: ContextStateData): void {
     bus.emit('updateContextState', {
-      stream: this.streamName,
+      streamId: this.streamName,
       contextState,
     });
   }

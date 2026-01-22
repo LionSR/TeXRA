@@ -49,7 +49,7 @@ export interface ProgressEventPayloads {
     usage: TokenUsageStats;
   };
   updateContextState: {
-    stream: StreamTabId;
+    streamId: StreamTabId;
     contextState: ContextStateData;
   };
   showRetryRequest: RetryRequestPrompt;

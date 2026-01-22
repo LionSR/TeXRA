@@ -63,16 +63,16 @@ function handleUpdateStreamUsage(
 
 function handleUpdateContextState(
   ctx: EventHandlerContext,
-  { stream, contextState }: ProgressEventPayloads['updateContextState'],
+  { streamId, contextState }: ProgressEventPayloads['updateContextState'],
 ): void {
   withEventErrorHandling(
     'UsageEvents',
     'failed to handle updateContextState',
     () => {
-      ctx.state.setContextState(stream, contextState);
+      ctx.state.setContextState(streamId, contextState);
       // Broadcast to webview - frontend decides which run to display
       if (isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.updateContextState(stream, contextState);
+        ctx.webviewUpdater.updateContextState(streamId, contextState);
       }
     },
   );
