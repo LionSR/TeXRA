@@ -370,50 +370,34 @@ export abstract class ModelHandler<
     return this.isProvider(ModelProvider.DEEPSEEK);
   }
 
+  /** Provider to config suffix mapping for streaming settings */
+  private static readonly PROVIDER_STREAMING_SUFFIX: Record<ModelProvider, string> = {
+    [ModelProvider.ANTHROPIC]: 'Anthropic',
+    [ModelProvider.OPENAI]: 'Openai',
+    [ModelProvider.GOOGLE]: 'Google',
+    [ModelProvider.DEEPSEEK]: 'Deepseek',
+    [ModelProvider.MOONSHOT]: 'Moonshot',
+    [ModelProvider.DASHSCOPE]: 'Dashscope',
+    [ModelProvider.COPILOT]: 'Copilot',
+    [ModelProvider.XAI]: 'Xai',
+    [ModelProvider.OTHERS]: '',
+  };
+
   /**
    * Gets streaming configuration for the current model provider
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    const useStreamingGlobal = getConfig<boolean>(
-      'texra.model.useStreaming',
-      false,
-    );
+    const globalDefault = getConfig<boolean>('texra.model.useStreaming', false);
 
-    // For OpenRouter models, use dedicated setting
-    if (
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false)
-    ) {
-      return getConfig<boolean>(
-        'texra.model.useStreamingOpenrouter',
-        useStreamingGlobal,
-      );
+    if (this.config.openRouterOnly || getConfig<boolean>('texra.model.useOpenRouter', false)) {
+      return getConfig<boolean>('texra.model.useStreamingOpenrouter', globalDefault);
     }
 
-    // Map ModelProvider enum to configuration key suffix
-    const providerConfigMap: Record<ModelProvider, string> = {
-      [ModelProvider.ANTHROPIC]: 'Anthropic',
-      [ModelProvider.OPENAI]: 'Openai',
-      [ModelProvider.GOOGLE]: 'Google',
-      [ModelProvider.DEEPSEEK]: 'Deepseek',
-      [ModelProvider.MOONSHOT]: 'Moonshot',
-      [ModelProvider.DASHSCOPE]: 'Dashscope',
-      [ModelProvider.COPILOT]: 'Copilot',
-      [ModelProvider.XAI]: 'Xai',
-      [ModelProvider.OTHERS]: '', // Will fall back to global
-    };
+    const suffix = ModelHandler.PROVIDER_STREAMING_SUFFIX[this.config.provider];
+    if (!suffix) return globalDefault;
 
-    const configSuffix = providerConfigMap[this.config.provider];
-
-    // If no mapping exists or it's the OTHERS provider, just use global setting
-    if (!configSuffix) {
-      return useStreamingGlobal;
-    }
-
-    // Build the full config key and fetch the setting
-    const configKey = `texra.model.useStreaming${configSuffix}`;
-    return getConfig<boolean>(configKey, useStreamingGlobal);
+    return getConfig<boolean>(`texra.model.useStreaming${suffix}`, globalDefault);
   }
 
   get isOReasoningModel(): boolean {
@@ -436,22 +420,13 @@ export abstract class ModelHandler<
    * @returns Valid reasoning effort string for the current provider
    */
   protected validateReasoningEffort(effort: string): string {
-    // Default implementation - return as is for most providers
-    if (this.config.provider === ModelProvider.XAI) {
-      // xAI models only support 'low' and 'high'
-      if (effort === 'low' || effort === 'high') {
-        return effort;
-      }
+    if (this.config.provider !== ModelProvider.XAI) return effort;
+    if (effort === 'low' || effort === 'high') return effort;
 
-      // Default to 'high' for other values
-      this.logger.warn(
-        `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
-      );
-      return 'high';
-    }
-
-    // For other providers, return effort as is
-    return effort;
+    this.logger.warn(
+      `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
+    );
+    return 'high';
   }
 
   /**
