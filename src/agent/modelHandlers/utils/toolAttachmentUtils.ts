@@ -13,6 +13,9 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@tools/result';
 
+// Local imports - model handlers
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
+
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
@@ -232,8 +235,33 @@ export async function loadAttachmentBuffer(
 }
 
 /**
+ * Check if tool result text exceeds the maximum allowed length.
+ * Returns an error message if exceeded, otherwise returns null.
+ *
+ * @param text - The text to check
+ * @param maxLength - Maximum allowed length (default: MAX_TOOL_RESULT_TEXT_LENGTH)
+ * @returns Error message if limit exceeded, null otherwise
+ */
+export function checkToolResultTextLimit(
+  text: string,
+  maxLength: number = MAX_TOOL_RESULT_TEXT_LENGTH,
+): string | null {
+  if (text.length <= maxLength) {
+    return null;
+  }
+
+  const exceededBy = text.length - maxLength;
+  return (
+    `Tool result too large: ${text.length.toLocaleString()} characters ` +
+    `(limit: ${maxLength.toLocaleString()}, exceeded by ${exceededBy.toLocaleString()}). ` +
+    `The output was not included to prevent context window overflow.`
+  );
+}
+
+/**
  * Format tool result as plain text for sending to models.
  * Extracts only actionable fields - avoids JSON serialization to save tokens.
+ * Truncates output if it exceeds MAX_TOOL_RESULT_TEXT_LENGTH to prevent context overflow.
  *
  * Priority order:
  * 1. output (primary result content)
@@ -243,7 +271,7 @@ export async function loadAttachmentBuffer(
  *
  * @param result - The tool result payload
  * @param attachmentSummary - Optional attachment summary to append
- * @returns Formatted plain text string
+ * @returns Formatted plain text string (truncated if exceeds limit)
  */
 export function formatToolResultAsText(
   result: ToolResultPayload,
@@ -278,5 +306,13 @@ export function formatToolResultAsText(
 
   // 'OK' fallback is defensive - only triggers if tool sets no output, summary,
   // error, userInstruction, or attachmentSummary. All current tools set at least summary.
-  return textPieces.join('\n\n') || 'OK';
+  const combined = textPieces.join('\n\n') || 'OK';
+
+  // Check if result exceeds maximum length - return error message if so
+  const limitError = checkToolResultTextLimit(combined);
+  if (limitError) {
+    return limitError;
+  }
+
+  return combined;
 }
