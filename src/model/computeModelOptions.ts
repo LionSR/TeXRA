@@ -113,14 +113,6 @@ export async function computeModelOptions(): Promise<string> {
   return optionTags.join('\n');
 }
 
-/** Build description attribute from context and cost info. */
-function buildDescription(contextStr: string, costStr: string): string {
-  const parts = [];
-  if (contextStr) parts.push(`Context: ${contextStr}`);
-  if (costStr) parts.push(`Cost (in/out per 1M): ${costStr}`);
-  return parts.length > 0 ? `description="${parts.join(' | ')}"` : '';
-}
-
 /** Build a single model option tag. */
 async function buildModelOption(
   model: string,
@@ -137,6 +129,13 @@ async function buildModelOption(
     : '';
   const costStr = formatCost(config.inputPrice, config.outputPrice);
 
+  // Build description attribute from context and cost info
+  const descParts: string[] = [];
+  if (contextStr) descParts.push(`Context: ${contextStr}`);
+  if (costStr) descParts.push(`Cost (in/out per 1M): ${costStr}`);
+  const description =
+    descParts.length > 0 ? `description="${descParts.join(' | ')}"` : '';
+
   const attrs = [
     `value="${model}"`,
     !available &&
@@ -144,7 +143,7 @@ async function buildModelOption(
     config.provider && `data-provider="${config.provider}"`,
     contextStr && `data-context="${contextStr}"`,
     costStr && `data-cost="${costStr}"`,
-    buildDescription(contextStr, costStr),
+    description,
   ].filter(Boolean);
 
   return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
