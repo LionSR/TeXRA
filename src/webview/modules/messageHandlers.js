@@ -46,7 +46,6 @@ import {
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
-  getAgentTypeDecorator,
   getModelProviderDecorator,
 } from '@common/iconConstants.js';
 
@@ -489,24 +488,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const {
-      label,
-      isMultiple,
-      isToolUse,
-      isRemote,
-      isCustom,
-      description,
-      agentType,
-    } = this._readAgentOptionMetadata(opt);
+    const { label, isMultiple, isToolUse, isRemote, isCustom, description } =
+      this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
-
-    // Add agent type hint to tooltip (no unicode icon - too confusing)
-    if (agentType) {
-      const decorator = getAgentTypeDecorator(agentType);
-      hints.push(decorator.hint || `Type: ${decorator.label}`);
-    }
 
     // Add cloud icon for remote agents (visible indicator, at end)
     if (isRemote) {
@@ -540,9 +526,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       displayLabel = `${displayLabel} ${unicode}`;
     }
 
-    // Add tool-use hint only if not already covered by agentType
-    // (avoid duplicate "Can execute tools and code" when agentType is toolUse)
-    if (isToolUse && agentType !== 'toolUse') {
+    // Add tool-use hint
+    if (isToolUse) {
       hints.push('Can execute tools and code');
     }
 
@@ -579,7 +564,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       isRemote: dataset.remote === 'true',
       isCustom: dataset.custom === 'true',
       description: dataset.description ?? '',
-      agentType: dataset.agentType ?? '',
     };
   }
 
@@ -1034,19 +1018,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles ?? {};
-    // config.session is the single source of truth for session metadata
-    const canonicalSession = config.session;
 
     // Block saves during restoration - _setAgentValue dispatches change events
     // which trigger save(), and we don't want to capture incomplete DOM state
     mainViewState.blockSave();
     try {
       const savedState = {};
-      const sessionType = this._restoreFormFields(
-        config,
-        savedState,
-        canonicalSession,
-      );
+      const sessionType = this._restoreFormFields(config, savedState);
       this._restoreFileArrays(config, savedState, activeFiles);
 
       // Store state for persistence and future restoration
@@ -1065,18 +1043,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   /**
    * Determine session type from state, with clear priority order.
+   * @param {Object} state - AgentConfig or state object
    * @returns {'workflow' | 'toolUse'} The normalized session type
    */
-  _determineSessionType(canonicalSession, state) {
+  _determineSessionType(state) {
     const isValidSessionType = (value) =>
       value === SESSION_TYPES.TOOL_USE || value === SESSION_TYPES.WORKFLOW;
 
-    // Priority order: canonical > explicit > inferred > default
-    const candidates = [
-      canonicalSession?.agentCategory,
-      state.sessionType,
-      canonicalSession?.agentType ?? state.agentType,
-    ];
+    // Priority order: agentCategory > sessionType > legacy flag > default
+    // agentCategory is now at top level of AgentConfig
+    const candidates = [state.agentCategory, state.sessionType];
 
     for (const candidate of candidates) {
       if (isValidSessionType(candidate)) {
@@ -1114,8 +1090,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * Restore form field values from state to DOM.
    * @returns {string} The normalized session type
    */
-  _restoreFormFields(state, savedState, canonicalSession) {
-    const sessionType = this._determineSessionType(canonicalSession, state);
+  _restoreFormFields(state, savedState) {
+    const sessionType = this._determineSessionType(state);
     const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
 
     // Extract agent values with clear logic

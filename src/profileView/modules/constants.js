@@ -39,8 +39,3 @@ export const CLASS_NAMES = {
   SELECT_BTN: 'select-btn',
   TAG: 'tag',
 };
-
-// Default values
-export const DEFAULTS = {
-  AGENT_CATEGORY: 'workflow',
-};

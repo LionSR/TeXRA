@@ -3,6 +3,7 @@ description: Multi-paper enhancement workflow with derivation and revision phase
 inherits: devise
 
 settings:
+  agentCategory: workflow
   documentTag: latex_documents
   endTag: </latex_documents>
   isMultipleOutput: true

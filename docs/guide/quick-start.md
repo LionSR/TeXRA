@@ -1,111 +1,132 @@
 # Quick Start Guide
 
-Get your first AI-assisted edit in under 5 minutes.
+This guide will help you get up and running with TeXRA quickly. In just a few minutes, you'll be able to use AI to enhance your academic research in VS Code.
 
-## Prerequisites
+## Overview
 
-You need an API key from one of the supported providers (Anthropic, OpenAI, Google, etc.). If you do not have one yet, create an account with your preferred provider and generate an API key.
+TeXRA integrates powerful AI capabilities directly into your writing workflow. Here's what you can do:
 
-## Step 1: Set Your API Key
+- Fix grammar and typos in academic documents
+- Improve writing style and clarity
+- Create or enhance technical figures
+- Transform papers into different formats (lecture notes, slides, posters)
 
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the Command Palette
-2. Type `TeXRA: Set API Key` and select the command
-3. Choose your API provider and paste your key
+> 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
 
-Alternatively, place a `.env` file in your workspace root with your key (e.g., `ANTHROPIC_API_KEY=sk-...`). TeXRA loads it automatically.
+## Set Up API Keys
 
-## Step 2: Open a LaTeX File
+Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
 
-Open any `.tex` file in VS Code. For a ready-made example, run `TeXRA: Create Sample Project` from the Command Palette to generate a `texra-sample/draft.tex` file.
+1.  **Open the Command Palette**: Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS).
+2.  **Run the Set API Key command**: Type `TeXRA: Set API Key` and select the command.
+3.  **Follow the prompts**: Select the API provider (e.g., Anthropic, OpenAI) and enter your key when prompted.
 
-## Step 3: Run Your First Agent
+Repeat this process for each AI provider you plan to use with TeXRA.
 
-1. **Open the TeXRA panel**: Click the TeXRA icon in the Activity Bar (left sidebar) or press `Ctrl+Alt+M` (`Cmd+Option+M` on macOS)
-2. **Set your input file**: Click the file icon button next to "Input" to use your active editor file
-3. **Select Workflow mode**: Click the "Workflow" radio button (Chat mode is for interactive tool-use agents)
-4. **Choose an agent**: Select `polish` from the agent dropdown
-5. **Choose a model**: Select `gemini3p` or `sonnet45T` (or any available model)
-6. **Enter an instruction**: Type something like "Improve clarity and fix any grammatical issues."
-7. **Click Execute** (the play button)
+You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
 
-The ProgressBoard panel shows real-time progress. When complete, VS Code opens the output file (e.g., `draft_polish_r0_gemini3p.tex`).
+## Basic Workflow
 
-## Step 4: Review the Results
+The typical TeXRA workflow consists of these steps:
 
-Compare the original and output files:
+1. Select files to process (input, reference, auxiliary, figures)
+2. Choose the appropriate agent (correct, polish, draw, etc.)
+3. Select the AI model to use
+4. Provide specific instructions
+5. Execute the agent
+6. Review the generated output
 
-- **Quick diff**: Right-click both files in the Explorer and select "Compare Selected"
-- **Visual diff**: Use the LaTeXDiffs section in the TeXRA panel to generate a PDF with additions in blue and deletions in red
+## Your First TeXRA Task
 
-Accept changes you like, discard the rest, and iterate.
+Let's go through an example to illustrate the basic workflow.
 
----
+### Step 1: Open a Document
 
-That is the core workflow. The sections below cover additional details and common tasks.
+1. Open VS Code
+2. Navigate to the TeXRA panel in the sidebar (click the brain icon) or press `Ctrl+Alt+M` (`Cmd+Option+M` on macOS)
+3. Open or create a LaTeX document from the workspace you'd like to improve
 
-## In-Editor Walkthrough
+::: tip Example
+Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-made example to your workspace. This creates a `draft.tex` file under `texra-sample/`. Open it, run **TeXRA: Set API Key** to add your credentials, then select an agent and model in the TeXRA panel. Finally, write your instruction and execute the agent to see results.
+:::
 
-Inside VS Code, open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or run `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide and links directly to the relevant commands.
+### Step 2: Select Files
 
-## Detailed Reference
+1. In the TeXRA panel, click the "Current" button next to "Input" to set your active document as the input file
+2. (Optional) Add reference, auxiliary, or figure files if needed for your task
 
-This section provides more detail on each part of the interface.
+::: tip Onboarding Prompt
+The first time you choose an input file, TeXRA shows a tooltip explaining the selector.
+Select **Never remind again** to hide it permanently.
+:::
 
-### File Selection
+::: info Multiple Files
+For complex documents with multiple input files, use the "Multiple" dropdown to select additional files.
+:::
 
-The TeXRA panel has four file input categories:
+<!-- ![File Selection](/images/file-selection.png) -->
 
-| Category | Purpose | Examples |
-|----------|---------|----------|
-| **Input** | Primary file(s) the agent processes | `.tex` documents |
-| **Reference** | Context files (not modified) | `.bib` files, style guides |
-| **Auxiliary** | Supporting files | `preamble.tex`, `.cls`, `.sty` |
-| **Media** | Visual or audio assets | Images, PDFs |
+### Step 3: Choose Agent and Model
 
-Click the file icon (<i class="codicon codicon-file-code"></i>) to use the current editor file, or the add button (<i class="codicon codicon-add"></i>) to browse. Click the chevron (<i class="codicon codicon-chevron-down"></i>) to expand and add multiple files.
+1. In the dropdown menus at the bottom of the instruction box, select:
+   - **Agent**: `polish` (for improving writing)
+   - **Model**: `sonnet45` (Claude Sonnet 4.5) or another available model
 
-![File Selection](/images/file-selection.png)
-
-### Agent and Model Selection
-
-At the bottom of the instruction box:
-- **Agent dropdown**: Determines the task (`polish`, `correct`, `draw`, `paper2slide`, etc.)
-- **Model dropdown**: The AI model (`gemini3p`, `sonnet45T`, `opus45T`, `gpt52`, etc.)
+::: tip Onboarding Prompt
+When you first open the agent or model dropdown, a tooltip explains its role.
+You can dismiss these prompts with **Never remind again**.
+:::
 
 ![Agent and Model Selection](/images/agent-model-selection.png)
 
-### Chat vs Workflow Mode
+### Step 4: Write Instructions
 
-The radio buttons above the instruction box switch between two modes:
-- **Chat**: Interactive agents that execute commands and scripts
-- **Workflow**: Document-editing agents that produce file outputs
+In the instruction text area, provide specific guidance for the AI. For example:
 
-For your first task, use Workflow mode with the `polish` or `correct` agent.
+```
+Improve the clarity and flow of this document. Focus on making the technical
+explanations more accessible. Fix any grammatical issues or awkward phrasing.
+Ensure consistent terminology throughout.
+```
 
-### Writing Effective Instructions
+::: tip Effective Instructions
+Be specific about what you want! Vague instructions are like asking a genie for "something cool" – results may vary wildly. Include what should change and what should remain the same.
+:::
 
-Include:
-- What should change ("Fix grammatical errors")
-- What should stay the same ("Preserve technical terminology")
-- Scope ("Focus on the introduction")
+### Step 5: Configure Tools
 
-### Tool Configuration
+1. Click on the "Tool Config" dropdown
+2. (Optional) Enable helpers for this run:
+   - "Attach TeX Count" to include document statistics
+   - "Attach Diagnostics" to include LaTeX compilation logs and other troubleshooting details
+   - Reflection rounds are controlled by the selected agent—most writing agents already include a follow-up critique pass
 
-Click the tools icon (<i class="codicon codicon-tools"></i>) next to Input for optional settings:
-- **Attach TeX Count**: Include word/character statistics
-- **Attach Diagnostics**: Include LaTeX compilation logs
+::: tip Save Prompts for Later
+Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.
+:::
 
 ![Tool Configuration](/images/tool-config.png)
 
-### Reviewing Results
+### Step 6: Execute the Agent
 
-Output files are named `originalname_agent_r0_model.tex` and saved next to your input file.
+1. Click the "Execute" button (<i class="codicon codicon-play"></i>)
+2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
+3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
-**VS Code Diff**: Right-click the original and output files in the Explorer, then select "Compare Selected". Use the arrow icons between panels to accept or reject individual changes.
+![Execution Progress](/images/texra-progressboard.png)
 
-![VS Code Compare View](/images/vscode-compare.png)
+### Step 7: Review Results
 
-**LaTeXDiff**: Expand the LaTeXDiffs section in the TeXRA panel to generate a visual PDF comparison with additions in blue and deletions in red.
+1. When the agent completes, VS Code will open the generated output file (e.g., `yourfile_polish_r0_model.tex`).
+2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
+3. You can compare the original and modified versions using:
+   - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
+
+     ![VS Code Compare View](/images/vscode-compare.png)
+
+     You can accept individual changes by clicking the arrow icons that appear between the two panels. The left arrow (<i class="codicon codicon-arrow-left"></i>) restores the original text, while the right arrow (<i class="codicon codicon-arrow-right"></i>) accepts the AI's changes. This makes it easy to cherry-pick which modifications you want to keep.
+
+   - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison. This creates a PDF with additions highlighted in blue and deletions in red.
 
 <div class="quick-pdf-viewer">
   <div class="pdf-tabs">
@@ -217,19 +238,19 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini3p`, `gpt41`, `gpt51`, or `gpt52`
+- **Model**: `gemini25p`, `gpt41`, `gpt51`, `gpt5`, or `gpt5pro`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet45T`, `gpt51`, or `gpt52`
+- **Model**: `sonnet45T`, `gpt51`, `gpt5`, or `gpt5pro`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
 
 - **Agent**: `polish`
-- **Model**: `opus45T` or `sonnet45T`
+- **Model**: `opus45` or `sonnet45T`
 - **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
 
 ## Understanding the Output
@@ -243,12 +264,12 @@ When TeXRA completes a task, it produces:
 Output files are saved in the same directory as your input file with a naming pattern:
 `original_filename_agent_r0_model.extension`
 
-For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet45T` model, the output file would be named:
-`paper_polish_r0_sonnet45T.tex`
+For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet45` model, the output file would be named:
+`paper_polish_r0_sonnet45.tex`
 
 ## Next Steps
 
-Now that you have completed your first task with TeXRA, you can:
+Now that you've completed your first task with TeXRA, you can:
 
 - Explore more [built-in agents](./built-in-agents.md) for specialized tasks
 - Learn about [LaTeX diff](./latex-diff.md) for comparing document versions

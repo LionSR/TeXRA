@@ -45,8 +45,8 @@ Find the official PyTorch documentation for attention mechanisms.
 
 ## Which Agent to Use
 
-| Agent | Best for |
-|-------|----------|
-| `search` | Finding papers, literature reviews, fact-checking |
+| Agent     | Best for                                                  |
+| --------- | --------------------------------------------------------- |
+| `search`  | Finding papers, literature reviews, fact-checking         |
 | `discuss` | Brainstorming research directions with literature context |
-| `ask` | Quick lookups about your documents and related work |
+| `ask`     | Quick lookups about your documents and related work       |

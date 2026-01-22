@@ -3,6 +3,7 @@
  */
 import { z } from 'zod';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
@@ -41,10 +42,6 @@ export const RetryRequestPromptSchema = z.strictObject({
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 
-/** Agent category for proposals */
-export const AgentProposalCategorySchema = z.enum(['workflow', 'toolUse']);
-export type AgentProposalCategory = z.infer<typeof AgentProposalCategorySchema>;
-
 /** Agent proposal actions */
 export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
 export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
@@ -64,7 +61,7 @@ export type AgentProposalActionMessage = z.infer<
  * Workflow agents receive files directly and process them.
  */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal('workflow'),
+  agentCategory: z.literal(AgentCategory.Workflow),
   ...WorkflowSpecificFieldsSchema.shape,
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
@@ -75,7 +72,7 @@ export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
  * File paths are mentioned in the instruction text.
  */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal('toolUse'),
+  agentCategory: z.literal(AgentCategory.ToolUse),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
