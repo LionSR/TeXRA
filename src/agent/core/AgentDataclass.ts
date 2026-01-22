@@ -203,11 +203,11 @@ export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
 ): boolean {
-  const endTagLists = [
-    settings.endTag,
-    settings.documentTag && `</${settings.documentTag}>`,
-  ];
-  return endTagLists.some((tag) => tag && fileContent.includes(tag));
+  if (settings.endTag && fileContent.includes(settings.endTag)) {
+    return true;
+  }
+  const closingTag = settings.documentTag && `</${settings.documentTag}>`;
+  return Boolean(closingTag && fileContent.includes(closingTag));
 }
 
 /** Zod schema for AgentPrompt validation */
