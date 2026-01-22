@@ -417,10 +417,9 @@ export async function checkMultipleToolsInstalled(
   configs: string[] | ToolConfig[],
   showError: boolean = true,
 ): Promise<boolean[]> {
-  const results = await Promise.all(
+  return Promise.all(
     configs.map((config) => checkToolInstalled(config, showError)),
   );
-  return results;
 }
 
 /**
