@@ -8,7 +8,7 @@ import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { type ErrorContext } from '@common/errors/schemas';
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -669,7 +669,7 @@ export class AgentLogger {
     id?: string,
     parentGroupId?: string,
   ): Promise<string> {
-    await sleep(SHORT_SLEEP_MS);
+    await delay(SHORT_SLEEP_MS);
     return logger.startGroup(
       this.streamId,
       groupName,

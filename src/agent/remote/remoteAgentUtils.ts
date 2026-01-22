@@ -15,7 +15,7 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
@@ -90,7 +90,7 @@ export async function selectAgentInMainView(
 
   // Small delay to ensure webview has time to initialize if it was just revealed
   // This helps prevent race conditions where the message arrives before handlers are ready
-  await sleep(100);
+  await delay(100);
 
   try {
     const webviewView = await getMainWebview(CHANNEL);

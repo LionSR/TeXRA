@@ -18,4 +18,4 @@ export {
   type SerializedError,
 } from './stringCore';
 export { isObject } from './typeGuards';
-export { debounce, sleep, sleepWithAbort } from './async';
+export { debounce, delay } from './async';
