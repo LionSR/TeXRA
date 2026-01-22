@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Type imports
 import type { OutputFileInfo } from '@agent/output/types';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
@@ -88,7 +88,7 @@ export class WebviewUpdater {
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
-    agentFilter: AgentTypeFilter,
+    agentFilter: AgentCategoryFilter,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAMS,
@@ -280,13 +280,13 @@ export class WebviewUpdater {
   updateInstruction(
     stream: StreamTabId | '',
     instruction: InstructionUpdate | null,
-    sessionKind?: string,
+    agentCategory?: string,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
-      sessionKind,
+      agentCategory,
     });
   }
 
@@ -384,7 +384,11 @@ export class WebviewUpdater {
     statuses?: Map<string, string>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(state, statuses, state.agentTypeFilter);
+    const streams = buildStreamInfos(
+      state,
+      statuses,
+      state.agentCategoryFilter,
+    );
     const streamNames = streams.map((info) => info.name);
 
     // Delegate active stream resolution to state (single source of truth)
@@ -398,7 +402,7 @@ export class WebviewUpdater {
       this.updateTheme(theme);
     }
 
-    this.updateStreams(streams, activeStream, state.agentTypeFilter);
+    this.updateStreams(streams, activeStream, state.agentCategoryFilter);
 
     return activeStream;
   }

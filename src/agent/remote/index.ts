@@ -8,9 +8,7 @@
 // Core types and schemas
 export {
   RemoteAgentListItemSchema,
-  RemoteAgentMetadataSchema,
   type RemoteAgentListItem,
-  type RemoteAgentMetadata,
   type RemoteAgentConfig,
   type RemoteAgentLoadOptions,
 } from './types';

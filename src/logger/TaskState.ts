@@ -2,7 +2,11 @@
 import { z } from 'zod';
 
 // Local imports
-import { AgentCategory, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import {
+  liftLegacyAgentCategory,
+  type AgentConfig,
+} from '@agent/core/AgentConfig';
 
 // Type imports
 import { FILE_TYPES, type FileType } from '@utils/config';
@@ -26,20 +30,14 @@ const ActiveFilesSchema = z.partialRecord(
 ) as z.ZodType<Record<FileType, boolean>>;
 
 /**
- * AgentConfig schema that normalizes legacy format on parse.
- * Lifts session.agentCategory to top level if not already present.
+ * Lightweight AgentConfig schema for persisted TaskState validation.
+ * Uses shared liftLegacyAgentCategory (single source of truth) for migration.
+ * Only validates agentCategory discriminator, not full config.
  */
-const AgentConfigSchema = z
-  .looseObject({
-    agentCategory: z.enum(AgentCategory).optional(),
-    session: z.object({ agentCategory: z.enum(AgentCategory) }).optional(),
-  })
-  .transform((c) => ({
-    ...c,
-    // Lift from session if not at top level (legacy format migration)
-    agentCategory: c.agentCategory ?? c.session?.agentCategory,
-  }))
-  .pipe(z.looseObject({ agentCategory: z.enum(AgentCategory) }));
+const AgentConfigSchema = z.preprocess(
+  liftLegacyAgentCategory,
+  z.looseObject({ agentCategory: z.nativeEnum(AgentCategory) }),
+);
 
 /** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({

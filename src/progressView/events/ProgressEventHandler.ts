@@ -61,7 +61,7 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Update agentTypeFilter to match the session category if needed.
+   * Update agentCategoryFilter to match the session category if needed.
    * Only updates when filter is not 'all' and doesn't already match.
    */
   private maybeUpdateFilterForCategory(
@@ -69,10 +69,10 @@ export class ProgressEventHandler {
   ): void {
     if (
       category &&
-      this.state.agentTypeFilter !== 'all' &&
-      this.state.agentTypeFilter !== category
+      this.state.agentCategoryFilter !== 'all' &&
+      this.state.agentCategoryFilter !== category
     ) {
-      this.state.agentTypeFilter = category;
+      this.state.agentCategoryFilter = category;
     }
   }
 
@@ -130,17 +130,16 @@ export class ProgressEventHandler {
   private async processSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
   ): Promise<void> {
-    const { stream, session, isRemote, hasMultipleOutputs } = payload;
+    const { stream, agentCategory, isRemote, hasMultipleOutputs } = payload;
     if (!stream) return;
 
-    // Initialize stream state
     await this.state.streamTabs.ensureStream(stream);
     this.state.updateStreamHints(stream, {
-      sessionCategory: session?.agentCategory,
+      agentCategory,
       isRemote,
       hasMultipleOutputs,
     });
-    this.maybeUpdateFilterForCategory(session?.agentCategory);
+    this.maybeUpdateFilterForCategory(agentCategory);
     this.state.activeStream = stream;
     this.replayPendingTaskGroups(stream);
 
@@ -181,13 +180,13 @@ export class ProgressEventHandler {
       () => {
         const { streamTabId, executionId, taskState } = data;
         const isActiveStream = this.state.activeStream === streamTabId;
-        const sessionKind = taskState.agentConfig.agentCategory;
-        const previousFilter = this.state.agentTypeFilter;
+        const category = taskState.agentConfig.agentCategory;
+        const previousFilter = this.state.agentCategoryFilter;
 
         this.state.setTaskState(streamTabId, taskState);
 
         if (isActiveStream) {
-          this.maybeUpdateFilterForCategory(sessionKind);
+          this.maybeUpdateFilterForCategory(category);
         }
 
         if (executionId) {
@@ -202,7 +201,8 @@ export class ProgressEventHandler {
         // 1. Filter changed (affects visible streams)
         // 2. Active stream's task state changed (label needs inputFile, agent, etc.)
         if (this.webviewUpdater.isAvailable()) {
-          const filterChanged = this.state.agentTypeFilter !== previousFilter;
+          const filterChanged =
+            this.state.agentCategoryFilter !== previousFilter;
           if (filterChanged || isActiveStream) {
             this.webviewUpdater.updateAll(
               this.state,
@@ -303,7 +303,7 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
-    const sessionKind = this.getStreamCategory(stream);
+    const category = this.getStreamCategory(stream);
 
     // Use provided runId or read cached activeRunId (no expensive resolution)
     const runId =
@@ -321,7 +321,7 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateInstruction(
       stream,
       instructionUpdate ?? null,
-      sessionKind,
+      category,
     );
   }
 
@@ -471,13 +471,13 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get the session category for a stream from taskState or hints.
+   * Get the agent category for a stream from taskState or hints.
    */
   private getStreamCategory(stream: string): AgentCategory | undefined {
     const taskState = this.state.getTaskState(stream);
     return (
-      taskState?.agentConfig?.session?.agentCategory ??
-      this.state.getStreamHints(stream).sessionCategory
+      taskState?.agentConfig?.agentCategory ??
+      this.state.getStreamHints(stream).agentCategory
     );
   }
 
@@ -530,7 +530,7 @@ export class ProgressEventHandler {
     }
 
     this.state.updateStreamHints(stream, {
-      sessionCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
     });
     this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
     this.state.activeStream = stream;
