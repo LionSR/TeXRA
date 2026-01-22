@@ -189,6 +189,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ['completed', 'failed', 'cancelled', 'incomplete'];
 
   private previousResponseId: string | null = null;
+  private pendingBackgroundResponseId: string | null = null;
 
   /**
    * Conversation state for tracking messages, tokens, and compaction.
@@ -239,6 +240,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.previousResponseId = null;
     }
 
+    this.pendingBackgroundResponseId = null;
     this.conversationState.sentMessages = effectiveMessagesCount;
 
     // Set cumulative input tokens from actual usage (not additive - this IS the total)
@@ -854,6 +856,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.reasoning = reasoning;
     }
 
+    if (useBackgroundResponses && this.pendingBackgroundResponseId) {
+      this.logger.debug(
+        `Resuming background polling for response ${this.pendingBackgroundResponseId} after retry.`,
+        {
+          data: {
+            responseId: this.pendingBackgroundResponseId,
+          },
+        },
+      );
+      const requestOptions = signal ? { signal } : undefined;
+      const existingResponse = await client.responses.retrieve(
+        this.pendingBackgroundResponseId,
+        undefined,
+        requestOptions,
+      );
+      const response = await this.waitForBackgroundCompletion(
+        client,
+        existingResponse,
+        signal,
+      );
+      this.finalizeResponse(
+        response,
+        effectiveMessages.length,
+        compactedThisCall,
+      );
+      return response;
+    }
+
     // Wrap execution in try-catch to handle previousResponseId errors
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
@@ -951,6 +981,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
+        this.pendingBackgroundResponseId = response.id ?? null;
         this.logger.logProgress(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
         );
@@ -1298,6 +1329,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           },
         },
       );
+      if (this.pendingBackgroundResponseId === responseId) {
+        this.pendingBackgroundResponseId = null;
+      }
       throw new Error(
         `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
       );
