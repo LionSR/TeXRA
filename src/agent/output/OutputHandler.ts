@@ -327,7 +327,7 @@ export class OutputHandler implements IOutputHandler {
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
-            stream: this.channel,
+            streamId: this.channel,
             storageKey,
             filesByRound: { [currRound]: [] },
           });
@@ -369,7 +369,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('updateMissingOutputs', {
-          stream: this.channel,
+          streamId: this.channel,
           storageKey,
           filesByRound: { [currRound]: missing },
         });
@@ -416,7 +416,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('addOutputFiles', {
-          stream: this.channel,
+          streamId: this.channel,
           storageKey,
           filesByRound: { [currRound]: fileInfos },
         });

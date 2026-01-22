@@ -257,7 +257,7 @@ async function resolveAgentBase(
 
   // Emit stream event before stage creation (prevents race condition)
   bus.emit('setActiveStream', {
-    stream: streamId,
+    streamId,
     agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: useMultipleOutputs,
@@ -534,7 +534,7 @@ export async function executeAgent(
       showAgentNotification(config);
     }
     bus.emit('setTaskState', {
-      streamTabId,
+      streamId: streamTabId,
       executionId,
       taskState: agentConfigToTaskState(config),
     });
