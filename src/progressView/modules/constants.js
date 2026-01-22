@@ -96,7 +96,7 @@ export const AGENT_PROPOSAL_ACTIONS = Object.freeze([
   'setup',
 ]);
 
-// Agent proposal categories (matches AgentProposalCategorySchema in eventBus/types.ts)
+// Agent proposal categories (matches AgentCategory enum in AgentDataclass.ts)
 export const AGENT_PROPOSAL_CATEGORIES = Object.freeze({
   WORKFLOW: 'workflow',
   TOOL_USE: 'toolUse',

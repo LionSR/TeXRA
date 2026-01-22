@@ -103,36 +103,8 @@ export const AGENT_DECORATORS = {
     },
   },
 
-  // Agent types (reasoning strategy)
-  types: {
-    CoT: {
-      icon: 'list-tree',
-      unicode: '⛓',
-      label: 'Chain of Thought',
-      hint: 'Shows reasoning in scratchpad before final response',
-    },
-    direct: {
-      icon: 'lightbulb',
-      unicode: '⚡',
-      label: 'Direct',
-      hint: 'Responds directly without scratchpad',
-    },
-    toolUse: {
-      icon: 'tools',
-      unicode: '🔧',
-      label: 'Tool Use',
-      hint: 'Can execute tools and code',
-    },
-    unknown: {
-      icon: 'question',
-      unicode: '?',
-      label: 'Unknown',
-      hint: 'Unknown agent type',
-    },
-  },
-
-  // Session kinds (workflow vs tool-use category)
-  sessionKinds: {
+  // Agent categories (workflow vs tool-use)
+  agentCategories: {
     workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
     toolUse: { icon: 'tools', unicode: '🔧', label: 'Tool Use' },
   },
@@ -157,22 +129,13 @@ export function applyCodiconClass(element, iconName) {
 }
 
 /**
- * Get the decorator config for an agent type.
- * @param {string} agentType - Agent type key (CoT, direct, toolUse)
+ * Get the decorator config for an agent category.
+ * @param {string} agentCategory - Agent category key (workflow, toolUse)
  * @returns {{ icon: string, label: string }}
  */
-export function getAgentTypeDecorator(agentType) {
-  return AGENT_DECORATORS.types[agentType] || AGENT_DECORATORS.types.unknown;
-}
-
-/**
- * Get the decorator config for a session kind.
- * @param {string} sessionKind - Session kind key (workflow, toolUse)
- * @returns {{ icon: string, label: string }}
- */
-export function getSessionKindDecorator(sessionKind) {
+export function getAgentCategoryDecorator(agentCategory) {
   return (
-    AGENT_DECORATORS.sessionKinds[sessionKind] ||
-    AGENT_DECORATORS.sessionKinds.workflow
+    AGENT_DECORATORS.agentCategories[agentCategory] ||
+    AGENT_DECORATORS.agentCategories.workflow
   );
 }

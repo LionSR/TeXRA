@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - agent metadata
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import { isAgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
 import {
   StorageKeySchema,
@@ -12,7 +12,7 @@ import {
   type StorageKey,
 } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -45,7 +45,7 @@ import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
  * Used to display UI indicators before TaskState is fully populated.
  */
 export const StreamHintsSchema = z.object({
-  sessionCategory: z.enum(AgentCategory).optional(),
+  agentCategory: z.nativeEnum(AgentCategory).optional(),
   isRemote: z.boolean().optional(),
   hasMultipleOutputs: z.boolean().optional(),
 });
@@ -81,7 +81,7 @@ type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 const PROGRESS_VIEW_DEFAULTS = {
   activeStream: '' as StreamTabId,
   streamSortOrder: 'time',
-  agentTypeFilter: 'all' as AgentTypeFilter,
+  agentCategoryFilter: 'all' as AgentCategoryFilter,
 } as const;
 
 /**
@@ -97,8 +97,8 @@ export class ProgressViewState {
   private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = PROGRESS_VIEW_DEFAULTS.activeStream;
   private _streamSortOrder: string = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
-  private _agentTypeFilter: AgentTypeFilter =
-    PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
+  private _agentCategoryFilter: AgentCategoryFilter =
+    PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
 
@@ -204,19 +204,19 @@ export class ProgressViewState {
     this.saveStreamSortOrder();
   }
 
-  get agentTypeFilter(): AgentTypeFilter {
-    return this._agentTypeFilter;
+  get agentCategoryFilter(): AgentCategoryFilter {
+    return this._agentCategoryFilter;
   }
 
-  set agentTypeFilter(filter: AgentTypeFilter) {
-    if (!isAgentTypeFilter(filter)) {
+  set agentCategoryFilter(filter: AgentCategoryFilter) {
+    if (!isAgentCategoryFilter(filter)) {
       this.logger.warn(
-        `Invalid agent filter: ${filter}, defaulting to '${PROGRESS_VIEW_DEFAULTS.agentTypeFilter}'`,
+        `Invalid agent filter: ${filter}, defaulting to '${PROGRESS_VIEW_DEFAULTS.agentCategoryFilter}'`,
       );
-      filter = PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
+      filter = PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
     }
-    this._agentTypeFilter = filter;
-    this.saveAgentTypeFilter();
+    this._agentCategoryFilter = filter;
+    this.saveAgentCategoryFilter();
   }
 
   // ============================================================================
@@ -549,7 +549,7 @@ export class ProgressViewState {
     this.loadTaskStates();
     this.loadExecutionIds();
     this.loadStreamSortOrder();
-    this.loadAgentTypeFilter();
+    this.loadAgentCategoryFilter();
     this.loadActiveRunIds();
   }
 
@@ -709,20 +709,20 @@ export class ProgressViewState {
     );
   }
 
-  private loadAgentTypeFilter(): void {
+  private loadAgentCategoryFilter(): void {
     const savedFilter = this.storage.get<string>(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
-      PROGRESS_VIEW_DEFAULTS.agentTypeFilter,
+      PROGRESS_VIEW_DEFAULTS.agentCategoryFilter,
     );
-    this._agentTypeFilter = isAgentTypeFilter(savedFilter)
+    this._agentCategoryFilter = isAgentCategoryFilter(savedFilter)
       ? savedFilter
-      : PROGRESS_VIEW_DEFAULTS.agentTypeFilter;
+      : PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
   }
 
-  private saveAgentTypeFilter(): void {
+  private saveAgentCategoryFilter(): void {
     void this.storage.update(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
-      this._agentTypeFilter,
+      this._agentCategoryFilter,
     );
   }
 }

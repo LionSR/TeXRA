@@ -6,9 +6,9 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
-import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
+import { AgentCategory, hasEndTag } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -175,11 +175,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
 
-    // Workflow agents are CoT or Direct - must explicitly match known types
-    const agentType = this.getAgentType();
-    const isWorkflowAgent =
-      agentType === AgentType.CoT || agentType === AgentType.Direct;
-    return isWorkflowAgent;
+    // Background mode is only eligible for Workflow agents
+    return this.getAgentCategory() === AgentCategory.Workflow;
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;

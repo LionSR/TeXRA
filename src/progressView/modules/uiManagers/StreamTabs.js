@@ -4,7 +4,7 @@ import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
-  getAgentTypeDecorator,
+  getAgentCategoryDecorator,
   applyCodiconClass,
 } from '@common/iconConstants.js';
 
@@ -193,13 +193,12 @@ export class StreamTabs {
    * @param {Object} info - Stream info object
    */
   _applyAgentDecorators(tabEl, info) {
-    // Agent type icon (CoT, direct, toolUse)
-    const agentIcon = tabEl.querySelector('.agent-type');
+    // Agent category icon (workflow, toolUse)
+    const agentIcon = tabEl.querySelector('.agent-category');
     if (agentIcon) {
-      const key = info.agentType ?? info.agent ?? 'unknown';
-      const decorator = getAgentTypeDecorator(key);
+      const decorator = getAgentCategoryDecorator(info.agentCategory);
       applyCodiconClass(agentIcon, decorator.icon);
-      agentIcon.title = `Agent type: ${decorator.label}`;
+      agentIcon.title = `Category: ${decorator.label}`;
     }
 
     // Property-based decorators - remove if condition false, apply icon if true

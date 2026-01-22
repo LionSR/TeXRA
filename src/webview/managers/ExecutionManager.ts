@@ -7,7 +7,7 @@ import {
   type AgentConfigInput,
 } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from '@agent/core/ToolConfig';
 import type { z } from 'zod';
 import * as logger from '@logger/logUtils';
@@ -87,9 +87,9 @@ export class ExecutionManager {
     // Schema provides defaults via .prefault(), we only override conditional fields
     const parseResult = AgentConfigSchema.safeParse({
       ...message,
-      session: isToolUse
-        ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
-        : { agentCategory: AgentCategory.Workflow },
+      agentCategory: isToolUse
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow,
       outputFiles,
       useMultipleOutputs:
         !isToolUse &&
