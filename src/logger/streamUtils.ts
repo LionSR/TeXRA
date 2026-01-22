@@ -3,13 +3,13 @@ import { randomUUID } from 'crypto';
 
 // Local imports
 import { getCleanAgentName, getMultipleName } from '@agent/index';
-import { AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 interface StreamTabIdOptions {
-  agentType?: AgentType;
+  agentCategory?: AgentCategory;
   executionId?: ExecutionId;
   useMultipleOutputs?: boolean;
 }
@@ -27,7 +27,7 @@ export function getStreamTabId(
   const cleanAgent = getCleanAgentName(agent);
 
   // Tool-use agents use execution ID for deduplication
-  if (options.agentType === AgentType.ToolUse) {
+  if (options.agentCategory === AgentCategory.ToolUse) {
     const shortId =
       options.executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
     return `${cleanAgent ?? 'toolUse'}@${model}#${shortId}`;

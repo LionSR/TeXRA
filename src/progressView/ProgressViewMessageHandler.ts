@@ -18,8 +18,8 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
-  AgentTypeFilter,
-  isAgentTypeFilter,
+  AgentCategoryFilter,
+  isAgentCategoryFilter,
 } from '@agent/types/AgentStreamTypes';
 import type {
   ExecutionId,
@@ -60,10 +60,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import {
-  AgentProposalActionMessageSchema,
-  AgentProposalCategorySchema,
-} from '@eventBus/types';
+import { AgentProposalActionMessageSchema } from '@eventBus/types';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
@@ -354,7 +351,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleFilterStreams(message: any): Promise<void> {
-    this.provider.state.agentTypeFilter = isAgentTypeFilter(message.filter)
+    this.provider.state.agentCategoryFilter = isAgentCategoryFilter(
+      message.filter,
+    )
       ? message.filter
       : 'all';
     this.provider.updateWebview();
@@ -500,20 +499,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Look up the agent to get the agentType
-    const agentEntry = getAgent(proposal.agent);
-    const agentType = agentEntry?.agentType;
-
     // Map proposal category string to AgentCategory enum
     const agentCategory =
       proposal.agentCategory === 'toolUse'
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
-
-    const session = {
-      agentType,
-      agentCategory,
-    };
 
     // Build the agentConfig based on proposal type
     // Workflow proposals have file fields; tool-use proposals don't
@@ -545,8 +535,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
-      agentType,
-      session,
+      agentCategory,
       // File fields only present for workflow agents
       ...(isWorkflow && {
         inputFile: proposal.inputFile,
@@ -1203,12 +1192,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? `${context}\n\n${originalConfig.instruction}`
       : context;
 
-    // Build session with category based on mode
+    // Determine category based on mode
     const newAgentEntry = getAgent(agent);
     const agentCategory = isChat
       ? AgentCategory.ToolUse
       : AgentCategory.Workflow;
-    const session = { agentType: newAgentEntry?.agentType, agentCategory };
 
     // Build config preserving toolConfig, reference/auxiliary files
     // When attachAgentOutputs is enabled, merge agent outputs into reference files
@@ -1246,8 +1234,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       useMultipleOutputs,
       referenceFiles: mergedReferenceFiles,
       instruction,
-      session,
-      agentType: session.agentType,
+      agentCategory,
     } as AgentConfig;
 
     // Chat mode returns minimal TaskState, workflow preserves activeFiles

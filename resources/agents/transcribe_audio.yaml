@@ -2,7 +2,7 @@ name: transcribe_audio
 description: Transcribes audio with speaker identification and LaTeX math formatting.
 
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: audio_transcript
   endTag: </audio_transcript>
   outputExt: tex

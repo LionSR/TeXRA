@@ -2,7 +2,7 @@ name: criticize
 description: Critical reviewer for mathematical physics papers. Inserts inline comments using \criticize{}{severity}{confidence} without modifying original content.
 
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex

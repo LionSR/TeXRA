@@ -6,12 +6,11 @@
  */
 
 // Most commonly used - enums and category types
-export { AgentCategory, AgentType, hasEndTag } from './AgentDataclass';
+export { AgentCategory, hasEndTag } from './AgentDataclass';
 export type {
   AgentSetting,
   AgentPrompt,
   AgentWorkflowSetting,
-  AgentSessionDescriptor,
 } from './AgentDataclass';
 
 // Config types

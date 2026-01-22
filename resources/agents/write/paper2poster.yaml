@@ -1,5 +1,6 @@
 name: paper2poster
 settings:
+  agentCategory: workflow
   documentTag: beamer_poster
   endTag: </beamer_poster>
   outputExt: tex

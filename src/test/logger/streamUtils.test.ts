@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {
@@ -46,7 +46,7 @@ describe('getStreamTabId', () => {
   it('uses execution id prefix for tool use streams', () => {
     const executionId = '12345678-9abc-def0-1234-56789abcdef0';
     const id = getStreamTabId('diagnostics', 'gpt4', '', {
-      agentType: AgentType.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
       executionId,
     });
     assert.equal(id, 'diagnostics@gpt4#12345678');
