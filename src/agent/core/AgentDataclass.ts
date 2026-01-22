@@ -102,17 +102,25 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 
 /**
  * Normalize input to ensure agentCategory discriminator is present.
- * Handles backward compatibility for legacy agentType field.
- * Strips agentType during preprocessing (before strictObject validation).
+ * Handles backward compatibility for legacy fields:
+ * - agentType: mapped to agentCategory, then stripped
+ * - maxRounds: mapped to rounds, then stripped
+ * Strips legacy fields before strictObject validation.
  * Defaults to Workflow when not specified.
  */
 const normalizeAgentSettingInput = (input: unknown): unknown => {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  const { agentType, ...rest } = input as Record<string, unknown>;
+  // Strip legacy fields via destructuring
+  const { agentType, maxRounds, ...rest } = input as Record<string, unknown>;
 
-  // If agentCategory already present, just strip legacy agentType
+  // Migrate maxRounds to rounds (if rounds not already set)
+  if (maxRounds !== undefined && rest.rounds === undefined) {
+    rest.rounds = maxRounds;
+  }
+
+  // If agentCategory already present, we're done
   if (rest.agentCategory !== undefined) {
     return rest;
   }
