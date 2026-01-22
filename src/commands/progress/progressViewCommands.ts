@@ -7,17 +7,6 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'progressViewCommands';
 
-function openProgressViewInTab(): void {
-  const provider = ProgressViewProvider.getInstance();
-  if (!provider) {
-    vscode.window.showErrorMessage(
-      'Progress View is not available. Please try again.',
-    );
-    return;
-  }
-  provider.showProgressViewAsPanel();
-}
-
 export function registerProgressViewCommands(
   context: vscode.ExtensionContext,
 ): void {
@@ -25,9 +14,15 @@ export function registerProgressViewCommands(
     vscode.commands.registerCommand('texra.showProgressView', () =>
       safeExecuteCommand('texra.progressView.focus', [], CHANNEL),
     ),
-    vscode.commands.registerCommand(
-      'texra.openProgressViewInTab',
-      openProgressViewInTab,
-    ),
+    vscode.commands.registerCommand('texra.openProgressViewInTab', () => {
+      const provider = ProgressViewProvider.getInstance();
+      if (!provider) {
+        vscode.window.showErrorMessage(
+          'Progress View is not available. Please try again.',
+        );
+        return;
+      }
+      provider.showProgressViewAsPanel();
+    }),
   );
 }
