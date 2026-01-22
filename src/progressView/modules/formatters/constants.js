@@ -53,6 +53,11 @@ export const TOOLS_WITH_DIFF_INPUT = new Set(['edit_file']);
 export const TOOLS_WITH_FILE_LINK = new Set(['read_file']);
 
 /**
+ * Tools that write files and should show file link + syntax-highlighted content.
+ */
+export const TOOLS_WITH_FILE_CONTENT = new Set(['write_file']);
+
+/**
  * Tools whose input AND output are code that benefits from syntax highlighting.
  * Maps tool name to default language hint for output.
  * Use 'bash' for shell commands, 'plaintext' for tools with variable output.
@@ -62,6 +67,62 @@ export const TOOL_OUTPUT_LANGUAGES = new Map([
   ['execute', 'plaintext'], // Could be any language - don't guess
   ['run', 'plaintext'], // Could be any language - don't guess
 ]);
+
+/**
+ * Map file extensions that don't match highlight.js language names.
+ * Focused on LaTeX research context. Unknown extensions try the extension directly.
+ */
+const EXTENSION_ALIASES = new Map([
+  // LaTeX ecosystem
+  ['tex', 'latex'],
+  ['sty', 'latex'],
+  ['cls', 'latex'],
+  ['dtx', 'latex'],
+  ['tikz', 'latex'],
+  ['bib', 'bibtex'],
+  ['bst', 'latex'],
+  // Scientific computing
+  ['py', 'python'],
+  ['jl', 'julia'],
+  ['wl', 'mathematica'],
+  ['m', 'mathematica'],
+  ['f90', 'fortran'],
+  ['f95', 'fortran'],
+  ['ipynb', 'json'],
+  // Config/docs
+  ['yml', 'yaml'],
+  ['md', 'markdown'],
+  ['sh', 'bash'],
+]);
+
+/**
+ * Get highlight.js language from file path based on extension.
+ * Uses alias map for non-standard extensions, otherwise tries the extension directly.
+ * @param {string} filePath - File path to extract extension from
+ * @returns {string} Language identifier (highlight.js validates it later)
+ */
+export function getLanguageFromPath(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return 'plaintext';
+  }
+
+  const fileName = filePath.split('/').pop() || filePath;
+  const lowerFileName = fileName.toLowerCase();
+
+  // Handle special filenames
+  if (lowerFileName === 'dockerfile') return 'dockerfile';
+  if (lowerFileName === 'makefile') return 'makefile';
+
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === fileName.length - 1) {
+    return 'plaintext';
+  }
+
+  const ext = fileName.slice(lastDot + 1).toLowerCase();
+
+  // Check alias map first, then use extension directly
+  return EXTENSION_ALIASES.get(ext) || ext;
+}
 
 // Threshold constants for diff detection heuristics
 export const DIFF_DETECTION_LINE_LIMIT = 20;
