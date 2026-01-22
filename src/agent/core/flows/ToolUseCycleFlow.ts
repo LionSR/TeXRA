@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, Flow } from '@agent/node';
+import { BaseNode, BatchNode, Flow } from '@agent/node';
 import {
   BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
@@ -532,89 +532,55 @@ interface ToolExecutionResult {
   }>;
 }
 
-/** Data extracted by prep() for tool dispatch. */
-interface ToolUseDispatchPrepResult {
-  shouldSkip: boolean;
-  interrupted: boolean;
-  toolCalls: SdkToolCall[];
-  text?: string;
-}
-
-/** Result of exec() for tool dispatch. */
-type ToolUseDispatchExecResult =
-  | { kind: 'skipped'; interrupted: boolean }
-  | {
-      kind: 'success';
-      execResults: ToolExecutionResult[];
-      assistantText: string;
-    };
-
 /**
- * Dispatches tool calls and processes their results.
- * Batches multiple parallel calls for Google/DeepSeek handlers to preserve thought signatures.
+ * Dispatches tool calls and processes their results using BatchNode pattern.
+ *
+ * Uses BatchNode for sequential execution of tool calls. This preserves ordering
+ * guarantees when tools may have dependencies (e.g., read file then edit file).
+ *
+ * To enable parallel execution, change to extend ParallelBatchNode instead.
+ *
+ * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends BaseNode<
+class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
-    const services = this.services;
+  /**
+   * Returns the array of tool calls to execute.
+   * Returns empty array if should skip (no tools, stopped, or interrupted).
+   */
+  async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     const toolCalls = shared.toolCalls ?? [];
 
-    const shouldSkip = shared.shouldStop || toolCalls.length === 0;
-    const interrupted = shouldSkip
-      ? false
-      : Boolean(await services.checkInterruption());
+    // Skip if no tool calls or already stopped
+    if (shared.shouldStop || toolCalls.length === 0) {
+      return [];
+    }
 
-    return {
-      shouldSkip,
-      interrupted,
-      toolCalls,
-      text: shared.text,
-    };
+    // Check for interruption before starting batch execution
+    if (this.services.checkInterruption()) {
+      shared.shouldStop = true;
+      return [];
+    }
+
+    return toolCalls;
   }
 
-  async exec(
-    prepRes: ToolUseDispatchPrepResult,
-  ): Promise<ToolUseDispatchExecResult> {
-    if (prepRes.shouldSkip) {
-      return { kind: 'skipped', interrupted: false };
-    }
-
-    if (prepRes.interrupted) {
-      return { kind: 'skipped', interrupted: true };
-    }
-
+  /**
+   * Execute a single tool call. Called sequentially for each tool in the batch.
+   */
+  async exec(call: SdkToolCall): Promise<ToolExecutionResult> {
     const services = this.services;
     const { workspace } = services;
-    const tracker = workspace.interactions;
-    const todoState = workspace.todos;
-    const assistantText = prepRes.text ?? '';
 
-    const execResults: ToolExecutionResult[] = [];
-    for (const call of prepRes.toolCalls) {
-      if (services.checkInterruption()) {
-        break;
-      }
-      const execResult = await this.executeToolCall(
-        call,
-        services,
-        tracker,
-        todoState,
-      );
-      execResults.push(execResult);
-    }
-
-    if (execResults.length === 0 && services.checkInterruption()) {
-      return { kind: 'skipped', interrupted: true };
-    }
-
-    return {
-      kind: 'success',
-      execResults,
-      assistantText,
-    };
+    return this.executeToolCall(
+      call,
+      services,
+      workspace.interactions,
+      workspace.todos,
+    );
   }
 
   /**
@@ -737,23 +703,29 @@ class ToolUseDispatchNode<C> extends BaseNode<
     return validLocations;
   }
 
+  /**
+   * Process all tool execution results and create follow-up messages.
+   *
+   * @param shared - Mutable shared state
+   * @param toolCalls - Array of tool calls from prep()
+   * @param execResults - Array of execution results from exec() calls
+   */
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: ToolUseDispatchPrepResult,
-    execRes: ToolUseDispatchExecResult,
+    toolCalls: SdkToolCall[],
+    execResults: ToolExecutionResult[],
   ): Promise<string | undefined> {
     const services = this.services;
     const { workspace } = services;
 
-    if (execRes.kind === 'skipped') {
-      if (execRes.interrupted) {
-        shared.shouldStop = true;
-      }
+    // If no tools were executed (skipped or interrupted), complete the flow
+    if (execResults.length === 0) {
       return FlowTransition.COMPLETE;
     }
 
-    const { execResults, assistantText } = execRes;
+    const assistantText = shared.text ?? '';
 
+    // Log and process media files for each result
     for (const execResult of execResults) {
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
@@ -796,6 +768,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
     }
 
+    // Process user instructions from tool results
     for (const execResult of execResults) {
       if (isNonEmptyString(execResult.result.userInstruction)) {
         await services.modelHandler.createUserFollowUpMessages(
