@@ -6,17 +6,17 @@ import * as path from 'path';
 import { MEMORY_DISPLAY_ROOT, MEMORY_STORAGE_ROOT } from './constants';
 
 /**
- * Convert a storage path to a display path.
- * @param storagePath - Path relative to storage root (e.g., "memories/notes.md")
- * @returns Display path with virtual prefix (e.g., "/memories/notes.md")
+ * Normalize path separators to forward slashes for display.
  */
-export function toDisplayPath(storagePath: string): string {
-  const relative = path.relative(MEMORY_STORAGE_ROOT, storagePath);
-  if (!relative || relative === '') {
-    return MEMORY_DISPLAY_ROOT;
-  }
-  const normalized = relative.split(path.sep).join('/');
-  return `${MEMORY_DISPLAY_ROOT}/${normalized}`;
+function toForwardSlashes(p: string): string {
+  return p.split(path.sep).join('/');
+}
+
+/**
+ * Build a storage path from a relative path within the memory root.
+ */
+function toStoragePath(relative: string): string {
+  return relative ? path.join(MEMORY_STORAGE_ROOT, relative) : MEMORY_STORAGE_ROOT;
 }
 
 /**
@@ -25,11 +25,20 @@ export function toDisplayPath(storagePath: string): string {
  * @returns Display path with virtual prefix (e.g., "/memories/notes.md")
  */
 export function relativeToDisplayPath(relativePath: string): string {
-  if (!relativePath) {
+  if (!relativePath || relativePath === '') {
     return MEMORY_DISPLAY_ROOT;
   }
-  const normalized = relativePath.split(path.sep).join('/');
-  return `${MEMORY_DISPLAY_ROOT}/${normalized}`;
+  return `${MEMORY_DISPLAY_ROOT}/${toForwardSlashes(relativePath)}`;
+}
+
+/**
+ * Convert a storage path to a display path.
+ * @param storagePath - Path relative to storage root (e.g., "memories/notes.md")
+ * @returns Display path with virtual prefix (e.g., "/memories/notes.md")
+ */
+export function toDisplayPath(storagePath: string): string {
+  const relative = path.relative(MEMORY_STORAGE_ROOT, storagePath);
+  return relativeToDisplayPath(relative);
 }
 
 /**
@@ -64,7 +73,7 @@ export function resolveMemoryStoragePath(storagePath: string): string {
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`Invalid memory path: ${storagePath}`);
   }
-  return path.join(MEMORY_STORAGE_ROOT, relative);
+  return toStoragePath(relative);
 }
 
 /**
@@ -88,13 +97,11 @@ export function displayToStoragePath(displayPath: string): string {
       : displayPath.slice(`${MEMORY_DISPLAY_ROOT}/`.length);
   const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
   const base = path.resolve(MEMORY_STORAGE_ROOT);
-  if (!resolved.startsWith(`${base}${path.sep}`) && resolved !== base) {
+  if (resolved !== base && !resolved.startsWith(`${base}${path.sep}`)) {
     throw new Error(
       `The path ${displayPath} does not exist. Please provide a valid path.`,
     );
   }
   const relative = path.relative(base, resolved);
-  return relative
-    ? path.join(MEMORY_STORAGE_ROOT, relative)
-    : MEMORY_STORAGE_ROOT;
+  return toStoragePath(relative);
 }

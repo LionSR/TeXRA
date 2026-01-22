@@ -67,20 +67,19 @@ export function createArxivClient(options?: unknown): ArxivClientInstance {
  * Uses the identifiers-arxiv package for robust extraction.
  */
 export function normaliseArxivIdentifier(value: string): string {
-  // Preprocess PDF URLs since identifiers-arxiv doesn't handle them
+  // Convert PDF URLs to abs URLs and strip .pdf suffix (identifiers-arxiv doesn't handle these)
   const preprocessed = value
     .replace(/^https?:\/\/arxiv\.org\/pdf\//, 'https://arxiv.org/abs/')
     .replace(/\.pdf$/i, '');
-
   const extracted = extractArxivId(preprocessed);
-  return extracted[0] || value; // Fallback to original if extraction fails
+  return extracted[0] || value;
 }
 
 export function extractEntryIdentifier(rawId: unknown): string | null {
   if (typeof rawId !== 'string') {
     return null;
   }
-  const [, id] = rawId.split('/abs/');
+  const id = rawId.split('/abs/')[1];
   return id ? normaliseArxivIdentifier(id) : null;
 }
 
@@ -93,9 +92,9 @@ export function getAuthorNames(
   return maxAuthors != null ? names.slice(0, maxAuthors) : names;
 }
 
-/** Normalize entry title by trimming */
-export function normalizeEntryTitle(title: unknown): string {
-  return String(title).trim();
+/** Normalize entry title by trimming whitespace */
+export function normalizeEntryTitle(title: string): string {
+  return title.trim();
 }
 
 /** Extract base paper metadata from an arXiv entry */
