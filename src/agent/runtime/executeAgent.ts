@@ -350,13 +350,11 @@ function acquireStreamOrThrow(
   );
 }
 
-type FlowRunner = () => Promise<EndGroupStatus>;
-
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamTabId: StreamTabId,
   agentName: string,
-  runner: FlowRunner,
+  runner: () => Promise<EndGroupStatus>,
 ): Promise<void> {
   try {
     const flowStatus = await runner();
