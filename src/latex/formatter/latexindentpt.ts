@@ -9,7 +9,7 @@ import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -63,7 +63,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Wait a moment for the file system to stabilize
-    await sleep(100);
+    await delay(100);
 
     // Setup cleanup patterns relative to workspace
     const fileBaseName = path.basename(filePath, '.tex');
