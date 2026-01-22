@@ -177,7 +177,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Task Groups
   ADD_TASK_GROUP: 'addTaskGroup',
-  ADD_TASK_GROUPS: 'addTaskGroups', // Batch add for efficiency
   UPDATE_TASK_GROUP: 'updateTaskGroup',
 
   // Todo List

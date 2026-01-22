@@ -370,7 +370,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.APPEND_LOG]: this.handleAppendLog.bind(this),
       [COMMANDS.UPDATE_LOG]: this.handleUpdateLog.bind(this),
       [COMMANDS.ADD_TASK_GROUP]: this.handleAddTaskGroup.bind(this),
-      [COMMANDS.ADD_TASK_GROUPS]: this.handleAddTaskGroups.bind(this),
       [COMMANDS.UPDATE_TASK_GROUP]: this.handleUpdateTaskGroup.bind(this),
       [COMMANDS.UPDATE_STATUS]: this.handleUpdateStatus.bind(this),
       [COMMANDS.UPDATE_STREAM_STATUS]: this.handleUpdateStreamStatus.bind(this),
@@ -777,65 +776,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       scrollToBottom(logContent);
     }
 
-    this._updatePlaceholderVisibility();
-  }
-
-  /**
-   * Handle batch ADD_TASK_GROUPS command - more efficient than multiple ADD_TASK_GROUP.
-   * Used when replaying pending task groups after stream activation.
-   */
-  handleAddTaskGroups(message) {
-    if (!this._isActiveStream(message) || !Array.isArray(message.groups)) {
-      this._updatePlaceholderVisibility();
-      return;
-    }
-
-    const groups = message.groups;
-    if (groups.length === 0) {
-      this._updatePlaceholderVisibility();
-      return;
-    }
-
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const targetStream = state.activeStream || message.stream || null;
-    let lastParentRunId = null;
-
-    // Process all groups, collecting parent groups for run selector
-    const parentGroups = groups.filter((g) => !g.parentGroupId);
-
-    // Add all groups to DOM in batch
-    for (const group of groups) {
-      dom.taskGroups.addGroup(group);
-    }
-
-    // Add parent groups to run selector
-    for (const group of parentGroups) {
-      dom.runSelector.addRun(group);
-      lastParentRunId = group.id;
-
-      if (targetStream) {
-        state.deleteRunFiles(targetStream, group.id);
-        state.deleteRunMissingOutputs(targetStream, group.id);
-      }
-    }
-
-    // Set active run to the last parent group (most recent)
-    if (lastParentRunId && targetStream) {
-      state.setActiveRunId(targetStream, lastParentRunId);
-      const pending = state.takePendingInstruction(targetStream);
-      if (pending) {
-        state.setRunInstruction(targetStream, lastParentRunId, pending);
-      } else {
-        state.clearRunInstruction(targetStream, lastParentRunId);
-      }
-      dom.runSelector.setActiveRun(lastParentRunId);
-      dom.taskGroups.showRun(lastParentRunId);
-      this._refreshInstructionForActiveRun(lastParentRunId);
-      this._refreshOutputsForActiveRun(lastParentRunId);
-      this._refreshUsageForActiveRun();
-    }
-
-    scrollToBottom(logContent);
     this._updatePlaceholderVisibility();
   }
 

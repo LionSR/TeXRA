@@ -501,8 +501,12 @@ export class ProgressEventHandler {
 
   /**
    * Replay any buffered task groups for a stream after it becomes active.
-   * Uses batch API to avoid message flooding when many groups are pending.
    * Groups are only deleted after successful replay to preserve them if webview unavailable.
+   *
+   * Note: We intentionally use individual addTaskGroup calls rather than batching because
+   * the frontend handler does complex per-group state management (pending instructions,
+   * run files, active run setup) that must run for each parent group. Batching would
+   * skip this state setup for intermediate groups.
    */
   private replayPendingTaskGroups(stream: string): void {
     const pending = this.pendingTaskGroups.get(stream);
@@ -511,8 +515,9 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Use batch API to send all groups in a single message
-      this.webviewUpdater.addTaskGroups(stream, pending);
+      for (const group of pending) {
+        this.webviewUpdater.addTaskGroup(stream, group);
+      }
       this.pendingTaskGroups.delete(stream);
     }
   }

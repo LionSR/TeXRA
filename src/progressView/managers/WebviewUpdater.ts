@@ -340,23 +340,6 @@ export class WebviewUpdater {
   }
 
   /**
-   * Add multiple task groups to the webview in a single message.
-   * More efficient than multiple addTaskGroup calls for batched operations.
-   */
-  addTaskGroups(stream: StreamTabId, groups: TaskGroup[]): void {
-    if (groups.length === 0) return;
-    if (groups.length === 1) {
-      this.addTaskGroup(stream, groups[0]);
-      return;
-    }
-    this.sendMessage({
-      command: COMMANDS.ADD_TASK_GROUPS,
-      stream,
-      groups,
-    });
-  }
-
-  /**
    * Update a task group in the webview
    */
   updateTaskGroup(update: UpdateTaskGroupPayload): void {
