@@ -162,7 +162,11 @@ export class MediaAttachmentProcessor {
       async (
         location,
       ): Promise<
-        | { ok: true; entry: MediaEntry | MediaEntry[] | undefined; result: MediaFileResult }
+        | {
+            ok: true;
+            entry: MediaEntry | MediaEntry[] | undefined;
+            result: MediaFileResult;
+          }
         | { ok: false; location: FileLocation; reason: unknown }
       > => {
         try {
