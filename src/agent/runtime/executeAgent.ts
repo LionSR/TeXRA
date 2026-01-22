@@ -46,7 +46,6 @@ import {
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentCategoryForSource,
