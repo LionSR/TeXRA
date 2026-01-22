@@ -19,26 +19,6 @@ export const mainViewCommands = {
 };
 
 /**
- * Log a refresh error and notify the user.
- */
-function logRefreshError(error: unknown, context: string): void {
-  const message = toErrorMessage(error);
-  logger.error(CHANNEL, `Failed to ${context}: ${message}`);
-  vscode.window.showErrorMessage(`Failed to ${context}: ${message}`);
-}
-
-/**
- * Post options to webview. Synchronous since we don't handle postMessage result.
- */
-function postOptionsToWebview(
-  webview: vscode.WebviewView,
-  command: string,
-  options: unknown,
-): void {
-  webview.webview.postMessage({ command, options });
-}
-
-/**
  * Registers main view commands for the extension
  * @param context - The VS Code extension context
  * @returns Object containing the registered commands
@@ -73,13 +53,16 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
 
       try {
         const options = await computeModelOptions();
-        postOptionsToWebview(
-          webview,
-          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
           options,
-        );
+        });
       } catch (error) {
-        logRefreshError(error, 'refresh model options');
+        const message = toErrorMessage(error);
+        logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
+        vscode.window.showErrorMessage(
+          `Failed to refresh model options: ${message}`,
+        );
       }
     },
   );
@@ -96,13 +79,16 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
       try {
         await refresh();
         const options = await computeAgentOptions();
-        postOptionsToWebview(
-          webview,
-          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
           options,
-        );
+        });
       } catch (error) {
-        logRefreshError(error, 'refresh agent options');
+        const message = toErrorMessage(error);
+        logger.error(CHANNEL, `Failed to refresh agent options: ${message}`);
+        vscode.window.showErrorMessage(
+          `Failed to refresh agent options: ${message}`,
+        );
       }
     },
   );
@@ -123,18 +109,18 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
           computeModelOptions(),
           computeAgentOptions(),
         ]);
-        postOptionsToWebview(
-          webview,
-          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          modelOptions,
-        );
-        postOptionsToWebview(
-          webview,
-          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-          agentOptions,
-        );
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          options: modelOptions,
+        });
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          options: agentOptions,
+        });
       } catch (error) {
-        logRefreshError(error, 'refresh options');
+        const message = toErrorMessage(error);
+        logger.error(CHANNEL, `Failed to refresh options: ${message}`);
+        vscode.window.showErrorMessage(`Failed to refresh options: ${message}`);
       }
     },
   );
