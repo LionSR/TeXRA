@@ -36,16 +36,24 @@
   color: var(--vscode-descriptionForeground, #888);
   cursor: pointer;
   border-radius: var(--border-radius-small);
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .code-block-copy:hover {
-  background-color: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
+  background-color: var(
+    --vscode-toolbar-hoverBackground,
+    rgba(90, 93, 94, 0.31)
+  );
   color: var(--vscode-foreground);
 }
 
 .code-block-copy:active {
-  background-color: var(--vscode-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
+  background-color: var(
+    --vscode-toolbar-activeBackground,
+    rgba(99, 102, 103, 0.31)
+  );
 }
 
 .code-block-copy.copied {
