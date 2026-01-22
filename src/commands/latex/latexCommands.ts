@@ -101,8 +101,8 @@ async function handleGetTeXCount(): Promise<void> {
   try {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'get TeX count' },
-      async ({ relativePath: filePath }) => {
-        logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
+      async ({ relativePath }) => {
+        logger.debug(CHANNEL, `Getting tex count for: ${relativePath}`);
 
         // Ask if user wants to merge included files
         const countingMode = await vscode.window.showQuickPick<
@@ -135,7 +135,7 @@ async function handleGetTeXCount(): Promise<void> {
           async (progress) => {
             progress.report({ message: 'Running texcount...' });
 
-            const { output, errors } = await getTeXCount(filePath, {
+            const { output, errors } = await getTeXCount(relativePath, {
               mode: countingMode.value,
               channel: CHANNEL,
             });
@@ -185,10 +185,3 @@ async function handleGetTeXCount(): Promise<void> {
     await showLoggedErrorMessage(CHANNEL, 'Error getting tex count', err);
   }
 }
-
-export const latexCommands = {
-  handleIndentCurrentTeX,
-  handleGetTeXCount,
-  runIndentTeX,
-  handleApplyReplacements,
-};
