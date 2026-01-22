@@ -187,9 +187,3 @@ async function handleCompileTikzFigures(): Promise<void> {
     },
   );
 }
-
-export const figureCommands = {
-  handleExtractFigurePaths,
-  handleExtractTikzFigures,
-  handleCompileTikzFigures,
-};
