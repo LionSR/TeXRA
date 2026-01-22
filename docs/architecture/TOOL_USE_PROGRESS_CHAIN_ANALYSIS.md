@@ -351,6 +351,350 @@ The tool use and progress view architecture is **production-ready**. The codebas
 
 ---
 
+## Detailed Improvement Opportunities
+
+### HIGH PRIORITY: Code Duplication (50+ instances)
+
+#### 1. Tool Edit Approval Flow - Repeated 5+ times
+
+**Problem**: The 6-step approval sequence is copy-pasted across WriteTool, EditTool, and TextEditorTool (5 times in TextEditorTool alone).
+
+**Pattern repeated:**
+```typescript
+// Step 1: Check read gate
+const readGate = requireFileReadForEdit(path, exists);
+if (readGate) return readGate;
+
+// Step 2: Request approval
+const approval = await requestToolEditApproval({ path, originalContent, proposedContent, sourceTool });
+
+// Step 3: Handle rejection
+if (!approval.accepted) {
+  return buildApprovalRejectedResult(path, 'tool_name', approval.userMessage);
+}
+
+// Step 4: Write content
+const finalContent = getApprovedContent(approval, proposedContent);
+const { appliedContent } = await writeApprovedContent(path, originalContent, finalContent);
+
+// Step 5: Record read
+recordToolFileRead(path);
+
+// Step 6: Return result
+return { summary: 'Wrote...', output: '...', edits: [...] };
+```
+
+**Files affected:**
+- `src/tools/WriteTool.ts:37-87`
+- `src/tools/EditTool.ts:49-115`
+- `src/tools/TextEditorTool.ts:314-360, 404-464, 520-592, 610-685`
+
+**Fix**: Extract to single helper:
+```typescript
+async function executeApprovedEdit(params: {
+  path: string;
+  exists: boolean;
+  originalContent: string;
+  proposedContent: string;
+  sourceTool: string;
+  buildResult: (appliedContent: string) => ToolResult;
+}): Promise<ToolResult> {
+  // All 6 steps in one place
+}
+```
+
+**Impact**: ~200 lines removed, single source of truth for edit flow.
+
+---
+
+#### 2. Event Handler State→Webview Pattern - Repeated ~10 times
+
+**Problem**: Every event handler follows identical 3-step sequence.
+
+**Pattern repeated:**
+```typescript
+// Step 1: Update state
+await ctx.state.outputFiles.addFiles(stream, storageKey, filesByRound);
+
+// Step 2: Check webview
+if (!isWebviewAvailable(ctx)) return;
+
+// Step 3: Update webview
+ctx.webviewUpdater.updateFiles(stream, { runId: storageKey, rounds });
+```
+
+**Files affected:**
+- `src/progressView/events/LogEventHandlers.ts:36-50`
+- `src/progressView/events/OutputEventHandlers.ts:46-61`
+- `src/progressView/events/UsageEventHandlers.ts:36-61`
+- `src/progressView/events/TodoEventHandlers.ts:29-40`
+
+**Fix**: Create helper that encapsulates pattern:
+```typescript
+async function updateStateAndWebview<T>(
+  ctx: EventHandlerContext,
+  stateUpdate: () => Promise<T>,
+  webviewUpdate: (result: T) => void,
+): Promise<void> {
+  const result = await stateUpdate();
+  if (isWebviewAvailable(ctx)) {
+    webviewUpdate(result);
+  }
+}
+```
+
+---
+
+#### 3. Debug Saving Pattern - Repeated 4 times
+
+**Problem**: Identical `maybeSaveDebugObject()` calls with same structure.
+
+**Files affected:**
+- `src/agent/core/flows/ResponseCycleFlow.ts:210-222, 353-365`
+- `src/agent/core/flows/ToolUseCycleFlow.ts:218-229, 319-330`
+
+**Fix**: Extract to shared helper with default context builder.
+
+---
+
+### MEDIUM PRIORITY: Unnecessary Abstractions
+
+#### 1. Factory Functions Called Once
+
+| Factory | Location | Caller |
+|---------|----------|--------|
+| `createResponseCycleFlow()` | ResponseCycleFlow.ts:875 | ResponseCycleNode.ts:168 only |
+| `createToolUseCycleFlow()` | ToolUseCycleFlow.ts:814 | ToolUseCycleNode.ts:74 only |
+
+**Assessment**: These factories exist for testability and could be kept for that reason. However, per CLAUDE.md, if they're only called from one place, consider inlining.
+
+---
+
+#### 2. PersistentMapManager - 5 Thin Subclasses
+
+**Problem**: All 5 subclasses (UsageStatsManager, OutputFilesManager, TaskGroupManager, StreamTabsManager, RunInstructionManager) only override `serialize()`/`deserialize()` with 1-line implementations.
+
+**Current**:
+```typescript
+// RunInstructionManager.ts - 94 lines for essentially:
+protected override serialize(value: InstructionMap): unknown {
+  return mapToRecord(value);  // 1 line
+}
+protected override deserialize(data: unknown): InstructionMap {
+  return recordToMap<InstructionUpdate>(data);  // 1 line
+}
+```
+
+**Fix**: Consolidate to configurable manager:
+```typescript
+class PersistentMapManager<K, V> {
+  constructor(
+    private key: WorkspaceStateKey,
+    private serializer: (v: V) => unknown,
+    private deserializer: (d: unknown) => V,
+  ) {}
+}
+
+// Usage:
+const instructionManager = new PersistentMapManager(
+  WorkspaceStateKey.RUN_INSTRUCTIONS,
+  mapToRecord,
+  recordToMap<InstructionUpdate>,
+);
+```
+
+**Impact**: ~400 lines → ~150 lines.
+
+---
+
+#### 3. Separate Event Handler Files - Could Be Inlined
+
+**Current**: 5 separate files each with `registerXxxEventHandlers()` function called from one place.
+
+**Files**:
+- `LogEventHandlers.ts` (89 lines)
+- `OutputEventHandlers.ts` (111 lines)
+- `UsageEventHandlers.ts` (80 lines)
+- `TodoEventHandlers.ts` (~40 lines)
+- `FollowUpEventHandlers.ts` (~50 lines)
+
+**Assessment**: This is a **judgment call**. Separate files provide organization, but add ~30 lines of boilerplate per file. If each handler is <50 lines of actual logic, consider consolidating into `ProgressEventHandler.ts`.
+
+---
+
+### HIGH PRIORITY: Error Handling Issues
+
+#### 1. Event Handler Failures Silent to UI
+
+**File**: `src/progressView/events/errorHandling.ts:40-42`
+
+**Problem**:
+```typescript
+Promise.resolve(result).catch((error) =>
+  logError(moduleName, context, error),  // Logged but UI never knows
+);
+```
+
+**Fix**: Emit error event for UI notification:
+```typescript
+Promise.resolve(result).catch((error) => {
+  logError(moduleName, context, error);
+  bus.emit('eventHandlerError', { moduleName, context, error: toErrorMessage(error) });
+});
+```
+
+---
+
+#### 2. Tool Errors Lose Context
+
+**File**: `src/agent/core/flows/ToolUseCycleFlow.ts:111-112`
+
+**Problem**:
+```typescript
+return {
+  message: `${toolName}: Invalid parameters provided`,  // Generic, no param info
+};
+```
+
+**Fix**: Include parameter path:
+```typescript
+return {
+  message: `${toolName}: Invalid parameter at ${issue.path.join('.')}: ${issue.message}`,
+};
+```
+
+---
+
+#### 3. Zod Detection Uses Duck Typing
+
+**File**: `src/agent/core/flows/ToolUseCycleFlow.ts:89-97`
+
+**Problem**: Duck typing (`'issues' in error`) could match non-Zod errors.
+
+**Fix**:
+```typescript
+import { ZodError } from 'zod';
+function isZodError(error: unknown): error is ZodError {
+  return error instanceof ZodError;
+}
+```
+
+---
+
+#### 4. Silent Tool Registry Fallbacks
+
+**File**: `src/tools/registry.ts:154, 160`
+
+**Problem**:
+```typescript
+return ToolDefinitionSchema.catch({ name }).parse(item);  // Silent fallback to name-only
+```
+
+**Fix**: Throw with context instead:
+```typescript
+const result = ToolDefinitionSchema.safeParse(item);
+if (!result.success) {
+  throw new Error(`Tool '${name}' has invalid schema: ${result.error.message}`);
+}
+return result.data;
+```
+
+---
+
+### MEDIUM PRIORITY: Type Safety Gaps
+
+#### 1. 16 Message Handlers Accept `any`
+
+**File**: `src/progressView/ProgressViewMessageHandler.ts`
+
+**Lines**: 206, 214, 218, 226, 246, 255, 279, 287, 301, 305, 336, 342, 348, 353, 362, 369
+
+**Problem**:
+```typescript
+private async handleSwitchStream(message: any): Promise<void> {
+  this.provider.setActiveStream(message.stream);  // No validation
+}
+```
+
+**Fix**: Define message schemas:
+```typescript
+const SwitchStreamMessageSchema = z.object({ stream: StreamTabIdSchema });
+
+private async handleSwitchStream(message: unknown): Promise<void> {
+  const parsed = SwitchStreamMessageSchema.safeParse(message);
+  if (!parsed.success) return;
+  this.provider.setActiveStream(parsed.data.stream);
+}
+```
+
+---
+
+#### 2. Model Handler Uses `any[]` and `any` Parameters
+
+**File**: `src/agent/modelHandlers/ModelHandler.ts:603, 612-613`
+
+**Problem**:
+```typescript
+abstract createMediaContent(mediaMessage: MediaEntry[]): any[];
+abstract extractResponse(responseObject: any, endTag: string): ExtractResponseResult;
+```
+
+**Fix**: Define proper types:
+```typescript
+abstract createMediaContent(mediaMessage: MediaEntry[]): MediaContentPart[];
+abstract extractResponse(responseObject: unknown, endTag: string): ExtractResponseResult;
+```
+
+---
+
+#### 3. Persisted Flow Unsafe Casts
+
+**File**: `src/agent/node/persisted-flow.ts:127, 134-145`
+
+**Problem**:
+```typescript
+const params = flow.params as P;  // No validation
+const shared = flow.shared as S;  // No validation
+cursor.setParams(params as any);  // Double cast
+```
+
+**Fix**: Add Zod validation at deserialization.
+
+---
+
+## Refactoring Priority Matrix
+
+| Category | Items | Lines Saved | Risk | Priority |
+|----------|-------|-------------|------|----------|
+| Tool approval extraction | 1 helper | ~200 | Low | **HIGH** |
+| Event handler pattern helper | 1 helper | ~50 | Low | **HIGH** |
+| Error handling improvements | 4 fixes | 0 | Low | **HIGH** |
+| Type safety (message handlers) | 16 handlers | 0 | Medium | **MEDIUM** |
+| PersistentMapManager consolidation | 5 classes | ~250 | Medium | **MEDIUM** |
+| Debug saving helper | 1 helper | ~40 | Low | **LOW** |
+| Factory inlining | 2 factories | ~20 | Low | **LOW** |
+
+---
+
+## Recommended Action Plan
+
+**Phase 1 - Quick Wins (Low Risk)**:
+1. Extract tool edit approval helper → Single PR
+2. Add error context to tool failures → Single PR
+3. Fix Zod detection to use `instanceof` → Single PR
+
+**Phase 2 - Event Handlers (Medium Risk)**:
+1. Add UI notification for event handler errors
+2. Create state→webview update helper
+3. Add message schemas for 16 handlers
+
+**Phase 3 - Abstractions (Medium Risk)**:
+1. Evaluate PersistentMapManager consolidation
+2. Consider event handler file consolidation
+3. Add type safety to model handlers
+
+---
+
 ## Files Reference
 
 | Layer | Key Files |
