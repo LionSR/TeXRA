@@ -51,8 +51,9 @@ import {
 } from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
+import type { ExecutionKVStore } from '@agent/storage';
 import { BaseNode } from './index';
-import { PersistedFlow, type FlowStore } from './persisted-flow';
+import { PersistedFlow } from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
@@ -238,7 +239,7 @@ export class RoundPersistedFlow<
 
   constructor(
     start: BaseNode<any, any>,
-    kv: FlowStore,
+    kv: ExecutionKVStore,
     config?: RoundFlowConfig<S, Svc>,
     runId?: string,
   ) {
