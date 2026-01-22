@@ -21,6 +21,7 @@ prompts:
         \item Reference the figures throughout the main text in relevant places.
         \item Follow the best practices for creating professional-quality figures in research papers.
         \item Stick to the given instructions. If I ask you to revise Figure~\ref{fig:1} only, do not create another Figure~\ref{fig:2}.
+        \item When working with TikZ diagrams connected to mathematical formulas, always reflect whether the visual representation accurately matches the underlying equations and relationships.
     \end{itemize}
 
   userPrefix: |
