@@ -1791,7 +1791,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           isImage: mimeType.startsWith('image/'),
         });
       } catch (err) {
-        // Logged via retry helper
+        this.logger.warn(
+          `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
+        );
       } finally {
         if (buffer) {
           buffer.fill(0);
