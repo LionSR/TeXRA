@@ -84,6 +84,36 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /**
+   * Get or create a nested map entry for stream runs.
+   */
+  private getOrCreateNested<K, V>(
+    map: Map<K, Map<string, V>>,
+    key: K,
+  ): Map<string, V> {
+    let inner = map.get(key);
+    if (!inner) {
+      inner = new Map();
+      map.set(key, inner);
+    }
+    return inner;
+  }
+
+  /**
+   * Get or create a rounds map for a storage key.
+   */
+  private getOrCreateRounds<V>(
+    map: Map<string, Map<number, V>>,
+    key: string,
+  ): Map<number, V> {
+    let inner = map.get(key);
+    if (!inner) {
+      inner = new Map();
+      map.set(key, inner);
+    }
+    return inner;
+  }
+
+  /**
    * Add output files for a stream and round.
    *
    * @param stream - The stream tab ID
@@ -96,17 +126,8 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
     // storageKey is already branded - use directly, no normalization needed
-    let streamRuns = this.items.get(stream);
-    if (!streamRuns) {
-      streamRuns = new Map();
-      this.items.set(stream, streamRuns);
-    }
-
-    let runRounds = streamRuns.get(storageKey);
-    if (!runRounds) {
-      runRounds = new Map();
-      streamRuns.set(storageKey, runRounds);
-    }
+    const streamRuns = this.getOrCreateNested(this.items, stream);
+    const runRounds = this.getOrCreateRounds(streamRuns, storageKey);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);
@@ -144,18 +165,8 @@ export class OutputFilesManager extends PersistentMapManager<
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
     // storageKey is already branded - use directly, no normalization needed
-
-    let streamMissing = this._missingOutputs.get(stream);
-    if (!streamMissing) {
-      streamMissing = new Map();
-      this._missingOutputs.set(stream, streamMissing);
-    }
-
-    let runMissing = streamMissing.get(storageKey);
-    if (!runMissing) {
-      runMissing = new Map();
-      streamMissing.set(storageKey, runMissing);
-    }
+    const streamMissing = this.getOrCreateNested(this._missingOutputs, stream);
+    const runMissing = this.getOrCreateRounds(streamMissing, storageKey);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);

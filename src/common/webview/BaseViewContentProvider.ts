@@ -200,7 +200,10 @@ export abstract class BaseViewContentProvider {
     resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
   ): Record<string, vscode.Uri> {
     return Object.fromEntries(
-      descriptors.map(({ key, path }) => [key, resolver.call(this, webview, path)]),
+      descriptors.map(({ key, path }) => [
+        key,
+        resolver.call(this, webview, path),
+      ]),
     );
   }
 

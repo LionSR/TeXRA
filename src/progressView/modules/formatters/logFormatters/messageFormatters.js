@@ -168,14 +168,10 @@ export function formatError(message) {
 
   // If there are no details, hide the copy button and make it non-expandable
   if (!detailText) {
-    if (bannerEntry.copyButton) {
-      bannerEntry.copyButton.style.display = 'none';
-    }
-    // Remove toggle icon for non-expandable entries
-    const toggleIcon = bannerEntry.element.querySelector('.toggle-icon');
-    if (toggleIcon) {
-      toggleIcon.style.visibility = 'hidden';
-    }
+    bannerEntry.copyButton?.style.setProperty('display', 'none');
+    bannerEntry.element
+      .querySelector('.toggle-icon')
+      ?.style.setProperty('visibility', 'hidden');
   }
 
   if (bannerEntry.contentElem) {
