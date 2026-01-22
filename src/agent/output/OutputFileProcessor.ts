@@ -138,18 +138,24 @@ export class OutputFileProcessor {
         diff: null,
       };
 
-      const hasDocumentTag = Boolean(agentSetting.documentTag);
-      const hasScratchpadPrefill =
-        agentSetting.prefills?.some((prefill) =>
-          SCRATCHPAD_TAG_PATTERN.test(prefill),
-        ) ?? false;
-
       // Determine XML processing based on xmlStructureMode setting
       const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
-      const shouldProcessXml =
-        xmlMode === 'always' ||
-        (xmlMode === 'scratchpadOnly' &&
-          (hasDocumentTag || hasScratchpadPrefill));
+      let shouldProcessXml = false;
+      switch (xmlMode) {
+        case 'always':
+          shouldProcessXml = true;
+          break;
+        case 'scratchpadOnly': {
+          const hasDocumentTag = Boolean(agentSetting.documentTag);
+          const hasScratchpadPrefill =
+            agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+            false;
+          shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
+          break;
+        }
+        case 'never':
+          break;
+      }
 
       if (shouldProcessXml) {
         processed = await xmlManager.processSingleXmlOutput(
