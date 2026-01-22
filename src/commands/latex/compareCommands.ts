@@ -267,8 +267,3 @@ function getNewFileTarget(
 
   return { targetLocation, targetFileName, isNewFile: true };
 }
-
-export const compareCommands = {
-  handleCompare,
-  handleAcceptEdited,
-};

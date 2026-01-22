@@ -72,13 +72,6 @@ export async function openLabel(label: string): Promise<void> {
   vscode.window.showInformationMessage(`Label "${label}" not found.`);
 }
 
-/** Command handlers for file operations */
-export const openFileCommands = {
-  openFileCompile: openBuildDisplayIfTex,
-  openFile,
-  openLabel,
-};
-
 export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
 ): void {
