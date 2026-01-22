@@ -31,9 +31,6 @@ import {
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
-// Re-export from canonical source for backward compatibility
-export { RetryErrorInfoSchema, type RetryErrorInfo } from '@common/errors';
-
 /**
  * Minimum retry count for background mode (at least 3 attempts before manual retry UI).
  * Background jobs may fail due to timeouts and need more automatic recovery attempts.
