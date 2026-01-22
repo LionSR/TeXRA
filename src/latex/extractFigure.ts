@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
@@ -84,55 +83,47 @@ export async function extractFigurePathsFromLatex(
 ): Promise<string[]> {
   const figurePaths: string[] = [];
 
-  try {
-    const latexFile = latexFileLocation.absolutePath;
-    const latexDir = path.dirname(latexFile);
-    const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
+  const latexFile = latexFileLocation.absolutePath;
+  const latexDir = path.dirname(latexFile);
+  const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
-    // Regular expressions to match figure inclusion commands
-    const figurePatterns = [
-      /\\includegraphics(?:\[.*?\])?\{(.+?)\}/g,
-      /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
-    ];
+  // Regular expressions to match figure inclusion commands
+  const figurePatterns = [
+    /\\includegraphics(?:\[.*?\])?\{(.+?)\}/g,
+    /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
+  ];
 
-    // Read file content
-    const content = await flexibleFS.read(latexFileLocation);
+  // Read file content
+  const content = await flexibleFS.read(latexFileLocation);
 
-    // Parse graphicspaths
-    const paths = parseGraphicspath(content);
-    for (const p of paths) {
-      graphicspaths.push(joinLatexPath(latexDir, p));
-    }
+  // Parse graphicspaths
+  const paths = parseGraphicspath(content);
+  for (const p of paths) {
+    graphicspaths.push(joinLatexPath(latexDir, p));
+  }
 
-    // Pre-process content to remove commented lines
-    const processedLines = content
-      .split('\n')
-      .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
-      .join('\n');
+  // Pre-process content to remove commented lines
+  const processedLines = content
+    .split('\n')
+    .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
+    .join('\n');
 
-    // Find all matches in the processed content for both patterns
-    const discovered = new Set<string>();
+  // Find all matches in the processed content for both patterns
+  const discovered = new Set<string>();
 
-    for (const pattern of figurePatterns) {
-      for (const match of processedLines.matchAll(pattern)) {
-        const resolved = await resolveFigurePath(
-          match[1],
-          graphicspaths,
-          latexDir,
-        );
-        if (resolved && !discovered.has(resolved)) {
-          figurePaths.push(resolved);
-          discovered.add(resolved);
-        }
+  for (const pattern of figurePatterns) {
+    for (const match of processedLines.matchAll(pattern)) {
+      const resolved = await resolveFigurePath(
+        match[1],
+        graphicspaths,
+        latexDir,
+      );
+      if (resolved && !discovered.has(resolved)) {
+        figurePaths.push(resolved);
+        discovered.add(resolved);
       }
     }
-
-    return figurePaths;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error extracting figure paths: ${toErrorMessage(err)}`,
-    );
-    throw err;
   }
+
+  return figurePaths;
 }
