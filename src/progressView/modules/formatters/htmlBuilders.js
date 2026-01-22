@@ -9,7 +9,11 @@ import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
-import { TOOL_ICON_MAP } from './constants.js';
+import {
+  TOOL_ICON_MAP,
+  DIFF_DETECTION_LINE_LIMIT,
+  DIFF_MARKER_THRESHOLD,
+} from './constants.js';
 import { generateInlineDiff } from './wordDiff.js';
 
 /**
@@ -53,17 +57,18 @@ function getDiffLineClass(line) {
 }
 
 /**
- * Check if text appears to be diff output
+ * Check if text appears to be diff output.
+ * Examines first N lines for diff markers (@@, +++, ---).
  * @param {string} text - Text to check
  * @returns {boolean} True if text looks like diff output
  */
 function isDiffContent(text) {
-  const lines = text.split('\n').slice(0, 20);
+  const lines = text.split('\n').slice(0, DIFF_DETECTION_LINE_LIMIT);
   const diffMarkers = lines.filter(
     (line) =>
       line.startsWith('@@') || line.startsWith('+++') || line.startsWith('---'),
   ).length;
-  return diffMarkers >= 2;
+  return diffMarkers >= DIFF_MARKER_THRESHOLD;
 }
 
 /**
@@ -201,29 +206,107 @@ export function getToolIconClass(toolName, isError = false) {
 // Syntax Highlighting
 // ============================================================================
 
+/** Human-readable labels for language badges */
+const LANGUAGE_LABELS = {
+  bash: 'Bash',
+  json: 'JSON',
+  yaml: 'YAML',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  python: 'Python',
+  plaintext: 'Text',
+};
+
 /**
- * Wrap code in a pre element with syntax highlighting using highlight.js
+ * Get display label for a language
+ * @param {string} language - Language identifier
+ * @returns {string} Human-readable label
+ */
+function getLanguageLabel(language) {
+  return LANGUAGE_LABELS[language] || language || 'Text';
+}
+
+/**
+ * Build a code block with optional syntax highlighting, language badge, and copy button.
+ * Does NOT use auto-detection - requires explicit language or defaults to plaintext.
+ *
+ * @param {string} text - Code text to display
+ * @param {object} [options] - Configuration options
+ * @param {string} [options.language='plaintext'] - Language for syntax highlighting
+ * @param {string} [options.className] - Additional CSS class for the pre element
+ * @param {boolean} [options.showLanguage=false] - Show language badge
+ * @param {boolean} [options.showCopy=false] - Show copy button
+ * @returns {string} HTML string for the code block
+ */
+export function buildCodeBlock(text, options = {}) {
+  const {
+    language = 'plaintext',
+    className = '',
+    showLanguage = false,
+    showCopy = false,
+  } = options;
+
+  const classes = ['code-block', className].filter(Boolean).join(' ');
+  const preClasses = ['hljs', className].filter(Boolean).join(' ');
+
+  // Build code content with or without highlighting
+  let codeContent;
+  const isHighlightable = language && language !== 'plaintext';
+
+  if (isHighlightable && hljs.getLanguage(language)) {
+    try {
+      const result = hljs.highlight(text, { language, ignoreIllegals: true });
+      codeContent = result.value;
+    } catch {
+      codeContent = encodeHtml(text);
+    }
+  } else {
+    codeContent = encodeHtml(text);
+  }
+
+  // Build header with optional badge and copy button
+  const headerParts = [];
+  if (showLanguage) {
+    const label = getLanguageLabel(language);
+    headerParts.push(`<span class="code-block-language">${encodeHtml(label)}</span>`);
+  }
+  if (showCopy) {
+    headerParts.push(
+      `<button class="code-block-copy" title="Copy to clipboard"><i class="codicon codicon-copy"></i></button>`,
+    );
+  }
+
+  const header =
+    headerParts.length > 0
+      ? `<div class="code-block-header">${headerParts.join('')}</div>`
+      : '';
+
+  return `<div class="${classes}" data-language="${encodeHtml(language)}">${header}<pre class="${preClasses}"><code>${codeContent}</code></pre></div>`;
+}
+
+/**
+ * Wrap code in a pre element with syntax highlighting using highlight.js.
+ * Legacy API - prefer buildCodeBlock for new code.
+ *
  * @param {string} text - Code text to highlight
- * @param {string} [language] - Optional language hint (e.g., 'bash', 'json')
+ * @param {string} [language='plaintext'] - Language hint (e.g., 'bash', 'json', 'yaml')
  * @param {string} [className] - Optional additional CSS class
  * @returns {string} HTML string with syntax highlighting
  */
-export function wrapInHighlightedPre(text, language = '', className = '') {
-  const classes = ['hljs', className].filter(Boolean).join(' ');
-  const classAttr = classes ? ` class="${classes}"` : '';
+export function wrapInHighlightedPre(text, language = 'plaintext', className = '') {
+  // Delegate to buildCodeBlock without header elements for backwards compatibility
+  const preClasses = ['hljs', className].filter(Boolean).join(' ');
 
-  try {
-    let result;
-    if (language && hljs.getLanguage(language)) {
-      result = hljs.highlight(text, { language, ignoreIllegals: true });
-    } else {
-      result = hljs.highlightAuto(text);
+  if (language && language !== 'plaintext' && hljs.getLanguage(language)) {
+    try {
+      const result = hljs.highlight(text, { language, ignoreIllegals: true });
+      return `<pre class="${preClasses}"><code>${result.value}</code></pre>`;
+    } catch {
+      // Fall through to plaintext
     }
-    return `<pre${classAttr}><code>${result.value}</code></pre>`;
-  } catch {
-    // Fallback to plain text if highlighting fails
-    return `<pre${classAttr}><code>${encodeHtml(text)}</code></pre>`;
   }
+
+  return `<pre class="${preClasses}"><code>${encodeHtml(text)}</code></pre>`;
 }
 
 // ============================================================================
