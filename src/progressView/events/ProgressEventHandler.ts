@@ -178,23 +178,23 @@ export class ProgressEventHandler {
       'StreamStatus',
       'failed to handle setTaskState',
       () => {
-        const { streamTabId, executionId, taskState } = data;
-        const isActiveStream = this.state.activeStream === streamTabId;
+        const { streamId, executionId, taskState } = data;
+        const isActiveStream = this.state.activeStream === streamId;
         const category = taskState.agentConfig.agentCategory;
         const previousFilter = this.state.agentCategoryFilter;
 
-        this.state.setTaskState(streamTabId, taskState);
+        this.state.setTaskState(streamId, taskState);
 
         if (isActiveStream) {
           this.maybeUpdateFilterForCategory(category);
         }
 
         if (executionId) {
-          this.state.setExecutionId(streamTabId, executionId);
+          this.state.setExecutionId(streamId, executionId);
         }
 
         if (isActiveStream) {
-          this.sendInstructionUpdate(streamTabId);
+          this.sendInstructionUpdate(streamId);
         }
 
         // Update stream tabs when:

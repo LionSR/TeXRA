@@ -129,7 +129,7 @@ export type SetActiveStreamPayload = z.infer<
  * error messages from the underlying schema.
  */
 export const SetTaskStatePayloadSchema = z.strictObject({
-  streamTabId: StreamTabIdSchema,
+  streamId: StreamTabIdSchema,
   executionId: ExecutionIdSchema.optional(),
   // Validate with TaskStateSchema, then cast output to full TaskState type
   taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),

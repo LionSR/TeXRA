@@ -41,13 +41,15 @@ type RequestState<TResult> =
   | { status: 'resolved' };
 
 /** Configuration for coordinator behavior */
-export interface CoordinatorConfig {
+export interface CoordinatorConfig<TResult extends BaseResult> {
   /** Event name emitted to show UI (e.g., 'showRetryRequest') */
   showEventName: keyof ProgressEventPayloads;
   /** Event name emitted to resolve/hide UI (e.g., 'resolveRetryRequest') */
   resolveEventName: keyof ProgressEventPayloads;
   /** Field name for ID in resolve event payload (e.g., 'streamId', 'proposalId') */
   idFieldName: string;
+  /** Default result for cancelled/replaced requests */
+  defaultCancelResult: TResult;
 }
 
 // ============================================================================
@@ -56,9 +58,9 @@ export interface CoordinatorConfig {
 
 /**
  * Generic coordinator for promise-based user interaction flows.
- * Subclasses provide specific result types and event configurations.
+ * Can be used directly with config or extended for additional behavior.
  */
-export abstract class BasePromiseCoordinator<
+export class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
@@ -66,13 +68,19 @@ export abstract class BasePromiseCoordinator<
   protected readonly requests = new Map<string, RequestState<TResult>>();
 
   /** Configuration for this coordinator */
-  protected abstract readonly config: CoordinatorConfig;
+  protected readonly config: CoordinatorConfig<TResult>;
+
+  constructor(config: CoordinatorConfig<TResult>) {
+    this.config = config;
+  }
 
   /**
    * Get the default result for cancelled/replaced requests.
-   * Subclasses override to provide appropriate default (e.g., { action: 'cancel' }).
+   * Override in subclasses for custom behavior.
    */
-  protected abstract getDefaultCancelResult(): TResult;
+  protected getDefaultCancelResult(): TResult {
+    return this.config.defaultCancelResult;
+  }
 
   /**
    * Wait for user action. Emits show event and returns Promise.

@@ -585,7 +585,7 @@ export async function executeAgent(
       showAgentNotification(config);
     }
     bus.emit('setTaskState', {
-      streamTabId,
+      streamId: streamTabId,
       executionId,
       taskState: agentConfigToTaskState(config),
     });
