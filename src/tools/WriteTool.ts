@@ -5,17 +5,7 @@ import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult } from '@tools/result';
-import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@tools/fileInteractions';
-import {
-  buildApprovalRejectedResult,
-  formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
-  writeApprovedContent,
-} from '@tools/approval/toolEditApproval';
+import { executeToolEditApprovalFlow } from '@tools/approval/executeApprovalFlow';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
@@ -36,53 +26,21 @@ export class WriteFileTool extends defineTool({
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
     const exists = await WorkspaceFS.exists(input.path);
-    const readGate = requireFileReadForEdit(input.path, exists);
-    if (readGate) {
-      return readGate;
-    }
-
     const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
 
+    // Apply LaTeX transformations before approval
     const proposedContent = isTexFile(input.path)
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
-    const approval = await requestToolEditApproval({
+    return executeToolEditApprovalFlow({
       path: input.path,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
+      summaryMessage: `Wrote ${input.path}`,
+      successOutputPrefix: 'written',
+      skipFileReadCheck: !exists,
     });
-
-    if (!approval.accepted) {
-      return buildApprovalRejectedResult(
-        input.path,
-        'write_file',
-        approval.userMessage,
-      );
-    }
-
-    const finalContent = getApprovedContent(approval, proposedContent);
-    const { appliedContent } = await writeApprovedContent(
-      input.path,
-      originalContent,
-      finalContent,
-    );
-
-    recordToolFileRead(input.path);
-
-    const userDiffNote = formatUnifiedApprovalUserDiff(
-      input.path,
-      proposedContent,
-      appliedContent,
-    );
-    const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
-
-    return {
-      summary: `Wrote ${input.path}`,
-      output,
-      userPatch: approval.userPatch,
-      edits: [{ path: input.path, lineChanges: approval.lineChanges }],
-    };
   }
 }

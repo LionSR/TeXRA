@@ -3,18 +3,9 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
-import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@tools/fileInteractions';
+import { requireFileReadForEdit } from '@tools/fileInteractions';
 import { pluralize } from '@tools/utils';
-import {
-  buildApprovalRejectedResult,
-  formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
-  writeApprovedContent,
-} from '@tools/approval/toolEditApproval';
+import { executeToolEditApprovalFlow } from '@tools/approval/executeApprovalFlow';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
@@ -55,12 +46,14 @@ export class EditFileTool extends defineTool({
       );
     }
 
+    // Validation: file must exist and have been read
     const exists = await WorkspaceFS.exists(targetPath);
     const readGate = requireFileReadForEdit(targetPath, exists);
     if (readGate) {
       return readGate;
     }
 
+    // Validation: old_str must be found
     const currentContent = await WorkspaceFS.read(targetPath);
     const occurrences = countOccurrences(currentContent, old_str);
 
@@ -76,52 +69,23 @@ export class EditFileTool extends defineTool({
       );
     }
 
+    // Build proposed content
     const updatedContent = replace_all
       ? currentContent.replaceAll(old_str, new_str)
       : currentContent.replace(old_str, new_str);
 
-    const approval = await requestToolEditApproval({
+    const count = replace_all ? occurrences : 1;
+    const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
+
+    // Execute approval flow (skip read check since we already validated above)
+    return executeToolEditApprovalFlow({
       path: targetPath,
       originalContent: currentContent,
       proposedContent: updatedContent,
       sourceTool: 'edit_file',
+      summaryMessage: `Edited ${targetPath}: replaced ${count} ${pluralize(count, 'occurrence')}`,
+      successOutputPrefix: replacementSummary,
+      skipFileReadCheck: true,
     });
-
-    if (!approval.accepted) {
-      return buildApprovalRejectedResult(
-        targetPath,
-        'edit_file',
-        approval.userMessage,
-      );
-    }
-
-    const finalContent = getApprovedContent(approval, updatedContent);
-    const { appliedContent } = await writeApprovedContent(
-      targetPath,
-      currentContent,
-      finalContent,
-    );
-
-    recordToolFileRead(targetPath);
-
-    const count = replace_all ? occurrences : 1;
-    const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
-    const summary = `Edited ${targetPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
-
-    const userDiffNote = formatUnifiedApprovalUserDiff(
-      targetPath,
-      updatedContent,
-      appliedContent,
-    );
-    const output = userDiffNote
-      ? `${replacementSummary}\n\n${userDiffNote}`
-      : replacementSummary;
-
-    return {
-      summary,
-      output,
-      userPatch: approval.userPatch,
-      edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
-    };
   }
 }

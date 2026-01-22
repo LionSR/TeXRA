@@ -14,12 +14,10 @@ import {
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
 import {
-  buildApprovalRejectedResult,
-  formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
-  writeApprovedContent,
-} from '@tools/approval/toolEditApproval';
+  executeToolEditApprovalFlow,
+  executeToolEditApprovalFlowWithResult,
+} from '@tools/approval/executeApprovalFlow';
+import { formatUnifiedApprovalUserDiff } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local file imports
@@ -320,56 +318,26 @@ export class TextEditorTool extends defineTool({
    */
   private async create(filePath: string, content: string): Promise<ToolResult> {
     try {
-      const proposedContent = isTexFile(filePath)
-        ? replacementEngine.applyAll(content)
-        : content;
-      const approval = await requestToolEditApproval({
-        path: filePath,
-        originalContent: '',
-        proposedContent: proposedContent,
-        sourceTool: 'text_editor:create',
-      });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          filePath,
-          'text_editor:create',
-          approval.userMessage,
-        );
-      }
-
       // Create parent directories if they don't exist
       const dirPath = path.dirname(filePath);
       if (dirPath !== '.') {
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      const finalContent = getApprovedContent(approval, proposedContent);
-      const { appliedContent } = await writeApprovedContent(
-        filePath,
-        '',
-        finalContent,
-      );
+      // Apply LaTeX transformations before approval
+      const proposedContent = isTexFile(filePath)
+        ? replacementEngine.applyAll(content)
+        : content;
 
-      // Record file as "read" after creation so subsequent edits don't require
-      // an explicit read - this is essential for newly created files.
-      recordToolFileRead(filePath);
-
-      const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
+      return executeToolEditApprovalFlow({
+        path: filePath,
+        originalContent: '',
         proposedContent,
-        appliedContent,
-      );
-      const output = userDiffNote
-        ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
-        : `File created successfully at: ${filePath}`;
-
-      return {
-        summary: `Created file ${filePath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      };
+        sourceTool: 'text_editor:create',
+        summaryMessage: `Created file ${filePath}`,
+        successOutputPrefix: `File created successfully at: ${filePath}`,
+        skipFileReadCheck: true,
+      });
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${error}`);
     }
@@ -388,7 +356,7 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      // Read file content
+      // Validation: file must exist and have been read
       const exists = await WorkspaceFS.exists(filePath);
       const readGate = requireFileReadForEdit(filePath, exists);
       if (readGate) {
@@ -401,7 +369,7 @@ export class TextEditorTool extends defineTool({
       const expandedOldStr = oldStr.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      // Check for occurrences of oldStr
+      // Validation: old_str must be found exactly once
       const occurrences = expandedFileContent.split(expandedOldStr).length - 1;
 
       if (occurrences === 0) {
@@ -411,7 +379,6 @@ export class TextEditorTool extends defineTool({
       }
 
       if (occurrences > 1) {
-        // Find line numbers where oldStr occurs
         const lines = expandedFileContent.split('\n');
         const lineNumbers = lines
           .map((line, index) =>
@@ -424,43 +391,13 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Perform replacement
+      // Build proposed content
       const newFileContent = expandedFileContent.replace(
         expandedOldStr,
         expandedNewStr,
       );
 
-      const approval = await requestToolEditApproval({
-        path: filePath,
-        originalContent: fileContent,
-        proposedContent: newFileContent,
-        sourceTool: 'text_editor:str_replace',
-      });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          filePath,
-          'text_editor:str_replace',
-          approval.userMessage,
-        );
-      }
-
-      const approvedContent = getApprovedContent(approval, newFileContent);
-      const { appliedContent, baseContent } = await writeApprovedContent(
-        filePath,
-        fileContent,
-        approvedContent,
-      );
-      if (appliedContent !== baseContent) {
-        this.addToHistory(filePath, baseContent);
-      }
-      const finalContent = appliedContent;
-
-      // Record file as "read" after editing so subsequent edits don't require
-      // an explicit read again.
-      recordToolFileRead(filePath);
-
-      // Create a snippet of the edited section
+      // Calculate snippet position for output
       const textBeforeReplacement =
         expandedFileContent.split(expandedOldStr)[0];
       const replacementLine =
@@ -469,34 +406,53 @@ export class TextEditorTool extends defineTool({
       const endLine =
         replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) ?? []).length;
 
-      const newFileLines = finalContent.split('\n');
-      const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
+      // Execute approval flow with history tracking
+      return executeToolEditApprovalFlowWithResult(
+        {
+          path: filePath,
+          originalContent: fileContent,
+          proposedContent: newFileContent,
+          sourceTool: 'text_editor:str_replace',
+          summaryMessage: `Updated ${filePath}`,
+          skipFileReadCheck: true,
+        },
+        (writeResult, approval) => {
+          const { appliedContent, baseContent } = writeResult;
 
-      // Prepare success message
-      const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
-        newFileContent,
-        finalContent,
-      );
-      const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippet,
-        `a snippet of ${filePath}`,
-        startLine,
-      );
-      const reviewMessage =
-        'Review the changes and make sure they are as expected. Edit the file again if necessary.';
-      const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
-      const successMsg = userDiffNote
-        ? `${baseMsg}\n\n${userDiffNote}`
-        : baseMsg;
+          // Track history for undo support
+          if (appliedContent !== baseContent) {
+            this.addToHistory(filePath, baseContent);
+          }
 
-      return {
-        summary: `Updated ${filePath}`,
-        output: successMsg,
-        userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      };
+          // Build snippet output
+          const newFileLines = appliedContent.split('\n');
+          const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
+          const snippetOutput = this.makeOutput(
+            snippet,
+            `a snippet of ${filePath}`,
+            startLine,
+          );
+
+          // Format output
+          const userDiffNote = formatUnifiedApprovalUserDiff(
+            filePath,
+            newFileContent,
+            appliedContent,
+          );
+          const successIntro = `The file ${filePath} has been edited.`;
+          const reviewMessage =
+            'Review the changes and make sure they are as expected. Edit the file again if necessary.';
+          const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
+          const output = userDiffNote ? `${baseMsg}\n\n${userDiffNote}` : baseMsg;
+
+          return {
+            summary: `Updated ${filePath}`,
+            output,
+            userPatch: approval.userPatch,
+            edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+          };
+        },
+      );
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -518,7 +474,7 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      // Read file content
+      // Validation: file must exist and have been read
       const exists = await WorkspaceFS.exists(filePath);
       const readGate = requireFileReadForEdit(filePath, exists);
       if (readGate) {
@@ -530,94 +486,80 @@ export class TextEditorTool extends defineTool({
       const expandedFileContent = fileContent.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      // Split content into lines
+      // Validation: insert line must be in range
       const fileLines = expandedFileContent.split('\n');
       const numLines = fileLines.length;
 
-      // Validate insert line
       if (insertLine < 0 || insertLine > numLines) {
         throw new ToolError(
           `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${numLines}]`,
         );
       }
 
-      // Insert new text
+      // Build proposed content
       const newStrLines = expandedNewStr.split('\n');
       const newFileLines = [
         ...fileLines.slice(0, insertLine),
         ...newStrLines,
         ...fileLines.slice(insertLine),
       ];
-
-      // Write new content to file
       const newFileContent = newFileLines.join('\n');
 
-      const approval = await requestToolEditApproval({
-        path: filePath,
-        originalContent: fileContent,
-        proposedContent: newFileContent,
-        sourceTool: 'text_editor:insert',
-      });
+      // Execute approval flow with history tracking
+      return executeToolEditApprovalFlowWithResult(
+        {
+          path: filePath,
+          originalContent: fileContent,
+          proposedContent: newFileContent,
+          sourceTool: 'text_editor:insert',
+          summaryMessage: `Inserted text into ${filePath}`,
+          skipFileReadCheck: true,
+        },
+        (writeResult, approval) => {
+          const { appliedContent, baseContent } = writeResult;
 
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          filePath,
-          'text_editor:insert',
-          approval.userMessage,
-        );
-      }
+          // Track history for undo support
+          if (appliedContent !== baseContent) {
+            this.addToHistory(filePath, baseContent);
+          }
 
-      const approvedContent = getApprovedContent(approval, newFileContent);
-      const { appliedContent, baseContent } = await writeApprovedContent(
-        filePath,
-        fileContent,
-        approvedContent,
+          // Build snippet output
+          const previewLines = appliedContent.split('\n');
+          const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
+          const snippetEnd = Math.min(
+            previewLines.length,
+            insertLine + newStrLines.length + SNIPPET_LINES,
+          );
+          const snippetText = previewLines
+            .slice(snippetStart, snippetEnd)
+            .join('\n');
+          const startLine = snippetStart + 1;
+          const snippetOutput = this.makeOutput(
+            snippetText,
+            'a snippet of the edited file',
+            startLine,
+          );
+
+          // Format output
+          const userDiffNote = formatUnifiedApprovalUserDiff(
+            filePath,
+            newFileContent,
+            appliedContent,
+          );
+          const successIntro = `The file ${filePath} has been edited.`;
+          const reviewNote =
+            'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
+          const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
+          const output = userDiffNote ? `${baseMsg}\n\n${userDiffNote}` : baseMsg;
+
+          return {
+            summary: `Inserted text into ${filePath}`,
+            output,
+            userPatch: approval.userPatch,
+            edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+          };
+        },
       );
-      if (appliedContent !== baseContent) {
-        this.addToHistory(filePath, baseContent);
-      }
-      const finalContent = appliedContent;
-
-      // Record file as "read" after editing so subsequent edits don't require
-      // an explicit read again.
-      recordToolFileRead(filePath);
-
-      // Prepare success message
-      const previewLines = finalContent.split('\n');
-      const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
-      const snippetEnd = Math.min(
-        previewLines.length,
-        insertLine + newStrLines.length + SNIPPET_LINES,
-      );
-      const snippetText = previewLines
-        .slice(snippetStart, snippetEnd)
-        .join('\n');
-      const startLine = snippetStart + 1;
-      const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
-        newFileContent,
-        finalContent,
-      );
-
-      const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(
-        snippetText,
-        'a snippet of the edited file',
-        startLine,
-      );
-      const reviewNote =
-        'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
-      const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
-      const successMsg = userDiffNote
-        ? `${baseMsg}\n\n${userDiffNote}`
-        : baseMsg;
-
-      return {
-        summary: `Inserted text into ${filePath}`,
-        output: successMsg,
-        userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -633,71 +575,58 @@ export class TextEditorTool extends defineTool({
    */
   private async undoEdit(filePath: string): Promise<ToolResult> {
     try {
-      // Check if there's history for this file
+      // Validation: must have edit history
       const history = this.fileHistory.get(filePath);
       if (!history || history.length === 0) {
         throw new ToolError(`No edit history found for ${filePath}.`);
       }
 
+      // Validation: file must exist and have been read
       const exists = await WorkspaceFS.exists(filePath);
       const readGate = requireFileReadForEdit(filePath, exists);
       if (readGate) {
         return readGate;
       }
 
-      // Restore previous content
       const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
-      const approval = await requestToolEditApproval({
-        path: filePath,
-        originalContent: currentContent,
-        proposedContent: previousContent,
-        sourceTool: 'text_editor:undo_edit',
-      });
+      // Execute approval flow with history cleanup
+      return executeToolEditApprovalFlowWithResult(
+        {
+          path: filePath,
+          originalContent: currentContent,
+          proposedContent: previousContent,
+          sourceTool: 'text_editor:undo_edit',
+          summaryMessage: `Undid edit on ${filePath}`,
+          skipFileReadCheck: true,
+        },
+        (writeResult, approval) => {
+          const { appliedContent } = writeResult;
 
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          filePath,
-          'text_editor:undo_edit',
-          approval.userMessage,
-        );
-      }
+          // Pop from history after successful write
+          history.pop();
+          if (history.length === 0) {
+            this.fileHistory.delete(filePath);
+          }
 
-      const approvedContent = getApprovedContent(approval, previousContent);
-      const { appliedContent } = await writeApprovedContent(
-        filePath,
-        currentContent,
-        approvedContent,
+          // Format output
+          const userDiffNote = formatUnifiedApprovalUserDiff(
+            filePath,
+            previousContent,
+            appliedContent,
+          );
+          const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent, filePath)}`;
+          const output = userDiffNote ? `${baseOutput}\n${userDiffNote}` : baseOutput;
+
+          return {
+            summary: `Undid edit on ${filePath}`,
+            output,
+            userPatch: approval.userPatch,
+            edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+          };
+        },
       );
-      history.pop();
-      const finalContent = appliedContent;
-
-      // Record file as "read" after undo so subsequent edits don't require
-      // an explicit read again.
-      recordToolFileRead(filePath);
-
-      // If the history is now empty, delete the entry
-      if (history.length === 0) {
-        this.fileHistory.delete(filePath);
-      }
-
-      const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
-        previousContent,
-        finalContent,
-      );
-      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;
-      const output = userDiffNote
-        ? `${baseOutput}\n${userDiffNote}`
-        : baseOutput;
-
-      return {
-        summary: `Undid edit on ${filePath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
