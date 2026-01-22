@@ -17,10 +17,6 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import {
-  AgentCategoryFilter,
-  isAgentCategoryFilter,
-} from '@agent/types/AgentStreamTypes';
 import type {
   ExecutionId,
   StorageKey,
@@ -199,7 +195,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * This allows the provider to process any pending updates that
    * were queued while the webview was initializing.
    */
-  protected override async handleWebviewReady(message: any): Promise<void> {
+  protected override async handleWebviewReady(message: unknown): Promise<void> {
     const webviewView = this.getActiveView();
     if (webviewView) {
       await super.handleWebviewReady(message, webviewView);
@@ -242,7 +238,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleDeleteAll(_message: any): Promise<void> {
+  private async handleDeleteAll(_message: unknown): Promise<void> {
     // Show confirmation dialog
     const confirmation = await vscode.window.showWarningMessage(
       'Are you sure you want to delete all streams? This action cannot be undone.',
@@ -424,7 +420,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'sortStreams',
       async ({ sortBy }) => {
-        this.provider.state.streamSortOrder = sortBy ?? 'time';
+        this.provider.state.streamSortOrder = sortBy;
         this.provider.updateWebview();
       },
     );
@@ -436,9 +432,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'filterStreams',
       async ({ filter }) => {
-        this.provider.state.agentCategoryFilter = isAgentCategoryFilter(filter)
-          ? filter
-          : 'all';
+        this.provider.state.agentCategoryFilter = filter;
         this.provider.updateWebview();
       },
     );
@@ -558,30 +552,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleAgentProposalAction(message: unknown): Promise<void> {
-    const parsed = AgentProposalActionMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      this.logger.warn(this.channel, 'Invalid agent proposal action message', {
-        data: { message, error: parsed.error.message },
-      });
-      return;
-    }
-
-    const { proposalId, action, feedback } = parsed.data;
-
-    switch (action) {
-      case 'approve':
-        proposalCoordinator.resolveRequest(proposalId, { action: 'approve' });
-        break;
-      case 'reject':
-        proposalCoordinator.resolveRequest(proposalId, {
-          action: 'reject',
-          feedback,
-        });
-        break;
-      case 'setup':
-        await this.handleAgentProposalSetup(proposalId);
-        break;
-    }
+    await this.withValidatedMessage(
+      AgentProposalActionMessageSchema,
+      message,
+      'agentProposalAction',
+      async ({ proposalId, action, feedback }) => {
+        switch (action) {
+          case 'approve':
+            proposalCoordinator.resolveRequest(proposalId, {
+              action: 'approve',
+            });
+            break;
+          case 'reject':
+            proposalCoordinator.resolveRequest(proposalId, {
+              action: 'reject',
+              feedback,
+            });
+            break;
+          case 'setup':
+            await this.handleAgentProposalSetup(proposalId);
+            break;
+        }
+      },
+    );
   }
 
   /**
