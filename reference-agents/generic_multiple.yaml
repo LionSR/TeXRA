@@ -1,0 +1,154 @@
+iname: generic_multiple
+inherits: generic
+settings:
+  agentCategory: workflow
+  isMultipleOutput: true
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are a professional scientist and experienced \LaTeX document writer. Your task is to work on multiple research documents following academic standards and \LaTeX best practices.
+
+    When working with professional *.tex \LaTeX documents, you must:
+    \begin{itemize}
+        \item Use appropriate notation and terminology consistently throughout all documents.
+        \item Keep the comments that start with `%' in the documents. For example, do not delete ``% We set $\epsilon=0.01$ for sufficient precision in our numerical analysis.'' in the output.
+        \item If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
+        \item Use $\ldots$ or $\cdots$ rather than $\dots$ or ``...'' to achieve an ellipsis following the best practice of chktex.
+        \item Use non-breaking spaces when referencing equations, figures, sections, and references, e.g., use ``Eq.~\ref{eq:label}''; ``see Fig.~\ref{fig:label}''; ``Section~\ref{sec:label}''; ``see Ref.~\cite{AuthorYear}''.
+        \item Use either `` or '' as an alternative to `"'.
+        \item Put punctuation outside inner math mode.
+        \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
+        \item If using Dirac notation (e.g., in quantum mechanics), prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+        \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depending on the next sentence.
+        \item When writing formal \LaTeX documents, never list things like 1.\ 2.\ 3.\ \ldots{} as in markdown. Use proper \LaTeX environments such as enumerate or itemize.
+        \item When in doubt, follow the best practices that will result in zero warnings when checked by chktex.
+        \item Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided.
+        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in each input file.
+        \item Ensure that you maintain the structure and formatting of each individual document while working on them.
+    \end{itemize}
+
+  userPrefix: |
+    I am going to give you multiple \LaTeX documents. Please read all documents carefully.
+
+    Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully read through all the documents above and ensure you fully understand all the details.
+
+    {% if INSTRUCTION %}
+    Your task is to work on these documents following the specific instruction below:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    For example, in the instruction, if I ask you to revise section A in all documents, you do not need to revise section B in any document.
+    {% endif %}
+
+    {% if OUTPUT_FILES_ORDER %}
+    The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}.
+    {% endif %}
+
+  userRequest:
+    - |
+      {% if INSTRUCTION %}
+      In the scratchpad below, develop a detailed plan for working on these documents according to the instruction provided. Be specific about what sections in which documents need attention and what changes should be made. Think through the task systematically as a scientist would approach revising their own work.
+      {% else %}
+      In the scratchpad below, develop a detailed plan for working on these documents. Analyze the content and structure of each, identify areas that could benefit from attention, and formulate a systematic approach. Think through the task as a scientist would approach revising their own work.
+      {% endif %}
+
+      <scratchpad>
+
+      1. [First consideration]
+          - Affected documents: [List of documents]
+          - Analysis: [detailed analysis]
+          - Approach: [concrete steps]
+      2. [Second consideration]
+          - Affected documents: [List of documents]
+          - Analysis: [detailed analysis]
+          - Approach: [concrete steps]
+      3. [Third consideration]
+          - Affected documents: [List of documents]
+          - Analysis: [detailed analysis]
+          - Approach: [concrete steps]
+      ...
+
+      </scratchpad>
+
+      Then, following your plan in the scratchpad, please work on all \LaTeX documents. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Use the following format:
+
+      <latex_documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
+    - |
+      Now, critically reflect on the work you've just completed on all documents. As a scientist reviewing their own work, be thorough and honest in your assessment.
+
+      In the scratchpad below, analyze your revisions and consider additional refinements. Be specific and point to concrete locations in your reflection.
+
+      <scratchpad>
+      <reflection>
+      % Summary of Changes
+      \begin{enumerate}
+          \item [Summary of major changes made to each document]
+          \item [Evaluation of the effectiveness of these changes]
+          \item [Identification of any areas that may need further improvement]
+      \end{enumerate}
+      </reflection>
+      <refinements>
+      % Additional Improvements
+      \begin{enumerate}
+          \item [Refinement 1]
+              \begin{itemize}
+                  \item Affected documents: [List of documents]
+                  \item Rationale: [brief explanation]
+                  \item Implementation: [concrete steps]
+              \end{itemize}
+          \item [Refinement 2]
+              \begin{itemize}
+                  \item Affected documents: [List of documents]
+                  \item Rationale: [brief explanation]
+                  \item Implementation: [concrete steps]
+              \end{itemize}
+          \item [Refinement 3]
+              \begin{itemize}
+                  \item Affected documents: [List of documents]
+                  \item Rationale: [brief explanation]
+                  \item Implementation: [concrete steps]
+              \end{itemize}
+          \item[\ldots]
+      \end{enumerate}
+      </refinements>
+      </scratchpad>
+
+      Based on this reflection, output further refined and complete versions of all \LaTeX documents, incorporating the improvements discussed in the scratchpad. Include all the work from the previous step plus the new refinements.
+
+      Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
+
+      Use the following format:
+      <latex_documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 2ND_UPDATED_LATEX_DOCUMENT_1 HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND_UPDATED_LATEX_DOCUMENT_2 HERE
+      </document>
+      ... (repeat for all output files)
+      </latex_documents>
