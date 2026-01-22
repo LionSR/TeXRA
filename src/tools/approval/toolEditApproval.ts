@@ -464,7 +464,9 @@ async function nativeRequestApproval(
       );
       const appliedContent = openDocument
         ? openDocument.getText()
-        : await fs.readFile(proposedUri.fsPath, 'utf8').catch(() => proposedContent);
+        : await fs
+            .readFile(proposedUri.fsPath, 'utf8')
+            .catch(() => proposedContent);
       const userPatch = computeUserPatch(
         request.path,
         proposedContent,

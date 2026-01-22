@@ -8,7 +8,6 @@ import * as nunjucks from 'nunjucks';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
@@ -95,39 +94,31 @@ export async function writePromptToXml(
   agent: string,
   executionId?: ExecutionId,
 ): Promise<string> {
-  try {
-    const { dir, name } = path.parse(inputFile);
-    const agentName = getAgentFirstNameChunk(agent);
-    const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
+  const { dir, name } = path.parse(inputFile);
+  const agentName = getAgentFirstNameChunk(agent);
+  const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
 
-    if (executionId) {
-      const runDir = path.join(TASK_RUNS_DIR, executionId);
-      const relativeOutputFile = path.join(
-        runDir,
-        `${name}_${agentName}_input.xml`,
-      );
-
-      await StorageFS.ensureDir(TASK_RUNS_DIR);
-      await StorageFS.ensureDir(runDir);
-
-      const storagePath = StorageFS.fullPath(relativeOutputFile);
-      logger.debug(CHANNEL, `Writing input prompt to ${storagePath}`);
-      await StorageFS.write(relativeOutputFile, fullPrompt);
-
-      return storagePath;
-    }
-
-    const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
-    const workspacePath = WorkspaceFS.fullPath(outputFile);
-    logger.debug(CHANNEL, `Writing input prompt to ${workspacePath}`);
-    await WorkspaceFS.write(outputFile, fullPrompt);
-
-    return workspacePath;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error writing prompt to XML: ${toErrorMessage(err)}`,
+  if (executionId) {
+    const runDir = path.join(TASK_RUNS_DIR, executionId);
+    const relativeOutputFile = path.join(
+      runDir,
+      `${name}_${agentName}_input.xml`,
     );
-    throw err;
+
+    await StorageFS.ensureDir(TASK_RUNS_DIR);
+    await StorageFS.ensureDir(runDir);
+
+    const storagePath = StorageFS.fullPath(relativeOutputFile);
+    logger.debug(CHANNEL, `Writing input prompt to ${storagePath}`);
+    await StorageFS.write(relativeOutputFile, fullPrompt);
+
+    return storagePath;
   }
+
+  const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
+  const workspacePath = WorkspaceFS.fullPath(outputFile);
+  logger.debug(CHANNEL, `Writing input prompt to ${workspacePath}`);
+  await WorkspaceFS.write(outputFile, fullPrompt);
+
+  return workspacePath;
 }
