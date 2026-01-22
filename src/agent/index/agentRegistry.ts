@@ -336,15 +336,11 @@ function groupByVariants<T>(
 
   for (const item of items) {
     const name = getName(item);
-    const isMultiple = isMultipleVariant(name);
-    const baseName = isMultiple ? getBaseName(name) : name;
+    const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
+    const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
 
     const group = groups.get(baseName) ?? {};
-    if (isMultiple) {
-      group.multiple = item;
-    } else {
-      group.base = item;
-    }
+    group[isMultiple ? 'multiple' : 'base'] = item;
     groups.set(baseName, group);
   }
 
@@ -489,8 +485,7 @@ export function parseKey(
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
  */
 export function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseKey(agentIdentifier);
-  return parsed ? parsed.name : agentIdentifier;
+  return parseKey(agentIdentifier)?.name ?? agentIdentifier;
 }
 
 // =============================================================================
@@ -504,7 +499,7 @@ export function isMultipleVariant(name: string): boolean {
 
 /** Get base name (strips _multiple suffix if present). */
 export function getBaseName(name: string): string {
-  return isMultipleVariant(name)
+  return name.endsWith(MULTIPLE_SUFFIX)
     ? name.slice(0, -MULTIPLE_SUFFIX.length)
     : name;
 }
@@ -598,15 +593,18 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   for (const entry of entries) {
     // Remote agents use source:name key to preserve uniqueness
     const key =
-      entry.source === 'remote' ? `${entry.source}:${entry.name}` : entry.name;
+      entry.source === 'remote'
+        ? createKey(entry.source, entry.name)
+        : entry.name;
     const existing = byKey.get(key);
 
     // Keep entry if none exists or if this one has higher priority
-    if (
+    const isHigherPriority =
       !existing ||
       LOOKUP_PRIORITY.indexOf(entry.source) <
-        LOOKUP_PRIORITY.indexOf(existing.source)
-    ) {
+        LOOKUP_PRIORITY.indexOf(existing.source);
+
+    if (isHigherPriority) {
       byKey.set(key, entry);
     }
   }

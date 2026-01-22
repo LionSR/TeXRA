@@ -55,13 +55,13 @@ export interface UsageMonitorModelInfo {
  * Takes individual fields instead of full AgentExecutionContext:
  * - logger: For error logging
  * - usageReporter: For reporting usage to UI
- * - getStorageKey: Callback to get current storage key (handles mutable state)
+ * - storageKey: The storage key for this execution (immutable)
  * - streamId: For backend logging
  */
 export interface UsageMonitorContext {
   logger: AgentLogger;
   usageReporter: AgentUsageReporter;
-  getStorageKey: () => StorageKey;
+  storageKey: StorageKey;
   streamId: StreamTabId;
 }
 
@@ -70,11 +70,6 @@ export interface UsageMonitorContext {
  *
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
- *
- * ## Storage Key Resolution
- * Uses getStorageKey() callback which returns the correct key:
- * - Workflow agents: storageKey = task group ID
- * - Tool-use agents: storageKey = executionId
  */
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
@@ -158,9 +153,7 @@ export class UsageMonitor {
         payload.toolUseTokens = toolUseTokens;
       }
 
-      // Get current storageKey via callback - handles mutable state correctly
-      const storageKey = this.context.getStorageKey();
-      usageReporter.report(payload, storageKey);
+      usageReporter.report(payload, this.context.storageKey);
 
       // Note: Context state is emitted by model handlers during token counting
       // (Anthropic, Google, OpenAI). This avoids duplicate emissions and ensures

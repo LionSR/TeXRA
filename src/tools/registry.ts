@@ -148,15 +148,14 @@ export function resolveToolDefinitions(
     const tool = registry.get(name);
     if (!tool) {
       warnOnMissing?.(name);
-      if (typeof item === 'string') {
-        return { name };
-      }
-      return ToolDefinitionSchema.catch({ name }).parse(item);
     }
 
+    // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
-      return tool.definition;
+      return tool?.definition ?? { name };
     }
+
+    // Object items: always parse with schema to validate/merge overrides
     return ToolDefinitionSchema.catch({ name }).parse(item);
   });
 }
