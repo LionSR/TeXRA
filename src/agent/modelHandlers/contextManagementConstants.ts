@@ -34,6 +34,13 @@ export const TOKEN_SAFETY_BUFFER = 10;
 export const HEURISTIC_TOKEN_BUFFER = 5000;
 
 /**
+ * Maximum character length for tool result text sent to models.
+ * Tool results exceeding this limit return an error to prevent context window overflow.
+ * Set to 200KB (200,000 characters) which is roughly 50,000-66,000 tokens depending on content.
+ */
+export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
+
+/**
  * Compute reduced max tokens when context pressure requires adjustment.
  * Ensures minimum completion tokens while respecting available space.
  *
