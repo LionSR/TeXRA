@@ -6,23 +6,6 @@ import { AgentCategory } from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
- * Checks that the number of output files does not exceed the number of input files.
- * Used internally by AgentConfigSchema refinement.
- */
-export function validateOutputFiles(cfg: {
-  inputFile: string;
-  inputFiles: string[];
-  outputFiles: string[];
-}): boolean {
-  if (cfg.outputFiles.length === 0) {
-    return true;
-  }
-
-  const inputs = [cfg.inputFile, ...cfg.inputFiles];
-  return cfg.outputFiles.length <= inputs.length;
-}
-
-/**
  * Base proposal fields shared by both workflow and tool-use agent proposals.
  * Contains only the common fields that all proposal types need.
  */
@@ -137,19 +120,17 @@ export const liftLegacyAgentCategory = (input: unknown): unknown => {
 export const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
   AgentConfigFieldsSchema.superRefine((config, ctx) => {
-    if (
-      !validateOutputFiles({
-        inputFile: config.inputFile,
-        inputFiles: config.inputFiles,
-        outputFiles: config.outputFiles,
-      })
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['outputFiles'],
-        message:
-          'Number of output files must not be greater than the number of input files.',
-      });
+    // Validate that output files count doesn't exceed input files count
+    if (config.outputFiles.length > 0) {
+      const inputCount = 1 + config.inputFiles.length; // inputFile + inputFiles
+      if (config.outputFiles.length > inputCount) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['outputFiles'],
+          message:
+            'Number of output files must not be greater than the number of input files.',
+        });
+      }
     }
   }),
 );

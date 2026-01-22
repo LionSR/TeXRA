@@ -116,13 +116,6 @@ export abstract class BaseViewContentProvider {
     );
   }
 
-  /** URIs shared by all views */
-  private getSharedModuleUris(
-    webview: vscode.Webview,
-  ): Record<string, vscode.Uri> {
-    return this.buildUriRecord(webview, this.sharedModuleDescriptors);
-  }
-
   /**
    * Standard implementation that subclasses can override if needed
    */
@@ -130,7 +123,7 @@ export abstract class BaseViewContentProvider {
     try {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
-      const sharedUris = this.getSharedModuleUris(webview);
+      const sharedUris = this.buildUriRecord(webview, this.sharedModuleDescriptors);
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
 
