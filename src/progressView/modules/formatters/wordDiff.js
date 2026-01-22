@@ -3,11 +3,7 @@
  * Provides clean inline highlighting for text changes.
  */
 
-import {
-  diff_match_patch,
-  DIFF_DELETE,
-  DIFF_INSERT,
-} from 'diff-match-patch';
+import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 import { encodeHtml } from '@common/htmlEncoding.js';
 
 /**

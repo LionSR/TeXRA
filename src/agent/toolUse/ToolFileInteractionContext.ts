@@ -22,18 +22,19 @@ export function withToolFileInteractionContext<T>(
   run: () => Promise<T> | T,
 ): Promise<T> {
   contextStack.push(context);
-  const maybeCleanup = () => {
+
+  function cleanup(): void {
     const index = contextStack.lastIndexOf(context);
     if (index >= 0) {
       contextStack.splice(index, 1);
     }
-  };
+  }
 
   try {
     const result = run();
-    return Promise.resolve(result).finally(maybeCleanup);
+    return Promise.resolve(result).finally(cleanup);
   } catch (error) {
-    maybeCleanup();
+    cleanup();
     throw error;
   }
 }

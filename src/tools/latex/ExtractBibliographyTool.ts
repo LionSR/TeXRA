@@ -52,7 +52,8 @@ export class ExtractBibliographyTool extends defineTool({
     let citationKeys = [...context.citationKeys];
 
     // Use provided bibPath, or fall back to configured default
-    const effectiveBibPath = bibPath || getConfig<string>('texra.bib.defaultPath', '');
+    const effectiveBibPath =
+      bibPath || getConfig<string>('texra.bib.defaultPath', '');
 
     if (effectiveBibPath) {
       const { resolved: bibResolved } = resolveAndFormat(effectiveBibPath);
