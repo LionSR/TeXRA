@@ -62,7 +62,10 @@ export function shouldUseOpenRouter(config: {
   // Models requiring direct API access bypass OpenRouter
   if (config.requiresResponsesAPI) return false;
 
-  return config.openRouterOnly || getConfig<boolean>('texra.model.useOpenRouter', false);
+  return (
+    config.openRouterOnly ||
+    getConfig<boolean>('texra.model.useOpenRouter', false)
+  );
 }
 
 /**
@@ -113,17 +116,24 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   );
 
   if (useImprovedConnection) {
-    const customDomain = getConfig<string>('texra.model.improvedConnectionDomain', '').trim();
+    const customDomain = getConfig<string>(
+      'texra.model.improvedConnectionDomain',
+      '',
+    ).trim();
     const domain = normalizeUrl(customDomain || DEFAULT_PROXY_DOMAIN);
 
     if (!customDomain) {
-      config.logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
+      config.logger?.debug(
+        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
+      );
     }
 
     // OpenRouter uses 'openrouter' path; other providers use their configured paths
     const path = useOpenRouter ? 'openrouter' : PROXY_PATHS[config.provider];
     if (path) {
-      config.logger?.debug(`Using proxy for ${config.provider}: ${domain}/${path}`);
+      config.logger?.debug(
+        `Using proxy for ${config.provider}: ${domain}/${path}`,
+      );
       return `https://${domain}/${path}`;
     }
   }
@@ -132,7 +142,10 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
   // DeepSeek allows custom base URL override
   if (config.provider === ModelProvider.DEEPSEEK) {
-    const customUrl = getConfig<string>('texra.model.baseUrlDeepSeek', '').trim();
+    const customUrl = getConfig<string>(
+      'texra.model.baseUrlDeepSeek',
+      '',
+    ).trim();
     if (customUrl) return `https://${normalizeUrl(customUrl)}`;
   }
 
