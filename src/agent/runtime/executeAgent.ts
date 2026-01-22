@@ -58,7 +58,6 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
-  StorageKeyManager,
 } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -100,10 +99,8 @@ export type { AgentConfigPayload };
 /**
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
- *
- * Extends StorageKeyManager to provide storage key callbacks.
  */
-interface ResolvedAgentBase extends StorageKeyManager {
+interface ResolvedAgentBase {
   modelHandler: IModelHandler<any, any, any, any, any>;
   config: AgentConfig;
   setting: AgentSetting;
@@ -113,6 +110,8 @@ interface ResolvedAgentBase extends StorageKeyManager {
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
+  /** Storage key for file organization (computed once, immutable). */
+  storageKey: StorageKey;
   /** Parent stage for flow execution. Init stage is a child of this. */
   runStage: AgentLogStage;
 }
@@ -189,33 +188,6 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
 }
 
 // ============================================================================
-// Storage Key Management
-// ============================================================================
-
-/**
- * Create a storage key manager with mutable state.
- * Initial key is executionId; updated to runStage.id for workflow agents.
- */
-function createStorageKeyManager(
-  executionId: ExecutionId,
-  logger: AgentLogger,
-): StorageKeyManager {
-  const initialKey = executionId as StorageKey;
-  let key: StorageKey = initialKey;
-
-  return {
-    getStorageKey: () => key,
-    hasInitialStorageKey: () => key === initialKey,
-    updateStorageKey: (newKey: StorageKey) => {
-      if (key !== initialKey) {
-        logger.warn(`Storage key already ${key}, updating to ${newKey}`);
-      }
-      key = newKey;
-    },
-  };
-}
-
-// ============================================================================
 // Agent Resolution
 // ============================================================================
 
@@ -240,9 +212,12 @@ async function resolveAgentBase(
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
-  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(resolution, {
-    preferMultiple: fullConfig.useMultipleOutputs,
-  });
+  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
+    resolution,
+    {
+      preferMultiple: fullConfig.useMultipleOutputs,
+    },
+  );
   const setting = ensureAgentCategoryForSource(
     loadedSettings,
     resolution.entry.source,
@@ -292,23 +267,27 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  // Create storage key manager
-  const storageKeyMgr = createStorageKeyManager(executionId, agentLogger);
-
-  // Create run stage and update storage key
+  // Create run stage and compute storage key (immutable after this point)
   const runStage = await agentLogger.stage(`Run: ${config.agent}`);
-  if (runStage.id && storageKeyMgr.hasInitialStorageKey()) {
-    storageKeyMgr.updateStorageKey(normalizeRunId(runStage.id));
-  }
+  const storageKey: StorageKey = runStage.id
+    ? normalizeRunId(runStage.id)
+    : (executionId as StorageKey);
 
   // Build user variables (workflow agents wrap in Init stage for grouping)
   const agentPath = path.dirname(resolution.definitionPath);
   const buildVars = () =>
-    buildUserVars(config, setting, prompt, agentPath, {
-      isOpenai: modelHandler.isOpenai,
-      isAnthropic: modelHandler.isAnthropic,
-      isGoogle: modelHandler.isGoogle,
-    }, agentLogger);
+    buildUserVars(
+      config,
+      setting,
+      prompt,
+      agentPath,
+      {
+        isOpenai: modelHandler.isOpenai,
+        isAnthropic: modelHandler.isAnthropic,
+        isGoogle: modelHandler.isGoogle,
+      },
+      agentLogger,
+    );
 
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
@@ -323,35 +302,26 @@ async function resolveAgentBase(
   // Create usage monitor
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
-    { logger: agentLogger, usageReporter, getStorageKey: storageKeyMgr.getStorageKey, streamId },
+    { logger: agentLogger, usageReporter, storageKey, streamId },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
-      isMultipleOutput: isWorkflowSetting(setting) ? setting.isMultipleOutput : undefined,
+      isMultipleOutput: isWorkflowSetting(setting)
+        ? setting.isMultipleOutput
+        : undefined,
     },
   );
 
-  // Return all components needed by flow runners.
-  // Note: This matches ResolvedAgentBase interface which flows require.
-  // The many fields reflect the complexity of agent initialization.
   return {
-    // Agent definition
     config,
     setting,
     prompt,
-    // Model
     modelHandler,
-    // Identity
     streamId,
     executionId,
-    // Logging
     logger: agentLogger,
     runStage,
-    // Storage
-    getStorageKey: storageKeyMgr.getStorageKey,
-    hasInitialStorageKey: storageKeyMgr.hasInitialStorageKey,
-    updateStorageKey: storageKeyMgr.updateStorageKey,
-    // Runtime data
+    storageKey,
     userVarChannels,
     usageMonitor,
   };
@@ -647,7 +617,12 @@ export async function executeMergeAgent(
   let ctx: ResolvedAgentBase;
   let resolutionSucceeded = false;
   try {
-    ctx = await resolveAgentBase({ agent: 'merge', model, inputFile, editedFile });
+    ctx = await resolveAgentBase({
+      agent: 'merge',
+      model,
+      inputFile,
+      editedFile,
+    });
     resolutionSucceeded = true;
   } finally {
     if (!resolutionSucceeded) {

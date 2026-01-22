@@ -192,7 +192,15 @@ function extractOutputContent(candidate) {
   if (!isPlainObject(candidate)) return candidate;
 
   // Extract nested output, stripping metadata fields
-  const { output, summary, error, isError, diagnostics, userInstruction, ...rest } = candidate;
+  const {
+    output,
+    summary,
+    error,
+    isError,
+    diagnostics,
+    userInstruction,
+    ...rest
+  } = candidate;
   return output !== undefined ? output : rest;
 }
 
@@ -219,7 +227,10 @@ export function normalizeToolUseLog(structured) {
   const nested = isPlainObject(structured.output) ? structured.output : {};
   const summaryText = firstTrimmed(structured.summary, nested.summary);
   const errorText = firstTrimmed(structured.error, nested.error);
-  const userInstructionText = firstTrimmed(structured.userInstruction, nested.userInstruction);
+  const userInstructionText = firstTrimmed(
+    structured.userInstruction,
+    nested.userInstruction,
+  );
 
   const outputContent = extractOutputContent(structured.output);
   const outputText = formatOutputText(outputContent);
