@@ -1220,9 +1220,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Set useMultipleOutputs when we have multiple output files
     const useMultipleOutputs =
-      attachAgentOutputs && outputFiles.length > 1
-        ? true
-        : originalConfig.useMultipleOutputs;
+      (attachAgentOutputs && outputFiles.length > 1) ||
+      originalConfig.useMultipleOutputs;
 
     const newConfig = {
       ...originalConfig,

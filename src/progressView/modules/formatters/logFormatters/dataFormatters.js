@@ -253,13 +253,13 @@ const extractLegacyFormat = (entry) => {
 const buildLatexdiffEntryHtml = (entry) => {
   if (!entry) return '';
 
-  // Extract fields based on format
-  const data =
-    entry.revised && typeof entry.revised === 'object'
-      ? extractNewFormat(entry)
-      : entry.locations
-        ? extractLegacyFormat(entry)
-        : null;
+  // Extract fields based on format - new format has revised object, legacy has locations
+  let data = null;
+  if (entry.revised && typeof entry.revised === 'object') {
+    data = extractNewFormat(entry);
+  } else if (entry.locations) {
+    data = extractLegacyFormat(entry);
+  }
 
   if (!data) return '';
 

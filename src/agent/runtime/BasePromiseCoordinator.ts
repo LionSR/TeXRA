@@ -95,16 +95,16 @@ export abstract class BasePromiseCoordinator<
     }
 
     return new Promise<TResult>((resolve) => {
-      const timeoutId =
-        options?.timeoutMs && options.timeoutMs > 0
-          ? setTimeout(() => {
-              const req = this.requests.get(id);
-              if (req?.status === 'pending' && req.resolve === resolve) {
-                const result = options.onTimeout?.() ?? this.getTimeoutResult();
-                this.resolveRequest(id, result);
-              }
-            }, options.timeoutMs)
-          : undefined;
+      let timeoutId: NodeJS.Timeout | undefined;
+      if (options?.timeoutMs && options.timeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          const req = this.requests.get(id);
+          if (req?.status === 'pending' && req.resolve === resolve) {
+            const result = options.onTimeout?.() ?? this.getTimeoutResult();
+            this.resolveRequest(id, result);
+          }
+        }, options.timeoutMs);
+      }
 
       this.requests.set(id, {
         status: 'pending',

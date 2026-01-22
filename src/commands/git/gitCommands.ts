@@ -56,13 +56,21 @@ function getRecentCommits(): string[] | null {
 
   const result = execaSync(
     'git',
-    ['log', '-n', String(numberOfCommits), `--pretty=format:${COMMIT_LABEL_FORMAT}`],
+    [
+      'log',
+      '-n',
+      String(numberOfCommits),
+      `--pretty=format:${COMMIT_LABEL_FORMAT}`,
+    ],
     { cwd: workspacePath, reject: false },
   );
   if (result.exitCode !== 0) {
     return [];
   }
-  return result.stdout.toString().split('\n').map((line) => line.trim());
+  return result.stdout
+    .toString()
+    .split('\n')
+    .map((line) => line.trim());
 }
 
 function findCommitInHistory(commitHash: string): string | null {
