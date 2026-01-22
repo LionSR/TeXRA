@@ -8,7 +8,6 @@
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 
@@ -21,7 +20,6 @@ export interface ToolUseFlowContextInit<
   setting: AgentToolUseSetting;
   toolRegistry?: IToolRegistry;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
-  getUsageRecorder?: () => RoundFinalizedCallback;
   onFollowUpConsumed?: () => void;
 }
 
