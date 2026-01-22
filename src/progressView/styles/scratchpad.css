@@ -169,7 +169,7 @@
   padding: 0 2px;
 }
 
-/* Syntax highlighted code blocks */
+/* Syntax highlighted code blocks (base hljs styling) */
 pre.hljs {
   padding: var(--spacing-small);
   overflow-x: auto;
