@@ -130,24 +130,6 @@ async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
   await fs.unlink(uri.fsPath).catch(() => {});
 }
 
-async function readCurrentContent(
-  uri: vscode.Uri,
-  fallback: string,
-): Promise<string> {
-  const openDocument = vscode.workspace.textDocuments.find(
-    (document) => document.uri.toString() === uri.toString(),
-  );
-  if (openDocument) {
-    return openDocument.getText();
-  }
-
-  try {
-    return await fs.readFile(uri.fsPath, 'utf8');
-  } catch (_err) {
-    return fallback;
-  }
-}
-
 export function setToolEditApprovalSessionBypass(enabled: boolean): void {
   approvalsBypassedForSession = enabled;
   notifyProgressViewApprovalBypassState();
@@ -202,10 +184,6 @@ function resolveProgressViewApprovalPrompt(requestId: string): void {
   bus.emit('resolveToolEditApprovalPrompt', { requestId });
 }
 
-function countNewlines(value: string): number {
-  return (value.match(/\n/g) ?? []).length;
-}
-
 function createSemanticDiffs(
   original: string,
   proposed: string,
@@ -251,7 +229,7 @@ function firstChangedLine(original: string, proposed: string): number | null {
   for (const [type, text] of diffs) {
     switch (type) {
       case DIFF_EQUAL:
-        proposedLine += countNewlines(text);
+        proposedLine += (text.match(/\n/g) ?? []).length;
         break;
       case DIFF_INSERT:
         return proposedLine;
@@ -480,10 +458,13 @@ async function nativeRequestApproval(
     });
 
     if (result.accepted) {
-      const appliedContent = await readCurrentContent(
-        proposedUri,
-        proposedContent,
+      // Read current content from open document or file, falling back to proposedContent
+      const openDocument = vscode.workspace.textDocuments.find(
+        (doc) => doc.uri.toString() === proposedUri.toString(),
       );
+      const appliedContent = openDocument
+        ? openDocument.getText()
+        : await fs.readFile(proposedUri.fsPath, 'utf8').catch(() => proposedContent);
       const userPatch = computeUserPatch(
         request.path,
         proposedContent,
