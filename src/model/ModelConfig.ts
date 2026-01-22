@@ -76,12 +76,9 @@ export type ModelRegistry = z.infer<typeof ModelRegistrySchema>;
 // Compile-time assertions - ensure schemas stay synchronized with llm-zoo types
 // ============================================================================
 
-type SchemaModelConfig = z.infer<typeof ModelConfigSchema>;
-type SchemaModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
-
 // These will fail at compile time if local schemas diverge from llm-zoo types
-const _assertModelConfig: SchemaModelConfig = {} as ModelConfig;
-const _assertModelCapabilities: SchemaModelCapabilities =
+const _assertModelConfig: z.infer<typeof ModelConfigSchema> = {} as ModelConfig;
+const _assertModelCapabilities: z.infer<typeof ModelCapabilitiesSchema> =
   {} as ModelCapabilities;
 
 // Suppress unused variable warnings
