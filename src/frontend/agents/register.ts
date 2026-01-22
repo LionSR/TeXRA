@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { getBaseName, getMultipleName } from '@agent/index/agentRegistry';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import {
-  AgentType,
+  AgentCategory,
   type AgentSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
@@ -38,10 +38,10 @@ export type AgentRegistrationSkipReason =
 function asWorkflowSetting(
   setting?: AgentSetting,
 ): AgentWorkflowSetting | undefined {
-  if (!setting || setting.agentType === AgentType.ToolUse) {
+  if (!setting || setting.agentCategory === AgentCategory.ToolUse) {
     return undefined;
   }
-  return setting;
+  return setting as AgentWorkflowSetting;
 }
 
 export function getAgentRegistrationSkipReason(

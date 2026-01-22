@@ -297,16 +297,16 @@ export class TaskGroupDomManager {
   /**
    * Show/hide task groups based on the selected run.
    *
-   * For toolUse sessions, always shows ALL groups (conversation history).
-   * For workflow sessions, shows only the specified run (or all if null).
+   * For toolUse agents, always shows ALL groups (conversation history).
+   * For workflow agents, shows only the specified run (or all if null).
    *
    * @param {string|null} groupId - The run ID to show, or null to show all
    */
   showRun(groupId) {
-    // ToolUse sessions show all groups as conversation turns (append-only history)
-    // Workflow sessions filter to single run (mutually exclusive runs)
+    // ToolUse agents show all groups as conversation turns (append-only history)
+    // Workflow agents filter to single run (mutually exclusive runs)
     const showAll =
-      progressViewState.activeSessionKind === 'toolUse' ||
+      progressViewState.activeAgentCategory === 'toolUse' ||
       !groupId ||
       !this.groupElements.has(groupId);
 

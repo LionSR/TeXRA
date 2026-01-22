@@ -3,7 +3,7 @@
  *
  * Executes workflow-style agents that run for a fixed number of rounds,
  * producing structured output. Behavior is configuration-driven:
- * - `setting.maxRounds`: Number of reflection rounds
+ * - Total rounds = max(setting.rounds, userRequest.length)
  * - `setting.xmlStructureMode`: 'never' | 'scratchpadOnly' | 'always'
  *
  * The flow manages:
@@ -114,51 +114,32 @@ interface DerivedConfig {
   outputExt: string;
 }
 
-/** XML structure mode lookup - explicit setting takes precedence. */
-const XML_STRUCTURE_MODE_MAP: Record<
-  NonNullable<AgentWorkflowSetting['xmlStructureMode']>,
-  boolean | 'scratchpad'
-> = {
-  always: true,
-  scratchpadOnly: 'scratchpad',
-  never: false,
-};
-
-/** Agent type defaults when xmlStructureMode is not set. */
-const AGENT_TYPE_XML_DEFAULTS: Record<string, boolean | 'scratchpad'> = {
-  CoT: true,
-  direct: 'scratchpad',
-};
-
 /** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
 function shouldEnforceXmlStructure(
   setting: AgentWorkflowSetting,
   useScratchpad: boolean,
 ): boolean {
-  const mode =
-    setting.xmlStructureMode !== undefined
-      ? XML_STRUCTURE_MODE_MAP[setting.xmlStructureMode]
-      : (AGENT_TYPE_XML_DEFAULTS[setting.agentType] ?? false);
+  const mode = setting.xmlStructureMode ?? 'scratchpadOnly';
 
-  if (mode === 'scratchpad') {
-    return useScratchpad;
+  switch (mode) {
+    case 'always':
+      return true;
+    case 'never':
+      return false;
+    case 'scratchpadOnly':
+      return useScratchpad;
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
+    }
   }
-  return mode;
 }
 
-/** Compute the total number of rounds based on settings and prompt. */
+/** Compute the total number of rounds: max(setting.rounds, userRequest.length) */
 function computeTotalRounds(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): number {
-  if (setting.maxRounds !== undefined) {
-    return setting.maxRounds;
-  }
-
-  if (setting.agentType === 'direct') {
-    return 1;
-  }
-
   let requests: string[];
   if (Array.isArray(prompt.userRequest)) {
     requests = prompt.userRequest;
@@ -167,6 +148,7 @@ function computeTotalRounds(
   } else {
     requests = [];
   }
+
   return Math.max(setting.rounds ?? 2, requests.length);
 }
 

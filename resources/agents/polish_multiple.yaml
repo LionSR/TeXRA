@@ -1,7 +1,7 @@
 name: polish_multiple
 inherits: polish
 settings:
-  agentType: CoT
+  agentCategory: workflow
   isMultipleOutput: true
   documentTag: latex_documents
   endTag: </latex_documents>

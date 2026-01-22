@@ -25,9 +25,8 @@ import { SUPABASE_CONFIG } from '@/auth/config';
 
 import {
   RemoteAgentListItemSchema,
-  RemoteAgentMetadataSchema,
+  EdgeFunctionResponseSchema,
   type RemoteAgentListItem,
-  type RemoteAgentMetadata,
   type RemoteAgentConfig,
   type RemoteAgentLoadOptions,
 } from './types';
@@ -109,6 +108,7 @@ function parseListItemRow(row: {
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
+  // Schema handles NULL -> Workflow defaulting via transform
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
@@ -240,18 +240,11 @@ export class RemoteAgentLoader {
           throw new Error(message);
         }
 
-        const {
-          config: yamlContent,
-          name: responseName,
-          visibility,
-          agentCategory,
-        } = await response.json();
-
-        if (!yamlContent) {
-          throw new Error(
-            'Server returned empty configuration. Contact support.',
-          );
-        }
+        // Validate edge function response
+        const responseData = EdgeFunctionResponseSchema.parse(
+          await response.json(),
+        );
+        const yamlContent = responseData.config;
 
         logger.debug(
           CHANNEL,
@@ -284,16 +277,8 @@ export class RemoteAgentLoader {
         }
 
         return {
-          name: validated.name || responseName || agentName,
           settings: parseAgentSetting(settings),
           prompts: AgentPromptSchema.parse(validated.prompts),
-          metadata: RemoteAgentMetadataSchema.parse({
-            id: '',
-            name: responseName || agentName,
-            description: validated.description,
-            visibility,
-            agentCategory,
-          }),
         };
       } catch (error) {
         // If this is the last candidate, throw the error

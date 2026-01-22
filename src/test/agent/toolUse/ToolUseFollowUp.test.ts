@@ -26,7 +26,7 @@ describe('ToolUseFollowUp', () => {
     agentConfig: AgentConfigSchema.parse({
       model: 'demo-model',
       agent: 'demo-agent',
-      session: { agentType: 'toolUse', agentCategory: 'toolUse' },
+      agentCategory: 'toolUse',
     }),
     messages: [],
     // State slices stored directly (v2 schema)

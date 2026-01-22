@@ -129,8 +129,8 @@ export class EventsManager {
             return;
           }
 
-          if (progressViewState.agentTypeFilter !== filter) {
-            progressViewState.agentTypeFilter = filter;
+          if (progressViewState.agentCategoryFilter !== filter) {
+            progressViewState.agentCategoryFilter = filter;
             progressViewState.pendingFilterUpdate = true;
             // Persist the new selection immediately so updates don't snap back
             vscode.postMessage({

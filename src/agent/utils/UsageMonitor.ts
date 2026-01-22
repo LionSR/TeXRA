@@ -26,7 +26,7 @@ export interface UsageMonitorMetadata {
   /** Agent name for backend logging */
   agentName?: string;
   /** Agent category: workflow or toolUse */
-  agentCategory?: `${AgentCategory}`;
+  agentCategory?: AgentCategory;
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput?: boolean;
 }

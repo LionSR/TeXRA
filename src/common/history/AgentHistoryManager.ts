@@ -39,11 +39,6 @@ export class AgentHistoryManager {
     config: AgentConfig,
   ): Promise<void> {
     const normalizedConfig = AgentConfigSchema.parse(config);
-    if (!normalizedConfig.session) {
-      throw new Error(
-        'Agent history cannot store configs without session metadata.',
-      );
-    }
 
     const historyItem: AgentHistoryItem = {
       id: executionId,
@@ -125,10 +120,6 @@ export class AgentHistoryManager {
         logger.warn(CHANNEL, 'Discarding malformed agent history entry', {
           data: error,
         });
-        continue;
-      }
-
-      if (!normalizedConfig.session) {
         continue;
       }
 
