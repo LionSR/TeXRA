@@ -236,7 +236,7 @@ prompts:
 
       CROSS-DOCUMENT:
       - [Document 1: original result]
-        \criticize{Implemented: Strengthened to full finite-time result (proof in new Appendix~\ref{app:finite}). This enables the generalization in Document 2, Section 3.}{4}{4}
+        \criticize{Implemented: Strengthened to full finite-time result (proof in new Appendix~\ref{app:finite}). This enables the generalization in \cref{sec:generalization}.}{4}{4}
       - [Document 2: now uses strengthened result from Document 1]
 
       <latex_documents>
@@ -354,10 +354,10 @@ prompts:
 
       - Cross-document:
         [Document 1: strengthened result]
-        \criticize{Implemented: Extended from asymptotic to full finite-time regime (Appendix~\ref{app:finite}). This strengthening enables the applications in Supplementary Material Section 2.}{4}{4}
+        \criticize{Implemented: Extended from asymptotic to full finite-time regime (Appendix~\ref{app:finite}). This strengthening enables the applications in \cref{supp:applications}.}{4}{4}
         [Document 2: now uses stronger result]
         The finite-time bound from the main text now gives...
-        \criticize{Enhancement: Using strengthened result from main text Theorem 3. Previous version only had asymptotic bound.}{3}{5}
+        \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
 
       Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
 
