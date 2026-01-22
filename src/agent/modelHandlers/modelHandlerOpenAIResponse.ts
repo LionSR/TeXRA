@@ -225,7 +225,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return null;
     }
 
-    this.logger.info(`Resuming polling for pending background response ${pendingId}`);
+    this.logger.info(
+      `Resuming polling for pending background response ${pendingId}`,
+    );
 
     let pendingResponse: Response;
     try {
@@ -252,14 +254,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.debug(
         `Pending background response ${pendingId} still processing (status: ${pendingResponse.status}), resuming poll`,
       );
-      const response = await this.waitForBackgroundCompletion(client, pendingResponse, signal);
+      const response = await this.waitForBackgroundCompletion(
+        client,
+        pendingResponse,
+        signal,
+      );
       this.clearPendingBackgroundResponse();
       return response;
     }
 
     if (pendingResponse.status === 'completed') {
       // Already completed while we were disconnected
-      this.logger.info(`Pending background response ${pendingId} already completed`);
+      this.logger.info(
+        `Pending background response ${pendingId} already completed`,
+      );
       this.clearPendingBackgroundResponse();
       return pendingResponse;
     }
@@ -354,6 +362,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.resetConversationState();
+    this.clearPendingBackgroundResponse();
   }
 
   /** Retrieve the stored previous response ID. */
@@ -545,6 +554,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.resetConversationState();
+    this.clearPendingBackgroundResponse();
 
     const messages: ResponseInputItem[] = [];
 
@@ -955,10 +965,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     try {
       // Try to resume a pending background response (for retry after connection error)
       if (useBackgroundResponses && this.pendingBackgroundResponseId) {
-        const resumedResponse = await this.tryResumeBackgroundResponse(client, signal);
+        const resumedResponse = await this.tryResumeBackgroundResponse(
+          client,
+          signal,
+        );
         if (resumedResponse) {
           // Successfully resumed - finalize and return
-          this.finalizeResponse(resumedResponse, effectiveMessages.length, compactedThisCall);
+          this.finalizeResponse(
+            resumedResponse,
+            effectiveMessages.length,
+            compactedThisCall,
+          );
           return resumedResponse;
         }
         // Resume failed or response failed remotely - fall through to create new request
