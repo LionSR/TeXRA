@@ -337,9 +337,7 @@ function groupByVariants<T>(
   for (const item of items) {
     const name = getName(item);
     const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
-    const baseName = isMultiple
-      ? name.slice(0, -MULTIPLE_SUFFIX.length)
-      : name;
+    const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
 
     const group = groups.get(baseName) ?? {};
     group[isMultiple ? 'multiple' : 'base'] = item;
