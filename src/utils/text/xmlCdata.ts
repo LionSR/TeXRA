@@ -3,9 +3,6 @@
  * Single source of truth for CDATA operations in XML content.
  */
 
-// Local imports - common
-import { toErrorMessage } from '@common/errors';
-
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
@@ -33,15 +30,10 @@ export function removeCDATA(content: string): string {
  * Wrap content of specified tags with CDATA sections
  */
 export function addCdataToTags(xmlData: string, tags: string[]): string {
-  try {
-    return tags.reduce((result, tag) => {
-      const pattern = new RegExp(`(<${tag}>)(.*?)(</${tag}>)`, 'gs');
-      return result.replace(pattern, '$1<![CDATA[$2]]>$3');
-    }, xmlData);
-  } catch (err) {
-    logger.error(CHANNEL, `Error adding CDATA to tags: ${toErrorMessage(err)}`);
-    throw err;
-  }
+  return tags.reduce((result, tag) => {
+    const pattern = new RegExp(`(<${tag}>)(.*?)(</${tag}>)`, 'gs');
+    return result.replace(pattern, '$1<![CDATA[$2]]>$3');
+  }, xmlData);
 }
 
 /**
