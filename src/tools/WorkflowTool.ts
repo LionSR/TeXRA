@@ -95,11 +95,9 @@ function proposalResultToToolResult(
       const feedback = result.feedback?.trim();
       return {
         summary: `User rejected '${agentName}' ${label}`,
-        output: `The ${context === 'workflow' ? 'workflow agent proposal' : 'delegation proposal'} was rejected.`,
+        output: `The ${label} was rejected.`,
         isError: true,
-        ...(feedback && feedback.length > 0
-          ? { userInstruction: feedback }
-          : {}),
+        ...(feedback ? { userInstruction: feedback } : {}),
       };
     }
     case 'timeout':

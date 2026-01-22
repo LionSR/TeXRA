@@ -165,18 +165,16 @@ export class OutputFileProcessor {
         );
       }
 
-      const hasProcessedPath = Boolean(processed.location.absolutePath);
+      const processedFiles = processed.location.absolutePath
+        ? [processed]
+        : [];
 
-      if (hasProcessedPath) {
+      if (processedFiles.length > 0) {
         await indentLatexFile(processed.location, logger);
         logger.debug(
           `Indented single output file: ${processed.location.absolutePath}`,
         );
-      }
 
-      const processedFiles = hasProcessedPath ? [processed] : [];
-
-      if (hasProcessedPath) {
         if (baseFiles.length > 0) {
           await replaceInputCommands(
             baseFiles,
@@ -184,13 +182,12 @@ export class OutputFileProcessor {
             logger,
           );
         }
-        this.ctx.setRoundOutputs(currRound, processedFiles);
       } else {
         logger.debug(
           `No processed file was generated from ${outputLocation.absolutePath}`,
         );
-        this.ctx.setRoundOutputs(currRound, []);
       }
+      this.ctx.setRoundOutputs(currRound, processedFiles);
 
       await this.captureXmlSummary(
         currRound,
