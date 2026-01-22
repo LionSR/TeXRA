@@ -28,6 +28,8 @@ prompts:
 
     Mathematical Communication: (1) Use $...$ for inline math expressions. (2) Define all notation before use. (3) Show reasoning step-by-step, not just final results. (4) For complex problems, outline your approach before diving into details.
 
+    LaTeX Best Practices: (1) Use `` and '' instead of "..." for quotes. (2) Follow chktex best practices (no warnings). (3) Use appropriate mathematical environments (equation, align, etc.). (4) Keep mathematical notation consistent throughout. (5) All inline mathematical variables must be enclosed in $...$, not backticks.
+
     Research Workflow:
     (1) Use web_search and web_fetch to find current information, news, and general resources.
     (2) Use arxiv_search and arxiv_metadata for preprints and recent academic work.
