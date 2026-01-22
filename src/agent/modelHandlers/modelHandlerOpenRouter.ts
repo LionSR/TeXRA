@@ -4,8 +4,18 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 /**
  * OpenRouter reasoning_details item type.
- * Defined locally since @openrouter/sdk/models subpath export requires moduleResolution: node16+
+ *
+ * Note: This type is intentionally defined locally rather than imported from
+ * `@openrouter/sdk/models` (Schema2 type) because:
+ * - The SDK uses ESM subpath exports which require `moduleResolution: "node16"` or higher
+ * - This project uses `moduleResolution: "node"` in tsconfig.json
+ * - Changing moduleResolution would have broader implications across the codebase
+ *
+ * The SDK's Schema2 type is equivalent but includes additional optional fields
+ * (signature, id, format, index) that we don't need for our use case.
+ *
  * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ * @see Schema2 in @openrouter/sdk/esm/models/schema2.d.ts for SDK equivalent
  */
 type ReasoningDetailItem =
   | { type: 'reasoning.text'; text?: string | null }
