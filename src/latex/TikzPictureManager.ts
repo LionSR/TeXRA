@@ -5,7 +5,6 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { renderPrompt } from '@utils/prompt';
 import {
@@ -87,40 +86,32 @@ export class TikzPictureManager {
     latexFile: FileLocation,
     channel: string = this.channel,
   ): Promise<[string, string[]][]> {
-    try {
-      const content = await flexibleFS.read(latexFile);
+    const content = await flexibleFS.read(latexFile);
 
-      // Regular expressions to match figure environments and tikzpictures
-      const figurePattern =
-        /\\begin{figure}.*?\\label\{(.*?)\}.*?\\end{figure}/gs;
-      const tikzPattern = /\\begin{tikzpicture}.*?\\end{tikzpicture}/gs;
+    // Regular expressions to match figure environments and tikzpictures
+    const figurePattern =
+      /\\begin{figure}.*?\\label\{(.*?)\}.*?\\end{figure}/gs;
+    const tikzPattern = /\\begin{tikzpicture}.*?\\end{tikzpicture}/gs;
 
-      const labeledTikzPictures: [string, string[]][] = [];
+    const labeledTikzPictures: [string, string[]][] = [];
 
-      let figureMatch;
-      while ((figureMatch = figurePattern.exec(content)) !== null) {
-        const figureContent = figureMatch[0];
-        const label = figureMatch[1];
+    let figureMatch;
+    while ((figureMatch = figurePattern.exec(content)) !== null) {
+      const figureContent = figureMatch[0];
+      const label = figureMatch[1];
 
-        // Find all tikzpictures in this figure
-        const tikzMatches = [...figureContent.matchAll(tikzPattern)].map(
-          (match) => match[0],
-        );
-
-        if (tikzMatches.length > 0) {
-          labeledTikzPictures.push([label, tikzMatches]);
-          logger.debug(channel, `Found TikZ picture with label: ${label}`);
-        }
-      }
-
-      return labeledTikzPictures;
-    } catch (err) {
-      logger.error(
-        channel,
-        `Error extracting TikZ pictures: ${toErrorMessage(err)}`,
+      // Find all tikzpictures in this figure
+      const tikzMatches = [...figureContent.matchAll(tikzPattern)].map(
+        (match) => match[0],
       );
-      throw err;
+
+      if (tikzMatches.length > 0) {
+        labeledTikzPictures.push([label, tikzMatches]);
+        logger.debug(channel, `Found TikZ picture with label: ${label}`);
+      }
     }
+
+    return labeledTikzPictures;
   }
 
   /**
@@ -139,34 +130,26 @@ export class TikzPictureManager {
     suffix?: string,
     channel: string = this.channel,
   ): Promise<FileLocation> {
-    try {
-      const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
-        tikzpicture: tikzpictures,
-      });
+    const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
+      tikzpicture: tikzpictures,
+    });
 
-      const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-      const buildDir = getLocationPath(buildDirLocation);
-      const fileRelativePath = path.join(buildDir, filename);
+    const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
+    const buildDir = getLocationPath(buildDirLocation);
+    const fileRelativePath = path.join(buildDir, filename);
 
-      const texLocation = this.createLocation(
-        fileRelativePath,
-        path.join(buildDirLocation.absolutePath, filename),
-      );
+    const texLocation = this.createLocation(
+      fileRelativePath,
+      path.join(buildDirLocation.absolutePath, filename),
+    );
 
-      await flexibleFS.write(texLocation, standaloneContent);
-      logger.debug(
-        channel,
-        `Created standalone LaTeX file: ${texLocation.absolutePath}`,
-      );
+    await flexibleFS.write(texLocation, standaloneContent);
+    logger.debug(
+      channel,
+      `Created standalone LaTeX file: ${texLocation.absolutePath}`,
+    );
 
-      return texLocation;
-    } catch (err) {
-      logger.error(
-        channel,
-        `Error creating standalone LaTeX: ${toErrorMessage(err)}`,
-      );
-      throw err;
-    }
+    return texLocation;
   }
 
   /**
@@ -179,79 +162,71 @@ export class TikzPictureManager {
     latexFile: FileLocation,
     channel: string = this.channel,
   ): Promise<FileLocation[]> {
-    try {
-      const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
-      const inputDir = path.dirname(getLocationPath(latexFile));
-      const buildRelativePath = path.join(inputDir, 'build', inputName);
+    const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
+    const inputDir = path.dirname(getLocationPath(latexFile));
+    const buildRelativePath = path.join(inputDir, 'build', inputName);
 
-      const buildDirLocation = this.createLocation(
-        buildRelativePath,
-        path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
-      );
+    const buildDirLocation = this.createLocation(
+      buildRelativePath,
+      path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
+    );
 
-      await flexibleFS.ensureDir(buildDirLocation);
+    await flexibleFS.ensureDir(buildDirLocation);
 
-      logger.debug(
-        channel,
-        `Extracting TikZ pictures from ${latexFile.absolutePath}`,
-      );
-      const labeledTikzPictures = await this.extract(latexFile, channel);
-      logger.debug(
-        channel,
-        `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
-      );
+    logger.debug(
+      channel,
+      `Extracting TikZ pictures from ${latexFile.absolutePath}`,
+    );
+    const labeledTikzPictures = await this.extract(latexFile, channel);
+    logger.debug(
+      channel,
+      `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
+    );
 
-      const compiledFiles: FileLocation[] = [];
+    const compiledFiles: FileLocation[] = [];
 
-      for (const [label, tikzpicturess] of labeledTikzPictures) {
-        const suffixes =
-          tikzpicturess.length > 1
-            ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i))
-            : [undefined];
+    for (const [label, tikzpicturess] of labeledTikzPictures) {
+      const suffixes =
+        tikzpicturess.length > 1
+          ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i))
+          : [undefined];
 
-        for (let i = 0; i < tikzpicturess.length; i++) {
-          const tikzpictures = tikzpicturess[i];
-          const suffix = suffixes[i];
+      for (let i = 0; i < tikzpicturess.length; i++) {
+        const tikzpictures = tikzpicturess[i];
+        const suffix = suffixes[i];
 
-          const texLocation = await this.createStandalone(
-            tikzpictures,
-            label,
-            buildDirLocation,
-            suffix,
+        const texLocation = await this.createStandalone(
+          tikzpictures,
+          label,
+          buildDirLocation,
+          suffix,
+          channel,
+        );
+        await compileLatex2Pdf(texLocation, { channel });
+
+        // Derive PDF location from tex location
+        const pdfFilename = path
+          .basename(texLocation.absolutePath)
+          .replace(/\.tex$/, '.pdf');
+        const texDir = path.dirname(getLocationPath(texLocation));
+        const pdfRelativePath = path.join(texDir, pdfFilename);
+
+        const pdfLocation = this.createLocation(
+          pdfRelativePath,
+          path.join(path.dirname(texLocation.absolutePath), pdfFilename),
+        );
+
+        if (await flexibleFS.exists(pdfLocation)) {
+          compiledFiles.push(pdfLocation);
+          logger.debug(
             channel,
+            `Successfully compiled: ${pdfLocation.absolutePath}`,
           );
-          await compileLatex2Pdf(texLocation, { channel });
-
-          // Derive PDF location from tex location
-          const pdfFilename = path
-            .basename(texLocation.absolutePath)
-            .replace(/\.tex$/, '.pdf');
-          const texDir = path.dirname(getLocationPath(texLocation));
-          const pdfRelativePath = path.join(texDir, pdfFilename);
-
-          const pdfLocation = this.createLocation(
-            pdfRelativePath,
-            path.join(path.dirname(texLocation.absolutePath), pdfFilename),
-          );
-
-          if (await flexibleFS.exists(pdfLocation)) {
-            compiledFiles.push(pdfLocation);
-            logger.debug(
-              channel,
-              `Successfully compiled: ${pdfLocation.absolutePath}`,
-            );
-          }
         }
       }
-
-      return compiledFiles;
-    } catch (err) {
-      logger.error(
-        channel,
-        `Error extracting and compiling TikZ pictures: ${toErrorMessage(err)}`,
-      );
-      throw err;
     }
+
+    return compiledFiles;
   }
 }
 
