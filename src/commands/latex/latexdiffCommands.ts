@@ -430,7 +430,25 @@ async function handleRunLatexdiff(
       typeof config.runId === 'string' && config.runId.length > 0
         ? config.runId
         : undefined;
-    const outputsByRound = normalizeOutputsByRound(config.outputsByRound);
+
+    // Normalize outputsByRound from raw config
+    let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
+    const rawOutputsByRound = config.outputsByRound;
+    if (rawOutputsByRound && typeof rawOutputsByRound === 'object') {
+      const roundMap = new Map<number, OutputFileInfo[]>();
+      for (const [roundKey, value] of Object.entries(rawOutputsByRound)) {
+        const roundResult = RoundKeySchema.safeParse(roundKey);
+        if (roundResult.success && Array.isArray(value) && value.length > 0) {
+          roundMap.set(roundResult.data, value);
+        }
+      }
+      if (roundMap.size > 0) {
+        outputsByRound = new Map(
+          [...roundMap.entries()].sort((a, b) => a[0] - b[0]),
+        );
+      }
+    }
+
     const fileService = new TaskRunFileService(runId);
 
     const outcome = await vscode.window.withProgress(
@@ -521,47 +539,6 @@ async function handleRunLatexdiff(
   }
 }
 
-function normalizeOutputsByRound(
-  raw?: Record<string, OutputFileInfo[]> | null,
-): Map<number, OutputFileInfo[]> | null {
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-
-  const entries = Object.entries(raw);
-  const roundMap = new Map<number, OutputFileInfo[]>();
-
-  for (const [roundKey, value] of entries) {
-    const roundResult = RoundKeySchema.safeParse(roundKey);
-    if (!roundResult.success || !Array.isArray(value) || value.length === 0) {
-      continue;
-    }
-    roundMap.set(roundResult.data, value);
-  }
-
-  if (roundMap.size === 0) {
-    return null;
-  }
-
-  return new Map([...roundMap.entries()].sort((a, b) => a[0] - b[0]));
-}
-
-/**
- * Get file description for display - trust source field.
- */
-function describeFile(info: OutputFileInfo): string {
-  if (info.source) {
-    return info.source;
-  }
-  if (
-    info.location.kind === 'workspace' ||
-    info.location.kind === 'runStorage'
-  ) {
-    return path.basename(info.location.relativePath);
-  }
-  return path.basename(info.location.absolutePath);
-}
-
 async function runLatexdiffFromMetadata(params: {
   rounds: Map<number, OutputFileInfo[]>;
   mathMarkup?: MathMarkupOption;
@@ -570,6 +547,15 @@ async function runLatexdiffFromMetadata(params: {
   fileService: TaskRunFileService;
 }): Promise<DiffRunOutcome> {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
+
+  // Get file description for display - trust source field, fall back to basename
+  const getFileLabel = (info: OutputFileInfo): string => {
+    if (info.source) return info.source;
+    const loc = info.location;
+    return loc.kind === 'workspace' || loc.kind === 'runStorage'
+      ? path.basename(loc.relativePath)
+      : path.basename(loc.absolutePath);
+  };
 
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
@@ -583,7 +569,7 @@ async function runLatexdiffFromMetadata(params: {
       const revised = info.location;
       // lineage.original is already a FileLocation | null - use directly
       const base = info.lineage?.original ?? null;
-      const description = `${describeFile(info)} (r${round})`;
+      const description = `${getFileLabel(info)} (r${round})`;
 
       if (!base) {
         immediateResults.push({
@@ -626,7 +612,7 @@ async function runLatexdiffFromMetadata(params: {
         const current = group[index];
         const base = previous.info.location;
         const revised = current.info.location;
-        const description = `${describeFile(current.info)} (r${previous.round}→r${current.round})`;
+        const description = `${getFileLabel(current.info)} (r${previous.round}→r${current.round})`;
 
         operations.push({
           type: 'between-rounds',

@@ -104,14 +104,6 @@ export function createFileMapping(
  */
 const TEX_EXTENSION_REGEX = /\.tex$/i;
 
-function hasTexExtension(value: string): boolean {
-  return TEX_EXTENSION_REGEX.test(value);
-}
-
-function removeTexExtension(value: string): string {
-  return value.replace(TEX_EXTENSION_REGEX, '');
-}
-
 /**
  * Build a string → string lookup for LaTeX \input command replacement.
  * Generates all path suffix variants (from full path down to filename) for flexible matching.
@@ -141,12 +133,16 @@ function buildReplacementLookup(
       }
 
       // Also register without .tex extension
-      if (hasTexExtension(baseSuffix) && hasTexExtension(outputSuffix)) {
-        const baseNoExt = normalizeLatexPath(removeTexExtension(baseSuffix));
+      const baseHasTex = TEX_EXTENSION_REGEX.test(baseSuffix);
+      const outputHasTex = TEX_EXTENSION_REGEX.test(outputSuffix);
+      if (baseHasTex && outputHasTex) {
+        const baseNoExt = normalizeLatexPath(
+          baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
+        );
         if (baseNoExt && !replacements.has(baseNoExt)) {
           replacements.set(
             baseNoExt,
-            normalizeLatexPath(removeTexExtension(outputSuffix)),
+            normalizeLatexPath(outputSuffix.replace(TEX_EXTENSION_REGEX, '')),
           );
         }
       }
