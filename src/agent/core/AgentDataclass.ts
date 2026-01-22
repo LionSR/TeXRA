@@ -120,7 +120,10 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
 
   // Migrate maxRounds to rounds (if rounds not already set)
   if (maxRounds !== undefined && rest.rounds === undefined) {
-    logger.debug(CHANNEL, `Migrating legacy maxRounds (${maxRounds}) to rounds`);
+    logger.debug(
+      CHANNEL,
+      `Migrating legacy maxRounds (${maxRounds}) to rounds`,
+    );
     rest.rounds = maxRounds;
   }
 
@@ -134,12 +137,18 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
 
   // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
   if (agentType === 'toolUse') {
-    logger.debug(CHANNEL, `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`);
+    logger.debug(
+      CHANNEL,
+      `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`,
+    );
     return { ...rest, agentCategory: AgentCategory.ToolUse };
   }
 
   if (agentType !== undefined) {
-    logger.debug(CHANNEL, `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`);
+    logger.debug(
+      CHANNEL,
+      `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`,
+    );
   }
 
   // Default to Workflow

@@ -54,19 +54,19 @@ export type ArxivPaperMetadata = z.infer<typeof ArxivPaperMetadataSchema>;
 
 export type ArxivClientInstance = typeof arxivClient;
 
-export const createArxivClient = (options?: unknown): ArxivClientInstance => {
+export function createArxivClient(options?: unknown): ArxivClientInstance {
   const ClientCtor = arxivClient.constructor as {
     new (ctorOptions?: unknown): ArxivClientInstance;
   };
   return new ClientCtor(options);
-};
+}
 
 /**
  * Normalize an arXiv identifier by extracting it from various formats.
  * Handles URLs (abs/pdf), plain IDs, arxiv: prefixes, and old/new format IDs.
  * Uses the identifiers-arxiv package for robust extraction.
  */
-export const normaliseArxivIdentifier = (value: string): string => {
+export function normaliseArxivIdentifier(value: string): string {
   // Preprocess PDF URLs since identifiers-arxiv doesn't handle them
   const preprocessed = value
     .replace(/^https?:\/\/arxiv\.org\/pdf\//, 'https://arxiv.org/abs/')
@@ -74,15 +74,15 @@ export const normaliseArxivIdentifier = (value: string): string => {
 
   const extracted = extractArxivId(preprocessed);
   return extracted[0] || value; // Fallback to original if extraction fails
-};
+}
 
-export const extractEntryIdentifier = (rawId: unknown): string | null => {
+export function extractEntryIdentifier(rawId: unknown): string | null {
   if (typeof rawId !== 'string') {
     return null;
   }
   const [, id] = rawId.split('/abs/');
   return id ? normaliseArxivIdentifier(id) : null;
-};
+}
 
 /** Extract author names, optionally limiting to maxAuthors */
 export function getAuthorNames(
