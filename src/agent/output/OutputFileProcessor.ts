@@ -165,9 +165,7 @@ export class OutputFileProcessor {
         );
       }
 
-      const processedFiles = processed.location.absolutePath
-        ? [processed]
-        : [];
+      const processedFiles = processed.location.absolutePath ? [processed] : [];
 
       if (processedFiles.length > 0) {
         await indentLatexFile(processed.location, logger);

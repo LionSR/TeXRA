@@ -309,7 +309,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // storageKey is for logical indexing (finding file metadata in progress view state).
       // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
       // Note: Physical file paths use executionId (see runId below), not storageKey.
-      const storageKey = (activeRunId ?? executionId ?? null) as StorageKey | null;
+      const storageKey = (activeRunId ??
+        executionId ??
+        null) as StorageKey | null;
       const runOutputs = storageKey
         ? this.provider.state.getRunOutputFiles(message.stream, { storageKey })
         : undefined;
