@@ -108,20 +108,16 @@ function parseListItemRow(row: {
   visibility?: string[] | null;
   agent_category?: string | null;
 }): RemoteAgentListItem | null {
-  // Schema handles NULL -> Workflow defaulting via transform
+  const { id, name, description, visibility, agent_category } = row;
   const result = RemoteAgentListItemSchema.safeParse({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    visibility: row.visibility,
-    agentCategory: row.agent_category,
+    id,
+    name,
+    description,
+    visibility,
+    agentCategory: agent_category,
   });
-
   if (!result.success) {
-    logger.warn(
-      CHANNEL,
-      `Invalid metadata for agent "${row.name}": ${result.error.message}`,
-    );
+    logger.warn(CHANNEL, `Invalid metadata for agent "${name}": ${result.error.message}`);
     return null;
   }
   return result.data;
@@ -217,13 +213,7 @@ export class RemoteAgentLoader {
         });
 
         if (!response.ok) {
-          let errorText = 'Unknown error';
-          try {
-            errorText = await response.text();
-          } catch {
-            logger.warn(CHANNEL, 'Failed to read error response body');
-          }
-
+          const errorText = await response.text().catch(() => 'Unknown error');
           const isLastCandidate = candidateName === candidateNames.at(-1);
           const { message, shouldContinue } = mapHttpError(
             response.status,
