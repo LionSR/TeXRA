@@ -1,4 +1,4 @@
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 
 /**
  * Simple rate limiter to respect API rate limits for academic metadata services.
@@ -28,7 +28,7 @@ export async function waitForRateLimit(
 
   if (timeSinceLastRequest < minDelayMs) {
     const waitTime = minDelayMs - timeSinceLastRequest;
-    await sleep(waitTime);
+    await delay(waitTime);
     // Use calculated time to avoid drift from async operations
     state.lastRequestTime = now + waitTime;
   } else {
