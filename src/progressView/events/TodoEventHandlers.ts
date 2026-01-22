@@ -28,13 +28,13 @@ export function registerTodoEventHandlers(
 
 function handleUpdateTodos(
   ctx: EventHandlerContext,
-  { stream, todos }: ProgressEventPayloads['updateTodos'],
+  { streamId, todos }: ProgressEventPayloads['updateTodos'],
 ): void {
   withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
-    ctx.state.setTodos(stream, todos);
+    ctx.state.setTodos(streamId, todos);
     // Broadcast to webview - frontend decides which run to display
     if (isWebviewAvailable(ctx)) {
-      ctx.webviewUpdater.updateTodos(stream, todos);
+      ctx.webviewUpdater.updateTodos(streamId, todos);
     }
   });
 }
