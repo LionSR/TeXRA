@@ -138,11 +138,13 @@ export class OutputFileProcessor {
         diff: null,
       };
 
+      const hasDocumentTag = Boolean(agentSetting.documentTag);
       const hasScratchpadPrefill =
         agentSetting.prefills?.some((prefill) =>
           SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
-      const hasDocumentTag = Boolean(agentSetting.documentTag);
+
+      // Determine XML processing based on xmlStructureMode setting
       const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       const shouldProcessXml =
         xmlMode === 'always' ||
