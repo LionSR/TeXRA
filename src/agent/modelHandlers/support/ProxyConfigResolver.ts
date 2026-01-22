@@ -10,12 +10,15 @@ const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
  */
 function normalizeUrl(input: string): string {
   if (!input) return '';
+
+  // Ensure protocol for URL parsing
   const withProtocol = input.includes('://') ? input : `https://${input}`;
   try {
     const url = new URL(withProtocol);
     return `${url.host}${url.pathname}`.replace(/\/+$/, '');
   } catch {
-    return withProtocol.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    // For malformed URLs, strip protocol and trailing slashes from original input
+    return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   }
 }
 
@@ -56,11 +59,10 @@ export function shouldUseOpenRouter(config: {
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
 }): boolean {
-  return (
-    !config.requiresResponsesAPI &&
-    (config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false))
-  );
+  // Models requiring direct API access bypass OpenRouter
+  if (config.requiresResponsesAPI) return false;
+
+  return config.openRouterOnly || getConfig<boolean>('texra.model.useOpenRouter', false);
 }
 
 /**
@@ -111,37 +113,26 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   );
 
   if (useImprovedConnection) {
-    // Use empty string as default so we can detect when config is not set
-    // (using DEFAULT_PROXY_DOMAIN as default would prevent debug logging)
-    const configValue = getConfig<string>(
-      'texra.model.improvedConnectionDomain',
-      '',
-    );
-    const domain = normalizeUrl(configValue.trim() || DEFAULT_PROXY_DOMAIN);
-    if (!configValue.trim()) {
-      config.logger?.debug(
-        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
-      );
+    const customDomain = getConfig<string>('texra.model.improvedConnectionDomain', '').trim();
+    const domain = normalizeUrl(customDomain || DEFAULT_PROXY_DOMAIN);
+
+    if (!customDomain) {
+      config.logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
     }
 
-    if (useOpenRouter) {
-      config.logger?.debug(`Using proxy for ${config.provider} for OpenRouter`);
-      return `https://${domain}/openrouter`;
-    }
-
-    const path = PROXY_PATHS[config.provider];
+    // OpenRouter uses 'openrouter' path; other providers use their configured paths
+    const path = useOpenRouter ? 'openrouter' : PROXY_PATHS[config.provider];
     if (path) {
-      config.logger?.debug(
-        `Using proxy for ${config.provider}: with ${domain}/${path}`,
-      );
+      config.logger?.debug(`Using proxy for ${config.provider}: ${domain}/${path}`);
       return `https://${domain}/${path}`;
     }
   }
 
   if (useOpenRouter) return 'https://openrouter.ai/api/v1';
 
+  // DeepSeek allows custom base URL override
   if (config.provider === ModelProvider.DEEPSEEK) {
-    const customUrl = getConfig<string>('texra.model.baseUrlDeepSeek', '');
+    const customUrl = getConfig<string>('texra.model.baseUrlDeepSeek', '').trim();
     if (customUrl) return `https://${normalizeUrl(customUrl)}`;
   }
 

@@ -32,13 +32,32 @@ function mergeMessageContent(
   const prevContent = previous.content;
   const currContent = current.content;
 
+  // No previous content: use current
+  if (prevContent == null) {
+    previous.content = currContent;
+    return;
+  }
+
   // Note: Messages are already deep-cloned before merging, so we can safely
   // spread arrays without additional structuredClone calls.
+
+  // Both arrays: concatenate
   if (Array.isArray(prevContent) && Array.isArray(currContent)) {
     previous.content = [...prevContent, ...currContent];
     return;
   }
 
+  // Both strings: join with newline (empty strings pass through unchanged)
+  if (typeof prevContent === 'string' && typeof currContent === 'string') {
+    if (prevContent === '' || currContent === '') {
+      previous.content = prevContent || currContent;
+    } else {
+      previous.content = `${prevContent}\n${currContent}`;
+    }
+    return;
+  }
+
+  // Previous array + current string: append non-empty string as text item
   if (Array.isArray(prevContent) && typeof currContent === 'string') {
     if (currContent.length > 0) {
       previous.content = [
@@ -49,31 +68,13 @@ function mergeMessageContent(
     return;
   }
 
+  // Previous string/empty + current array: prepend non-empty string or use array
   if (Array.isArray(currContent)) {
     if (typeof prevContent === 'string' && prevContent.length > 0) {
       previous.content = [{ type: 'text', text: prevContent }, ...currContent];
-      return;
-    }
-
-    if (prevContent == null || prevContent === '') {
+    } else if (prevContent === '') {
       previous.content = currContent;
     }
-    return;
-  }
-
-  if (typeof prevContent === 'string' && typeof currContent === 'string') {
-    if (prevContent.length === 0) {
-      previous.content = currContent;
-    } else if (currContent.length === 0) {
-      previous.content = prevContent;
-    } else {
-      previous.content = `${prevContent}\n${currContent}`;
-    }
-    return;
-  }
-
-  if (prevContent == null) {
-    previous.content = currContent;
   }
 }
 
@@ -116,7 +117,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
   }
 
   if (asString) {
-    working.forEach((message) => {
+    for (const message of working) {
       if (Array.isArray(message.content)) {
         // Extract text from content array items and join with newlines
         message.content = (message.content as Array<unknown>)
@@ -124,7 +125,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
           .map((item) => item.text)
           .join('\n');
       }
-    });
+    }
   }
 
   return working;
