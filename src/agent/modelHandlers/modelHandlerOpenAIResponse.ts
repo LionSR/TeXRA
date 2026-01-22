@@ -237,6 +237,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal ? { signal } : undefined,
       );
     } catch (err) {
+      // User cancellation - clear pending ID and propagate
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        this.clearPendingBackgroundResponse();
+        throw err;
+      }
       // Failed to retrieve - could be network error or 404 (expired/deleted)
       // Clear and signal that a new request is needed
       this.logger.warn(
@@ -259,7 +264,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         pendingResponse,
         signal,
       );
-      this.clearPendingBackgroundResponse();
+      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
       return response;
     }
 
@@ -268,7 +273,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.info(
         `Pending background response ${pendingId} already completed`,
       );
-      this.clearPendingBackgroundResponse();
+      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
       return pendingResponse;
     }
 
@@ -341,6 +346,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       this.previousResponseId = null;
     }
+
+    // Clear any pending background response ID - a successful finalization means
+    // any previous pending ID is stale and should not be resumed
+    this.clearPendingBackgroundResponse();
 
     this.conversationState.sentMessages = effectiveMessagesCount;
 
@@ -1084,8 +1093,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           response,
           signal,
         );
-        // Clear the pending ID after successful completion
-        this.clearPendingBackgroundResponse();
+        // Note: clearPendingBackgroundResponse() called by finalizeResponse() below
       }
 
       this.finalizeResponse(
