@@ -35,15 +35,6 @@ export type AgentRegistrationSkipReason =
   | 'baseRegistered'
   | 'multipleRegistered';
 
-function asWorkflowSetting(
-  setting?: AgentSetting,
-): AgentWorkflowSetting | undefined {
-  if (!setting || setting.agentCategory === AgentCategory.ToolUse) {
-    return undefined;
-  }
-  return setting as AgentWorkflowSetting;
-}
-
 export function getAgentRegistrationSkipReason(
   agentName: string,
   configuredAgents: string[],
@@ -146,12 +137,14 @@ export async function validateYamlAndPromptAdd(
   }
 
   const settings = validationResult.settings;
-  const workflowSettings = asWorkflowSetting(settings);
+  const isWorkflow = settings.agentCategory !== AgentCategory.ToolUse;
+  const workflowSettings = isWorkflow
+    ? (settings as AgentWorkflowSetting)
+    : undefined;
   const defaultOutputs = settings.defaultOutputFiles ?? [];
   const hasMultipleDefaults = defaultOutputs.length > 1;
   const isMultipleOutput = Boolean(
-    workflowSettings?.isMultipleOutput ??
-    (workflowSettings && hasMultipleDefaults),
+    workflowSettings?.isMultipleOutput ?? (isWorkflow && hasMultipleDefaults),
   );
 
   const metadata: AgentVariantMetadata = {
