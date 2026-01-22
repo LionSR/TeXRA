@@ -109,6 +109,11 @@ interface UploadedOpenAIResponseAttachment {
  * the native response message types instead of reusing the chat completion
  * abstractions. Conversation state is maintained through `previous_response_id`
  * so we only submit the new messages for each turn.
+ *
+ * THREAD SAFETY: This handler maintains internal state (previousResponseId,
+ * pendingBackgroundResponseId, conversationState) that is NOT thread-safe.
+ * Each handler instance must be used by a single agent execution at a time.
+ * Do not share instances across concurrent invocations.
  */
 export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
@@ -191,6 +196,109 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private previousResponseId: string | null = null;
 
   /**
+   * Stores the ID of a background response that is currently being polled.
+   * This allows retry logic to resume polling the same response instead of
+   * creating a new request when connection errors occur during polling.
+   *
+   * IMPORTANT: This handler assumes single-threaded execution per instance.
+   * Do not share a handler instance across concurrent agent invocations.
+   */
+  private pendingBackgroundResponseId: string | null = null;
+
+  /** Clears the pending background response ID. Single point of mutation. */
+  private clearPendingBackgroundResponse(): void {
+    this.pendingBackgroundResponseId = null;
+  }
+
+  /**
+   * Attempts to resume polling a pending background response.
+   *
+   * @returns The completed response if resume succeeded, or null if a new request is needed.
+   *          Throws on abort (user cancellation).
+   */
+  private async tryResumeBackgroundResponse(
+    client: OpenAI,
+    signal?: AbortSignal,
+  ): Promise<Response | null> {
+    const pendingId = this.pendingBackgroundResponseId;
+    if (!pendingId) {
+      return null;
+    }
+
+    this.logger.info(
+      `Resuming polling for pending background response ${pendingId}`,
+    );
+
+    let pendingResponse: Response;
+    try {
+      pendingResponse = await client.responses.retrieve(
+        pendingId,
+        undefined,
+        signal ? { signal } : undefined,
+      );
+    } catch (err) {
+      // User cancellation - clear pending ID and propagate
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        this.clearPendingBackgroundResponse();
+        throw err;
+      }
+      // Failed to retrieve - could be network error or 404 (expired/deleted)
+      // Clear and signal that a new request is needed
+      this.logger.warn(
+        `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(err)}. ` +
+          'Will create new request.',
+        { data: { responseId: pendingId, error: getSdkErrorMessage(err) } },
+      );
+      this.clearPendingBackgroundResponse();
+      return null;
+    }
+
+    // Check the status of the retrieved response
+    if (this.isBackgroundPending(pendingResponse)) {
+      // Still processing - resume polling
+      this.logger.debug(
+        `Pending background response ${pendingId} still processing (status: ${pendingResponse.status}), resuming poll`,
+      );
+      const response = await this.waitForBackgroundCompletion(
+        client,
+        pendingResponse,
+        signal,
+      );
+      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
+      return response;
+    }
+
+    if (pendingResponse.status === 'completed') {
+      // Already completed while we were disconnected
+      this.logger.info(
+        `Pending background response ${pendingId} already completed`,
+      );
+      // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
+      return pendingResponse;
+    }
+
+    // Response failed remotely (failed/cancelled/incomplete)
+    const errorDetail =
+      pendingResponse.error?.message ??
+      pendingResponse.incomplete_details?.reason ??
+      'no additional details';
+    this.logger.warn(
+      `Pending background response ${pendingId} failed remotely ` +
+        `(status: ${pendingResponse.status}, reason: ${errorDetail}). Will create new request.`,
+      {
+        data: {
+          responseId: pendingId,
+          status: pendingResponse.status,
+          error: pendingResponse.error ?? undefined,
+          incompleteDetails: pendingResponse.incomplete_details ?? undefined,
+        },
+      },
+    );
+    this.clearPendingBackgroundResponse();
+    return null;
+  }
+
+  /**
    * Conversation state for tracking messages, tokens, and compaction.
    * Grouped together to ensure synchronized resets.
    */
@@ -239,6 +347,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.previousResponseId = null;
     }
 
+    // Clear any pending background response ID - a successful finalization means
+    // any previous pending ID is stale and should not be resumed
+    this.clearPendingBackgroundResponse();
+
     this.conversationState.sentMessages = effectiveMessagesCount;
 
     // Set cumulative input tokens from actual usage (not additive - this IS the total)
@@ -259,6 +371,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.resetConversationState();
+    this.clearPendingBackgroundResponse();
   }
 
   /** Retrieve the stored previous response ID. */
@@ -452,6 +565,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.resetConversationState();
+    this.clearPendingBackgroundResponse();
 
     const messages: ResponseInputItem[] = [];
 
@@ -860,6 +974,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
     try {
+      // Try to resume a pending background response (for retry after connection error)
+      if (useBackgroundResponses && this.pendingBackgroundResponseId) {
+        const resumedResponse = await this.tryResumeBackgroundResponse(
+          client,
+          signal,
+        );
+        if (resumedResponse) {
+          // Successfully resumed - finalize and return
+          this.finalizeResponse(
+            resumedResponse,
+            effectiveMessages.length,
+            compactedThisCall,
+          );
+          return resumedResponse;
+        }
+        // Resume failed or response failed remotely - fall through to create new request
+      }
+
       if (useStreaming) {
         const { stream: _stream, ...rest } = params;
         const streamParams: ResponseStreamParams = { ...rest, stream: true };
@@ -956,11 +1088,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger.logProgress(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
         );
+        // Store the pending ID so retry logic can resume polling instead of creating a new request
+        this.pendingBackgroundResponseId = response.id;
         response = await this.waitForBackgroundCompletion(
           client,
           response,
           signal,
         );
+        // Note: clearPendingBackgroundResponse() called by finalizeResponse() below
       }
 
       this.finalizeResponse(
@@ -987,11 +1122,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
         this.previousResponseId = null;
         this.resetConversationState();
+        // Also clear pending background response if present
+        this.clearPendingBackgroundResponse();
       } else if (this.previousResponseId) {
         // Log diagnostic info for other errors when chaining was active
         this.logger.warn(
           `Request failed with previousResponseId=${this.previousResponseId}. ` +
             `Error: ${getSdkErrorMessage(error)}`,
+        );
+      }
+
+      // Log info about pending background response for retry logic
+      // Note: We intentionally keep pendingBackgroundResponseId for connection errors
+      // so that retry logic can resume polling the same response
+      if (this.pendingBackgroundResponseId) {
+        this.logger.info(
+          `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
+            'next attempt will try to resume polling instead of creating new request',
         );
       }
 
@@ -1200,8 +1347,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               },
             },
           );
-          // Background jobs keep running on the OpenAI side when polling stops.
-          // Callers can later resume polling or explicitly cancel via client.responses.cancel(responseId).
+          // User cancelled - clear pending ID to prevent ghost-resume on next call.
+          // The background job keeps running on OpenAI's side but we won't try to
+          // resume it since the user explicitly cancelled.
+          this.clearPendingBackgroundResponse();
         }
         throw err;
       }
@@ -1225,11 +1374,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const requestOptions = signal ? { signal } : undefined;
-      current = await client.responses.retrieve(
-        responseId,
-        undefined,
-        requestOptions,
-      );
+      try {
+        current = await client.responses.retrieve(
+          responseId,
+          undefined,
+          requestOptions,
+        );
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // User cancelled during retrieve - clear pending ID
+          this.clearPendingBackgroundResponse();
+        }
+        throw err;
+      }
 
       this.logger.debug(
         `Background poll ${pollCount} for response ${responseId}: status=${
