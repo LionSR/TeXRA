@@ -37,21 +37,22 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
-// Context Initialization
+// Core Agent Context
 // ============================================================================
 
 /**
- * Base initialization config shared by all flow contexts.
+ * Core agent context shared by all agent operations.
  *
- * Flow-specific contexts extend this with additional fields:
- * - ToolUseFlowContextInit adds: toolRegistry, resumeSnapshot
- * - ReflectionFlowContextInit adds: getUsageRecorder (required)
+ * This is the foundation that both resolution output (ResolvedAgentBase)
+ * and flow inputs (BaseFlowContextInit) build upon. Defined once to
+ * eliminate duplication.
  */
-export interface BaseFlowContextInit<C = unknown> {
+export interface AgentCore<C = unknown> {
   /** Model handler for API calls and message formatting */
   modelHandler: IModelHandler<any, any, any, any, C>;
 
@@ -64,7 +65,7 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Agent prompt templates */
   prompt: AgentPrompt;
 
-  /** Logger for flow operations */
+  /** Logger for operations */
   logger: AgentLogger;
 
   /** Stream/tab identifier */
@@ -75,7 +76,21 @@ export interface BaseFlowContextInit<C = unknown> {
 
   /** User variable channels for template rendering */
   userVarChannels: UserVariableChannels;
+}
 
+// ============================================================================
+// Flow Context Initialization
+// ============================================================================
+
+/**
+ * Base initialization config shared by all flow contexts.
+ *
+ * Extends AgentCore with interrupt handling and usage recording.
+ * Flow-specific contexts extend this with additional fields:
+ * - ToolUseFlowContextInit adds: toolRegistry, resumeSnapshot
+ * - RunReflectionFlowInput adds: storageKey, parentStage
+ */
+export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
   /** Check if user requested interruption (synchronous) */
   checkInterruption: () => boolean;
 
@@ -84,6 +99,9 @@ export interface BaseFlowContextInit<C = unknown> {
 
   /** Callback invoked when interrupt() is called on the flow context */
   onInterrupt?: () => void;
+
+  /** Usage recorder callback. If not provided, usage is not tracked. */
+  getUsageRecorder?: () => RoundFinalizedCallback;
 }
 
 /**

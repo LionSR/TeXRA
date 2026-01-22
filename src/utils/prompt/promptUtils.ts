@@ -49,16 +49,17 @@ export function getListOfFiles(files: string[] | null | undefined): string {
 }
 
 async function resolveValue(value: unknown): Promise<unknown> {
-  if (value instanceof Promise) {
+  // Pass through primitives and Promises unchanged.
+  // Promises are excluded from object handling to avoid iterating their internal properties.
+  if (typeof value !== 'object' || value === null || value instanceof Promise) {
     return value;
   }
-  if (typeof value === 'object' && value !== null) {
-    const entries = await Promise.all(
-      Object.entries(value).map(async ([k, v]) => [k, await resolveValue(v)]),
-    );
-    return Object.fromEntries(entries);
-  }
-  return value;
+
+  // Recursively resolve all values in the object
+  const entries = await Promise.all(
+    Object.entries(value).map(async ([k, v]) => [k, await resolveValue(v)]),
+  );
+  return Object.fromEntries(entries);
 }
 
 /**
