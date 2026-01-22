@@ -14,10 +14,7 @@
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { AgentProposal } from '@eventBus/types';
-import {
-  BasePromiseCoordinator,
-  type CoordinatorConfig,
-} from './BasePromiseCoordinator';
+import { PromiseCoordinator } from './BasePromiseCoordinator';
 
 // ============================================================================
 // Types
@@ -45,40 +42,55 @@ interface ProposalShowPayload {
 }
 
 // ============================================================================
-// Coordinator Implementation
+// Factory Function
 // ============================================================================
 
-/** Manages pending agent proposals (workflow and tool-use). */
-class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
-  ProposalResult,
-  ProposalShowPayload
-> {
-  protected readonly config: CoordinatorConfig = {
+/**
+ * Create the proposal coordinator with its specialized API.
+ * Uses factory function + composition instead of class inheritance
+ * since only the config and one wrapper method are needed.
+ */
+function createProposalCoordinator() {
+  const coordinator = new PromiseCoordinator<ProposalResult, ProposalShowPayload>({
     showEventName: 'showAgentProposal',
     resolveEventName: 'resolveAgentProposal',
     idFieldName: 'proposalId',
+    defaultCancelResult: { action: 'reject' },
+  });
+
+  return {
+    /** Wait for user action on a proposal. */
+    waitForProposal(
+      streamId: string,
+      options: ProposalRequestOptions,
+    ): Promise<ProposalResult> {
+      const { proposalId, proposal, timeoutMs } = options;
+
+      // Show progress view to ensure user sees the proposal
+      void safeExecuteCommand('texra.showProgressView');
+
+      return coordinator.waitForUserAction(
+        proposalId,
+        { proposalId, streamId, ...proposal },
+        { timeoutMs },
+      );
+    },
+
+    /** Check if a proposal is pending. */
+    hasPendingRequest(proposalId: string): boolean {
+      return coordinator.hasPendingRequest(proposalId);
+    },
+
+    /** Resolve a pending proposal. */
+    resolveRequest(proposalId: string, result: ProposalResult): boolean {
+      return coordinator.resolveRequest(proposalId, result);
+    },
+
+    /** Clear a pending proposal without user action. */
+    clearRequest(proposalId: string): void {
+      coordinator.clearRequest(proposalId);
+    },
   };
-
-  protected getDefaultCancelResult(): ProposalResult {
-    return { action: 'reject' };
-  }
-
-  /** Wait for user action on a proposal. Uses different signature from base class. */
-  waitForProposal(
-    streamId: string,
-    options: ProposalRequestOptions,
-  ): Promise<ProposalResult> {
-    const { proposalId, proposal, timeoutMs } = options;
-
-    // Show progress view to ensure user sees the proposal
-    void safeExecuteCommand('texra.showProgressView');
-
-    return this.waitForUserAction(
-      proposalId,
-      { proposalId, streamId, ...proposal },
-      { timeoutMs },
-    );
-  }
 }
 
 // ============================================================================
@@ -86,4 +98,4 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const proposalCoordinator = new AgentProposalCoordinatorImpl();
+export const proposalCoordinator = createProposalCoordinator();

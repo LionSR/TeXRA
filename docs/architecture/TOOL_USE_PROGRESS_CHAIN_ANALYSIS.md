@@ -678,20 +678,53 @@ cursor.setParams(params as any);  // Double cast
 
 ## Recommended Action Plan
 
-**Phase 1 - Quick Wins (Low Risk)**:
-1. Extract tool edit approval helper → Single PR
+**Phase 1 - Quick Wins (Low Risk)**: ✅ COMPLETED
+1. ✅ Extract tool edit approval helper → `src/tools/approval/executeApprovalFlow.ts`
 2. Add error context to tool failures → Single PR
 3. Fix Zod detection to use `instanceof` → Single PR
 
-**Phase 2 - Event Handlers (Medium Risk)**:
+**Phase 2 - Event Handlers (Medium Risk)**: ✅ PARTIALLY COMPLETED
 1. Add UI notification for event handler errors
 2. Create state→webview update helper
-3. Add message schemas for 16 handlers
+3. ✅ Add message schemas for 16 handlers → `src/webview/types/messages.ts`
 
-**Phase 3 - Abstractions (Medium Risk)**:
+**Phase 3 - Abstractions (Medium Risk)**: ✅ PARTIALLY COMPLETED
 1. Evaluate PersistentMapManager consolidation
 2. Consider event handler file consolidation
 3. Add type safety to model handlers
+4. ✅ Simplify coordinator subclasses → Factory function for AgentProposalCoordinator
+
+## Completed Refactorings
+
+### 1. Tool Edit Approval Flow Consolidation
+- **Created**: `src/tools/approval/executeApprovalFlow.ts`
+- **Functions**:
+  - `executeToolEditApprovalFlow()` - Standard 6-step approval sequence
+  - `executeToolEditApprovalFlowWithResult()` - For post-processing (TextEditorTool history)
+- **Updated tools**:
+  - `WriteTool.ts`: 88→43 lines (~50% reduction)
+  - `EditTool.ts`: 127→87 lines (~30% reduction)
+  - `TextEditorTool.ts`: 4 methods simplified
+
+### 2. Type-Safe Message Handlers
+- **Updated**: `src/progressView/ProgressViewMessageHandler.ts`
+- **Added schemas**: `src/webview/types/messages.ts`
+  - `StreamMessageSchema`, `RetryStreamMessageSchema`
+  - `SendFollowUpMessageSchema`, `SortStreamsMessageSchema`
+  - `FilterStreamsMessageSchema`, `OpenLabelMessageSchema`
+- **Pattern**: Changed from `(message: any)` to `(message: unknown)` + `safeParse()`
+
+### 3. Coordinator Subclass Simplification
+- **Refactored**: `src/agent/runtime/BasePromiseCoordinator.ts`
+  - Changed from abstract class to concrete `PromiseCoordinator`
+  - Config now passed via constructor instead of abstract property
+  - `defaultCancelResult` moved to config object
+- **Simplified**: `src/agent/runtime/AgentProposalCoordinator.ts`
+  - Changed from class inheritance to factory function + composition
+  - `createProposalCoordinator()` wraps `PromiseCoordinator` instance
+- **Updated**: `src/agent/runtime/RetryRequestCoordinator.ts`
+  - Still extends `PromiseCoordinator` (justified: has `loggers` Map state)
+  - Passes config via constructor
 
 ---
 

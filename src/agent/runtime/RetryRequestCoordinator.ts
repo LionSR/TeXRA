@@ -12,10 +12,7 @@
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { RetryErrorDetails } from '@eventBus/types';
-import {
-  BasePromiseCoordinator,
-  type CoordinatorConfig,
-} from './BasePromiseCoordinator';
+import { PromiseCoordinator } from './BasePromiseCoordinator';
 
 // ============================================================================
 // Types
@@ -63,23 +60,22 @@ interface RetryShowPayload extends Record<string, unknown> {
 
 /**
  * Manages pending retry requests.
- * Extends BasePromiseCoordinator with retry-specific behavior.
+ * Extends PromiseCoordinator with retry-specific behavior (logger tracking).
  */
-class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
+class RetryRequestCoordinatorImpl extends PromiseCoordinator<
   RetryResult,
   RetryShowPayload
 > {
-  protected readonly config: CoordinatorConfig = {
-    showEventName: 'showRetryRequest',
-    resolveEventName: 'resolveRetryRequest',
-    idFieldName: 'streamId',
-  };
-
   /** Track logger per request for debug messages */
   private readonly loggers = new Map<string, AgentLogger>();
 
-  protected getDefaultCancelResult(): RetryResult {
-    return { action: 'cancel' };
+  constructor() {
+    super({
+      showEventName: 'showRetryRequest',
+      resolveEventName: 'resolveRetryRequest',
+      idFieldName: 'streamId',
+      defaultCancelResult: { action: 'cancel' },
+    });
   }
 
   /**
