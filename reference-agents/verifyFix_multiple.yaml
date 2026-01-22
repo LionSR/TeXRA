@@ -3,6 +3,7 @@ description: Multi-document verification and fix agent for research papers. Comp
 inherits: verifyFix
 
 settings:
+  agentCategory: workflow
   documentTag: latex_documents
   endTag: </latex_documents>
   isMultipleOutput: true

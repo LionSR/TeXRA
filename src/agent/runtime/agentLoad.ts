@@ -13,12 +13,12 @@ import {
   type ResolvedAgent,
 } from '@agent/index';
 import {
-  AgentSetting,
-  AgentPrompt,
+  AgentCategory,
   AgentPromptSchema,
   AgentDefinitionSchema,
-  AgentType,
   parseAgentSetting,
+  type AgentSetting,
+  type AgentPrompt,
 } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
@@ -89,12 +89,11 @@ export interface AgentLoadOptions {
   preferMultiple?: boolean;
 }
 
-export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
-  settings: T,
-  source: AgentSource,
-): T {
-  if (source === 'builtInToolUse' && !settings.agentType) {
-    return { ...settings, agentType: AgentType.ToolUse };
+export function ensureAgentCategoryForSource<
+  T extends { agentCategory?: AgentCategory },
+>(settings: T, source: AgentSource): T {
+  if (source === 'builtInToolUse' && !settings.agentCategory) {
+    return { ...settings, agentCategory: AgentCategory.ToolUse };
   }
   return settings;
 }
@@ -155,7 +154,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    settings = ensureAgentTypeForSource(settings, entry.source);
+    settings = ensureAgentCategoryForSource(settings, entry.source);
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {

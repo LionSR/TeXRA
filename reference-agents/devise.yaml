@@ -2,7 +2,7 @@ name: devise
 description: Mathematical paper enhancer with two-phase workflow. Rewrites document by first adding rigorous derivations then revising to publication-ready scientific style.
 
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex

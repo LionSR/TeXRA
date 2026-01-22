@@ -4,7 +4,7 @@ import * as path from 'path';
 
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
 
@@ -54,7 +54,6 @@ describe('loadAgentSettingAndPrompts', () => {
         path: baseDefinitionPath,
         multiplePath: multipleDefinitionPath,
         category: AgentCategory.Workflow,
-        agentType: AgentType.Direct,
       },
       definitionPath: multipleDefinitionPath,
       resolvedName: 'polish_multiple',
@@ -66,7 +65,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: polish_multiple',
         'settings:',
-        '  agentType: direct',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: multiple variant',
         '',
@@ -78,7 +77,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: polish',
         'settings:',
-        '  agentType: direct',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: base variant',
         '',
@@ -101,7 +100,6 @@ describe('loadAgentSettingAndPrompts', () => {
         name: 'summarize',
         path: baseDefinitionPath,
         category: AgentCategory.Workflow,
-        agentType: AgentType.Direct,
       },
       definitionPath: baseDefinitionPath,
       resolvedName: 'summarize',
@@ -113,7 +111,7 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: summarize',
         'settings:',
-        '  agentType: direct',
+        '  rounds: 1',
         'prompts:',
         '  userRequest: base only',
         '',

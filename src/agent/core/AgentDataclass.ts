@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 // Local imports - model types
 import { ToolDefinitionSchema, type ToolDefinition } from '@model';
+import * as logger from '@logger/logUtils';
 
-// Local imports - session schema (imported for local use, re-exported below)
-import type { AgentSessionDescriptor } from './AgentSessionSchema';
+const CHANNEL = 'AgentDataclass';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
@@ -20,91 +20,25 @@ export const AgentSource = z.enum([
 ]);
 export type AgentSource = z.infer<typeof AgentSource>;
 
-/** Primary discriminator for agent families. */
+/**
+ * Primary discriminator for agent families.
+ *
+ * **Workflow**: Document processing agents that run for a fixed number of rounds.
+ * - Default rounds: max(configured rounds, userRequest length)
+ * - Use `rounds: 1` for single-pass processing
+ * - XML structure enforcement controlled by `xmlStructureMode` (default: 'scratchpadOnly')
+ *
+ * **ToolUse**: Interactive agents with tool-calling capabilities.
+ * - Continues until user follow-up or interruption
+ * - Manages persistent sessions with checkpointing
+ */
 export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
 }
 
-/**
- * Agent types within each category.
- *
- * ## Workflow Agent Types
- *
- * **CoT (Chain-of-Thought)**: Multi-round reflection with iterative refinement.
- * - Default: 2+ rounds (max of configured rounds and userRequest length)
- * - Default: Always enforces XML structure for reasoning
- * - Best for: Complex tasks requiring step-by-step reasoning and revision
- * - Override with: `maxRounds` and `xmlStructureMode` in YAML
- *
- * **Direct**: Single-pass execution with minimal overhead.
- * - Default: 1 round (single-pass processing)
- * - Default: XML structure only when scratchpad prefill is used
- * - Best for: Simple corrections, quick transformations, merge operations
- * - Override with: `maxRounds` and `xmlStructureMode` in YAML
- *
- * ## Tool-Use Agent Types
- *
- * **ToolUse**: Interactive session with tool-calling capabilities.
- * - Continues until user follow-up or interruption
- * - Manages persistent sessions with checkpointing
- */
-export enum AgentType {
-  /**
-   * Chain-of-Thought: Multi-round reflection agent.
-   * Implies: xmlStructureMode='always', maxRounds=max(rounds, requests)
-   */
-  CoT = 'CoT',
-
-  /**
-   * Direct: Single-round fast execution agent.
-   * Implies: xmlStructureMode='scratchpadOnly', maxRounds=1
-   */
-  Direct = 'direct',
-
-  /**
-   * ToolUse: Interactive agent with tool-calling capabilities.
-   */
-  ToolUse = 'toolUse',
-}
-
-/** Workflow-specific agent types. */
-export const WORKFLOW_TYPES = [AgentType.CoT, AgentType.Direct] as const;
-export type WorkflowAgentType = (typeof WORKFLOW_TYPES)[number];
-
-/** Tool-use-specific agent types. */
-export const TOOL_USE_TYPES = [AgentType.ToolUse] as const;
-export type ToolUseAgentType = (typeof TOOL_USE_TYPES)[number];
-
-// Re-export AgentSessionDescriptor from schema (single source of truth)
-export type { AgentSessionDescriptor } from './AgentSessionSchema';
-
-/** Derive AgentCategory from AgentType. */
-export function deriveAgentCategory(
-  agentType?: AgentType | null,
-): AgentCategory {
-  return agentType === AgentType.ToolUse
-    ? AgentCategory.ToolUse
-    : AgentCategory.Workflow;
-}
-
-/**
- * Resolve canonical session metadata from optional hints.
- */
-export function resolveAgentSessionDescriptor(
-  agentType?: AgentType | null,
-  categoryHint?: AgentCategory | null,
-): AgentSessionDescriptor {
-  const agentCategory = categoryHint ?? deriveAgentCategory(agentType);
-  return {
-    agentType: agentType ?? undefined,
-    agentCategory,
-  };
-}
-
 /** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
-  agentType: z.enum(AgentType).prefault(AgentType.CoT),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -135,40 +69,29 @@ export const AgentSettingBaseSchema = z.strictObject({
 
 /** XML structure enforcement modes for workflow agents. */
 export const XmlStructureMode = z.enum([
-  'never', // Never ensure XML structure (default)
-  'scratchpadOnly', // Only when useScratchpad is true
+  'never', // Never ensure XML structure
+  'scratchpadOnly', // Only when useScratchpad is true (runtime default)
   'always', // Always ensure XML structure
 ]);
 export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
 
-/** Workflow agents: CoT or Direct patterns with workflow-specific fields. */
+/** Workflow agents: document processing with fixed rounds. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
-  agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
   isRewrite: z.boolean().prefault(true),
+  /** Minimum rounds (default 2). Actual rounds = max(rounds, userRequest.length) */
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
 
-  // === Flow-first behavior configuration ===
-  // These replace subclass polymorphism with explicit configuration
-
-  /**
-   * Maximum rounds to execute. When set, overrides the default calculation.
-   * - undefined: Use max(rounds, userRequest.length) (default)
-   * - 1: Single-pass processing
-   * - N: Fixed number of rounds
-   */
-  maxRounds: z.number().optional(),
-
   /**
    * XML structure enforcement mode.
-   * - 'never': Don't ensure XML structure (default)
-   * - 'scratchpadOnly': Only when prefills include scratchpad
+   * - 'scratchpadOnly': Only when prefills include scratchpad (default)
    * - 'always': Always ensure XML structure
+   * - 'never': Don't ensure XML structure
    */
   xmlStructureMode: XmlStructureMode.optional(),
 });
@@ -178,25 +101,49 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
-  agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
 });
 
 /**
  * Normalize input to ensure agentCategory discriminator is present.
- * Derives category from agentType when missing.
+ * Handles backward compatibility for legacy fields:
+ * - agentType: mapped to agentCategory, then stripped
+ * - maxRounds: mapped to rounds, then stripped
+ * Strips legacy fields before strictObject validation.
+ * Defaults to Workflow when not specified.
  */
 const normalizeAgentSettingInput = (input: unknown): unknown => {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  const obj = input as Record<string, unknown>;
-  if (obj.agentCategory !== undefined) {
-    return input;
+  // Strip legacy fields via destructuring
+  const { agentType, maxRounds, ...rest } = input as Record<string, unknown>;
+
+  // Migrate maxRounds to rounds (if rounds not already set)
+  if (maxRounds !== undefined && rest.rounds === undefined) {
+    logger.debug(CHANNEL, `Migrating legacy maxRounds (${maxRounds}) to rounds`);
+    rest.rounds = maxRounds;
   }
-  return {
-    ...obj,
-    agentCategory: deriveAgentCategory(obj.agentType as AgentType | undefined),
-  };
+
+  // If agentCategory already present, we're done
+  if (rest.agentCategory !== undefined) {
+    if (agentType !== undefined) {
+      logger.debug(CHANNEL, `Stripping legacy agentType: ${agentType}`);
+    }
+    return rest;
+  }
+
+  // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
+  if (agentType === 'toolUse') {
+    logger.debug(CHANNEL, `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`);
+    return { ...rest, agentCategory: AgentCategory.ToolUse };
+  }
+
+  if (agentType !== undefined) {
+    logger.debug(CHANNEL, `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`);
+  }
+
+  // Default to Workflow
+  return { ...rest, agentCategory: AgentCategory.Workflow };
 };
 
 /**
@@ -220,18 +167,6 @@ export type AgentToolUseSetting = Extract<
   AgentSetting,
   { agentCategory: AgentCategory.ToolUse }
 >;
-
-/**
- * Return the canonical session descriptor for an agent setting.
- */
-export function getAgentSessionDescriptor(
-  setting: AgentSetting,
-): Required<AgentSessionDescriptor> {
-  return {
-    agentType: setting.agentType,
-    agentCategory: setting.agentCategory,
-  };
-}
 
 /** Type guard for workflow settings. */
 export function isWorkflowSetting(

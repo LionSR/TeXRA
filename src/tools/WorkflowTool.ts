@@ -259,7 +259,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
 
     // Construct workflow proposal
     const proposal = WorkflowAgentProposalSchema.parse({
-      agentCategory: 'workflow',
+      agentCategory: AgentCategory.Workflow,
       agent: input.agent,
       model: input.model,
       instruction: input.instruction,
@@ -363,7 +363,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
-      agentCategory: 'toolUse',
+      agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
       model: input.model,
       instruction: input.instruction,

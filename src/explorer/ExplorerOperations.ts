@@ -22,7 +22,6 @@ name: my_agent
 
 # --- Agent Settings ---
 settings:
-  agentType: CoT
   temperature: 0.1
   isRewrite: true
   documentTag: document

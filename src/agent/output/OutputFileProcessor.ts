@@ -1,9 +1,6 @@
 import * as path from 'path';
 
-import {
-  AgentType,
-  type AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
@@ -141,17 +138,17 @@ export class OutputFileProcessor {
         diff: null,
       };
 
-      const isCoTAgent = agentSetting.agentType === AgentType.CoT;
-      const isDirectAgent = agentSetting.agentType === AgentType.Direct;
       const hasDocumentTag = Boolean(agentSetting.documentTag);
       const hasScratchpadPrefill =
         agentSetting.prefills?.some((prefill) =>
           SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
 
-      // CoT agents always process XML; Direct agents only when they have XML structure
+      // Determine XML processing based on xmlStructureMode setting
+      const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       const shouldProcessXml =
-        isCoTAgent || (isDirectAgent && (hasDocumentTag || hasScratchpadPrefill));
+        xmlMode === 'always' ||
+        (xmlMode === 'scratchpadOnly' && (hasDocumentTag || hasScratchpadPrefill));
 
       if (shouldProcessXml) {
         processed = await xmlManager.processSingleXmlOutput(

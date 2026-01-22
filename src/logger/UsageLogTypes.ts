@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // =============================================================================
@@ -34,7 +35,7 @@ export const UsageLogMetadataSchema = z.object({
   agentName: z.string().optional(),
 
   /** Agent category: workflow or toolUse */
-  agentCategory: z.enum(['workflow', 'toolUse']).optional(),
+  agentCategory: z.nativeEnum(AgentCategory).optional(),
 
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput: z.boolean().optional(),
