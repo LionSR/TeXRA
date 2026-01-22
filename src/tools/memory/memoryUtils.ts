@@ -16,7 +16,9 @@ function toForwardSlashes(p: string): string {
  * Build a storage path from a relative path within the memory root.
  */
 function toStoragePath(relative: string): string {
-  return relative ? path.join(MEMORY_STORAGE_ROOT, relative) : MEMORY_STORAGE_ROOT;
+  return relative
+    ? path.join(MEMORY_STORAGE_ROOT, relative)
+    : MEMORY_STORAGE_ROOT;
 }
 
 /**
