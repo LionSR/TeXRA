@@ -38,23 +38,33 @@ function generateRoundBasedFileName(
 
 /**
  * Generate a diff filename based on input and edited file names.
- * Uses round-based naming if both files have rounds AND rounds differ.
+ * Uses round-based naming only for between-round diffs (same operation chain).
+ * Falls back to suffix for round-vs-original diffs (edited builds on input).
  */
 export function generateDiffFileName(
   inputFile: string,
   editedFile: string,
   suffix: string,
 ): string {
+  const inputFileName = path.basename(inputFile);
   const editedFileName = path.basename(editedFile);
-  const inputRoundMatch = extractLastRoundModelMatch(path.basename(inputFile));
+  const inputBaseName = path.parse(inputFileName).name;
+  const editedBaseName = path.parse(editedFileName).name;
+
+  const inputRoundMatch = extractLastRoundModelMatch(inputFileName);
   const editedRoundMatch = extractLastRoundModelMatch(editedFileName);
 
-  // Only use round-based naming if both files have rounds AND rounds differ.
-  // Same-round comparisons (e.g., original vs proposed temp files) fall back to suffix.
+  // Only use round-based naming if:
+  // 1. Both files have rounds AND rounds differ
+  // 2. The edited file does NOT start with the input file's base name
+  //    (if it does, the input's round is part of the base, not a round to diff against)
+  // This distinguishes between-round diffs (r0→r1 in same chain) from
+  // round-vs-original diffs (original_r0 → original_r0_agent_r1).
   if (
     inputRoundMatch &&
     editedRoundMatch &&
-    inputRoundMatch[1] !== editedRoundMatch[1]
+    inputRoundMatch[1] !== editedRoundMatch[1] &&
+    !editedBaseName.startsWith(inputBaseName)
   ) {
     return generateRoundBasedFileName(
       editedFileName,
@@ -63,5 +73,5 @@ export function generateDiffFileName(
     );
   }
 
-  return `${path.parse(editedFileName).name}${suffix}.tex`;
+  return `${editedBaseName}${suffix}.tex`;
 }
