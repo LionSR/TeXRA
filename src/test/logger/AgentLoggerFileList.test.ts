@@ -15,7 +15,7 @@ describe('AgentLogger.logFileCategory', () => {
     logger = new AgentLogger('TestFileListLogger');
     capturedMessages = [];
     unsubscribe = bus.on('addLogMessage', (payload) => {
-      if (payload.stream === 'TestFileListLogger') {
+      if (payload.streamId === 'TestFileListLogger') {
         capturedMessages.push(payload.logMessage);
       }
     });
