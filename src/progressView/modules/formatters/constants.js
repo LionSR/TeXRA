@@ -54,8 +54,18 @@ export const TOOLS_WITH_FILE_LINK = new Set(['read_file']);
 
 /**
  * Tools whose input AND output are code that benefits from syntax highlighting.
+ * Maps tool name to default language hint for output.
+ * Use 'bash' for shell commands, 'plaintext' for tools with variable output.
  */
-export const TOOLS_WITH_CODE_OUTPUT = new Set(['bash', 'execute', 'run']);
+export const TOOL_OUTPUT_LANGUAGES = new Map([
+  ['bash', 'bash'],
+  ['execute', 'plaintext'], // Could be any language - don't guess
+  ['run', 'plaintext'], // Could be any language - don't guess
+]);
+
+// Threshold constants for diff detection heuristics
+export const DIFF_DETECTION_LINE_LIMIT = 20;
+export const DIFF_MARKER_THRESHOLD = 2;
 
 /**
  * Tool icon mapping for different tool types.

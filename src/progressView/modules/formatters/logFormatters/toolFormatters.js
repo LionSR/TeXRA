@@ -12,13 +12,13 @@ import {
   getToolIconClass,
   buildFileLinkWithLines,
   buildEditDiffSection,
-  wrapInHighlightedPre,
+  buildCodeBlock,
 } from '../htmlBuilders.js';
-import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
+import { normalizeToolUseLog, stringifyWithLanguage } from '../normalizers.js';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
-  TOOLS_WITH_CODE_OUTPUT,
+  TOOL_OUTPUT_LANGUAGES,
 } from '../constants.js';
 
 // Web search provider display names
@@ -40,18 +40,36 @@ const STATUS_ICONS = {
 };
 
 /**
- * Build a tool section with appropriate code highlighting based on tool type.
+ * Build a tool section with appropriate code highlighting based on tool type and content.
+ * Uses explicit language from tool config or content metadata - never auto-detects.
+ *
  * @param {string} label - Section label (e.g., 'Input:', 'Output:')
  * @param {string} text - Content text to display
- * @param {string} toolName - Name of the tool
- * @param {string} [extraClass] - Additional CSS class for the content
+ * @param {object} options - Display options
+ * @param {string} options.toolName - Name of the tool
+ * @param {string} [options.language] - Explicit language override (from stringifyWithLanguage)
+ * @param {string} [options.extraClass] - Additional CSS class for the content
  * @returns {string} HTML for the section
  */
-function buildToolSection(label, text, toolName, extraClass = '') {
-  const useHighlighting = TOOLS_WITH_CODE_OUTPUT.has(toolName);
-  const content = useHighlighting
-    ? wrapInHighlightedPre(text, 'bash', extraClass)
+function buildToolSection(label, text, options = {}) {
+  const { toolName = '', language: contentLanguage, extraClass = '' } = options;
+
+  // Determine language: tool config > content metadata > plaintext
+  const toolLanguage = TOOL_OUTPUT_LANGUAGES.get(toolName);
+  const language = toolLanguage || contentLanguage || 'plaintext';
+
+  // Only use highlighting for known languages, show badge for non-plaintext
+  const shouldHighlight = language && language !== 'plaintext';
+
+  const content = shouldHighlight
+    ? buildCodeBlock(text, {
+        language,
+        className: extraClass,
+        showLanguage: true,
+        showCopy: true,
+      })
     : wrapInPre(text, extraClass);
+
   return buildToolUseSection(label, content);
 }
 
@@ -194,9 +212,15 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
-    const inputValue = stringifyForDisplay(input);
+    const { text: inputValue, language: inputLanguage } =
+      stringifyWithLanguage(input);
     if (inputValue) {
-      sections.push(buildToolSection('Input:', inputValue, toolName));
+      sections.push(
+        buildToolSection('Input:', inputValue, {
+          toolName,
+          language: inputLanguage,
+        }),
+      );
     }
   }
 
@@ -204,7 +228,10 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   // Skip for read/file-link tools (already shown as file link)
   if (outputText && !TOOLS_WITH_FILE_LINK.has(toolName)) {
     sections.push(
-      buildToolSection('Output:', outputText, toolName, 'tool-output-full'),
+      buildToolSection('Output:', outputText, {
+        toolName,
+        extraClass: 'tool-output-full',
+      }),
     );
   }
 
@@ -225,10 +252,15 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     );
   }
 
-  const fallbackYaml = stringifyForDisplay(parsed);
+  const { text: fallbackYaml, language: fallbackLanguage } =
+    stringifyWithLanguage(parsed);
   contentElem.innerHTML =
     sections.length === 0
-      ? wrapInPre(fallbackYaml || '')
+      ? buildCodeBlock(fallbackYaml || '', {
+          language: fallbackLanguage,
+          showLanguage: fallbackLanguage !== 'plaintext',
+          showCopy: true,
+        })
       : sections.join('<hr class="tool-use-separator">');
 
   return element;
