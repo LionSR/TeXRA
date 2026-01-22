@@ -2,7 +2,7 @@ name: draw
 description: Creates or polishes TikZ figures for your research paper.
 
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex

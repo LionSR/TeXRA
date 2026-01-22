@@ -2,19 +2,14 @@
 import { z } from 'zod';
 
 // Local imports - agent components
-import {
-  AgentCategory,
-  AgentType,
-  resolveAgentSessionDescriptor,
-} from './AgentDataclass';
-import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
+import { AgentCategory } from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
  * Checks that the number of output files does not exceed the number of input files.
- * Extracted as a separate function for clarity and reusability.
+ * Used internally by AgentConfigSchema refinement.
  */
-export const validateOutputFiles = (cfg: {
+const validateOutputFiles = (cfg: {
   inputFile: string;
   inputFiles: string[];
   outputFiles: string[];
@@ -36,13 +31,13 @@ export const BaseProposalFieldsSchema = z.object({
   model: z.string().describe('Model to use for agent execution'),
   instruction: z.string().describe('Instruction for the agent'),
 });
-export type BaseProposalFields = z.infer<typeof BaseProposalFieldsSchema>;
 
 /**
  * File path fields for workflow agents only.
  * Tool-use agents access files through their own tools instead.
+ * Used internally to compose WorkflowSpecificFieldsSchema.
  */
-export const FileFieldsSchema = z.object({
+const FileFieldsSchema = z.object({
   inputFile: z.string().describe('Path to the primary input file'),
   inputFiles: z.array(z.string()).describe('Additional input file paths'),
   referenceFile: z
@@ -66,7 +61,6 @@ export const FileFieldsSchema = z.object({
   mediaFiles: z.array(z.string()).describe('Additional media file paths'),
   outputFiles: z.array(z.string()).describe('Desired output file paths'),
 });
-export type FileFields = z.infer<typeof FileFieldsSchema>;
 
 /**
  * Workflow-specific fields: file fields + multiple outputs flag.
@@ -77,19 +71,6 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
     .boolean()
     .describe('Enable multiple outputs mode for agents that support it'),
 });
-export type WorkflowSpecificFields = z.infer<
-  typeof WorkflowSpecificFieldsSchema
->;
-
-/**
- * Core workflow fields - combines base fields with workflow-specific fields.
- * Used by AgentConfig and WorkflowAgentProposal (workflow category only).
- * No defaults - consumers add their own via .extend() or .prefault().
- */
-export const CoreWorkflowFieldsSchema = BaseProposalFieldsSchema.extend({
-  ...WorkflowSpecificFieldsSchema.shape,
-});
-export type CoreWorkflowFields = z.infer<typeof CoreWorkflowFieldsSchema>;
 
 /** Zod schema for validating AgentConfig objects */
 const stringArrayField = () => z.array(z.string()).prefault([]);
@@ -115,10 +96,7 @@ const AgentConfigFieldsSchema = z.object({
   outputFiles: stringArrayField(),
 
   // AgentConfig-specific fields
-  // Legacy field for backward compatibility - prefer session.agentType
-  agentType: z.enum(AgentType).optional(),
-  // Canonical session descriptor - single source of truth
-  session: AgentSessionDescriptorSchema.optional(),
+  agentCategory: z.nativeEnum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFile: z.string().nullable().prefault(null),
   editedFiles: stringArrayField(),
 
@@ -127,11 +105,38 @@ const AgentConfigFieldsSchema = z.object({
 });
 
 /**
- * Base schema with output file count validation.
- * Used for AgentConfigSchema (with transform) - full validation path.
+ * Lift legacy session.agentCategory to top level for backward compatibility.
+ * Persisted data may have { session: { agentCategory } } format.
+ *
+ * Exported for reuse in TaskState.ts to maintain single source of truth.
  */
-const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
-  (config, ctx) => {
+export const liftLegacyAgentCategory = (input: unknown): unknown => {
+  if (typeof input !== 'object' || input === null) return input;
+  const obj = input as Record<string, unknown>;
+
+  // If agentCategory already exists at top level, no migration needed
+  if ('agentCategory' in obj && obj.agentCategory !== undefined) {
+    return input;
+  }
+
+  // Lift from session.agentCategory if present (legacy format)
+  // Note: The `session` field is left in place but is ignored by the schema.
+  // AgentConfigFieldsSchema uses z.object() which strips unknown fields.
+  const session = obj.session as Record<string, unknown> | undefined;
+  if (session && typeof session === 'object' && 'agentCategory' in session) {
+    return { ...obj, agentCategory: session.agentCategory };
+  }
+
+  return input;
+};
+
+/**
+ * Agent configuration schema with output file count validation.
+ * Includes backward compatibility for legacy { session: { agentCategory } } format.
+ */
+export const AgentConfigSchema = z.preprocess(
+  liftLegacyAgentCategory,
+  AgentConfigFieldsSchema.superRefine((config, ctx) => {
     if (
       !validateOutputFiles({
         inputFile: config.inputFile,
@@ -146,31 +151,12 @@ const AgentConfigBaseSchema = AgentConfigFieldsSchema.superRefine(
           'Number of output files must not be greater than the number of input files.',
       });
     }
-  },
+  }),
 );
 
-export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
-  const descriptor = resolveAgentSessionDescriptor(
-    config.session?.agentType ?? config.agentType,
-    config.session?.agentCategory,
-  );
-
-  return {
-    ...config,
-    agentType: descriptor.agentType,
-    // Lift agentCategory to top level for easier access (reduces nesting)
-    // Access via config.agentCategory instead of config.session.agentCategory
-    agentCategory: descriptor.agentCategory,
-    session: descriptor,
-  };
-});
-
-// Re-export AgentCategory for convenience
-// Canonical source: AgentDataclass.ts
-export { AgentCategory };
-
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
-export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+// Use AgentConfigFieldsSchema for input type since preprocess makes input `unknown`
+export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
 
 /**
  * Schema for agent configuration payload passed to executeAgent.

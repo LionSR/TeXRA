@@ -2,7 +2,7 @@ name: search
 description: Research assistant with web search and literature discovery tools.
 
 settings:
-  agentType: toolUse
+  agentCategory: toolUse
   tools:
     - bash
     - read_file
