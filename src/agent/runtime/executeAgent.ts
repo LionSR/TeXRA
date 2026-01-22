@@ -404,14 +404,6 @@ function acquireStreamOrThrow(
   );
 }
 
-/** Create a usage recorder callback for flow execution. */
-function createUsageRecorder(
-  usageMonitor: UsageMonitor,
-  runKind: 'workflow' | 'tool-use' = 'workflow',
-): () => RoundFinalizedCallback {
-  return () => (run) => usageMonitor.recordUsage(run, { runKind });
-}
-
 type FlowRunner = () => Promise<EndGroupStatus>;
 
 async function runFlowWithLifecycle(
@@ -621,7 +613,8 @@ export async function executeAgent(
         const result = await runToolUseFlow({
           ...ctx,
           ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          getUsageRecorder: () => (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: ctx.setting as AgentToolUseSetting,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
@@ -634,7 +627,8 @@ export async function executeAgent(
       const result = await runReflectionFlow({
         ...ctx,
         ...interruptManager.asFlowInput(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        getUsageRecorder: () => (run) =>
+          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         parentStage: ctx.runStage,
       });
@@ -704,7 +698,8 @@ export async function executeMergeAgent(
       const result = await runReflectionFlow({
         ...ctx,
         ...interruptManager.asFlowInput(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        getUsageRecorder: () => (run) =>
+          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
         parentStage: ctx.runStage,
@@ -767,7 +762,8 @@ export async function resumeToolUseFromSnapshot(
         {
           ...ctx,
           ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          getUsageRecorder: () => (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>
