@@ -308,3 +308,52 @@ export const MemoryEnabledMessageSchema = z.object({
 });
 
 export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
+
+// --- Progress View Stream Management Schemas ---
+
+/** Stream identifier - non-empty string */
+const StreamIdSchema = z.string().min(1);
+
+/** Message with stream identifier */
+export const StreamMessageSchema = z.object({
+  stream: StreamIdSchema,
+});
+
+export type StreamMessage = z.infer<typeof StreamMessageSchema>;
+
+/** Retry stream request with optional feedback */
+export const RetryStreamMessageSchema = z.object({
+  stream: StreamIdSchema,
+  feedback: z.string().optional(),
+});
+
+export type RetryStreamMessage = z.infer<typeof RetryStreamMessageSchema>;
+
+/** Send follow-up message */
+export const SendFollowUpMessageSchema = z.object({
+  stream: StreamIdSchema,
+  text: z.string(),
+});
+
+export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
+
+/** Sort streams by criteria */
+export const SortStreamsMessageSchema = z.object({
+  sortBy: z.enum(['time', 'name']).optional(),
+});
+
+export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
+
+/** Filter streams by agent category */
+export const FilterStreamsMessageSchema = z.object({
+  filter: z.string().optional(),
+});
+
+export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
+
+/** Open label message */
+export const OpenLabelMessageSchema = z.object({
+  label: z.string().min(1),
+});
+
+export type OpenLabelMessage = z.infer<typeof OpenLabelMessageSchema>;
