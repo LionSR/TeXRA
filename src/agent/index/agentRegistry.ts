@@ -392,11 +392,11 @@ async function scanYaml(
 
     // Extract tool names (can be strings or objects with name field)
     const rawTools = rawSettings.tools as unknown[] | undefined;
-    const tools = rawTools
-      ?.map((t) =>
-        typeof t === 'string' ? t : ((t as { name?: string })?.name ?? null),
-      )
-      .filter((t): t is string => t !== null);
+    const tools = rawTools?.flatMap((t) => {
+      if (typeof t === 'string') return t;
+      const name = (t as Record<string, unknown>)?.name;
+      return typeof name === 'string' ? name : [];
+    });
 
     // Determine category from source or explicit setting
     // Backward compatibility: check both agentCategory and legacy agentType

@@ -140,16 +140,14 @@ function computeTotalRounds(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): number {
-  let requests: string[];
-  if (Array.isArray(prompt.userRequest)) {
-    requests = prompt.userRequest;
-  } else if (prompt.userRequest) {
-    requests = [prompt.userRequest];
-  } else {
-    requests = [];
+  const { userRequest } = prompt;
+  let requestCount = 0;
+  if (Array.isArray(userRequest)) {
+    requestCount = userRequest.length;
+  } else if (userRequest) {
+    requestCount = 1;
   }
-
-  return Math.max(setting.rounds ?? 2, requests.length);
+  return Math.max(setting.rounds ?? 2, requestCount);
 }
 
 /** Derive configuration values from settings and prompts. */
