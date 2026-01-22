@@ -187,48 +187,40 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
 export async function getBase64EncodedMedia(
   mediaPath: string,
 ): Promise<string> {
+  const absolutePath = await resolveExistingFile(mediaPath);
+  const mimeType = getMimeType(absolutePath);
+  let tempPath: string | null = null;
+  let pathToRead = absolutePath;
+
   try {
-    const absolutePath = await resolveExistingFile(mediaPath);
-    const mimeType = getMimeType(absolutePath);
-    let tempPath: string | null = null;
-    let pathToRead = absolutePath;
-
-    try {
-      if (mimeType?.startsWith('image/')) {
-        const resizedPath = await resizeImageIfNeeded(absolutePath);
-        if (resizedPath !== absolutePath) {
-          tempPath = resizedPath;
-          pathToRead = resizedPath;
-        }
-      }
-
-      const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
-      if (mediaBytes.length === 0) {
-        logger.warn(CHANNEL, `Skipping empty media file: ${mediaPath}`);
-        throw new Error(`File is empty: ${mediaPath}`);
-      }
-      const base64String = mediaBytes.toString('base64');
-      logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
-      return base64String;
-    } finally {
-      if (tempPath) {
-        try {
-          AbsoluteFS.deleteSync(tempPath);
-          logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
-        } catch (err) {
-          logger.warn(
-            CHANNEL,
-            `Failed to remove temporary file ${tempPath}: ${toErrorMessage(err)}`,
-          );
-        }
+    if (mimeType?.startsWith('image/')) {
+      const resizedPath = await resizeImageIfNeeded(absolutePath);
+      if (resizedPath !== absolutePath) {
+        tempPath = resizedPath;
+        pathToRead = resizedPath;
       }
     }
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error encoding media to base64: ${toErrorMessage(err)}`,
-    );
-    throw err;
+
+    const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
+    if (mediaBytes.length === 0) {
+      logger.warn(CHANNEL, `Skipping empty media file: ${mediaPath}`);
+      throw new Error(`File is empty: ${mediaPath}`);
+    }
+    const base64String = mediaBytes.toString('base64');
+    logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
+    return base64String;
+  } finally {
+    if (tempPath) {
+      try {
+        AbsoluteFS.deleteSync(tempPath);
+        logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
+      } catch (err) {
+        logger.warn(
+          CHANNEL,
+          `Failed to remove temporary file ${tempPath}: ${toErrorMessage(err)}`,
+        );
+      }
+    }
   }
 }
 
@@ -328,12 +320,6 @@ export async function singlePagePdf2Png(
       `Successfully converted page ${pageNum} of ${pdfPath} to PNG`,
     );
     return base64String;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error converting PDF page to PNG: ${toErrorMessage(err)}`,
-    );
-    throw err;
   } finally {
     // Always clean up all temporary files in the temporary directory
     logger.debug(CHANNEL, `Cleaning up temporary files in ${TEMP_DIR}`);
@@ -355,33 +341,25 @@ export async function multiPagePdf2Png(
   maxSize: [number, number] = [1024, 1024],
   maxPages: number = 100,
 ): Promise<string[]> {
-  try {
-    const pageCount = await countPdfPages(pdfPath);
-    const pagesToConvert = Math.min(pageCount, maxPages);
+  const pageCount = await countPdfPages(pdfPath);
+  const pagesToConvert = Math.min(pageCount, maxPages);
 
-    const base64Images: string[] = [];
-    for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-      const base64Image = await singlePagePdf2Png(
-        pdfPath,
-        pageNum,
-        quality,
-        maxSize,
-      );
-      base64Images.push(base64Image);
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
+  const base64Images: string[] = [];
+  for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
+    const base64Image = await singlePagePdf2Png(
+      pdfPath,
+      pageNum,
+      quality,
+      maxSize,
     );
-    return base64Images;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error converting multiple PDF pages: ${toErrorMessage(err)}`,
-    );
-    throw err;
+    base64Images.push(base64Image);
   }
+
+  logger.debug(
+    CHANNEL,
+    `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
+  );
+  return base64Images;
 }
 
 /**

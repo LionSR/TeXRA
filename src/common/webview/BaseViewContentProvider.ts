@@ -123,7 +123,10 @@ export abstract class BaseViewContentProvider {
     try {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
-      const sharedUris = this.buildUriRecord(webview, this.sharedModuleDescriptors);
+      const sharedUris = this.buildUriRecord(
+        webview,
+        this.sharedModuleDescriptors,
+      );
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
 
