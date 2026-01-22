@@ -1687,7 +1687,7 @@
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
-    "prettier": "^3.8.0",
+    "prettier": "^3.8.1",
     "terser-webpack-plugin": "^5.3.16",
     "ts-loader": "^9.5.4",
     "tsconfig-paths": "^4.2.0",
