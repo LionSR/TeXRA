@@ -42,37 +42,25 @@ interface ProposalShowPayload {
 }
 
 // ============================================================================
-// Factory-created Coordinator
+// Coordinator Implementation
 // ============================================================================
 
-/** Extended coordinator with proposal-specific method. */
-export interface ProposalCoordinator
-  extends BasePromiseCoordinator<ProposalResult, ProposalShowPayload> {
+/** Manages pending agent proposals (workflow and tool-use). */
+class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+  ProposalResult,
+  ProposalShowPayload
+> {
+  constructor() {
+    super({
+      showEventName: 'showAgentProposal',
+      resolveEventName: 'resolveAgentProposal',
+      idFieldName: 'proposalId',
+      defaultCancelResult: { action: 'reject' },
+    });
+  }
+
   /** Wait for user action on a proposal. */
   waitForProposal(
-    streamId: string,
-    options: ProposalRequestOptions,
-  ): Promise<ProposalResult>;
-}
-
-/**
- * Create a proposal coordinator instance.
- * Uses composition over inheritance for this thin wrapper.
- */
-function createProposalCoordinator(): ProposalCoordinator {
-  const coordinator = new BasePromiseCoordinator<
-    ProposalResult,
-    ProposalShowPayload
-  >({
-    showEventName: 'showAgentProposal',
-    resolveEventName: 'resolveAgentProposal',
-    idFieldName: 'proposalId',
-    defaultCancelResult: { action: 'reject' },
-  });
-
-  // Add the proposal-specific method
-  const extended = coordinator as ProposalCoordinator;
-  extended.waitForProposal = function (
     streamId: string,
     options: ProposalRequestOptions,
   ): Promise<ProposalResult> {
@@ -86,9 +74,7 @@ function createProposalCoordinator(): ProposalCoordinator {
       { proposalId, streamId, ...proposal },
       { timeoutMs },
     );
-  };
-
-  return extended;
+  }
 }
 
 // ============================================================================
@@ -96,4 +82,4 @@ function createProposalCoordinator(): ProposalCoordinator {
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const proposalCoordinator = createProposalCoordinator();
+export const proposalCoordinator = new AgentProposalCoordinatorImpl();
