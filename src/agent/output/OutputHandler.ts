@@ -348,16 +348,13 @@ export class OutputHandler implements IOutputHandler {
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
         if (missing.length > 0) {
-          const xmlLocation = outputLocation;
-          const xmlExists = await flexibleFS.exists(xmlLocation);
+          const xmlExists = await flexibleFS.exists(outputLocation);
 
-          const missingOutputsData = {
+          this.logger.missingOutputs({
             missing,
-            xmlFile: xmlExists ? xmlLocation.absolutePath : null,
+            xmlFile: xmlExists ? outputLocation.absolutePath : null,
             documentTag: this.agentSetting.documentTag,
-          };
-
-          this.logger.missingOutputs(missingOutputsData);
+          });
           await showInstructionWithSuppress(
             'missingOutputsInfo',
             'Missing output files detected',
