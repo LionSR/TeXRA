@@ -4,16 +4,6 @@
  */
 
 /**
- * Helper to extract the last match of a pattern from text.
- */
-function extractLastMatch(
-  text: string,
-  pattern: RegExp,
-): RegExpMatchArray | null {
-  return [...text.matchAll(pattern)].at(-1) ?? null;
-}
-
-/**
  * Extracts the last _rN_ match from a filename.
  * Use this to correctly handle nested filenames where the base contains its own _rN_ pattern.
  *
@@ -27,7 +17,7 @@ function extractLastMatch(
 export function extractLastRoundMatch(
   filename: string,
 ): RegExpMatchArray | null {
-  return extractLastMatch(filename, /_r(\d+)_/g);
+  return [...filename.matchAll(/_r(\d+)_/g)].at(-1) ?? null;
 }
 
 /**
@@ -44,7 +34,7 @@ export function extractLastRoundMatch(
 export function extractLastRoundModelMatch(
   filename: string,
 ): RegExpMatchArray | null {
-  return extractLastMatch(filename, /_r(\d+)_([^_.]+)/g);
+  return [...filename.matchAll(/_r(\d+)_([^_.]+)/g)].at(-1) ?? null;
 }
 
 /**
