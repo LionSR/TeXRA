@@ -246,7 +246,6 @@ export function buildCodeBlock(text, options = {}) {
     showCopy = false,
   } = options;
 
-  const classes = ['code-block'].filter(Boolean).join(' ');
   const preClasses = ['hljs', className].filter(Boolean).join(' ');
 
   // Build code content with or without highlighting
@@ -283,7 +282,7 @@ export function buildCodeBlock(text, options = {}) {
       ? `<div class="code-block-header">${headerParts.join('')}</div>`
       : '';
 
-  return `<div class="${classes}" data-language="${encodeHtml(language)}">${header}<pre class="${preClasses}"><code>${codeContent}</code></pre></div>`;
+  return `<div class="code-block" data-language="${encodeHtml(language)}">${header}<pre class="${preClasses}"><code>${codeContent}</code></pre></div>`;
 }
 
 // ============================================================================
