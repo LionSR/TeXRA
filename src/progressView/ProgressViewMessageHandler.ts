@@ -309,8 +309,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // storageKey is for logical indexing (finding file metadata in progress view state).
       // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
       // Note: Physical file paths use executionId (see runId below), not storageKey.
-      const storageKey: StorageKey | null =
-        activeRunId ?? (executionId as StorageKey | undefined) ?? null;
+      const storageKey = (activeRunId ?? executionId ?? null) as StorageKey | null;
       const runOutputs = storageKey
         ? this.provider.state.getRunOutputFiles(message.stream, { storageKey })
         : undefined;
@@ -513,21 +512,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
     // Build activeFiles - only relevant for workflow agents
-    const activeFiles = isWorkflow
-      ? {
-          input: hasFiles(proposal.inputFiles),
-          reference: hasFiles(proposal.referenceFiles),
-          auxiliary: hasFiles(proposal.auxiliaryFiles),
-          media: hasFiles(proposal.mediaFiles),
-          output: hasFiles(proposal.outputFiles),
-        }
-      : {
-          input: false,
-          reference: false,
-          auxiliary: false,
-          media: false,
-          output: false,
-        };
+    const activeFiles = {
+      input: isWorkflow && hasFiles(proposal.inputFiles),
+      reference: isWorkflow && hasFiles(proposal.referenceFiles),
+      auxiliary: isWorkflow && hasFiles(proposal.auxiliaryFiles),
+      media: isWorkflow && hasFiles(proposal.mediaFiles),
+      output: isWorkflow && hasFiles(proposal.outputFiles),
+    };
 
     // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
     // For tool-use agents, file fields will get default values from AgentConfigSchema
