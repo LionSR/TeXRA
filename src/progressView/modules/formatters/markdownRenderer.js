@@ -89,7 +89,8 @@ export const processMarkdownContent = (content, renderer) => {
 
   // Add line break before bold text starting a new sentence (capital letter after period)
   // This fixes OpenAI reasoning summary output which omits line breaks before bold headers
-  const formattedContent = protectedContent.replace(/\.(\*\*[A-Z])/g, '.\n$1');
+  // Handle both ".**Bold" and ". **Bold" patterns (with optional whitespace)
+  const formattedContent = protectedContent.replace(/\.\s*(\*\*[A-Z])/g, '.\n$1');
 
   const md = renderer || getMarkdownRenderer();
 
