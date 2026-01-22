@@ -3,15 +3,24 @@
  *
  * Handles todo events: updateTodos.
  */
-import type {
-  ProgressEventBusLike,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
-import { withEventErrorHandling } from './errorHandling';
+import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import { createEventHandler, registerEventHandlers } from './errorHandling';
 import {
   isWebviewAvailable,
   type EventHandlerContext,
 } from './EventHandlerContext';
+
+const handleUpdateTodos = createEventHandler(
+  'TodoEvents',
+  'updateTodos',
+  (ctx, { stream, todos }) => {
+    ctx.state.setTodos(stream, todos);
+    // Broadcast to webview - frontend decides which run to display
+    if (isWebviewAvailable(ctx)) {
+      ctx.webviewUpdater.updateTodos(stream, todos);
+    }
+  },
+);
 
 /**
  * Register todo event handlers on the event bus.
@@ -21,20 +30,7 @@ export function registerTodoEventHandlers(
   ctx: EventHandlerContext,
   signal: AbortSignal,
 ): void {
-  bus.on('updateTodos', (payload) => handleUpdateTodos(ctx, payload), {
-    signal,
-  });
-}
-
-function handleUpdateTodos(
-  ctx: EventHandlerContext,
-  { stream, todos }: ProgressEventPayloads['updateTodos'],
-): void {
-  withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
-    ctx.state.setTodos(stream, todos);
-    // Broadcast to webview - frontend decides which run to display
-    if (isWebviewAvailable(ctx)) {
-      ctx.webviewUpdater.updateTodos(stream, todos);
-    }
+  registerEventHandlers(bus, ctx, signal, {
+    updateTodos: handleUpdateTodos,
   });
 }

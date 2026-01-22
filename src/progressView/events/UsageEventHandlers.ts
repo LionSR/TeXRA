@@ -3,15 +3,47 @@
  *
  * Handles usage events: updateStreamUsage, updateContextState.
  */
-import type {
-  ProgressEventBusLike,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
-import { withEventErrorHandling } from './errorHandling';
+import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
+import { createEventHandler, registerEventHandlers } from './errorHandling';
 import {
   isWebviewAvailable,
   type EventHandlerContext,
 } from './EventHandlerContext';
+
+const handleUpdateStreamUsage = createEventHandler(
+  'UsageEvents',
+  'updateStreamUsage',
+  async (ctx, { stream, usage, storageKey }) => {
+    // usage is already typed as TokenUsageStats from the event payload
+    const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
+      stream,
+      storageKey,
+      usage,
+    );
+
+    // For tool-use sessions (no task groups), set active run ID from usage
+    if (!ctx.state.getActiveRunId(stream)) {
+      ctx.state.setActiveRunId(stream, storageKey);
+    }
+
+    // Broadcast to webview - frontend decides which run to display
+    if (isWebviewAvailable(ctx) && accumulatedUsage) {
+      ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
+    }
+  },
+);
+
+const handleUpdateContextState = createEventHandler(
+  'UsageEvents',
+  'updateContextState',
+  (ctx, { stream, contextState }) => {
+    ctx.state.setContextState(stream, contextState);
+    // Broadcast to webview - frontend decides which run to display
+    if (isWebviewAvailable(ctx)) {
+      ctx.webviewUpdater.updateContextState(stream, contextState);
+    }
+  },
+);
 
 /**
  * Register usage event handlers on the event bus.
@@ -21,59 +53,8 @@ export function registerUsageEventHandlers(
   ctx: EventHandlerContext,
   signal: AbortSignal,
 ): void {
-  bus.on(
-    'updateStreamUsage',
-    (payload) => handleUpdateStreamUsage(ctx, payload),
-    { signal },
-  );
-  bus.on(
-    'updateContextState',
-    (payload) => handleUpdateContextState(ctx, payload),
-    { signal },
-  );
-}
-
-function handleUpdateStreamUsage(
-  ctx: EventHandlerContext,
-  { stream, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
-): void {
-  withEventErrorHandling(
-    'UsageEvents',
-    'failed to handle updateStreamUsage',
-    async () => {
-      // usage is already typed as TokenUsageStats from the event payload
-      const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
-        stream,
-        storageKey,
-        usage,
-      );
-
-      // For tool-use sessions (no task groups), set active run ID from usage
-      if (!ctx.state.getActiveRunId(stream)) {
-        ctx.state.setActiveRunId(stream, storageKey);
-      }
-
-      // Broadcast to webview - frontend decides which run to display
-      if (isWebviewAvailable(ctx) && accumulatedUsage) {
-        ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
-      }
-    },
-  );
-}
-
-function handleUpdateContextState(
-  ctx: EventHandlerContext,
-  { stream, contextState }: ProgressEventPayloads['updateContextState'],
-): void {
-  withEventErrorHandling(
-    'UsageEvents',
-    'failed to handle updateContextState',
-    () => {
-      ctx.state.setContextState(stream, contextState);
-      // Broadcast to webview - frontend decides which run to display
-      if (isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.updateContextState(stream, contextState);
-      }
-    },
-  );
+  registerEventHandlers(bus, ctx, signal, {
+    updateStreamUsage: handleUpdateStreamUsage,
+    updateContextState: handleUpdateContextState,
+  });
 }
