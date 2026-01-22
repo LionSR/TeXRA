@@ -30,7 +30,7 @@ import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { sleepWithAbort } from '@utils/core';
+import { delay } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -1185,7 +1185,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
       try {
-        await sleepWithAbort(pollInterval, signal);
+        await delay(pollInterval, { signal });
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
