@@ -18,6 +18,7 @@
 @import './groups.css';
 @import './markdown.css';
 @import './scratchpad.css';
+@import './code-block.css';
 @import './file-list.css';
 @import './latexdiff.css';
 @import './statistics.css';
