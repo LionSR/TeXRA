@@ -18,7 +18,9 @@ import { normalizeToolUseLog, stringifyWithLanguage } from '../normalizers.js';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
+  TOOLS_WITH_FILE_CONTENT,
   TOOL_OUTPUT_LANGUAGES,
+  getLanguageFromPath,
 } from '../constants.js';
 
 // Web search provider display names
@@ -210,6 +212,23 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
       ),
     );
   }
+  // Handle write tools with file link + syntax-highlighted content
+  else if (
+    TOOLS_WITH_FILE_CONTENT.has(toolName) &&
+    filePath &&
+    input?.content !== undefined
+  ) {
+    sections.push(
+      buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
+    );
+    const contentLanguage = getLanguageFromPath(filePath);
+    sections.push(
+      buildToolSection('Content:', input.content, {
+        toolName,
+        language: contentLanguage,
+      }),
+    );
+  }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
     const { text: inputValue, language: inputLanguage } =
@@ -225,8 +244,16 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   }
 
   // Show output if present (primary result from tool)
-  // Skip for read/file-link tools (already shown as file link)
-  if (outputText && !TOOLS_WITH_FILE_LINK.has(toolName)) {
+  // Skip for read tools (already shown as file link)
+  // Skip trivial "written" for write tools, but show if user adjusted content
+  // (WriteTool outputs "written\n\n<diff>" when user modifies proposed content)
+  const isWriteTool = TOOLS_WITH_FILE_CONTENT.has(toolName);
+  const isTrivialWriteOutput = isWriteTool && outputText.trim() === 'written';
+  if (
+    outputText &&
+    !TOOLS_WITH_FILE_LINK.has(toolName) &&
+    !isTrivialWriteOutput
+  ) {
     sections.push(
       buildToolSection('Output:', outputText, {
         toolName,
