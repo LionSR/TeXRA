@@ -148,8 +148,9 @@ export class OutputFileProcessor {
         case 'scratchpadOnly': {
           const hasDocumentTag = Boolean(agentSetting.documentTag);
           const hasScratchpadPrefill =
-            agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-            false;
+            agentSetting.prefills?.some((p) =>
+              SCRATCHPAD_TAG_PATTERN.test(p),
+            ) ?? false;
           shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
           break;
         }
@@ -261,10 +262,12 @@ export class OutputFileProcessor {
       );
       if (documentEntries.length > 0) {
         const trimmedDocuments = documentEntries.map((e) => e.content.trim());
-        tagContents[documentTag] =
-          trimmedDocuments.length === 1
-            ? trimmedDocuments[0]
-            : trimmedDocuments;
+        // Store as single string if only one document, array otherwise
+        if (trimmedDocuments.length === 1) {
+          tagContents[documentTag] = trimmedDocuments[0];
+        } else {
+          tagContents[documentTag] = trimmedDocuments;
+        }
 
         for (const entry of documentEntries) {
           const nameAttr = entry.name ? ` name="${entry.name}"` : '';

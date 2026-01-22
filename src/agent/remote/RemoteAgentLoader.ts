@@ -117,7 +117,10 @@ function parseListItemRow(row: {
     agentCategory: agent_category,
   });
   if (!result.success) {
-    logger.warn(CHANNEL, `Invalid metadata for agent "${name}": ${result.error.message}`);
+    logger.warn(
+      CHANNEL,
+      `Invalid metadata for agent "${name}": ${result.error.message}`,
+    );
     return null;
   }
   return result.data;

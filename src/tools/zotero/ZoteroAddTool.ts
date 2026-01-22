@@ -235,8 +235,12 @@ export class ZoteroAddTool extends defineTool({
       results.push({ item: itemLabel, ...result });
     }
 
-    const successCount = results.filter((r) => r.status === 'success').length;
-    const errorCount = results.filter((r) => r.status === 'error').length;
+    let successCount = 0;
+    let errorCount = 0;
+    for (const r of results) {
+      if (r.status === 'success') successCount++;
+      else if (r.status === 'error') errorCount++;
+    }
 
     const output = results
       .map((r) => {
