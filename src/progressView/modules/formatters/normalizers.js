@@ -39,25 +39,42 @@ function extractString(primary, fallback) {
 }
 
 /**
- * Convert a value to a display-friendly string
- * @param {*} value - Value to stringify
- * @returns {string} Display string
+ * @typedef {Object} StringifyResult
+ * @property {string} text - The stringified text
+ * @property {string} language - Language hint for syntax highlighting ('yaml', 'json', 'plaintext')
  */
-export function stringifyForDisplay(value) {
+
+/**
+ * Convert a value to a display-friendly string with language metadata.
+ * Avoids repeated parsing by tracking the serialization format used.
+ * @param {*} value - Value to stringify
+ * @returns {StringifyResult} Object with text and language hint
+ */
+export function stringifyWithLanguage(value) {
   if (value === undefined || value === null) {
-    return '';
+    return { text: '', language: 'plaintext' };
   }
 
   if (typeof value === 'string') {
-    return value;
+    return { text: value, language: 'plaintext' };
   }
 
   try {
     const yamlString = yaml.stringify(value);
-    return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
+    const text = typeof yamlString === 'string' ? yamlString.trimEnd() : '';
+    return { text, language: 'yaml' };
   } catch {
-    return String(value);
+    return { text: String(value), language: 'plaintext' };
   }
+}
+
+/**
+ * Convert a value to a display-friendly string (legacy API)
+ * @param {*} value - Value to stringify
+ * @returns {string} Display string
+ */
+export function stringifyForDisplay(value) {
+  return stringifyWithLanguage(value).text;
 }
 
 /**
