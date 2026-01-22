@@ -11,7 +11,7 @@ import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { sleep } from '@utils/core';
+import { delay } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
 import { getConfig } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -167,7 +167,7 @@ export async function stopRecordingAndTranscribe(
     resetRecordingState();
 
     // Wait a bit for the file to be properly written
-    await sleep(500);
+    await delay(500);
 
     // Check if the file exists and has content
     if (!AbsoluteFS.existsSync(recordingPath)) {
