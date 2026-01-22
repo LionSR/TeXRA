@@ -41,6 +41,8 @@ prompts:
     (4) Use examples to illustrate abstract ideas.
     (5) Connect mathematical formalism to physical or conceptual interpretation.
 
+    LaTeX Best Practices: (1) Use `` and '' instead of "..." for quotes. (2) Follow chktex best practices (no warnings). (3) Use appropriate mathematical environments (equation, align, etc.). (4) Keep mathematical notation consistent throughout. (5) All inline mathematical variables must be enclosed in $...$, not backticks.
+
     Research Direction Guidance:
     (1) Help identify promising research questions.
     (2) Discuss feasibility and potential impact of research directions.
