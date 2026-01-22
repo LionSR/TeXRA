@@ -106,14 +106,15 @@ async function createTempFile(
   const basename = path.basename(originalPath, ext);
   const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, UUID_PREFIX_LENGTH)}${ext}`;
 
-  const tempDir =
-    location === 'workspaceTemp'
-      ? path.join(workspacePath, TEXRA_TEMP_DIR)
-      : path.dirname(
-          path.isAbsolute(originalPath)
-            ? originalPath
-            : path.join(workspacePath, originalPath),
-        );
+  let tempDir: string;
+  if (location === 'workspaceTemp') {
+    tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
+  } else {
+    const resolvedPath = path.isAbsolute(originalPath)
+      ? originalPath
+      : path.join(workspacePath, originalPath);
+    tempDir = path.dirname(resolvedPath);
+  }
 
   if (location === 'workspaceTemp') {
     await fs.mkdir(tempDir, { recursive: true });
