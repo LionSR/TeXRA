@@ -31,6 +31,8 @@ import {
   type RemoteAgentLoadOptions,
 } from './types';
 
+import { resolveToolDefinitions } from '@tools/registry';
+
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 
@@ -249,7 +251,6 @@ export class RemoteAgentLoader {
         // Extract and process settings (remote agents are self-contained, no inheritance)
         const settings: Partial<AgentSetting> = validated.settings;
         if (Array.isArray(settings.tools)) {
-          const { resolveToolDefinitions } = await import('@tools/registry');
           settings.tools = resolveToolDefinitions(
             settings.tools as (string | { name: string })[],
             (name) =>
