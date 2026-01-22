@@ -37,7 +37,7 @@ const PackConfigSchema = z
   })
   .transform((c) => ({
     ...c,
-    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 1,
+    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
   }));
 
 /** For packMultiple - inputFile optional if outputFiles provided */
