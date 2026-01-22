@@ -2,8 +2,11 @@
  * Zod schemas for webview message types.
  * Types are derived from schemas using z.infer<> for single source of truth.
  */
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { PROGRESS_VIEW_APPROVAL_ACTIONS } from '@tools/approval/toolEditApproval';
 
 // --- Base Schemas (composable building blocks) ---
@@ -282,14 +285,14 @@ export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
 
 /** Sort streams message */
 export const SortStreamsMessageSchema = z.object({
-  sortBy: z.enum(['time', 'inputFile', 'agent']).optional(),
+  sortBy: z.enum(['time', 'inputFile', 'agent']).default('time'),
 });
 
 export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
 
 /** Filter streams message */
 export const FilterStreamsMessageSchema = z.object({
-  filter: z.enum(['all', 'workflow', 'toolUse']),
+  filter: z.union([z.literal('all'), z.enum(AgentCategory)]),
 });
 
 export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
