@@ -72,9 +72,8 @@ export function joinWorkspaceRelativePath(
   baseRelative: string,
   child: string,
 ): WorkspacePathResolution {
-  const base = baseRelative && baseRelative !== '.' ? baseRelative : '.';
-  const combined = base === '.' ? child : path.join(base, child);
-  return resolveWorkspaceRelativePath(combined);
+  // path.join handles empty/dot bases naturally: join('.', 'x') and join('', 'x') both return 'x'
+  return resolveWorkspaceRelativePath(path.join(baseRelative || '.', child));
 }
 
 /**
@@ -149,11 +148,13 @@ export function formatToolOutput(
   content: string | string[] | null,
   noMatchesText: string = '(no entries)',
 ): string {
-  if (!content || (Array.isArray(content) && content.length === 0)) {
-    return `${header}\n${noMatchesText}`;
-  }
-  const lines = Array.isArray(content) ? content.join('\n') : content;
-  return `${header}\n${lines}`;
+  const isEmpty = !content || (Array.isArray(content) && content.length === 0);
+  const body = isEmpty
+    ? noMatchesText
+    : Array.isArray(content)
+      ? content.join('\n')
+      : content;
+  return `${header}\n${body}`;
 }
 
 /**

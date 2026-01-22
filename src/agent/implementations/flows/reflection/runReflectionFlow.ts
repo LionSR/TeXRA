@@ -15,7 +15,7 @@
  *
  * Following koala's approach:
  * - shared state is natively serializable (snapshots, not class instances)
- * - services contain runtime dependencies (runStage, logger, etc.)
+ * - services contain runtime dependencies (parentStage, logger, etc.)
  * - PersistedFlow handles persistence transparently
  */
 
@@ -24,11 +24,7 @@ import * as path from 'path';
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type {
-  StreamTabId,
-  StorageKeyManager,
-} from '@agent/types/IdentifierTypes';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -43,7 +39,6 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
-import { normalizeRunId } from '@common/constants/runIds';
 import {
   EXECUTION_STATUS,
   executionToEndStatus,
@@ -75,18 +70,19 @@ import type { ReflectionServices } from './ReflectionServices';
 
 /**
  * Input for running a reflection flow.
- * Extends BaseFlowContextInit with reflection-specific fields and StorageKeyManager.
+ * Extends BaseFlowContextInit with reflection-specific fields.
  */
-export interface RunReflectionFlowInput<C = unknown>
-  extends BaseFlowContextInit<C>, StorageKeyManager {
+export interface RunReflectionFlowInput<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
-  /** Usage recorder callback. If not provided, usage is not tracked. */
-  getUsageRecorder?: () => RoundFinalizedCallback;
+  /** Storage key for file organization (computed by caller). */
+  storageKey: StorageKey;
 
-  /** Optional: Parent log stage for creating round stages. */
-  parentStage?: AgentLogStage;
+  /** Parent log stage for creating round stages. */
+  parentStage: AgentLogStage;
 
   /** Optional custom output file location getter (used by merge). */
   getOutputFileLocation?: (round: number) => AgentFileLocation;
@@ -181,20 +177,17 @@ export async function runReflectionFlow<C = unknown>(
     logger,
     streamId,
     executionId,
-    getStorageKey,
-    hasInitialStorageKey,
-    updateStorageKey,
+    storageKey,
+    parentStage,
     userVarChannels,
     checkInterruption,
     setAbortController,
     getUsageRecorder = () => async () => {},
-    parentStage,
   } = input;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
-  let createdRunStage = false;
 
   // ========================================================================
   // Create services inline (previously in createReflectionFlowContext)
@@ -261,28 +254,6 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // ========================================================================
-  // Run stage and storage key setup
-  // ========================================================================
-
-  // Create or use provided run stage FIRST - we need its ID for storage key
-  const runStage =
-    parentStage ??
-    (await logger.stage(`Run: ${config.agent}`, {
-      skip: false,
-    }));
-
-  createdRunStage = !parentStage;
-
-  // For new runs, update storage key to match the run stage ID
-  // Note: runStage.id is always defined for newly created stages
-  if (createdRunStage && hasInitialStorageKey()) {
-    const runStorageKey = normalizeRunId(runStage.id!);
-    updateStorageKey(runStorageKey);
-  }
-
-  const storageKey = getStorageKey();
-
   // Set active run for output handler
   outputHandler.setActiveRun(storageKey);
 
@@ -345,7 +316,7 @@ export async function runReflectionFlow<C = unknown>(
       Record<string, unknown>,
       ReflectionServices<C>
     >(startNode, kv, {
-      parentStage: runStage,
+      parentStage,
       hooks: {
         createRoundStage: async (roundIndex, parent) => {
           return await logger.stage(`r${roundIndex}`, {
@@ -372,7 +343,7 @@ export async function runReflectionFlow<C = unknown>(
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      runStage,
+      parentStage,
       baseFiles,
     };
     pf.setServices(services);
@@ -398,10 +369,6 @@ export async function runReflectionFlow<C = unknown>(
       } catch {
         // Ignore cleanup errors
       }
-    }
-
-    if (createdRunStage) {
-      (services?.runStage ?? runStage)?.end(status);
     }
 
     // Clean up retry coordinator
