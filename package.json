@@ -1765,7 +1765,7 @@
     "openai": "^6.16.0",
     "p-map": "^7.0.4",
     "pdf2pic": "^3.2.0",
-    "perfect-debounce": "^2.0.0",
+    "perfect-debounce": "^2.1.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "tar": "^7.5.6",
