@@ -22,17 +22,21 @@ import { TaskStateSchema, type TaskState } from '@logger/TaskState';
  * (progressView cannot import types.ts directly due to other deps)
  */
 export {
-  RetryErrorDetailsSchema,
   ToolEditApprovalPromptSchema,
   RetryRequestPromptSchema,
   WorkflowAgentProposalSchema,
   WorkflowAgentProposalPromptSchema,
-  type RetryErrorDetails,
   type ToolEditApprovalPrompt,
   type RetryRequestPrompt,
   type WorkflowAgentProposal,
   type WorkflowAgentProposalPrompt,
 } from './types';
+
+// Re-export error types from the canonical location
+export {
+  ProviderErrorPartialSchema,
+  type ProviderErrorPartial,
+} from '@common/errors/schemas';
 
 // Re-export TaskGroupStatusSchema from single source of truth
 export { TaskGroupStatusSchema, type TaskGroupStatus };
