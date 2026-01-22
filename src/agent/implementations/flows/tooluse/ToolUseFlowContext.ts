@@ -8,7 +8,6 @@
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 
@@ -21,7 +20,6 @@ export interface ToolUseFlowContextInit<
   setting: AgentToolUseSetting;
   toolRegistry?: IToolRegistry;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
-  getUsageRecorder?: () => RoundFinalizedCallback;
   onFollowUpConsumed?: () => void;
 }
 
@@ -42,27 +40,22 @@ export function resolveTools(
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
 ): ToolDefinition[] {
-  const toolRegistry = registry;
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
-  const resolved: ToolDefinition[] = [];
-  const resolvedNames = new Set<string>();
-
-  for (const config of toolConfigs) {
-    const def = typeof config === 'string' ? { name: config } : config;
-
-    if (!toolRegistry.has(def.name)) {
-      logger.warn(`Tool "${def.name}" not found in registry`);
-      continue;
-    }
-
-    resolved.push(def);
-    resolvedNames.add(def.name);
-  }
+  // Normalize configs and filter to valid tools
+  const resolved = toolConfigs
+    .map((config) => (typeof config === 'string' ? { name: config } : config))
+    .filter((def) => {
+      if (!registry.has(def.name)) {
+        logger.warn(`Tool "${def.name}" not found in registry`);
+        return false;
+      }
+      return true;
+    });
 
   // Auto-inject memory tool if enabled and not already configured
-  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
-    const memoryTool = toolRegistry.get('memory');
+  if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
+    const memoryTool = registry.get('memory');
     if (memoryTool) {
       resolved.push(memoryTool.definition);
     } else {
