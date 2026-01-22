@@ -515,7 +515,7 @@ export async function executeAgent(
     const runStorage = getRunStorageService();
 
     // Set stream status to running
-    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     logger.info(`Starting task execution for ${streamTabId}`);
     logger.info(`Input file: ${config.inputFile}`);
@@ -627,7 +627,7 @@ export async function executeMergeAgent(
   const { streamId: streamTabId, config, executionId } = ctx;
 
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
-    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     const taskStage = await logger.stage(`Task: merge@${model}`);
     return taskStage.run(async () => {
@@ -700,7 +700,7 @@ export async function resumeToolUseFromSnapshot(
     streamTabId,
     snapshotConfig.agent,
     async () => {
-      StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+      StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
       // Run the flow with resume snapshot
       const result = await runToolUseFlow(
