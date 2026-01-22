@@ -236,10 +236,3 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     return undefined;
   }
 }
-
-export const imageCommands = {
-  handleCountPdfPages,
-  handleEncodeImageToBase64,
-  handleConvertPdfToImages,
-  handleTestPdfToImage,
-};

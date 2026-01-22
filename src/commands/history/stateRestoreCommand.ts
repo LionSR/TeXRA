@@ -58,7 +58,3 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }
 }
-
-export const stateRestoreCommand = {
-  restoreState,
-};
