@@ -114,7 +114,7 @@ export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
 /** Payload for setting the active stream with optional category hint */
 export const SetActiveStreamPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema.nullable(),
-  agentCategory: z.nativeEnum(AgentCategory).optional(),
+  agentCategory: z.enum(AgentCategory).optional(),
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote: z.boolean().optional(),
   /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
