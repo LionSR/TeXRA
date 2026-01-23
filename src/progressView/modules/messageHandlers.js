@@ -501,9 +501,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllQueuedFollowUps();
       state.clearAllFollowUpText();
     } else {
-      // NOTE: Content clearing is handled by handleUpdateLogs which always follows.
-      // Backend always sends UPDATE_LOGS after UPDATE_STREAMS (even for empty streams).
-      // Clearing here would be redundant - we'd clear twice.
+      // Clear content when switching streams to prevent stale display.
+      // While UPDATE_LOGS typically follows UPDATE_STREAMS, some code paths
+      // (e.g., setStreamStatus for new streams with filter change) only send
+      // UPDATE_STREAMS. Clear proactively so stale content doesn't persist.
+      if (
+        state.lastRenderedStream &&
+        state.lastRenderedStream !== message.activeStream
+      ) {
+        const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+        if (logContent) logContent.innerHTML = '';
+        state.lastRenderedStream = '';
+      }
 
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
@@ -638,9 +647,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Append grouped messages to their containers (container guaranteed to exist)
+    // Append grouped messages to their containers
     for (const [groupId, frag] of groupedFragments) {
-      dom.logEntries.getGroupContainer(groupId).appendChild(frag);
+      const container = dom.logEntries.getGroupContainer(groupId);
+      // Container should exist (we checked during batching), but guard against DOM changes
+      if (container) {
+        container.appendChild(frag);
+      } else {
+        // Fallback: append to main log if container was removed
+        logContent.appendChild(frag);
+      }
     }
 
     // Append ungrouped messages (and fallback grouped) to main log
