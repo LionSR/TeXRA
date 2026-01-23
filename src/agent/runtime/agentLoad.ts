@@ -16,7 +16,7 @@ import {
   AgentCategory,
   AgentPromptSchema,
   AgentDefinitionSchema,
-  parseAgentSetting,
+  AgentSettingSchema,
   type AgentSetting,
   type AgentPrompt,
 } from '@agent/core/AgentDataclass';
@@ -49,7 +49,7 @@ export function validateAgentYamlContent(
 ): AgentYamlValidationResult {
   const raw = typeof content === 'string' ? yaml.parse(content) : content;
   const data = AgentDefinitionSchema.parse(raw);
-  const settingsBlock = parseAgentSetting(data.settings);
+  const settingsBlock = AgentSettingSchema.parse(data.settings);
   const promptsBlock = AgentPromptSchema.parse(data.prompts);
   const rootName = typeof data.name === 'string' ? data.name.trim() : '';
 
@@ -166,7 +166,7 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    return [parseAgentSetting(settings), AgentPromptSchema.parse(prompts)];
+    return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
   } catch (err) {
     // Log error context, then rethrow original to preserve error type (e.g., ZodError)
     // for proper handling by callers like executeCommand.ts

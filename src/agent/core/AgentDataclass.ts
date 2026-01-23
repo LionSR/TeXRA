@@ -233,8 +233,3 @@ export const AgentDefinitionSchema = z.strictObject({
 });
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
-
-/** Parses a settings block into an AgentSetting. */
-export function parseAgentSetting(settings: unknown): AgentSetting {
-  return AgentSettingSchema.parse(settings);
-}
