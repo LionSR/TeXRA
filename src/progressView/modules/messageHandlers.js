@@ -219,20 +219,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string|null} stream - The stream to clear, or null to clear all
    */
   _clearRunScopedState(stream) {
-    // Stream-scoped clear methods accept optional stream param (null = clear all)
-    state.clearRunInstructions(stream);
-    state.clearRunFiles(stream);
-    state.clearRunMissingOutputs(stream);
-    state.clearRunUsage(stream, null);
-    state.clearContextState(stream);
-
     if (stream) {
+      // Single stream: use batched clear for run-scoped data
+      state.clearStreamRunData(stream);
+      state.clearContextState(stream);
       state.clearExecutionIdAvailability(stream);
-      state.clearActiveRun(stream);
       state.clearTodos(stream);
       state.clearQueuedFollowUps(stream);
       state.clearFollowUpText(stream);
     } else {
+      // All streams: individual clear methods that support null
+      state.clearRunInstructions(null);
+      state.clearRunFiles(null);
+      state.clearRunMissingOutputs(null);
+      state.clearRunUsage(null, null);
+      state.clearContextState(null);
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
       state.clearAllTodos();
@@ -499,19 +500,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllQueuedFollowUps();
       state.clearAllFollowUpText();
     } else {
-      // Clear content immediately when switching streams to prevent stale display.
-      // handleUpdateLogs will repopulate with correct content, but if the new stream
-      // is empty, no logs message arrives - so we must clear proactively here.
-      // Use lastRenderedStream (not previousStream) to detect if displayed content
-      // differs from the new stream - handles cases where previousStream is unset.
-      if (
-        state.lastRenderedStream &&
-        state.lastRenderedStream !== message.activeStream
-      ) {
-        const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-        if (logContent) logContent.innerHTML = '';
-        state.lastRenderedStream = '';
-      }
+      // NOTE: Content clearing is handled by handleUpdateLogs which always follows.
+      // Backend always sends UPDATE_LOGS after UPDATE_STREAMS (even for empty streams).
+      // Clearing here would be redundant - we'd clear twice.
 
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
@@ -574,16 +565,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Full rebuild path: clear and rebuild
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const previousRunId = state.getActiveRunId(message.stream);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
     state.taskGroups.clear();
-    state.clearRunInstructions(message.stream);
-    state.clearRunFiles(message.stream);
-    state.clearRunMissingOutputs(message.stream);
-    state.clearRunUsage(message.stream);
-    state.clearPendingInstruction(state.activeStream);
-    const previousRunId = state.getActiveRunId(message.stream);
-    state.clearActiveRun(message.stream);
+    state.clearStreamRunData(message.stream); // Batched clear of all run-scoped data
     logContent.innerHTML = '';
     const groups = message.groups ?? [];
 
