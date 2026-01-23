@@ -550,8 +550,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'toggleToolEditApprovalBypass',
-      async ({ stream }) => {
-        const streamId = stream as StreamTabId;
+      async ({ stream: streamId }) => {
         const isNowEnabled = toggleToolEditApprovalSessionBypass(streamId);
         const infoMessage = isNowEnabled
           ? 'YOLO mode enabled: Tool edits will be auto-approved for this stream.'
