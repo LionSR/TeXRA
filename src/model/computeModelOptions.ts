@@ -1,7 +1,7 @@
 // Local imports - model utilities
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import type { ModelConfig } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 
