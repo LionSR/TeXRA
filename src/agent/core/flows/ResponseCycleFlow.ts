@@ -456,7 +456,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
     return stage.run(async () => {
       const {
-        response: newResponse,
+        text: newResponse,
         usage: responseUsage,
         stopReason,
       } = modelHandler.extractResponse(prepRes.responseObject, setting.endTag);

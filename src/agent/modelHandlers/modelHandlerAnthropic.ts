@@ -1354,7 +1354,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     newResponse = replacementEngine.applyAll(newResponse);
 
     return {
-      response: newResponse,
+      text: newResponse,
       usage: responseObject.usage,
       stopReason: stopReason ?? 'stop',
     };

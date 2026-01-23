@@ -1048,7 +1048,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (state.hasThinkingContent) {
           state.thinkingStream.finalize();
         }
-        const { response: finalText } = this.extractResponse(response, '');
+        const { text: finalText } = this.extractResponse(response, '');
         if (state.outputStream) state.outputStream.finalize(finalText);
 
         // Emit any web searches not yet emitted (fallback for edge cases)
@@ -1204,10 +1204,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       endTag &&
       !newResponse.includes(endTag)
     ) {
-      return { response: `${newResponse}\n${endTag}`, usage, stopReason };
+      return { text: `${newResponse}\n${endTag}`, usage, stopReason };
     }
 
-    return { response: newResponse, usage, stopReason };
+    return { text: newResponse, usage, stopReason };
   }
 
   /** Price computation adapted for Responses API token fields. */

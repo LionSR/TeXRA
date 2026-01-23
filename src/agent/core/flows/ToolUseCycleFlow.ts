@@ -391,11 +391,10 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
-    const {
-      response: text,
-      usage,
-      stopReason,
-    } = services.modelHandler.extractResponse(prepRes.response, '');
+    const { text, usage, stopReason } = services.modelHandler.extractResponse(
+      prepRes.response,
+      '',
+    );
 
     const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
