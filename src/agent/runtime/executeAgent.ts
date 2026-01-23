@@ -671,9 +671,13 @@ export async function resumeToolUseFromSnapshot(
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
   // Resolve agent base with snapshot's stream ID for correct UI state
-  const ctx = await resolveAgentBase(snapshot.agentConfig, snapshot.executionId, {
-    streamTabIdOverride: snapshot.streamId,
-  });
+  const ctx = await resolveAgentBase(
+    snapshot.agentConfig,
+    snapshot.executionId,
+    {
+      streamTabIdOverride: snapshot.streamId,
+    },
+  );
   const { setting, streamId, config } = ctx;
 
   // Validate agent category
@@ -692,21 +696,22 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-    // Run the flow with resume snapshot
-    const result = await runToolUseFlow(
-      {
-        ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: () => (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-        setting: setting as AgentToolUseSetting,
-        resumeSnapshot: snapshot,
-        onFollowUpConsumed: () =>
-          bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
-      },
-      setupSession ? (context) => setupSession(context.session) : undefined,
-    );
+      // Run the flow with resume snapshot
+      const result = await runToolUseFlow(
+        {
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: () => (run) =>
+            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+          setting: setting as AgentToolUseSetting,
+          resumeSnapshot: snapshot,
+          onFollowUpConsumed: () =>
+            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+        },
+        setupSession ? (context) => setupSession(context.session) : undefined,
+      );
 
-    return result.status;
-  });
+      return result.status;
+    },
+  );
 }
