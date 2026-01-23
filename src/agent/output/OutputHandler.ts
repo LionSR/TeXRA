@@ -44,6 +44,23 @@ interface RoundData {
   xmlSummary: OutputXmlSummary;
 }
 
+/** Default empty XML summary */
+const EMPTY_XML_SUMMARY: OutputXmlSummary = {
+  tagContents: {},
+  documents: [],
+  singleOutputFile: null,
+  sourceLocation: null,
+};
+
+/** Create empty RoundData with default values */
+function createEmptyRoundData(): RoundData {
+  return {
+    outputs: [],
+    rawOutput: null,
+    xmlSummary: { ...EMPTY_XML_SUMMARY },
+  };
+}
+
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
@@ -191,16 +208,7 @@ export class OutputHandler implements IOutputHandler {
   private ensureRoundData(round: number): RoundData {
     let data = this.rounds.get(round);
     if (!data) {
-      data = {
-        outputs: [],
-        rawOutput: null,
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
-      };
+      data = createEmptyRoundData();
       this.rounds.set(round, data);
     }
     return data;
@@ -503,13 +511,6 @@ export class OutputHandler implements IOutputHandler {
 
   public getRoundXmlSummary(round: number): OutputXmlSummary {
     const data = this.rounds.get(round);
-    return (
-      data?.xmlSummary ?? {
-        tagContents: {},
-        documents: [],
-        singleOutputFile: null,
-        sourceLocation: null,
-      }
-    );
+    return data?.xmlSummary ?? EMPTY_XML_SUMMARY;
   }
 }
