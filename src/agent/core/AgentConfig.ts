@@ -79,7 +79,7 @@ const AgentConfigFieldsSchema = z.object({
   outputFiles: stringArrayField(),
 
   // AgentConfig-specific fields
-  agentCategory: z.nativeEnum(AgentCategory).prefault(AgentCategory.Workflow),
+  agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFile: z.string().nullable().prefault(null),
   editedFiles: stringArrayField(),
 
