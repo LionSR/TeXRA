@@ -341,8 +341,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (response.status === 'completed') {
       this.previousResponseId = response.id;
     } else {
+      const errorDetail =
+        response.error?.message ?? response.incomplete_details?.reason;
       this.logger.warn(
         `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+        {
+          data: {
+            responseId: response.id,
+            status: response.status,
+            hasUsage: !!response.usage,
+            errorDetail,
+          },
+        },
       );
       this.previousResponseId = null;
     }
@@ -1069,30 +1079,35 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response = await client.responses.create(nonStreamingParams, {
         signal,
       });
-      if (useBackgroundResponses) {
-        this.logger.debug(
-          `Background response ${response.id} created with status ${
-            response.status ?? 'unknown'
-          }`,
-          {
-            data: {
-              responseId: response.id,
-              status: response.status,
-              usage: response.usage ?? undefined,
+
+      // Poll for completion if response is pending (queued/in_progress).
+      // This can happen in two cases:
+      // 1. Background mode explicitly enabled (expected)
+      // 2. Server-side latency when using previous_response_id (unexpected but handled)
+      if (this.isBackgroundPending(response)) {
+        if (useBackgroundResponses) {
+          this.logger.logProgress(
+            `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+          );
+          // Store pending ID so retry logic can resume polling instead of creating new request
+          this.pendingBackgroundResponseId = response.id;
+        } else {
+          this.logger.debug(
+            `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
+            {
+              data: {
+                responseId: response.id,
+                status: response.status,
+                hasPreviousResponseId: !!this.previousResponseId,
+              },
             },
-          },
-        );
-        this.logger.logProgress(
-          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-        );
-        // Store the pending ID so retry logic can resume polling instead of creating a new request
-        this.pendingBackgroundResponseId = response.id;
+          );
+        }
         response = await this.waitForBackgroundCompletion(
           client,
           response,
           signal,
         );
-        // Note: clearPendingBackgroundResponse() called by finalizeResponse() below
       }
 
       this.finalizeResponse(
@@ -1166,6 +1181,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!responseObject.usage) {
       this.logger.warn(
         'Response missing usage information - token counts will show as 0',
+        {
+          data: {
+            responseId: responseObject.id,
+            status: responseObject.status,
+          },
+        },
       );
     }
     let newResponse = responseObject.output_text?.trim() ?? '';
