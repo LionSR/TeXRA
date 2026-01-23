@@ -9,6 +9,7 @@ import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
   formatToolOutput,
+  pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { toPosixPath } from '@utils/core';
@@ -18,8 +19,14 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const GlobInputSchema = z.strictObject({
-  pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().nullish(),
+  pattern: z
+    .string()
+    .min(1, 'pattern is required')
+    .describe('Glob pattern like "**/*.tex" or "src/**/*.ts"'),
+  path: z
+    .string()
+    .nullish()
+    .describe('Directory to search. Defaults to workspace root.'),
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;
@@ -92,9 +99,9 @@ export class GlobTool extends defineTool({
 
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
     const count = lines.length;
-    const header = `Found ${count} file${count === 1 ? '' : 's'} matching "${input.pattern}" under ${display}`;
+    const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
     return {
-      summary: `Found ${count} file${count === 1 ? '' : 's'} for "${input.pattern}" in ${display}`,
+      summary: `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };
   }
