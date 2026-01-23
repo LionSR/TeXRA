@@ -123,24 +123,38 @@ export class GrepTool extends defineTool({
     const exitCode = result.exitCode ?? (result.success ? 0 : 1);
     if (exitCode >= 2) {
       throw new ToolError(
-        `ripgrep error: ${result.stderr || `exit code ${exitCode}`}`,
+        `Regex error: ${result.stderr || `exit code ${exitCode}`}. ` +
+          `Check pattern syntax or use literal: true for exact string matching.`,
       );
     }
 
+    const allLines = result.stdout?.split(/\r?\n/).filter(Boolean) ?? [];
+    const totalCount = allLines.length;
+    const offset = input.offset ?? 0;
     const limitedOutput = applyPagination(
       result.stdout,
-      input.offset ?? undefined,
+      offset,
       input.head_limit ?? undefined,
     );
-    const outputText =
-      limitedOutput || `No matches found for pattern in ${display}`;
-    const summary = limitedOutput
-      ? `Matches for "${input.pattern}" in ${display}`
-      : `No matches for "${input.pattern}" in ${display}`;
+    const returnedCount = limitedOutput?.split(/\r?\n/).filter(Boolean).length ?? 0;
+
+    if (totalCount === 0) {
+      return {
+        summary: `No matches for "${input.pattern}" in ${display}`,
+        output: `No matches found. Try: broader pattern, -i for case-insensitive, or check path.`,
+      };
+    }
+
+    const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
+    const userInstruction =
+      returnedCount < totalCount
+        ? `Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.`
+        : undefined;
 
     return {
       summary,
-      output: outputText,
+      output: limitedOutput,
+      ...(userInstruction && { userInstruction }),
     };
   }
 }
