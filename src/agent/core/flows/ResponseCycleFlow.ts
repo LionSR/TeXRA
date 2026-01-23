@@ -168,9 +168,8 @@ class ResponsePrepNode<C> extends BaseNode<
     systemPrompt?: string;
     outputLocation: AgentFileLocation;
   }> {
-    const services = this.services;
-    const { prompt, userVarChannels } = services;
-    const interrupted = services.checkInterruption();
+    const { prompt, userVarChannels, checkInterruption } = this.services;
+    const interrupted = checkInterruption();
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
     const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
@@ -608,29 +607,25 @@ class ResponseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const processedResponse = result.processedResponse;
-
-    if (!processedResponse) {
+    if (!result.processedResponse) {
       shared.endTurn = false;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    const outputLocation = prepRes.outputLocation;
-
-    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+    await AbsoluteFS.ensureDir(dirname(prepRes.outputLocation.absolutePath));
 
     if (!prepRes.outputExists) {
-      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
-      await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
+      logger.debug(`Creating new file: ${prepRes.outputLocation.absolutePath}`);
+      await AbsoluteFS.write(prepRes.outputLocation.absolutePath, result.processedResponse);
       shared.outputExists = true;
     } else {
       logger.debug(
-        `Appending to existing file: ${outputLocation.absolutePath}`,
+        `Appending to existing file: ${prepRes.outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
-        outputLocation,
-        (result.bestConnector ?? '') + processedResponse,
+        prepRes.outputLocation,
+        (result.bestConnector ?? '') + result.processedResponse,
       );
     }
 
@@ -648,10 +643,10 @@ class ResponseProcessNode<C> extends BaseNode<
 
     logger.debug('Response preview:');
     logger.debug(
-      `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
+      `First ${K_SLICE} chars:\n${result.processedResponse.slice(0, K_SLICE)}`,
     );
     logger.debug(
-      `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
+      `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
 
     const connector = result.bestConnector ?? '';
@@ -660,14 +655,14 @@ class ResponseProcessNode<C> extends BaseNode<
       modelHandler.updateMessageContentWithPrefill(
         shared.messages,
         connector,
-        processedResponse,
+        result.processedResponse,
         workspace,
       );
     } else {
       modelHandler.updateMessageContentWithoutPrefill(
         shared.messages,
         connector,
-        processedResponse,
+        result.processedResponse,
         workspace,
       );
     }
