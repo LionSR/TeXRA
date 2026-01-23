@@ -43,7 +43,11 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
+import {
+  handleProgressViewBashApprovalAction,
+  rejectPendingBashApprovalsForStream,
+  rejectAllPendingBashApprovals,
+} from '@tools/approval/bashApproval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -234,8 +238,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           return;
         }
 
-        // Clear pending task groups and YOLO state to prevent memory leaks
+        // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
+        rejectPendingBashApprovalsForStream(streamId);
         clearApprovalBypassForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
@@ -257,8 +262,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups and YOLO state to prevent memory leaks
+    // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
+    rejectAllPendingBashApprovals();
     clearAllApprovalBypass();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
