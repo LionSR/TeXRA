@@ -1135,11 +1135,6 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.testPdfToImage",
-        "title": "Test PDF to Image Conversion",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.extractFigurePaths",
         "title": "Extract Figure Paths from LaTeX",
         "category": "TeXRA"
@@ -1187,11 +1182,6 @@
       {
         "command": "texra.parseYaml",
         "title": "Parse YAML Structure",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.testYamlBrackets",
-        "title": "Test YAML Bracket Handling",
         "category": "TeXRA"
       },
       {
@@ -1311,11 +1301,6 @@
         "title": "Fix Validation Issues with Claude",
         "category": "TeXRA",
         "icon": "$(fix-all)"
-      },
-      {
-        "command": "texra.testWolframTool",
-        "title": "Test Wolfram Tool",
-        "category": "TeXRA"
       },
       {
         "command": "texra.openDoc",
