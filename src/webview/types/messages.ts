@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 import { PROGRESS_VIEW_APPROVAL_ACTIONS } from '@tools/approval/toolEditApproval';
 
 // --- Base Schemas (composable building blocks) ---
@@ -227,7 +228,7 @@ export const TrimmedStringSchema = z
 
 /** Polish follow-up message from progress view */
 export const PolishFollowUpMessageSchema = z.object({
-  stream: z.string().min(1),
+  stream: StreamTabIdSchema,
   text: TrimmedStringSchema,
 });
 
@@ -249,7 +250,7 @@ export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
 
 /** Followup task message from progress view */
 export const FollowupTaskMessageSchema = z.object({
-  stream: z.string().min(1),
+  stream: StreamTabIdSchema,
   mode: z.enum(['chat', 'workflow', 'merge']),
   agent: z.string().min(1),
   model: z.string().min(1),
@@ -264,7 +265,7 @@ export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;
 
 /** Stream-only message */
 export const StreamMessageSchema = z.object({
-  stream: z.string().min(1),
+  stream: StreamTabIdSchema,
 });
 
 export type StreamMessage = z.infer<typeof StreamMessageSchema>;

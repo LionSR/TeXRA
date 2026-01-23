@@ -5,7 +5,7 @@
 import { createFromTemplate } from '@common/templateUtils.js';
 import { encodeHtml } from '@common/htmlEncoding.js';
 import { setElementDataset, wrapInPre } from '../htmlBuilders.js';
-import { stringifyForDisplay } from '../normalizers.js';
+import { stringifyWithLanguage } from '../normalizers.js';
 import { formatTimestamp } from '../timestampUtils.js';
 import { createBannerEntry } from '../baseLogFormatter.js';
 import { EMOJI_BY_LEVEL } from '../constants.js';
@@ -60,7 +60,7 @@ export function formatProgressStatus(message) {
   const summaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Status update';
-  const detailText = stringifyForDisplay(normalizedPayload.structured);
+  const detailText = stringifyWithLanguage(normalizedPayload.structured).text;
   const emoji = EMOJI_BY_LEVEL[level] || '•';
 
   const container = document.createElement('div');

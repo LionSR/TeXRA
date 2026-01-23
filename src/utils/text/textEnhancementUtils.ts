@@ -12,7 +12,7 @@ import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 

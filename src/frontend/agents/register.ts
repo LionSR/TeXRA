@@ -45,13 +45,11 @@ export function getAgentRegistrationSkipReason(
   }
 
   if (variant.isMultipleOutput) {
-    const baseName = variant.baseAgentName;
-    if (baseName && configuredAgents.includes(baseName)) {
+    if (variant.baseAgentName && configuredAgents.includes(variant.baseAgentName)) {
       return 'baseRegistered';
     }
   } else {
-    const siblingMultiple = variant.multipleAgentName;
-    if (siblingMultiple && configuredAgents.includes(siblingMultiple)) {
+    if (variant.multipleAgentName && configuredAgents.includes(variant.multipleAgentName)) {
       return 'multipleRegistered';
     }
   }

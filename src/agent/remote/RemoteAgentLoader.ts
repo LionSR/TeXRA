@@ -9,7 +9,7 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentPromptSchema,
-  parseAgentSetting,
+  AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import {
@@ -17,6 +17,7 @@ import {
   getBaseName,
   updateAgentDescription,
 } from '@agent/index/agentRegistry';
+import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -28,7 +29,6 @@ import {
   EdgeFunctionResponseSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
-  type RemoteAgentLoadOptions,
 } from './types';
 
 import { resolveToolDefinitions } from '@tools/registry';
@@ -153,7 +153,7 @@ export class RemoteAgentLoader {
    */
   static async loadRemoteAgent(
     agentName: string,
-    options?: RemoteAgentLoadOptions,
+    options?: AgentLoadOptions,
   ): Promise<RemoteAgentConfig> {
     // Check if user is authenticated
     const isAuth = await SupabaseClient.isAuthenticated();
@@ -239,13 +239,12 @@ export class RemoteAgentLoader {
         const responseData = EdgeFunctionResponseSchema.parse(
           await response.json(),
         );
-        const yamlContent = responseData.config;
 
         logger.debug(
           CHANNEL,
           `Parsing YAML for remote agent: ${candidateName}`,
         );
-        const parsed = yaml.parse(yamlContent);
+        const parsed = yaml.parse(responseData.config);
         const validated = AgentDefinitionSchema.parse(parsed);
 
         // Extract and process settings (remote agents are self-contained, no inheritance)
@@ -271,7 +270,7 @@ export class RemoteAgentLoader {
         }
 
         return {
-          settings: parseAgentSetting(settings),
+          settings: AgentSettingSchema.parse(settings),
           prompts: AgentPromptSchema.parse(validated.prompts),
         };
       } catch (error) {
