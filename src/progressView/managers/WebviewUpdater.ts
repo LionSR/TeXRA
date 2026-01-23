@@ -31,6 +31,10 @@ import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 /**
  * Extra content to include with log updates.
  * All fields are optional to support incremental updates.
+ *
+ * NOTE: Status/todos/instruction are sent as separate messages rather than
+ * batched here. This ensures critical UI feedback (status) isn't blocked by
+ * potentially large log payloads and provides fault isolation.
  */
 export interface LogContentExtras {
   /** Instructions by run ID */
