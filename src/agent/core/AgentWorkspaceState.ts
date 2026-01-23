@@ -345,11 +345,22 @@ export class TodoState {
 
   /**
    * Update the entire todo list.
-   * Triggers the onUpdate callback if set.
+   * Only triggers callback if todos actually changed.
    */
   updateTodos(todos: TodoItem[]): void {
+    if (this._todosEqual(this._todos, todos)) return;
     this._todos = todos;
     this._onUpdate?.(todos);
+  }
+
+  private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].content !== b[i].content || a[i].status !== b[i].status) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
