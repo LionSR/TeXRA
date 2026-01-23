@@ -32,10 +32,11 @@ export class StreamTabs {
     }
     tabsContainer.innerHTML = '';
     let activeInfo = null;
-    streams.forEach((info) => {
+    const fragment = document.createDocumentFragment();
+    for (const info of streams) {
       if (!info || typeof info !== 'object') {
         console.warn('StreamTabs.update: invalid stream value:', info);
-        return;
+        continue;
       }
       const tooltip = this._buildTooltip(info);
       const tabEl = createFromTemplate('streamTabTemplate', {
@@ -54,16 +55,16 @@ export class StreamTabs {
           '.tab-delete': { stream: info.name },
         },
       });
-      if (!tabEl) return;
+      if (!tabEl) continue;
       this._applyStatus(tabEl.querySelector('.tab-status'), info.status);
-      // Apply agent decorators from shared config
       this._applyAgentDecorators(tabEl, info);
       if (info.name === activeStream) {
         tabEl.classList.add('is-active');
         activeInfo = info;
       }
-      tabsContainer.appendChild(tabEl);
-    });
+      fragment.appendChild(tabEl);
+    }
+    tabsContainer.appendChild(fragment);
 
     // Update active stream name
     const streamNameElem = document.getElementById(
