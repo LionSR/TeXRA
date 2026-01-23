@@ -9,7 +9,9 @@ import { executeCommand } from '@utils/system/execUtils';
 import { defineTool } from './core/define';
 
 const BashInputSchema = z.strictObject({
-  command: z.string(),
+  command: z
+    .string()
+    .describe('Shell command to execute. Use full paths for reliability.'),
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
