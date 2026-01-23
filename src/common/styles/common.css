@@ -277,3 +277,10 @@ vscode-toolbar-button {
 [hidden] {
   display: none !important;
 }
+
+/* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
+.agent-icon {
+  display: inline-block;
+  width: 1.2em;
+  text-align: center;
+}
