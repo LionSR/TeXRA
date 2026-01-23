@@ -610,7 +610,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    // Batch all messages via DocumentFragment to avoid layout thrashing
+    // Batch all messages via DocumentFragment to avoid layout thrashing.
+    // Check container existence during iteration to preserve chronological order for fallbacks.
     const ungroupedFragment = document.createDocumentFragment();
     const groupedFragments = new Map(); // groupId → fragment
 
@@ -619,29 +620,30 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (!formatted) continue;
 
       if (msg.groupId) {
-        let frag = groupedFragments.get(msg.groupId);
-        if (!frag) {
-          frag = document.createDocumentFragment();
-          groupedFragments.set(msg.groupId, frag);
+        const container = dom.logEntries.getGroupContainer(msg.groupId);
+        if (container) {
+          // Group container exists - batch to grouped fragment
+          let frag = groupedFragments.get(msg.groupId);
+          if (!frag) {
+            frag = document.createDocumentFragment();
+            groupedFragments.set(msg.groupId, frag);
+          }
+          appendFormatted(frag, formatted);
+        } else {
+          // Group container missing - add to ungrouped to preserve chronological order
+          appendFormatted(ungroupedFragment, formatted);
         }
-        appendFormatted(frag, formatted);
       } else {
         appendFormatted(ungroupedFragment, formatted);
       }
     }
 
-    // Append grouped messages to their containers (fallback to main log if group missing)
+    // Append grouped messages to their containers (container guaranteed to exist)
     for (const [groupId, frag] of groupedFragments) {
-      const container = dom.logEntries.getGroupContainer(groupId);
-      if (container) {
-        container.appendChild(frag);
-      } else {
-        // Group container not found - append to main log as fallback
-        logContent.appendChild(frag);
-      }
+      dom.logEntries.getGroupContainer(groupId).appendChild(frag);
     }
 
-    // Append ungrouped messages to main log
+    // Append ungrouped messages (and fallback grouped) to main log
     if (ungroupedFragment.childNodes.length > 0) {
       logContent.appendChild(ungroupedFragment);
     }
