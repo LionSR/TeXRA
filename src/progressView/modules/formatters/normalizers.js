@@ -83,7 +83,6 @@ export function stringifyWithLanguage(value) {
   }
 }
 
-
 /**
  * Try to parse a string as JSON
  * @param {string} text - Text to parse

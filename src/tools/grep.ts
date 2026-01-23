@@ -95,7 +95,13 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
-    const command = ['rg', ...args, ...ignoreArgs, input.pattern, path.relative];
+    const command = [
+      'rg',
+      ...args,
+      ...ignoreArgs,
+      input.pattern,
+      path.relative,
+    ];
 
     const result = await executeCommand(command, {
       channel: CHANNEL,
