@@ -3,9 +3,7 @@
 
 import type { ExecutionKVStore } from '@agent/storage';
 
-import { BaseNode, Flow } from './index';
-
-type Action = string;
+import { BaseNode, Flow, type Action } from './index';
 
 interface NodeRecord {
   action?: string;

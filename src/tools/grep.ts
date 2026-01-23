@@ -87,9 +87,7 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const { resolved: searchPath, display } = resolveAndFormat(
-      input.path ?? undefined,
-    );
+    const { resolved, display } = resolveAndFormat(input.path ?? undefined);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
     const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
@@ -97,8 +95,7 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
-    const targetPath = searchPath.relative === '.' ? '.' : searchPath.relative;
-    const command = ['rg', ...args, ...ignoreArgs, input.pattern, targetPath];
+    const command = ['rg', ...args, ...ignoreArgs, input.pattern, resolved.relative];
 
     const result = await executeCommand(command, {
       channel: CHANNEL,
