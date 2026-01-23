@@ -1145,15 +1145,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const thoughtContent = thoughtParts
-      .map((p) => p.text ?? '')
+      .map((part) => part.text ?? '')
       .join('')
       .trim();
 
     if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-      workspaceState.reasoning.thinkingBlocks = thoughtParts.map((p) => ({
+      workspaceState.reasoning.thinkingBlocks = thoughtParts.map((part) => ({
         type: 'thinking',
-        thinking: p.text,
-        thoughtSignature: p.thoughtSignature,
+        thinking: part.text,
+        thoughtSignature: part.thoughtSignature,
       }));
       workspaceState.reasoning.thinkingAdded = true;
     }

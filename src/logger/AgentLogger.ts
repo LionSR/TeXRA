@@ -432,12 +432,12 @@ export class AgentLogger {
     }
 
     // Use explicit === true check: only count files where existence was confirmed
-    const loadedCount = files.filter((f) => f.ok === true).length;
+    const loadedCount = files.filter((file) => file.ok === true).length;
     const summary = `Loading ${category} (${loadedCount}/${files.length})`;
 
-    const entries: FileListEntry[] = files.map((f) => ({
-      path: f.path,
-      ok: f.ok === true,
+    const entries: FileListEntry[] = files.map((file) => ({
+      path: file.path,
+      ok: file.ok === true,
       source: category,
       sourceDisplay: category,
     }));
