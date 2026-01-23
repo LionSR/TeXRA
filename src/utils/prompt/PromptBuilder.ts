@@ -143,11 +143,15 @@ export class PromptBuilder {
 
   private getRoundTemplate(currRound: number): string | undefined {
     const normalizedRound = Math.max(0, currRound);
-    const requestArray = Array.isArray(this.agentPrompt.userRequest)
-      ? this.agentPrompt.userRequest
-      : this.agentPrompt.userRequest
-        ? [this.agentPrompt.userRequest]
-        : [];
+
+    let requestArray: string[];
+    if (Array.isArray(this.agentPrompt.userRequest)) {
+      requestArray = this.agentPrompt.userRequest;
+    } else if (this.agentPrompt.userRequest) {
+      requestArray = [this.agentPrompt.userRequest];
+    } else {
+      requestArray = [];
+    }
 
     const template = requestArray[normalizedRound];
     if (template !== undefined) {
