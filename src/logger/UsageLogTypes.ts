@@ -35,7 +35,7 @@ export const UsageLogMetadataSchema = z.object({
   agentName: z.string().optional(),
 
   /** Agent category: workflow or toolUse */
-  agentCategory: z.nativeEnum(AgentCategory).optional(),
+  agentCategory: z.enum(AgentCategory).optional(),
 
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput: z.boolean().optional(),

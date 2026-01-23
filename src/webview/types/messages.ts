@@ -286,14 +286,14 @@ export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
 
 /** Sort streams message */
 export const SortStreamsMessageSchema = z.object({
-  sortBy: z.enum(['time', 'inputFile', 'agent']).default('time'),
+  sortBy: z.enum(['time', 'inputFile', 'agent']).prefault('time'),
 });
 
 export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
 
 /** Filter streams message */
 export const FilterStreamsMessageSchema = z.object({
-  filter: z.union([z.literal('all'), z.nativeEnum(AgentCategory)]),
+  filter: z.union([z.literal('all'), z.enum(AgentCategory)]),
 });
 
 export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
@@ -301,7 +301,7 @@ export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
 /** File command message for progress view */
 export const FileCommandMessageSchema = z.object({
   file: z.string().min(1),
-  line: z.number().int().nonnegative().optional(),
+  line: z.int().nonnegative().optional(),
 });
 
 export type FileCommandMessage = z.infer<typeof FileCommandMessageSchema>;

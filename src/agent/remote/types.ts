@@ -30,7 +30,7 @@ export const RemoteAgentListItemSchema = z.object({
    * Defaults NULL to Workflow for backward compatibility with existing DB rows.
    */
   agentCategory: z
-    .nativeEnum(AgentCategory)
+    .enum(AgentCategory)
     .nullish()
     .transform((val) => val ?? AgentCategory.Workflow),
 });
