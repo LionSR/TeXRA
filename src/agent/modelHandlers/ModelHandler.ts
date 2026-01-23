@@ -3,6 +3,7 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
@@ -20,6 +21,7 @@ import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
+  ReasoningEffort,
 } from '@model/ModelConfig';
 import type { ToolFileAttachment } from '@tools/result';
 import { getConfig } from '@utils/config';
@@ -439,6 +441,36 @@ export abstract class ModelHandler<
       `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
     );
     return 'high';
+  }
+
+  /**
+   * Returns the effective reasoning effort for the current user and model.
+   * Max tier users should not receive xhigh reasoning on GPT-5 models when
+   * using included (server-side) access.
+   */
+  protected getEffectiveReasoningEffort(): ReasoningEffort | null {
+    const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
+    if (!supportsReasoningEffort || !reasoningEffort) {
+      return null;
+    }
+
+    if (reasoningEffort === ReasoningEffort.NONE) {
+      return null;
+    }
+
+    const isGpt5 = this.config.name.startsWith('gpt5');
+    if (
+      isGpt5 &&
+      reasoningEffort === ReasoningEffort.XHIGH &&
+      this.shouldUseServerSideKeys()
+    ) {
+      const userTier = getServerSideKeyService().getUserTier();
+      if (userTier === MAX_TIER) {
+        return ReasoningEffort.HIGH;
+      }
+    }
+
+    return reasoningEffort;
   }
 
   /**
