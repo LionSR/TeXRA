@@ -509,6 +509,16 @@ export class LogEntryManager {
   }
 
   /**
+   * Get the container element for a group (for batch appending).
+   * @param {string} groupId - The group ID
+   * @returns {HTMLElement|null} The group content container or null
+   */
+  getGroupContainer(groupId) {
+    const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${groupId}`;
+    return safeGetElementById(groupContentId);
+  }
+
+  /**
    * Update an existing log entry identified by ID
    * @param {Object} logMessage - The log message with updated content
    * @returns {boolean} Whether the log entry was updated

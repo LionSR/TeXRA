@@ -62,11 +62,9 @@ function buildStreamInfo(
   const category = matchesFilter(rawCategory, filter);
   if (category === null) return null;
 
-  // Extract timestamps from logs
-  const logs = state.streamTabs.getMessages(id);
-  const hasLogs = logs.length > 0;
-  const lastTimestamp = hasLogs ? logs.at(-1)?.timestamp : undefined;
-  const creationTimestamp = hasLogs ? logs[0].timestamp : undefined;
+  // Extract timestamps directly (avoids copying entire messages array)
+  const lastTimestamp = state.streamTabs.getLastTimestamp(id);
+  const creationTimestamp = state.streamTabs.getFirstTimestamp(id);
 
   // Agent and file info (with fallbacks to hints)
   const inputFile = config?.inputFile ?? '';
