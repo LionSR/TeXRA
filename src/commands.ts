@@ -125,32 +125,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 }
 
 // Add exports for the command modules
-export { fileSelectionCommands } from '@commands/files';
-export {
-  latexdiffCommands,
-  latexCommands,
-  imageCommands,
-  figureCommands,
-  linterCommands,
-  arXivCommands,
-  compareCommands,
-} from '@commands/latex';
-export {
-  mergeCommands,
-  runExecuteCommand,
-  agentCreatorCommands,
-} from '@commands/agent';
+export { linterCommands, arXivCommands } from '@commands/latex';
+export { runExecuteCommand, agentCreatorCommands } from '@commands/agent';
 export {
   xmlCommands,
   yamlCommands,
-  textEditorCommands,
   helpCommands,
   settingsCommands,
   mainViewCommands,
   sampleProjectCommands,
 } from '@commands/system';
 export { apiKeyCommands } from '@commands/api/apiKeyCommands';
-export { stateRestoreCommand, historyCommands } from '@commands/history';
+export { historyCommands } from '@commands/history';
 export { memoryCommands } from '@commands/memory';
 export { wolframToolCommands, wolframScriptCommands } from '@commands/wolfram';
-export { openFileCommands } from '@commands/files';

@@ -5,12 +5,6 @@ import type { ExecutionKVStore } from '@agent/storage';
 
 import { BaseNode, Flow } from './index';
 
-/**
- * Storage backend for persisted flows.
- * Alias for ExecutionKVStore - the standard storage interface.
- */
-export type FlowStore = ExecutionKVStore;
-
 type Action = string;
 
 interface NodeRecord {
@@ -61,7 +55,7 @@ export class PersistedFlow<
   Svc = unknown,
 > extends Flow<S, P, Svc> {
   protected readonly runId: string;
-  protected readonly kv: FlowStore;
+  protected readonly kv: ExecutionKVStore;
 
   /**
    * Create a new PersistedFlow.
@@ -70,7 +64,7 @@ export class PersistedFlow<
    * @param kv - Storage backend (ExecutionKVStore)
    * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
    */
-  constructor(start: BaseNode<any, any>, kv: FlowStore, runId?: string) {
+  constructor(start: BaseNode<any, any>, kv: ExecutionKVStore, runId?: string) {
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
@@ -169,7 +163,7 @@ export class PersistedFlow<
     P extends Record<string, unknown> = Record<string, unknown>,
     Svc = unknown,
   >(
-    kv: FlowStore,
+    kv: ExecutionKVStore,
     runId: string | undefined,
     start: BaseNode<any, any>,
   ): Promise<PersistedFlow<S, P, Svc>> {

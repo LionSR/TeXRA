@@ -35,7 +35,3 @@ async function handleMerge(
 
   await executeMergeAgent(modelToUse, fileToUse, editedFile);
 }
-
-export const mergeCommands = {
-  handleMerge,
-};

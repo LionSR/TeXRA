@@ -43,7 +43,7 @@ export class LogChannelRegistry {
 
     const transport = new VSCodeTransport({
       channel: outputChannel,
-      streamName: channel,
+      streamId: channel,
       isAgentChannel: options.isAgent,
       includeStructuredData: () =>
         getConfig<boolean>('texra.logger.debugMode', false),

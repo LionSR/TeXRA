@@ -35,16 +35,16 @@ export function registerLogEventHandlers(
 
 function handleAddLogMessage(
   ctx: EventHandlerContext,
-  { stream, logMessage }: ProgressEventPayloads['addLogMessage'],
+  { streamId, logMessage }: ProgressEventPayloads['addLogMessage'],
 ): void {
   withEventErrorHandling(
     'LogEvents',
     'failed to handle addLogMessage',
     async () => {
-      const isNew = await ctx.state.streamTabs.addMessage(stream, logMessage);
+      const isNew = await ctx.state.streamTabs.addMessage(streamId, logMessage);
       // Send to webview if available (regardless of active stream - messages persist)
       if (isNew && isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.appendLogMessage(stream, logMessage);
+        ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
       }
     },
   );
@@ -52,7 +52,7 @@ function handleAddLogMessage(
 
 function handleUpdateLogMessage(
   ctx: EventHandlerContext,
-  { stream, logMessage }: ProgressEventPayloads['updateLogMessage'],
+  { streamId, logMessage }: ProgressEventPayloads['updateLogMessage'],
 ): void {
   withEventErrorHandling(
     'LogEvents',
@@ -62,23 +62,23 @@ function handleUpdateLogMessage(
       if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) return;
 
       // Guard: don't create phantom streams for updates to non-existent streams
-      if (!ctx.state.streamTabs.has(stream)) return;
+      if (!ctx.state.streamTabs.has(streamId)) return;
 
       // Find existing message
-      const messages = ctx.state.streamTabs.getMessages(stream);
+      const messages = ctx.state.streamTabs.getMessages(streamId);
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing || existing.messageType === MESSAGE_TYPES.INTERNAL) return;
 
       // Update state and notify webview
       const { id: _id, ...updates } = logMessage;
       const updated = ctx.state.streamTabs.updateMessage(
-        stream,
+        streamId,
         logMessage.id,
         updates,
       );
 
-      if (updated && canUpdateWebview(ctx, stream)) {
-        ctx.webviewUpdater.updateLogMessage(stream, {
+      if (updated && canUpdateWebview(ctx, streamId)) {
+        ctx.webviewUpdater.updateLogMessage(streamId, {
           ...existing,
           ...updates,
         });

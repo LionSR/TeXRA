@@ -29,16 +29,12 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
-/** Error details for retry requests (all fields optional for transport). */
-export const RetryErrorDetailsSchema = ProviderErrorPartialSchema;
-export type RetryErrorDetails = ProviderErrorPartial;
-
 export const RetryRequestPromptSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
-  errorDetails: RetryErrorDetailsSchema.optional(),
+  errorDetails: ProviderErrorPartialSchema.optional(),
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
 

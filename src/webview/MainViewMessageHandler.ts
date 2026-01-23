@@ -13,7 +13,7 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { computeModelOptions } from '@model/computeModelOptions';
-import { getConfig, setConfig, SETTINGS_QUERY } from '@utils/config';
+import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
@@ -241,7 +241,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
       ]),
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
-        await setConfig('ui.showDependencyReminders', m.value);
+        await updateConfig('ui.showDependencyReminders', m.value);
       },
       [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: async (m) => {
         const cmd = getToolDocsCommand(m.tool);
@@ -289,7 +289,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-        await setConfig('ui.showLoginBanner', false);
+        await updateConfig('ui.showLoginBanner', false);
         this.forwardToWebview({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
         });
