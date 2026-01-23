@@ -49,7 +49,10 @@ export class GlobTool extends defineTool({
         follow: false,
       });
     } catch (err) {
-      throw new ToolError(`glob error: ${toErrorMessage(err)}`);
+      throw new ToolError(
+        `Glob pattern error: ${toErrorMessage(err)}. ` +
+          `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
+      );
     }
 
     // Process matches in parallel for better performance
@@ -87,10 +90,11 @@ export class GlobTool extends defineTool({
       return a.relativePath.localeCompare(b.relativePath);
     });
 
-    const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
+    const count = lines.length;
+    const header = `Found ${count} file${count === 1 ? '' : 's'} matching "${input.pattern}" under ${display}`;
     return {
-      summary: `Matched: "${input.pattern}" under ${display}`,
+      summary: `Found ${count} file${count === 1 ? '' : 's'} for "${input.pattern}" in ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };
   }
