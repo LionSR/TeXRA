@@ -53,7 +53,7 @@ export interface CreateResponseOptions<
  */
 export interface ExtractResponseResult {
   /** Extracted response text */
-  response: string;
+  text: string;
   /** Usage/token statistics from the provider */
   usage: ProviderUsage;
   /** Reason why the model stopped generating */

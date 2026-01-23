@@ -47,11 +47,11 @@ export class LatexDiffManager {
     private readonly getOutputFiles: () => { [key: number]: OutputFileInfo[] },
     private readonly baseFiles: FileLocation[],
     private readonly logger: AgentLogger,
-    private readonly channel: string,
+    private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
-    this.latexdiffService = new LaTeXdiffService(channel);
+    this.latexdiffService = new LaTeXdiffService(streamId);
   }
 
   /**
@@ -345,7 +345,7 @@ export class LatexDiffManager {
       'build',
     );
     await this.dependencies.compileLatex2Pdf(diffLocation, {
-      channel: this.channel,
+      channel: this.streamId,
       outputDirectory: buildDir,
       compiler: 'latexmk',
     });
