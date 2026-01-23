@@ -56,7 +56,10 @@ export interface ProgressEventPayloads {
   resolveRetryRequest: { streamId: StreamTabId };
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
-  updateToolEditApprovalBypassState: { streamId: StreamTabId; bypassActive: boolean };
+  updateToolEditApprovalBypassState: {
+    streamId: StreamTabId;
+    bypassActive: boolean;
+  };
   showAgentProposal: AgentProposalPrompt;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
