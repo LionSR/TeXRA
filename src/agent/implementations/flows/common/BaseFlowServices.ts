@@ -68,7 +68,7 @@ export interface AgentCore<C = unknown> {
   /** Logger for operations */
   logger: AgentLogger;
 
-  /** Stream/tab identifier */
+  /** Stream/tab identifier for UI grouping */
   streamId: StreamTabId;
 
   /** Execution identifier */
