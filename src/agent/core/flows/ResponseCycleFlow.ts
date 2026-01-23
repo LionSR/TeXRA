@@ -137,15 +137,6 @@ export function assertCycleFieldsPopulated<T extends object>(
   }
 }
 
-/**
- * Reset cycle state for a new iteration.
- * Called at the start of each cycle to clear transient fields.
- * Reuses resetCycleState for base fields, adds response-specific fields.
- */
-function resetResponseCycleShared(shared: ResponseCycleShared): void {
-  resetCycleState(shared, ['responseObject', 'processedResponse']);
-}
-
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
 // intentionally visible to downstream nodes so that debug metadata and model
@@ -195,7 +186,7 @@ class ResponsePrepNode<C> extends BaseNode<
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
-      resetResponseCycleShared(shared);
+      resetCycleState(shared, ['responseObject', 'processedResponse']);
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
@@ -204,7 +195,7 @@ class ResponsePrepNode<C> extends BaseNode<
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
     shared.outputLocation = prepRes.outputLocation;
-    resetResponseCycleShared(shared);
+    resetCycleState(shared, ['responseObject', 'processedResponse']);
 
     await maybeSaveDebugObject({
       object: shared.messages,
@@ -231,11 +222,6 @@ class ResponsePrepNode<C> extends BaseNode<
 interface InvocationPrepResult extends BaseInvocationPrepResult {
   systemPrompt?: string;
 }
-
-/**
- * Result type for model invocation (uses shared InvocationResult).
- */
-type InvocationExecResult = InvocationResult<BaseInvocationSuccessData>;
 
 /**
  * Handles model invocation with PocketFlow's built-in retry.
@@ -281,7 +267,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
+  async exec(prepRes: InvocationPrepResult): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
@@ -326,14 +312,14 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   async execFallback(
     _prepRes: InvocationPrepResult,
     error: Error,
-  ): Promise<InvocationExecResult> {
+  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     return this.getFallbackResult(error);
   }
 
   async post(
     shared: ResponseCycleShared,
     _prepRes: InvocationPrepResult,
-    execRes: InvocationExecResult,
+    execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
     const { logger, config, round } = this.services;
 

@@ -93,12 +93,11 @@ export function assertPreparedShared(
 // ============================================================================
 
 /**
- * Lightweight schema for detecting and migrating legacy shared state format.
+ * Lightweight schema for detecting shared state format.
  * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
  * - only validates enough to detect format, not full content.
  */
-const FlatFormatSchema = z.looseObject({ conversation: z.array(z.unknown()) });
-const LegacyStateSchema = z.looseObject({ conversation: z.array(z.unknown()) });
+const ConversationSchema = z.looseObject({ conversation: z.array(z.unknown()) });
 
 /**
  * Migrate legacy shared state to current flat format.
@@ -111,7 +110,7 @@ export function migrateSharedState(
   shared: unknown,
 ): { data: ToolUseRunShared; migrated: boolean } | null {
   // Check if already flat format - return same reference (no migration needed)
-  const flatResult = FlatFormatSchema.safeParse(shared);
+  const flatResult = ConversationSchema.safeParse(shared);
   if (flatResult.success && !('state' in flatResult.data)) {
     return { data: shared as ToolUseRunShared, migrated: false };
   }
@@ -119,7 +118,7 @@ export function migrateSharedState(
   // Check if legacy format - extract and return nested state
   const obj = shared as Record<string, unknown>;
   if (obj && typeof obj === 'object' && 'state' in obj) {
-    const legacyResult = LegacyStateSchema.safeParse(obj.state);
+    const legacyResult = ConversationSchema.safeParse(obj.state);
     if (legacyResult.success) {
       return { data: obj.state as ToolUseRunShared, migrated: true };
     }
