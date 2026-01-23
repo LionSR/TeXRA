@@ -84,6 +84,23 @@ export function stringifyWithLanguage(value) {
 }
 
 /**
+ * Check if an input object is code-only (has only a `code` field with string content).
+ * @param {*} value - Value to check
+ * @returns {{isCodeOnly: boolean, code: string}} Result with code extraction
+ */
+export function extractCodeOnlyInput(value) {
+  // Check property first (cheap), then key count (allocates array)
+  if (
+    isPlainObject(value) &&
+    typeof value.code === 'string' &&
+    Object.keys(value).length === 1
+  ) {
+    return { isCodeOnly: true, code: value.code };
+  }
+  return { isCodeOnly: false, code: '' };
+}
+
+/**
  * Try to parse a string as JSON
  * @param {string} text - Text to parse
  * @returns {object|null} Parsed JSON or null
