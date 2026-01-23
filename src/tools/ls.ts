@@ -64,7 +64,10 @@ export class LsTool extends defineTool({
       stats = await WorkspaceFS.stat(resolved.relative);
     } catch (err) {
       const message = toErrorMessage(err);
-      throw new ToolError(`Path not found: ${display} (${message})`);
+      throw new ToolError(
+        `Path not found: ${display} (${message}). ` +
+          `Try: Use glob to search for files, or ls on parent directory.`,
+      );
     }
 
     const ignoreMatchers = input.ignore.map(createGlobMatcher);
@@ -126,9 +129,10 @@ export class LsTool extends defineTool({
 
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));
     const formatted = sorted.map(([name, type]) => formatEntry(name, type));
+    const count = formatted.length;
 
     return {
-      summary,
+      summary: `Listed ${count} entr${count === 1 ? 'y' : 'ies'} in ${display}`,
       output: formatToolOutput(`Listing for ${display}`, formatted),
     };
   }
