@@ -194,16 +194,3 @@ const selectBaseFile = createPicker({
     ),
   }),
 });
-
-export const fileSelectionCommands = {
-  selectInputFile,
-  selectInputFiles,
-  selectReferenceFiles,
-  selectAuxiliaryFiles,
-  selectMediaFiles,
-  selectMediaFile,
-  selectOutputFiles,
-  selectEditedFile,
-  getCurrentFile,
-  selectBaseFile,
-};

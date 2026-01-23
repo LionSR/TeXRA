@@ -7,10 +7,7 @@ export {
 } from './sampleProjectCommands';
 export { settingsCommands, registerSettingsCommands } from './settingsCommands';
 export { registerTestCommands } from './testCommands';
-export {
-  textEditorCommands,
-  registerTextEditorCommands,
-} from './textEditorCommands';
+export { registerTextEditorCommands } from './textEditorCommands';
 export {
   walkthroughCommands,
   registerWalkthroughCommands,

@@ -22,21 +22,21 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
-  streamName: string;
+  streamId: string;
   isAgentChannel: boolean;
   includeStructuredData?: () => boolean;
 }
 
 export class VSCodeTransport extends Transport {
   private readonly channel: vscode.OutputChannel;
-  private readonly streamName: string;
+  private readonly streamId: string;
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
 
   constructor(options: VSCodeTransportOptions) {
     super(options);
     this.channel = options.channel;
-    this.streamName = options.streamName;
+    this.streamId = options.streamId;
     this.isAgentChannel = options.isAgentChannel;
     this.includeStructuredData = options.includeStructuredData;
   }
@@ -63,7 +63,7 @@ export class VSCodeTransport extends Transport {
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
     if (this.isAgentChannel) {
       bus.emit('addTaskGroup', {
-        stream: this.streamName,
+        streamId: this.streamId,
         id,
         name: groupName,
         startTime: Date.now(),
@@ -78,7 +78,7 @@ export class VSCodeTransport extends Transport {
   endGroup(groupId: string, status: EndGroupStatus): void {
     if (!this.isAgentChannel) return;
     bus.emit('updateTaskGroup', {
-      stream: this.streamName,
+      streamId: this.streamId,
       id: groupId,
       status,
       endTime: Date.now(),
@@ -92,7 +92,7 @@ export class VSCodeTransport extends Transport {
     structuredData: unknown,
   ): void {
     const emoji = getColorForLevel(level);
-    const prefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
+    const prefix = this.isAgentChannel ? '' : `[${this.streamId}] `;
     this.channel.appendLine(`${emoji} [${timestamp}] ${prefix}${message}`);
 
     if (structuredData != null && this.includeStructuredData?.()) {
@@ -129,7 +129,7 @@ export class VSCodeTransport extends Transport {
     if (!shouldEmit) return;
 
     bus.emit('addLogMessage', {
-      stream: this.streamName,
+      streamId: this.streamId,
       logMessage: {
         id: randomUUID(),
         text: event.message,
@@ -172,7 +172,7 @@ export class VSCodeTransport extends Transport {
    */
   private emitContextState(contextState: ContextStateData): void {
     bus.emit('updateContextState', {
-      stream: this.streamName,
+      streamId: this.streamId,
       contextState,
     });
   }

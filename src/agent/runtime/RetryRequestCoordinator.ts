@@ -11,7 +11,7 @@
 
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { RetryErrorDetails } from '@eventBus/types';
+import type { ProviderErrorPartial } from '@common/errors/schemas';
 import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
@@ -45,7 +45,7 @@ export interface RetryRequestOptions {
   /** Timeout in milliseconds (defaults to wait indefinitely) */
   timeoutMs?: number;
   /** Structured error details for expandable display */
-  errorDetails?: RetryErrorDetails;
+  errorDetails?: ProviderErrorPartial;
 }
 
 /** Payload for show event */
@@ -54,7 +54,7 @@ interface RetryShowPayload extends Record<string, unknown> {
   operation: string;
   model?: string;
   errorMessage?: string;
-  errorDetails?: RetryErrorDetails;
+  errorDetails?: ProviderErrorPartial;
 }
 
 // ============================================================================

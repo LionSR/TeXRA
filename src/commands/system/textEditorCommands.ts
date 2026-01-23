@@ -216,7 +216,3 @@ async function handleTestTextEditor(): Promise<void> {
     );
   }
 }
-
-export const textEditorCommands = {
-  handleTestTextEditor,
-};

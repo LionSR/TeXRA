@@ -35,7 +35,7 @@ export function registerUsageEventHandlers(
 
 function handleUpdateStreamUsage(
   ctx: EventHandlerContext,
-  { stream, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
+  { streamId, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
 ): void {
   withEventErrorHandling(
     'UsageEvents',
@@ -43,19 +43,23 @@ function handleUpdateStreamUsage(
     async () => {
       // usage is already typed as TokenUsageStats from the event payload
       const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
-        stream,
+        streamId,
         storageKey,
         usage,
       );
 
       // For tool-use sessions (no task groups), set active run ID from usage
-      if (!ctx.state.getActiveRunId(stream)) {
-        ctx.state.setActiveRunId(stream, storageKey);
+      if (!ctx.state.getActiveRunId(streamId)) {
+        ctx.state.setActiveRunId(streamId, storageKey);
       }
 
       // Broadcast to webview - frontend decides which run to display
       if (isWebviewAvailable(ctx) && accumulatedUsage) {
-        ctx.webviewUpdater.updateRunUsage(stream, storageKey, accumulatedUsage);
+        ctx.webviewUpdater.updateRunUsage(
+          streamId,
+          storageKey,
+          accumulatedUsage,
+        );
       }
     },
   );
@@ -63,16 +67,16 @@ function handleUpdateStreamUsage(
 
 function handleUpdateContextState(
   ctx: EventHandlerContext,
-  { stream, contextState }: ProgressEventPayloads['updateContextState'],
+  { streamId, contextState }: ProgressEventPayloads['updateContextState'],
 ): void {
   withEventErrorHandling(
     'UsageEvents',
     'failed to handle updateContextState',
     () => {
-      ctx.state.setContextState(stream, contextState);
+      ctx.state.setContextState(streamId, contextState);
       // Broadcast to webview - frontend decides which run to display
       if (isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.updateContextState(stream, contextState);
+        ctx.webviewUpdater.updateContextState(streamId, contextState);
       }
     },
   );

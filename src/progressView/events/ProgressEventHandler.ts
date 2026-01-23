@@ -130,18 +130,18 @@ export class ProgressEventHandler {
   private async processSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
   ): Promise<void> {
-    const { stream, agentCategory, isRemote, hasMultipleOutputs } = payload;
-    if (!stream) return;
+    const { streamId, agentCategory, isRemote, hasMultipleOutputs } = payload;
+    if (!streamId) return;
 
-    await this.state.streamTabs.ensureStream(stream);
-    this.state.updateStreamHints(stream, {
+    await this.state.streamTabs.ensureStream(streamId);
+    this.state.updateStreamHints(streamId, {
       agentCategory,
       isRemote,
       hasMultipleOutputs,
     });
     this.maybeUpdateFilterForCategory(agentCategory);
-    this.state.activeStream = stream;
-    this.replayPendingTaskGroups(stream);
+    this.state.activeStream = streamId;
+    this.replayPendingTaskGroups(streamId);
 
     if (!this.webviewUpdater.isAvailable()) return;
 
@@ -150,10 +150,10 @@ export class ProgressEventHandler {
 
     // Refresh stream content (logs, groups, metadata, status, todos)
     // Note: refreshStreamSurface includes status update, so no separate setStreamStatus needed
-    const activeRunId = this.refreshStreamSurface(stream, {
+    const activeRunId = this.refreshStreamSurface(streamId, {
       updateInstruction: false,
     });
-    this.sendInstructionUpdate(stream, activeRunId);
+    this.sendInstructionUpdate(streamId, activeRunId);
   }
 
   private handleUpdateStreamStatus = (
@@ -164,7 +164,7 @@ export class ProgressEventHandler {
       'failed to handle updateStreamStatus',
       () =>
         this.setStreamStatus(
-          payload.stream,
+          payload.streamId,
           payload.status,
           payload.previousStatus,
         ),
@@ -178,23 +178,23 @@ export class ProgressEventHandler {
       'StreamStatus',
       'failed to handle setTaskState',
       () => {
-        const { streamTabId, executionId, taskState } = data;
-        const isActiveStream = this.state.activeStream === streamTabId;
+        const { streamId, executionId, taskState } = data;
+        const isActiveStream = this.state.activeStream === streamId;
         const category = taskState.agentConfig.agentCategory;
         const previousFilter = this.state.agentCategoryFilter;
 
-        this.state.setTaskState(streamTabId, taskState);
+        this.state.setTaskState(streamId, taskState);
 
         if (isActiveStream) {
           this.maybeUpdateFilterForCategory(category);
         }
 
         if (executionId) {
-          this.state.setExecutionId(streamTabId, executionId);
+          this.state.setExecutionId(streamId, executionId);
         }
 
         if (isActiveStream) {
-          this.sendInstructionUpdate(streamTabId);
+          this.sendInstructionUpdate(streamId);
         }
 
         // Update stream tabs when:
@@ -221,22 +221,22 @@ export class ProgressEventHandler {
       'TaskGroup',
       'failed to handle addTaskGroup',
       async () => {
-        const { stream, ...group } = data;
+        const { streamId, ...group } = data;
         const { id, parentGroupId } = group;
 
-        const hasStream = this.state.streamTabs.has(stream);
+        const hasStream = this.state.streamTabs.has(streamId);
         const addGroupPromise = this.state.taskGroups.addGroup(
-          stream,
+          streamId,
           id,
           group,
         );
 
         if (!parentGroupId) {
-          this.state.setActiveRunId(stream, id);
+          this.state.setActiveRunId(streamId, id);
         }
 
         if (!hasStream) {
-          await this.initializeStreamForTaskGroup(stream);
+          await this.initializeStreamForTaskGroup(streamId);
         }
 
         // Send to webview if available and stream is active, otherwise buffer.
@@ -244,11 +244,11 @@ export class ProgressEventHandler {
         // from being dropped during initialization (e.g., Init stage).
         if (
           this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
+          streamId === this.state.activeStream
         ) {
-          this.webviewUpdater.addTaskGroup(stream, group);
+          this.webviewUpdater.addTaskGroup(streamId, group);
         } else {
-          this.bufferTaskGroupForReplay(stream, group);
+          this.bufferTaskGroupForReplay(streamId, group);
         }
 
         await addGroupPromise;
@@ -265,7 +265,7 @@ export class ProgressEventHandler {
       async () => {
         await this.state.taskGroups.updateGroup(data);
 
-        if (canUpdateWebview(this.ctx, data.stream)) {
+        if (canUpdateWebview(this.ctx, data.streamId)) {
           this.webviewUpdater.updateTaskGroup(data);
         }
       },

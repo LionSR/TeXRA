@@ -72,14 +72,9 @@ export async function openLabel(label: string): Promise<void> {
   vscode.window.showInformationMessage(`Label "${label}" not found.`);
 }
 
-/** Command handlers for file operations */
-export const openFileCommands = {
-  openFileCompile: openBuildDisplayIfTex,
-  openFile,
-  openLabel,
-};
-
-export function registerOpenFileCommands(context: vscode.ExtensionContext) {
+export function registerOpenFileCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.openFileCompile',
@@ -88,5 +83,4 @@ export function registerOpenFileCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('texra.openFile', openFile),
     vscode.commands.registerCommand('texra.openLabel', openLabel),
   );
-  return openFileCommands;
 }
