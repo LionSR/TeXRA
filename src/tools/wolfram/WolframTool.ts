@@ -46,17 +46,17 @@ export class WolframTool extends defineTool({
     }
 
     // Wolfram often outputs errors to stdout rather than stderr
-    // Include both if available for complete context
+    // Include both if available for complete context, wrapped in XML tags
     if (result.error) {
-      errorParts.push(`stderr: ${result.error}`);
+      errorParts.push(`<stderr>${result.error}</stderr>`);
     }
     if (result.output) {
-      errorParts.push(`stdout: ${result.output}`);
+      errorParts.push(`<stdout>${result.output}</stdout>`);
     }
 
     const errorDetails =
       errorParts.length > 0
-        ? errorParts.join('; ')
+        ? errorParts.join('\n')
         : 'No error details available';
     throw new ToolError(`Wolfram execution failed: ${errorDetails}`);
   }
