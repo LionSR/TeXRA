@@ -192,8 +192,10 @@ async function getFileVars(
   // Build collection vars for each category using the centralized config
   for (const prefix of ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED']) {
     const cat = FILE_CATEGORIES[prefix];
-    const additionalFiles =
+    const rawAdditionalFiles =
       (agentConfig[cat.multiple] as string[] | undefined) ?? [];
+    // Filter empty strings to prevent file read errors
+    const additionalFiles = rawAdditionalFiles.filter(Boolean);
     const allFiles = getCategoryFiles(agentConfig, prefix);
 
     userVars[`ADDITIONAL_${prefix}S`] =

@@ -37,8 +37,8 @@ export const OutputXmlSummarySchema = z.strictObject({
     .record(z.string(), z.union([z.string(), z.array(z.string())]))
     .prefault(() => ({})),
   documents: z.array(z.string()).prefault(() => []),
-  singleOutputFile: z.string().nullable(),
-  sourceLocation: FileLocationSchema.nullable(),
+  singleOutputFile: z.string().nullable().prefault(null),
+  sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
