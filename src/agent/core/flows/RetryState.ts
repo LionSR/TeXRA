@@ -238,13 +238,13 @@ export abstract class RetryableInvocationNode<
       throw this._persistent401Error;
     }
 
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
     const services = this.getServices();
-    services.setAbortController(abortController);
+    let activeController = new AbortController();
+    this.signal = activeController.signal;
+    services.setAbortController(activeController);
+
     try {
-      return await operation(abortController.signal);
+      return await operation(activeController.signal);
     } catch (err) {
       // Detect relay 401 and refresh token immediately, before retry loop wastes attempts
       const formatted = formatProviderHttpError(err);
@@ -258,12 +258,12 @@ export abstract class RetryableInvocationNode<
         const refreshed = await SupabaseClient.forceRefreshToken();
         if (refreshed) {
           // Create fresh AbortController for retry - original signal may be in bad state
-          const retryController = new AbortController();
-          this.signal = retryController.signal;
-          services.setAbortController(retryController);
+          activeController = new AbortController();
+          this.signal = activeController.signal;
+          services.setAbortController(activeController);
           services.logger.debug('Token refreshed, retrying immediately');
           try {
-            return await operation(retryController.signal);
+            return await operation(activeController.signal);
           } catch (retryErr) {
             // If retry also fails with 401, it's not a token issue - skip auto-retries
             const retryFormatted = formatProviderHttpError(retryErr);
@@ -272,7 +272,8 @@ export abstract class RetryableInvocationNode<
                 'Still 401 after token refresh, skipping auto-retries',
               );
               // Store error for fast-fail on subsequent retry attempts
-              this._persistent401Error = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+              this._persistent401Error =
+                retryErr instanceof Error ? retryErr : new Error(String(retryErr));
             }
             throw retryErr;
           }
