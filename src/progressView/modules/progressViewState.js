@@ -206,9 +206,10 @@ export class ProgressViewState {
     this.agentCategoryFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
-    this.approvalBypassActive = false;
     this.activeAgentCategory = 'workflow';
     this.pendingInstructions = new Map();
+    /** Per-stream YOLO mode state */
+    this.approvalBypassByStream = new Map();
 
     this.activeRunIds = new Map();
     const streamResolver = this._resolveStreamId.bind(this);
@@ -686,6 +687,51 @@ export class ProgressViewState {
    */
   clearAllFollowUpText() {
     this.streamFollowUpText.clear();
+  }
+
+  /**
+   * Set YOLO mode (approval bypass) for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {boolean} enabled - Whether YOLO mode is enabled
+   */
+  setApprovalBypass(streamId, enabled) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (!targetStream) return;
+
+    if (enabled) {
+      this.approvalBypassByStream.set(targetStream, true);
+    } else {
+      this.approvalBypassByStream.delete(targetStream);
+    }
+  }
+
+  /**
+   * Get YOLO mode (approval bypass) for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {boolean}
+   */
+  getApprovalBypass(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (!targetStream) return false;
+    return this.approvalBypassByStream.get(targetStream) ?? false;
+  }
+
+  /**
+   * Clear YOLO mode (approval bypass) for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearApprovalBypass(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream) {
+      this.approvalBypassByStream.delete(targetStream);
+    }
+  }
+
+  /**
+   * Clear all YOLO mode states across all streams.
+   */
+  clearAllApprovalBypass() {
+    this.approvalBypassByStream.clear();
   }
 }
 

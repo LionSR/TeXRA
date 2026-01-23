@@ -473,6 +473,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.followUpInput.restoreTextForStream(message.activeStream);
     }
 
+    // Restore per-stream YOLO state
+    if (message.activeStream) {
+      const bypassActive = state.getApprovalBypass(message.activeStream);
+      dom.followUpInput.setApprovalBypassState(bypassActive);
+    }
+
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.workflowProposals.setActiveStream(message.activeStream, isToolAgent);
@@ -953,9 +959,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateToolEditApprovalState(message) {
+    const stream = message?.stream;
     const bypassActive = Boolean(message?.bypassActive);
-    state.approvalBypassActive = bypassActive;
-    dom.followUpInput.setApprovalBypassState(bypassActive);
+
+    // Store per-stream state
+    if (stream) {
+      state.setApprovalBypass(stream, bypassActive);
+    }
+
+    // Update UI if this is for the active stream
+    if (stream === state.activeStream) {
+      dom.followUpInput.setApprovalBypassState(bypassActive);
+    }
   }
 
   handleShowRetryRequest(message) {
