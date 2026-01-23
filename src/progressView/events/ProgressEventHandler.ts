@@ -374,7 +374,11 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream) ?? [];
     const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
-    // NOTE: pendingTaskGroups already cleared by replayPendingTaskGroups() before this call.
+    // Clear pendingTaskGroups since we're doing a full refresh from state.taskGroups.
+    // This handles both: (1) processSetActiveStream flow (replayPendingTaskGroups called first),
+    // (2) updateWebview flow (called directly without replay, groups already in state).
+    this.pendingTaskGroups.delete(stream);
+
     // NOTE: Status already sent via updateAll() → UPDATE_STREAMS → handleUpdateStreams.
 
     // Send primary content update (includes all run-scoped data in single message)
