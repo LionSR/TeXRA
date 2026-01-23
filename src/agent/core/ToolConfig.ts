@@ -11,9 +11,8 @@ export const DEFAULT_TOOL_CONFIG = {
 
 /**
  * Zod schema for validating ToolConfig objects.
- * Defaults are defined at the property level and the schema itself
- * defaults to an empty object, allowing omission of the entire
- * configuration section.
+ * Schema-level prefault provides all defaults from DEFAULT_TOOL_CONFIG.
+ * Field-level prefaults match the schema default to handle partial inputs.
  *
  * We explicitly strip unknown properties to remain backward compatible
  * with legacy settings that may still include removed flags.

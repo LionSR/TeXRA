@@ -12,7 +12,7 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
-import { Node } from '@agent/node';
+import { Node, type NonIterableObject } from '@agent/node';
 import {
   retryCoordinator,
   type RetryResult,
@@ -131,11 +131,6 @@ interface RetryableNodeServices {
   setAbortController: (ac: AbortController | null) => void;
 }
 
-/** Type constraint for Node params (matches PocketFlow's NonIterableObject). */
-type NodeParams = Partial<Record<string, unknown>> & {
-  [Symbol.iterator]?: never;
-};
-
 /**
  * Base class for model/tool invocation nodes with retry support.
  *
@@ -164,7 +159,7 @@ type NodeParams = Partial<Record<string, unknown>> & {
  */
 export abstract class RetryableInvocationNode<
   S,
-  P extends NodeParams = NodeParams,
+  P extends NonIterableObject = NonIterableObject,
   Svc extends RetryableNodeServices = RetryableNodeServices,
 > extends Node<S, P, Svc> {
   /**

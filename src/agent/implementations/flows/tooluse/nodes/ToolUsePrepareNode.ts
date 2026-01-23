@@ -18,8 +18,6 @@ export class ToolUsePrepareNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  async prep(_shared: ToolUseRunShared): Promise<void> {}
-
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: PrepareResult }> {
