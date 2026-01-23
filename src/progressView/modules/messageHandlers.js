@@ -49,6 +49,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
     this._entryFormatter = getSharedLogEntryFormatter();
+    this._lastFollowupState = null;
     this._handlers = {
       ...createThemeHandlers(),
       ...this._createHandlers(),
@@ -1190,22 +1191,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Update followup section visibility based on current stream state.
    * Called when stream status changes or streams are updated.
+   * Skips update if nothing relevant changed.
    */
   _updateFollowupSection() {
     const activeStream = state.activeStream;
     if (!activeStream) {
-      dom.followupSection?.updateForStream?.(null);
+      if (this._lastFollowupState !== null) {
+        this._lastFollowupState = null;
+        dom.followupSection?.updateForStream?.(null);
+      }
       return;
     }
 
     const streamStatus = state.streamStatuses.get(activeStream);
     const category = state.activeAgentCategory || 'workflow';
-    const hasOutputFiles = this._hasOutputFilesForActiveStream();
-
-    // Extract agent name from stream ID (format: "agentName@timestamp")
     const agentName = activeStream.split('@')[0] || activeStream;
 
-    // Get instruction text for workflow context
     const runId = state.resolveActiveRunId(activeStream);
     const instruction = runId
       ? state.getRunInstruction(activeStream, runId)
@@ -1215,42 +1216,28 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         (instruction.text.length > 100 ? '...' : '')
       : null;
 
-    // Count output files
+    // Count files in single pass (also determines hasOutputFiles)
     const files = runId ? state.getRunFiles(activeStream, runId) : null;
-    const fileCount = files
-      ? Object.values(files).reduce(
-          (sum, roundFiles) =>
-            sum + (Array.isArray(roundFiles) ? roundFiles.length : 0),
-          0,
-        )
-      : 0;
+    let fileCount = 0;
+    if (files) {
+      for (const roundFiles of Object.values(files)) {
+        if (Array.isArray(roundFiles)) fileCount += roundFiles.length;
+      }
+    }
+
+    // Skip if nothing changed
+    const key = `${activeStream}|${streamStatus}|${category}|${fileCount}|${instructionPreview ?? ''}`;
+    if (key === this._lastFollowupState) return;
+    this._lastFollowupState = key;
 
     dom.followupSection?.updateForStream?.({
       agentCategory: category,
       status: streamStatus,
-      hasOutputFiles,
+      hasOutputFiles: fileCount > 0,
       agentName,
       instructionPreview,
       fileCount,
     });
-  }
-
-  /**
-   * Check if the active stream has output files.
-   */
-  _hasOutputFilesForActiveStream() {
-    const activeStream = state.activeStream;
-    if (!activeStream) return false;
-
-    const runId = state.resolveActiveRunId(activeStream);
-    if (!runId) return false;
-
-    const files = state.getRunFiles(activeStream, runId);
-    if (!files) return false;
-
-    return Object.values(files).some(
-      (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
-    );
   }
 }
 
