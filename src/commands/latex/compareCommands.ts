@@ -187,11 +187,14 @@ async function handleAcceptEdited(
     const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
 
     // Build confirmation message based on operation type
-    const action = targetExists
-      ? 'overwrite existing'
-      : isNewFile
-        ? 'create'
-        : 'overwrite';
+    let action: string;
+    if (targetExists) {
+      action = 'overwrite existing';
+    } else if (isNewFile) {
+      action = 'create';
+    } else {
+      action = 'overwrite';
+    }
     const extensionNote = isNewFile
       ? `Extensions differ (${baseExt} vs ${editedExt}). `
       : '';
