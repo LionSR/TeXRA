@@ -103,30 +103,39 @@ export interface RunReflectionFlowResult {
 // Configuration Derivation
 // ============================================================================
 
-/** Derive configuration values from settings and prompts. */
-function deriveConfig(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): {
+interface DerivedConfig {
   useScratchpad: boolean;
   shouldEnsureXmlStructure: boolean;
   totalRounds: number;
   outputExt: string;
-} {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+}
 
-  // Determine XML structure enforcement based on mode
+/** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
+function shouldEnforceXmlStructure(
+  setting: AgentWorkflowSetting,
+  useScratchpad: boolean,
+): boolean {
   const mode = setting.xmlStructureMode ?? 'scratchpadOnly';
-  let shouldEnsureXmlStructure: boolean;
-  if (mode === 'always') {
-    shouldEnsureXmlStructure = true;
-  } else if (mode === 'never') {
-    shouldEnsureXmlStructure = false;
-  } else {
-    shouldEnsureXmlStructure = useScratchpad;
-  }
 
-  // Compute total rounds: max(setting.rounds, userRequest.length)
+  switch (mode) {
+    case 'always':
+      return true;
+    case 'never':
+      return false;
+    case 'scratchpadOnly':
+      return useScratchpad;
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
+    }
+  }
+}
+
+/** Compute the total number of rounds: max(setting.rounds, userRequest.length) */
+function computeTotalRounds(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): number {
   const { userRequest } = prompt;
   let requestCount = 0;
   if (Array.isArray(userRequest)) {
@@ -134,12 +143,20 @@ function deriveConfig(
   } else if (userRequest) {
     requestCount = 1;
   }
-  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
+  return Math.max(setting.rounds ?? 2, requestCount);
+}
+
+/** Derive configuration values from settings and prompts. */
+function deriveConfig(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): DerivedConfig {
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
 
   return {
     useScratchpad,
-    shouldEnsureXmlStructure,
-    totalRounds,
+    shouldEnsureXmlStructure: shouldEnforceXmlStructure(setting, useScratchpad),
+    totalRounds: computeTotalRounds(setting, prompt),
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
   };
 }
