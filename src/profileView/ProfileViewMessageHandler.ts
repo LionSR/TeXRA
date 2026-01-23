@@ -31,7 +31,7 @@ const RemoteAgentPayloadSchema = z.object({
   name: z.string(),
   description: z.string(),
   visibility: z.array(z.string()),
-  category: z.nativeEnum(AgentCategory),
+  category: z.enum(AgentCategory),
   supportsMultipleOutput: z.boolean(),
 });
 type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
