@@ -692,22 +692,21 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-      // Run the flow with resume snapshot
-      const result = await runToolUseFlow(
-        {
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: () => (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-          setting: setting as AgentToolUseSetting,
-          resumeSnapshot: snapshot,
-          onFollowUpConsumed: () =>
-            bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
-        },
-        setupSession ? (context) => setupSession(context.session) : undefined,
-      );
+    // Run the flow with resume snapshot
+    const result = await runToolUseFlow(
+      {
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getUsageRecorder: () => (run) =>
+          ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+        setting: setting as AgentToolUseSetting,
+        resumeSnapshot: snapshot,
+        onFollowUpConsumed: () =>
+          bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+      },
+      setupSession ? (context) => setupSession(context.session) : undefined,
+    );
 
-      return result.status;
-    },
-  );
+    return result.status;
+  });
 }
