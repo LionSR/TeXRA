@@ -50,7 +50,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     super();
     this._entryFormatter = getSharedLogEntryFormatter();
     this._lastFollowupState = null;
-    this._renderGeneration = 0;
     this._handlers = {
       ...createThemeHandlers(),
       ...this._createHandlers(),
@@ -317,42 +316,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       });
     }
     appendFormatted(logContent, formatted);
-  }
-
-  /**
-   * Render messages in chunks to keep UI responsive.
-   * First chunk renders immediately, remaining chunks use requestAnimationFrame.
-   * Uses _renderGeneration to cancel stale renders on stream switch.
-   */
-  _renderMessagesChunked(messages, logContent) {
-    const CHUNK_SIZE = 50;
-    const generation = ++this._renderGeneration;
-
-    if (messages.length <= CHUNK_SIZE) {
-      // Small list - render synchronously
-      messages.forEach((msg) => this._renderLogMessage(msg, logContent));
-      scrollToBottom(logContent);
-      return;
-    }
-
-    // Large list - render first chunk immediately, rest in frames
-    let i = 0;
-    const renderChunk = () => {
-      // Abort if a newer render started (stream switch)
-      if (this._renderGeneration !== generation) return;
-
-      const end = Math.min(i + CHUNK_SIZE, messages.length);
-      while (i < end) {
-        this._renderLogMessage(messages[i], logContent);
-        i++;
-      }
-      if (i < messages.length) {
-        requestAnimationFrame(renderChunk);
-      } else {
-        scrollToBottom(logContent);
-      }
-    };
-    renderChunk();
   }
 
   /**
@@ -647,8 +610,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    // Render messages in chunks to keep UI responsive during long conversations
-    this._renderMessagesChunked(sortedMessages, logContent);
+    sortedMessages.forEach((msg) => {
+      this._renderLogMessage(msg, logContent);
+    });
+    scrollToBottom(logContent);
 
     // Use validated run ID from state (set earlier via setActiveRunId after validation)
     const activeRunId = state.resolveActiveRunId(message.stream);
