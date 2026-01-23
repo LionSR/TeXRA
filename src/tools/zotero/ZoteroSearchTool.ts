@@ -46,18 +46,14 @@ function formatSearchResult(item: BbtSearchResultItem): string {
   // Handle both CSL JSON (author) and Zotero (creators) formats
   const creatorList = item.author || item.creators || [];
   const creators = creatorList
-    .map((creator) => {
-      if (creator.family) {
-        return creator.given
-          ? `${creator.family}, ${creator.given}`
-          : creator.family;
+    .map((c) => {
+      if (c.family) {
+        return c.given ? `${c.family}, ${c.given}` : c.family;
       }
-      if (creator.lastName) {
-        return creator.firstName
-          ? `${creator.lastName}, ${creator.firstName}`
-          : creator.lastName;
+      if (c.lastName) {
+        return c.firstName ? `${c.lastName}, ${c.firstName}` : c.lastName;
       }
-      return creator.name || '';
+      return c.name || '';
     })
     .filter(Boolean)
     .join('; ');

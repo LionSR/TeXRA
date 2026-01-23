@@ -161,10 +161,10 @@ export function formatCounts(counts: SeverityCounts): string {
  */
 export function formatMessageList(diagnostics: vscode.Diagnostic[]): string {
   return diagnostics
-    .map((diagnostic) => {
-      const line = diagnostic.range.start.line + 1;
-      const label = getSeverityLabel(diagnostic.severity);
-      return `  ${line}: [${label}] ${diagnostic.message}`;
+    .map((d) => {
+      const line = d.range.start.line + 1;
+      const label = getSeverityLabel(d.severity);
+      return `  ${line}: [${label}] ${d.message}`;
     })
     .join('\n');
 }
@@ -181,21 +181,21 @@ export function formatGroupedSections(
   diagnostics: vscode.Diagnostic[],
 ): string {
   const errors = diagnostics.filter(
-    (diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error,
+    (d) => d.severity === vscode.DiagnosticSeverity.Error,
   );
   const warnings = diagnostics.filter(
-    (diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Warning,
+    (d) => d.severity === vscode.DiagnosticSeverity.Warning,
   );
   const hints = diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.severity === vscode.DiagnosticSeverity.Information ||
-      diagnostic.severity === vscode.DiagnosticSeverity.Hint,
+    (d) =>
+      d.severity === vscode.DiagnosticSeverity.Information ||
+      d.severity === vscode.DiagnosticSeverity.Hint,
   );
 
   const formatSection = (title: string, items: vscode.Diagnostic[]): string => {
     if (items.length === 0) return '';
     const lines = items
-      .map((item) => `**Line ${item.range.start.line + 1}:** ${item.message}`)
+      .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}`)
       .join('\n\n');
     return `## ${title} (${items.length})\n\n${lines}`;
   };
