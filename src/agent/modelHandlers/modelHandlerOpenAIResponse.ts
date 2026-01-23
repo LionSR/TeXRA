@@ -341,8 +341,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (response.status === 'completed') {
       this.previousResponseId = response.id;
     } else {
+      const errorDetail =
+        response.error?.message ?? response.incomplete_details?.reason;
       this.logger.warn(
         `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+        {
+          data: {
+            responseId: response.id,
+            status: response.status,
+            hasUsage: !!response.usage,
+            errorDetail,
+          },
+        },
       );
       this.previousResponseId = null;
     }
@@ -1069,19 +1079,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response = await client.responses.create(nonStreamingParams, {
         signal,
       });
-      if (useBackgroundResponses) {
-        this.logger.debug(
-          `Background response ${response.id} created with status ${
-            response.status ?? 'unknown'
-          }`,
-          {
-            data: {
-              responseId: response.id,
-              status: response.status,
-              usage: response.usage ?? undefined,
-            },
+
+      // Log response status for debugging - useful when using previous_response_id
+      const initialStatus = response.status ?? 'unknown';
+      this.logger.debug(
+        `Response ${response.id} created with status "${initialStatus}"`,
+        {
+          data: {
+            responseId: response.id,
+            status: response.status,
+            hasUsage: !!response.usage,
+            hasPreviousResponseId: !!this.previousResponseId,
           },
-        );
+        },
+      );
+
+      if (useBackgroundResponses) {
         this.logger.logProgress(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
         );
@@ -1093,6 +1106,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           signal,
         );
         // Note: clearPendingBackgroundResponse() called by finalizeResponse() below
+      } else if (this.isBackgroundPending(response)) {
+        // Even without background mode enabled, the API may return in_progress
+        // when using previous_response_id due to server-side latency retrieving context.
+        // Poll until completion to avoid "not safe for chaining" warnings.
+        this.logger.debug(
+          `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
+          {
+            data: {
+              responseId: response.id,
+              status: response.status,
+              hasPreviousResponseId: !!this.previousResponseId,
+            },
+          },
+        );
+        response = await this.waitForBackgroundCompletion(
+          client,
+          response,
+          signal,
+        );
       }
 
       this.finalizeResponse(
@@ -1166,6 +1198,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!responseObject.usage) {
       this.logger.warn(
         'Response missing usage information - token counts will show as 0',
+        {
+          data: {
+            responseId: responseObject.id,
+            status: responseObject.status,
+          },
+        },
       );
     }
     let newResponse = responseObject.output_text?.trim() ?? '';
