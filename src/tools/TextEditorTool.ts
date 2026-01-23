@@ -31,6 +31,11 @@ const CHANNEL = 'TextEditorTool';
 logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
 
+/** Expand tabs to 4 spaces for consistent display */
+function expandTabs(content: string): string {
+  return content.replaceAll('\t', '    ');
+}
+
 /** Maps API type versions to their corresponding tool names */
 const API_TYPE_TO_NAME = {
   text_editor_20250429: 'str_replace_based_edit_tool',
@@ -42,7 +47,11 @@ export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().nullish(),
-  view_range: z.array(z.number()).length(2).nullish().describe('1-indexed. Use -1 for EOF.'),
+  view_range: z
+    .array(z.number())
+    .length(2)
+    .nullish()
+    .describe('1-indexed. Use -1 for EOF.'),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
   insert_line: z.number().nullish().describe('1-indexed.'),
@@ -402,9 +411,9 @@ export class TextEditorTool extends defineTool({
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
-      const expandedOldStr = oldStr.replaceAll('\t', '    ');
-      const expandedNewStr = newStr.replaceAll('\t', '    ');
+      const expandedFileContent = expandTabs(fileContent);
+      const expandedOldStr = expandTabs(oldStr);
+      const expandedNewStr = expandTabs(newStr);
 
       // Check for occurrences of oldStr
       const occurrences = expandedFileContent.split(expandedOldStr).length - 1;
@@ -532,8 +541,8 @@ export class TextEditorTool extends defineTool({
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
-      const expandedNewStr = newStr.replaceAll('\t', '    ');
+      const expandedFileContent = expandTabs(fileContent);
+      const expandedNewStr = expandTabs(newStr);
 
       // Split content into lines
       const fileLines = expandedFileContent.split(/\r?\n/);

@@ -176,13 +176,18 @@ export class ReadFileTool extends defineTool({
       startLine === endLine
         ? `line ${startLine}`
         : `lines ${startLine}-${endLine}`;
-    const base = isPartialRead
-      ? `Read ${rangeLabel} of ${path}`
-      : `Read ${path}`;
 
-    return rangeEndExceeded
-      ? `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`
-      : base;
+    let base: string;
+    if (isPartialRead) {
+      base = `Read ${rangeLabel} of ${path}`;
+    } else {
+      base = `Read ${path}`;
+    }
+
+    if (rangeEndExceeded) {
+      return `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
+    }
+    return base;
   }
 
   private getAttachmentConfig(
