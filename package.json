@@ -1662,7 +1662,7 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.7.0",
+    "@stylistic/eslint-plugin": "^5.7.1",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
     "@types/fs-extra": "^11.0.4",
