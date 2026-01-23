@@ -15,27 +15,50 @@ const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 type OutputMode = (typeof OUTPUT_MODES)[number];
 
 const GrepInputSchema = z.strictObject({
-  pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().nullish(),
-  glob: z.string().nullish(),
+  pattern: z
+    .string()
+    .min(1, 'pattern is required')
+    .describe('Regex pattern to search for. Use literal: true for exact match.'),
+  path: z
+    .string()
+    .nullish()
+    .describe('Directory to search. Defaults to workspace root.'),
+  glob: z
+    .string()
+    .nullish()
+    .describe('Filter files by glob pattern, e.g., "*.tex" or "**/*.ts".'),
   output_mode: z
     .enum(OUTPUT_MODES)
     .nullish()
-    .transform((v) => v ?? 'content'),
-  '-B': z.int().min(0).nullish(),
-  '-A': z.int().min(0).nullish(),
-  '-C': z.int().min(0).nullish(),
-  '-n': z.boolean().nullish(),
-  '-i': z.boolean().nullish(),
-  type: z.string().nullish(),
+    .transform((v) => v ?? 'content')
+    .describe('content: matching lines, files_with_matches: file paths only, count: match counts.'),
+  '-B': z.int().min(0).nullish().describe('Lines of context before match.'),
+  '-A': z.int().min(0).nullish().describe('Lines of context after match.'),
+  '-C': z.int().min(0).nullish().describe('Lines of context before and after match.'),
+  '-n': z.boolean().nullish().describe('Show line numbers in output.'),
+  '-i': z.boolean().nullish().describe('Case-insensitive search.'),
+  type: z
+    .string()
+    .nullish()
+    .describe('File type filter, e.g., "ts", "py", "tex".'),
   offset: z
     .int()
     .min(0)
     .nullish()
-    .describe('Skip first N results before applying head_limit'),
-  head_limit: z.int().min(1).nullish(),
-  multiline: z.boolean().nullish(),
-  literal: z.boolean().nullish(),
+    .describe('Skip first N results before applying head_limit.'),
+  head_limit: z
+    .int()
+    .min(1)
+    .nullish()
+    .describe('Maximum number of results to return.'),
+  multiline: z
+    .boolean()
+    .nullish()
+    .describe('Allow patterns to match across line boundaries.'),
+  literal: z
+    .boolean()
+    .nullish()
+    .describe('Match exact string instead of regex pattern.'),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;

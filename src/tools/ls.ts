@@ -10,6 +10,7 @@ import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
   formatToolOutput,
+  pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { toPosixPath } from '@utils/core';
@@ -19,8 +20,11 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const LsInputSchema = z.strictObject({
-  path: z.string(),
-  ignore: z.array(z.string()).prefault([]),
+  path: z.string().describe('File or directory path to list.'),
+  ignore: z
+    .array(z.string())
+    .prefault([])
+    .describe('Glob patterns to exclude from listing.'),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
@@ -132,7 +136,7 @@ export class LsTool extends defineTool({
     const count = formatted.length;
 
     return {
-      summary: `Listed ${count} entr${count === 1 ? 'y' : 'ies'} in ${display}`,
+      summary: `Listed ${count} ${pluralize(count, 'entry', 'entries')} in ${display}`,
       output: formatToolOutput(`Listing for ${display}`, formatted),
     };
   }
