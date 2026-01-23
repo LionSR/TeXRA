@@ -28,6 +28,11 @@ const GrepInputSchema = z.strictObject({
   '-n': z.boolean().nullish(),
   '-i': z.boolean().nullish(),
   type: z.string().nullish(),
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe('Skip first N results before applying head_limit'),
   head_limit: z.int().min(1).nullish(),
   multiline: z.boolean().nullish(),
   literal: z.boolean().nullish(),
@@ -73,10 +78,16 @@ export function buildArguments(
   return args;
 }
 
-function applyHeadLimit(output: string | null, headLimit?: number): string {
+function applyPagination(
+  output: string | null,
+  offset?: number,
+  headLimit?: number,
+): string {
   if (!output) return '';
-  if (!headLimit || headLimit <= 0) return output;
-  return output.split(/\r?\n/).slice(0, headLimit).join('\n');
+  const lines = output.split(/\r?\n/);
+  const start = offset && offset > 0 ? offset : 0;
+  const end = headLimit && headLimit > 0 ? start + headLimit : undefined;
+  return lines.slice(start, end).join('\n');
 }
 
 export class GrepTool extends defineTool({
@@ -116,8 +127,9 @@ export class GrepTool extends defineTool({
       );
     }
 
-    const limitedOutput = applyHeadLimit(
+    const limitedOutput = applyPagination(
       result.stdout,
+      input.offset ?? undefined,
       input.head_limit ?? undefined,
     );
     const outputText =
