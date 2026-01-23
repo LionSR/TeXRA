@@ -206,7 +206,6 @@ export class ProgressViewState {
     this.agentCategoryFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
-    this.approvalBypassActive = false;
     this.activeAgentCategory = 'workflow';
     this.pendingInstructions = new Map();
 
@@ -687,6 +686,7 @@ export class ProgressViewState {
   clearAllFollowUpText() {
     this.streamFollowUpText.clear();
   }
+
 }
 
 export const progressViewState = new ProgressViewState();

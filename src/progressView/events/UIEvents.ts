@@ -32,7 +32,10 @@ export interface ApprovalCallbacks {
     payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
   ) => void;
   resolveToolEditApprovalPrompt: (requestId: string) => void;
-  updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
+  updateToolEditApprovalBypassState: (
+    streamId: string,
+    bypassActive: boolean,
+  ) => void;
 }
 
 /** Callbacks for agent proposal handling (workflow or tool-use). */
@@ -107,7 +110,8 @@ export function registerUIEvents(
   registerEvent(
     bus,
     'updateToolEditApprovalBypassState',
-    (p) => callbacks.updateToolEditApprovalBypassState(p.bypassActive),
+    (p) =>
+      callbacks.updateToolEditApprovalBypassState(p.streamId, p.bypassActive),
     'failed to update approval bypass state',
     signal,
   );
