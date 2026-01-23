@@ -297,8 +297,13 @@ export abstract class RetryableInvocationNode<
     // to ensure each path logs exactly once at the appropriate point
     const formatted = formatProviderHttpError(error);
 
-    // If not retryable, don't show UI - go straight to execFallback
-    if (!formatted.retryable) {
+    // Relay 401 errors are special: marked non-retryable for auto-retry
+    // (to skip wasted attempts), but should show manual retry UI so user
+    // can trigger token refresh
+    const isRelay401 = formatted.statusCode === 401 && formatted.isRelayError;
+
+    // If not retryable AND not a relay 401, don't show UI - go straight to execFallback
+    if (!formatted.retryable && !isRelay401) {
       return { shouldRetry: false, userCancelled: false };
     }
 
@@ -319,10 +324,7 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       // Relay 401 errors need token refresh before retry
-      const needsTokenRefresh =
-        formatted.statusCode === 401 && formatted.isRelayError;
-
-      if (needsTokenRefresh) {
+      if (isRelay401) {
         logger.debug('Refreshing token before retry due to relay auth error');
         const authProvider = SupabaseAuthProvider.getInstance();
         const newToken = authProvider
