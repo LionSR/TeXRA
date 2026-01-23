@@ -123,13 +123,13 @@ export class ExtractBibliographyTool extends defineTool({
     const instructions = [
       missingBibliographyFiles.length > 0 &&
         `Missing bibliography files: ${missingBibliographyFiles
-          .map((f) => resolveAndFormat(f).display)
+          .map((file) => resolveAndFormat(file).display)
           .join(', ')}.`,
       missingKeys.length > 0 &&
-        `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
+        `Missing citation keys: ${missingKeys.map((key) => `\`${key}\``).join(', ')}.`,
       entries.size > DEFAULT_MAX_ENTRIES &&
         `Limited output to ${DEFAULT_MAX_ENTRIES} entries.`,
-    ].filter((x): x is string => Boolean(x));
+    ].filter((msg): msg is string => Boolean(msg));
 
     return {
       summary,
