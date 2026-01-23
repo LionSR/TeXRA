@@ -30,13 +30,16 @@ export class BashTool extends defineTool({
           ? `${input.command.slice(0, 57)}…`
           : input.command;
       return {
-        summary: `Ran: ${commandPreview}`,
+        summary: `Executed: ${commandPreview} (exit 0)`,
         output: result.stdout || '',
       };
     }
     // Many CLI tools (including latexmk) write errors to stdout, not stderr
     const outputs = [result.stderr, result.stdout].filter(Boolean);
     const errorOutput = outputs.join('\n') || 'No error output available';
-    throw new ToolError(`Bash command failed: ${errorOutput}`);
+    throw new ToolError(
+      `Command failed: ${errorOutput}\n\n` +
+        `Try: Check command syntax, verify file paths exist, ensure required tools are installed.`,
+    );
   }
 }
