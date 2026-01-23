@@ -78,9 +78,6 @@ export async function updateConfig<T>(
   await vscode.workspace.getConfiguration().update(key, value, target);
 }
 
-// Backwards-compatible alias
-export const setConfig = updateConfig;
-
 /**
  * Register a listener for configuration changes on the given keys.
  *

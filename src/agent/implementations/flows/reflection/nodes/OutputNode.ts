@@ -30,8 +30,6 @@ interface OutputPrepInput {
   ensureXmlStructure: boolean;
 }
 
-type OutputExecResult = RoundOutput;
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -82,7 +80,7 @@ export class OutputNode<C = unknown> extends Node<
     };
   }
 
-  async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
+  async exec(prepRes: OutputPrepInput): Promise<RoundOutput> {
     const { outputHandler, setting, logger } = this.services;
     const {
       currentRound,
@@ -147,7 +145,7 @@ export class OutputNode<C = unknown> extends Node<
   async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
-  ): Promise<OutputExecResult> {
+  ): Promise<RoundOutput> {
     this.services.logger.warn(`Output processing failed: ${error.message}`);
     return {
       round: prepRes.currentRound,
@@ -165,7 +163,7 @@ export class OutputNode<C = unknown> extends Node<
   async post(
     shared: ReflectionFlowShared,
     _prepRes: OutputPrepInput,
-    execRes: OutputExecResult,
+    execRes: RoundOutput,
   ): Promise<string | undefined> {
     // Store round output
     shared.roundOutputs[shared.currentRound] = execRes;

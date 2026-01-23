@@ -7,7 +7,6 @@ export {
 } from './fsEntryType';
 export {
   ExtensionCategory,
-  FileType,
   getIncludedExtensions,
   isLatexFile,
   isTexFile,

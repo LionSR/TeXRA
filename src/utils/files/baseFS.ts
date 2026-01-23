@@ -5,8 +5,6 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-type PathInput = string;
-
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
   return typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
@@ -20,7 +18,7 @@ function toBuffer(content: string | Uint8Array): Uint8Array {
  */
 export abstract class BaseFS {
   /** Resolve caller supplied path to an absolute filesystem path. */
-  protected static resolvePath(target: PathInput): string {
+  protected static resolvePath(target: string): string {
     return target;
   }
 
@@ -32,13 +30,13 @@ export abstract class BaseFS {
     // Default implementation performs no validation.
   }
 
-  private static preparePath(this: typeof BaseFS, target: PathInput): string {
+  private static preparePath(this: typeof BaseFS, target: string): string {
     const resolved = this.resolvePath(target);
     this.validateResolvedPath(resolved, target);
     return resolved;
   }
 
-  protected static toUri(this: typeof BaseFS, target: PathInput): vscode.Uri {
+  protected static toUri(this: typeof BaseFS, target: string): vscode.Uri {
     return vscode.Uri.file(this.preparePath(target));
   }
 
@@ -46,7 +44,7 @@ export abstract class BaseFS {
 
   public static async exists(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<boolean> {
     try {
       await vscode.workspace.fs.stat(this.toUri(target));
@@ -58,7 +56,7 @@ export abstract class BaseFS {
 
   public static async read(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<string> {
     const content = await vscode.workspace.fs.readFile(this.toUri(target));
     return Buffer.from(content).toString('utf-8');
@@ -66,7 +64,7 @@ export abstract class BaseFS {
 
   public static async readBytes(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<Buffer> {
     const content = await vscode.workspace.fs.readFile(this.toUri(target));
     return Buffer.from(content);
@@ -74,7 +72,7 @@ export abstract class BaseFS {
 
   public static async write(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     content: string | Uint8Array,
   ): Promise<void> {
     await vscode.workspace.fs.writeFile(this.toUri(target), toBuffer(content));
@@ -82,7 +80,7 @@ export abstract class BaseFS {
 
   public static async appendFile(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     content: string | Uint8Array,
   ): Promise<void> {
     await fs.promises.appendFile(this.preparePath(target), toBuffer(content));
@@ -90,7 +88,7 @@ export abstract class BaseFS {
 
   public static async delete(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
     await vscode.workspace.fs.delete(this.toUri(target), options);
@@ -98,14 +96,14 @@ export abstract class BaseFS {
 
   public static async createDir(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<void> {
     await vscode.workspace.fs.createDirectory(this.toUri(target));
   }
 
   public static async ensureDir(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<void> {
     try {
       await this.createDir(target);
@@ -119,22 +117,22 @@ export abstract class BaseFS {
 
   public static async readDir(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<[string, vscode.FileType][]> {
     return vscode.workspace.fs.readDirectory(this.toUri(target));
   }
 
   public static async stat(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<vscode.FileStat> {
     return vscode.workspace.fs.stat(this.toUri(target));
   }
 
   public static async copy(
     this: typeof BaseFS,
-    source: PathInput,
-    destination: PathInput,
+    source: string,
+    destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
     await vscode.workspace.fs.copy(
@@ -146,8 +144,8 @@ export abstract class BaseFS {
 
   public static async rename(
     this: typeof BaseFS,
-    source: PathInput,
-    destination: PathInput,
+    source: string,
+    destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
     await vscode.workspace.fs.rename(
@@ -159,7 +157,7 @@ export abstract class BaseFS {
 
   public static async isDir(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
@@ -171,7 +169,7 @@ export abstract class BaseFS {
 
   public static async isFile(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
@@ -183,7 +181,7 @@ export abstract class BaseFS {
 
   public static async isSymbolicLink(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
@@ -198,21 +196,21 @@ export abstract class BaseFS {
 
   // ===== Sync Methods =====
 
-  public static existsSync(this: typeof BaseFS, target: PathInput): boolean {
+  public static existsSync(this: typeof BaseFS, target: string): boolean {
     return fs.existsSync(this.preparePath(target));
   }
 
-  public static readSync(this: typeof BaseFS, target: PathInput): string {
+  public static readSync(this: typeof BaseFS, target: string): string {
     return fs.readFileSync(this.preparePath(target), 'utf-8');
   }
 
-  public static readBytesSync(this: typeof BaseFS, target: PathInput): Buffer {
+  public static readBytesSync(this: typeof BaseFS, target: string): Buffer {
     return fs.readFileSync(this.preparePath(target));
   }
 
   public static writeSync(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     content: string | Buffer,
   ): void {
     if (typeof content === 'string') {
@@ -222,29 +220,29 @@ export abstract class BaseFS {
     fs.writeFileSync(this.preparePath(target), content);
   }
 
-  public static deleteSync(this: typeof BaseFS, target: PathInput): void {
+  public static deleteSync(this: typeof BaseFS, target: string): void {
     fs.unlinkSync(this.preparePath(target));
   }
 
   public static mkdirSync(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     options?: { recursive?: boolean },
   ): void {
     fs.mkdirSync(this.preparePath(target), options);
   }
 
-  public static ensureDirSync(this: typeof BaseFS, target: PathInput): void {
+  public static ensureDirSync(this: typeof BaseFS, target: string): void {
     if (!this.existsSync(target)) {
       this.mkdirSync(target, { recursive: true });
     }
   }
 
-  public static readDirSync(this: typeof BaseFS, target: PathInput): string[] {
+  public static readDirSync(this: typeof BaseFS, target: string): string[] {
     return fs.readdirSync(this.preparePath(target));
   }
 
-  public static statSync(this: typeof BaseFS, target: PathInput): fs.Stats {
+  public static statSync(this: typeof BaseFS, target: string): fs.Stats {
     return fs.statSync(this.preparePath(target));
   }
 
@@ -252,7 +250,7 @@ export abstract class BaseFS {
 
   public static createReadStream(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     options?:
       | BufferEncoding
       | (fs.ObjectEncodingOptions & {
@@ -271,7 +269,7 @@ export abstract class BaseFS {
 
   public static createWriteStream(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     options?:
       | BufferEncoding
       | (fs.ObjectEncodingOptions & {
@@ -288,7 +286,7 @@ export abstract class BaseFS {
 
   public static unlink(
     this: typeof BaseFS,
-    target: PathInput,
+    target: string,
     callback: (err: NodeJS.ErrnoException | null) => void,
   ): void {
     fs.unlink(this.preparePath(target), callback);
@@ -296,7 +294,7 @@ export abstract class BaseFS {
 
   // ===== Utility helpers =====
 
-  public static fullPath(this: typeof BaseFS, target: PathInput): string {
+  public static fullPath(this: typeof BaseFS, target: string): string {
     return this.preparePath(target);
   }
 }

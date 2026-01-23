@@ -327,7 +327,7 @@ export class OutputHandler implements IOutputHandler {
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
-            stream: this.channel,
+            streamId: this.channel,
             storageKey,
             filesByRound: { [currRound]: [] },
           });
@@ -348,16 +348,13 @@ export class OutputHandler implements IOutputHandler {
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
         if (missing.length > 0) {
-          const xmlLocation = outputLocation;
-          const xmlExists = await flexibleFS.exists(xmlLocation);
+          const xmlExists = await flexibleFS.exists(outputLocation);
 
-          const missingOutputsData = {
+          this.logger.missingOutputs({
             missing,
-            xmlFile: xmlExists ? xmlLocation.absolutePath : null,
+            xmlFile: xmlExists ? outputLocation.absolutePath : null,
             documentTag: this.agentSetting.documentTag,
-          };
-
-          this.logger.missingOutputs(missingOutputsData);
+          });
           await showInstructionWithSuppress(
             'missingOutputsInfo',
             'Missing output files detected',
@@ -372,7 +369,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('updateMissingOutputs', {
-          stream: this.channel,
+          streamId: this.channel,
           storageKey,
           filesByRound: { [currRound]: missing },
         });
@@ -419,7 +416,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('addOutputFiles', {
-          stream: this.channel,
+          streamId: this.channel,
           storageKey,
           filesByRound: { [currRound]: fileInfos },
         });

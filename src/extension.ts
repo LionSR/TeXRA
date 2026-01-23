@@ -243,11 +243,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   disposeStatusListener = bus.on(
     'updateStreamStatus',
-    ({ stream, status }: { stream: string; status: StreamStatus }) => {
+    ({ streamId, status }: { streamId: string; status: StreamStatus }) => {
       if (status === STREAM_STATUS.RUNNING) {
-        runningStreams.add(stream);
+        runningStreams.add(streamId);
       } else if (isTerminalStatus(status)) {
-        runningStreams.delete(stream);
+        runningStreams.delete(streamId);
       }
       updateStatusBarText();
     },
