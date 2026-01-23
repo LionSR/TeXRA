@@ -19,6 +19,8 @@ export interface WolframScriptResult {
   success: boolean;
   output: string | null;
   error: string | null;
+  timedOut: boolean;
+  exitCode: number | null;
 }
 
 /**
@@ -40,6 +42,8 @@ async function runWolfram(
       success: false,
       output: null,
       error: WOLFRAM_NOT_INSTALLED_ERROR,
+      timedOut: false,
+      exitCode: null,
     };
   }
 
@@ -55,6 +59,8 @@ async function runWolfram(
       success: result.success,
       output: result.stdout,
       error: result.stderr,
+      timedOut: result.timedOut ?? false,
+      exitCode: result.exitCode ?? null,
     };
   } catch (err) {
     const errorMessage = toErrorMessage(err);
@@ -69,6 +75,8 @@ async function runWolfram(
       success: false,
       output: null,
       error: errorMessage,
+      timedOut: false,
+      exitCode: null,
     };
   }
 }
