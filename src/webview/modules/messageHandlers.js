@@ -41,13 +41,15 @@ import {
   waitForElement,
   isSelectLikeElement,
   getSelectOptionElements,
-  getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
-  AGENT_DECORATORS,
-  getModelProviderDecorator,
-} from '@common/iconConstants.js';
+  decorateAgentOption,
+  decorateAgentOptions,
+  decorateModelOptions,
+  updateAgentSelectTooltip,
+  setOptionsHtml,
+} from '@common/dropdownUtils.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -352,12 +354,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             (opt) => opt.value === targetValue,
           );
           if (option && !option.dataset.decorated) {
-            this._decorateAgentOption(option);
+            decorateAgentOption(option);
             option.dataset.decorated = 'true';
           }
 
           // Update the select's tooltip
-          this._updateAgentSelectTooltip(selectElement);
+          updateAgentSelectTooltip(selectElement);
         } finally {
           mainViewState.unblockSave();
         }
@@ -385,186 +387,30 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _applyModelOptions(selectElement, optionsHtml) {
-    if (!isSelectLikeElement(selectElement)) {
-      return;
-    }
+    if (!isSelectLikeElement(selectElement)) return;
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
-    const previous = selectElement.value;
 
-    // Two-phase selection restoration:
-    // 1. _markOptionAsSelected: Add 'selected' attribute to HTML BEFORE innerHTML assignment.
-    //    This prevents vscode-single-select's slotchange from defaulting to first option.
-    // 2. _restoreModelSelection: Handles fallback cases after innerHTML is set:
-    //    - Value not found in options (preserves user preference in state)
-    //    - Sets selectElement.value for programmatic access
-    //    Both are needed because slotchange fires asynchronously after innerHTML.
-    const htmlWithSelected = this._markOptionAsSelected(optionsHtml, previous);
-    selectElement.innerHTML = htmlWithSelected;
-    this._restoreModelSelection(selectElement, previous);
-
-    getSelectOptionElements(selectElement).forEach((opt) => {
-      this._decorateModelOption(opt);
-    });
+    // setOptionsHtml handles vscode-single-select's slotchange workaround:
+    // 1. Captures previous value
+    // 2. Marks option as selected in HTML before innerHTML assignment
+    // 3. Sets innerHTML
+    // 4. Calls restore function with custom fallback logic
+    setOptionsHtml(selectElement, optionsHtml, this._restoreModelSelection.bind(this));
+    decorateModelOptions(selectElement);
     updateModelApiKeyBanner(selectElement);
   }
 
-  _decorateModelOption(opt) {
-    const { provider, context, cost, requiresKey } = opt.dataset;
-    const modelName =
-      opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
-
-    // Get provider decorator for the icon
-    const decorator = getModelProviderDecorator(provider);
-
-    // Build tooltip with provider info
-    const hints = [];
-    hints.push(`${decorator.label}`);
-    if (context) hints.push(`Context: ${context}`);
-    if (cost) hints.push(`Cost: ${cost}`);
-
-    // Set content with provider icon, adding red ✗ via DOM if key is missing
-    opt.textContent = `${decorator.unicode} ${modelName}`;
-    if (requiresKey === 'true') {
-      const span = document.createElement('span');
-      span.className = 'api-key-missing';
-      span.textContent = ' ✗';
-      opt.appendChild(span);
-    }
-
-    if (hints.length > 0) {
-      opt.title = hints.join(' | ');
-      opt.setAttribute('aria-label', `${modelName} (${hints.join(', ')})`);
-    }
-  }
-
   _applyAgentOptions(selectElement, optionsHtml) {
-    if (!isSelectLikeElement(selectElement)) {
-      return;
-    }
+    if (!isSelectLikeElement(selectElement)) return;
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
-    const previous = selectElement.value;
 
-    // Two-phase selection restoration (see _applyModelOptions for details):
-    // 1. _markOptionAsSelected: Prevents slotchange from defaulting to first option
-    // 2. _restoreAgentSelection: Handles fallbacks (value migration, placeholder creation)
-    const htmlWithSelected = this._markOptionAsSelected(
-      optionsHtml ?? '',
-      previous,
-    );
-    selectElement.innerHTML = htmlWithSelected;
-    this._restoreAgentSelection(selectElement, previous);
-
-    getSelectOptionElements(selectElement).forEach((opt) => {
-      this._decorateAgentOption(opt);
-    });
-    // Update the select's tooltip to show selected agent info
-    this._updateAgentSelectTooltip(selectElement);
-  }
-
-  /**
-   * Update the agent select element's tooltip to show the selected agent's details.
-   * This provides immediate feedback about the currently selected agent.
-   * @param {HTMLElement} selectElement - The agent select element
-   */
-  _updateAgentSelectTooltip(selectElement) {
-    if (!isSelectLikeElement(selectElement)) {
-      return;
-    }
-
-    const selectedOption = getSelectedOptionElement(selectElement);
-    if (selectedOption && selectedOption.title) {
-      // Use the selected option's tooltip as the select's tooltip
-      selectElement.title = selectedOption.title;
-    } else if (selectedOption) {
-      // Fallback: show the agent name
-      const label =
-        selectedOption.dataset?.label || selectedOption.textContent || '';
-      selectElement.title = label;
-    } else {
-      selectElement.title = '';
-    }
-  }
-
-  _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse, isRemote, isCustom, description } =
-      this._readAgentOptionMetadata(opt);
-
-    const hints = [];
-    let displayLabel = label;
-
-    // Add cloud icon for remote agents (visible indicator, at end)
-    if (isRemote) {
-      hints.push(AGENT_DECORATORS.properties.remote.hint);
-    }
-
-    // Add custom hint to tooltip (no unicode icon - too confusing)
-    if (isCustom) {
-      const { hint } = AGENT_DECORATORS.properties.custom;
-      hints.push(hint);
-    }
-
-    // Add description (primary info about the agent)
-    if (description) {
-      hints.push(description);
-    }
-
-    // Add multiple outputs indicator (visible indicator, at end)
-    if (isMultiple) {
-      const { unicode, hint } = AGENT_DECORATORS.properties.multipleOutputs;
-      displayLabel = `${displayLabel} ${unicode}`;
-      hints.push(hint);
-      opt.style.opacity = '0.9';
-    } else {
-      opt.style.opacity = '';
-    }
-
-    // Add cloud icon for remote agents (visible indicator, at end after multiple)
-    if (isRemote) {
-      const { unicode } = AGENT_DECORATORS.properties.remote;
-      displayLabel = `${displayLabel} ${unicode}`;
-    }
-
-    // Add tool-use hint
-    if (isToolUse) {
-      hints.push('Can execute tools and code');
-    }
-
-    // Set text content (vscode-option doesn't support HTML)
-    opt.textContent = displayLabel;
-
-    if (hints.length > 0) {
-      opt.title = hints.join('\n');
-      opt.setAttribute('aria-label', `${label} (${hints.join(', ')})`);
-      opt.setAttribute('aria-description', hints.join(' '));
-    } else {
-      opt.removeAttribute('title');
-      opt.setAttribute('aria-label', label);
-      opt.removeAttribute('aria-description');
-    }
-  }
-
-  _readAgentOptionMetadata(opt) {
-    // Extract label with fallback chain: dataset.label > textContent > value attribute
-    const label =
-      opt.dataset.label ||
-      opt.textContent?.trim() ||
-      opt.getAttribute('value') ||
-      '';
-    if (label && !opt.dataset.label) {
-      opt.dataset.label = label;
-    }
-
-    const { dataset } = opt;
-    return {
-      label,
-      isMultiple: dataset.multiple === 'true',
-      isToolUse: dataset.toolUse === 'true',
-      isRemote: dataset.remote === 'true',
-      isCustom: dataset.custom === 'true',
-      description: dataset.description ?? '',
-    };
+    // setOptionsHtml handles vscode-single-select's slotchange workaround
+    // (see _applyModelOptions). Uses custom restore for value migration and placeholder creation.
+    setOptionsHtml(selectElement, optionsHtml ?? '', this._restoreAgentSelection.bind(this));
+    decorateAgentOptions(selectElement);
+    updateAgentSelectTooltip(selectElement);
   }
 
   /**
@@ -824,52 +670,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // the model becomes available again (e.g., API key re-added).
   }
 
-  /**
-   * Mark an option as selected in HTML string by adding the 'selected' attribute.
-   *
-   * This is necessary to work around a timing issue in vscode-single-select:
-   * When innerHTML is replaced, slotchange fires asynchronously. The component's
-   * _setStateFromSlottedElements() reads el.selected from each option, and if none
-   * are selected, it defaults to index 0. By the time we set selectElement.value,
-   * the slotchange handler has already run and reset the selection.
-   *
-   * By adding 'selected' attribute to the correct option in HTML before setting
-   * innerHTML, slotchange will read selected=true and preserve the selection.
-   *
-   * Uses DOMParser for safe, encoding-aware HTML manipulation instead of regex.
-   *
-   * @param {string} html - The options HTML string
-   * @param {string} value - The value to mark as selected
-   * @returns {string} The HTML with 'selected' attribute added to matching option
-   */
-  _markOptionAsSelected(html, value) {
-    if (!value || !html) {
-      return html || '';
-    }
-
-    // Use DOMParser for safe, encoding-aware manipulation
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
-    const options = doc.querySelectorAll('vscode-option');
-
-    let found = false;
-    options.forEach((opt) => {
-      // getAttribute returns decoded value, so we compare directly with value
-      if (opt.getAttribute('value') === value) {
-        opt.setAttribute('selected', '');
-        found = true;
-      }
-    });
-
-    if (!found) {
-      // Value not found in options - return original HTML
-      return html;
-    }
-
-    // Return the modified HTML (with null-safety fallback)
-    return doc.querySelector('div')?.innerHTML ?? html;
-  }
-
   _getActiveAgentSelection() {
     const sessionType = this._getSessionTypeValue();
     const select = this._getAgentElementByType(sessionType);
@@ -903,11 +703,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     AGENT_SELECT_LIST.forEach((selectId) => {
       const selectElement = document.getElementById(selectId);
       if (selectElement) {
-        const handler = () => this._updateAgentSelectTooltip(selectElement);
+        const handler = () => updateAgentSelectTooltip(selectElement);
         selectElement.addEventListener('change', handler);
         this._tooltipListeners.push({ element: selectElement, handler });
         // Set initial tooltip
-        this._updateAgentSelectTooltip(selectElement);
+        updateAgentSelectTooltip(selectElement);
       }
     });
   }
