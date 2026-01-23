@@ -1,5 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
+import type { ZodIssue } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
@@ -85,30 +86,31 @@ function parseToolInput(
   }
 }
 
+/** Check if an error has Zod-like issues array (duck typing). */
+function hasZodIssues(error: unknown): error is { issues: ZodIssue[] } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'issues' in error &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  // Check if error has Zod-like issues array (duck typing)
-  const hasZodIssues =
-    typeof error === 'object' &&
-    error !== null &&
-    'issues' in error &&
-    Array.isArray((error as { issues?: unknown }).issues);
-
-  if (!hasZodIssues) {
+  if (!hasZodIssues(error)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
-  const issues = (error as { issues: ValidationErrorDiagnostics['issues'] })
-    .issues;
   return {
     message: `${toolName}: Invalid parameters provided`,
     diagnostics: {
       type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-      issues,
-      formatted: formatZodIssuesForDiagnostics(issues),
+      issues: error.issues,
+      formatted: formatZodIssuesForDiagnostics(error.issues),
     },
   };
 }
