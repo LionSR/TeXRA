@@ -446,8 +446,8 @@ export class ProgressViewProvider
   /**
    * Set active stream (used by message handler)
    */
-  public setActiveStream(stream: string): void {
-    this.state.activeStream = stream;
+  public setActiveStream(streamId: StreamTabId): void {
+    this.state.activeStream = streamId;
     this.updateWebview();
   }
 

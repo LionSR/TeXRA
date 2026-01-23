@@ -17,6 +17,7 @@ import {
   getBaseName,
   updateAgentDescription,
 } from '@agent/index/agentRegistry';
+import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -28,7 +29,6 @@ import {
   EdgeFunctionResponseSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
-  type RemoteAgentLoadOptions,
 } from './types';
 
 import { resolveToolDefinitions } from '@tools/registry';
@@ -153,7 +153,7 @@ export class RemoteAgentLoader {
    */
   static async loadRemoteAgent(
     agentName: string,
-    options?: RemoteAgentLoadOptions,
+    options?: AgentLoadOptions,
   ): Promise<RemoteAgentConfig> {
     // Check if user is authenticated
     const isAuth = await SupabaseClient.isAuthenticated();
