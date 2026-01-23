@@ -488,7 +488,7 @@ export class ProgressEventHandler {
    * Get a copy of all stream statuses.
    * Delegates to StreamStatusService as the single source of truth.
    */
-  getAllStreamStatuses(): Map<string, StreamStatus> {
+  getAllStreamStatuses(): Map<StreamTabId, StreamStatus> {
     return StreamStatusService.getAll();
   }
 
@@ -576,24 +576,26 @@ export class ProgressEventHandler {
    * Reset running tasks to ERROR status (used during webview reload)
    * Returns the list of affected streams for further processing
    */
-  resetRunningTasksToError(waitingStreams?: Set<string>): string[] {
-    const affectedStreams: string[] = [];
-    const waitingSet = waitingStreams ?? new Set<string>();
+  resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
+    const affectedStreams: StreamTabId[] = [];
+    const waitingSet = waitingStreams ?? new Set<StreamTabId>();
 
-    for (const [stream, status] of StreamStatusService.entries()) {
+    for (const [streamId, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
-        if (waitingSet.has(stream)) {
-          StreamStatusService.set(stream, STREAM_STATUS.WAITING, {
+        if (waitingSet.has(streamId)) {
+          StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
             emit: false,
           });
           this.logger.debug(
-            `Stream ${stream} restored to WAITING after reload`,
+            `Stream ${streamId} restored to WAITING after reload`,
           );
         } else {
-          StreamStatusService.set(stream, STREAM_STATUS.ERROR, { emit: false });
-          affectedStreams.push(stream);
+          StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
+            emit: false,
+          });
+          affectedStreams.push(streamId);
           this.logger.debug(
-            `Stream ${stream} set to ERROR due to webview reload`,
+            `Stream ${streamId} set to ERROR due to webview reload`,
           );
         }
       }
