@@ -539,12 +539,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleToggleToolEditApprovalBypass(): Promise<void> {
-    const isNowEnabled = toggleToolEditApprovalSessionBypass();
-    const message = isNowEnabled
-      ? 'YOLO mode enabled: Tool edits will be auto-approved for this session.'
-      : 'YOLO mode disabled: Tool edits will prompt for approval.';
-    await vscode.window.showInformationMessage(message);
+  private async handleToggleToolEditApprovalBypass(
+    message: unknown,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      StreamMessageSchema,
+      message,
+      'toggleToolEditApprovalBypass',
+      async ({ stream }) => {
+        const streamId = stream as StreamTabId;
+        const isNowEnabled = toggleToolEditApprovalSessionBypass(streamId);
+        const infoMessage = isNowEnabled
+          ? 'YOLO mode enabled: Tool edits will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool edits will prompt for approval.';
+        await vscode.window.showInformationMessage(infoMessage);
+      },
+    );
   }
 
   private async handleAgentProposalAction(message: unknown): Promise<void> {

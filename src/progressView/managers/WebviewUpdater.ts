@@ -202,9 +202,10 @@ export class WebviewUpdater {
     });
   }
 
-  updateToolEditApprovalState(bypassActive: boolean): void {
+  updateToolEditApprovalState(stream: StreamTabId, bypassActive: boolean): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      stream,
       bypassActive,
     });
   }

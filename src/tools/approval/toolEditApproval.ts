@@ -85,16 +85,19 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-let approvalsBypassedForSession = false;
+/** Per-stream YOLO mode state tracking */
+const approvalsBypassedByStream = new Map<string, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
-function notifyProgressViewApprovalBypassState(): void {
+function notifyProgressViewApprovalBypassState(streamId: StreamTabId): void {
   if (!initialized) {
     return;
   }
+  const bypassActive = approvalsBypassedByStream.get(streamId) ?? false;
   bus.emit('updateToolEditApprovalBypassState', {
-    bypassActive: approvalsBypassedForSession,
+    streamId,
+    bypassActive,
   });
 }
 
@@ -130,15 +133,26 @@ async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
   await fs.unlink(uri.fsPath).catch(() => {});
 }
 
-export function setToolEditApprovalSessionBypass(enabled: boolean): void {
-  approvalsBypassedForSession = enabled;
-  notifyProgressViewApprovalBypassState();
+export function setToolEditApprovalSessionBypass(
+  streamId: StreamTabId,
+  enabled: boolean,
+): void {
+  approvalsBypassedByStream.set(streamId, enabled);
+  notifyProgressViewApprovalBypassState(streamId);
 }
 
-export function toggleToolEditApprovalSessionBypass(): boolean {
-  const newState = !approvalsBypassedForSession;
-  setToolEditApprovalSessionBypass(newState);
+export function toggleToolEditApprovalSessionBypass(
+  streamId: StreamTabId,
+): boolean {
+  const currentState = approvalsBypassedByStream.get(streamId) ?? false;
+  const newState = !currentState;
+  setToolEditApprovalSessionBypass(streamId, newState);
   return newState;
+}
+
+/** Check if YOLO mode is enabled for a specific stream */
+export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
+  return approvalsBypassedByStream.get(streamId) ?? false;
 }
 
 export function initializeToolEditApproval(
@@ -506,7 +520,9 @@ async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
   const run = async () => {
-    if (approvalsBypassedForSession) {
+    // Check per-stream YOLO mode
+    const streamId = request.streamId;
+    if (streamId && isApprovalBypassedForStream(streamId)) {
       return { accepted: true };
     }
     return customHandler
@@ -536,7 +552,10 @@ export async function requestToolEditApproval(
       ? request
       : { ...request, streamId: context.streamId };
 
-  if (!approvalsEnabled || approvalsBypassedForSession) {
+  // Check global config and per-stream YOLO mode
+  const streamId = preparedRequest.streamId;
+  const isStreamBypassed = streamId && isApprovalBypassedForStream(streamId);
+  if (!approvalsEnabled || isStreamBypassed) {
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
