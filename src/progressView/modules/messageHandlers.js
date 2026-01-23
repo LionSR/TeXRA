@@ -619,7 +619,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         container.appendChild(frag);
       } else {
         // Fallback: append to main log if container was removed (race condition)
-        console.warn(`[messageHandlers] Group container removed during batch: ${groupId}`);
+        console.warn(
+          `[messageHandlers] Group container removed during batch: ${groupId}`,
+        );
         logContent.appendChild(frag);
       }
     }
@@ -1242,7 +1244,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Skip if nothing changed (use \0 separator to avoid collision with user content)
-    const key = [activeStream, streamStatus, category, fileCount, instructionPreview ?? ''].join('\0');
+    const key = [
+      activeStream,
+      streamStatus,
+      category,
+      fileCount,
+      instructionPreview ?? '',
+    ].join('\0');
     if (key === this._lastFollowupState) return;
     this._lastFollowupState = key;
 
