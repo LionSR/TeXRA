@@ -18,7 +18,7 @@ export class StreamTabsManager extends PersistentMapManager<
   StreamTabId,
   LogMessageData[]
 > {
-  private static readonly MAX_MESSAGE_HISTORY = 500;
+  private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
