@@ -17,7 +17,7 @@ export type WolframInput = z.infer<typeof WolframInputSchema>;
 
 export class WolframTool extends defineTool({
   name: 'wolfram',
-  description: `Execute Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Use conditional checks (If, Which) to verify properties and print computed values, not predetermined strings.`,
+  description: `Execute Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Write tests using VerificationTest or assertions to verify properties, printing computed values rather than predetermined strings.`,
   schema: WolframInputSchema,
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
