@@ -9,7 +9,7 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentPromptSchema,
-  parseAgentSetting,
+  AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import {
@@ -271,7 +271,7 @@ export class RemoteAgentLoader {
         }
 
         return {
-          settings: parseAgentSetting(settings),
+          settings: AgentSettingSchema.parse(settings),
           prompts: AgentPromptSchema.parse(validated.prompts),
         };
       } catch (error) {

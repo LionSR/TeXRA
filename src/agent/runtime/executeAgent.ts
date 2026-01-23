@@ -70,7 +70,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
