@@ -618,15 +618,16 @@ class ToolUseDispatchNode<C> extends BatchNode<
       options.logger.debug(
         `Skipping duplicate tool call: ${call.name} (same parameters already executed in this batch)`,
       );
+      const dedupeMessage = `This ${call.name} operation was just performed with identical parameters. See the result above.`;
       result = {
-        content: `This ${call.name} operation was just performed with identical parameters. See the result above.`,
+        output: dedupeMessage,
         isError: false,
       };
       return {
         call,
         result,
         parsedInput,
-        sanitizedOutput: { content: result.content },
+        sanitizedOutput: { output: dedupeMessage },
         editedFiles: [],
       };
     }
@@ -648,8 +649,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
           },
           () => tool.call(parsedInput),
         );
-        // Record successful execution for deduplication
-        this.executedInBatch.add(signature);
+        // Only deduplicate successful calls - failed calls can be re-attempted
+        if (!result.isError) {
+          this.executedInBatch.add(signature);
+        }
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(call.name, err);
         result = {
