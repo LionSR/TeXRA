@@ -239,13 +239,12 @@ export class RemoteAgentLoader {
         const responseData = EdgeFunctionResponseSchema.parse(
           await response.json(),
         );
-        const yamlContent = responseData.config;
 
         logger.debug(
           CHANNEL,
           `Parsing YAML for remote agent: ${candidateName}`,
         );
-        const parsed = yaml.parse(yamlContent);
+        const parsed = yaml.parse(responseData.config);
         const validated = AgentDefinitionSchema.parse(parsed);
 
         // Extract and process settings (remote agents are self-contained, no inheritance)
