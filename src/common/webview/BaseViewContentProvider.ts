@@ -177,6 +177,7 @@ export abstract class BaseViewContentProvider {
       { key: 'pathUtilsUri', path: 'modules/pathUtils.js' },
       { key: 'debounceUri', path: 'modules/debounce.js' },
       { key: 'clipboardUtilsUri', path: 'modules/clipboardUtils.js' },
+      { key: 'dropdownUtilsUri', path: 'modules/dropdownUtils.js' },
       { key: 'streamStatusUri', path: 'constants/streamStatus.js' },
       { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
       // Filename kept as agentTypes.js for import map compatibility in webviews
