@@ -22,8 +22,17 @@
 
 .yolo-toggle-button {
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .yolo-toggle-button.is-active {
-  color: var(--vscode-inputValidation-warningForeground, #dd8500);
+  color: var(--vscode-inputValidation-errorForeground, #f14c4c);
+  background-color: rgba(241, 76, 76, 0.15);
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(241, 76, 76, 0.4);
+}
+
+.yolo-toggle-button.is-active:hover {
+  background-color: rgba(241, 76, 76, 0.25);
+  box-shadow: 0 0 12px rgba(241, 76, 76, 0.6);
 }
