@@ -151,12 +151,8 @@ export class ProgressEventHandler {
     // Update stream tabs list (required to set activeStream in frontend)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
-    // Refresh stream content (logs, groups, metadata, status, todos)
-    // Note: refreshStreamSurface includes status update, so no separate setStreamStatus needed
-    const activeRunId = this.refreshStreamSurface(streamId, {
-      updateInstruction: false,
-    });
-    this.sendInstructionUpdate(streamId, activeRunId);
+    // Refresh stream content: status first (critical), then logs, then todos/instruction
+    this.refreshStreamSurface(streamId, { updateInstruction: true });
   }
 
   private handleUpdateStreamStatus = (
@@ -200,13 +196,13 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamId);
         }
 
-        // Update stream tabs when:
-        // 1. Filter changed (affects visible streams)
-        // 2. Active stream's task state changed (label needs inputFile, agent, etc.)
+        // Update stream tabs only when filter changed (affects visible streams).
+        // Label updates (from inputFile/agent) happen on next stream switch -
+        // no need to rebuild all tabs while user is focused on content.
         if (this.webviewUpdater.isAvailable()) {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
-          if (filterChanged || isActiveStream) {
+          if (filterChanged) {
             this.webviewUpdater.updateAll(
               this.state,
               StreamStatusService.getAll(),
@@ -335,6 +331,11 @@ export class ProgressEventHandler {
    * Frontend detects stream switches using its lastRenderedStream tracking
    * and decides whether to do full rebuild or incremental update.
    *
+   * NOTE: Status/todos/instruction are sent as separate small messages rather
+   * than batched into UPDATE_LOGS. This ensures critical UI feedback (status)
+   * isn't blocked by potentially large log payloads, and provides fault isolation
+   * if the large payload has issues.
+   *
    * @param stream - Stream to refresh, or empty string to clear all content.
    * @param options.updateInstruction - If true (default), also update instruction panel.
    * @returns The resolved active run ID, useful for callers that need to pass it
@@ -373,8 +374,8 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream) ?? [];
     const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
-    // Clear buffer before update to prevent race condition
-    this.pendingTaskGroups.delete(stream);
+    // NOTE: pendingTaskGroups already cleared by replayPendingTaskGroups() before this call.
+    // NOTE: Status already sent via updateAll() → UPDATE_STREAMS → handleUpdateStreams.
 
     // Send primary content update (includes all run-scoped data in single message)
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
@@ -386,9 +387,8 @@ export class ProgressEventHandler {
       contextState,
     });
 
-    // Send ephemeral state
+    // Send ephemeral state separately (small, independent messages)
     this.webviewUpdater.updateTodos(stream, todos);
-    this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
@@ -424,17 +424,17 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    * Updates StreamStatusService (single source of truth) and triggers webview updates.
    *
-   * @param streamId - Stream identifier
-   * @param status - New status to set
-   * @param previousStatus - Previous status from event payload (undefined for direct calls)
+   * For NEW streams: full refresh (adds stream to tab list)
+   * For EXISTING streams: targeted status update only (no rebuild)
+   *
+   * Tab reordering is driven by log timestamps, not status changes.
+   * Status is just a visual indicator - no need to rebuild tabs for it.
    */
   setStreamStatus(
     streamId: StreamTabId,
     status: StreamStatus,
     previousStatus?: StreamStatus,
   ): void {
-    // For direct calls (no previousStatus), update service without emitting.
-    // Event-triggered calls already mutated the service before emitting.
     const isDirectCall = previousStatus === undefined;
     if (isDirectCall) {
       StreamStatusService.set(streamId, status, { emit: false });
@@ -444,30 +444,19 @@ export class ProgressEventHandler {
       return;
     }
 
-    // Resolve previous status: from event payload or read current (for direct calls).
-    // Treat READY as "no previous status" for ordering purposes.
-    const prevStatus = previousStatus ?? StreamStatusService.get(streamId);
-    const effectivePrevious =
-      prevStatus === STREAM_STATUS.READY ? undefined : prevStatus;
-
     const streamExists = this.state.streamTabs.has(streamId);
-    const needsFullRefresh =
-      !streamExists ||
-      (this.state.streamSortOrder === 'time' &&
-        StreamStatusService.mightAffectTabOrder(effectivePrevious, status));
 
-    if (needsFullRefresh) {
-      // Ensure filter matches stream's category to keep it visible (e.g., when resuming)
+    if (!streamExists) {
+      // New stream - full refresh to add it to tab list
       const streamCategory = this.getStreamCategory(streamId);
       if (streamCategory) {
         this.maybeUpdateFilterForCategory(streamCategory);
       }
-
       const statusesForRefresh = StreamStatusService.getAll();
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.updateAll(this.state, statusesForRefresh);
     } else {
-      // Targeted update - send only status change for this stream
+      // Existing stream - targeted status update only
       const logs = this.state.streamTabs.getMessages(streamId);
       const lastTimestamp = logs.at(-1)?.timestamp;
       this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
@@ -549,12 +538,9 @@ export class ProgressEventHandler {
     }
 
     // Coordinated update: UPDATE_STREAMS first (sets frontend activeStream),
-    // then UPDATE_LOGS (requires activeStream to be set)
+    // then stream content (requires activeStream to be set)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-    const activeRunId = this.refreshStreamSurface(streamId, {
-      updateInstruction: false,
-    });
-    this.sendInstructionUpdate(streamId, activeRunId);
+    this.refreshStreamSurface(streamId, { updateInstruction: true });
   }
 
   /**
