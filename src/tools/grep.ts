@@ -28,9 +28,10 @@ const GrepInputSchema = z.strictObject({
   '-n': z.boolean().nullish(),
   '-i': z.boolean().nullish(),
   type: z.string().nullish(),
+  offset: z.int().min(0).nullish(),
   head_limit: z.int().min(1).nullish(),
   multiline: z.boolean().nullish(),
-  literal: z.boolean().nullish(),
+  literal: z.boolean().nullish().describe('Exact string, not regex.'),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
@@ -73,12 +74,6 @@ export function buildArguments(
   return args;
 }
 
-function applyHeadLimit(output: string | null, headLimit?: number): string {
-  if (!output) return '';
-  if (!headLimit || headLimit <= 0) return output;
-  return output.split(/\r?\n/).slice(0, headLimit).join('\n');
-}
-
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
@@ -112,23 +107,39 @@ export class GrepTool extends defineTool({
     const exitCode = result.exitCode ?? (result.success ? 0 : 1);
     if (exitCode >= 2) {
       throw new ToolError(
-        `ripgrep error: ${result.stderr || `exit code ${exitCode}`}`,
+        `Regex error: ${result.stderr || `exit code ${exitCode}`}. ` +
+          `Check pattern syntax or use literal: true for exact string matching.`,
       );
     }
 
-    const limitedOutput = applyHeadLimit(
-      result.stdout,
-      input.head_limit ?? undefined,
-    );
-    const outputText =
-      limitedOutput || `No matches found for pattern in ${display}`;
-    const summary = limitedOutput
-      ? `Matches for "${input.pattern}" in ${display}`
-      : `No matches for "${input.pattern}" in ${display}`;
+    // Filter empty lines consistently for counting and pagination
+    const allLines = result.stdout?.split(/\r?\n/).filter(Boolean) ?? [];
+    const totalCount = allLines.length;
+
+    if (totalCount === 0) {
+      return {
+        summary: `No matches for "${input.pattern}" in ${display}`,
+        output: `No matches found. Try: broader pattern, -i for case-insensitive, or check path.`,
+      };
+    }
+
+    // Apply pagination to filtered lines for consistent offset calculation
+    const offset = input.offset ?? 0;
+    const limit = input.head_limit;
+    const end = limit ? offset + limit : undefined;
+    const paginatedLines = allLines.slice(offset, end);
+    const returnedCount = paginatedLines.length;
+
+    const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
+    const userInstruction =
+      returnedCount < totalCount
+        ? `Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.`
+        : undefined;
 
     return {
       summary,
-      output: outputText,
+      output: paginatedLines.join('\n'),
+      ...(userInstruction && { userInstruction }),
     };
   }
 }
