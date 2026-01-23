@@ -177,6 +177,12 @@ export abstract class RetryableInvocationNode<
    */
   protected _hasAttemptedTokenRefresh = false;
 
+  /**
+   * Stores persistent 401 error after token refresh failed to fix it.
+   * When set, subsequent retry attempts fast-fail without making API calls.
+   */
+  protected _persistent401Error: Error | null = null;
+
   constructor() {
     const config = getNodeRetryConfig();
     super(config.maxRetries, config.wait);
@@ -205,6 +211,7 @@ export abstract class RetryableInvocationNode<
     const cloned = super.clone();
     cloned._userCancelled = false;
     cloned._hasAttemptedTokenRefresh = false;
+    cloned._persistent401Error = null;
     return cloned;
   }
 
@@ -226,6 +233,11 @@ export abstract class RetryableInvocationNode<
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
+    // Fast-fail if we already know 401 persists after token refresh
+    if (this._persistent401Error) {
+      throw this._persistent401Error;
+    }
+
     const abortController = new AbortController();
     // Set signal on Node so retry loop can detect user cancellation
     this.signal = abortController.signal;
@@ -259,8 +271,8 @@ export abstract class RetryableInvocationNode<
               services.logger.debug(
                 'Still 401 after token refresh, skipping auto-retries',
               );
-              // Set maxRetries to 1 to skip remaining auto-retries
-              this.maxRetries = 1;
+              // Store error for fast-fail on subsequent retry attempts
+              this._persistent401Error = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
             }
             throw retryErr;
           }
