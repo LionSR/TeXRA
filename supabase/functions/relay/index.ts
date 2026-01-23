@@ -236,6 +236,12 @@ function calculateAccessStatus(
 
 /**
  * Create a JSON error response with relay metadata.
+ *
+ * Uses nested error format compatible with both OpenAI and Anthropic SDKs.
+ * SDKs extract the `error` object, preserving the `_relay` field for
+ * relay error detection (isRelayError checks for _relay in rawErrorBody).
+ *
+ * Format: { type: "error", error: { _relay, type, message, ...extra } }
  */
 function jsonError(
   message: string,
@@ -243,7 +249,15 @@ function jsonError(
   extra?: Record<string, unknown>,
 ): Response {
   return new Response(
-    JSON.stringify({ _relay: RELAY_VERSION, error: message, ...extra }),
+    JSON.stringify({
+      type: 'error',
+      error: {
+        _relay: RELAY_VERSION,
+        type: 'relay_error',
+        message,
+        ...extra,
+      },
+    }),
     {
       status,
       headers: { 'Content-Type': 'application/json' },
