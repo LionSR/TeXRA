@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -25,162 +22,79 @@ export interface BashApprovalResult {
 
 export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
-interface PendingBashApprovalEntry {
-  request: BashApprovalRequest;
-  streamId?: StreamTabId;
-  settle: (result: BashApprovalResult) => void;
-  isSettled: () => boolean;
-}
-
 /** All valid approval actions for bash prompts */
 export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
-interface BashApprovalActionPayload {
-  requestId: string;
-  action: BashApprovalAction;
-  feedback?: string;
-}
-
+// Approval queue state
 let queue: Promise<void> = Promise.resolve();
-let initialized = false;
-let customHandler:
-  | ((request: BashApprovalRequest) => Promise<BashApprovalResult>)
-  | undefined;
 let approvalCounter = 0;
-const pendingApprovals = new Map<string, PendingBashApprovalEntry>();
-
-export function initializeBashApproval(): void {
-  if (initialized) {
-    return;
-  }
-  initialized = true;
-}
-
-export function setBashApprovalHandler(
-  handler?: (request: BashApprovalRequest) => Promise<BashApprovalResult>,
-): void {
-  customHandler = handler;
-}
-
-async function showProgressViewApprovalPrompt(
-  requestId: string,
-  request: BashApprovalRequest,
-): Promise<void> {
-  await safeExecuteCommand('texra.showProgressView');
-  const streamId = request.streamId;
-  // Use shared YOLO state from toolEditApproval
-  const isBypassed = streamId && isApprovalBypassedForStream(streamId);
-  bus.emit('showBashApprovalPrompt', {
-    requestId,
-    command: request.command,
-    allowBypass: !isBypassed,
-    streamId: streamId ?? '',
-  });
-}
-
-function resolveProgressViewApprovalPrompt(requestId: string): void {
-  bus.emit('resolveBashApprovalPrompt', { requestId });
-}
-
-async function nativeRequestApproval(
-  request: BashApprovalRequest,
-): Promise<BashApprovalResult> {
-  const { command, streamId } = request;
-
-  approvalCounter += 1;
-  const requestId = `bash-approval-${Date.now().toString(36)}-${approvalCounter}`;
-
-  let result: BashApprovalResult = { accepted: false };
-  try {
-    result = await new Promise<BashApprovalResult>((resolve) => {
-      let settled = false;
-
-      const settle = (value: BashApprovalResult) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        resolve(value);
-      };
-
-      const entry: PendingBashApprovalEntry = {
-        request,
-        streamId,
-        isSettled: () => settled,
-        settle,
-      };
-
-      pendingApprovals.set(requestId, entry);
-      void showProgressViewApprovalPrompt(requestId, request);
-    });
-
-    return result;
-  } finally {
-    pendingApprovals.delete(requestId);
-    resolveProgressViewApprovalPrompt(requestId);
-  }
-}
-
-async function enqueueApproval(
-  request: BashApprovalRequest,
-): Promise<BashApprovalResult> {
-  const run = async () =>
-    customHandler ? customHandler(request) : nativeRequestApproval(request);
-
-  const operation = queue.then(run);
-  queue = operation.then(
-    () => {},
-    () => {},
-  );
-  return operation;
-}
+const pendingApprovals = new Map<
+  string,
+  { settle: (result: BashApprovalResult) => void; isSettled: () => boolean }
+>();
 
 export async function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
+  // Resolve streamId from context if not provided
   const context = getCurrentToolFileInteractionContext();
-  const preparedRequest =
-    request.streamId || !context?.streamId
-      ? request
-      : { ...request, streamId: context.streamId };
+  const streamId = request.streamId ?? context?.streamId;
 
-  // Check global config and shared YOLO mode (same as tool edits)
-  const streamId = preparedRequest.streamId;
-  const isStreamBypassed = streamId && isApprovalBypassedForStream(streamId);
-  if (!approvalsEnabled || isStreamBypassed) {
+  // Skip if globally disabled or YOLO mode active
+  if (!approvalsEnabled || (streamId && isApprovalBypassedForStream(streamId))) {
     return { accepted: true };
   }
 
-  return enqueueApproval(preparedRequest);
+  // Enqueue to serialize approval prompts
+  const operation = queue.then(() => showApprovalPrompt(request, streamId));
+  queue = operation.then(() => {}, () => {});
+  return operation;
 }
 
-export async function handleProgressViewBashApprovalAction(
-  payload: BashApprovalActionPayload,
-): Promise<void> {
-  const entry = pendingApprovals.get(payload.requestId);
-  if (!entry || entry.isSettled()) {
-    return;
-  }
+async function showApprovalPrompt(
+  request: BashApprovalRequest,
+  streamId?: StreamTabId,
+): Promise<BashApprovalResult> {
+  const requestId = `bash-${Date.now().toString(36)}-${++approvalCounter}`;
 
-  switch (payload.action) {
-    case 'approve': {
-      entry.settle({ accepted: true });
-      break;
-    }
-
-    case 'reject': {
-      const userMessage = payload.feedback?.trim();
-      entry.settle({
-        accepted: false,
-        userMessage: userMessage || undefined,
+  try {
+    return await new Promise<BashApprovalResult>((resolve) => {
+      let settled = false;
+      pendingApprovals.set(requestId, {
+        settle: (result) => { if (!settled) { settled = true; resolve(result); } },
+        isSettled: () => settled,
       });
-      break;
-    }
+
+      void safeExecuteCommand('texra.showProgressView');
+      bus.emit('showBashApprovalPrompt', {
+        requestId,
+        command: request.command,
+        allowBypass: !(streamId && isApprovalBypassedForStream(streamId)),
+        streamId: streamId ?? '',
+      });
+    });
+  } finally {
+    pendingApprovals.delete(requestId);
+    bus.emit('resolveBashApprovalPrompt', { requestId });
   }
+}
+
+export async function handleProgressViewBashApprovalAction(payload: {
+  requestId: string;
+  action: BashApprovalAction;
+  feedback?: string;
+}): Promise<void> {
+  const entry = pendingApprovals.get(payload.requestId);
+  if (!entry || entry.isSettled()) return;
+
+  entry.settle({
+    accepted: payload.action === 'approve',
+    userMessage: payload.action === 'reject' ? payload.feedback?.trim() : undefined,
+  });
 }
 
 export function buildBashApprovalRejectedResult(
@@ -193,15 +107,13 @@ export function buildBashApprovalRejectedResult(
   isError: true;
   userInstruction?: string;
 } {
-  const commandPreview =
-    command.length > 60 ? `${command.slice(0, 57)}…` : command;
-  const baseMessage = `User rejected bash command: ${commandPreview}`;
-  const feedback = userMessage?.trim();
+  const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
+  const message = `User rejected bash command: ${preview}`;
   return {
-    output: baseMessage,
-    summary: baseMessage,
-    error: baseMessage,
+    output: message,
+    summary: message,
+    error: message,
     isError: true,
-    ...(feedback ? { userInstruction: feedback } : {}),
+    ...(userMessage?.trim() ? { userInstruction: userMessage.trim() } : {}),
   };
 }
