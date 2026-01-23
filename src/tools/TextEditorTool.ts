@@ -42,10 +42,17 @@ export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().nullish(),
-  view_range: z.array(z.number()).length(2).nullish(),
+  view_range: z
+    .array(z.number())
+    .length(2)
+    .nullish()
+    .describe('Line range [start, end], 1-indexed. Use -1 for end to read to EOF.'),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
-  insert_line: z.number().nullish(),
+  insert_line: z
+    .number()
+    .nullish()
+    .describe('Line number to insert before (1-indexed). Use 1 to insert at start.'),
 });
 
 /** Derived from TextEditorInputSchema - single source of truth */
@@ -246,8 +253,11 @@ export class TextEditorTool extends defineTool({
         };
       }
 
-      // Read file contents
-      let fileContent = await WorkspaceFS.read(filePath);
+      // Read file contents and expand tabs (consistent with str_replace)
+      let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
+        '\t',
+        '    ',
+      );
       let initLine = 1;
 
       // Handle view range if provided
@@ -506,7 +516,7 @@ export class TextEditorTool extends defineTool({
   /**
    * Insert text at a specific line in a file
    * @param filePath - Path to the file
-   * @param insertLine - Line number to insert at (0-indexed)
+   * @param insertLine - Line number to insert before (1-indexed)
    * @param newStr - Text to insert
    * @private
    */
@@ -532,19 +542,19 @@ export class TextEditorTool extends defineTool({
       const fileLines = expandedFileContent.split(/\r?\n/);
       const numLines = fileLines.length;
 
-      // Validate insert line
-      if (insertLine < 0 || insertLine > numLines) {
+      // Validate insert line (1-indexed, like view_range)
+      if (insertLine < 1 || insertLine > numLines + 1) {
         throw new ToolError(
-          `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${numLines}]`,
+          `Invalid \`insert_line\`: ${insertLine}. Should be in range [1, ${numLines + 1}] (1-indexed, insert after line N).`,
         );
       }
 
-      // Insert new text
+      // Insert new text (convert 1-indexed to 0-indexed for slice)
       const newStrLines = expandedNewStr.split('\n');
       const newFileLines = [
-        ...fileLines.slice(0, insertLine),
+        ...fileLines.slice(0, insertLine - 1),
         ...newStrLines,
-        ...fileLines.slice(insertLine),
+        ...fileLines.slice(insertLine - 1),
       ];
 
       // Write new content to file
@@ -580,12 +590,13 @@ export class TextEditorTool extends defineTool({
       // an explicit read again.
       recordToolFileRead(filePath);
 
-      // Prepare success message
+      // Prepare success message (insertLine is 1-indexed, convert to 0-indexed for slicing)
       const previewLines = finalContent.split('\n');
-      const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
+      const insertIndex = insertLine - 1;
+      const snippetStart = Math.max(0, insertIndex - SNIPPET_LINES);
       const snippetEnd = Math.min(
         previewLines.length,
-        insertLine + newStrLines.length + SNIPPET_LINES,
+        insertIndex + newStrLines.length + SNIPPET_LINES,
       );
       const snippetText = previewLines
         .slice(snippetStart, snippetEnd)
