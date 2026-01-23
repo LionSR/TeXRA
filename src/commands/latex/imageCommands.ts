@@ -166,4 +166,3 @@ async function handleConvertPdfToImages(): Promise<
     return undefined;
   }
 }
-
