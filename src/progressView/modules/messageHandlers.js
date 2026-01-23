@@ -514,7 +514,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
-    this._refreshActiveRunPanels();
+    // NOTE: _refreshActiveRunPanels() NOT called here - UPDATE_LOGS always follows
+    // and calls it with the correct activeRunId. Calling here would be redundant.
     this._updateFollowupSection();
   }
 
