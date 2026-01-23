@@ -16,7 +16,6 @@ import {
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
-import { StorageFS } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -25,7 +24,6 @@ export const yamlCommands = {
   testAgentLoading: 'texra.testAgentLoading',
   loadSpecificAgent: 'texra.loadSpecificAgent',
   parseYaml: 'texra.parseYaml',
-  testYamlBrackets: 'texra.testYamlBrackets',
 };
 
 export async function handleTestAgentLoading(): Promise<void> {
@@ -169,68 +167,6 @@ export async function handleParseYaml(): Promise<void> {
   }
 }
 
-export async function handleTestYamlBrackets(
-  context: vscode.ExtensionContext,
-): Promise<void> {
-  try {
-    // Initialize StorageFS with the context
-    StorageFS.initialize(context);
-
-    logger.info(CHANNEL, 'Testing YAML parsing with angle brackets:');
-
-    // Create a temporary test YAML file
-    await StorageFS.ensureDir('test_yaml');
-
-    // Test YAML content with various angle bracket formats
-    const testYaml = {
-      test1: '<value>',
-      test2: '</value>',
-      test3: 'value',
-      settings: {
-        documentTag: 'latex_document',
-        endTag: '</latex_document>',
-      },
-    };
-
-    // Write test YAML
-    const yamlString = yaml.stringify(testYaml);
-    await StorageFS.write('test_yaml/test_brackets.yaml', yamlString);
-
-    // Read and parse the YAML using StorageFS
-    const content = await StorageFS.read('test_yaml/test_brackets.yaml');
-    logger.info(CHANNEL, '\nRaw YAML content:');
-    logger.info(CHANNEL, content);
-
-    // Parse the content
-    const parsed = yaml.parse(content);
-    logger.info(CHANNEL, '\nParsed YAML structure:');
-    logger.info(CHANNEL, JSON.stringify(parsed, null, 2));
-
-    // Verify specific fields
-    logger.info(CHANNEL, '\nVerifying specific fields:');
-    logger.info(CHANNEL, `test1: "${parsed.test1}"`);
-    logger.info(CHANNEL, `test2: "${parsed.test2}"`);
-    logger.info(CHANNEL, `test3: "${parsed.test3}"`);
-    logger.info(
-      CHANNEL,
-      `settings.documentTag: "${parsed.settings.documentTag}"`,
-    );
-    logger.info(CHANNEL, `settings.endTag: "${parsed.settings.endTag}"`);
-
-    // Cleanup
-    await StorageFS.delete('test_yaml/test_brackets.yaml');
-    await StorageFS.delete('test_yaml', {
-      recursive: true,
-    });
-
-    vscode.window.showInformationMessage(
-      'YAML bracket test completed. Check Debug Console for results.',
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'YAML bracket test failed', err);
-  }
-}
-
 export function registerYamlCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -242,8 +178,5 @@ export function registerYamlCommands(context: vscode.ExtensionContext): void {
       handleLoadSpecificAgent,
     ),
     vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
-    vscode.commands.registerCommand(yamlCommands.testYamlBrackets, () =>
-      handleTestYamlBrackets(context),
-    ),
   );
 }
