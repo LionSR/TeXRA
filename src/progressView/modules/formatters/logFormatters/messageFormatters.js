@@ -54,7 +54,7 @@ export function formatProgressStatus(message) {
     timestamp,
   } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp ?? Date.now()),
+    new Date(timestamp),
   );
 
   const summaryText =
@@ -110,7 +110,7 @@ const ERROR_DETAIL_FIELDS = [
 export function formatError(message) {
   const { normalizedPayload = {}, id, groupId, timestamp } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp ?? Date.now()),
+    new Date(timestamp),
   );
 
   const structured = normalizedPayload.structured ?? {};
