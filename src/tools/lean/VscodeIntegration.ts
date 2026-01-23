@@ -262,9 +262,6 @@ export async function getTermGoal(
   );
 }
 
-// HoverResult uses LSP Hover type from vscode-languageserver-protocol
-export type HoverResult = Hover;
-
 /** Extract text value from hover contents (handles all LSP content formats) */
 export function extractHoverText(contents: Hover['contents']): string | null {
   if (typeof contents === 'string') {
@@ -296,8 +293,8 @@ export async function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
-): Promise<LspResult<HoverResult>> {
-  return sendPositionRequest<HoverResult>(
+): Promise<LspResult<Hover>> {
+  return sendPositionRequest<Hover>(
     filePath,
     line,
     column,

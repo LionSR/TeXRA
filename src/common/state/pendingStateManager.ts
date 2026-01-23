@@ -30,7 +30,7 @@ export function setPendingState(
  * @returns The pending state data if any, undefined otherwise
  */
 export function consumePendingState(): PendingStateData | undefined {
-  const data = pendingStateData;
+  const result = pendingStateData;
   pendingStateData = undefined;
-  return data;
+  return result;
 }

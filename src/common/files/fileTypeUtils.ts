@@ -17,12 +17,6 @@ export type ExtensionCategory =
   | 'audio'
   | 'edited';
 
-/**
- * @deprecated Use ExtensionCategory instead. This alias exists for
- * backwards compatibility during migration.
- */
-export type FileType = ExtensionCategory;
-
 const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
   reference: 'texra.files.included.referenceExtensions',
