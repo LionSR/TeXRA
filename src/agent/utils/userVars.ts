@@ -99,9 +99,7 @@ function getBasicVars(
   // Build agent lists for template use
   const formatAgentList = (agents: { name: string; description?: string }[]) =>
     agents
-      .map(
-        (agent) => `- ${agent.name}: ${agent.description || 'No description'}`,
-      )
+      .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
       .join('\n');
 
   const workflowAgentsList = formatAgentList(getVisibleWorkflowAgents());
@@ -128,7 +126,7 @@ function combineFiles(
   single: string | undefined,
   multiple: string[],
 ): string[] {
-  return [single, ...multiple].filter((item): item is string => Boolean(item));
+  return [single, ...multiple].filter((f): f is string => Boolean(f));
 }
 
 async function getFileVars(
@@ -181,13 +179,13 @@ async function getFileVars(
   }
 
   const filterStrings = (arr: string[]): string[] =>
-    arr.filter((str): str is string => Boolean(str));
+    arr.filter((s): s is string => Boolean(s));
 
   // Build all edited files list (editedFile + editedFiles)
   const allEditedFiles = [
     agentConfig.editedFile,
     ...filterStrings(agentConfig.editedFiles ?? []),
-  ].filter((item): item is string => Boolean(item));
+  ].filter((f): f is string => Boolean(f));
 
   const collectionMappings: Record<string, [string[], string[]]> = {
     INPUT: [filterStrings(agentConfig.inputFiles), allInputFiles],
