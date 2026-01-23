@@ -205,35 +205,40 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * Called by SupabaseClient.getAccessToken() to avoid token expiration during
    * long-running operations (e.g., GPT-5 background mode).
    *
+   * @param force - If true, refresh regardless of expiry time (for relay auth errors)
    * @returns Fresh access token, or null if no session or refresh failed
    */
-  async ensureFreshToken(): Promise<string | null> {
+  async ensureFreshToken(force = false): Promise<string | null> {
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
       const session = parseStoredSession(sessionData);
       if (!session) {
+        if (force) {
+          logger.warn(
+            'SupabaseAuthProvider',
+            'Cannot force refresh: no session found',
+          );
+        }
         return null;
       }
 
       const timeUntilExpiry = session.expiresAt - Date.now();
+      const shouldRefresh = force || timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS;
 
-      // Refresh proactively if token expires within threshold
-      if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
-        logger.info(
-          'SupabaseAuthProvider',
-          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
-        );
+      if (shouldRefresh) {
+        const reason = force
+          ? 'relay auth error'
+          : `token expires in ${Math.round(timeUntilExpiry / 1000)}s`;
+        logger.info('SupabaseAuthProvider', `Refreshing token (${reason})`);
+
         const refreshed = await this.refreshSession(session);
         if (refreshed) {
           return refreshed.accessToken;
         }
         // If token is already expired and refresh failed, return null
         // to trigger VS Code auth fallback instead of returning expired token
-        if (timeUntilExpiry <= 0) {
-          logger.warn(
-            'SupabaseAuthProvider',
-            'Token expired and refresh failed, returning null',
-          );
+        if (timeUntilExpiry <= 0 || force) {
+          logger.warn('SupabaseAuthProvider', 'Token refresh failed');
           return null;
         }
         // Token still valid but refresh failed - return existing token
@@ -247,6 +252,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
       return null;
     }
+  }
+
+  /**
+   * Force refresh the access token regardless of expiry time.
+   * Called when a relay 401 error is received, indicating the server
+   * considers the token invalid even if it hasn't expired locally.
+   *
+   * @returns Fresh access token, or null if no session or refresh failed
+   */
+  async forceRefreshToken(): Promise<string | null> {
+    return this.ensureFreshToken(true);
   }
 
   /**

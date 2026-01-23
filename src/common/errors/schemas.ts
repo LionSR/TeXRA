@@ -76,6 +76,11 @@ export const ProviderErrorSchema = z.object({
    * Relay errors have `_relay` field in rawErrorBody.
    */
   isRelayError: z.boolean(),
+  /**
+   * Whether token refresh is needed before retry.
+   * Set for relay 401 errors where the token may have expired.
+   */
+  needsTokenRefresh: z.boolean().optional(),
   /** Provider request ID for support debugging */
   requestId: z.string().optional(),
   /** Raw error body from provider API response */

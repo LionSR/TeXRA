@@ -411,33 +411,86 @@ function isRelayError(rawErrorBody: unknown): boolean {
 }
 
 /**
- * Determines if an error is retryable based on status code and error content.
- *
- * Provider-specific overrides:
- * - Anthropic: "overloaded_error" and "timeout_error" are retryable (no dedicated SDK classes)
- * - Relay: errors with `_relay` field are retryable (user can fix and retry)
+ * Known relay authentication error messages.
+ * These patterns help detect relay auth errors when the `_relay` field
+ * isn't properly extracted from the SDK error body.
  */
-function determineRetryable(
+const RELAY_AUTH_ERROR_PATTERNS = [
+  'Invalid or expired token',
+  'Missing authorization token',
+] as const;
+
+/**
+ * Checks if an error appears to be a relay authentication error.
+ * Used as a fallback when `_relay` field detection fails.
+ *
+ * Relay auth errors (401) should be retryable because:
+ * 1. The token can be refreshed before retry
+ * 2. The user can sign out and sign back in
+ */
+function isRelayAuthError(err: unknown, statusCode?: number): boolean {
+  // Only consider 401 errors
+  if (statusCode !== StatusCodes.UNAUTHORIZED) {
+    return false;
+  }
+
+  // Check error message for known relay auth error patterns
+  if (err instanceof Error) {
+    const message = err.message;
+    return RELAY_AUTH_ERROR_PATTERNS.some((pattern) =>
+      message.includes(pattern),
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Error classification result - computed once and reused.
+ * Avoids redundant checks for relay/auth status.
+ */
+interface ErrorClassification {
+  /** Error has _relay field in body (from relay service) */
+  isRelay: boolean;
+  /** 401 error with known relay auth message pattern */
+  isRelayAuth: boolean;
+  /** Error is retryable (connection, 5xx, rate limit, or relay) */
+  retryable: boolean;
+  /** Token refresh needed before retry (relay 401) */
+  needsTokenRefresh: boolean;
+}
+
+/**
+ * Classify an error once - determines retryability and token refresh needs.
+ * Single pass through all checks to avoid redundant computation.
+ */
+function classifyError(
   err: unknown,
   statusCode?: number,
   rawErrorBody?: unknown,
-): boolean {
-  // Relay errors should be retryable - user can fix (refresh auth, switch keys) and retry
-  if (isRelayError(rawErrorBody)) {
-    return true;
-  }
+): ErrorClassification {
+  const isRelay = isRelayError(rawErrorBody);
+  const isRelayAuth = isRelayAuthError(err, statusCode);
 
-  if (err instanceof Error) {
+  // Token refresh needed for any relay 401 error
+  const needsTokenRefresh =
+    statusCode === StatusCodes.UNAUTHORIZED && (isRelay || isRelayAuth);
+
+  // Determine retryability
+  let retryable = isRelay || isRelayAuth || isRetryableStatusCode(statusCode);
+
+  // Anthropic-specific: overloaded_error and timeout_error are retryable
+  if (!retryable && err instanceof Error) {
     const msg = err.message;
-    // Anthropic: overloaded_error and timeout_error should be retryable
     if (
       msg.includes(ANTHROPIC_OVERLOADED_ERROR) ||
       msg.includes(ANTHROPIC_TIMEOUT_ERROR)
     ) {
-      return true;
+      retryable = true;
     }
   }
-  return isRetryableStatusCode(statusCode);
+
+  return { isRelay, isRelayAuth, retryable, needsTokenRefresh };
 }
 
 export function formatProviderHttpError(err: unknown): ProviderError {
@@ -461,15 +514,12 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Try to match known SDK error types
   const sdkMatch = matchSdkError(err);
   if (sdkMatch) {
-    // Check if this should be retryable due to relay/overloaded error
-    const isRelay = isRelayError(rawErrorBody);
-    const retryable =
-      determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
-      sdkMatch.retryable;
+    const classification = classifyError(err, sdkMatch.statusCode, rawErrorBody);
     return {
       ...sdkMatch,
-      retryable,
-      isRelayError: isRelay,
+      retryable: classification.retryable || sdkMatch.retryable,
+      isRelayError: classification.isRelay || classification.isRelayAuth,
+      needsTokenRefresh: classification.needsTokenRefresh || undefined,
       rawErrorBody,
       streamDiagnostics,
     };
@@ -480,7 +530,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
-  const isRelay = isRelayError(rawErrorBody);
+  const classification = classifyError(err, statusCode, rawErrorBody);
 
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
@@ -497,7 +547,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       message: finalMessage,
       provider,
       retryable: true,
-      isRelayError: isRelay,
+      isRelayError: classification.isRelay,
       requestId,
       rawErrorBody,
       streamDiagnostics,
@@ -510,8 +560,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     statusCode,
     statusText,
     provider,
-    retryable: determineRetryable(err, statusCode, rawErrorBody),
-    isRelayError: isRelay,
+    retryable: classification.retryable,
+    isRelayError: classification.isRelay || classification.isRelayAuth,
+    needsTokenRefresh: classification.needsTokenRefresh || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,
