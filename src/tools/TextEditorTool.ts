@@ -262,7 +262,7 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        const fileLines = fileContent.split('\n');
+        const fileLines = fileContent.split(/\r?\n/);
         const numLines = fileLines.length;
         const [startLine, endLine] = viewRange;
 
@@ -529,7 +529,7 @@ export class TextEditorTool extends defineTool({
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
       // Split content into lines
-      const fileLines = expandedFileContent.split('\n');
+      const fileLines = expandedFileContent.split(/\r?\n/);
       const numLines = fileLines.length;
 
       // Validate insert line
