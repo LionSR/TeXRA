@@ -85,16 +85,19 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-let approvalsBypassedForSession = false;
+/** Per-stream YOLO mode state tracking (single source of truth) */
+const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
-function notifyProgressViewApprovalBypassState(): void {
+function notifyProgressViewApprovalBypassState(streamId: StreamTabId): void {
   if (!initialized) {
     return;
   }
+  const bypassActive = approvalsBypassedByStream.get(streamId) ?? false;
   bus.emit('updateToolEditApprovalBypassState', {
-    bypassActive: approvalsBypassedForSession,
+    streamId,
+    bypassActive,
   });
 }
 
@@ -130,15 +133,36 @@ async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
   await fs.unlink(uri.fsPath).catch(() => {});
 }
 
-export function setToolEditApprovalSessionBypass(enabled: boolean): void {
-  approvalsBypassedForSession = enabled;
-  notifyProgressViewApprovalBypassState();
+export function setToolEditApprovalSessionBypass(
+  streamId: StreamTabId,
+  enabled: boolean,
+): void {
+  approvalsBypassedByStream.set(streamId, enabled);
+  notifyProgressViewApprovalBypassState(streamId);
 }
 
-export function toggleToolEditApprovalSessionBypass(): boolean {
-  const newState = !approvalsBypassedForSession;
-  setToolEditApprovalSessionBypass(newState);
+export function toggleToolEditApprovalSessionBypass(
+  streamId: StreamTabId,
+): boolean {
+  const currentState = approvalsBypassedByStream.get(streamId) ?? false;
+  const newState = !currentState;
+  setToolEditApprovalSessionBypass(streamId, newState);
   return newState;
+}
+
+/** Check if YOLO mode is enabled for a specific stream */
+export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
+  return approvalsBypassedByStream.get(streamId) ?? false;
+}
+
+/** Clear YOLO mode state for a deleted stream (prevents memory leak) */
+export function clearApprovalBypassForStream(streamId: StreamTabId): void {
+  approvalsBypassedByStream.delete(streamId);
+}
+
+/** Clear all YOLO mode state (used when deleting all streams) */
+export function clearAllApprovalBypass(): void {
+  approvalsBypassedByStream.clear();
 }
 
 export function initializeToolEditApproval(
@@ -167,13 +191,15 @@ async function showProgressViewApprovalPrompt(
   lineChanges: LineChanges,
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
+  const streamId = request.streamId;
+  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
   bus.emit('showToolEditApprovalPrompt', {
     requestId,
     path: request.path,
     relativePath,
     sourceTool: request.sourceTool,
-    allowBypass: !approvalsBypassedForSession,
-    streamId: request.streamId ?? '',
+    allowBypass: !isBypassed,
+    streamId: streamId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
     isLatex: isLatexFile(request.path),
@@ -505,14 +531,9 @@ async function nativeRequestApproval(
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  const run = async () => {
-    if (approvalsBypassedForSession) {
-      return { accepted: true };
-    }
-    return customHandler
-      ? customHandler(request)
-      : nativeRequestApproval(request);
-  };
+  // Note: YOLO bypass is checked in requestToolEditApproval before enqueueing
+  const run = async () =>
+    customHandler ? customHandler(request) : nativeRequestApproval(request);
 
   const operation = queue.then(run);
   queue = operation.then(
@@ -536,7 +557,10 @@ export async function requestToolEditApproval(
       ? request
       : { ...request, streamId: context.streamId };
 
-  if (!approvalsEnabled || approvalsBypassedForSession) {
+  // Check global config and per-stream YOLO mode
+  const streamId = preparedRequest.streamId;
+  const isStreamBypassed = streamId && isApprovalBypassedForStream(streamId);
+  if (!approvalsEnabled || isStreamBypassed) {
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
