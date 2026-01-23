@@ -17,7 +17,8 @@ export type WolframInput = z.infer<typeof WolframInputSchema>;
 
 export class WolframTool extends defineTool({
   name: 'wolfram',
-  description: 'Execute Wolfram Language code',
+  description:
+    'Execute Wolfram Language code. Sessions do not persist between calls - each execution starts fresh with no memory of previous variables or definitions.',
   schema: WolframInputSchema,
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
