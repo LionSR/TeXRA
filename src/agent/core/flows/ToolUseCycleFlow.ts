@@ -457,8 +457,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const services = this.services;
-    const { run, workspace, onRoundFinalized } = services;
+    const { run, workspace, onRoundFinalized, modelHandler } = this.services;
 
     if (execRes.kind === 'skipped') {
       return FlowTransition.COMPLETE;
@@ -494,7 +493,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.endTurn = true;
       if (execRes.text) {
         shared.messages.push(
-          services.modelHandler.createAssistantMessage(execRes.text),
+          modelHandler.createAssistantMessage(execRes.text),
         );
         workspace.assembly.lastResponse = execRes.text;
       }
