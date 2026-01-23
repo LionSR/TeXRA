@@ -473,11 +473,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.followUpInput.restoreTextForStream(message.activeStream);
     }
 
-    // Restore per-stream YOLO state
-    if (message.activeStream) {
-      const bypassActive = state.getApprovalBypass(message.activeStream);
-      dom.followUpInput.setApprovalBypassState(bypassActive);
-    }
+    // YOLO state is sent by backend via updateToolEditApprovalState message
+    // No need to restore from frontend cache here
 
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
@@ -962,12 +959,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const stream = message?.stream;
     const bypassActive = Boolean(message?.bypassActive);
 
-    // Store per-stream state
-    if (stream) {
-      state.setApprovalBypass(stream, bypassActive);
-    }
-
     // Update UI if this is for the active stream
+    // Backend is single source of truth - no local caching
     if (stream === state.activeStream) {
       dom.followUpInput.setApprovalBypassState(bypassActive);
     }
