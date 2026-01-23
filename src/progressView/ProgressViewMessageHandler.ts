@@ -41,6 +41,8 @@ import {
   clearAllApprovalBypass,
   clearApprovalBypassForStream,
   handleProgressViewToolEditApprovalAction,
+  rejectAllPendingToolEditApprovals,
+  rejectPendingToolEditApprovalsForStream,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
 import {
@@ -240,6 +242,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
         // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
+        rejectPendingToolEditApprovalsForStream(streamId);
         rejectPendingBashApprovalsForStream(streamId);
         clearApprovalBypassForStream(streamId);
         await this.provider.state.clearStream(streamId);
@@ -264,6 +267,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
+    rejectAllPendingToolEditApprovals();
     rejectAllPendingBashApprovals();
     clearAllApprovalBypass();
     await this.provider.state.clearAll();
