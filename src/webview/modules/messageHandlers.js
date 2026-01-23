@@ -396,7 +396,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // 2. Marks option as selected in HTML before innerHTML assignment
     // 3. Sets innerHTML
     // 4. Calls restore function with custom fallback logic
-    setOptionsHtml(selectElement, optionsHtml, this._restoreModelSelection.bind(this));
+    setOptionsHtml(
+      selectElement,
+      optionsHtml,
+      this._restoreModelSelection.bind(this),
+    );
     decorateModelOptions(selectElement);
     updateModelApiKeyBanner(selectElement);
   }
@@ -408,7 +412,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     // setOptionsHtml handles vscode-single-select's slotchange workaround
     // (see _applyModelOptions). Uses custom restore for value migration and placeholder creation.
-    setOptionsHtml(selectElement, optionsHtml ?? '', this._restoreAgentSelection.bind(this));
+    setOptionsHtml(
+      selectElement,
+      optionsHtml ?? '',
+      this._restoreAgentSelection.bind(this),
+    );
     decorateAgentOptions(selectElement);
     updateAgentSelectTooltip(selectElement);
   }

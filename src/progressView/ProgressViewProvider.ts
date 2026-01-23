@@ -276,7 +276,9 @@ export class ProgressViewProvider
    * When no stream is active, sends false to reset the UI.
    */
   private sendYoloStateForStream(streamId: StreamTabId): void {
-    const bypassActive = streamId ? isApprovalBypassedForStream(streamId) : false;
+    const bypassActive = streamId
+      ? isApprovalBypassedForStream(streamId)
+      : false;
     this.sendIfReady(() =>
       this.webviewUpdater.updateToolEditApprovalState(
         streamId || ('' as StreamTabId),
