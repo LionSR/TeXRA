@@ -35,7 +35,11 @@ let queue: Promise<void> = Promise.resolve();
 let approvalCounter = 0;
 const pendingApprovals = new Map<
   string,
-  { settle: (result: BashApprovalResult) => void; isSettled: () => boolean }
+  {
+    streamId?: StreamTabId;
+    settle: (result: BashApprovalResult) => void;
+    isSettled: () => boolean;
+  }
 >();
 
 export async function requestBashApproval(
@@ -74,6 +78,7 @@ async function showApprovalPrompt(
       };
 
       pendingApprovals.set(requestId, {
+        streamId,
         settle,
         isSettled: () => settled,
       });
@@ -104,6 +109,25 @@ export async function handleProgressViewBashApprovalAction(payload: {
     accepted: payload.action === 'approve',
     userMessage: payload.action === 'reject' ? payload.feedback?.trim() : undefined,
   });
+}
+
+/** Reject all pending bash approvals for a deleted stream (prevents memory leak) */
+export function rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
+  for (const entry of pendingApprovals.values()) {
+    if (entry.streamId === streamId && !entry.isSettled()) {
+      // Settling triggers finally block which emits resolveBashApprovalPrompt
+      entry.settle({ accepted: false });
+    }
+  }
+}
+
+/** Reject all pending bash approvals (used when deleting all streams) */
+export function rejectAllPendingBashApprovals(): void {
+  for (const entry of pendingApprovals.values()) {
+    if (!entry.isSettled()) {
+      entry.settle({ accepted: false });
+    }
+  }
 }
 
 export function buildBashApprovalRejectedResult(
