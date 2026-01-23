@@ -34,8 +34,6 @@ interface OutputPrepInput {
 // Helpers
 // ============================================================================
 
-type WarnLogger = { warn: (msg: string) => void };
-
 /**
  * Execute an operation that can fail gracefully.
  * Logs warnings on failure but doesn't throw.
@@ -43,7 +41,7 @@ type WarnLogger = { warn: (msg: string) => void };
 async function tryOperation(
   label: string,
   operation: () => Promise<void>,
-  logger: WarnLogger,
+  logger: { warn: (msg: string) => void },
 ): Promise<void> {
   try {
     await operation();
