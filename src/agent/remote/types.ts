@@ -14,9 +14,6 @@ import {
   AgentPromptSchema,
 } from '@agent/core/AgentDataclass';
 
-// Re-export AgentLoadOptions as RemoteAgentLoadOptions for API consistency
-export type { AgentLoadOptions as RemoteAgentLoadOptions } from '@agent/runtime/agentLoad';
-
 /**
  * Schema for remote agent list items (from DB queries).
  * Description from DB serves as cache; authoritative value comes from YAML when loaded.
