@@ -69,6 +69,8 @@ const WOLFRAM_RESULT_STYLES = `
 interface WolframResultContent {
   output: string | null;
   error: string | null;
+  timedOut: boolean;
+  exitCode: number | null;
 }
 
 /** Build HTML content sections for Wolfram result display */
@@ -76,9 +78,22 @@ function buildResultSections(result: WolframResultContent): {
   outputHtml: string;
   errorHtml: string;
 } {
-  const errorHtml = result.error
-    ? `<div class="error"><h3>Error:</h3><pre>${result.error}</pre></div>`
-    : '';
+  // Build error section with all available diagnostic info
+  const errorParts: string[] = [];
+  if (result.timedOut) {
+    errorParts.push('Execution timed out');
+  }
+  if (result.exitCode !== null && result.exitCode !== 0) {
+    errorParts.push(`Exit code: ${result.exitCode}`);
+  }
+  if (result.error) {
+    errorParts.push(result.error);
+  }
+
+  const errorHtml =
+    errorParts.length > 0
+      ? `<div class="error"><h3>Error:</h3><pre>${errorParts.join('\n')}</pre></div>`
+      : '';
 
   const outputHtml = result.output
     ? `<div class="output"><h3>Output:</h3><pre>${result.output}</pre></div>`
@@ -139,9 +154,16 @@ export function registerWolframScriptCommands(
               `Wolframscript test successful: ${result.output}`,
             );
           } else {
+            const errorParts: string[] = [];
+            if (result.timedOut) errorParts.push('timed out');
+            if (result.exitCode !== null && result.exitCode !== 0)
+              errorParts.push(`exit code ${result.exitCode}`);
+            if (result.error) errorParts.push(result.error);
+            const errorMsg =
+              errorParts.length > 0 ? errorParts.join('; ') : 'unknown error';
             await showLoggedMessageWithDocs(
               CHANNEL,
-              `Wolframscript test failed: ${result.error}. See Tool Integration for setup instructions.`,
+              `Wolframscript test failed: ${errorMsg}. See Tool Integration for setup instructions.`,
               'tool-integration',
               'Open Tool Integration Docs',
             );
