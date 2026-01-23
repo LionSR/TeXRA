@@ -194,7 +194,7 @@ export class MainViewProvider
     // Update cache (called directly for init, debounced for file changes)
     const updateAgentDirs = async () => {
       const dirs = await agentDirectories.getAllLocal();
-      agentDirPaths = dirs.map((dir) => dir.directory);
+      agentDirPaths = dirs.map((d) => d.directory);
     };
 
     // Initialize cache immediately (not debounced)
