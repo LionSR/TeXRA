@@ -580,6 +580,21 @@ export class ProgressViewState {
     this.contextState.delete(streamId);
   }
 
+  /**
+   * Clear all run-scoped data for a stream in a single call.
+   * More efficient than calling individual clear methods separately.
+   * @param {string} streamId - The stream ID to clear data for
+   */
+  clearStreamRunData(streamId) {
+    if (!streamId) return;
+    this.runInstructions.clearStream(streamId);
+    this.runFiles.clearStream(streamId);
+    this.runMissingOutputs.clearStream(streamId);
+    this.runUsage.clearStream(streamId);
+    this.clearPendingInstruction(streamId);
+    this.clearActiveRun(streamId);
+  }
+
   deleteRunMissingOutputs(streamId, runId) {
     this.runMissingOutputs.delete(streamId, runId);
   }

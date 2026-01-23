@@ -49,6 +49,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
     this._entryFormatter = getSharedLogEntryFormatter();
+    this._lastFollowupState = null;
     this._handlers = {
       ...createThemeHandlers(),
       ...this._createHandlers(),
@@ -219,20 +220,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string|null} stream - The stream to clear, or null to clear all
    */
   _clearRunScopedState(stream) {
-    // Stream-scoped clear methods accept optional stream param (null = clear all)
-    state.clearRunInstructions(stream);
-    state.clearRunFiles(stream);
-    state.clearRunMissingOutputs(stream);
-    state.clearRunUsage(stream, null);
-    state.clearContextState(stream);
-
     if (stream) {
+      // Single stream: use batched clear for run-scoped data
+      state.clearStreamRunData(stream);
+      state.clearContextState(stream);
       state.clearExecutionIdAvailability(stream);
-      state.clearActiveRun(stream);
       state.clearTodos(stream);
       state.clearQueuedFollowUps(stream);
       state.clearFollowUpText(stream);
     } else {
+      // All streams: individual clear methods that support null
+      state.clearRunInstructions(null);
+      state.clearRunFiles(null);
+      state.clearRunMissingOutputs(null);
+      state.clearRunUsage(null, null);
+      state.clearContextState(null);
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
       state.clearAllTodos();
@@ -276,44 +278,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (messageRunId && runIds.includes(messageRunId)) return messageRunId;
     if (previousRunId && runIds.includes(previousRunId)) return previousRunId;
     return runIds.at(-1);
-  }
-
-  /**
-   * Render a log message to its appropriate container.
-   * Attempts to append to group first, falls back to main log content.
-   * @param {Object} msg - The log message to render
-   * @param {HTMLElement} logContent - The main log content container
-   * @returns {void} No return value; dom.logEntries.append returns truthy on success
-   */
-  _renderLogMessage(msg, logContent) {
-    // dom.logEntries.append returns true if message was added to its group container
-    if (msg.groupId) {
-      const wasAppendedToGroup = dom.logEntries.append(msg);
-      // DIAGNOSTIC: Track grouped message handling
-      if (!wasAppendedToGroup) {
-        console.warn(
-          '[_renderLogMessage] Message has groupId but no container:',
-          {
-            messageType: msg.messageType,
-            id: msg.id,
-            groupId: msg.groupId,
-          },
-        );
-      }
-      if (wasAppendedToGroup) return;
-    }
-    const formatted = this._entryFormatter.format(msg);
-    // DIAGNOSTIC: Log if formatter returns null
-    if (!formatted) {
-      console.warn('[_renderLogMessage] Formatter returned null for:', {
-        messageType: msg.messageType,
-        id: msg.id,
-        hasText: Boolean(msg.text),
-        hasData: Boolean(msg.data),
-        groupId: msg.groupId,
-      });
-    }
-    appendFormatted(logContent, formatted);
   }
 
   /**
@@ -499,11 +463,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllQueuedFollowUps();
       state.clearAllFollowUpText();
     } else {
-      // Clear content immediately when switching streams to prevent stale display.
-      // handleUpdateLogs will repopulate with correct content, but if the new stream
-      // is empty, no logs message arrives - so we must clear proactively here.
-      // Use lastRenderedStream (not previousStream) to detect if displayed content
-      // differs from the new stream - handles cases where previousStream is unset.
+      // Handle stream switch: clear stale content, then repopulate from cache.
+      // While UPDATE_LOGS typically follows UPDATE_STREAMS, some code paths
+      // (e.g., setStreamStatus for new streams with filter change) only send
+      // UPDATE_STREAMS. We clear first, then repopulate from cached state.
+      // If UPDATE_LOGS arrives later, it will rebuild with fresh data.
       if (
         state.lastRenderedStream &&
         state.lastRenderedStream !== message.activeStream
@@ -511,6 +475,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
         if (logContent) logContent.innerHTML = '';
         state.lastRenderedStream = '';
+        // Repopulate panels from cached state for the new stream
+        const activeRunId = state.resolveActiveRunId(message.activeStream);
+        this._refreshActiveRunPanels(activeRunId);
       }
 
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -522,7 +489,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
-    this._refreshActiveRunPanels();
     this._updateFollowupSection();
   }
 
@@ -574,16 +540,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Full rebuild path: clear and rebuild
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const previousRunId = state.getActiveRunId(message.stream);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
     state.taskGroups.clear();
-    state.clearRunInstructions(message.stream);
-    state.clearRunFiles(message.stream);
-    state.clearRunMissingOutputs(message.stream);
-    state.clearRunUsage(message.stream);
-    state.clearPendingInstruction(state.activeStream);
-    const previousRunId = state.getActiveRunId(message.stream);
-    state.clearActiveRun(message.stream);
+    state.clearStreamRunData(message.stream); // Batched clear of all run-scoped data
     logContent.innerHTML = '';
     const groups = message.groups ?? [];
 
@@ -622,9 +583,51 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    sortedMessages.forEach((msg) => {
-      this._renderLogMessage(msg, logContent);
-    });
+    // Batch all messages via DocumentFragment to avoid layout thrashing.
+    // Check container existence during iteration to preserve chronological order for fallbacks.
+    const ungroupedFragment = document.createDocumentFragment();
+    const groupedFragments = new Map(); // groupId → fragment
+
+    for (const msg of sortedMessages) {
+      const formatted = this._entryFormatter.format(msg);
+      if (!formatted) continue;
+
+      if (msg.groupId) {
+        const container = dom.logEntries.getGroupContainer(msg.groupId);
+        if (container) {
+          // Group container exists - batch to grouped fragment
+          let frag = groupedFragments.get(msg.groupId);
+          if (!frag) {
+            frag = document.createDocumentFragment();
+            groupedFragments.set(msg.groupId, frag);
+          }
+          appendFormatted(frag, formatted);
+        } else {
+          // Group container missing - add to ungrouped to preserve chronological order
+          appendFormatted(ungroupedFragment, formatted);
+        }
+      } else {
+        appendFormatted(ungroupedFragment, formatted);
+      }
+    }
+
+    // Append grouped messages to their containers
+    for (const [groupId, frag] of groupedFragments) {
+      const container = dom.logEntries.getGroupContainer(groupId);
+      // Container should exist (we checked during batching), but guard against DOM changes
+      if (container) {
+        container.appendChild(frag);
+      } else {
+        // Fallback: append to main log if container was removed (race condition)
+        console.warn(`[messageHandlers] Group container removed during batch: ${groupId}`);
+        logContent.appendChild(frag);
+      }
+    }
+
+    // Append ungrouped messages (and fallback grouped) to main log
+    if (ungroupedFragment.childNodes.length > 0) {
+      logContent.appendChild(ungroupedFragment);
+    }
     scrollToBottom(logContent);
 
     // Use validated run ID from state (set earlier via setActiveRunId after validation)
@@ -1204,22 +1207,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Update followup section visibility based on current stream state.
    * Called when stream status changes or streams are updated.
+   * Skips update if nothing relevant changed.
    */
   _updateFollowupSection() {
     const activeStream = state.activeStream;
     if (!activeStream) {
-      dom.followupSection?.updateForStream?.(null);
+      if (this._lastFollowupState !== null) {
+        this._lastFollowupState = null;
+        dom.followupSection?.updateForStream?.(null);
+      }
       return;
     }
 
     const streamStatus = state.streamStatuses.get(activeStream);
     const category = state.activeAgentCategory || 'workflow';
-    const hasOutputFiles = this._hasOutputFilesForActiveStream();
-
-    // Extract agent name from stream ID (format: "agentName@timestamp")
     const agentName = activeStream.split('@')[0] || activeStream;
 
-    // Get instruction text for workflow context
     const runId = state.resolveActiveRunId(activeStream);
     const instruction = runId
       ? state.getRunInstruction(activeStream, runId)
@@ -1229,42 +1232,28 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         (instruction.text.length > 100 ? '...' : '')
       : null;
 
-    // Count output files
+    // Count files in single pass (also determines hasOutputFiles)
     const files = runId ? state.getRunFiles(activeStream, runId) : null;
-    const fileCount = files
-      ? Object.values(files).reduce(
-          (sum, roundFiles) =>
-            sum + (Array.isArray(roundFiles) ? roundFiles.length : 0),
-          0,
-        )
-      : 0;
+    let fileCount = 0;
+    if (files) {
+      for (const roundFiles of Object.values(files)) {
+        if (Array.isArray(roundFiles)) fileCount += roundFiles.length;
+      }
+    }
+
+    // Skip if nothing changed (use \0 separator to avoid collision with user content)
+    const key = [activeStream, streamStatus, category, fileCount, instructionPreview ?? ''].join('\0');
+    if (key === this._lastFollowupState) return;
+    this._lastFollowupState = key;
 
     dom.followupSection?.updateForStream?.({
       agentCategory: category,
       status: streamStatus,
-      hasOutputFiles,
+      hasOutputFiles: fileCount > 0,
       agentName,
       instructionPreview,
       fileCount,
     });
-  }
-
-  /**
-   * Check if the active stream has output files.
-   */
-  _hasOutputFilesForActiveStream() {
-    const activeStream = state.activeStream;
-    if (!activeStream) return false;
-
-    const runId = state.resolveActiveRunId(activeStream);
-    if (!runId) return false;
-
-    const files = state.getRunFiles(activeStream, runId);
-    if (!files) return false;
-
-    return Object.values(files).some(
-      (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
-    );
   }
 }
 

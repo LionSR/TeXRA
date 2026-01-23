@@ -1,7 +1,8 @@
 /**
  * Usage event handlers for progress view.
+ * Handles: updateStreamUsage, updateContextState.
  *
- * Handles usage events: updateStreamUsage, updateContextState.
+ * These events fire per-round (not per-chunk), so direct sending is fine.
  */
 import type {
   ProgressEventBusLike,
@@ -13,9 +14,6 @@ import {
   type EventHandlerContext,
 } from './EventHandlerContext';
 
-/**
- * Register usage event handlers on the event bus.
- */
 export function registerUsageEventHandlers(
   bus: ProgressEventBusLike,
   ctx: EventHandlerContext,
@@ -37,47 +35,31 @@ function handleUpdateStreamUsage(
   ctx: EventHandlerContext,
   { streamId, usage, storageKey }: ProgressEventPayloads['updateStreamUsage'],
 ): void {
-  withEventErrorHandling(
-    'UsageEvents',
-    'failed to handle updateStreamUsage',
-    async () => {
-      // usage is already typed as TokenUsageStats from the event payload
-      const accumulatedUsage = await ctx.state.usageStats.setRunUsage(
-        streamId,
-        storageKey,
-        usage,
-      );
+  withEventErrorHandling('UsageEvents', 'updateStreamUsage', async () => {
+    const accumulated = await ctx.state.usageStats.setRunUsage(
+      streamId,
+      storageKey,
+      usage,
+    );
 
-      // For tool-use sessions (no task groups), set active run ID from usage
-      if (!ctx.state.getActiveRunId(streamId)) {
-        ctx.state.setActiveRunId(streamId, storageKey);
-      }
+    if (!ctx.state.getActiveRunId(streamId)) {
+      ctx.state.setActiveRunId(streamId, storageKey);
+    }
 
-      // Broadcast to webview - frontend decides which run to display
-      if (isWebviewAvailable(ctx) && accumulatedUsage) {
-        ctx.webviewUpdater.updateRunUsage(
-          streamId,
-          storageKey,
-          accumulatedUsage,
-        );
-      }
-    },
-  );
+    if (accumulated && isWebviewAvailable(ctx)) {
+      ctx.webviewUpdater.updateRunUsage(streamId, storageKey, accumulated);
+    }
+  });
 }
 
 function handleUpdateContextState(
   ctx: EventHandlerContext,
   { streamId, contextState }: ProgressEventPayloads['updateContextState'],
 ): void {
-  withEventErrorHandling(
-    'UsageEvents',
-    'failed to handle updateContextState',
-    () => {
-      ctx.state.setContextState(streamId, contextState);
-      // Broadcast to webview - frontend decides which run to display
-      if (isWebviewAvailable(ctx)) {
-        ctx.webviewUpdater.updateContextState(streamId, contextState);
-      }
-    },
-  );
+  withEventErrorHandling('UsageEvents', 'updateContextState', () => {
+    ctx.state.setContextState(streamId, contextState);
+    if (isWebviewAvailable(ctx)) {
+      ctx.webviewUpdater.updateContextState(streamId, contextState);
+    }
+  });
 }
