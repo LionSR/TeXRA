@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.7] - 2026-01-23
+
+### Features
+
+- Added **Zotero integration** tools (`zotero_search`, `zotero_export`, `zotero_add`) via Better BibTeX JSON-RPC for literature management.
+- Added **ShareLaTeX git support** in the clone command for self-hosted Overleaf instances.
+- Added **bib path setting** (`texra.defaultBibPath`) to configure the default bibliography file location.
+- Added **attach agent outputs** option in follow-up mode to include generated files as reference.
+- Added **syntax highlighting** for `write_file` tool content in progress view.
+- Added **inline diff highlighting** for `edit_file` tool output showing additions and deletions.
+- Added **stream diagnostics** in retry UI details panel for debugging failed requests.
+- Added **apply agents** for implementing review suggestions from orchestrated workflows.
+- Added **grep offset parameter** for paginating through large search results.
+- Agent and model dropdowns now **sync between progress view and main webview**.
+- **YOLO mode** is now per-stream with a distinct visual indicator.
+
+### Bug Fixes
+
+- Fixed background response handling for improved reliability during retries.
+- Fixed diff naming producing incorrect labels when input file contains round numbers.
+- Fixed nested scrollbars appearing in code blocks.
+- Fixed edit tool not displaying deletions when `new_str` is empty.
+- Fixed grep tool error handling for empty results.
+- Fixed KaTeX MathML causing duplicate text rendering in progress view.
+- Fixed merge agent not respecting multiple outputs setting.
+
+### Improvements
+
+- Improved tool error recovery suggestions and result summaries.
+- Updated dependencies including SDK packages and Prettier.
+
 ## [0.35.6] - 2026-01-19
 
 ### Features
