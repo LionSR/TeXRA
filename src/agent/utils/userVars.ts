@@ -121,12 +121,39 @@ function getBasicVars(
   };
 }
 
+/**
+ * File category configuration for consistent handling across the codebase.
+ * Maps category name to { single, multiple } field accessors from AgentConfig.
+ */
+type FileCategoryConfig = {
+  single: keyof AgentConfig;
+  multiple: keyof AgentConfig;
+};
+
+const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
+  INPUT: { single: 'inputFile', multiple: 'inputFiles' },
+  REFERENCE: { single: 'referenceFile', multiple: 'referenceFiles' },
+  AUXILIARY: { single: 'auxiliaryFile', multiple: 'auxiliaryFiles' },
+  MEDIA: { single: 'mediaFile', multiple: 'mediaFiles' },
+  EDITED: { single: 'editedFile', multiple: 'editedFiles' },
+};
+
 /** Combine a single file with an array, filtering out empty values */
 function combineFiles(
-  single: string | undefined,
-  multiple: string[],
+  single: string | null | undefined,
+  multiple: string[] | undefined,
 ): string[] {
-  return [single, ...multiple].filter((f): f is string => Boolean(f));
+  return [single, ...(multiple ?? [])].filter((f): f is string => Boolean(f));
+}
+
+/** Get combined files for a category from AgentConfig */
+function getCategoryFiles(config: AgentConfig, category: string): string[] {
+  const cat = FILE_CATEGORIES[category];
+  if (!cat) return [];
+  return combineFiles(
+    config[cat.single] as string | null | undefined,
+    config[cat.multiple] as string[] | undefined,
+  );
 }
 
 async function getFileVars(
@@ -136,22 +163,10 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  const allInputFiles = combineFiles(
-    agentConfig.inputFile,
-    agentConfig.inputFiles,
-  );
-  const allReferenceFiles = combineFiles(
-    agentConfig.referenceFile ?? undefined,
-    agentConfig.referenceFiles,
-  );
-  const allAuxiliaryFiles = combineFiles(
-    agentConfig.auxiliaryFile ?? undefined,
-    agentConfig.auxiliaryFiles,
-  );
-  const allMediaFiles = combineFiles(
-    agentConfig.mediaFile ?? undefined,
-    agentConfig.mediaFiles,
-  );
+  const allInputFiles = getCategoryFiles(agentConfig, 'INPUT');
+  const allReferenceFiles = getCategoryFiles(agentConfig, 'REFERENCE');
+  const allAuxiliaryFiles = getCategoryFiles(agentConfig, 'AUXILIARY');
+  const allMediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
 
   // Log file categories being loaded (processed sequentially to preserve UI display order)
   // Skip for tool-use agents as they don't need this UI feedback
@@ -164,48 +179,29 @@ async function getFileVars(
     ]);
   }
 
-  const singleFileMappings = {
-    INPUT: agentConfig.inputFile,
-    REFERENCE: agentConfig.referenceFile,
-    AUXILIARY: agentConfig.auxiliaryFile,
-    EDITED: agentConfig.editedFile,
-  } as Record<string, string | undefined>;
-
-  for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
-    userVars[`${prefix}_FILE`] = filePath;
+  // Build single file vars for each category
+  for (const prefix of ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED']) {
+    const cat = FILE_CATEGORIES[prefix];
+    const filePath = agentConfig[cat.single] as string | null | undefined;
+    userVars[`${prefix}_FILE`] = filePath ?? null;
     userVars[`${prefix}_CONTENT`] = filePath
       ? await WorkspaceFS.read(filePath)
       : null;
   }
 
-  const filterStrings = (arr: string[]): string[] =>
-    arr.filter((s): s is string => Boolean(s));
+  // Build collection vars for each category using the centralized config
+  for (const prefix of ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED']) {
+    const cat = FILE_CATEGORIES[prefix];
+    const additionalFiles =
+      (agentConfig[cat.multiple] as string[] | undefined) ?? [];
+    const allFiles = getCategoryFiles(agentConfig, prefix);
 
-  // Build all edited files list (editedFile + editedFiles)
-  const allEditedFiles = [
-    agentConfig.editedFile,
-    ...filterStrings(agentConfig.editedFiles ?? []),
-  ].filter((f): f is string => Boolean(f));
-
-  const collectionMappings: Record<string, [string[], string[]]> = {
-    INPUT: [filterStrings(agentConfig.inputFiles), allInputFiles],
-    REFERENCE: [filterStrings(agentConfig.referenceFiles), allReferenceFiles],
-    AUXILIARY: [filterStrings(agentConfig.auxiliaryFiles), allAuxiliaryFiles],
-    EDITED: [filterStrings(agentConfig.editedFiles ?? []), allEditedFiles],
-  };
-
-  for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
-    collectionMappings,
-  )) {
-    const additionalXml =
+    userVars[`ADDITIONAL_${prefix}S`] =
       additionalFiles.length > 0
         ? await getXmlFormatFromFiles(additionalFiles)
         : null;
-    const allXml =
+    userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
-
-    userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
-    userVars[`ALL_${prefix}S`] = allXml;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
@@ -255,18 +251,12 @@ async function logFileCategoriesWithExistence(
   }
 }
 
-/** Result from processing a required file map */
-type RequiredFileMapResult = {
-  vars: UserVars;
-  files: LoadedFileEntry[];
-};
-
 async function processRequiredFileMap(
   fileMap: Record<string, string> | undefined,
   logger: AgentLogger,
   source: string,
   basePath?: string,
-): Promise<RequiredFileMapResult> {
+): Promise<FileVarsResult> {
   if (!fileMap) return { vars: {}, files: [] };
 
   const vars: UserVars = {};
@@ -326,64 +316,44 @@ async function getPatternBasedFileVars(
   const userVars: UserVars = {};
   const files: LoadedFileEntry[] = [];
 
-  if (agentSetting.filePatternsContain) {
-    for (const patternConfig of agentSetting.filePatternsContain) {
-      const pattern = patternConfig.pattern.toLowerCase();
-      const varName = patternConfig.varName;
-      const categories = patternConfig.categories;
+  if (!agentSetting.filePatternsContain) {
+    return { vars: userVars, files };
+  }
 
-      for (const category of categories) {
-        // Type-safe access to agent config properties
-        const categoryValue = agentConfig[
-          category as keyof AgentConfig
-        ] as unknown;
+  for (const {
+    pattern: rawPattern,
+    varName,
+    categories,
+  } of agentSetting.filePatternsContain) {
+    const pattern = rawPattern.toLowerCase();
+    const source = `Pattern '${pattern}'`;
 
-        if (category.endsWith('File')) {
-          if (
-            categoryValue &&
-            typeof categoryValue === 'string' &&
-            categoryValue.toLowerCase().includes(pattern)
-          ) {
-            const ok = await setVarFromFile(
-              categoryValue,
-              varName,
-              userVars,
-              logger,
-              `Pattern '${pattern}'`,
-            );
-            files.push({
-              path: categoryValue,
-              ok,
-              varName,
-              source: `Pattern '${pattern}'`,
-            });
-          }
-        } else if (category.endsWith('Files')) {
-          if (categoryValue && Array.isArray(categoryValue)) {
-            for (const file of categoryValue) {
-              if (
-                typeof file === 'string' &&
-                file.toLowerCase().includes(pattern)
-              ) {
-                const ok = await setVarFromFile(
-                  file,
-                  varName,
-                  userVars,
-                  logger,
-                  `Pattern '${pattern}'`,
-                );
-                files.push({
-                  path: file,
-                  ok,
-                  varName,
-                  source: `Pattern '${pattern}'`,
-                });
-                if (ok) {
-                  break;
-                }
-              }
-            }
-          }
+    // Helper to try setting a var from a file that matches the pattern
+    async function trySetVar(filePath: string): Promise<boolean> {
+      if (!filePath.toLowerCase().includes(pattern)) return false;
+      const ok = await setVarFromFile(
+        filePath,
+        varName,
+        userVars,
+        logger,
+        source,
+      );
+      files.push({ path: filePath, ok, varName, source });
+      return ok;
+    }
+
+    // Check each category for matching files
+    for (const category of categories) {
+      const categoryValue = agentConfig[
+        category as keyof AgentConfig
+      ] as unknown;
+
+      if (category.endsWith('File') && typeof categoryValue === 'string') {
+        await trySetVar(categoryValue);
+      } else if (category.endsWith('Files') && Array.isArray(categoryValue)) {
+        // Try each file until one succeeds
+        for (const file of categoryValue) {
+          if (typeof file === 'string' && (await trySetVar(file))) break;
         }
       }
     }
