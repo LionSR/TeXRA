@@ -215,8 +215,9 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
  */
 /** Number of recent tool use/result pairs to keep after context clearing */
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
-/** Number of assistant turns with thinking blocks to keep */
-const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
+// DISABLED: Thinking clearing is disabled - see setupContextManagement()
+// /** Number of assistant turns with thinking blocks to keep */
+// const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 /**
  * Minimum percentage of context to clear at once for tool uses.
  * This ensures cache invalidation is worthwhile - clearing too few tokens
@@ -355,34 +356,39 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const triggerTokens = Math.floor((thresholdPercent / 100) * contextWindow);
 
-    // Thinking clearing is opt-in because the API requires it to be listed
-    // first in edits, which means it runs before tool use clearing and
-    // reduces tokens before the tool use trigger is checked. This can
-    // prevent tool use clearing from triggering in many scenarios.
-    // The API's default behavior (keep last 1 thinking turn) still applies
-    // even without explicit thinking clearing config.
-    const enableThinkingClearing = getConfig<boolean>(
-      'texra.model.enableThinkingClearing',
-      false,
-    );
-
-    if (
-      enableThinkingClearing &&
-      supportsReasoning &&
-      options.thinking &&
-      !contextManagementEdits.some(
-        (edit) => edit.type === 'clear_thinking_20251015',
-      )
-    ) {
-      // Thinking clearing must come first in the edits array per API requirement
-      contextManagementEdits.unshift({
-        type: 'clear_thinking_20251015' as const,
-        keep: {
-          type: 'thinking_turns' as const,
-          value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-        },
-      });
-    }
+    // DISABLED: Thinking clearing causes issues - it runs before tool use clearing
+    // (API requirement) and clears thinking even at low context usage. The API's
+    // default behavior (keep last 1 thinking turn) still applies without explicit config.
+    // TODO: Re-enable once Anthropic supports triggers for thinking clearing or
+    // changes the ordering requirement.
+    //
+    // const enableThinkingClearing = getConfig<boolean>(
+    //   'texra.model.enableThinkingClearing',
+    //   false,
+    // );
+    //
+    // if (
+    //   enableThinkingClearing &&
+    //   supportsReasoning &&
+    //   options.thinking &&
+    //   !contextManagementEdits.some(
+    //     (edit) => edit.type === 'clear_thinking_20251015',
+    //   )
+    // ) {
+    //   // Thinking clearing must come first in the edits array per API requirement.
+    //   // Add trigger to prevent clearing at low context usage.
+    //   contextManagementEdits.unshift({
+    //     type: 'clear_thinking_20251015' as const,
+    //     trigger: {
+    //       type: 'input_tokens' as const,
+    //       value: triggerTokens,
+    //     },
+    //     keep: {
+    //       type: 'thinking_turns' as const,
+    //       value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+    //     },
+    //   });
+    // }
 
     // Add tool result clearing strategy with server-side trigger.
     // The trigger ensures clearing only activates when input tokens exceed threshold.
