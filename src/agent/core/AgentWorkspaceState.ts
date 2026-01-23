@@ -356,7 +356,8 @@ export class TodoState {
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
-      if (a[i].content !== b[i].content || a[i].status !== b[i].status) {
+      const ai = a[i], bi = b[i];
+      if (ai.content !== bi.content || ai.status !== bi.status || ai.activeForm !== bi.activeForm) {
         return false;
       }
     }
