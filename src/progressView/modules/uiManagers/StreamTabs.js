@@ -13,10 +13,58 @@ const STATUS_CLASSES = Object.values(STREAM_STATUS).map((s) => `is-${s}`);
 
 /**
  * Manages stream tab UI updates.
+ * Uses surgical DOM updates when possible to avoid full rebuilds.
  */
 export class StreamTabs {
+  constructor() {
+    this._lastStreamNames = [];
+  }
+
   /**
-   * Updates UI to show stream tabs and highlight the active stream
+   * Check if only metadata changed (same streams in same order).
+   * @param {Array} streams
+   * @returns {boolean}
+   */
+  _canUpdateInPlace(streams) {
+    if (streams.length !== this._lastStreamNames.length) return false;
+    for (let i = 0; i < streams.length; i++) {
+      if (streams[i]?.name !== this._lastStreamNames[i]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Update a single tab's metadata in place.
+   * @param {HTMLElement} tabEl - The tab wrapper element
+   * @param {Object} info - Stream info
+   * @param {boolean} isActive - Whether this is the active stream
+   */
+  _updateTabInPlace(tabEl, info, isActive) {
+    const tooltip = this._buildTooltip(info);
+    const tab = tabEl.querySelector('.tab');
+
+    // Update text content
+    const titleEl = tabEl.querySelector('.tab-title');
+    if (titleEl) titleEl.textContent = info.label || info.name;
+
+    const modelEl = tabEl.querySelector('.model');
+    if (modelEl) modelEl.textContent = info.model || '';
+
+    const lastActiveEl = tabEl.querySelector('.last-active');
+    if (lastActiveEl) lastActiveEl.textContent = formatRelativeTime(info.lastTimestamp);
+
+    // Update tooltip
+    tabEl.title = tooltip;
+    if (tab) tab.title = tooltip;
+
+    // Update status and active state
+    this._applyStatus(tabEl.querySelector('.tab-status'), info.status);
+    tabEl.classList.toggle('is-active', isActive);
+  }
+
+  /**
+   * Updates UI to show stream tabs and highlight the active stream.
+   * Uses surgical updates when stream list is unchanged (only metadata changed).
    * @param {Array} streams - Array of stream metadata objects
    * @param {string} activeStream - Currently active stream
    */
@@ -30,8 +78,24 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
-    tabsContainer.innerHTML = '';
+
     let activeInfo = null;
+
+    // Fast path: same streams in same order, update in place
+    if (this._canUpdateInPlace(streams)) {
+      const tabs = tabsContainer.children;
+      streams.forEach((info, i) => {
+        if (!info || typeof info !== 'object') return;
+        const isActive = info.name === activeStream;
+        this._updateTabInPlace(tabs[i], info, isActive);
+        if (isActive) activeInfo = info;
+      });
+      this._updateStreamNameHeader(activeInfo);
+      return;
+    }
+
+    // Slow path: stream list changed, full rebuild required
+    tabsContainer.innerHTML = '';
     streams.forEach((info) => {
       if (!info || typeof info !== 'object') {
         console.warn('StreamTabs.update: invalid stream value:', info);
@@ -65,7 +129,17 @@ export class StreamTabs {
       tabsContainer.appendChild(tabEl);
     });
 
-    // Update active stream name
+    // Track stream names for next diff check
+    this._lastStreamNames = streams.map((s) => s?.name).filter(Boolean);
+
+    this._updateStreamNameHeader(activeInfo);
+  }
+
+  /**
+   * Update the active stream name header element.
+   * @param {Object|null} activeInfo
+   */
+  _updateStreamNameHeader(activeInfo) {
     const streamNameElem = document.getElementById(
       ELEMENT_IDS.ACTIVE_STREAM_NAME,
     );
