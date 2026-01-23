@@ -424,9 +424,9 @@ const RELAY_AUTH_ERROR_PATTERNS = [
  * Checks if an error appears to be a relay authentication error.
  * Used as a fallback when `_relay` field detection fails.
  *
- * Relay auth errors (401) should be retryable because:
- * 1. The token can be refreshed before retry
- * 2. The user can sign out and sign back in
+ * Relay auth errors (401) are NOT auto-retryable because auto-retry
+ * with an expired token will always fail. Instead, they go straight
+ * to manual retry where the token is refreshed first.
  */
 function isRelayAuthError(err: unknown, statusCode?: number): boolean {
   // Only consider 401 errors
@@ -434,11 +434,11 @@ function isRelayAuthError(err: unknown, statusCode?: number): boolean {
     return false;
   }
 
-  // Check error message for known relay auth error patterns
+  // Check error message for known relay auth error patterns (case-insensitive)
   if (err instanceof Error) {
-    const message = err.message;
+    const message = err.message.toLowerCase();
     return RELAY_AUTH_ERROR_PATTERNS.some((pattern) =>
-      message.includes(pattern),
+      message.includes(pattern.toLowerCase()),
     );
   }
 
@@ -454,15 +454,22 @@ interface ErrorClassification {
   isRelay: boolean;
   /** 401 error with known relay auth message pattern */
   isRelayAuth: boolean;
-  /** Error is retryable (connection, 5xx, rate limit, or relay) */
+  /**
+   * Error is retryable for AUTO-RETRY (connection, 5xx, rate limit).
+   * Note: Relay 401 errors are NOT auto-retryable because auto-retry
+   * with an expired token will always fail. They go straight to manual
+   * retry where the token is refreshed first.
+   */
   retryable: boolean;
-  /** Token refresh needed before retry (relay 401) */
-  needsTokenRefresh: boolean;
 }
 
 /**
- * Classify an error once - determines retryability and token refresh needs.
+ * Classify an error once - determines retryability.
  * Single pass through all checks to avoid redundant computation.
+ *
+ * Key design: Relay 401 errors are marked non-retryable for auto-retry.
+ * This skips wasted auto-retry attempts and goes straight to manual retry,
+ * where token refresh happens before the actual retry.
  */
 function classifyError(
   err: unknown,
@@ -472,12 +479,15 @@ function classifyError(
   const isRelay = isRelayError(rawErrorBody);
   const isRelayAuth = isRelayAuthError(err, statusCode);
 
-  // Token refresh needed for any relay 401 error
-  const needsTokenRefresh =
+  // Relay 401 errors: NOT auto-retryable (would waste attempts with expired token)
+  // They'll skip to manual retry where token refresh happens first
+  const isRelay401 =
     statusCode === StatusCodes.UNAUTHORIZED && (isRelay || isRelayAuth);
 
-  // Determine retryability
-  let retryable = isRelay || isRelayAuth || isRetryableStatusCode(statusCode);
+  // Determine retryability for auto-retry
+  // Relay errors (non-401) are retryable, relay 401 errors are not
+  let retryable =
+    (isRelay && !isRelay401) || isRetryableStatusCode(statusCode);
 
   // Anthropic-specific: overloaded_error and timeout_error are retryable
   if (!retryable && err instanceof Error) {
@@ -490,7 +500,7 @@ function classifyError(
     }
   }
 
-  return { isRelay, isRelayAuth, retryable, needsTokenRefresh };
+  return { isRelay, isRelayAuth, retryable };
 }
 
 export function formatProviderHttpError(err: unknown): ProviderError {
@@ -519,7 +529,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       ...sdkMatch,
       retryable: classification.retryable || sdkMatch.retryable,
       isRelayError: classification.isRelay || classification.isRelayAuth,
-      needsTokenRefresh: classification.needsTokenRefresh || undefined,
       rawErrorBody,
       streamDiagnostics,
     };
@@ -562,7 +571,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     provider,
     retryable: classification.retryable,
     isRelayError: classification.isRelay || classification.isRelayAuth,
-    needsTokenRefresh: classification.needsTokenRefresh || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,

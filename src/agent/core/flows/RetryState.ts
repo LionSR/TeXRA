@@ -318,19 +318,27 @@ export abstract class RetryableInvocationNode<
     });
 
     if (result.action === 'retry') {
-      // If token refresh is needed (relay auth error), refresh before retry
-      if (formatted.needsTokenRefresh) {
+      // Relay 401 errors need token refresh before retry
+      const needsTokenRefresh =
+        formatted.statusCode === 401 && formatted.isRelayError;
+
+      if (needsTokenRefresh) {
         logger.debug('Refreshing token before retry due to relay auth error');
         const authProvider = SupabaseAuthProvider.getInstance();
-        if (authProvider) {
-          const newToken = await authProvider.forceRefreshToken();
-          if (newToken) {
-            logger.debug('Token refreshed successfully, proceeding with retry');
-          } else {
-            logger.warn('Token refresh failed, retrying with existing token');
-          }
+        const newToken = authProvider
+          ? await authProvider.forceRefreshToken()
+          : null;
+
+        if (!newToken) {
+          // Token refresh failed - don't retry, it will just fail again
+          logger.warn(
+            'Token refresh failed. Please sign out and sign back in.',
+          );
+          return { shouldRetry: false, userCancelled: false };
         }
+        logger.debug('Token refreshed successfully, proceeding with retry');
       }
+
       logger.debug('Manual retry triggered');
       StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
       return { shouldRetry: true, userCancelled: false };
