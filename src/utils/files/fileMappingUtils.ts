@@ -96,54 +96,6 @@ export function createFileMapping(
  */
 const TEX_EXTENSION_REGEX = /\.tex$/i;
 
-/**
- * Build a string → string lookup for LaTeX \input command replacement.
- * Generates all path suffix variants (from full path down to filename) for flexible matching.
- */
-function buildReplacementLookup(
-  baseToOutputMap: Map<string, FileLocation>,
-): Map<string, string> {
-  const replacements = new Map<string, string>();
-
-  for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
-    if (!baseFile || !outputLoc) continue;
-
-    const outputFile = getComparablePath(outputLoc);
-
-    const baseSegments = getPathSegments(baseFile);
-    const outputSegments = getPathSegments(outputFile);
-    const maxDepth = Math.min(baseSegments.length, outputSegments.length);
-
-    for (let depth = maxDepth; depth >= 1; depth--) {
-      const baseSuffix = baseSegments.slice(-depth).join('/');
-      const outputSuffix = outputSegments.slice(-depth).join('/');
-
-      // Register replacement if not already present
-      const normalizedBase = normalizeLatexPath(baseSuffix);
-      if (normalizedBase && !replacements.has(normalizedBase)) {
-        replacements.set(normalizedBase, normalizeLatexPath(outputSuffix));
-      }
-
-      // Also register without .tex extension
-      const baseHasTex = TEX_EXTENSION_REGEX.test(baseSuffix);
-      const outputHasTex = TEX_EXTENSION_REGEX.test(outputSuffix);
-      if (baseHasTex && outputHasTex) {
-        const baseNoExt = normalizeLatexPath(
-          baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
-        );
-        if (baseNoExt && !replacements.has(baseNoExt)) {
-          replacements.set(
-            baseNoExt,
-            normalizeLatexPath(outputSuffix.replace(TEX_EXTENSION_REGEX, '')),
-          );
-        }
-      }
-    }
-  }
-
-  return replacements;
-}
-
 export async function replaceInputCommands(
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],
@@ -170,7 +122,42 @@ export async function replaceInputCommands(
       .join(', ')}`,
   );
 
-  const replacementLookup = buildReplacementLookup(baseToOutputMap);
+  // Build replacement lookup: generates all path suffix variants for flexible matching
+  const replacementLookup = new Map<string, string>();
+  for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
+    if (!baseFile || !outputLoc) continue;
+
+    const outputFile = getComparablePath(outputLoc);
+    const baseSegments = getPathSegments(baseFile);
+    const outputSegments = getPathSegments(outputFile);
+    const maxDepth = Math.min(baseSegments.length, outputSegments.length);
+
+    for (let depth = maxDepth; depth >= 1; depth--) {
+      const baseSuffix = baseSegments.slice(-depth).join('/');
+      const outputSuffix = outputSegments.slice(-depth).join('/');
+
+      // Register replacement if not already present
+      const normalizedBase = normalizeLatexPath(baseSuffix);
+      if (normalizedBase && !replacementLookup.has(normalizedBase)) {
+        replacementLookup.set(normalizedBase, normalizeLatexPath(outputSuffix));
+      }
+
+      // Also register without .tex extension
+      const baseHasTex = TEX_EXTENSION_REGEX.test(baseSuffix);
+      const outputHasTex = TEX_EXTENSION_REGEX.test(outputSuffix);
+      if (baseHasTex && outputHasTex) {
+        const baseNoExt = normalizeLatexPath(
+          baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
+        );
+        if (baseNoExt && !replacementLookup.has(baseNoExt)) {
+          replacementLookup.set(
+            baseNoExt,
+            normalizeLatexPath(outputSuffix.replace(TEX_EXTENSION_REGEX, '')),
+          );
+        }
+      }
+    }
+  }
 
   if (replacementLookup.size === 0) {
     logger?.debug('No replacement entries derived from file mappings');

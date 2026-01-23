@@ -12,25 +12,6 @@ import {
 // Local file imports
 import { FILE_TYPES, type FileType } from './constants';
 
-function createActiveFilesFromArrays(
-  src: Record<string, any>,
-): Record<FileType, boolean> {
-  const active = {} as Record<FileType, boolean>;
-  FILE_TYPES.forEach((type) => {
-    const filesField = `${type}Files`;
-    const flagField = `${filesField}Active`;
-    const useMultipleOutputs = Boolean(
-      (src as { useMultipleOutputs?: boolean }).useMultipleOutputs,
-    );
-    const multipleFlag = type === 'output' && useMultipleOutputs;
-    active[type] =
-      (Array.isArray(src[filesField]) && src[filesField].length > 0) ||
-      !!src[flagField] ||
-      multipleFlag;
-  });
-  return active;
-}
-
 /**
  * Converts an AgentConfig object to a TaskState object.
  *
@@ -44,11 +25,28 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
         agentConfig: config as ToolUseTaskState['agentConfig'],
         toolSessionState: {},
       };
-    case AgentCategory.Workflow:
+    case AgentCategory.Workflow: {
+      // Build activeFiles inline - determines which file types are active
+      const activeFiles = {} as Record<FileType, boolean>;
+      const useMultipleOutputs = Boolean(
+        (config as { useMultipleOutputs?: boolean }).useMultipleOutputs,
+      );
+      for (const type of FILE_TYPES) {
+        const filesField = `${type}Files`;
+        const flagField = `${filesField}Active`;
+        const multipleFlag = type === 'output' && useMultipleOutputs;
+        activeFiles[type] =
+          (Array.isArray((config as Record<string, unknown>)[filesField]) &&
+            ((config as Record<string, unknown>)[filesField] as unknown[])
+              .length > 0) ||
+          !!(config as Record<string, unknown>)[flagField] ||
+          multipleFlag;
+      }
       return {
         agentConfig: config as WorkflowTaskState['agentConfig'],
-        activeFiles: createActiveFilesFromArrays(config),
+        activeFiles,
       };
+    }
     default: {
       const _exhaustive: never = config.agentCategory;
       throw new Error(`Unknown agent category: ${_exhaustive}`);
