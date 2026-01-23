@@ -365,7 +365,9 @@ class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(prepRes: ToolUseProcessPrepResult): Promise<ToolUseProcessExecResult> {
+  async exec(
+    prepRes: ToolUseProcessPrepResult,
+  ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
       return { kind: 'skipped' };
     }
