@@ -630,10 +630,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Append grouped messages to their containers
+    // Append grouped messages to their containers (fallback to main log if group missing)
     for (const [groupId, frag] of groupedFragments) {
       const container = dom.logEntries.getGroupContainer(groupId);
-      if (container) container.appendChild(frag);
+      if (container) {
+        container.appendChild(frag);
+      } else {
+        // Group container not found - append to main log as fallback
+        logContent.appendChild(frag);
+      }
     }
 
     // Append ungrouped messages to main log
@@ -1253,8 +1258,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Skip if nothing changed
-    const key = `${activeStream}|${streamStatus}|${category}|${fileCount}|${instructionPreview ?? ''}`;
+    // Skip if nothing changed (use \0 separator to avoid collision with user content)
+    const key = [activeStream, streamStatus, category, fileCount, instructionPreview ?? ''].join('\0');
     if (key === this._lastFollowupState) return;
     this._lastFollowupState = key;
 
