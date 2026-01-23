@@ -26,13 +26,13 @@ import type {
 const MAX_BUFFER_SIZE = 1000;
 
 export interface ProgressEventPayloads {
-  addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
-  updateLogMessage: { stream: StreamTabId; logMessage: LogMessageUpdate };
+  addLogMessage: { streamId: StreamTabId; logMessage: LogMessageData };
+  updateLogMessage: { streamId: StreamTabId; logMessage: LogMessageUpdate };
   addTaskGroup: AddTaskGroupPayload;
   updateTaskGroup: UpdateTaskGroupPayload;
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: {
-    stream: StreamTabId;
+    streamId: StreamTabId;
     status: StreamStatus;
     /** Previous status before this update, for detecting transitions */
     previousStatus: StreamStatus;
@@ -43,13 +43,13 @@ export interface ProgressEventPayloads {
   updateMissingOutputs: RunScopedPayload & {
     filesByRound: { [key: number]: string[] };
   };
-  clearMissingOutputs: { stream: StreamTabId };
+  clearMissingOutputs: { streamId: StreamTabId };
   setTaskState: SetTaskStatePayload;
   updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
   };
   updateContextState: {
-    stream: StreamTabId;
+    streamId: StreamTabId;
     contextState: ContextStateData;
   };
   showRetryRequest: RetryRequestPrompt;

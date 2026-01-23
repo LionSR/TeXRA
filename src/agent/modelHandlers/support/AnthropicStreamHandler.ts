@@ -56,10 +56,6 @@ interface AnthropicStreamState {
   finalized: boolean;
 }
 
-// Re-export for backward compatibility (getDiagnostics return type)
-export { StreamDiagnosticsSchema as StreamDiagnosticsOutputSchema };
-export type StreamDiagnosticsOutput = StreamDiagnostics;
-
 /**
  * Schema for internal mutable state during streaming.
  * Uses Set/timestamp fields for efficient tracking during stream processing.
@@ -163,7 +159,7 @@ export class AnthropicStreamHandler {
    * Returns diagnostic information about the streaming state.
    * Useful for debugging stream failures - shows what was received before error.
    */
-  getDiagnostics(): StreamDiagnosticsOutput {
+  getDiagnostics(): StreamDiagnostics {
     const now = Date.now();
     return {
       thinkingChars: this.diagnostics.thinkingChars,

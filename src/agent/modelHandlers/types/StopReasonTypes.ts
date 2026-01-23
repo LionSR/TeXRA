@@ -54,14 +54,6 @@ export const ANTHROPIC_STOP = {
   PAUSE_TURN: 'pause_turn',
   REFUSAL: 'refusal',
 } as const satisfies Record<string, AnthropicSDKStopReason>;
-/** Anthropic stop reason type - derived from SDK's StopReason */
-export type AnthropicStopReason = AnthropicSDKStopReason;
-
-/**
- * Finish reasons returned by Google's API.
- * Uses SDK's FinishReason enum directly as the single source of truth.
- */
-export type GoogleFinishReason = FinishReason;
 
 /**
  * Union type covering all known provider stop reasons.
@@ -70,7 +62,7 @@ export type GoogleFinishReason = FinishReason;
 export type ProviderStopReason =
   | OpenAIChatFinishReason
   | OpenAICompletionFinishReason
-  | AnthropicStopReason
-  | GoogleFinishReason
+  | AnthropicSDKStopReason
+  | FinishReason
   | MCPStopReason
   | string;

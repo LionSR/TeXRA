@@ -257,7 +257,7 @@ async function resolveAgentBase(
 
   // Emit stream event before stage creation (prevents race condition)
   bus.emit('setActiveStream', {
-    stream: streamId,
+    streamId,
     agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: useMultipleOutputs,
@@ -350,13 +350,11 @@ function acquireStreamOrThrow(
   );
 }
 
-type FlowRunner = () => Promise<EndGroupStatus>;
-
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamTabId: StreamTabId,
   agentName: string,
-  runner: FlowRunner,
+  runner: () => Promise<EndGroupStatus>,
 ): Promise<void> {
   try {
     const flowStatus = await runner();
@@ -517,7 +515,7 @@ export async function executeAgent(
     const runStorage = getRunStorageService();
 
     // Set stream status to running
-    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     logger.info(`Starting task execution for ${streamTabId}`);
     logger.info(`Input file: ${config.inputFile}`);
@@ -536,7 +534,7 @@ export async function executeAgent(
       showAgentNotification(config);
     }
     bus.emit('setTaskState', {
-      streamTabId,
+      streamId: streamTabId,
       executionId,
       taskState: agentConfigToTaskState(config),
     });
@@ -629,7 +627,7 @@ export async function executeMergeAgent(
   const { streamId: streamTabId, config, executionId } = ctx;
 
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
-    StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     const taskStage = await logger.stage(`Task: merge@${model}`);
     return taskStage.run(async () => {
@@ -702,7 +700,7 @@ export async function resumeToolUseFromSnapshot(
     streamTabId,
     snapshotConfig.agent,
     async () => {
-      StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
+      StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
       // Run the flow with resume snapshot
       const result = await runToolUseFlow(

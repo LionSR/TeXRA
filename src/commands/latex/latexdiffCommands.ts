@@ -889,19 +889,3 @@ async function runLatexdiffViaWorkspaceScan(params: {
 
   return { results, totalOperations };
 }
-
-export const latexdiffCommands = {
-  handleLatexdiff,
-  handleLatexdiffvc,
-  handlePackLatexdiffvc,
-  handlePackLatexdiffvcMultiple,
-  handleCleanLatexdiffvc,
-  handleCleanLatexdiffvcMultiple,
-  handleRunLatexdiff,
-};
-
-export const latexdiffHelpers = {
-  ensureLatexdiffToolInstalled,
-  promptForLatexdiffMathMarkup,
-  openLatexdiffResult,
-};
