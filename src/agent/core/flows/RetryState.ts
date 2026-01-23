@@ -170,6 +170,13 @@ export abstract class RetryableInvocationNode<
    */
   protected _userCancelled = false;
 
+  /**
+   * Tracks if we've already attempted token refresh for relay 401 errors.
+   * Prevents infinite refresh loops when 401 is due to account issues (suspended,
+   * permissions revoked) rather than just an expired token.
+   */
+  protected _hasAttemptedTokenRefresh = false;
+
   constructor() {
     const config = getNodeRetryConfig();
     super(config.maxRetries, config.wait);
@@ -190,13 +197,14 @@ export abstract class RetryableInvocationNode<
   }
 
   /**
-   * Reset user-cancelled flag on clone to prevent stale state.
+   * Reset instance flags on clone to prevent stale state.
    * Note: BaseNode.clone() shallow-copies with Object.assign. Subclasses with
    * object/array properties must override to deep-copy them.
    */
   clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
+    cloned._hasAttemptedTokenRefresh = false;
     return cloned;
   }
 
@@ -287,8 +295,9 @@ export abstract class RetryableInvocationNode<
    * Handles the manual retry prompt UI flow.
    * Extracted as a protected method for better cohesion with retry logic.
    *
-   * For relay 401 errors, automatically refreshes the token and retries
-   * without showing the manual retry UI.
+   * For relay 401 errors, attempts ONE automatic token refresh before showing
+   * manual retry UI. The flag prevents infinite refresh loops when 401 is due
+   * to account issues rather than expired tokens.
    */
   protected async handleManualRetryPrompt(
     error: Error,
@@ -305,22 +314,20 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    // Auto-refresh token on relay 401 errors and retry automatically
-    if (formatted.isRelayError && formatted.statusCode === 401) {
-      logger.info('Relay 401 error, attempting automatic token refresh', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
+    // Auto-refresh token on relay 401 errors (once per error cycle)
+    if (
+      formatted.isRelayError &&
+      formatted.statusCode === 401 &&
+      !this._hasAttemptedTokenRefresh
+    ) {
+      this._hasAttemptedTokenRefresh = true;
+      logger.debug('Relay 401 error, attempting automatic token refresh');
       const refreshedToken = await SupabaseClient.forceRefreshToken();
       if (refreshedToken) {
-        logger.info('Token refreshed successfully, retrying automatically', {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        });
+        logger.debug('Token refreshed, retrying');
         return { shouldRetry: true, userCancelled: false };
       }
       // Refresh failed - fall through to manual retry UI
-      logger.warn('Token refresh failed, showing manual retry UI', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
     }
 
     // Log the error before showing retry UI - pass FULL formatted error
