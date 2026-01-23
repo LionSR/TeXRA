@@ -602,7 +602,9 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Helper to create | separated regex part from a list of words
-const createWordRegexPart = (words: string[]): string => words.join('|');
+function createWordRegexPart(words: string[]): string {
+  return words.join('|');
+}
 
 // Define the comprehensive list of all trigger words (from our previous discussion)
 // prettier-ignore

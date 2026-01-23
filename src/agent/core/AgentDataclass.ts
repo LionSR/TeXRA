@@ -111,7 +111,7 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
  * Strips legacy fields before strictObject validation.
  * Defaults to Workflow when not specified.
  */
-const normalizeAgentSettingInput = (input: unknown): unknown => {
+function normalizeAgentSettingInput(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
@@ -153,7 +153,7 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
 
   // Default to Workflow
   return { ...rest, agentCategory: AgentCategory.Workflow };
-};
+}
 
 /**
  * Union schema with preprocessing to normalize discriminator.
