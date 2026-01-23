@@ -17,7 +17,7 @@ import { WorkspaceFS } from '@utils/files';
 // ============================================================================
 
 export const LatexFileResolutionSchema = z.object({
-  resolved: z.custom<WorkspacePathResolution>(),
+  path: z.custom<WorkspacePathResolution>(),
   display: z.string(),
 });
 export type LatexFileResolution = z.infer<typeof LatexFileResolutionSchema>;
@@ -41,12 +41,12 @@ export type AttachmentLimitOptions = z.infer<
 export async function resolveLatexFileOrThrow(
   texPath: string,
 ): Promise<LatexFileResolution> {
-  const { resolved, display } = resolveAndFormat(texPath);
-  if (!(await WorkspaceFS.exists(resolved.relative))) {
+  const { path, display } = resolveAndFormat(texPath);
+  if (!(await WorkspaceFS.exists(path.relative))) {
     throw new ToolError(`LaTeX file not found: ${display}`);
   }
 
-  return { resolved, display };
+  return { path, display };
 }
 
 export async function buildLimitedAttachments(
