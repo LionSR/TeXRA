@@ -14,6 +14,7 @@ import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { TaskRunFileService } from '@utils/files';
 
 // ============================================================================
@@ -56,6 +57,17 @@ export interface ToolUseCycleOptions<
   toolRegistry: IToolRegistry;
   modelName?: string;
   agentName?: string;
+  /**
+   * Session for follow-up queue access.
+   * When provided, allows injecting queued user messages after tool dispatch
+   * so the model can continue without ending the turn.
+   */
+  session?: IToolUseSession;
+  /**
+   * Callback invoked when a queued follow-up message is consumed.
+   * Used to update the UI (clear the queued message display).
+   */
+  onFollowUpConsumed?: () => void;
 }
 
 // ============================================================================
