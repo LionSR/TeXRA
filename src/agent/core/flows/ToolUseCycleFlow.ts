@@ -721,7 +721,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     // Filter out null results (interrupted tool calls)
     const completedResults = execResults.filter(
-      (result): result is ToolExecutionResult => result !== null,
+      (r): r is ToolExecutionResult => r !== null,
     );
 
     // If interrupted mid-batch, mark as stopped
@@ -741,10 +741,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
 
-    const extracted = completedResults.map((execResult) =>
-      extractToolAttachments(execResult.result),
+    const extracted = completedResults.map((er) =>
+      extractToolAttachments(er.result),
     );
-    const calls = completedResults.map((execResult) => execResult.call);
+    const calls = completedResults.map((er) => er.call);
 
     // For Google/DeepSeek handlers with multiple parallel calls, batch all tool calls
     // into a single message to preserve thought signatures.
@@ -757,8 +757,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
       const followUpMsgs = await services.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
-        extracted.map((item) => item.sanitizedResult),
-        extracted.map((item) => item.attachments),
+        extracted.map((e) => e.sanitizedResult),
+        extracted.map((e) => e.attachments),
         workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
