@@ -1,13 +1,16 @@
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
+// Local imports - tools
+import type { ToolResult } from '@tools/result';
+
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Local file imports - use shared YOLO state
+// Local file imports - shared YOLO state (cleanup handled by toolEditApproval.ts)
 import { isApprovalBypassedForStream } from './toolEditApproval';
 
 export interface BashApprovalRequest {
@@ -27,7 +30,7 @@ export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
-// Approval queue state
+// Approval queue state (pendingApprovals self-cleans via finally block)
 let queue: Promise<void> = Promise.resolve();
 let approvalCounter = 0;
 const pendingApprovals = new Map<
@@ -64,8 +67,14 @@ async function showApprovalPrompt(
   try {
     return await new Promise<BashApprovalResult>((resolve) => {
       let settled = false;
+      const settle = (result: BashApprovalResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
       pendingApprovals.set(requestId, {
-        settle: (result) => { if (!settled) { settled = true; resolve(result); } },
+        settle,
         isSettled: () => settled,
       });
 
@@ -73,7 +82,7 @@ async function showApprovalPrompt(
       bus.emit('showBashApprovalPrompt', {
         requestId,
         command: request.command,
-        allowBypass: !(streamId && isApprovalBypassedForStream(streamId)),
+        allowBypass: true, // YOLO already checked in requestBashApproval
         streamId: streamId ?? '',
       });
     });
@@ -100,13 +109,7 @@ export async function handleProgressViewBashApprovalAction(payload: {
 export function buildBashApprovalRejectedResult(
   command: string,
   userMessage?: string,
-): {
-  output: string;
-  summary: string;
-  error: string;
-  isError: true;
-  userInstruction?: string;
-} {
+): ToolResult {
   const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
   const message = `User rejected bash command: ${preview}`;
   return {
