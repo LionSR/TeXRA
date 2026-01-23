@@ -55,7 +55,7 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const { resolved, display } = resolveAndFormat(input.path);
+    const { path: resolved, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
     const summary = `Listing for ${display}`;
 
