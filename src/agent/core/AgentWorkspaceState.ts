@@ -357,6 +357,7 @@ export class TodoState {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
       const ai = a[i], bi = b[i];
+      if (!ai || !bi) return false; // Guard against sparse arrays
       if (ai.content !== bi.content || ai.status !== bi.status || ai.activeForm !== bi.activeForm) {
         return false;
       }
