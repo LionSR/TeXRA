@@ -221,9 +221,9 @@ const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
  * Minimum percentage of context to clear at once for tool uses.
  * This ensures cache invalidation is worthwhile - clearing too few tokens
  * causes frequent cache misses without meaningful benefit.
- * 10% is a reasonable balance between cache efficiency and context retention.
+ * 25% provides more aggressive clearing to reduce frequent cache thrashing.
  */
-const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 10;
+const CONTEXT_MANAGEMENT_CLEAR_AT_LEAST_PERCENT = 25;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -805,6 +805,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
         context_management?: BetaContextManagementResponse | null;
       }
     ).context_management;
+
+    // Debug logging to diagnose context management response
+    if (contextManagement) {
+      this.logger.debug(
+        `Context management response received: ${JSON.stringify(contextManagement)}`,
+      );
+    }
 
     if (!contextManagement?.applied_edits?.length) {
       return;
