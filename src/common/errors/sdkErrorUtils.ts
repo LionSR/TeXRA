@@ -323,6 +323,7 @@ function detectRequestId(err: unknown): string | undefined {
 /**
  * Extracts the raw error body from SDK errors.
  * OpenAI SDK stores the parsed JSON response in an `error` property.
+ * Google GenAI SDK stores the raw JSON in the error message.
  * Useful for debugging relay errors where the body contains additional context.
  */
 function detectRawErrorBody(err: unknown): unknown {
@@ -335,15 +336,31 @@ function detectRawErrorBody(err: unknown): unknown {
     body?: unknown;
     data?: unknown;
     response?: { data?: unknown };
+    message?: string;
   };
 
   // Try common SDK property names in order of likelihood
-  return (
+  const directBody =
     candidate.error ?? // OpenAI SDK
     candidate.body ??
     candidate.data ??
-    candidate.response?.data
-  );
+    candidate.response?.data;
+
+  if (directBody !== undefined) {
+    return directBody;
+  }
+
+  // Google GenAI SDK: raw JSON may be in the error message
+  // e.g., ApiError: {"error":{"_relay":"1.8.2","message":"..."}}
+  if (candidate.message && candidate.message.startsWith('{')) {
+    try {
+      return JSON.parse(candidate.message);
+    } catch {
+      // Not valid JSON, ignore
+    }
+  }
+
+  return undefined;
 }
 
 // ============================================================================
