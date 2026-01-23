@@ -457,8 +457,7 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateAll(this.state, statusesForRefresh);
     } else {
       // Existing stream - targeted status update only
-      const logs = this.state.streamTabs.getMessages(streamId);
-      const lastTimestamp = logs.at(-1)?.timestamp;
+      const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
     }
   }
