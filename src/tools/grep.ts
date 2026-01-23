@@ -21,18 +21,17 @@ const GrepInputSchema = z.strictObject({
   output_mode: z
     .enum(OUTPUT_MODES)
     .nullish()
-    .transform((v) => v ?? 'content')
-    .describe('content: lines, files_with_matches: paths only, count: counts per file.'),
+    .transform((v) => v ?? 'content'),
   '-B': z.int().min(0).nullish(),
   '-A': z.int().min(0).nullish(),
   '-C': z.int().min(0).nullish(),
   '-n': z.boolean().nullish(),
   '-i': z.boolean().nullish(),
-  type: z.string().nullish().describe('Ripgrep file type, e.g., "ts", "py".'),
-  offset: z.int().min(0).nullish().describe('Skip first N results for pagination.'),
+  type: z.string().nullish(),
+  offset: z.int().min(0).nullish(),
   head_limit: z.int().min(1).nullish(),
-  multiline: z.boolean().nullish().describe('Match patterns across line boundaries.'),
-  literal: z.boolean().nullish().describe('Exact string match, not regex.'),
+  multiline: z.boolean().nullish(),
+  literal: z.boolean().nullish().describe('Exact string, not regex.'),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
