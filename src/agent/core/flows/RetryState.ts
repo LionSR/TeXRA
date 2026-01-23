@@ -18,6 +18,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   formatProviderHttpError,
   type ProviderError,
@@ -285,6 +286,9 @@ export abstract class RetryableInvocationNode<
   /**
    * Handles the manual retry prompt UI flow.
    * Extracted as a protected method for better cohesion with retry logic.
+   *
+   * For relay 401 errors, automatically refreshes the token and retries
+   * without showing the manual retry UI.
    */
   protected async handleManualRetryPrompt(
     error: Error,
@@ -299,6 +303,24 @@ export abstract class RetryableInvocationNode<
     // If not retryable, don't show UI - go straight to execFallback
     if (!formatted.retryable) {
       return { shouldRetry: false, userCancelled: false };
+    }
+
+    // Auto-refresh token on relay 401 errors and retry automatically
+    if (formatted.isRelayError && formatted.statusCode === 401) {
+      logger.info('Relay 401 error, attempting automatic token refresh', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+      const refreshedToken = await SupabaseClient.forceRefreshToken();
+      if (refreshedToken) {
+        logger.info('Token refreshed successfully, retrying automatically', {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        });
+        return { shouldRetry: true, userCancelled: false };
+      }
+      // Refresh failed - fall through to manual retry UI
+      logger.warn('Token refresh failed, showing manual retry UI', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
     }
 
     // Log the error before showing retry UI - pass FULL formatted error

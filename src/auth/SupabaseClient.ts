@@ -16,6 +16,12 @@ import {
 /** Interface for auth provider to avoid circular imports. */
 interface AuthTokenProvider {
   ensureFreshToken(): Promise<string | null>;
+  /**
+   * Force refresh the token, bypassing local expiry checks.
+   * Used when server returns 401 (token invalid/expired on server).
+   * @returns Fresh access token, or null if refresh failed
+   */
+  forceRefreshToken(): Promise<string | null>;
 }
 
 /**
@@ -253,6 +259,22 @@ export class SupabaseClient {
   static async isAuthenticated(): Promise<boolean> {
     const token = await this.getAccessToken();
     return token !== null;
+  }
+
+  /**
+   * Force refresh the token, bypassing local expiry checks.
+   * Used when relay returns 401 (token invalid/expired on server).
+   * @returns Fresh access token, or null if refresh failed or no auth provider
+   */
+  static async forceRefreshToken(): Promise<string | null> {
+    if (!this.authProvider) {
+      logger.warn(
+        'SupabaseClient',
+        'Cannot force refresh: no auth provider registered',
+      );
+      return null;
+    }
+    return this.authProvider.forceRefreshToken();
   }
 
   /** Get configuration for re-initialization. */
