@@ -856,7 +856,7 @@ export class ModelHandlerOpenAI<
     }
 
     // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { content: fileContent } = await prepareExistingOutputContent(
+    const { fileContent } = await prepareExistingOutputContent(
       outputLocation,
       workspaceState,
       this.logger,
