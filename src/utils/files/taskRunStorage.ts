@@ -123,35 +123,6 @@ type ResolvedPath =
   | { kind: 'workspace'; absolutePath: string; relativePath: string }
   | { kind: 'external'; absolutePath: string };
 
-function resolveAbsolutePathAgainstWorkspace(
-  absolutePath: string,
-  workspaceRoot: string | undefined,
-): ResolvedPath {
-  if (!workspaceRoot) {
-    return { kind: 'external', absolutePath };
-  }
-  const relative = WorkspaceFS.relativePath(absolutePath);
-  if (relative !== absolutePath && !relative.startsWith('..')) {
-    return {
-      kind: 'workspace',
-      absolutePath,
-      relativePath: relative,
-    };
-  }
-  return { kind: 'external', absolutePath };
-}
-
-function resolveRelativePathAgainstWorkspace(
-  relativePath: string,
-  workspaceRoot: string | undefined,
-): ResolvedPath {
-  if (!workspaceRoot) {
-    return { kind: 'external', absolutePath: path.resolve(relativePath) };
-  }
-  const absolutePath = path.join(workspaceRoot, relativePath);
-  return { kind: 'workspace', absolutePath, relativePath };
-}
-
 /**
  * Resolve a path (absolute or relative) against a workspace root.
  * This is the shared logic for path resolution used by createLocation,
@@ -177,10 +148,26 @@ function resolvePathAgainstWorkspace(
     // Use WorkspaceFS.relativePath() which handles symlinks correctly via
     // vscode.workspace.asRelativePath(). Direct path.relative() fails when
     // the path is inside a symlinked directory.
-    return resolveAbsolutePathAgainstWorkspace(inputPath, workspaceRoot);
+    if (!workspaceRoot) {
+      return { kind: 'external', absolutePath: inputPath };
+    }
+    const relative = WorkspaceFS.relativePath(inputPath);
+    if (relative !== inputPath && !relative.startsWith('..')) {
+      return {
+        kind: 'workspace',
+        absolutePath: inputPath,
+        relativePath: relative,
+      };
+    }
+    return { kind: 'external', absolutePath: inputPath };
   }
 
-  return resolveRelativePathAgainstWorkspace(inputPath, workspaceRoot);
+  // Relative path
+  if (!workspaceRoot) {
+    return { kind: 'external', absolutePath: path.resolve(inputPath) };
+  }
+  const absolutePath = path.join(workspaceRoot, inputPath);
+  return { kind: 'workspace', absolutePath, relativePath: inputPath };
 }
 
 /**

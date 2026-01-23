@@ -59,37 +59,40 @@ export function buildFileContextFromTaskState(
   taskState: TaskState,
 ): FileContext {
   const { agentConfig } = taskState;
+  const context: FileContext = {};
 
-  return {
-    ...(agentConfig.agent && { agent: agentConfig.agent }),
-    ...(isNonEmptyString(agentConfig.inputFile) && {
-      inputFile: agentConfig.inputFile,
-    }),
-    ...(agentConfig.inputFiles.length > 0 && {
-      inputFiles: agentConfig.inputFiles,
-    }),
-    ...(isNonEmptyString(agentConfig.referenceFile) && {
-      referenceFile: agentConfig.referenceFile,
-    }),
-    ...(agentConfig.referenceFiles.length > 0 && {
-      referenceFiles: agentConfig.referenceFiles,
-    }),
-    ...(isNonEmptyString(agentConfig.auxiliaryFile) && {
-      auxiliaryFile: agentConfig.auxiliaryFile,
-    }),
-    ...(agentConfig.auxiliaryFiles.length > 0 && {
-      auxiliaryFiles: agentConfig.auxiliaryFiles,
-    }),
-    ...(isNonEmptyString(agentConfig.mediaFile) && {
-      mediaFile: agentConfig.mediaFile,
-    }),
-    ...(agentConfig.mediaFiles.length > 0 && {
-      mediaFiles: agentConfig.mediaFiles,
-    }),
-    ...(agentConfig.outputFiles.length > 0 && {
-      outputFiles: agentConfig.outputFiles,
-    }),
-  };
+  if (agentConfig.agent) {
+    context.agent = agentConfig.agent;
+  }
+  if (isNonEmptyString(agentConfig.inputFile)) {
+    context.inputFile = agentConfig.inputFile;
+  }
+  if (agentConfig.inputFiles.length > 0) {
+    context.inputFiles = agentConfig.inputFiles;
+  }
+  if (isNonEmptyString(agentConfig.referenceFile)) {
+    context.referenceFile = agentConfig.referenceFile;
+  }
+  if (agentConfig.referenceFiles.length > 0) {
+    context.referenceFiles = agentConfig.referenceFiles;
+  }
+  if (isNonEmptyString(agentConfig.auxiliaryFile)) {
+    context.auxiliaryFile = agentConfig.auxiliaryFile;
+  }
+  if (agentConfig.auxiliaryFiles.length > 0) {
+    context.auxiliaryFiles = agentConfig.auxiliaryFiles;
+  }
+  if (isNonEmptyString(agentConfig.mediaFile)) {
+    context.mediaFile = agentConfig.mediaFile;
+  }
+  if (agentConfig.mediaFiles.length > 0) {
+    context.mediaFiles = agentConfig.mediaFiles;
+  }
+  if (agentConfig.outputFiles.length > 0) {
+    context.outputFiles = agentConfig.outputFiles;
+  }
+
+  return context;
 }
 
 /**
