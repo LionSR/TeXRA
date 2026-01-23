@@ -63,10 +63,6 @@ export interface ProgressEventPayloads {
   };
   showBashApprovalPrompt: BashApprovalPrompt;
   resolveBashApprovalPrompt: { requestId: string };
-  updateBashApprovalBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
   showAgentProposal: AgentProposalPrompt;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
