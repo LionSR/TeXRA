@@ -55,7 +55,9 @@ export class WebFetchTool extends defineTool({
     const parsedUrl = new URL(url);
     const hostname = parsedUrl.hostname.toLowerCase();
     if (BLOCKED_HOSTNAMES.has(hostname)) {
-      throw new ToolError('Fetching from localhost is not allowed');
+      throw new ToolError(
+        'Cannot fetch localhost URLs. Provide a public URL instead.',
+      );
     }
 
     const ipVersion = isIP(hostname);
@@ -65,13 +67,13 @@ export class WebFetchTool extends defineTool({
       );
       if (isPrivateIp) {
         throw new ToolError(
-          'Fetching from private network ranges is not allowed',
+          'Cannot fetch private network IPs. Provide a public URL instead.',
         );
       }
     } else if (ipVersion === 6) {
       if (PRIVATE_IPV6_PREFIXES.some((prefix) => hostname.startsWith(prefix))) {
         throw new ToolError(
-          'Fetching from private network ranges is not allowed',
+          'Cannot fetch private network IPs. Provide a public URL instead.',
         );
       }
     }
