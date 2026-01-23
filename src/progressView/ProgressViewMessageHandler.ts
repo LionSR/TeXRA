@@ -6,12 +6,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  getVisibleWorkflowAgents,
-  getVisibleToolUseAgents,
   getAgent,
   createKey,
   ensureAgentsLoaded,
+  computeAgentOptions,
 } from '@agent/index/agentRegistry';
+import { computeModelOptions } from '@model/computeModelOptions';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
@@ -1024,30 +1024,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Handle request for followup options (agents, models).
-   * Returns separate workflow and tool-use agent lists to match main webview.
+   * Returns pre-built HTML options matching main webview format.
    */
   private async handleGetFollowupOptions(_message: unknown): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
     try {
-      // Ensure agent cache is initialized (no re-scan if already loaded)
-      await ensureAgentsLoaded();
+      // Compute agent and model options in parallel (same as main webview)
+      const [agentOptions, modelOptionsHtml] = await Promise.all([
+        computeAgentOptions(),
+        computeModelOptions(),
+      ]);
 
-      // Get visible agents matching main webview (filtered, deduplicated)
-      const workflowAgents = getVisibleWorkflowAgents();
-      const toolUseAgents = getVisibleToolUseAgents();
-
-      // Format as source:name for consistent handling with main view
-      const workflowAgentKeys = workflowAgents.map((a) =>
-        createKey(a.source, a.name),
-      );
-      const toolUseAgentKeys = toolUseAgents.map((a) =>
-        createKey(a.source, a.name),
-      );
-
-      // Get models from config
-      const models = getConfig<string[]>('texra.models', []);
       const defaultMergeModel = getConfig<string>(
         'texra.merge.defaultModel',
         'gemini3f',
@@ -1055,9 +1044,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        workflowAgents: workflowAgentKeys,
-        toolUseAgents: toolUseAgentKeys,
-        models,
+        workflowAgentsHtml: agentOptions.workflow,
+        toolUseAgentsHtml: agentOptions.toolUse,
+        modelOptionsHtml,
         defaultMergeModel,
       });
     } catch (error) {
