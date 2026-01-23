@@ -245,9 +245,12 @@ export abstract class RetryableInvocationNode<
         services.logger.debug('Relay 401, refreshing token before retry loop');
         const refreshed = await SupabaseClient.forceRefreshToken();
         if (refreshed) {
-          // Retry immediately with fresh token
+          // Create fresh AbortController for retry - original signal may be in bad state
+          const retryController = new AbortController();
+          this.signal = retryController.signal;
+          services.setAbortController(retryController);
           services.logger.debug('Token refreshed, retrying immediately');
-          return await operation(abortController.signal);
+          return await operation(retryController.signal);
         }
       }
       throw err;
