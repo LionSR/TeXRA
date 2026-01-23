@@ -512,6 +512,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
         if (logContent) logContent.innerHTML = '';
         state.lastRenderedStream = '';
+        // Clear panels to prevent stale data when UPDATE_LOGS doesn't follow
+        this._clearActivePanels();
       }
 
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -523,8 +525,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
-    // NOTE: _refreshActiveRunPanels() NOT called here - UPDATE_LOGS always follows
-    // and calls it with the correct activeRunId. Calling here would be redundant.
     this._updateFollowupSection();
   }
 
