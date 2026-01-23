@@ -38,6 +38,8 @@ import {
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
 import {
+  clearAllApprovalBypass,
+  clearApprovalBypassForStream,
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
@@ -228,8 +230,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           return;
         }
 
-        // Clear pending task groups to prevent memory leaks
+        // Clear pending task groups and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
+        clearApprovalBypassForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
         this.provider.updateWebview({ forceRebuild: true });
@@ -250,8 +253,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups to prevent memory leaks
+    // Clear all pending task groups and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
+    clearAllApprovalBypass();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -539,12 +543,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleToggleToolEditApprovalBypass(): Promise<void> {
-    const isNowEnabled = toggleToolEditApprovalSessionBypass();
-    const message = isNowEnabled
-      ? 'YOLO mode enabled: Tool edits will be auto-approved for this session.'
-      : 'YOLO mode disabled: Tool edits will prompt for approval.';
-    await vscode.window.showInformationMessage(message);
+  private async handleToggleToolEditApprovalBypass(
+    message: unknown,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      StreamMessageSchema,
+      message,
+      'toggleToolEditApprovalBypass',
+      async ({ stream: streamId }) => {
+        const isNowEnabled = toggleToolEditApprovalSessionBypass(streamId);
+        const infoMessage = isNowEnabled
+          ? 'YOLO mode enabled: Tool edits will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool edits will prompt for approval.';
+        await vscode.window.showInformationMessage(infoMessage);
+      },
+    );
   }
 
   private async handleAgentProposalAction(message: unknown): Promise<void> {

@@ -18,7 +18,7 @@ import type {
 } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
-// @ts-ignore - Import JavaScript module
+import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
@@ -83,7 +83,6 @@ export class ProgressViewProvider
     string,
     AgentProposalPrompt
   >();
-  private approvalBypassActive = false;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -266,7 +265,24 @@ export class ProgressViewProvider
       this.eventHandler.refreshStreamSurface(activeStream);
     }
 
+    // Send YOLO state for the resolved active stream (single source of truth query)
+    this.sendYoloStateForStream(activeStream);
+
     this._pendingUpdateOptions = null;
+  }
+
+  /**
+   * Send YOLO mode state to the frontend for a stream.
+   * When no stream is active, sends false to reset the UI.
+   */
+  private sendYoloStateForStream(streamId: StreamTabId): void {
+    const bypassActive = streamId ? isApprovalBypassedForStream(streamId) : false;
+    this.sendIfReady(() =>
+      this.webviewUpdater.updateToolEditApprovalState(
+        streamId || ('' as StreamTabId),
+        bypassActive,
+      ),
+    );
   }
 
   /**
@@ -301,7 +317,9 @@ export class ProgressViewProvider
     for (const prompt of this.pendingApprovalPrompts.values()) {
       this.webviewUpdater.showToolEditApprovalPrompt(prompt);
     }
-    this.webviewUpdater.updateToolEditApprovalState(this.approvalBypassActive);
+
+    // Send per-stream YOLO state for active stream (handles empty stream case)
+    this.sendYoloStateForStream(this.state.activeStream);
 
     for (const payload of this.pendingRetryRequests.values()) {
       this.webviewUpdater.showRetryRequest(payload);
@@ -326,10 +344,14 @@ export class ProgressViewProvider
     );
   }
 
-  public updateToolEditApprovalBypassState(bypassActive: boolean): void {
-    this.approvalBypassActive = bypassActive;
+  public updateToolEditApprovalBypassState(
+    streamId: StreamTabId,
+    bypassActive: boolean,
+  ): void {
+    // toolEditApproval.ts is the single source of truth for YOLO state
+    // This method just relays the state change to the webview
     this.sendIfReady(() =>
-      this.webviewUpdater.updateToolEditApprovalState(bypassActive),
+      this.webviewUpdater.updateToolEditApprovalState(streamId, bypassActive),
     );
   }
 
@@ -449,6 +471,7 @@ export class ProgressViewProvider
   public setActiveStream(streamId: StreamTabId): void {
     this.state.activeStream = streamId;
     this.updateWebview();
+    // YOLO state is sent by updateWebview via sendYoloStateForStream
   }
 
   /**
