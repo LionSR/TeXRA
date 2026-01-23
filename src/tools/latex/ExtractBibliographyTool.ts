@@ -56,12 +56,11 @@ export class ExtractBibliographyTool extends defineTool({
       bibPath || getConfig<string>('texra.bib.defaultPath', '');
 
     if (effectiveBibPath) {
-      const { resolved: bibResolved } = resolveAndFormat(effectiveBibPath);
-      const candidate = bibResolved.relative;
-      const exists = await WorkspaceFS.exists(candidate);
+      const { resolved } = resolveAndFormat(effectiveBibPath);
+      const exists = await WorkspaceFS.exists(resolved.relative);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
-      if (!target.includes(candidate)) {
-        target.push(candidate);
+      if (!target.includes(resolved.relative)) {
+        target.push(resolved.relative);
       }
     }
 
