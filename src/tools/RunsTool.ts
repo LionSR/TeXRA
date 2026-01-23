@@ -37,7 +37,7 @@ const RunsToolInputSchema = z.strictObject({
     .array(z.int().min(1))
     .length(2)
     .refine(([start, end]) => end >= start, {
-      message: 'view_range[1] must be >= view_range[0]',
+      error: 'view_range[1] must be >= view_range[0]',
     })
     .nullish(),
 });

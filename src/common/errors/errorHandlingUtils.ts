@@ -140,7 +140,7 @@ export function formatZodError(error: z.ZodError): string {
  */
 export async function parseWithErrorDisplay<T>(
   channel: string,
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T>,
   data: unknown,
   context?: string,
 ): Promise<T | null> {
