@@ -90,9 +90,10 @@ export class ToolUsePrepareNode<C> extends Node<
     execRes: NodeExecResult<PrepareResult>,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
-      throw execRes.error instanceof Error
-        ? execRes.error
-        : new Error(String(execRes.error));
+      if (execRes.error instanceof Error) {
+        throw execRes.error;
+      }
+      throw new Error(String(execRes.error));
     }
 
     const {

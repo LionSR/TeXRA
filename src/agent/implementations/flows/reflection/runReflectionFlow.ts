@@ -239,11 +239,12 @@ export async function runReflectionFlow<C = unknown>(
         round,
         config.editedFile || undefined,
       );
-      return (
-        useScratchpad
-          ? fileService.createRawOutputLocation(fileName)
-          : fileService.createLocation(fileName)
-      ) as AgentFileLocation;
+      if (useScratchpad) {
+        return fileService.createRawOutputLocation(
+          fileName,
+        ) as AgentFileLocation;
+      }
+      return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
   // Create interruptible object for registration
