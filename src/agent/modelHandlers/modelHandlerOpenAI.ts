@@ -178,13 +178,10 @@ export class ModelHandlerOpenAI<
       baseParams.temperature = temperature;
     }
 
-    if (
-      this.capabilities.supportsReasoning &&
-      this.capabilities.supportsReasoningEffort &&
-      this.capabilities.reasoningEffort
-    ) {
+    const reasoningEffort = this.getEffectiveReasoningEffort();
+    if (this.capabilities.supportsReasoning && reasoningEffort) {
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        this.capabilities.reasoningEffort,
+        reasoningEffort,
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 
