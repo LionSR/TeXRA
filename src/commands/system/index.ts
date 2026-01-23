@@ -23,6 +23,5 @@ export {
   handleTestAgentLoading,
   handleLoadSpecificAgent,
   handleParseYaml,
-  handleTestYamlBrackets,
   registerYamlCommands,
 } from './yamlCommands';

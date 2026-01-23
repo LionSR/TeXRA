@@ -7,7 +7,6 @@ import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
-  singlePagePdf2Png,
 } from '@frontend/media/img';
 import * as dialogUtils from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -35,10 +34,6 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'texra.convertPdfToImages',
       handleConvertPdfToImages,
-    ),
-    vscode.commands.registerCommand(
-      'texra.testPdfToImage',
-      handleTestPdfToImage,
     ),
   );
 }
@@ -172,67 +167,3 @@ async function handleConvertPdfToImages(): Promise<
   }
 }
 
-async function handleTestPdfToImage(): Promise<string | undefined> {
-  try {
-    const selection = await dialogUtils.selectFileFromWorkspace({
-      openLabel: 'Select PDF file',
-      filters: PDF_FILTERS,
-    });
-    if (!selection) {
-      return undefined;
-    }
-
-    logger.debug(
-      CHANNEL,
-      `Testing PDF to PNG conversion for: ${selection.relativePath} (resolved: ${selection.absolutePath})`,
-    );
-
-    // Get page number from user
-    const pageNum = await vscode.window.showInputBox({
-      prompt: 'Enter page number to convert (1-based, default: 1)',
-      value: '1',
-      validateInput: (value) => {
-        const num = parseInt(value);
-        return num > 0 ? null : 'Please enter a positive number';
-      },
-    });
-
-    if (pageNum === undefined) {
-      return undefined;
-    }
-
-    const base64String = await singlePagePdf2Png(
-      selection.relativePath,
-      parseInt(pageNum),
-      300,
-      [1024, 1024],
-    );
-    logTruncatedBase64(base64String);
-
-    vscode.window.showInformationMessage(
-      `Successfully converted page ${pageNum} of ${selection.relativePath} to PNG`,
-    );
-    return base64String;
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'testPdfToImage command failed', err);
-
-    if (
-      err instanceof Error &&
-      err.message.includes('GraphicsMagick/ImageMagick is not installed')
-    ) {
-      void vscode.window
-        .showInformationMessage(
-          'GraphicsMagick/ImageMagick is required for PDF conversion. Open the download page?',
-          'Open Download Page',
-        )
-        .then((selection) => {
-          if (selection === 'Open Download Page') {
-            void vscode.env.openExternal(
-              vscode.Uri.parse('http://www.graphicsmagick.org/download.html'),
-            );
-          }
-        });
-    }
-    return undefined;
-  }
-}
