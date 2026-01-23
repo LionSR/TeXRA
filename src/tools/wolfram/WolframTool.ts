@@ -31,8 +31,9 @@ export class WolframTool extends defineTool({
         output: result.output ?? '',
       };
     }
-    throw new ToolError(
-      `Wolfram execution failed: ${result.error ?? 'No error details available'}`,
-    );
+    // Wolfram often outputs errors to stdout rather than stderr
+    const errorDetails =
+      result.error || result.output || 'No error details available';
+    throw new ToolError(`Wolfram execution failed: ${errorDetails}`);
   }
 }
