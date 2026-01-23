@@ -85,28 +85,24 @@ function parseToolInput(
   }
 }
 
-/** Check if an error has Zod-like issues array (duck typing). */
-function hasZodIssues(
-  error: unknown,
-): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'issues' in error &&
-    Array.isArray((error as { issues?: unknown }).issues)
-  );
-}
-
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!hasZodIssues(error)) {
+  // Check if error has Zod-like issues array (duck typing)
+  const hasZodIssues =
+    typeof error === 'object' &&
+    error !== null &&
+    'issues' in error &&
+    Array.isArray((error as { issues?: unknown }).issues);
+
+  if (!hasZodIssues) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
-  const issues = error.issues as ValidationErrorDiagnostics['issues'];
+  const issues = (error as { issues: ValidationErrorDiagnostics['issues'] })
+    .issues;
   return {
     message: `${toolName}: Invalid parameters provided`,
     diagnostics: {
@@ -330,13 +326,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   }
 }
 
-/** Data extracted by prep() for tool-use process. */
-interface ToolUseProcessPrepResult {
-  shouldStop: boolean;
-  response?: unknown;
-  responseTimeMs?: number;
-}
-
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
   | { kind: 'skipped' }
@@ -358,7 +347,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<{ shouldStop: boolean; response?: unknown; responseTimeMs?: number }> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -367,7 +356,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 
   async exec(
-    prepRes: ToolUseProcessPrepResult,
+    prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
       return { kind: 'skipped' };
@@ -454,7 +443,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: ToolUseProcessPrepResult,
+    _prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
@@ -668,42 +657,30 @@ class ToolUseDispatchNode<C> extends BatchNode<
     };
     options.logger.logToolUse(toolUseLog);
 
-    const mediaLocations = await this.collectValidMediaLocations(
-      result.files,
-      options.logger,
-    );
-    if (mediaLocations.length > 0) {
-      workspace.media.addMediaFiles(mediaLocations);
-    }
-  }
-
-  /** Collect valid file locations from tool result attachments. */
-  private async collectValidMediaLocations(
-    files: ToolResult['files'],
-    logger: AgentLogger,
-  ): Promise<FileLocation[]> {
-    if (!files || files.length === 0) {
-      return [];
-    }
-
-    const validLocations: FileLocation[] = [];
-    for (const attachment of files) {
-      const filePath = attachment.path;
-      if (typeof filePath !== 'string' || filePath.trim() === '') {
-        continue;
-      }
-      const location = pathToLocation(filePath);
-      try {
-        if (await AbsoluteFS.exists(location.absolutePath)) {
-          validLocations.push(location);
+    // Collect and add valid media file locations
+    const files = result.files;
+    if (files && files.length > 0) {
+      const validLocations: FileLocation[] = [];
+      for (const attachment of files) {
+        const filePath = attachment.path;
+        if (typeof filePath !== 'string' || filePath.trim() === '') {
+          continue;
         }
-      } catch (err) {
-        logger.debug(
-          `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
-        );
+        const location = pathToLocation(filePath);
+        try {
+          if (await AbsoluteFS.exists(location.absolutePath)) {
+            validLocations.push(location);
+          }
+        } catch (err) {
+          options.logger.debug(
+            `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
+          );
+        }
+      }
+      if (validLocations.length > 0) {
+        workspace.media.addMediaFiles(validLocations);
       }
     }
-    return validLocations;
   }
 
   /**
