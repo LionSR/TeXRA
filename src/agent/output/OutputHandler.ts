@@ -46,12 +46,7 @@ import {
 const RoundDataSchema = z.object({
   outputs: OutputFileInfoSchema.array().prefault(() => []),
   rawOutput: FileLocationSchema.nullable().prefault(null),
-  xmlSummary: OutputXmlSummarySchema.prefault(() => ({
-    tagContents: {},
-    documents: [],
-    singleOutputFile: null,
-    sourceLocation: null,
-  })),
+  xmlSummary: OutputXmlSummarySchema.prefault(() => ({})),
 });
 
 type RoundData = z.infer<typeof RoundDataSchema>;
