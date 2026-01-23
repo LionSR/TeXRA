@@ -250,7 +250,20 @@ export abstract class RetryableInvocationNode<
           this.signal = retryController.signal;
           services.setAbortController(retryController);
           services.logger.debug('Token refreshed, retrying immediately');
-          return await operation(retryController.signal);
+          try {
+            return await operation(retryController.signal);
+          } catch (retryErr) {
+            // If retry also fails with 401, it's not a token issue - skip auto-retries
+            const retryFormatted = formatProviderHttpError(retryErr);
+            if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+              services.logger.debug(
+                'Still 401 after token refresh, skipping auto-retries',
+              );
+              // Set maxRetries to 1 to skip remaining auto-retries
+              this.maxRetries = 1;
+            }
+            throw retryErr;
+          }
         }
       }
       throw err;
