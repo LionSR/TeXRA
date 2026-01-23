@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 import { PROGRESS_VIEW_APPROVAL_ACTIONS } from '@tools/approval/toolEditApproval';
+import { BASH_APPROVAL_ACTIONS } from '@tools/approval/bashApproval';
 
 // --- Base Schemas (composable building blocks) ---
 
@@ -247,6 +248,17 @@ export const ApprovalActionMessageSchema = z.object({
 });
 
 export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
+
+/** Bash approval action message from progress view */
+export const BashApprovalActionMessageSchema = z.object({
+  requestId: z.string().min(1),
+  action: z.enum(BASH_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
+export type BashApprovalActionMessage = z.infer<
+  typeof BashApprovalActionMessageSchema
+>;
 
 /** Followup task message from progress view */
 export const FollowupTaskMessageSchema = z.object({

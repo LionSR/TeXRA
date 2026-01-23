@@ -43,6 +43,12 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
+import {
+  clearAllBashApprovalBypass,
+  clearBashApprovalBypassForStream,
+  handleProgressViewBashApprovalAction,
+  toggleBashApprovalSessionBypass,
+} from '@tools/approval/bashApproval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -63,6 +69,7 @@ import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
   ApprovalActionMessageSchema,
+  BashApprovalActionMessageSchema,
   FollowupTaskMessageSchema,
   StreamMessageSchema,
   RetryStreamMessageSchema,
@@ -160,6 +167,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleToggleToolEditApprovalBypass.bind(this),
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]:
         this.handleAgentProposalAction.bind(this),
+      [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]:
+        this.handleBashApprovalAction.bind(this),
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS]:
+        this.handleToggleBashApprovalBypass.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -233,6 +244,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         // Clear pending task groups and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
         clearApprovalBypassForStream(streamId);
+        clearBashApprovalBypassForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
         this.provider.updateWebview({ forceRebuild: true });
@@ -256,6 +268,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     // Clear all pending task groups and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
     clearAllApprovalBypass();
+    clearAllBashApprovalBypass();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -555,6 +568,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const infoMessage = isNowEnabled
           ? 'YOLO mode enabled: Tool edits will be auto-approved for this stream.'
           : 'YOLO mode disabled: Tool edits will prompt for approval.';
+        await vscode.window.showInformationMessage(infoMessage);
+      },
+    );
+  }
+
+  private async handleBashApprovalAction(message: unknown): Promise<void> {
+    await this.withValidatedMessage(
+      BashApprovalActionMessageSchema,
+      message,
+      'bashApprovalAction',
+      handleProgressViewBashApprovalAction,
+    );
+  }
+
+  private async handleToggleBashApprovalBypass(
+    message: unknown,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      StreamMessageSchema,
+      message,
+      'toggleBashApprovalBypass',
+      async ({ stream: streamId }) => {
+        const isNowEnabled = toggleBashApprovalSessionBypass(streamId);
+        const infoMessage = isNowEnabled
+          ? 'YOLO mode enabled: Bash commands will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Bash commands will prompt for approval.';
         await vscode.window.showInformationMessage(infoMessage);
       },
     );
