@@ -224,8 +224,10 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       label: string,
     ): { path: string; label: string }[] =>
       [single, ...arr]
-        .filter((p): p is string => typeof p === 'string' && p.length > 0)
-        .map((path) => ({ path, label }));
+        .filter(
+          (item): item is string => typeof item === 'string' && item.length > 0,
+        )
+        .map((filePath) => ({ path: filePath, label }));
 
     const filesToValidate = [
       ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
