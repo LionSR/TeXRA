@@ -582,24 +582,25 @@ export class ProgressEventHandler {
     const waitingSet = waitingStreams ?? new Set<StreamTabId>();
 
     for (const [streamId, status] of StreamStatusService.entries()) {
-      if (status === STREAM_STATUS.RUNNING) {
-        if (waitingSet.has(streamId)) {
-          StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-            emit: false,
-          });
-          this.logger.debug(
-            `Stream ${streamId} restored to WAITING after reload`,
-          );
-        } else {
-          StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
-            emit: false,
-          });
-          affectedStreams.push(streamId);
-          this.logger.debug(
-            `Stream ${streamId} set to ERROR due to webview reload`,
-          );
-        }
+      if (status !== STREAM_STATUS.RUNNING) continue;
+
+      if (waitingSet.has(streamId)) {
+        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+          emit: false,
+        });
+        this.logger.debug(
+          `Stream ${streamId} restored to WAITING after reload`,
+        );
+        continue;
       }
+
+      StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
+        emit: false,
+      });
+      affectedStreams.push(streamId);
+      this.logger.debug(
+        `Stream ${streamId} set to ERROR due to webview reload`,
+      );
     }
 
     return affectedStreams;

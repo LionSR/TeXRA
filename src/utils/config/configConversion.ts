@@ -15,7 +15,7 @@ import { FILE_TYPES, type FileType } from './constants';
 function createActiveFilesFromArrays(
   src: Record<string, any>,
 ): Record<FileType, boolean> {
-  const active: Record<FileType, boolean> = {} as Record<FileType, boolean>;
+  const active = {} as Record<FileType, boolean>;
   FILE_TYPES.forEach((type) => {
     const filesField = `${type}Files`;
     const flagField = `${filesField}Active`;
