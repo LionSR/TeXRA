@@ -26,53 +26,11 @@ const STATUS_CLASSES = {
 /**
  * Manages the todo list display in the progress view.
  * Shows task progress for tool-use agents using native VS Code collapsible.
- * Uses surgical DOM updates when only status changes (common case).
  */
 export class TodoList {
   constructor() {
     this._elements = null;
     this._currentTodos = [];
-  }
-
-  /**
-   * Check if todos can be updated surgically (same items, only status changed).
-   * @param {Array} oldTodos
-   * @param {Array} newTodos
-   * @returns {boolean}
-   */
-  _canUpdateInPlace(oldTodos, newTodos) {
-    if (oldTodos.length !== newTodos.length) return false;
-    for (let i = 0; i < oldTodos.length; i++) {
-      if (oldTodos[i].content !== newTodos[i].content) return false;
-    }
-    return true;
-  }
-
-  /**
-   * Update a single todo item's status in place.
-   * @param {HTMLElement} item - The todo item element
-   * @param {{content: string, status: string, activeForm: string}} todo
-   */
-  _updateItemStatus(item, todo) {
-    const { status } = todo;
-    const isInProgress = status === TODO_STATUS.IN_PROGRESS;
-
-    // Update status class
-    item.classList.remove(...Object.values(STATUS_CLASSES));
-    if (STATUS_CLASSES[status]) item.classList.add(STATUS_CLASSES[status]);
-
-    // Update icon
-    const icon = item.querySelector('.todo-item__icon');
-    if (icon) {
-      icon.className = `codicon codicon-${STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING]} todo-item__icon`;
-      icon.classList.toggle('spin', isInProgress);
-    }
-
-    // Update text (activeForm vs content based on status)
-    const content = item.querySelector('.todo-item__content');
-    if (content) {
-      content.textContent = isInProgress ? todo.activeForm : todo.content;
-    }
   }
 
   /**
@@ -96,7 +54,6 @@ export class TodoList {
 
   /**
    * Update the todo list display.
-   * Uses surgical updates when only status changed (avoids full DOM rebuild).
    * @param {Array<{content: string, status: string, activeForm: string}>} todos - The todo items
    */
   update(todos) {
@@ -105,30 +62,14 @@ export class TodoList {
       return;
     }
 
-    const newTodos = todos ?? [];
+    this._currentTodos = todos ?? [];
 
-    if (newTodos.length === 0) {
-      this._currentTodos = [];
+    if (this._currentTodos.length === 0) {
       this.hide();
       return;
     }
 
-    // Fast path: same items, only status/activeForm may have changed
-    // This is the common case during task execution
-    if (this._canUpdateInPlace(this._currentTodos, newTodos)) {
-      const items = elements.list.children;
-      for (let i = 0; i < newTodos.length; i++) {
-        // Only update if status actually changed
-        if (this._currentTodos[i].status !== newTodos[i].status) {
-          this._updateItemStatus(items[i], newTodos[i]);
-        }
-      }
-      this._currentTodos = newTodos;
-      return;
-    }
-
-    // Slow path: list structure changed, full rebuild required
-    this._currentTodos = newTodos;
+    // Clear and rebuild the list
     elements.list.innerHTML = '';
 
     for (const todo of this._currentTodos) {
