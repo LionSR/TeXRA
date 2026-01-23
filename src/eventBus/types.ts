@@ -29,6 +29,15 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
+/** Bash approval request prompt */
+export const BashApprovalPromptSchema = z.strictObject({
+  requestId: z.string(),
+  command: z.string(),
+  allowBypass: z.boolean(),
+  streamId: z.union([StreamTabIdSchema, z.literal('')]),
+});
+export type BashApprovalPrompt = z.infer<typeof BashApprovalPromptSchema>;
+
 export const RetryRequestPromptSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
