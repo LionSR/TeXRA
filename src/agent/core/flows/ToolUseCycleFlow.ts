@@ -526,6 +526,11 @@ interface ToolExecutionResult {
   }>;
 }
 
+/** Create a signature for deduplicating tool calls */
+function createToolCallSignature(name: string, input: unknown): string {
+  return `${name}:${JSON.stringify(input ?? {})}`;
+}
+
 /**
  * Dispatches tool calls and processes their results using BatchNode pattern.
  *
@@ -535,18 +540,27 @@ interface ToolExecutionResult {
  * To enable parallel execution, change to extend ParallelBatchNode instead.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
+ *
+ * Deduplicates tool calls within the same batch - if the model requests the same
+ * tool with identical parameters multiple times, only the first is executed.
  */
 class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
+  /** Tracks tool calls executed in the current batch for deduplication */
+  private executedInBatch = new Set<string>();
+
   /**
    * Returns the array of tool calls to execute.
    * Returns empty array if should skip (no tools, stopped, or interrupted).
    */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     const toolCalls = shared.toolCalls ?? [];
+
+    // Reset batch deduplication tracker at start of each batch
+    this.executedInBatch.clear();
 
     // Skip if no tool calls or already stopped
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -585,6 +599,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
   /**
    * Execute a single tool call and return the result with metadata.
+   * Checks for duplicate calls within the batch and returns a synthetic result
+   * if the same tool with same parameters was already executed.
    */
   private async executeToolCall(
     call: SdkToolCall,
@@ -595,6 +611,25 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const tool = options.toolRegistry.get(call.name);
     let result: ToolResult;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
+
+    // Check for duplicate tool call within this batch
+    const signature = createToolCallSignature(call.name, parsedInput);
+    if (this.executedInBatch.has(signature)) {
+      options.logger.debug(
+        `Skipping duplicate tool call: ${call.name} (same parameters already executed in this batch)`,
+      );
+      result = {
+        content: `This ${call.name} operation was just performed with identical parameters. See the result above.`,
+        isError: false,
+      };
+      return {
+        call,
+        result,
+        parsedInput,
+        sanitizedOutput: { content: result.content },
+        editedFiles: [],
+      };
+    }
 
     if (!tool) {
       result = {
@@ -613,6 +648,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
           },
           () => tool.call(parsedInput),
         );
+        // Record successful execution for deduplication
+        this.executedInBatch.add(signature);
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(call.name, err);
         result = {
