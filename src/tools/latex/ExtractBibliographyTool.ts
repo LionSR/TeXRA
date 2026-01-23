@@ -40,13 +40,13 @@ export class ExtractBibliographyTool extends defineTool({
   schema: ExtractBibliographyInputSchema,
 }) {
   protected async execute({ texPath, bibPath }: ExtractBibliographyInput) {
-    const { resolved, display } = resolveAndFormat(texPath);
+    const { path, display } = resolveAndFormat(texPath);
 
-    if (!(await WorkspaceFS.exists(resolved.relative))) {
+    if (!(await WorkspaceFS.exists(path.relative))) {
       throw new ToolError(`LaTeX file not found: ${display}`);
     }
 
-    const context = await extractBibliographyContext(resolved.relative);
+    const context = await extractBibliographyContext(path.relative);
     const bibliographyFiles = [...context.bibliographyFiles];
     const missingBibliographyFiles = [...context.missingBibliographyFiles];
     let citationKeys = [...context.citationKeys];
@@ -56,7 +56,7 @@ export class ExtractBibliographyTool extends defineTool({
       bibPath || getConfig<string>('texra.bib.defaultPath', '');
 
     if (effectiveBibPath) {
-      const { resolved } = resolveAndFormat(effectiveBibPath);
+      const { path: resolved } = resolveAndFormat(effectiveBibPath);
       const exists = await WorkspaceFS.exists(resolved.relative);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.relative)) {

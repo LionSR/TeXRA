@@ -159,14 +159,15 @@ export function formatToolOutput(
 
 /**
  * Common pattern for resolving and formatting workspace paths.
+ * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */
-export function resolveAndFormat(path?: string): {
-  resolved: WorkspacePathResolution;
+export function resolveAndFormat(targetPath?: string): {
+  path: WorkspacePathResolution;
   display: string;
 } {
-  const resolved = resolveWorkspaceRelativePath(path);
-  const display = toPosixPath(resolved.relative);
-  return { resolved, display };
+  const path = resolveWorkspaceRelativePath(targetPath);
+  const display = toPosixPath(path.relative);
+  return { path, display };
 }
 
 /**
@@ -228,13 +229,13 @@ export async function buildFileAttachment({
     throw new ToolError('Attachment path must be provided.');
   }
 
-  const { resolved, display } = resolveAndFormat(filePath);
-  const exists = await WorkspaceFS.exists(resolved.relative);
+  const { path, display } = resolveAndFormat(filePath);
+  const exists = await WorkspaceFS.exists(path.relative);
   if (!exists) {
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
-  const stats = await WorkspaceFS.stat(resolved.relative).catch((err) => {
+  const stats = await WorkspaceFS.stat(path.relative).catch((err) => {
     throw new ToolError(
       `Failed to inspect attachment ${display}: ${toErrorMessage(err)}`,
     );
@@ -247,16 +248,14 @@ export async function buildFileAttachment({
     );
   }
 
-  const buffer = await WorkspaceFS.readFileBytes(resolved.relative).catch(
-    (err) => {
-      throw new ToolError(
-        `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
-      );
-    },
-  );
+  const buffer = await WorkspaceFS.readFileBytes(path.relative).catch((err) => {
+    throw new ToolError(
+      `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
+    );
+  });
 
   const inferredMime =
-    mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
+    mimeType ?? getMimeType(path.relative) ?? 'application/octet-stream';
   const base64Data = includeBase64 ? buffer.toString('base64') : undefined;
   const bytes = Uint8Array.from(buffer);
   buffer.fill(0);
