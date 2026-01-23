@@ -38,6 +38,18 @@ export interface ApprovalCallbacks {
   ) => void;
 }
 
+/** Callbacks for bash approval event handling. */
+export interface BashApprovalCallbacks {
+  showBashApprovalPrompt: (
+    payload: ProgressEventPayloads['showBashApprovalPrompt'],
+  ) => void;
+  resolveBashApprovalPrompt: (requestId: string) => void;
+  updateBashApprovalBypassState: (
+    streamId: string,
+    bypassActive: boolean,
+  ) => void;
+}
+
 /** Callbacks for agent proposal handling (workflow or tool-use). */
 export interface AgentProposalCallbacks {
   showAgentProposal: (
@@ -49,6 +61,7 @@ export interface AgentProposalCallbacks {
 /** Combined UI callbacks interface. */
 export type UICallbacks = RetryCallbacks &
   ApprovalCallbacks &
+  BashApprovalCallbacks &
   AgentProposalCallbacks;
 
 /** Helper to register an event with error handling wrapper. */
@@ -113,6 +126,30 @@ export function registerUIEvents(
     (p) =>
       callbacks.updateToolEditApprovalBypassState(p.streamId, p.bypassActive),
     'failed to update approval bypass state',
+    signal,
+  );
+
+  // Bash approval events
+  registerEvent(
+    bus,
+    'showBashApprovalPrompt',
+    callbacks.showBashApprovalPrompt,
+    'failed to show bash approval prompt',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolveBashApprovalPrompt',
+    (p) => callbacks.resolveBashApprovalPrompt(p.requestId),
+    'failed to resolve bash approval prompt',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'updateBashApprovalBypassState',
+    (p) =>
+      callbacks.updateBashApprovalBypassState(p.streamId, p.bypassActive),
+    'failed to update bash approval bypass state',
     signal,
   );
 

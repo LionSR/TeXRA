@@ -2,7 +2,11 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
+import {
+  buildBashApprovalRejectedResult,
+  requestBashApproval,
+} from '@tools/approval/bashApproval';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -21,6 +25,16 @@ export class BashTool extends defineTool({
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
+    // Request approval before executing the command
+    const approval = await requestBashApproval({ command: input.command });
+
+    if (!approval.accepted) {
+      return buildBashApprovalRejectedResult(
+        input.command,
+        approval.userMessage,
+      );
+    }
+
     // Truncation only applies to internal logging so long-running commands keep
     // the output channel readable while still returning the complete stdout.
     const result = await executeCommand(input.command, { truncate: true });
