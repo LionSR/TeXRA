@@ -1080,46 +1080,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       });
 
-      // Log response status for debugging - useful when using previous_response_id
-      const initialStatus = response.status ?? 'unknown';
-      this.logger.debug(
-        `Response ${response.id} created with status "${initialStatus}"`,
-        {
-          data: {
-            responseId: response.id,
-            status: response.status,
-            hasUsage: !!response.usage,
-            hasPreviousResponseId: !!this.previousResponseId,
-          },
-        },
-      );
-
-      if (useBackgroundResponses) {
-        this.logger.logProgress(
-          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-        );
-        // Store the pending ID so retry logic can resume polling instead of creating a new request
-        this.pendingBackgroundResponseId = response.id;
-        response = await this.waitForBackgroundCompletion(
-          client,
-          response,
-          signal,
-        );
-        // Note: clearPendingBackgroundResponse() called by finalizeResponse() below
-      } else if (this.isBackgroundPending(response)) {
-        // Even without background mode enabled, the API may return in_progress
-        // when using previous_response_id due to server-side latency retrieving context.
-        // Poll until completion to avoid "not safe for chaining" warnings.
-        this.logger.debug(
-          `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
-          {
-            data: {
-              responseId: response.id,
-              status: response.status,
-              hasPreviousResponseId: !!this.previousResponseId,
+      // Poll for completion if response is pending (queued/in_progress).
+      // This can happen in two cases:
+      // 1. Background mode explicitly enabled (expected)
+      // 2. Server-side latency when using previous_response_id (unexpected but handled)
+      if (this.isBackgroundPending(response)) {
+        if (useBackgroundResponses) {
+          this.logger.logProgress(
+            `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+          );
+          // Store pending ID so retry logic can resume polling instead of creating new request
+          this.pendingBackgroundResponseId = response.id;
+        } else {
+          this.logger.debug(
+            `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
+            {
+              data: {
+                responseId: response.id,
+                status: response.status,
+                hasPreviousResponseId: !!this.previousResponseId,
+              },
             },
-          },
-        );
+          );
+        }
         response = await this.waitForBackgroundCompletion(
           client,
           response,
