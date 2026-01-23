@@ -19,6 +19,7 @@ import type {
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
+  BashApprovalPrompt,
   AgentProposalPrompt,
 } from './types';
 
@@ -57,6 +58,12 @@ export interface ProgressEventPayloads {
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: {
+    streamId: StreamTabId;
+    bypassActive: boolean;
+  };
+  showBashApprovalPrompt: BashApprovalPrompt;
+  resolveBashApprovalPrompt: { requestId: string };
+  updateBashApprovalBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
