@@ -267,7 +267,9 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: InvocationPrepResult): Promise<InvocationResult<BaseInvocationSuccessData>> {
+  async exec(
+    prepRes: InvocationPrepResult,
+  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
     if (prepRes.shouldStop) {

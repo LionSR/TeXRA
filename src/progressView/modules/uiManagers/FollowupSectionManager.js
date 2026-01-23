@@ -206,9 +206,13 @@ export class FollowupSectionManager {
           ? defaultMergeModel
           : this._currentStreamData?.model || modelSelect.value;
 
-      applyModelOptions(modelSelect, withPlaceholder(modelOptionsHtml, MODEL_PLACEHOLDER), {
-        preserveValue: preferredModel,
-      });
+      applyModelOptions(
+        modelSelect,
+        withPlaceholder(modelOptionsHtml, MODEL_PLACEHOLDER),
+        {
+          preserveValue: preferredModel,
+        },
+      );
     }
   }
 
@@ -229,7 +233,10 @@ export class FollowupSectionManager {
         : this._workflowAgentsHtml;
 
     // Apply options with decoration (preserves current selection if valid)
-    applyAgentOptions(agentSelect, withPlaceholder(agentsHtml, AGENT_PLACEHOLDER));
+    applyAgentOptions(
+      agentSelect,
+      withPlaceholder(agentsHtml, AGENT_PLACEHOLDER),
+    );
   }
 
   /**

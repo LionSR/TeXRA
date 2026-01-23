@@ -114,7 +114,7 @@ export class WebviewUpdater {
    * @param action - The action type: 'render' (default) or 'clear'
    */
   updateLogContent(
-    stream: StreamTabId,
+    streamId: StreamTabId,
     messages: LogMessageData[],
     groups: TaskGroup[] = [],
     extras?: LogContentExtras,
@@ -122,7 +122,7 @@ export class WebviewUpdater {
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
-      stream,
+      stream: streamId,
       messages,
       groups,
       ...extras,
@@ -202,7 +202,10 @@ export class WebviewUpdater {
     });
   }
 
-  updateToolEditApprovalState(stream: StreamTabId, bypassActive: boolean): void {
+  updateToolEditApprovalState(
+    stream: StreamTabId,
+    bypassActive: boolean,
+  ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       stream,

@@ -686,7 +686,6 @@ export class ProgressViewState {
   clearAllFollowUpText() {
     this.streamFollowUpText.clear();
   }
-
 }
 
 export const progressViewState = new ProgressViewState();
