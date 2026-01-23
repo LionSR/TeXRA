@@ -315,20 +315,13 @@ export abstract class RetryableInvocationNode<
 
   /**
    * Handles the manual retry prompt UI flow.
-   * Extracted as a protected method for better cohesion with retry logic.
-   *
-   * For relay 401 errors, attempts ONE automatic token refresh before showing
-   * manual retry UI. The flag prevents infinite refresh loops when 401 is due
-   * to account issues rather than expired tokens.
+   * Shows retry UI for retryable errors and waits for user action.
    */
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.getServices();
     const operationName = this.getOperationName();
-    // Format error for this method's scope (retryable error handling)
-    // Note: getFallbackResult() formats separately for non-retryable errors
-    // to ensure each path logs exactly once at the appropriate point
     const formatted = formatProviderHttpError(error);
 
     // If not retryable, don't show UI - go straight to execFallback
@@ -336,23 +329,7 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    // Auto-refresh token on relay 401 errors (once per error cycle)
-    if (
-      formatted.isRelayError &&
-      formatted.statusCode === 401 &&
-      !this._hasAttemptedTokenRefresh
-    ) {
-      this._hasAttemptedTokenRefresh = true;
-      logger.debug('Relay 401 error, attempting automatic token refresh');
-      const refreshedToken = await SupabaseClient.forceRefreshToken();
-      if (refreshedToken) {
-        logger.debug('Token refreshed, retrying');
-        return { shouldRetry: true, userCancelled: false };
-      }
-      // Refresh failed - fall through to manual retry UI
-    }
-
-    // Log the error before showing retry UI - pass FULL formatted error
+    // Log the error before showing retry UI
     logger.logErrorData(
       `${operationName} failed: ${formatted.message}`,
       formatted, // Pass complete ProviderError - no field loss
