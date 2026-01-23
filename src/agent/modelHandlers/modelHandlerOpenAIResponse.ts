@@ -844,12 +844,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (includeSummary) {
         reasoning.summary = 'auto';
       }
-      if (
-        this.capabilities.supportsReasoningEffort &&
-        this.capabilities.reasoningEffort &&
-        this.capabilities.reasoningEffort !== 'none'
-      ) {
-        reasoning.effort = this.capabilities.reasoningEffort;
+      const reasoningEffort = this.getEffectiveReasoningEffort();
+      if (reasoningEffort) {
+        reasoning.effort = reasoningEffort;
       }
       params.reasoning = reasoning;
     }
