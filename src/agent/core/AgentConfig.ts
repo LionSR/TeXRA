@@ -93,7 +93,7 @@ const AgentConfigFieldsSchema = z.object({
  *
  * Exported for reuse in TaskState.ts to maintain single source of truth.
  */
-export const liftLegacyAgentCategory = (input: unknown): unknown => {
+export function liftLegacyAgentCategory(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
 
@@ -111,7 +111,7 @@ export const liftLegacyAgentCategory = (input: unknown): unknown => {
   }
 
   return input;
-};
+}
 
 /**
  * Agent configuration schema with output file count validation.
