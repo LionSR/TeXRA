@@ -10,6 +10,9 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
+// Local file imports - use shared YOLO state
+import { isApprovalBypassedForStream } from './toolEditApproval';
+
 export interface BashApprovalRequest {
   command: string;
   streamId?: StreamTabId;
@@ -47,51 +50,6 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingBashApprovalEntry>();
-/** Per-stream YOLO mode state tracking (single source of truth) */
-const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
-
-function notifyProgressViewApprovalBypassState(streamId: StreamTabId): void {
-  if (!initialized) {
-    return;
-  }
-  const bypassActive = approvalsBypassedByStream.get(streamId) ?? false;
-  bus.emit('updateBashApprovalBypassState', {
-    streamId,
-    bypassActive,
-  });
-}
-
-export function setBashApprovalSessionBypass(
-  streamId: StreamTabId,
-  enabled: boolean,
-): void {
-  approvalsBypassedByStream.set(streamId, enabled);
-  notifyProgressViewApprovalBypassState(streamId);
-}
-
-export function toggleBashApprovalSessionBypass(streamId: StreamTabId): boolean {
-  const currentState = approvalsBypassedByStream.get(streamId) ?? false;
-  const newState = !currentState;
-  setBashApprovalSessionBypass(streamId, newState);
-  return newState;
-}
-
-/** Check if YOLO mode is enabled for a specific stream */
-export function isBashApprovalBypassedForStream(
-  streamId: StreamTabId,
-): boolean {
-  return approvalsBypassedByStream.get(streamId) ?? false;
-}
-
-/** Clear YOLO mode state for a deleted stream (prevents memory leak) */
-export function clearBashApprovalBypassForStream(streamId: StreamTabId): void {
-  approvalsBypassedByStream.delete(streamId);
-}
-
-/** Clear all YOLO mode state (used when deleting all streams) */
-export function clearAllBashApprovalBypass(): void {
-  approvalsBypassedByStream.clear();
-}
 
 export function initializeBashApproval(): void {
   if (initialized) {
@@ -112,7 +70,8 @@ async function showProgressViewApprovalPrompt(
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
   const streamId = request.streamId;
-  const isBypassed = streamId && isBashApprovalBypassedForStream(streamId);
+  // Use shared YOLO state from toolEditApproval
+  const isBypassed = streamId && isApprovalBypassedForStream(streamId);
   bus.emit('showBashApprovalPrompt', {
     requestId,
     command: request.command,
@@ -167,7 +126,6 @@ async function nativeRequestApproval(
 async function enqueueApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
-  // Note: YOLO bypass is checked in requestBashApproval before enqueueing
   const run = async () =>
     customHandler ? customHandler(request) : nativeRequestApproval(request);
 
@@ -190,9 +148,9 @@ export async function requestBashApproval(
       ? request
       : { ...request, streamId: context.streamId };
 
-  // Check global config and per-stream YOLO mode
+  // Check global config and shared YOLO mode (same as tool edits)
   const streamId = preparedRequest.streamId;
-  const isStreamBypassed = streamId && isBashApprovalBypassedForStream(streamId);
+  const isStreamBypassed = streamId && isApprovalBypassedForStream(streamId);
   if (!approvalsEnabled || isStreamBypassed) {
     return { accepted: true };
   }
@@ -228,7 +186,13 @@ export async function handleProgressViewBashApprovalAction(
 export function buildBashApprovalRejectedResult(
   command: string,
   userMessage?: string,
-): { output: string; summary: string; error: string; isError: true; userInstruction?: string } {
+): {
+  output: string;
+  summary: string;
+  error: string;
+  isError: true;
+  userInstruction?: string;
+} {
   const commandPreview =
     command.length > 60 ? `${command.slice(0, 57)}…` : command;
   const baseMessage = `User rejected bash command: ${commandPreview}`;

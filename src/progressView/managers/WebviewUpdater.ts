@@ -228,14 +228,6 @@ export class WebviewUpdater {
     });
   }
 
-  updateBashApprovalState(stream: StreamTabId, bypassActive: boolean): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_BASH_APPROVAL_STATE,
-      stream,
-      bypassActive,
-    });
-  }
-
   showRetryRequest(request: RetryRequestPrompt): void {
     this.sendMessage({
       command: COMMANDS.SHOW_RETRY_REQUEST,

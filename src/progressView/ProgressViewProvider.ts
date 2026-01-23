@@ -10,7 +10,6 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
-import { isBashApprovalBypassedForStream } from '@tools/approval/bashApproval';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -118,8 +117,6 @@ export class ProgressViewProvider
           this.updateToolEditApprovalBypassState.bind(this),
         showBashApprovalPrompt: this.showBashApprovalPrompt.bind(this),
         resolveBashApprovalPrompt: this.resolveBashApprovalPrompt.bind(this),
-        updateBashApprovalBypassState:
-          this.updateBashApprovalBypassState.bind(this),
         showAgentProposal: this.showAgentProposal.bind(this),
         resolveAgentProposal: this.resolveAgentProposal.bind(this),
       },
@@ -284,25 +281,18 @@ export class ProgressViewProvider
   /**
    * Send YOLO mode state to the frontend for a stream.
    * When no stream is active, sends false to reset the UI.
-   * Sends both tool edit and bash approval YOLO states.
+   * YOLO mode is shared between tool edits and bash commands.
    */
   private sendYoloStateForStream(streamId: StreamTabId): void {
-    const toolEditBypassActive = streamId
+    const bypassActive = streamId
       ? isApprovalBypassedForStream(streamId)
       : false;
-    const bashBypassActive = streamId
-      ? isBashApprovalBypassedForStream(streamId)
-      : false;
-    this.sendIfReady(() => {
+    this.sendIfReady(() =>
       this.webviewUpdater.updateToolEditApprovalState(
         streamId || ('' as StreamTabId),
-        toolEditBypassActive,
-      );
-      this.webviewUpdater.updateBashApprovalState(
-        streamId || ('' as StreamTabId),
-        bashBypassActive,
-      );
-    });
+        bypassActive,
+      ),
+    );
   }
 
   /**
@@ -390,17 +380,6 @@ export class ProgressViewProvider
     this.pendingBashApprovalPrompts.delete(requestId);
     this.sendIfReady(() =>
       this.webviewUpdater.resolveBashApprovalPrompt(requestId),
-    );
-  }
-
-  public updateBashApprovalBypassState(
-    streamId: StreamTabId,
-    bypassActive: boolean,
-  ): void {
-    // bashApproval.ts is the single source of truth for bash YOLO state
-    // This method just relays the state change to the webview
-    this.sendIfReady(() =>
-      this.webviewUpdater.updateBashApprovalState(streamId, bypassActive),
     );
   }
 
