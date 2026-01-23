@@ -18,10 +18,12 @@ import {
 // =============================================================================
 
 /** Placeholder option for agent dropdowns */
-export const AGENT_PLACEHOLDER = '<vscode-option value="">Select agent</vscode-option>';
+export const AGENT_PLACEHOLDER =
+  '<vscode-option value="">Select agent</vscode-option>';
 
 /** Placeholder option for model dropdowns */
-export const MODEL_PLACEHOLDER = '<vscode-option value="">Select model</vscode-option>';
+export const MODEL_PLACEHOLDER =
+  '<vscode-option value="">Select model</vscode-option>';
 
 /**
  * Prepend placeholder to options HTML.
@@ -291,7 +293,11 @@ export function restoreSelection(selectElement, previousValue) {
  * @param {function} [restoreFn] - Custom restore function(selectElement, previousValue). Defaults to restoreSelection.
  * @returns {string} The previous value (for chaining with decoration)
  */
-export function setOptionsHtml(selectElement, optionsHtml, restoreFn = restoreSelection) {
+export function setOptionsHtml(
+  selectElement,
+  optionsHtml,
+  restoreFn = restoreSelection,
+) {
   if (!isSelectLikeElement(selectElement)) return '';
 
   const previousValue = selectElement.value;
@@ -313,7 +319,10 @@ export function applyAgentOptions(selectElement, optionsHtml, options = {}) {
 
   if (options.preserveValue !== undefined) {
     // Use explicit value - manually do the steps
-    const htmlWithSelected = markOptionAsSelected(optionsHtml, options.preserveValue);
+    const htmlWithSelected = markOptionAsSelected(
+      optionsHtml,
+      options.preserveValue,
+    );
     selectElement.innerHTML = htmlWithSelected;
     restoreSelection(selectElement, options.preserveValue);
   } else {
@@ -335,7 +344,10 @@ export function applyModelOptions(selectElement, optionsHtml, options = {}) {
   if (!isSelectLikeElement(selectElement)) return;
 
   if (options.preserveValue !== undefined) {
-    const htmlWithSelected = markOptionAsSelected(optionsHtml, options.preserveValue);
+    const htmlWithSelected = markOptionAsSelected(
+      optionsHtml,
+      options.preserveValue,
+    );
     selectElement.innerHTML = htmlWithSelected;
     restoreSelection(selectElement, options.preserveValue);
   } else {

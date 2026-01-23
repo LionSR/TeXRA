@@ -97,7 +97,9 @@ export function assertPreparedShared(
  * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
  * - only validates enough to detect format, not full content.
  */
-const ConversationSchema = z.looseObject({ conversation: z.array(z.unknown()) });
+const ConversationSchema = z.looseObject({
+  conversation: z.array(z.unknown()),
+});
 
 /**
  * Migrate legacy shared state to current flat format.

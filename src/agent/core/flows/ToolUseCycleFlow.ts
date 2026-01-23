@@ -250,7 +250,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<InvocationResult<BaseInvocationSuccessData>> {
+  async exec(
+    prepRes: BaseInvocationPrepResult,
+  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
@@ -346,7 +348,11 @@ class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<{ shouldStop: boolean; response?: unknown; responseTimeMs?: number }> {
+  async prep(shared: ToolUseCycleShared): Promise<{
+    shouldStop: boolean;
+    response?: unknown;
+    responseTimeMs?: number;
+  }> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -354,9 +360,11 @@ class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(
-    prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
-  ): Promise<ToolUseProcessExecResult> {
+  async exec(prepRes: {
+    shouldStop: boolean;
+    response?: unknown;
+    responseTimeMs?: number;
+  }): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
       return { kind: 'skipped' };
     }
@@ -441,7 +449,11 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
+    _prepRes: {
+      shouldStop: boolean;
+      response?: unknown;
+      responseTimeMs?: number;
+    },
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;
