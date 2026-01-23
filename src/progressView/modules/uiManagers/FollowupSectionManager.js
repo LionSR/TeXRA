@@ -9,6 +9,13 @@ import {
   setRadioGroupValue,
   setVisibilityState,
 } from '@common/domUtils.js';
+import {
+  applyAgentOptions,
+  applyModelOptions,
+  withPlaceholder,
+  AGENT_PLACEHOLDER,
+  MODEL_PLACEHOLDER,
+} from '@common/dropdownUtils.js';
 
 /**
  * Manages the followup section for workflow task continuation.
@@ -20,8 +27,10 @@ export class FollowupSectionManager {
     // Mode is stored in progressViewState.streamFollowupMode (single source of truth)
     this._currentStreamData = null;
     this._listeners = [];
-    this._workflowAgents = [];
-    this._toolUseAgents = [];
+    // Store pre-built HTML for agent options (same format as main webview)
+    this._workflowAgentsHtml = '';
+    this._toolUseAgentsHtml = '';
+    this._modelOptionsHtml = '';
   }
 
   /**
@@ -168,87 +177,59 @@ export class FollowupSectionManager {
 
   /**
    * Set the available agent and model options.
-   * Called when receiving options from the extension.
-   * @param {Object} options - { workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }
+   * Called when receiving pre-built HTML options from the extension.
+   * @param {Object} options - { workflowAgentsHtml: string, toolUseAgentsHtml: string, modelOptionsHtml: string, defaultMergeModel: string }
    */
   setOptions(options) {
     const {
-      workflowAgents = [],
-      toolUseAgents = [],
-      models = [],
+      workflowAgentsHtml = '',
+      toolUseAgentsHtml = '',
+      modelOptionsHtml = '',
       defaultMergeModel,
     } = options ?? {};
 
-    // Store both agent lists for mode switching
-    this._workflowAgents = workflowAgents;
-    this._toolUseAgents = toolUseAgents;
+    // Store pre-built HTML for mode switching (same format as main webview)
+    this._workflowAgentsHtml = workflowAgentsHtml;
+    this._toolUseAgentsHtml = toolUseAgentsHtml;
+    this._modelOptionsHtml = modelOptionsHtml;
+    this._defaultMergeModel = defaultMergeModel;
 
     // Update agent dropdown based on current mode
     this._updateAgentDropdown();
 
-    // Update model dropdown
+    // Update model dropdown with pre-built HTML
     const modelSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_MODEL);
-    if (modelSelect) {
-      const currentValue = modelSelect.value;
-      // Use current stream's model as default, or defaultMergeModel for merge mode
-      // Fall back to first available model if no default is set
+    if (modelSelect && modelOptionsHtml) {
+      // Determine preferred model based on mode
       const preferredModel =
         this._getMode() === 'merge'
-          ? defaultMergeModel || models[0]
-          : this._currentStreamData?.model || currentValue || models[0];
-      const hasValidSelection =
-        preferredModel && models.includes(preferredModel);
+          ? defaultMergeModel
+          : this._currentStreamData?.model || modelSelect.value;
 
-      // Build options: none option first, then models
-      const noneOption = `<vscode-option value=""${!hasValidSelection ? ' selected' : ''}>Select model</vscode-option>`;
-      const modelOptions = models
-        .map(
-          (model) =>
-            `<vscode-option value="${model}"${model === preferredModel ? ' selected' : ''}>${model}</vscode-option>`,
-        )
-        .join('');
-
-      modelSelect.innerHTML = noneOption + modelOptions;
+      applyModelOptions(modelSelect, withPlaceholder(modelOptionsHtml, MODEL_PLACEHOLDER), {
+        preserveValue: preferredModel,
+      });
     }
-
-    this._defaultMergeModel = defaultMergeModel;
   }
 
   /**
    * Update the agent dropdown based on the current mode.
    * Chat mode shows tool-use agents; workflow mode shows workflow agents.
+   * Uses pre-built HTML with proper decoration (same as main webview).
    * @private
    */
   _updateAgentDropdown() {
     const agentSelect = safeGetElementById(ELEMENT_IDS.FOLLOWUP_AGENT);
     if (!agentSelect) return;
 
-    // Select the appropriate agent list based on mode
-    const agents =
-      this._getMode() === 'chat' ? this._toolUseAgents : this._workflowAgents;
+    // Select the appropriate pre-built HTML based on mode
+    const agentsHtml =
+      this._getMode() === 'chat'
+        ? this._toolUseAgentsHtml
+        : this._workflowAgentsHtml;
 
-    // Clear dropdown if no agents available for this mode
-    if (!agents || agents.length === 0) {
-      agentSelect.innerHTML =
-        '<vscode-option value="">Select agent</vscode-option>';
-      return;
-    }
-
-    // Preserve current selection only if it exists in the new list
-    const currentValue = agentSelect.value;
-    const hasValidSelection = currentValue && agents.includes(currentValue);
-
-    // Build options: none option first, then agents
-    const noneOption = `<vscode-option value=""${!hasValidSelection ? ' selected' : ''}>Select agent</vscode-option>`;
-    const agentOptions = agents
-      .map((agent) => {
-        const displayName = agent.includes(':') ? agent.split(':')[1] : agent;
-        const isSelected = agent === currentValue;
-        return `<vscode-option value="${agent}"${isSelected ? ' selected' : ''}>${displayName}</vscode-option>`;
-      })
-      .join('');
-
-    agentSelect.innerHTML = noneOption + agentOptions;
+    // Apply options with decoration (preserves current selection if valid)
+    applyAgentOptions(agentSelect, withPlaceholder(agentsHtml, AGENT_PLACEHOLDER));
   }
 
   /**
