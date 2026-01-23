@@ -11,28 +11,19 @@ export const DEFAULT_TOOL_CONFIG = {
 
 /**
  * Zod schema for validating ToolConfig objects.
- * Defaults are defined at the property level and the schema itself
- * defaults to an empty object, allowing omission of the entire
- * configuration section.
+ * Schema-level prefault provides all defaults from DEFAULT_TOOL_CONFIG.
+ * Field-level prefaults match the schema default to handle partial inputs.
  *
  * We explicitly strip unknown properties to remain backward compatible
  * with legacy settings that may still include removed flags.
  */
 export const ToolConfigSchema = z
   .object({
-    autoExtractFigure: z
-      .boolean()
-      .prefault(DEFAULT_TOOL_CONFIG.autoExtractFigure),
-    autoExtractTikzFigure: z
-      .boolean()
-      .prefault(DEFAULT_TOOL_CONFIG.autoExtractTikzFigure),
-    attachTeXCount: z.boolean().prefault(DEFAULT_TOOL_CONFIG.attachTeXCount),
-    attachDiagnostics: z
-      .boolean()
-      .prefault(DEFAULT_TOOL_CONFIG.attachDiagnostics),
-    autoCompileInputPdf: z
-      .boolean()
-      .prefault(DEFAULT_TOOL_CONFIG.autoCompileInputPdf),
+    autoExtractFigure: z.boolean().prefault(false),
+    autoExtractTikzFigure: z.boolean().prefault(false),
+    attachTeXCount: z.boolean().prefault(false),
+    attachDiagnostics: z.boolean().prefault(false),
+    autoCompileInputPdf: z.boolean().prefault(false),
   })
   .prefault(DEFAULT_TOOL_CONFIG);
 
