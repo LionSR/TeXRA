@@ -1,5 +1,6 @@
 // Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
+import { z } from 'zod';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -21,6 +22,7 @@ import {
   flexibleFS,
   pathToLocation,
   getComparablePath,
+  FileLocationSchema,
   type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -31,17 +33,27 @@ import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
 
 import type { IOutputHandler } from './IOutputHandler';
-import type {
-  OutputFileInfo,
-  OutputXmlSummary,
-  RoundFileMapping,
-  RoundOutput,
+import {
+  OutputFileInfoSchema,
+  OutputXmlSummarySchema,
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type RoundFileMapping,
+  type RoundOutput,
 } from './types';
 
-interface RoundData {
-  outputs: OutputFileInfo[];
-  rawOutput: FileLocation | null;
-  xmlSummary: OutputXmlSummary;
+/** Schema for internal round data storage */
+const RoundDataSchema = z.object({
+  outputs: OutputFileInfoSchema.array().prefault(() => []),
+  rawOutput: FileLocationSchema.nullable().prefault(null),
+  xmlSummary: OutputXmlSummarySchema.prefault(() => ({})),
+});
+
+type RoundData = z.infer<typeof RoundDataSchema>;
+
+/** Create empty RoundData with schema defaults */
+function createEmptyRoundData(): RoundData {
+  return RoundDataSchema.parse({});
 }
 
 /** Handles output file processing and validation for agent responses. */
@@ -191,16 +203,7 @@ export class OutputHandler implements IOutputHandler {
   private ensureRoundData(round: number): RoundData {
     let data = this.rounds.get(round);
     if (!data) {
-      data = {
-        outputs: [],
-        rawOutput: null,
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
-      };
+      data = createEmptyRoundData();
       this.rounds.set(round, data);
     }
     return data;
@@ -503,13 +506,6 @@ export class OutputHandler implements IOutputHandler {
 
   public getRoundXmlSummary(round: number): OutputXmlSummary {
     const data = this.rounds.get(round);
-    return (
-      data?.xmlSummary ?? {
-        tagContents: {},
-        documents: [],
-        singleOutputFile: null,
-        sourceLocation: null,
-      }
-    );
+    return data?.xmlSummary ?? OutputXmlSummarySchema.parse({});
   }
 }
