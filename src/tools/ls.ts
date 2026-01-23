@@ -20,11 +20,8 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const LsInputSchema = z.strictObject({
-  path: z.string().describe('File or directory path to list.'),
-  ignore: z
-    .array(z.string())
-    .prefault([])
-    .describe('Glob patterns to exclude from listing.'),
+  path: z.string(),
+  ignore: z.array(z.string()).prefault([]).describe('Glob patterns to exclude.'),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
