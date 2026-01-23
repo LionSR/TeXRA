@@ -94,12 +94,10 @@ export function convertLatexToMarkdown(latex: string): string {
     latex,
   );
 
-  const converted = LATEX_REPLACEMENTS.reduce(
+  return LATEX_REPLACEMENTS.reduce(
     (content, [pattern, replacement]) => content.replace(pattern, replacement),
     withoutEnvironments,
   );
-
-  return converted;
 }
 
 /**

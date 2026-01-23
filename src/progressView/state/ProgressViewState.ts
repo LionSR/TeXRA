@@ -78,9 +78,17 @@ export const StreamSessionStateSchema = z.object({
  */
 type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 
+/**
+ * Active stream identifier, or empty string when no stream is selected.
+ * Empty string represents the "no selection" state and is used throughout
+ * the progress view to indicate that no stream content should be displayed.
+ */
+export type ActiveStreamId = StreamTabId | '';
+
 /** Default values for ProgressViewState UI properties */
 const PROGRESS_VIEW_DEFAULTS = {
-  activeStream: '' as StreamTabId,
+  /** Empty string indicates no stream is selected */
+  activeStream: '' as ActiveStreamId,
   streamSortOrder: 'time',
   agentCategoryFilter: 'all' as AgentCategoryFilter,
 } as const;
@@ -96,7 +104,7 @@ export class ProgressViewState {
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
-  private _activeStream: StreamTabId = PROGRESS_VIEW_DEFAULTS.activeStream;
+  private _activeStream: ActiveStreamId = PROGRESS_VIEW_DEFAULTS.activeStream;
   private _streamSortOrder: string = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
   private _agentCategoryFilter: AgentCategoryFilter =
     PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
@@ -149,11 +157,13 @@ export class ProgressViewState {
   }
 
   // Active stream management
-  get activeStream(): StreamTabId {
+  /** Get the active stream ID, or empty string if no stream is selected */
+  get activeStream(): ActiveStreamId {
     return this._activeStream;
   }
 
-  set activeStream(stream: StreamTabId) {
+  /** Set the active stream ID. Use empty string to clear the selection. */
+  set activeStream(stream: ActiveStreamId) {
     this._activeStream = stream;
     this.saveActiveStream();
   }

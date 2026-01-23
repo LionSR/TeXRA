@@ -55,14 +55,13 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const { resolved: target, display } = resolveAndFormat(input.path);
-    const relative = target.relative === '.' ? '.' : target.relative;
+    const { resolved, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
     const summary = `Listing for ${display}`;
 
     let stats: vscode.FileStat | undefined;
     try {
-      stats = await WorkspaceFS.stat(relative);
+      stats = await WorkspaceFS.stat(resolved.relative);
     } catch (err) {
       const message = toErrorMessage(err);
       throw new ToolError(`Path not found: ${display} (${message})`);
@@ -74,11 +73,11 @@ export class LsTool extends defineTool({
       ignoreMatchers.some((matcher) => matcher(entryPath));
 
     if (stats.type === vscode.FileType.File) {
-      const relativePosix = toPosixPath(relative);
+      const relativePosix = toPosixPath(resolved.relative);
       const fileName = relativePosix.split('/').at(-1) ?? relativePosix;
       if (
         isDefaultHiddenName(fileName) ||
-        gitignore.ignores(relative) ||
+        gitignore.ignores(resolved.relative) ||
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix)
       ) {
@@ -100,7 +99,7 @@ export class LsTool extends defineTool({
       };
     }
 
-    if (relative !== '.' && gitignore.ignores(relative)) {
+    if (resolved.relative !== '.' && gitignore.ignores(resolved.relative)) {
       return {
         summary,
         output: formatToolOutput(
@@ -111,12 +110,12 @@ export class LsTool extends defineTool({
       };
     }
 
-    const entries = await WorkspaceFS.readDir(relative);
+    const entries = await WorkspaceFS.readDir(resolved.relative);
     const filtered = entries.filter(([name]) => {
       if (isDefaultHiddenName(name)) {
         return false;
       }
-      const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
+      const resolvedChild = joinWorkspaceRelativePath(resolved.relative, name);
       const entryPath = toPosixPath(resolvedChild.relative);
       return (
         !gitignore.ignores(resolvedChild.relative) &&

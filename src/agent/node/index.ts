@@ -3,7 +3,9 @@ import { delay } from '@utils/core';
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
-type Action = string;
+
+/** Flow transition action - typically 'default' or a custom action name */
+export type Action = string;
 
 /**
  * Base node class for PocketFlow.

@@ -10,7 +10,6 @@ export {
   RemoteAgentListItemSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
-  type RemoteAgentLoadOptions,
 } from './types';
 
 // Remote agent loader

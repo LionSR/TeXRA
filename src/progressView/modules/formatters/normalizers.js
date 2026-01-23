@@ -83,14 +83,6 @@ export function stringifyWithLanguage(value) {
   }
 }
 
-/**
- * Convert a value to a display-friendly string (legacy API)
- * @param {*} value - Value to stringify
- * @returns {string} Display string
- */
-export function stringifyForDisplay(value) {
-  return stringifyWithLanguage(value).text;
-}
 
 /**
  * Try to parse a string as JSON
@@ -213,7 +205,7 @@ function formatOutputText(content) {
   if (typeof content === 'string') return content;
   if (content === undefined) return '';
   if (isPlainObject(content) && Object.keys(content).length === 0) return '';
-  return stringifyForDisplay(content);
+  return stringifyWithLanguage(content).text;
 }
 
 /**
