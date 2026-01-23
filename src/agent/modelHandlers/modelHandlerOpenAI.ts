@@ -738,7 +738,7 @@ export class ModelHandlerOpenAI<
           newResponse = `${newResponse}\n${endTag}`;
         }
 
-        return { response: newResponse, usage, stopReason };
+        return { text: newResponse, usage, stopReason };
       }
 
       if (responseObject.error) {
@@ -791,7 +791,7 @@ export class ModelHandlerOpenAI<
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return { response: newResponse, usage: responseObject.usage, stopReason };
+    return { text: newResponse, usage: responseObject.usage, stopReason };
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
@@ -856,7 +856,7 @@ export class ModelHandlerOpenAI<
     }
 
     // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { content: fileContent } = await prepareExistingOutputContent(
+    const { fileContent } = await prepareExistingOutputContent(
       outputLocation,
       workspaceState,
       this.logger,

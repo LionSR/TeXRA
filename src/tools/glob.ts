@@ -36,15 +36,13 @@ export class GlobTool extends defineTool({
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const { resolved: base, display } = resolveAndFormat(
-      input.path ?? undefined,
-    );
+    const { path, display } = resolveAndFormat(input.path ?? undefined);
     const gitignore = await getGitignoreMatcher();
 
     let matches: string[];
     try {
       matches = await glob(input.pattern, {
-        cwd: base.absolute,
+        cwd: path.absolute,
         dot: true,
         nodir: false,
         absolute: false,
@@ -59,7 +57,7 @@ export class GlobTool extends defineTool({
       async (match): Promise<GlobMatchInfo | null> => {
         let resolved;
         try {
-          resolved = joinWorkspaceRelativePath(base.relative, match);
+          resolved = joinWorkspaceRelativePath(path.relative, match);
         } catch (err) {
           throw new ToolError(
             `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,

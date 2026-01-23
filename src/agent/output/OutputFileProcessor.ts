@@ -30,7 +30,7 @@ const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
-  channel: string;
+  streamId: string;
   logger: AgentLogger;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
@@ -124,7 +124,7 @@ export class OutputFileProcessor {
     storageKey: StorageKey,
     scope: AgentLogStage,
   ): Promise<void> {
-    const { agentSetting, logger, xmlManager, baseFiles, channel } = this.ctx;
+    const { agentSetting, logger, xmlManager, baseFiles, streamId } = this.ctx;
 
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
@@ -204,7 +204,7 @@ export class OutputFileProcessor {
       };
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
-        streamId: channel,
+        streamId: streamId,
         storageKey,
         filesByRound: { [currRound]: [] },
       });

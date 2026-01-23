@@ -391,11 +391,10 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
-    const {
-      response: text,
-      usage,
-      stopReason,
-    } = services.modelHandler.extractResponse(prepRes.response, '');
+    const { text, usage, stopReason } = services.modelHandler.extractResponse(
+      prepRes.response,
+      '',
+    );
 
     const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
@@ -492,9 +491,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.shouldStop = true;
       shared.endTurn = true;
       if (execRes.text) {
-        shared.messages.push(
-          modelHandler.createAssistantMessage(execRes.text),
-        );
+        shared.messages.push(modelHandler.createAssistantMessage(execRes.text));
         workspace.assembly.lastResponse = execRes.text;
       }
       workspace.resetServerToolContent();

@@ -76,14 +76,14 @@ export async function handleValidateAndFixXml(): Promise<void> {
       return;
     }
 
-    const { relativePath: filePath } = guardResult;
+    const { relativePath } = guardResult;
 
-    logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
+    logger.info(CHANNEL, `Starting XML validation for ${relativePath}`);
 
     const agentConfig = AgentConfigSchema.parse({
       agent: 'xml_validator',
       model: 'claude-3-7-sonnet-latest',
-      inputFile: filePath,
+      inputFile: relativePath,
     });
 
     await executeAgent(agentConfig);
