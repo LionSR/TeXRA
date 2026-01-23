@@ -368,10 +368,10 @@ async function runFlowWithLifecycle(
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Show appropriate notification based on error type
-    const hasApiKeyError =
+    if (
       rawMsg.includes('Missing API key') ||
-      rawMsg.includes('API key not found');
-    if (hasApiKeyError) {
+      rawMsg.includes('API key not found')
+    ) {
       await showApiKeyErrorNotification();
     } else {
       vscode.window.showErrorMessage(errorMsg);

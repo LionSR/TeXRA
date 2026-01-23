@@ -342,17 +342,22 @@ type ToolUseProcessExecResult =
       responseTimeMs?: number;
     };
 
+/** Schema for ToolUseProcessNode prep result - captures shared state snapshot for exec. */
+const ToolUseProcessPrepResultSchema = z.object({
+  shouldStop: z.boolean(),
+  response: z.unknown().optional(),
+  responseTimeMs: z.number().optional(),
+});
+
+type ToolUseProcessPrepResult = z.infer<typeof ToolUseProcessPrepResultSchema>;
+
 /** Processes the model response to extract tool calls and usage data. */
 class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<{
-    shouldStop: boolean;
-    response?: unknown;
-    responseTimeMs?: number;
-  }> {
+  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -360,11 +365,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(prepRes: {
-    shouldStop: boolean;
-    response?: unknown;
-    responseTimeMs?: number;
-  }): Promise<ToolUseProcessExecResult> {
+  async exec(prepRes: ToolUseProcessPrepResult): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
       return { kind: 'skipped' };
     }
@@ -430,9 +431,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const endTurn =
-      services.modelHandler.isEndTurnStop(stopReason) ||
-      !toolCalls ||
-      toolCalls.length === 0;
+      services.modelHandler.isEndTurnStop(stopReason) || !toolCalls?.length;
 
     return {
       kind: 'success',

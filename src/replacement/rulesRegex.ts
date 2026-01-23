@@ -37,7 +37,7 @@ const convertFencedLatexBlock: ReplacementFunction = (
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
 };
 
-const hasBalancedBraces = (value: string): boolean => {
+function hasBalancedBraces(value: string): boolean {
   let depth = 0;
 
   for (const char of value) {
@@ -56,7 +56,7 @@ const hasBalancedBraces = (value: string): boolean => {
   }
 
   return depth === 0;
-};
+}
 
 const createCaptionTrimmer = (
   command: '\\caption' | '\\caption*',
