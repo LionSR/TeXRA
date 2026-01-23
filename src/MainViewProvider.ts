@@ -208,8 +208,7 @@ export class MainViewProvider
 
     // Filter and debounce agent file changes
     const onAgentFileChange = (uri: vscode.Uri) => {
-      const filePath = uri.fsPath;
-      if (agentDirPaths.some((dir) => filePath.startsWith(dir))) {
+      if (agentDirPaths.some((dir) => uri.fsPath.startsWith(dir))) {
         void debouncedAgentFileRefresh();
       }
     };

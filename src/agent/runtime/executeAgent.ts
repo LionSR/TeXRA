@@ -670,10 +670,8 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  const snapshotConfig = snapshot.agentConfig;
-
   // Resolve agent base with snapshot's stream ID for correct UI state
-  const ctx = await resolveAgentBase(snapshotConfig, snapshot.executionId, {
+  const ctx = await resolveAgentBase(snapshot.agentConfig, snapshot.executionId, {
     streamTabIdOverride: snapshot.streamId,
   });
   const { setting, streamId, config } = ctx;
@@ -690,7 +688,7 @@ export async function resumeToolUseFromSnapshot(
   await runFlowWithLifecycle(
     ctx,
     streamId,
-    snapshotConfig.agent,
+    snapshot.agentConfig.agent,
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 

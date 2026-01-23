@@ -433,10 +433,9 @@ async function handleRunLatexdiff(
 
     // Normalize outputsByRound from raw config
     let outputsByRound: Map<number, OutputFileInfo[]> | null = null;
-    const rawOutputsByRound = config.outputsByRound;
-    if (rawOutputsByRound && typeof rawOutputsByRound === 'object') {
+    if (config.outputsByRound && typeof config.outputsByRound === 'object') {
       const roundMap = new Map<number, OutputFileInfo[]>();
-      for (const [roundKey, value] of Object.entries(rawOutputsByRound)) {
+      for (const [roundKey, value] of Object.entries(config.outputsByRound)) {
         const roundResult = RoundKeySchema.safeParse(roundKey);
         if (roundResult.success && Array.isArray(value) && value.length > 0) {
           roundMap.set(roundResult.data, value);
@@ -566,7 +565,6 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      const revised = info.location;
       // lineage.original is already a FileLocation | null - use directly
       const base = info.lineage?.original ?? null;
       const description = `${getFileLabel(info)} (r${round})`;
@@ -583,7 +581,7 @@ async function runLatexdiffFromMetadata(params: {
       operations.push({
         type: 'round',
         base,
-        revised,
+        revised: info.location,
         description,
         cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
         round,
