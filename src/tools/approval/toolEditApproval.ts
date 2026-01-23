@@ -85,8 +85,8 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-/** Per-stream YOLO mode state tracking */
-const approvalsBypassedByStream = new Map<string, boolean>();
+/** Per-stream YOLO mode state tracking (single source of truth) */
+const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
@@ -155,6 +155,16 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
 
+/** Clear YOLO mode state for a deleted stream (prevents memory leak) */
+export function clearApprovalBypassForStream(streamId: StreamTabId): void {
+  approvalsBypassedByStream.delete(streamId);
+}
+
+/** Clear all YOLO mode state (used when deleting all streams) */
+export function clearAllApprovalBypass(): void {
+  approvalsBypassedByStream.clear();
+}
+
 export function initializeToolEditApproval(
   context: vscode.ExtensionContext,
 ): void {
@@ -181,13 +191,15 @@ async function showProgressViewApprovalPrompt(
   lineChanges: LineChanges,
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
+  const streamId = request.streamId;
+  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
   bus.emit('showToolEditApprovalPrompt', {
     requestId,
     path: request.path,
     relativePath,
     sourceTool: request.sourceTool,
-    allowBypass: !approvalsBypassedForSession,
-    streamId: request.streamId ?? '',
+    allowBypass: !isBypassed,
+    streamId: streamId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
     isLatex: isLatexFile(request.path),
@@ -519,16 +531,9 @@ async function nativeRequestApproval(
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  const run = async () => {
-    // Check per-stream YOLO mode
-    const streamId = request.streamId;
-    if (streamId && isApprovalBypassedForStream(streamId)) {
-      return { accepted: true };
-    }
-    return customHandler
-      ? customHandler(request)
-      : nativeRequestApproval(request);
-  };
+  // Note: YOLO bypass is checked in requestToolEditApproval before enqueueing
+  const run = async () =>
+    customHandler ? customHandler(request) : nativeRequestApproval(request);
 
   const operation = queue.then(run);
   queue = operation.then(

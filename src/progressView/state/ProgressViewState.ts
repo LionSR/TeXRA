@@ -70,8 +70,6 @@ export const StreamSessionStateSchema = z.object({
   contextState: ContextStateDataSchema.nullable().prefault(null),
   /** Most recently viewed run for this stream (persisted) */
   activeRunId: StorageKeySchema.nullable().prefault(null),
-  /** YOLO mode: auto-approve tool edits without prompting (ephemeral, per-stream) */
-  approvalBypassEnabled: z.boolean().prefault(false),
 });
 
 /**
@@ -333,23 +331,6 @@ export class ProgressViewState {
       state.activeRunId = null;
       this.saveActiveRunIds();
     }
-  }
-
-  /** Set YOLO mode (approval bypass) for a stream */
-  setApprovalBypassEnabled(stream: StreamTabId, enabled: boolean): void {
-    this.getOrCreateSession(stream).approvalBypassEnabled = enabled;
-  }
-
-  /** Get YOLO mode (approval bypass) for a stream */
-  getApprovalBypassEnabled(stream: StreamTabId): boolean {
-    return this._sessionState.get(stream)?.approvalBypassEnabled ?? false;
-  }
-
-  /** Toggle YOLO mode (approval bypass) for a stream, returns new state */
-  toggleApprovalBypass(stream: StreamTabId): boolean {
-    const state = this.getOrCreateSession(stream);
-    state.approvalBypassEnabled = !state.approvalBypassEnabled;
-    return state.approvalBypassEnabled;
   }
 
   // ============================================================================
