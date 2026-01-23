@@ -57,12 +57,12 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
  * the unrepresentable option, causing failures with tool schemas that use .transform().
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((def) => ({
+  return defs.map((d) => ({
     type: 'function',
     function: {
-      name: def.name,
-      description: def.description,
-      parameters: convertToolSchema(def),
+      name: d.name,
+      description: d.description,
+      parameters: convertToolSchema(d),
     },
   })) as ChatCompletionTool[];
 }
@@ -92,9 +92,9 @@ export function toOpenAIResponseTools(
     options;
   const tools: OpenAIResponseTool[] = [];
 
-  for (const def of defs) {
+  for (const d of defs) {
     // Handle native web search tool (only if model supports it)
-    if (def.name === 'web_search' && supportsNativeWebSearch) {
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
       tools.push({ type: 'web_search' } as WebSearchTool);
       continue;
     }
@@ -107,9 +107,9 @@ export function toOpenAIResponseTools(
 
     tools.push({
       type: 'function',
-      name: def.name,
-      description: def.description,
-      parameters: convertToolSchema(def),
+      name: d.name,
+      description: d.description,
+      parameters: convertToolSchema(d),
       strict: false,
     } as FunctionTool);
   }
@@ -134,24 +134,24 @@ export function toAnthropicTools(
 ): ToolUnion[] {
   const { supportsNativeWebSearch = false } = options;
 
-  return defs.map<ToolUnion>((def) => {
+  return defs.map<ToolUnion>((d) => {
     // Check for native/server tools
-    const remoteType = ANTHROPIC_TOOL_TYPE_MAP[def.name];
-    if (remoteType && (def.name !== 'web_search' || supportsNativeWebSearch)) {
-      return { name: def.name, type: remoteType } as ToolUnion;
+    const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
+    if (remoteType && (d.name !== 'web_search' || supportsNativeWebSearch)) {
+      return { name: d.name, type: remoteType } as ToolUnion;
     }
 
     // Use Zod schema with ref support for complex types, else fallback
-    const params = def.zodSchema
-      ? (toJSONSchema(def.zodSchema, {
+    const params = d.zodSchema
+      ? (toJSONSchema(d.zodSchema, {
           reused: 'ref',
           unrepresentable: 'any',
         }) as AnthropicTool['input_schema'])
-      : (def.parameters as AnthropicTool['input_schema'] | undefined);
+      : (d.parameters as AnthropicTool['input_schema'] | undefined);
 
     return {
-      name: def.name,
-      description: def.description,
+      name: d.name,
+      description: d.description,
       ...(params ? { input_schema: params } : {}),
     } as ToolUnion;
   });
@@ -170,10 +170,10 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
     return [];
   }
 
-  const declarations: FunctionDeclaration[] = defs.map((def) => ({
-    name: def.name,
-    description: def.description,
-    parameters: convertToolSchema(def) as Schema | undefined,
+  const declarations: FunctionDeclaration[] = defs.map((d) => ({
+    name: d.name,
+    description: d.description,
+    parameters: convertToolSchema(d) as Schema | undefined,
   }));
 
   return [{ functionDeclarations: declarations }];
