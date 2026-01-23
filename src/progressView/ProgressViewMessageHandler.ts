@@ -208,8 +208,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'switchStream',
-      async ({ stream }) => {
-        this.provider.setActiveStream(stream);
+      async ({ stream: streamId }) => {
+        this.provider.setActiveStream(streamId);
       },
     );
   }
@@ -219,8 +219,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'deleteStream',
-      async ({ stream }) => {
-        const streamId = stream as StreamTabId;
+      async ({ stream: streamId }) => {
         const hasStream =
           this.provider.state.streamTabs.has(streamId) ||
           Boolean(this.provider.state.getTaskState(streamId));
@@ -263,8 +262,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'stopStream',
-      async ({ stream }) => {
-        await vscode.commands.executeCommand('texra.stopAgent', stream);
+      async ({ stream: streamId }) => {
+        await vscode.commands.executeCommand('texra.stopAgent', streamId);
       },
     );
   }
@@ -279,8 +278,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'resumeStream',
-      async ({ stream }) => {
-        const streamId = stream as StreamTabId;
+      async ({ stream: streamId }) => {
         const taskState = this.provider.state.getTaskState(streamId);
         if (!taskState) {
           return;
@@ -310,8 +308,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'runNew',
-      async ({ stream }) => {
-        const taskState = this.provider.state.getTaskState(stream);
+      async ({ stream: streamId }) => {
+        const taskState = this.provider.state.getTaskState(streamId);
         if (!taskState) {
           return;
         }
@@ -325,10 +323,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       RetryStreamMessageSchema,
       message,
       'retryStreamRequest',
-      async ({ stream, feedback }) => {
+      async ({ stream: streamId, feedback }) => {
         // triggerRetry is synchronous, no await needed
         // Pass optional feedback from the UI
-        const success = retryCoordinator.triggerRetry(stream, feedback);
+        const success = retryCoordinator.triggerRetry(streamId, feedback);
         if (!success) {
           await vscode.window.showInformationMessage(
             'No retryable request is available for this stream yet.',
@@ -343,8 +341,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'cancelRetryRequest',
-      ({ stream }) => {
-        retryCoordinator.cancelRetry(stream);
+      ({ stream: streamId }) => {
+        retryCoordinator.cancelRetry(streamId);
       },
     );
   }
@@ -354,10 +352,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'diffStream',
-      async ({ stream }) => {
-        await this.withToolbarTaskState(stream, async (taskState) => {
-          const executionId = this.provider.state.getExecutionId(stream);
-          const activeRunId = this.provider.state.getActiveRunId(stream);
+      async ({ stream: streamId }) => {
+        await this.withToolbarTaskState(streamId, async (taskState) => {
+          const executionId = this.provider.state.getExecutionId(streamId);
+          const activeRunId = this.provider.state.getActiveRunId(streamId);
           // storageKey is for logical indexing (finding file metadata in progress view state).
           // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
           // Note: Physical file paths use executionId (see runId below), not storageKey.
@@ -365,7 +363,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             executionId ??
             null) as StorageKey | null;
           const runOutputs = storageKey
-            ? this.provider.state.getRunOutputFiles(stream, { storageKey })
+            ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
             : undefined;
           const outputsByRound = runOutputs
             ? Object.fromEntries(runOutputs.entries())
@@ -377,7 +375,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             inputFile: taskState.agentConfig.inputFile,
             outputFiles: taskState.agentConfig.outputFiles,
             outputFilesActive: taskState.activeFiles.output,
-            streamId: stream,
+            streamId,
             // executionId is for file system paths (taskRuns/<executionId>/...)
             // storageKey is for logical storage indexing - different concepts
             runId: executionId,
@@ -393,9 +391,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'packStream',
-      async ({ stream }) => {
-        await this.withToolbarTaskState(stream, async (taskState) => {
-          await this.handleFileOperation(stream, taskState, 'texra.pack');
+      async ({ stream: streamId }) => {
+        await this.withToolbarTaskState(streamId, async (taskState) => {
+          await this.handleFileOperation(streamId, taskState, 'texra.pack');
         });
       },
     );
@@ -406,9 +404,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'cleanStream',
-      async ({ stream }) => {
-        await this.withToolbarTaskState(stream, async (taskState) => {
-          await this.handleFileOperation(stream, taskState, 'texra.clean');
+      async ({ stream: streamId }) => {
+        await this.withToolbarTaskState(streamId, async (taskState) => {
+          await this.handleFileOperation(streamId, taskState, 'texra.clean');
         });
       },
     );
@@ -443,8 +441,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'restoreState',
-      async ({ stream }) => {
-        const taskState = this.provider.state.getTaskState(stream);
+      async ({ stream: streamId }) => {
+        const taskState = this.provider.state.getTaskState(streamId);
         if (taskState) {
           await vscode.commands.executeCommand('texra.restoreState', taskState);
         }
@@ -457,9 +455,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       SendFollowUpMessageSchema,
       message,
       'sendFollowUp',
-      async ({ stream, text }) => {
+      async ({ stream: streamId, text }) => {
         await vscode.commands.executeCommand('texra.sendFollowUp', {
-          stream,
+          stream: streamId,
           text,
         });
       },
@@ -471,10 +469,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       PolishFollowUpMessageSchema,
       message,
       'polishFollowUp',
-      async ({ stream, text }) => {
-        const taskState = this.provider.state.getTaskState(
-          stream as StreamTabId,
-        ) as TaskState | undefined;
+      async ({ stream: streamId, text }) => {
+        const taskState = this.provider.state.getTaskState(streamId);
         if (!taskState) return;
 
         const fileContext = buildFileContextFromTaskState(taskState);
@@ -669,9 +665,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       StreamMessageSchema,
       message,
       'openTaskStorage',
-      async ({ stream }) => {
-        const streamId = stream as StreamTabId;
-
+      async ({ stream: streamId }) => {
         // Use cached activeRunId (set by event handlers when data arrives)
         const storageKey = this.provider.state.getActiveRunId(streamId);
         const runOutputs = storageKey
@@ -929,13 +923,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleFileOperation(
-    stream: string,
+    streamId: StreamTabId,
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const storageKey = this.provider.state.getActiveRunId(stream);
+    const storageKey = this.provider.state.getActiveRunId(streamId);
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
-      stream,
+      streamId,
       { storageKey, workspaceOnly: true },
     );
 
@@ -954,7 +948,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       outputFilesArray.length > 1;
 
     await vscode.commands.executeCommand(command, {
-      streamId: stream,
+      streamId,
       agent: taskState.agentConfig.agent,
       model: taskState.agentConfig.model,
       inputFile: taskState.agentConfig.inputFile,
@@ -966,14 +960,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
-   * @param stream - The stream identifier whose task state should be fetched.
+   * @param streamId - The stream identifier whose task state should be fetched.
    * @param action - The callback to execute when a valid workflow task state is available.
    */
   private async withToolbarTaskState(
-    stream: string,
+    streamId: StreamTabId,
     action: (taskState: WorkflowTaskState) => Promise<void>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(stream);
+    const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       return;
     }
@@ -1101,7 +1095,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private async processFollowup(
     data: {
-      stream: string;
+      stream: StreamTabId;
       mode: 'chat' | 'workflow' | 'merge';
       agent: string;
       model: string;
@@ -1112,7 +1106,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     executeImmediately: boolean,
   ): Promise<void> {
     const {
-      stream,
+      stream: streamId,
       mode,
       agent,
       model,
@@ -1120,7 +1114,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       attachAgentOutputs,
       initialQuestion,
     } = data;
-    const streamId = stream as StreamTabId;
 
     // Validate prerequisites
     const prereq = await this.validateFollowupPrerequisites(streamId, agent);
@@ -1141,7 +1134,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (fileMapping.size === 0) {
       this.logger.warn(this.channel, 'Followup: No file mappings found', {
         data: {
-          stream,
+          streamId,
           originalInputs: originalInputs.length,
           outputs: outputFiles.length,
         },
