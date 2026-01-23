@@ -12,6 +12,7 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
+import { StatusCodes } from 'http-status-codes';
 import { Node, type NonIterableObject } from '@agent/node';
 import {
   retryCoordinator,
@@ -300,7 +301,9 @@ export abstract class RetryableInvocationNode<
     // Relay 401 errors are special: marked non-retryable for auto-retry
     // (to skip wasted attempts), but should show manual retry UI so user
     // can trigger token refresh
-    const isRelay401 = formatted.statusCode === 401 && formatted.isRelayError;
+    const isRelay401 =
+      formatted.statusCode === StatusCodes.UNAUTHORIZED &&
+      formatted.isRelayError;
 
     // If not retryable AND not a relay 401, don't show UI - go straight to execFallback
     if (!formatted.retryable && !isRelay401) {

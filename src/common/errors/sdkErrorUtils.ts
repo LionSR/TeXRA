@@ -450,10 +450,8 @@ function isRelayAuthError(err: unknown, statusCode?: number): boolean {
  * Avoids redundant checks for relay/auth status.
  */
 interface ErrorClassification {
-  /** Error has _relay field in body (from relay service) */
-  isRelay: boolean;
-  /** 401 error with known relay auth message pattern */
-  isRelayAuth: boolean;
+  /** Error originated from relay (has _relay field OR matches auth pattern) */
+  isRelayError: boolean;
   /**
    * Error is retryable for AUTO-RETRY (connection, 5xx, rate limit).
    * Note: Relay 401 errors are NOT auto-retryable because auto-retry
@@ -476,18 +474,19 @@ function classifyError(
   statusCode?: number,
   rawErrorBody?: unknown,
 ): ErrorClassification {
-  const isRelay = isRelayError(rawErrorBody);
-  const isRelayAuth = isRelayAuthError(err, statusCode);
+  const hasRelayField = isRelayError(rawErrorBody);
+  const matchesRelayAuthPattern = isRelayAuthError(err, statusCode);
+  const isRelayErrorResult = hasRelayField || matchesRelayAuthPattern;
 
   // Relay 401 errors: NOT auto-retryable (would waste attempts with expired token)
   // They'll skip to manual retry where token refresh happens first
   const isRelay401 =
-    statusCode === StatusCodes.UNAUTHORIZED && (isRelay || isRelayAuth);
+    statusCode === StatusCodes.UNAUTHORIZED && isRelayErrorResult;
 
   // Determine retryability for auto-retry
   // Relay errors (non-401) are retryable, relay 401 errors are not
   let retryable =
-    (isRelay && !isRelay401) || isRetryableStatusCode(statusCode);
+    (hasRelayField && !isRelay401) || isRetryableStatusCode(statusCode);
 
   // Anthropic-specific: overloaded_error and timeout_error are retryable
   if (!retryable && err instanceof Error) {
@@ -500,7 +499,7 @@ function classifyError(
     }
   }
 
-  return { isRelay, isRelayAuth, retryable };
+  return { isRelayError: isRelayErrorResult, retryable };
 }
 
 export function formatProviderHttpError(err: unknown): ProviderError {
@@ -528,7 +527,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     return {
       ...sdkMatch,
       retryable: classification.retryable || sdkMatch.retryable,
-      isRelayError: classification.isRelay || classification.isRelayAuth,
+      isRelayError: classification.isRelayError,
       rawErrorBody,
       streamDiagnostics,
     };
@@ -556,7 +555,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       message: finalMessage,
       provider,
       retryable: true,
-      isRelayError: classification.isRelay,
+      isRelayError: classification.isRelayError,
       requestId,
       rawErrorBody,
       streamDiagnostics,
@@ -570,7 +569,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     statusText,
     provider,
     retryable: classification.retryable,
-    isRelayError: classification.isRelay || classification.isRelayAuth,
+    isRelayError: classification.isRelayError,
     requestId,
     rawErrorBody,
     streamDiagnostics,
