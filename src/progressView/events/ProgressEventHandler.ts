@@ -196,13 +196,13 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamId);
         }
 
-        // Update stream tabs only when filter changed (affects visible streams).
-        // Label updates (from inputFile/agent) happen on next stream switch -
-        // no need to rebuild all tabs while user is focused on content.
+        // Update stream tabs when filter changes or active stream gets metadata.
+        // Filter change affects visible streams; active stream update ensures
+        // tab label reflects latest taskState (agent name, input file, etc.).
         if (this.webviewUpdater.isAvailable()) {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
-          if (filterChanged) {
+          if (filterChanged || isActiveStream) {
             this.webviewUpdater.updateAll(
               this.state,
               StreamStatusService.getAll(),
