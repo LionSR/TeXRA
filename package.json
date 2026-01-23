@@ -1313,23 +1313,8 @@
         "icon": "$(fix-all)"
       },
       {
-        "command": "texra.testWolframScript",
-        "title": "Test Wolfram Script Installation",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.testWolframTool",
         "title": "Test Wolfram Tool",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.wolframScriptExecute",
-        "title": "Execute Wolfram Language Code",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.wolframScriptRunFile",
-        "title": "Run Current Wolfram Language File",
         "category": "TeXRA"
       },
       {

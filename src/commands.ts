@@ -44,10 +44,7 @@ import {
   registerHistoryCommands,
 } from '@commands/history';
 import { registerMemoryCommands } from '@commands/memory';
-import {
-  registerWolframScriptCommands,
-  registerWolframToolCommands,
-} from '@commands/wolfram';
+import { registerWolframToolCommands } from '@commands/wolfram';
 import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -94,7 +91,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerTextEditorCommands(context);
   registerLinterCommands(context);
   registerWolframToolCommands(context);
-  registerWolframScriptCommands(context);
   registerHistoryCommands(context);
   registerMemoryCommands(context);
   registerArXivCommands(context);
@@ -138,4 +134,4 @@ export {
 export { apiKeyCommands } from '@commands/api/apiKeyCommands';
 export { historyCommands } from '@commands/history';
 export { memoryCommands } from '@commands/memory';
-export { wolframToolCommands, wolframScriptCommands } from '@commands/wolfram';
+export { wolframToolCommands } from '@commands/wolfram';
