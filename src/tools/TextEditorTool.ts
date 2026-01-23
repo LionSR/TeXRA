@@ -413,7 +413,7 @@ export class TextEditorTool extends defineTool({
 
       if (occurrences > 1) {
         // Find line numbers where oldStr occurs
-        const lines = expandedFileContent.split('\n');
+        const lines = expandedFileContent.split(/\r?\n/);
         const lineNumbers = lines
           .map((line, index) =>
             line.includes(expandedOldStr) ? index + 1 : -1,
@@ -543,7 +543,7 @@ export class TextEditorTool extends defineTool({
       }
 
       // Insert new text (convert 1-indexed to 0-indexed for slice)
-      const newStrLines = expandedNewStr.split('\n');
+      const newStrLines = expandedNewStr.split(/\r?\n/);
       const newFileLines = [
         ...fileLines.slice(0, insertLine - 1),
         ...newStrLines,
