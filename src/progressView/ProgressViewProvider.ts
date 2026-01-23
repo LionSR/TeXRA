@@ -18,7 +18,6 @@ import type {
 } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
-// @ts-ignore - Import JavaScript module
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
@@ -463,8 +462,7 @@ export class ProgressViewProvider
     this.state.activeStream = streamId;
     this.updateWebview();
     // Send YOLO state for the new active stream
-    if (stream) {
-      const streamId = stream as StreamTabId;
+    if (streamId) {
       const bypassActive = isApprovalBypassedForStream(streamId);
       this.sendIfReady(() =>
         this.webviewUpdater.updateToolEditApprovalState(streamId, bypassActive),
