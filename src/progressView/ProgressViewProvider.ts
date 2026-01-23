@@ -382,7 +382,7 @@ export class ProgressViewProvider
    * Cleanup tasks after restart (legacy compatibility)
    */
   public async cleanupTasksAfterRestart(
-    waitingStreams?: Set<string>,
+    waitingStreams?: Set<StreamTabId>,
   ): Promise<void> {
     // Use the same logic as webview reload to mark all running tasks/groups as ERROR
     await this.resetRunningStreamStatuses(waitingStreams);
@@ -425,7 +425,7 @@ export class ProgressViewProvider
    * Sets all running streams and their groups to ERROR status
    */
   private async resetRunningStreamStatuses(
-    waitingStreams?: Set<string>,
+    waitingStreams?: Set<StreamTabId>,
   ): Promise<void> {
     // Get affected streams and set their status to ERROR
     const affectedStreams =
@@ -446,8 +446,8 @@ export class ProgressViewProvider
   /**
    * Set active stream (used by message handler)
    */
-  public setActiveStream(stream: string): void {
-    this.state.activeStream = stream;
+  public setActiveStream(streamId: StreamTabId): void {
+    this.state.activeStream = streamId;
     this.updateWebview();
   }
 

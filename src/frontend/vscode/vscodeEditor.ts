@@ -24,11 +24,10 @@ export async function openFileInEditor(
 ): Promise<string | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    const absolutePath = uri.fsPath;
 
     // Check if file is already open in an editor
     const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === absolutePath,
+      (e) => e.document.uri.fsPath === uri.fsPath,
     );
 
     let editor: vscode.TextEditor;
@@ -59,7 +58,7 @@ export async function openFileInEditor(
       );
     }
 
-    return absolutePath;
+    return uri.fsPath;
   } catch {
     return undefined;
   }
@@ -79,11 +78,10 @@ export async function ensureFileOpen(
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    const absolutePath = uri.fsPath;
 
     // Check if file is already open
     const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === absolutePath,
+      (e) => e.document.uri.fsPath === uri.fsPath,
     );
 
     let editor: vscode.TextEditor;
@@ -107,7 +105,7 @@ export async function ensureFileOpen(
       await editor.document.save();
     }
 
-    return { editor, absolutePath };
+    return { editor, absolutePath: uri.fsPath };
   } catch {
     return undefined;
   }

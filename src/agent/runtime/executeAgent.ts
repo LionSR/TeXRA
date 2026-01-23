@@ -70,7 +70,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -87,14 +87,6 @@ const logger = new AgentLogger(CHANNEL);
 // ============================================================================
 // Types
 // ============================================================================
-
-// Re-export for API compatibility
-// Canonical source: agentLoad.ts
-export type { AgentLoadOptions };
-
-// Re-export for callers that need to build agent configurations
-// Canonical source: AgentConfig.ts
-export type { AgentConfigPayload };
 
 /**
  * Resolution output after agent loading and initialization.
@@ -352,7 +344,7 @@ function acquireStreamOrThrow(
 
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
-  streamTabId: StreamTabId,
+  streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<EndGroupStatus>,
 ): Promise<void> {
@@ -360,16 +352,16 @@ async function runFlowWithLifecycle(
     const flowStatus = await runner();
     ctx.parentStage.end(flowStatus);
 
-    if (!StreamStatusService.shouldPreserveOnCompletion(streamTabId)) {
+    if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
       StreamStatusService.set(
-        streamTabId,
+        streamId,
         flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
       );
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (err) {
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
     // Handle flow error inline
     const rawMsg = toErrorMessage(err);
@@ -489,19 +481,19 @@ export async function executeAgent(
     throw err;
   }
 
-  const { setting, streamId: streamTabId, config } = ctx;
+  const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
   // Handle stream ID mismatch when useMultipleOutputs was corrected based on agent support.
   // Release the preliminary stream and acquire the correct one.
-  if (streamTabId !== preliminaryStreamId) {
+  if (streamId !== preliminaryStreamId) {
     logger.debug(
-      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${streamTabId}. ` +
+      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${streamId}. ` +
         'Corrected useMultipleOutputs based on agent support.',
     );
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     try {
-      acquireStreamOrThrow(streamTabId);
+      acquireStreamOrThrow(streamId);
     } catch (err) {
       // Clean up parentStage if reacquisition fails (resolved stream already in use)
       ctx.parentStage.end(END_GROUP_STATUS.ERROR);
@@ -509,18 +501,18 @@ export async function executeAgent(
     }
   }
 
-  await runFlowWithLifecycle(ctx, streamTabId, agentName, async () => {
+  await runFlowWithLifecycle(ctx, streamId, agentName, async () => {
     if (executionId) await ensureRunDir(executionId);
 
     const runStorage = getRunStorageService();
 
     // Set stream status to running
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-    logger.info(`Starting task execution for ${streamTabId}`);
+    logger.info(`Starting task execution for ${streamId}`);
     logger.info(`Input file: ${config.inputFile}`);
     logger.debug(
-      `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
+      `Stream ID: ${streamId}, Agent: ${agentName}, Model: ${config.model}`,
     );
     logger.debug(
       `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
@@ -534,7 +526,7 @@ export async function executeAgent(
       showAgentNotification(config);
     }
     bus.emit('setTaskState', {
-      streamId: streamTabId,
+      streamId,
       executionId,
       taskState: agentConfigToTaskState(config),
     });
@@ -624,10 +616,10 @@ export async function executeMergeAgent(
     }
   }
 
-  const { streamId: streamTabId, config, executionId } = ctx;
+  const { streamId, config, executionId } = ctx;
 
-  await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+  await runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
+    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
     const taskStage = await logger.stage(`Task: merge@${model}`);
     return taskStage.run(async () => {
@@ -678,13 +670,11 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  const snapshotConfig = snapshot.agentConfig;
-
   // Resolve agent base with snapshot's stream ID for correct UI state
-  const ctx = await resolveAgentBase(snapshotConfig, snapshot.executionId, {
+  const ctx = await resolveAgentBase(snapshot.agentConfig, snapshot.executionId, {
     streamTabIdOverride: snapshot.streamId,
   });
-  const { setting, streamId: streamTabId, config } = ctx;
+  const { setting, streamId, config } = ctx;
 
   // Validate agent category
   if (setting.agentCategory !== AgentCategory.ToolUse) {
@@ -697,10 +687,10 @@ export async function resumeToolUseFromSnapshot(
 
   await runFlowWithLifecycle(
     ctx,
-    streamTabId,
-    snapshotConfig.agent,
+    streamId,
+    snapshot.agentConfig.agent,
     async () => {
-      StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
       // Run the flow with resume snapshot
       const result = await runToolUseFlow(
