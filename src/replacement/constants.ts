@@ -48,8 +48,9 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
-const escapeRegExp = (value: string): string =>
-  value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export const FENCED_LATEX_ENVIRONMENTS = [
   'align',

@@ -149,11 +149,16 @@ export function formatToolOutput(
   noMatchesText: string = '(no entries)',
 ): string {
   const isEmpty = !content || (Array.isArray(content) && content.length === 0);
-  const body = isEmpty
-    ? noMatchesText
-    : Array.isArray(content)
-      ? content.join('\n')
-      : content;
+
+  let body: string;
+  if (isEmpty) {
+    body = noMatchesText;
+  } else if (Array.isArray(content)) {
+    body = content.join('\n');
+  } else {
+    body = content;
+  }
+
   return `${header}\n${body}`;
 }
 

@@ -297,9 +297,13 @@ export class TextEditorTool extends defineTool({
       // Record read only after successful validation
       recordToolFileRead(filePath);
 
-      const summary = viewRange
-        ? `View ${filePath} (${viewRange[0]}-${viewRange[1] === -1 ? 'end' : viewRange[1]})`
-        : `View ${filePath}`;
+      let summary: string;
+      if (viewRange) {
+        const endLabel = viewRange[1] === -1 ? 'end' : String(viewRange[1]);
+        summary = `View ${filePath} (${viewRange[0]}-${endLabel})`;
+      } else {
+        summary = `View ${filePath}`;
+      }
 
       return {
         summary,
