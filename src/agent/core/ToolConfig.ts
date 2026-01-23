@@ -19,11 +19,19 @@ export const DEFAULT_TOOL_CONFIG = {
  */
 export const ToolConfigSchema = z
   .object({
-    autoExtractFigure: z.boolean().prefault(false),
-    autoExtractTikzFigure: z.boolean().prefault(false),
-    attachTeXCount: z.boolean().prefault(false),
-    attachDiagnostics: z.boolean().prefault(false),
-    autoCompileInputPdf: z.boolean().prefault(false),
+    autoExtractFigure: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractFigure),
+    autoExtractTikzFigure: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractTikzFigure),
+    attachTeXCount: z.boolean().prefault(DEFAULT_TOOL_CONFIG.attachTeXCount),
+    attachDiagnostics: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.attachDiagnostics),
+    autoCompileInputPdf: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoCompileInputPdf),
   })
   .prefault(DEFAULT_TOOL_CONFIG);
 
