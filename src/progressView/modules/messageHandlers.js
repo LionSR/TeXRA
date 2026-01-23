@@ -281,44 +281,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Render a log message to its appropriate container.
-   * Attempts to append to group first, falls back to main log content.
-   * @param {Object} msg - The log message to render
-   * @param {HTMLElement} logContent - The main log content container
-   * @returns {void} No return value; dom.logEntries.append returns truthy on success
-   */
-  _renderLogMessage(msg, logContent) {
-    // dom.logEntries.append returns true if message was added to its group container
-    if (msg.groupId) {
-      const wasAppendedToGroup = dom.logEntries.append(msg);
-      // DIAGNOSTIC: Track grouped message handling
-      if (!wasAppendedToGroup) {
-        console.warn(
-          '[_renderLogMessage] Message has groupId but no container:',
-          {
-            messageType: msg.messageType,
-            id: msg.id,
-            groupId: msg.groupId,
-          },
-        );
-      }
-      if (wasAppendedToGroup) return;
-    }
-    const formatted = this._entryFormatter.format(msg);
-    // DIAGNOSTIC: Log if formatter returns null
-    if (!formatted) {
-      console.warn('[_renderLogMessage] Formatter returned null for:', {
-        messageType: msg.messageType,
-        id: msg.id,
-        hasText: Boolean(msg.text),
-        hasData: Boolean(msg.data),
-        groupId: msg.groupId,
-      });
-    }
-    appendFormatted(logContent, formatted);
-  }
-
-  /**
    * Update run-scoped metadata (instructions, usage, files, missing outputs, context) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    */
