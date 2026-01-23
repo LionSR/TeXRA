@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  StorageKey,
+} from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
@@ -46,7 +49,7 @@ export class ProgressEventHandler {
    * Key: stream ID, Value: array of groups waiting to be sent to frontend.
    * Groups are replayed when setActiveStream is processed for the stream.
    */
-  private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
+  private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
 
   /** Shared context for domain handlers - used for canUpdateWebview checks */
   private readonly ctx: EventHandlerContext;
@@ -337,7 +340,7 @@ export class ProgressEventHandler {
    *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
-    stream: string,
+    stream: StreamTabId | '',
     options: { updateInstruction?: boolean } = {},
   ): StorageKey | null {
     if (!this.webviewUpdater.isAvailable()) return null;
@@ -412,20 +415,20 @@ export class ProgressEventHandler {
    * Get current stream status.
    * Delegates to StreamStatusService as the single source of truth.
    */
-  getStreamStatus(stream: string): StreamStatus | undefined {
-    return StreamStatusService.get(stream);
+  getStreamStatus(streamId: StreamTabId): StreamStatus | undefined {
+    return StreamStatusService.get(streamId);
   }
 
   /**
    * Set the status for a specific stream synchronously.
    * Updates StreamStatusService (single source of truth) and triggers webview updates.
    *
-   * @param stream - Stream identifier
+   * @param streamId - Stream identifier
    * @param status - New status to set
    * @param previousStatus - Previous status from event payload (undefined for direct calls)
    */
   setStreamStatus(
-    stream: string,
+    streamId: StreamTabId,
     status: StreamStatus,
     previousStatus?: StreamStatus,
   ): void {
@@ -433,7 +436,7 @@ export class ProgressEventHandler {
     // Event-triggered calls already mutated the service before emitting.
     const isDirectCall = previousStatus === undefined;
     if (isDirectCall) {
-      StreamStatusService.set(stream, status, { emit: false });
+      StreamStatusService.set(streamId, status, { emit: false });
     }
 
     if (!this.webviewUpdater.isAvailable()) {
@@ -442,11 +445,11 @@ export class ProgressEventHandler {
 
     // Resolve previous status: from event payload or read current (for direct calls).
     // Treat READY as "no previous status" for ordering purposes.
-    const prevStatus = previousStatus ?? StreamStatusService.get(stream);
+    const prevStatus = previousStatus ?? StreamStatusService.get(streamId);
     const effectivePrevious =
       prevStatus === STREAM_STATUS.READY ? undefined : prevStatus;
 
-    const streamExists = this.state.streamTabs.has(stream);
+    const streamExists = this.state.streamTabs.has(streamId);
     const needsFullRefresh =
       !streamExists ||
       (this.state.streamSortOrder === 'time' &&
@@ -454,30 +457,30 @@ export class ProgressEventHandler {
 
     if (needsFullRefresh) {
       // Ensure filter matches stream's category to keep it visible (e.g., when resuming)
-      const streamCategory = this.getStreamCategory(stream);
+      const streamCategory = this.getStreamCategory(streamId);
       if (streamCategory) {
         this.maybeUpdateFilterForCategory(streamCategory);
       }
 
       const statusesForRefresh = StreamStatusService.getAll();
-      statusesForRefresh.set(stream, status);
+      statusesForRefresh.set(streamId, status);
       this.webviewUpdater.updateAll(this.state, statusesForRefresh);
     } else {
       // Targeted update - send only status change for this stream
-      const logs = this.state.streamTabs.getMessages(stream);
+      const logs = this.state.streamTabs.getMessages(streamId);
       const lastTimestamp = logs.at(-1)?.timestamp;
-      this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
+      this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
     }
   }
 
   /**
    * Get the agent category for a stream from taskState or hints.
    */
-  private getStreamCategory(stream: string): AgentCategory | undefined {
-    const taskState = this.state.getTaskState(stream);
+  private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
+    const taskState = this.state.getTaskState(streamId);
     return (
       taskState?.agentConfig?.agentCategory ??
-      this.state.getStreamHints(stream).agentCategory
+      this.state.getStreamHints(streamId).agentCategory
     );
   }
 
@@ -493,27 +496,30 @@ export class ProgressEventHandler {
    * Buffer a task group for later replay when the stream becomes active.
    * Called by TaskGroupEvents when addTaskGroup arrives before setActiveStream.
    */
-  private bufferTaskGroupForReplay(stream: string, group: TaskGroup): void {
-    const pending = this.pendingTaskGroups.get(stream) ?? [];
+  private bufferTaskGroupForReplay(
+    streamId: StreamTabId,
+    group: TaskGroup,
+  ): void {
+    const pending = this.pendingTaskGroups.get(streamId) ?? [];
     pending.push(group);
-    this.pendingTaskGroups.set(stream, pending);
+    this.pendingTaskGroups.set(streamId, pending);
   }
 
   /**
    * Replay any buffered task groups for a stream after it becomes active.
    * Groups are only deleted after successful replay to preserve them if webview unavailable.
    */
-  private replayPendingTaskGroups(stream: string): void {
-    const pending = this.pendingTaskGroups.get(stream);
+  private replayPendingTaskGroups(streamId: StreamTabId): void {
+    const pending = this.pendingTaskGroups.get(streamId);
     if (!pending || pending.length === 0) {
       return;
     }
 
     if (this.webviewUpdater.isAvailable()) {
       for (const group of pending) {
-        this.webviewUpdater.addTaskGroup(stream, group);
+        this.webviewUpdater.addTaskGroup(streamId, group);
       }
-      this.pendingTaskGroups.delete(stream);
+      this.pendingTaskGroups.delete(streamId);
     }
   }
 
@@ -521,19 +527,21 @@ export class ProgressEventHandler {
    * Initialize a stream when task group events arrive before dedicated
    * status or activation events, preserving any existing status metadata.
    */
-  private async initializeStreamForTaskGroup(stream: string): Promise<void> {
-    await this.state.streamTabs.ensureStream(stream);
+  private async initializeStreamForTaskGroup(
+    streamId: StreamTabId,
+  ): Promise<void> {
+    await this.state.streamTabs.ensureStream(streamId);
 
     // Set status to RUNNING if not already set (without emitting to avoid redundant updates)
-    if (!StreamStatusService.has(stream)) {
-      StreamStatusService.set(stream, STREAM_STATUS.RUNNING, { emit: false });
+    if (!StreamStatusService.has(streamId)) {
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
     }
 
-    this.state.updateStreamHints(stream, {
+    this.state.updateStreamHints(streamId, {
       agentCategory: AgentCategory.Workflow,
     });
     this.maybeUpdateFilterForCategory(AgentCategory.Workflow);
-    this.state.activeStream = stream;
+    this.state.activeStream = streamId;
 
     if (!this.webviewUpdater.isAvailable()) {
       return;
@@ -542,18 +550,18 @@ export class ProgressEventHandler {
     // Coordinated update: UPDATE_STREAMS first (sets frontend activeStream),
     // then UPDATE_LOGS (requires activeStream to be set)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-    const activeRunId = this.refreshStreamSurface(stream, {
+    const activeRunId = this.refreshStreamSurface(streamId, {
       updateInstruction: false,
     });
-    this.sendInstructionUpdate(stream, activeRunId);
+    this.sendInstructionUpdate(streamId, activeRunId);
   }
 
   /**
    * Clear pending task groups for a specific stream.
    * Called when a stream is deleted to prevent memory leaks.
    */
-  clearPendingTaskGroups(stream: string): void {
-    this.pendingTaskGroups.delete(stream);
+  clearPendingTaskGroups(streamId: StreamTabId): void {
+    this.pendingTaskGroups.delete(streamId);
   }
 
   /**

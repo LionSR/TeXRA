@@ -181,14 +181,14 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.sendFollowUp',
-      async (payload: { stream: string; text: string }) => {
-        const streamId = payload.stream as StreamTabId;
+      async (payload: { stream: StreamTabId; text: string }) => {
+        const { stream: streamId, text } = payload;
 
         // Lazy detection: check for persisted flow if status not already set.
         // This avoids iterating through all streams at startup.
         await lazyDetectWaitingStatus(streamId);
 
-        const result = await sendFollowUp(streamId, payload.text);
+        const result = await sendFollowUp(streamId, text);
         await handleFollowUpResult(result, streamId);
       },
     ),
