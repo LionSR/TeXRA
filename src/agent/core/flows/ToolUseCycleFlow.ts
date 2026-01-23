@@ -781,7 +781,102 @@ class ToolUseDispatchNode<C> extends BatchNode<
     return FlowTransition.CONTINUE;
   }
 }
-/** Creates a tool-use cycle flow with services injected via params. */
+
+/**
+ * Checks for queued follow-up messages after tool dispatch.
+ *
+ * If the cycle is about to complete (model ended turn) but there are queued
+ * user messages, this node injects them and continues the cycle so the model
+ * can respond to user input without ending the turn.
+ *
+ * This enables "steering" behavior where users can type during tool execution
+ * and have their message processed in the same turn.
+ */
+class ToolUseFollowUpInjectNode<C> extends BaseNode<
+  ToolUseCycleShared,
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
+> {
+  async prep(shared: ToolUseCycleShared): Promise<{
+    shouldInject: boolean;
+    endingTurn: boolean;
+  }> {
+    const session = this.services.session;
+
+    // Only check for follow-ups if session is available
+    if (!session) {
+      return { shouldInject: false, endingTurn: shared.endTurn };
+    }
+
+    // Check if cycle would end and there are queued messages
+    const endingTurn = shared.endTurn && shared.shouldStop;
+    const hasQueuedFollowUp = session.hasQueuedFollowUp();
+
+    return {
+      shouldInject: endingTurn && hasQueuedFollowUp,
+      endingTurn,
+    };
+  }
+
+  async exec(prepRes: {
+    shouldInject: boolean;
+    endingTurn: boolean;
+  }): Promise<string | null> {
+    if (!prepRes.shouldInject) {
+      return null;
+    }
+
+    const session = this.services.session;
+    if (!session) {
+      return null;
+    }
+
+    // Drain all queued follow-ups without waiting
+    // Use checkInterruption that always returns false since we're just draining
+    const followUp = await session.waitForFollowUp(() => false);
+    return followUp;
+  }
+
+  async post(
+    shared: ToolUseCycleShared,
+    prepRes: { shouldInject: boolean; endingTurn: boolean },
+    execRes: string | null,
+  ): Promise<string | undefined> {
+    // If no injection needed, proceed normally (will COMPLETE)
+    if (!prepRes.shouldInject || execRes === null) {
+      return FlowTransition.DEFAULT;
+    }
+
+    // Inject user follow-up as a message
+    this.services.logger.userMessage(execRes);
+    shared.messages = await this.services.modelHandler.createUserFollowUpMessages(
+      shared.messages,
+      execRes,
+    );
+
+    // Reset cycle state to continue
+    shared.shouldStop = false;
+    shared.endTurn = false;
+
+    // Notify that follow-up was consumed (for UI update)
+    this.services.onFollowUpConsumed?.();
+
+    return FlowTransition.CONTINUE;
+  }
+}
+
+/**
+ * Creates a tool-use cycle flow with services injected via params.
+ *
+ * Flow structure:
+ *   Prep → Call → Process → Dispatch → FollowUpInject
+ *     ↑                                      |
+ *     └──────────── CONTINUE ────────────────┘
+ *
+ * The FollowUpInject node checks for queued user messages after tool dispatch.
+ * If the model wants to end the turn but there are queued messages, it injects
+ * them and continues the cycle so the model can respond without waiting.
+ */
 export function createToolUseCycleFlow<C>(): Flow<
   ToolUseCycleShared,
   ToolUseCycleParams<C>
@@ -790,11 +885,16 @@ export function createToolUseCycleFlow<C>(): Flow<
   const callNode = new ToolUseCallNode<C>();
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
+  const followUpInjectNode = new ToolUseFollowUpInjectNode<C>();
 
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
+  dispatchNode.next(followUpInjectNode);
+  // Both dispatch CONTINUE (more tool calls) and followUpInject CONTINUE (injected message)
+  // loop back to prep for the next model call
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
+  followUpInjectNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }
