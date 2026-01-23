@@ -312,9 +312,9 @@ Use view_range: [start, end] to paginate large outputs.`,
       return { output: 'No files generated for this execution.' };
     }
 
-    const lines = entries.map(({ path: p, size, isDir }) => {
-      const sizeStr = isDir ? '<dir>' : this.formatSize(size);
-      return `${sizeStr.padStart(8)}  ${p}`;
+    const lines = entries.map((entry) => {
+      const sizeStr = entry.isDir ? '<dir>' : this.formatSize(entry.size);
+      return `${sizeStr.padStart(8)}  ${entry.path}`;
     });
 
     return {

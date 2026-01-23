@@ -1354,7 +1354,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     newResponse = replacementEngine.applyAll(newResponse);
 
     return {
-      response: newResponse,
+      text: newResponse,
       usage: responseObject.usage,
       stopReason: stopReason ?? 'stop',
     };
@@ -1445,7 +1445,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { content: fileContent } = await prepareExistingOutputContent(
+    const { fileContent } = await prepareExistingOutputContent(
       outputLocation,
       workspaceState,
       this.logger,
