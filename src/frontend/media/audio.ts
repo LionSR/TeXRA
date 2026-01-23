@@ -9,7 +9,7 @@ import { execa, type Subprocess } from 'execa';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
