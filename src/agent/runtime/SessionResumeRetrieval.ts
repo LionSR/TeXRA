@@ -163,6 +163,27 @@ export async function retrieveSessionResumeData(
 // =============================================================================
 
 /**
+ * Read flow record from execution store.
+ * Returns the flow record if found and valid, null otherwise.
+ */
+async function readFlowRecord(
+  executionId: ExecutionId,
+  agentType: 'tool-use' | 'workflow',
+): Promise<FlowRecord | null> {
+  const kv = getExecutionStore(executionId);
+  const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+
+  if (!flowRecord?.shared) {
+    logger.warn(
+      `No flow record found for ${agentType} execution: ${executionId}`,
+    );
+    return null;
+  }
+
+  return flowRecord;
+}
+
+/**
  * Retrieve resume data for a tool-use session.
  */
 async function retrieveToolUseResumeData(
@@ -171,11 +192,8 @@ async function retrieveToolUseResumeData(
   taskState: TaskState,
 ): Promise<ToolUseResumeData | null> {
   try {
-    const kv = getExecutionStore(executionId);
-    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-
-    if (!flowRecord?.shared) {
-      logger.warn(`No flow record found for execution: ${executionId}`);
+    const flowRecord = await readFlowRecord(executionId, 'tool-use');
+    if (!flowRecord) {
       return null;
     }
 
@@ -237,13 +255,8 @@ async function retrieveWorkflowResumeData(
   taskState: TaskState,
 ): Promise<WorkflowResumeData | null> {
   try {
-    const kv = getExecutionStore(executionId);
-    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-
-    if (!flowRecord?.shared) {
-      logger.warn(
-        `No flow record found for workflow execution: ${executionId}`,
-      );
+    const flowRecord = await readFlowRecord(executionId, 'workflow');
+    if (!flowRecord) {
       return null;
     }
 
