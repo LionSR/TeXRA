@@ -228,9 +228,6 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/** Result type for tool-use call. */
-type ToolUseCallResult = InvocationResult<BaseInvocationSuccessData>;
-
 /**
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
  * Uses RetryableInvocationNode for automatic retry logic with user prompts.
@@ -251,7 +248,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
@@ -279,14 +276,14 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   async execFallback(
     _prepRes: BaseInvocationPrepResult,
     error: Error,
-  ): Promise<ToolUseCallResult> {
+  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     return this.getFallbackResult(error);
   }
 
   async post(
     shared: ToolUseCycleShared,
     _prepRes: BaseInvocationPrepResult,
-    execRes: ToolUseCallResult,
+    execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
     const services = this.services;
 
