@@ -34,10 +34,10 @@ export class ExtractTikzFiguresTool extends defineTool({
   schema: ExtractTikzInputSchema,
 }) {
   protected async execute({ texPath, compile = true }: ExtractTikzInput) {
-    const { resolved, display } = await resolveLatexFileOrThrow(texPath);
+    const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const tikzFigures = await tikzPictureManager.extract(
-      pathToLocation(resolved.absolute),
+      pathToLocation(path.absolute),
     );
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
@@ -61,7 +61,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
       const compiledPaths = await tikzPictureManager.compile(
-        pathToLocation(resolved.absolute),
+        pathToLocation(path.absolute),
       );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API

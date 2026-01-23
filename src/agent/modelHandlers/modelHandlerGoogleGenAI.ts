@@ -778,7 +778,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
       return {
-        response: '',
+        text: '',
         usage: undefined,
         stopReason: 'UNKNOWN_EMPTY_RESPONSE',
       };
@@ -793,7 +793,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const errorMsg = `Request blocked due to ${blockReason}. Safety ratings: ${safetyRatings}`;
         this.logger.error(errorMsg);
         return {
-          response: '',
+          text: '',
           usage: responseObject.usageMetadata || undefined,
           stopReason: `Blocked: ${blockReason}`,
         };
@@ -802,7 +802,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         `Invalid or empty response structure from Google GenAI: ${JSON.stringify(responseObject)}`,
       );
       return {
-        response: '',
+        text: '',
         usage: undefined,
         stopReason: 'UNKNOWN_EMPTY_RESPONSE',
       };
@@ -836,7 +836,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       responseText += `\n${endTag}`;
     }
 
-    return { response: responseText, usage, stopReason };
+    return { text: responseText, usage, stopReason };
   }
 
   /**
@@ -1063,7 +1063,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
 
     // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { content: fileContent } = await prepareExistingOutputContent(
+    const { fileContent } = await prepareExistingOutputContent(
       outputLocation,
       workspaceState,
       this.logger,

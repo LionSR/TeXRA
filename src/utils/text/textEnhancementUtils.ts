@@ -287,8 +287,7 @@ ${text}`;
 
       let extractedText: string;
       try {
-        const { response: modelText } = handler.extractResponse(response, '');
-        extractedText = modelText;
+        ({ text: extractedText } = handler.extractResponse(response, ''));
       } catch (error) {
         logger.error(
           CHANNEL,
