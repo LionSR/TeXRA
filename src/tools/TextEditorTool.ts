@@ -42,17 +42,10 @@ export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().nullish(),
-  view_range: z
-    .array(z.number())
-    .length(2)
-    .nullish()
-    .describe('Line range [start, end], 1-indexed. Use -1 for end to read to EOF.'),
+  view_range: z.array(z.number()).length(2).nullish().describe('1-indexed. Use -1 for EOF.'),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
-  insert_line: z
-    .number()
-    .nullish()
-    .describe('Line number to insert before (1-indexed). Use 1 to insert at start.'),
+  insert_line: z.number().nullish().describe('1-indexed.'),
 });
 
 /** Derived from TextEditorInputSchema - single source of truth */

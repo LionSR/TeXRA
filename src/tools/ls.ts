@@ -21,7 +21,7 @@ import { defineTool } from './core/define';
 
 const LsInputSchema = z.strictObject({
   path: z.string(),
-  ignore: z.array(z.string()).prefault([]).describe('Glob patterns to exclude.'),
+  ignore: z.array(z.string()).prefault([]),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
