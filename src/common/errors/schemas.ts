@@ -28,26 +28,29 @@ import { z } from 'zod';
 /**
  * Stream diagnostics for debugging Anthropic streaming failures.
  * Shows what was received before the stream errored.
+ *
+ * Uses prefault() for sensible defaults - allows partial creation
+ * while ensuring all fields are present in output.
  */
 export const StreamDiagnosticsSchema = z.object({
   /** Characters of thinking content received */
-  thinkingChars: z.number(),
+  thinkingChars: z.number().prefault(0),
   /** Characters of text content received */
-  textChars: z.number(),
+  textChars: z.number().prefault(0),
   /** Characters of tool input JSON received */
-  toolInputChars: z.number(),
+  toolInputChars: z.number().prefault(0),
   /** Block types seen (e.g., ['thinking', 'text']) */
-  blockTypesSeen: z.array(z.string()),
+  blockTypesSeen: z.array(z.string()).prefault([]),
   /** Total events processed */
-  eventsProcessed: z.number(),
+  eventsProcessed: z.number().prefault(0),
   /** Last event type (e.g., 'content_block_delta') */
-  lastEventType: z.string().nullable(),
+  lastEventType: z.string().nullable().prefault(null),
   /** Seconds since stream started */
-  elapsedSecs: z.number(),
+  elapsedSecs: z.number().prefault(0),
   /** Seconds since last event (stall detection) */
-  secsSinceLastEvent: z.number(),
+  secsSinceLastEvent: z.number().prefault(0),
   /** Whether handler was finalized */
-  finalized: z.boolean(),
+  finalized: z.boolean().prefault(false),
 });
 
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
