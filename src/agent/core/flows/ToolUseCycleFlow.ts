@@ -1,5 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
+import type { ZodIssue } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
@@ -86,9 +87,7 @@ function parseToolInput(
 }
 
 /** Check if an error has Zod-like issues array (duck typing). */
-function hasZodIssues(
-  error: unknown,
-): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
+function hasZodIssues(error: unknown): error is { issues: ZodIssue[] } {
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -106,13 +105,12 @@ function normalizeToolCallError(
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
-  const issues = error.issues as ValidationErrorDiagnostics['issues'];
   return {
     message: `${toolName}: Invalid parameters provided`,
     diagnostics: {
       type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-      issues,
-      formatted: formatZodIssuesForDiagnostics(issues),
+      issues: error.issues,
+      formatted: formatZodIssuesForDiagnostics(error.issues),
     },
   };
 }
@@ -232,9 +230,6 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/** Result type for tool-use call. */
-type ToolUseCallResult = InvocationResult<BaseInvocationSuccessData>;
-
 /**
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
  * Uses RetryableInvocationNode for automatic retry logic with user prompts.
@@ -255,7 +250,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<InvocationResult<BaseInvocationSuccessData>> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
@@ -283,14 +278,14 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   async execFallback(
     _prepRes: BaseInvocationPrepResult,
     error: Error,
-  ): Promise<ToolUseCallResult> {
+  ): Promise<InvocationResult<BaseInvocationSuccessData>> {
     return this.getFallbackResult(error);
   }
 
   async post(
     shared: ToolUseCycleShared,
     _prepRes: BaseInvocationPrepResult,
-    execRes: ToolUseCallResult,
+    execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
     const services = this.services;
 
@@ -330,13 +325,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   }
 }
 
-/** Data extracted by prep() for tool-use process. */
-interface ToolUseProcessPrepResult {
-  shouldStop: boolean;
-  response?: unknown;
-  responseTimeMs?: number;
-}
-
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
   | { kind: 'skipped' }
@@ -358,7 +346,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<{ shouldStop: boolean; response?: unknown; responseTimeMs?: number }> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -367,7 +355,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 
   async exec(
-    prepRes: ToolUseProcessPrepResult,
+    prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
       return { kind: 'skipped' };
@@ -453,7 +441,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: ToolUseProcessPrepResult,
+    _prepRes: { shouldStop: boolean; response?: unknown; responseTimeMs?: number },
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;
@@ -664,42 +652,30 @@ class ToolUseDispatchNode<C> extends BatchNode<
     };
     options.logger.logToolUse(toolUseLog);
 
-    const mediaLocations = await this.collectValidMediaLocations(
-      result.files,
-      options.logger,
-    );
-    if (mediaLocations.length > 0) {
-      workspace.media.addMediaFiles(mediaLocations);
-    }
-  }
-
-  /** Collect valid file locations from tool result attachments. */
-  private async collectValidMediaLocations(
-    files: ToolResult['files'],
-    logger: AgentLogger,
-  ): Promise<FileLocation[]> {
-    if (!files || files.length === 0) {
-      return [];
-    }
-
-    const validLocations: FileLocation[] = [];
-    for (const attachment of files) {
-      const filePath = attachment.path;
-      if (typeof filePath !== 'string' || filePath.trim() === '') {
-        continue;
-      }
-      const location = pathToLocation(filePath);
-      try {
-        if (await AbsoluteFS.exists(location.absolutePath)) {
-          validLocations.push(location);
+    // Collect and add valid media file locations
+    const files = result.files;
+    if (files && files.length > 0) {
+      const validLocations: FileLocation[] = [];
+      for (const attachment of files) {
+        const filePath = attachment.path;
+        if (typeof filePath !== 'string' || filePath.trim() === '') {
+          continue;
         }
-      } catch (err) {
-        logger.debug(
-          `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
-        );
+        const location = pathToLocation(filePath);
+        try {
+          if (await AbsoluteFS.exists(location.absolutePath)) {
+            validLocations.push(location);
+          }
+        } catch (err) {
+          options.logger.debug(
+            `Skipping inaccessible media file: ${filePath} (${err instanceof Error ? err.message : 'unknown error'})`,
+          );
+        }
+      }
+      if (validLocations.length > 0) {
+        workspace.media.addMediaFiles(validLocations);
       }
     }
-    return validLocations;
   }
 
   /**
