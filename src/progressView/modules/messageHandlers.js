@@ -501,10 +501,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllQueuedFollowUps();
       state.clearAllFollowUpText();
     } else {
-      // Clear content when switching streams to prevent stale display.
+      // Handle stream switch: clear stale content, then repopulate from cache.
       // While UPDATE_LOGS typically follows UPDATE_STREAMS, some code paths
       // (e.g., setStreamStatus for new streams with filter change) only send
-      // UPDATE_STREAMS. Clear proactively so stale content doesn't persist.
+      // UPDATE_STREAMS. We clear first, then repopulate from cached state.
+      // If UPDATE_LOGS arrives later, it will rebuild with fresh data.
       if (
         state.lastRenderedStream &&
         state.lastRenderedStream !== message.activeStream
@@ -512,8 +513,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
         if (logContent) logContent.innerHTML = '';
         state.lastRenderedStream = '';
-        // Clear panels to prevent stale data when UPDATE_LOGS doesn't follow
-        this._clearActivePanels();
+        // Repopulate panels from cached state for the new stream
+        const activeRunId = state.resolveActiveRunId(message.activeStream);
+        this._refreshActiveRunPanels(activeRunId);
       }
 
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -654,7 +656,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (container) {
         container.appendChild(frag);
       } else {
-        // Fallback: append to main log if container was removed
+        // Fallback: append to main log if container was removed (race condition)
+        console.warn(`[messageHandlers] Group container removed during batch: ${groupId}`);
         logContent.appendChild(frag);
       }
     }
