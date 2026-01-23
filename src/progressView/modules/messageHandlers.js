@@ -610,9 +610,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    sortedMessages.forEach((msg) => {
-      this._renderLogMessage(msg, logContent);
-    });
+    // Batch ungrouped messages via DocumentFragment to avoid layout thrashing
+    const fragment = document.createDocumentFragment();
+    for (const msg of sortedMessages) {
+      if (msg.groupId) {
+        // Grouped messages go to their group container
+        dom.logEntries.append(msg);
+      } else {
+        // Ungrouped messages batch into fragment
+        const formatted = this._entryFormatter.format(msg);
+        if (formatted) appendFormatted(fragment, formatted);
+      }
+    }
+    if (fragment.childNodes.length > 0) {
+      logContent.appendChild(fragment);
+    }
     scrollToBottom(logContent);
 
     // Use validated run ID from state (set earlier via setActiveRunId after validation)
