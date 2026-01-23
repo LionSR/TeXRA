@@ -165,6 +165,27 @@ export function clearAllApprovalBypass(): void {
   approvalsBypassedByStream.clear();
 }
 
+/** Reject all pending tool edit approvals for a deleted stream (prevents memory leak) */
+export function rejectPendingToolEditApprovalsForStream(
+  streamId: StreamTabId,
+): void {
+  for (const entry of pendingApprovals.values()) {
+    if (entry.streamId === streamId && !entry.isSettled()) {
+      // Settling triggers finally block which cleans up temp files and emits resolve event
+      entry.settle({ accepted: false });
+    }
+  }
+}
+
+/** Reject all pending tool edit approvals (used when deleting all streams) */
+export function rejectAllPendingToolEditApprovals(): void {
+  for (const entry of pendingApprovals.values()) {
+    if (!entry.isSettled()) {
+      entry.settle({ accepted: false });
+    }
+  }
+}
+
 export function initializeToolEditApproval(
   context: vscode.ExtensionContext,
 ): void {
