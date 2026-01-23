@@ -16,6 +16,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  user-select: text;
+  cursor: text;
 }
 
 .tool-use-label {
