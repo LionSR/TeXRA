@@ -213,6 +213,10 @@ export abstract class RetryableInvocationNode<
    * Creates controller, registers with Node.signal, sets on services, executes
    * operation, and cleans up in finally block.
    *
+   * On relay 401 errors, automatically refreshes token and retries once
+   * BEFORE throwing to the retry loop. This avoids wasting N auto-retries
+   * with a stale token.
+   *
    * @example
    * return this.withAbortController(async (signal) => {
    *   const response = await modelHandler.createResponse({ signal });
@@ -229,6 +233,24 @@ export abstract class RetryableInvocationNode<
     services.setAbortController(abortController);
     try {
       return await operation(abortController.signal);
+    } catch (err) {
+      // Detect relay 401 and refresh token immediately, before retry loop wastes attempts
+      const formatted = formatProviderHttpError(err);
+      if (
+        formatted.isRelayError &&
+        formatted.statusCode === 401 &&
+        !this._hasAttemptedTokenRefresh
+      ) {
+        this._hasAttemptedTokenRefresh = true;
+        services.logger.debug('Relay 401, refreshing token before retry loop');
+        const refreshed = await SupabaseClient.forceRefreshToken();
+        if (refreshed) {
+          // Retry immediately with fresh token
+          services.logger.debug('Token refreshed, retrying immediately');
+          return await operation(abortController.signal);
+        }
+      }
+      throw err;
     } finally {
       // Clear service reference to allow GC and prevent stale abort calls.
       // NOTE: We intentionally keep this.signal set so Node._exec() can check
