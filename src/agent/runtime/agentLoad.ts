@@ -166,7 +166,10 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
+    return [
+      AgentSettingSchema.parse(settings),
+      AgentPromptSchema.parse(prompts),
+    ];
   } catch (err) {
     // Log error context, then rethrow original to preserve error type (e.g., ZodError)
     // for proper handling by callers like executeCommand.ts

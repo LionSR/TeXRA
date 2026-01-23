@@ -58,7 +58,7 @@ export class OutputHandler implements IOutputHandler {
 
   public baseFiles: FileLocation[];
   protected logger: AgentLogger;
-  protected channel: string;
+  protected streamId: string;
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
   private readonly lineageCalculator: FileLineageCalculator;
@@ -82,7 +82,7 @@ export class OutputHandler implements IOutputHandler {
     this.rounds = new Map();
     this.baseFiles = baseFiles;
     this.logger = logger;
-    this.channel = this.logger.streamId;
+    this.streamId = this.logger.streamId;
     this.fileService = fileService;
     this.executionId = executionId;
 
@@ -97,7 +97,7 @@ export class OutputHandler implements IOutputHandler {
       () => this.outputFiles,
       this.baseFiles,
       this.logger,
-      this.channel,
+      this.streamId,
       this.fileService,
     );
     this.lineageCalculator = new FileLineageCalculator(this.baseFiles);
@@ -108,7 +108,7 @@ export class OutputHandler implements IOutputHandler {
     this.fileProcessor = new OutputFileProcessor({
       agentSetting: this.agentSetting,
       baseFiles: this.baseFiles,
-      channel: this.channel,
+      streamId: this.streamId,
       logger: this.logger,
       xmlManager: this.xmlManager,
       setRoundOutputs: this.setRoundOutputs.bind(this),
@@ -327,7 +327,7 @@ export class OutputHandler implements IOutputHandler {
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
-            streamId: this.channel,
+            streamId: this.streamId,
             storageKey,
             filesByRound: { [currRound]: [] },
           });
@@ -369,7 +369,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('updateMissingOutputs', {
-          streamId: this.channel,
+          streamId: this.streamId,
           storageKey,
           filesByRound: { [currRound]: missing },
         });
@@ -416,7 +416,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         bus.emit('addOutputFiles', {
-          streamId: this.channel,
+          streamId: this.streamId,
           storageKey,
           filesByRound: { [currRound]: fileInfos },
         });

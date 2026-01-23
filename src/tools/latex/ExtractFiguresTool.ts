@@ -29,10 +29,10 @@ export class ExtractLatexFiguresTool extends defineTool({
   schema: ExtractFiguresInputSchema,
 }) {
   protected async execute({ texPath }: ExtractFiguresInput) {
-    const { resolved, display } = await resolveLatexFileOrThrow(texPath);
+    const { path, display } = await resolveLatexFileOrThrow(texPath);
 
     const figurePaths = await extractFigurePathsFromLatex(
-      pathToLocation(resolved.absolute),
+      pathToLocation(path.absolute),
     );
     const uniqueFigures = [...new Set(figurePaths)];
 
@@ -50,9 +50,9 @@ export class ExtractLatexFiguresTool extends defineTool({
         describe: () => `Figure referenced by ${display}`,
       });
 
-    const formattedList = limitedPaths.map((path) => {
-      const { display: figureDisplay } = resolveAndFormat(path);
-      return `- ${figureDisplay}`;
+    const formattedList = limitedPaths.map((figurePath) => {
+      const { display } = resolveAndFormat(figurePath);
+      return `- ${display}`;
     });
     const header = `Figures referenced in ${display}`;
     const output = formatToolOutput(header, formattedList);
