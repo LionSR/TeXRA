@@ -12,15 +12,7 @@ import { normalizeLatexPath, getPathSegments } from '@utils/core';
 
 // Local file imports
 import { flexibleFS } from './flexibleFS';
-import type { FileLocation } from './taskRunStorage';
-
-/**
- * Get the comparable path from a FileLocation.
- * Returns relativePath for workspace/runStorage, absolutePath for external files.
- */
-function getComparablePath(loc: FileLocation): string {
-  return loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
-}
+import { getComparablePath, type FileLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
