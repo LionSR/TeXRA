@@ -14,12 +14,17 @@ import {
   buildEditDiffSection,
   buildCodeBlock,
 } from '../htmlBuilders.js';
-import { normalizeToolUseLog, stringifyWithLanguage } from '../normalizers.js';
+import {
+  normalizeToolUseLog,
+  stringifyWithLanguage,
+  extractCodeOnlyInput,
+} from '../normalizers.js';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
   TOOLS_WITH_FILE_CONTENT,
   TOOL_OUTPUT_LANGUAGES,
+  TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '../constants.js';
 
@@ -231,15 +236,31 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
-    const { text: inputValue, language: inputLanguage } =
-      stringifyWithLanguage(input);
-    if (inputValue) {
+    // Check tool language first (cheap Map lookup) before extracting code
+    const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
+    const { isCodeOnly, code } = codeLanguage
+      ? extractCodeOnlyInput(input)
+      : { isCodeOnly: false, code: '' };
+
+    if (isCodeOnly) {
+      // Show code with appropriate syntax highlighting instead of YAML
       sections.push(
-        buildToolSection('Input:', inputValue, {
+        buildToolSection('Input:', code, {
           toolName,
-          language: inputLanguage,
+          language: codeLanguage,
         }),
       );
+    } else {
+      const { text: inputValue, language: inputLanguage } =
+        stringifyWithLanguage(input);
+      if (inputValue) {
+        sections.push(
+          buildToolSection('Input:', inputValue, {
+            toolName,
+            language: inputLanguage,
+          }),
+        );
+      }
     }
   }
 
@@ -279,16 +300,18 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     );
   }
 
-  const { text: fallbackYaml, language: fallbackLanguage } =
-    stringifyWithLanguage(parsed);
-  contentElem.innerHTML =
-    sections.length === 0
-      ? buildCodeBlock(fallbackYaml || '', {
-          language: fallbackLanguage,
-          showLanguage: fallbackLanguage !== 'plaintext',
-          showCopy: true,
-        })
-      : sections.join('<hr class="tool-use-separator">');
+  // Only compute fallback YAML when needed (avoid wasted yaml.stringify)
+  if (sections.length === 0) {
+    const { text: fallbackYaml, language: fallbackLanguage } =
+      stringifyWithLanguage(parsed);
+    contentElem.innerHTML = buildCodeBlock(fallbackYaml || '', {
+      language: fallbackLanguage,
+      showLanguage: fallbackLanguage !== 'plaintext',
+      showCopy: true,
+    });
+  } else {
+    contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
+  }
 
   return element;
 }
