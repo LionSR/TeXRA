@@ -9,6 +9,7 @@ import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
   formatToolOutput,
+  pluralize,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { toPosixPath } from '@utils/core';
@@ -49,7 +50,10 @@ export class GlobTool extends defineTool({
         follow: false,
       });
     } catch (err) {
-      throw new ToolError(`glob error: ${toErrorMessage(err)}`);
+      throw new ToolError(
+        `Glob pattern error: ${toErrorMessage(err)}. ` +
+          `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
+      );
     }
 
     // Process matches in parallel for better performance
@@ -87,10 +91,11 @@ export class GlobTool extends defineTool({
       return a.relativePath.localeCompare(b.relativePath);
     });
 
-    const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
+    const count = lines.length;
+    const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
     return {
-      summary: `Matched: "${input.pattern}" under ${display}`,
+      summary: `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };
   }
