@@ -78,11 +78,21 @@ export class WriteFileTool extends defineTool({
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
+    const originalLineCount = originalContent.split('\n').length;
+    const newLineCount = appliedContent.split('\n').length;
+    const action = exists ? 'Overwrote' : 'Created';
+    const summary = `${action} ${input.path} (${newLineCount} lines)`;
+    const userInstruction =
+      exists && originalLineCount > 0
+        ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
+        : undefined;
+
     return {
-      summary: `Wrote ${input.path}`,
+      summary,
       output,
       userPatch: approval.userPatch,
       edits: [{ path: input.path, lineChanges: approval.lineChanges }],
+      ...(userInstruction && { userInstruction }),
     };
   }
 }
