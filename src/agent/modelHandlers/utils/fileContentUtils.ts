@@ -23,7 +23,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
  */
 export interface PreparedFileContent {
   /** The cleaned file content */
-  content: string;
+  fileContent: string;
   /** Whether a scratchpad was found and logged */
   hadScratchpad: boolean;
 }
@@ -72,7 +72,7 @@ export async function prepareExistingOutputContent(
   workspaceState.assembly.lastResponse = content;
 
   return {
-    content,
+    fileContent: content,
     hadScratchpad: Boolean(scratchpad),
   };
 }

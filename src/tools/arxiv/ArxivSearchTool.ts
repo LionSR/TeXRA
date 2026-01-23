@@ -60,14 +60,13 @@ export class ArxivSearchTool extends defineTool({
     const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
 
     // Select the query function based on the field parameter
-    const { field: searchField } = input;
     const fieldQueryFns = {
       author: authorQuery,
       title: titleQuery,
       abstract: abstractQuery,
       all: all,
     } as const;
-    const fieldQueryFn = fieldQueryFns[searchField];
+    const fieldQueryFn = fieldQueryFns[input.field];
 
     // Build query using arxiv-client query builder
     const terms = Array.from(
@@ -131,14 +130,14 @@ export class ArxivSearchTool extends defineTool({
 
     const payload = {
       query: trimmedQuery,
-      field: searchField,
+      field: input.field,
       start: input.start,
       count: results.length,
       totalResults: null, // arxiv-client doesn't expose totalResults
       results,
     };
 
-    const fieldLabel = searchField !== 'all' ? ` (${searchField})` : '';
+    const fieldLabel = input.field !== 'all' ? ` (${input.field})` : '';
     return {
       summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
