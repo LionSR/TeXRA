@@ -619,7 +619,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         container.appendChild(frag);
       } else {
         // Fallback: append to main log if container was removed (race condition)
-        console.warn(`[messageHandlers] Group container removed during batch: ${groupId}`);
+        console.warn(
+          `[messageHandlers] Group container removed during batch: ${groupId}`,
+        );
         logContent.appendChild(frag);
       }
     }
@@ -1026,13 +1028,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearPendingInstruction(activeStream);
     }
 
-    // Tool-use agents: render instruction as user message in log
+    // Tool-use agents: instruction panel not used, user messages are in logs
     if (isToolUseAgent) {
       dom.instructionPanel.hide();
       state.clearPendingInstruction(activeStream);
-      if (hasText)
-        this._renderToolUseInstruction(activeStream, activeRunId, text);
-      else this._refreshInstructionForActiveRun();
       return;
     }
 
@@ -1049,37 +1048,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._refreshInstructionForActiveRun();
-  }
-
-  /**
-   * Render instruction as user message in log for tool-use agents.
-   */
-  _renderToolUseInstruction(stream, runId, text) {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!logContent) return;
-
-    const targetContentId = runId
-      ? `${GROUP_DOM_IDS.CONTENT_PREFIX}${runId}`
-      : null;
-    const scope =
-      (targetContentId && document.getElementById(targetContentId)) ||
-      logContent;
-
-    if (scope.querySelector('.user-message-container[data-instruction="true"]'))
-      return;
-
-    const userMessage = this._entryFormatter.format({
-      id: `instruction-${stream}-${runId || 'default'}`,
-      messageType: 'userMessage',
-      text,
-      timestamp: Date.now(),
-      groupId: runId || undefined,
-    });
-
-    if (userMessage) {
-      userMessage.dataset.instruction = 'true';
-      scope.insertBefore(userMessage, scope.firstChild);
-    }
   }
 
   handleDeleteStream(message) {
@@ -1242,7 +1210,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Skip if nothing changed (use \0 separator to avoid collision with user content)
-    const key = [activeStream, streamStatus, category, fileCount, instructionPreview ?? ''].join('\0');
+    const key = [
+      activeStream,
+      streamStatus,
+      category,
+      fileCount,
+      instructionPreview ?? '',
+    ].join('\0');
     if (key === this._lastFollowupState) return;
     this._lastFollowupState = key;
 
