@@ -81,6 +81,8 @@ export class ToolUseCycleNode<C> extends Node<
       onRoundFinalized: services.getUsageRecorder(),
       modelName: services.config.model,
       agentName: services.config.agent,
+      session: services.session,
+      onFollowUpConsumed: services.onFollowUpConsumed,
     });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {

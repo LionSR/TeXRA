@@ -183,25 +183,55 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
   cycleNormalizedUsage?: NormalizedUsage;
 }
 
-/** Prepares a tool-use cycle by checking interruptions. */
+/**
+ * Prepares a tool-use cycle by checking interruptions and injecting queued follow-ups.
+ *
+ * If there are queued user messages (typed during previous tool execution),
+ * they are injected here BEFORE calling the model. This ensures the model's
+ * thinking/response considers the user's feedback.
+ */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<{ interrupted: boolean }> {
+  async prep(
+    shared: ToolUseCycleShared,
+  ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
     const interrupted = this.services.checkInterruption();
-    return { interrupted };
+
+    // Check for queued follow-ups to inject before the model call
+    let queuedFollowUp: string | null = null;
+    const session = this.services.session;
+    if (session?.hasQueuedFollowUp()) {
+      // Drain without waiting (we know there's something)
+      queuedFollowUp = await session.waitForFollowUp(() => false);
+    }
+
+    return { interrupted, queuedFollowUp };
   }
 
   async post(
     shared: ToolUseCycleShared,
-    prepRes: { interrupted: boolean },
+    prepRes: { interrupted: boolean; queuedFollowUp: string | null },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;
       shared.endTurn = false;
       return FlowTransition.COMPLETE;
+    }
+
+    // Inject queued follow-up BEFORE the model call
+    // This ensures user's message typed during tool execution is seen
+    // before the model starts thinking/responding
+    if (prepRes.queuedFollowUp) {
+      this.services.logger.userMessage(prepRes.queuedFollowUp);
+      shared.messages =
+        await this.services.modelHandler.createUserFollowUpMessages(
+          shared.messages,
+          prepRes.queuedFollowUp,
+        );
+      this.services.onFollowUpConsumed?.();
     }
 
     resetCycleState(shared, [
@@ -781,7 +811,19 @@ class ToolUseDispatchNode<C> extends BatchNode<
     return FlowTransition.CONTINUE;
   }
 }
-/** Creates a tool-use cycle flow with services injected via params. */
+
+/**
+ * Creates a tool-use cycle flow with services injected via params.
+ *
+ * Flow structure:
+ *   Prep → Call → Process → Dispatch
+ *     ↑                        |
+ *     └────── CONTINUE ────────┘
+ *
+ * Queued user messages (typed during tool execution) are injected in PrepNode
+ * BEFORE calling the model, so the model's thinking/response considers the
+ * user's feedback.
+ */
 export function createToolUseCycleFlow<C>(): Flow<
   ToolUseCycleShared,
   ToolUseCycleParams<C>
