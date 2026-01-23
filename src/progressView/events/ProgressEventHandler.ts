@@ -16,7 +16,10 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { TaskGroup } from '@logger/LogTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import {
+  ProgressViewState,
+  type ActiveStreamId,
+} from '@progressView/state/ProgressViewState';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -335,12 +338,13 @@ export class ProgressEventHandler {
    * Frontend detects stream switches using its lastRenderedStream tracking
    * and decides whether to do full rebuild or incremental update.
    *
+   * @param stream - Stream to refresh, or empty string to clear all content.
    * @param options.updateInstruction - If true (default), also update instruction panel.
    * @returns The resolved active run ID, useful for callers that need to pass it
    *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
-    stream: StreamTabId | '',
+    stream: ActiveStreamId,
     options: { updateInstruction?: boolean } = {},
   ): StorageKey | null {
     if (!this.webviewUpdater.isAvailable()) return null;
