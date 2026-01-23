@@ -19,14 +19,8 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const GlobInputSchema = z.strictObject({
-  pattern: z
-    .string()
-    .min(1, 'pattern is required')
-    .describe('Glob pattern like "**/*.tex" or "src/**/*.ts"'),
-  path: z
-    .string()
-    .nullish()
-    .describe('Directory to search. Defaults to workspace root.'),
+  pattern: z.string().min(1, 'pattern is required'),
+  path: z.string().nullish(),
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;
