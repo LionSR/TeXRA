@@ -705,20 +705,14 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 // Error Handler & Export
 // =============================================================================
 
-app.onError((err, c) => {
+app.onError((err, _c) => {
   console.error('Relay error:', err);
-  return c.json({ _relay: RELAY_VERSION, error: 'Internal server error' }, 500);
+  return jsonError('Internal server error', 500);
 });
 
 // Handle requests that don't match /relay/* base path
-app.notFound((c) => {
-  return c.json(
-    {
-      _relay: RELAY_VERSION,
-      error: 'Invalid path. Expected: /relay/{provider}/{apiPath}',
-    },
-    400,
-  );
+app.notFound((_c) => {
+  return jsonError('Invalid path. Expected: /relay/{provider}/{apiPath}', 400);
 });
 
 Deno.serve(app.fetch);
