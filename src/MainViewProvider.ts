@@ -250,7 +250,7 @@ export class MainViewProvider
         if (missingTools.length > 0) {
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-            missingTools: missingTools,
+            missingTools,
           });
         }
       });
