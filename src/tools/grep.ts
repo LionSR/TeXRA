@@ -74,18 +74,6 @@ export function buildArguments(
   return args;
 }
 
-function applyPagination(
-  output: string | null,
-  offset?: number,
-  headLimit?: number,
-): string {
-  if (!output) return '';
-  const lines = output.split(/\r?\n/);
-  const start = offset && offset > 0 ? offset : 0;
-  const end = headLimit && headLimit > 0 ? start + headLimit : undefined;
-  return lines.slice(start, end).join('\n');
-}
-
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
@@ -124,15 +112,9 @@ export class GrepTool extends defineTool({
       );
     }
 
+    // Filter empty lines consistently for counting and pagination
     const allLines = result.stdout?.split(/\r?\n/).filter(Boolean) ?? [];
     const totalCount = allLines.length;
-    const offset = input.offset ?? 0;
-    const limitedOutput = applyPagination(
-      result.stdout,
-      offset,
-      input.head_limit ?? undefined,
-    );
-    const returnedCount = limitedOutput?.split(/\r?\n/).filter(Boolean).length ?? 0;
 
     if (totalCount === 0) {
       return {
@@ -140,6 +122,13 @@ export class GrepTool extends defineTool({
         output: `No matches found. Try: broader pattern, -i for case-insensitive, or check path.`,
       };
     }
+
+    // Apply pagination to filtered lines for consistent offset calculation
+    const offset = input.offset ?? 0;
+    const limit = input.head_limit;
+    const end = limit ? offset + limit : undefined;
+    const paginatedLines = allLines.slice(offset, end);
+    const returnedCount = paginatedLines.length;
 
     const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
     const userInstruction =
@@ -149,7 +138,7 @@ export class GrepTool extends defineTool({
 
     return {
       summary,
-      output: limitedOutput,
+      output: paginatedLines.join('\n'),
       ...(userInstruction && { userInstruction }),
     };
   }
