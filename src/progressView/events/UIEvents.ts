@@ -44,10 +44,6 @@ export interface BashApprovalCallbacks {
     payload: ProgressEventPayloads['showBashApprovalPrompt'],
   ) => void;
   resolveBashApprovalPrompt: (requestId: string) => void;
-  updateBashApprovalBypassState: (
-    streamId: string,
-    bypassActive: boolean,
-  ) => void;
 }
 
 /** Callbacks for agent proposal handling (workflow or tool-use). */
@@ -142,14 +138,6 @@ export function registerUIEvents(
     'resolveBashApprovalPrompt',
     (p) => callbacks.resolveBashApprovalPrompt(p.requestId),
     'failed to resolve bash approval prompt',
-    signal,
-  );
-  registerEvent(
-    bus,
-    'updateBashApprovalBypassState',
-    (p) =>
-      callbacks.updateBashApprovalBypassState(p.streamId, p.bypassActive),
-    'failed to update bash approval bypass state',
     signal,
   );
 

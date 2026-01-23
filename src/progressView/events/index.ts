@@ -5,7 +5,6 @@ export {
   registerUIEvents,
   type RetryCallbacks,
   type ApprovalCallbacks,
-  type BashApprovalCallbacks,
 } from './UIEvents';
 export { type ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 
