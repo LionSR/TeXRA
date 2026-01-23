@@ -144,8 +144,16 @@ export class FollowUpInputManager {
   }
 
   _toggleApprovalBypass() {
+    const stream = progressViewState.activeStream;
+    if (!stream) {
+      console.warn(
+        '[FollowUpInputManager] Cannot toggle YOLO mode: no active stream',
+      );
+      return;
+    }
     this.vscode.postMessage({
       command: COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+      stream,
     });
   }
 
@@ -223,13 +231,17 @@ export class FollowUpInputManager {
     button.classList.toggle('is-active', this._isYoloActive);
 
     if (this._isYoloActive) {
-      button.setAttribute('label', 'Disable YOLO mode');
+      // Change icon to flame when active for more visibility
+      button.setAttribute('icon', 'flame');
+      button.setAttribute('label', 'YOLO mode ON');
       button.setAttribute(
         'title',
-        'Disable YOLO mode (resume approval prompts)',
+        'YOLO mode active - click to disable (resume approval prompts)',
       );
     } else {
-      button.setAttribute('label', 'Enable YOLO mode');
+      // Shield icon when inactive
+      button.setAttribute('icon', 'shield');
+      button.setAttribute('label', 'Enable YOLO');
       button.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
     }
   }

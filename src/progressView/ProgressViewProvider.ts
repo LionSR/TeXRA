@@ -83,7 +83,6 @@ export class ProgressViewProvider
     string,
     AgentProposalPrompt
   >();
-  private approvalBypassActive = false;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -301,7 +300,16 @@ export class ProgressViewProvider
     for (const prompt of this.pendingApprovalPrompts.values()) {
       this.webviewUpdater.showToolEditApprovalPrompt(prompt);
     }
-    this.webviewUpdater.updateToolEditApprovalState(this.approvalBypassActive);
+
+    // Send per-stream YOLO state for active stream
+    const activeStream = this.state.activeStream;
+    if (activeStream) {
+      const bypassActive = this.state.getApprovalBypassEnabled(activeStream);
+      this.webviewUpdater.updateToolEditApprovalState(
+        activeStream,
+        bypassActive,
+      );
+    }
 
     for (const payload of this.pendingRetryRequests.values()) {
       this.webviewUpdater.showRetryRequest(payload);
@@ -326,10 +334,13 @@ export class ProgressViewProvider
     );
   }
 
-  public updateToolEditApprovalBypassState(bypassActive: boolean): void {
-    this.approvalBypassActive = bypassActive;
+  public updateToolEditApprovalBypassState(
+    streamId: StreamTabId,
+    bypassActive: boolean,
+  ): void {
+    this.state.setApprovalBypassEnabled(streamId, bypassActive);
     this.sendIfReady(() =>
-      this.webviewUpdater.updateToolEditApprovalState(bypassActive),
+      this.webviewUpdater.updateToolEditApprovalState(streamId, bypassActive),
     );
   }
 
