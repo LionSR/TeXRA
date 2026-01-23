@@ -55,6 +55,13 @@ export class ToolUsePrepareNode<C> extends Node<
         { memoryEnabled },
       );
 
+    // Log the initial instruction as a user message (consistent with follow-ups
+    // logged in ToolUseWaitNode). This ensures the message is in stored logs
+    // with correct timestamp, avoiding duplicate rendering issues on refresh.
+    if (userRequest) {
+      logger.userMessage(userRequest);
+    }
+
     const systemMessage = systemPrompt
       ? `${systemPrompt}\n${instructionSuffix}`
       : instructionSuffix;
