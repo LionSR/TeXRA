@@ -263,13 +263,6 @@ const REASONING_CACHE_DEFAULTS: ReasoningCacheState = {
   thinkingAdded: false,
 };
 
-/** Get the primary thinking block, or null if none */
-export function getReasoningPrimaryBlock(
-  state: ReasoningCacheState,
-): ThinkingBlock | null {
-  return state.thinkingBlocks[0] ?? null;
-}
-
 // ============================================================================
 // ServerToolContentState - Plain object (no class needed)
 // ============================================================================
