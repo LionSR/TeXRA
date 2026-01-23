@@ -610,20 +610,35 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    // Batch ungrouped messages via DocumentFragment to avoid layout thrashing
-    const fragment = document.createDocumentFragment();
+    // Batch all messages via DocumentFragment to avoid layout thrashing
+    const ungroupedFragment = document.createDocumentFragment();
+    const groupedFragments = new Map(); // groupId → fragment
+
     for (const msg of sortedMessages) {
+      const formatted = this._entryFormatter.format(msg);
+      if (!formatted) continue;
+
       if (msg.groupId) {
-        // Grouped messages go to their group container
-        dom.logEntries.append(msg);
+        let frag = groupedFragments.get(msg.groupId);
+        if (!frag) {
+          frag = document.createDocumentFragment();
+          groupedFragments.set(msg.groupId, frag);
+        }
+        appendFormatted(frag, formatted);
       } else {
-        // Ungrouped messages batch into fragment
-        const formatted = this._entryFormatter.format(msg);
-        if (formatted) appendFormatted(fragment, formatted);
+        appendFormatted(ungroupedFragment, formatted);
       }
     }
-    if (fragment.childNodes.length > 0) {
-      logContent.appendChild(fragment);
+
+    // Append grouped messages to their containers
+    for (const [groupId, frag] of groupedFragments) {
+      const container = dom.logEntries.getGroupContainer(groupId);
+      if (container) container.appendChild(frag);
+    }
+
+    // Append ungrouped messages to main log
+    if (ungroupedFragment.childNodes.length > 0) {
+      logContent.appendChild(ungroupedFragment);
     }
     scrollToBottom(logContent);
 

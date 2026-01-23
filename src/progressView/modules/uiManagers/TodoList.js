@@ -69,14 +69,13 @@ export class TodoList {
       return;
     }
 
-    // Clear and rebuild the list
+    // Clear and rebuild the list using DocumentFragment
     elements.list.innerHTML = '';
-
+    const fragment = document.createDocumentFragment();
     for (const todo of this._currentTodos) {
-      const item = this._createTodoItem(todo);
-      elements.list.appendChild(item);
+      fragment.appendChild(this._createTodoItem(todo));
     }
-
+    elements.list.appendChild(fragment);
     this.show();
   }
 
