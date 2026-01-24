@@ -45,6 +45,279 @@ This document outlines the modernization of TeXRA's ProgressView component, tran
 
 ---
 
+## Persisted Data & Schema Migration
+
+### Current Persisted Data Keys
+
+Data stored in VS Code's `workspaceState`:
+
+| Key | Current Format | New Format | Migration |
+|-----|----------------|------------|-----------|
+| `texra.streamTabs` | `StreamTabInfo[]` | `Stream[]` | Rename fields |
+| `texra.taskGroups` | `TaskGroup[]` (overloaded) | Split to `WorkflowRun[]` + `ConversationTurn[]` | **Complex** |
+| `texra.outputFiles` | `Record<stream, Record<run, files>>` | Embedded in `WorkflowRun.outputs` | Flatten |
+| `texra.missingOutputs` | `Record<stream, Record<run, paths>>` | Embedded in `WorkflowRun` | Flatten |
+| `texra.runInstructions` | `Record<stream, Record<run, string>>` | Embedded in `WorkflowRun.instruction` | Flatten |
+| `texra.activeRunIds` | `Record<stream, runId>` | `workflowData[stream].activeRunId` | Move |
+| `texra.activeStreamTab` | `string` | `activeStreamId: string` | Rename |
+| `texra.taskStates` | `Record<stream, TaskState>` | Embedded in `Stream.taskState` | Move |
+| `texra.executionIds` | `Record<stream, ExecutionId>` | `conversationData[stream].executionId` | Move |
+| `texra.usageStats` | `Record<stream, Record<run, Usage>>` | Embedded in `WorkflowRun.usage` | Flatten |
+| `texra.streamSortOrder` | `string` | `string` (unchanged) | None |
+| `texra.streamAgentFilter` | `string` | `string` (unchanged) | None |
+
+### Migration Strategy: Union + Transform at Entry Point
+
+Following the project's Zod conventions (see CLAUDE.md), we handle legacy formats at the **entry point only**:
+
+```typescript
+// src/shared/schemas/persistence/streamTabs.ts
+import { z } from 'zod';
+
+// ─────────────────────────────────────────────────────────────
+// Canonical format (new) - what the app uses internally
+// ─────────────────────────────────────────────────────────────
+export const StreamSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  agentCategory: z.enum(['workflow', 'toolUse']),
+  agentName: z.string(),
+  status: StreamStatusSchema,
+  isRemote: z.boolean().default(false),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+export type Stream = z.infer<typeof StreamSchema>;
+
+// ─────────────────────────────────────────────────────────────
+// Legacy format - what might be in persisted storage
+// ─────────────────────────────────────────────────────────────
+const LegacyStreamTabInfoSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),            // renamed to 'label'
+  agentType: z.string().optional(),   // renamed to 'agentName'
+  category: z.string().optional(),    // renamed to 'agentCategory'
+  // ... other legacy fields
+}).transform((legacy): Stream => ({
+  id: legacy.id,
+  label: legacy.displayName,
+  agentCategory: (legacy.category as 'workflow' | 'toolUse') ?? 'workflow',
+  agentName: legacy.agentType ?? 'unknown',
+  status: 'idle',
+  isRemote: false,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+}));
+
+// ─────────────────────────────────────────────────────────────
+// Entry schema - tries new format first, falls back to legacy
+// ─────────────────────────────────────────────────────────────
+export const StreamEntrySchema = z.union([
+  StreamSchema,           // Try new format first
+  LegacyStreamTabInfoSchema,  // Fall back to legacy + transform
+]);
+
+// For arrays
+export const StreamListEntrySchema = z.array(StreamEntrySchema);
+```
+
+### Complex Migration: TaskGroups → Workflow/Conversation
+
+The most complex migration is splitting `TaskGroup[]` into separate data models:
+
+```typescript
+// src/shared/schemas/persistence/taskGroups.ts
+
+// Legacy TaskGroup (overloaded for both agent types)
+const LegacyTaskGroupSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.string(),
+  parentGroupId: z.string().nullable(),
+  streamId: z.string(),
+  startTime: z.number().optional(),
+  endTime: z.number().optional(),
+  // ... other fields
+});
+
+// Migration function - called once at load time
+export function migrateTaskGroups(
+  legacyGroups: z.infer<typeof LegacyTaskGroupSchema>[],
+  streams: Stream[],
+): {
+  workflowData: Map<string, { activeRunId: string | null; runs: WorkflowRun[] }>;
+  conversationData: Map<string, { turns: ConversationTurn[]; executionId: string | null }>;
+} {
+  const workflowData = new Map();
+  const conversationData = new Map();
+
+  for (const stream of streams) {
+    const streamGroups = legacyGroups.filter(g => g.streamId === stream.id);
+
+    if (stream.agentCategory === 'workflow') {
+      // Root groups (parentGroupId === null) become WorkflowRuns
+      const runs = streamGroups
+        .filter(g => g.parentGroupId === null)
+        .map(g => migrateToWorkflowRun(g, streamGroups));
+
+      workflowData.set(stream.id, {
+        activeRunId: runs[runs.length - 1]?.id ?? null,
+        runs,
+      });
+    } else {
+      // All groups become ConversationTurns (append-only)
+      const turns = streamGroups.map(migrateToConversationTurn);
+
+      conversationData.set(stream.id, {
+        turns,
+        executionId: null, // loaded separately
+      });
+    }
+  }
+
+  return { workflowData, conversationData };
+}
+
+function migrateToWorkflowRun(
+  rootGroup: LegacyTaskGroup,
+  allGroups: LegacyTaskGroup[],
+): WorkflowRun {
+  const children = allGroups.filter(g => g.parentGroupId === rootGroup.id);
+
+  return {
+    id: rootGroup.id,
+    instruction: '', // loaded separately from runInstructions
+    status: mapStatus(rootGroup.status),
+    tasks: children.map(c => ({
+      id: c.id,
+      label: c.label,
+      status: mapStatus(c.status),
+      startTime: c.startTime,
+      endTime: c.endTime,
+    })),
+    outputs: [], // loaded separately from outputFiles
+    usage: undefined, // loaded separately from usageStats
+    startTime: rootGroup.startTime ?? Date.now(),
+    endTime: rootGroup.endTime,
+  };
+}
+```
+
+### State Loader with Migration
+
+```typescript
+// src/progressView/state/StateLoader.ts
+import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import { StreamListEntrySchema, migrateTaskGroups } from '@shared/schemas/persistence';
+
+export async function loadPersistedState(): Promise<ProgressState> {
+  // 1. Load streams (with legacy migration)
+  const rawStreams = workspaceSM.get(WorkspaceStateKey.STREAM_TABS, []);
+  const streamsResult = StreamListEntrySchema.safeParse(rawStreams);
+
+  if (!streamsResult.success) {
+    console.warn('Failed to parse streams, starting fresh:', streamsResult.error);
+    return createEmptyState();
+  }
+  const streams = streamsResult.data;
+
+  // 2. Load and migrate task groups
+  const rawTaskGroups = workspaceSM.get(WorkspaceStateKey.TASK_GROUPS, []);
+  const { workflowData, conversationData } = migrateTaskGroups(rawTaskGroups, streams);
+
+  // 3. Load run-scoped data and merge into workflow runs
+  const rawInstructions = workspaceSM.get(WorkspaceStateKey.RUN_INSTRUCTIONS, {});
+  const rawOutputFiles = workspaceSM.get(WorkspaceStateKey.OUTPUT_FILES, {});
+  const rawUsageStats = workspaceSM.get(WorkspaceStateKey.USAGE_STATS, {});
+
+  mergeRunScopedData(workflowData, { rawInstructions, rawOutputFiles, rawUsageStats });
+
+  // 4. Load execution IDs for conversation data
+  const rawExecutionIds = workspaceSM.get(WorkspaceStateKey.EXECUTION_IDS, {});
+  mergeExecutionIds(conversationData, rawExecutionIds);
+
+  // 5. Load active stream
+  const activeStreamId = workspaceSM.get(WorkspaceStateKey.ACTIVE_STREAM_TAB, null);
+
+  return {
+    activeStreamId,
+    streams: new Map(streams.map(s => [s.id, s])),
+    workflowData,
+    conversationData,
+  };
+}
+```
+
+### Persistence Format Version
+
+Add a version marker to detect format changes:
+
+```typescript
+// src/shared/schemas/persistence/version.ts
+export const PERSISTENCE_VERSION = 2;  // Increment on breaking changes
+
+export const PersistedRootSchema = z.object({
+  version: z.number(),
+  data: z.unknown(),  // Actual data varies by version
+});
+
+// At save time
+function saveState(state: ProgressState) {
+  workspaceSM.update('texra.progressState', {
+    version: PERSISTENCE_VERSION,
+    data: serializeState(state),
+  });
+}
+
+// At load time
+function loadState(): ProgressState {
+  const raw = workspaceSM.get('texra.progressState');
+
+  if (!raw) {
+    // No saved state, try legacy keys
+    return loadLegacyState();
+  }
+
+  const parsed = PersistedRootSchema.safeParse(raw);
+  if (!parsed.success) {
+    return loadLegacyState();
+  }
+
+  switch (parsed.data.version) {
+    case 2:
+      return parseV2State(parsed.data.data);
+    case 1:
+      return migrateV1ToV2(parsed.data.data);
+    default:
+      console.warn(`Unknown version ${parsed.data.version}, starting fresh`);
+      return createEmptyState();
+  }
+}
+```
+
+### Migration Principles
+
+1. **New format first in union** - Zod tries in order, so canonical format is checked first
+2. **Legacy transforms to canonical** - All legacy formats normalize to one structure
+3. **Parse at entry point only** - `loadPersistedState()` handles all migration
+4. **No conditional handling downstream** - Rest of codebase only sees canonical format
+5. **Version marker** - Enables future migrations without guessing format
+6. **Graceful degradation** - On parse failure, log warning and start fresh
+
+### Consolidated Storage Keys
+
+After migration, reduce from 12 keys to 4:
+
+| Old Keys | New Key | Notes |
+|----------|---------|-------|
+| `streamTabs`, `activeStreamTab`, `taskStates` | `texra.streams` | Stream metadata |
+| `taskGroups`, `runInstructions`, `outputFiles`, `missingOutputs`, `usageStats`, `activeRunIds` | `texra.workflowData` | All workflow data |
+| `executionIds` | `texra.conversationData` | All conversation data |
+| `streamSortOrder`, `streamAgentFilter` | `texra.uiPreferences` | UI state |
+
+---
+
 ## Architecture
 
 ### Current Event Flow
