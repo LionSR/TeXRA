@@ -371,9 +371,7 @@ export class ProgressViewProvider
 
   public showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
     this.pendingBashApprovalPrompts.set(prompt.requestId, prompt);
-    this.sendIfReady(() =>
-      this.webviewUpdater.showBashApprovalPrompt(prompt),
-    );
+    this.sendIfReady(() => this.webviewUpdater.showBashApprovalPrompt(prompt));
   }
 
   public resolveBashApprovalPrompt(requestId: string): void {
