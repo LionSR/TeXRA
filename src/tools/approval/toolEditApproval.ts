@@ -30,6 +30,7 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from './latexPreview';
+import { rejectPendingEntries } from './bashApproval';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -61,7 +62,7 @@ interface PendingApprovalEntry extends LatexPreviewEntry {
 }
 
 /** All valid approval actions for tool edit prompts */
-export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
+export const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
@@ -69,12 +70,12 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'previewProposed',
 ] as const;
 
-export type ProgressViewApprovalAction =
-  (typeof PROGRESS_VIEW_APPROVAL_ACTIONS)[number];
+export type ToolEditApprovalAction =
+  (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
-interface ProgressViewApprovalActionPayload {
+interface ToolEditApprovalActionPayload {
   requestId: string;
-  action: ProgressViewApprovalAction;
+  action: ToolEditApprovalAction;
   feedback?: string;
 }
 
@@ -155,13 +156,26 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
 
-/** Clear YOLO mode state for a deleted stream (prevents memory leak) */
-export function clearApprovalBypassForStream(streamId: StreamTabId): void {
+
+/** @internal Called by unified cleanup in index.ts */
+export function _rejectPendingToolEditApprovalsForStream(
+  streamId: StreamTabId,
+): void {
+  rejectPendingEntries(pendingApprovals.values(), streamId);
+}
+
+/** @internal Called by unified cleanup in index.ts */
+export function _rejectAllPendingToolEditApprovals(): void {
+  rejectPendingEntries(pendingApprovals.values());
+}
+
+/** @internal Called by unified cleanup in index.ts */
+export function _clearApprovalBypassForStream(streamId: StreamTabId): void {
   approvalsBypassedByStream.delete(streamId);
 }
 
-/** Clear all YOLO mode state (used when deleting all streams) */
-export function clearAllApprovalBypass(): void {
+/** @internal Called by unified cleanup in index.ts */
+export function _clearAllApprovalBypass(): void {
   approvalsBypassedByStream.clear();
 }
 
@@ -663,7 +677,7 @@ export async function writeApprovedContent(
 }
 
 export async function handleProgressViewToolEditApprovalAction(
-  payload: ProgressViewApprovalActionPayload,
+  payload: ToolEditApprovalActionPayload,
 ): Promise<void> {
   const entry = pendingApprovals.get(payload.requestId);
   if (!entry || entry.isSettled()) {
