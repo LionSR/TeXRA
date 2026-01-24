@@ -497,9 +497,9 @@ export class ProgressApp extends LitElement {
       return null;
     }
     const runIds = new Set<string>([
-      ...streamState.runInstructions.keys(),
-      ...streamState.runUsage.keys(),
-      ...streamState.runFiles.keys(),
+      ...Object.keys(streamState.runInstructions),
+      ...Object.keys(streamState.runUsage),
+      ...Object.keys(streamState.runFiles),
     ]);
     if (runIds.size === 0) return null;
     const selected = getEffectiveRunId(streamState) ?? '';
@@ -537,7 +537,7 @@ export class ProgressApp extends LitElement {
     runId: string | null,
   ) {
     if (!streamState || !runId) return null;
-    const instruction = streamState.runInstructions.get(runId);
+    const instruction = streamState.runInstructions[runId];
     if (!instruction) return null;
     return html`
       <div class="section">
@@ -552,7 +552,7 @@ export class ProgressApp extends LitElement {
     activeStream: StreamTabInfo,
   ) {
     if (!streamState) return null;
-    const groups = [...streamState.taskGroups.values()];
+    const groups = Object.values(streamState.taskGroups);
     if (groups.length === 0) return null;
     return html`
       <div class="section">
@@ -623,9 +623,11 @@ export class ProgressApp extends LitElement {
     runId: string | null,
   ) {
     if (!streamState || !runId) return null;
-    const roundMap = streamState.runFiles.get(runId);
-    if (!roundMap || roundMap.size === 0) return null;
-    const rounds = [...roundMap.entries()].sort((a, b) => a[0] - b[0]);
+    const roundMap = streamState.runFiles[runId];
+    if (!roundMap || Object.keys(roundMap).length === 0) return null;
+    const rounds = Object.entries(roundMap)
+      .map(([round, files]) => [Number(round), files] as const)
+      .sort((a, b) => a[0] - b[0]);
     return html`
       <div class="section">
         <h3>Output files</h3>
@@ -658,7 +660,7 @@ export class ProgressApp extends LitElement {
     runId: string | null,
   ) {
     if (!streamState || !runId) return null;
-    const usage = streamState.runUsage.get(runId);
+    const usage = streamState.runUsage[runId];
     if (!usage && !streamState.contextState) return null;
     return html`
       <div class="section">
@@ -822,23 +824,27 @@ export class ProgressApp extends LitElement {
       prev: ReturnType<typeof getStreamState>,
     ) => ReturnType<typeof getStreamState>,
   ) {
-    const nextStates = new Map(this.state.streamStates);
     const current = getStreamState(this.state, streamId);
-    nextStates.set(streamId, updater(current));
-    this.state = { ...this.state, streamStates: nextStates };
+    this.state = {
+      ...this.state,
+      streamStates: {
+        ...this.state.streamStates,
+        [streamId]: updater(current),
+      },
+    };
   }
 
   private updateStreamInfo(streams: StreamTabInfo[]) {
-    const nextStates = new Map(this.state.streamStates);
+    const nextStates = { ...this.state.streamStates };
     const knownStreams = new Set(streams.map((stream) => stream.name));
-    for (const key of nextStates.keys()) {
+    for (const key of Object.keys(nextStates)) {
       if (!knownStreams.has(key)) {
-        nextStates.delete(key);
+        delete nextStates[key];
       }
     }
     for (const stream of streams) {
-      const existing = nextStates.get(stream.name) ?? createEmptyStreamState();
-      nextStates.set(stream.name, { ...existing, info: stream });
+      const existing = nextStates[stream.name] ?? createEmptyStreamState();
+      nextStates[stream.name] = { ...existing, info: stream };
     }
     this.state = { ...this.state, streams, streamStates: nextStates };
   }
@@ -956,36 +962,35 @@ export class ProgressApp extends LitElement {
       const next = { ...prev };
       if (action === 'clear') {
         next.logs = [];
-        next.taskGroups = new Map();
+        next.taskGroups = {};
       } else {
         next.logs = messages;
         if (groups) {
-          next.taskGroups = new Map(groups.map((group) => [group.id, group]));
+          next.taskGroups = Object.fromEntries(
+            groups.map((group) => [group.id, group]),
+          );
         }
       }
       if (result.data.activeRunId !== undefined) {
         next.activeRunId = result.data.activeRunId;
       }
       if (result.data.runInstructions) {
-        next.runInstructions = this.mergeRecordIntoMap(
+        next.runInstructions = this.mergeRecord(
           next.runInstructions,
           result.data.runInstructions,
         );
       }
       if (result.data.runUsage) {
-        next.runUsage = this.mergeRecordIntoMap(
-          next.runUsage,
-          result.data.runUsage,
-        );
+        next.runUsage = this.mergeRecord(next.runUsage, result.data.runUsage);
       }
       if (result.data.runFiles) {
-        next.runFiles = this.mergeRunRoundMap(
+        next.runFiles = this.mergeRunRoundRecord(
           next.runFiles,
           result.data.runFiles,
         );
       }
       if (result.data.runMissingOutputs) {
-        next.runMissingOutputs = this.mergeRunRoundMap(
+        next.runMissingOutputs = this.mergeRunRoundRecord(
           next.runMissingOutputs,
           result.data.runMissingOutputs,
         );
@@ -1056,15 +1061,12 @@ export class ProgressApp extends LitElement {
     const { stream, runId, rounds, reset } = result.data;
     if (!runId || !rounds) return;
     this.setStreamState(stream, (prev) => {
-      const runFiles = reset ? new Map() : new Map(prev.runFiles);
-      const existingRounds = reset
-        ? new Map<number, OutputFileInfo[]>()
-        : new Map(runFiles.get(runId) ?? new Map());
-      const nextRounds = this.recordToRoundMap(rounds);
-      for (const [round, files] of nextRounds.entries()) {
-        existingRounds.set(round, files);
+      const runFiles = reset ? {} : { ...prev.runFiles };
+      const existingRounds = reset ? {} : { ...runFiles[runId] };
+      for (const [round, files] of Object.entries(rounds)) {
+        existingRounds[round] = files;
       }
-      runFiles.set(runId, existingRounds);
+      runFiles[runId] = existingRounds;
       return { ...prev, runFiles };
     });
   }
@@ -1075,17 +1077,12 @@ export class ProgressApp extends LitElement {
     const { stream, runId, rounds, reset } = result.data;
     if (!runId || !rounds) return;
     this.setStreamState(stream, (prev) => {
-      const runMissingOutputs = reset
-        ? new Map()
-        : new Map(prev.runMissingOutputs);
-      const existingRounds = reset
-        ? new Map<number, string[]>()
-        : new Map(runMissingOutputs.get(runId) ?? new Map());
-      const nextRounds = this.recordToRoundMap(rounds);
-      for (const [round, files] of nextRounds.entries()) {
-        existingRounds.set(round, files);
+      const runMissingOutputs = reset ? {} : { ...prev.runMissingOutputs };
+      const existingRounds = reset ? {} : { ...runMissingOutputs[runId] };
+      for (const [round, files] of Object.entries(rounds)) {
+        existingRounds[round] = files;
       }
-      runMissingOutputs.set(runId, existingRounds);
+      runMissingOutputs[runId] = existingRounds;
       return { ...prev, runMissingOutputs };
     });
   }
@@ -1096,11 +1093,11 @@ export class ProgressApp extends LitElement {
     if (!result.data.stream) return;
     this.setStreamState(result.data.stream, (prev) => {
       const runId = prev.activeRunId ?? 'default';
-      const runInstructions = new Map(prev.runInstructions);
+      const runInstructions = { ...prev.runInstructions };
       if (result.data.instruction) {
-        runInstructions.set(runId, result.data.instruction);
+        runInstructions[runId] = result.data.instruction;
       } else {
-        runInstructions.delete(runId);
+        delete runInstructions[runId];
       }
       return { ...prev, runInstructions };
     });
@@ -1120,8 +1117,7 @@ export class ProgressApp extends LitElement {
     if (!result.success) return;
     const { stream, runId, usage } = result.data;
     this.setStreamState(stream, (prev) => {
-      const runUsage = new Map(prev.runUsage);
-      runUsage.set(runId, usage);
+      const runUsage = { ...prev.runUsage, [runId]: usage };
       return { ...prev, runUsage };
     });
   }
@@ -1139,8 +1135,10 @@ export class ProgressApp extends LitElement {
     const result = AddTaskGroupMessageSchema.safeParse(raw);
     if (!result.success) return;
     this.setStreamState(result.data.stream, (prev) => {
-      const taskGroups = new Map(prev.taskGroups);
-      taskGroups.set(result.data.group.id, result.data.group);
+      const taskGroups = {
+        ...prev.taskGroups,
+        [result.data.group.id]: result.data.group,
+      };
       return { ...prev, taskGroups };
     });
   }
@@ -1150,14 +1148,14 @@ export class ProgressApp extends LitElement {
     if (!result.success) return;
     const { streamId, id, status, endTime } = result.data.update;
     this.setStreamState(streamId, (prev) => {
-      const taskGroups = new Map(prev.taskGroups);
-      const existing = taskGroups.get(id);
+      const taskGroups = { ...prev.taskGroups };
+      const existing = taskGroups[id];
       if (existing) {
-        taskGroups.set(id, {
+        taskGroups[id] = {
           ...existing,
           status: status ?? existing.status,
           endTime: endTime ?? existing.endTime,
-        });
+        };
       }
       return { ...prev, taskGroups };
     });
@@ -1257,35 +1255,20 @@ export class ProgressApp extends LitElement {
     );
   }
 
-  private recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
-    const map = new Map<number, T[]>();
-    for (const [key, items] of Object.entries(record)) {
-      const round = Number(key);
-      if (!Number.isNaN(round)) {
-        map.set(round, items);
-      }
-    }
-    return map;
-  }
-
-  private mergeRecordIntoMap<T>(
-    current: Map<string, T>,
+  private mergeRecord<T>(
+    current: Record<string, T>,
     record: Record<string, T>,
-  ): Map<string, T> {
-    const next = new Map(current);
-    for (const [key, value] of Object.entries(record)) {
-      next.set(key, value);
-    }
-    return next;
+  ): Record<string, T> {
+    return { ...current, ...record };
   }
 
-  private mergeRunRoundMap<T>(
-    current: Map<string, Map<number, T[]>>,
+  private mergeRunRoundRecord<T>(
+    current: Record<string, Record<string, T[]>>,
     record: Record<string, Record<string, T[]>>,
-  ): Map<string, Map<number, T[]>> {
-    const next = new Map(current);
+  ): Record<string, Record<string, T[]>> {
+    const next = { ...current };
     for (const [runId, rounds] of Object.entries(record)) {
-      next.set(runId, this.recordToRoundMap(rounds));
+      next[runId] = rounds;
     }
     return next;
   }

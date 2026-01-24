@@ -24,17 +24,19 @@ export interface StreamState {
   info?: StreamTabInfo;
   status?: StreamStatus;
   logs: LogMessageData[];
-  taskGroups: Map<string, TaskGroup>;
+  taskGroups: Record<string, TaskGroup>;
   todos: TodoItem[];
   queuedFollowUps: string[];
-  runInstructions: Map<string, InstructionUpdate>;
-  runUsage: Map<string, TokenUsageStats>;
-  runFiles: Map<string, Map<number, OutputFileInfo[]>>;
-  runMissingOutputs: Map<string, Map<number, string[]>>;
+  runInstructions: Record<string, InstructionUpdate>;
+  runUsage: Record<string, TokenUsageStats>;
+  runFiles: Record<string, Record<string, OutputFileInfo[]>>;
+  runMissingOutputs: Record<string, Record<string, string[]>>;
   activeRunId: string | null;
   selectedRunId: string | null;
   contextState?: ContextState;
   toolEditBypass?: boolean;
+  followUpText?: string;
+  followupMode?: FollowupMode;
 }
 
 export interface ProgressState {
@@ -42,21 +44,34 @@ export interface ProgressState {
   streams: StreamTabInfo[];
   streamFilter: StreamFilter;
   streamSort: StreamSort;
-  streamStates: Map<StreamTabId, StreamState>;
+  streamStates: Record<StreamTabId, StreamState>;
+  groupToggleStates: Record<string, boolean>;
+  followupOptions: FollowupOptions | null;
+}
+
+export type FollowupMode = 'chat' | 'workflow' | 'merge';
+
+export interface FollowupOptions {
+  workflowAgentsHtml: string;
+  toolUseAgentsHtml: string;
+  modelOptionsHtml: string;
+  defaultMergeModel: string;
 }
 
 export function createEmptyStreamState(): StreamState {
   return {
     logs: [],
-    taskGroups: new Map(),
+    taskGroups: {},
     todos: [],
     queuedFollowUps: [],
-    runInstructions: new Map(),
-    runUsage: new Map(),
-    runFiles: new Map(),
-    runMissingOutputs: new Map(),
+    runInstructions: {},
+    runUsage: {},
+    runFiles: {},
+    runMissingOutputs: {},
     activeRunId: null,
     selectedRunId: null,
+    followUpText: '',
+    followupMode: 'chat',
   };
 }
 
@@ -66,7 +81,9 @@ export function createInitialState(): ProgressState {
     streams: [],
     streamFilter: 'all',
     streamSort: 'time',
-    streamStates: new Map(),
+    streamStates: {},
+    groupToggleStates: {},
+    followupOptions: null,
   };
 }
 
@@ -74,7 +91,7 @@ export function getStreamState(
   state: ProgressState,
   streamId: StreamTabId,
 ): StreamState {
-  return state.streamStates.get(streamId) ?? createEmptyStreamState();
+  return state.streamStates[streamId] ?? createEmptyStreamState();
 }
 
 export function getEffectiveRunId(streamState: StreamState): string | null {
