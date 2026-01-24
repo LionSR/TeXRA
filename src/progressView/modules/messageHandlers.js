@@ -197,6 +197,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (shouldClear) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
+      dom.logEntries.clear(); // Clear stale references to elements in removed task groups
     }
     return shouldClear;
   }
