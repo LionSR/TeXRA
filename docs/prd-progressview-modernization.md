@@ -36,6 +36,7 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 - Adding features during migration
 - Changing EventBus architecture
 - Virtual scrolling
+- Non-VS Code platforms (CLI, web) — but architecture should not preclude them
 
 ---
 
