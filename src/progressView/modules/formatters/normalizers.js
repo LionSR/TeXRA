@@ -84,18 +84,19 @@ export function stringifyWithLanguage(value) {
 }
 
 /**
- * Check if an input object is code-only (has only a `code` field with string content).
+ * Check if an input object is code-only (has only a code/command field with string content).
+ * Supports 'code' field (wolfram) and 'command' field (bash).
  * @param {*} value - Value to check
  * @returns {{isCodeOnly: boolean, code: string}} Result with code extraction
  */
 export function extractCodeOnlyInput(value) {
-  // Check property first (cheap), then key count (allocates array)
-  if (
-    isPlainObject(value) &&
-    typeof value.code === 'string' &&
-    Object.keys(value).length === 1
-  ) {
-    return { isCodeOnly: true, code: value.code };
+  if (!isPlainObject(value) || Object.keys(value).length !== 1) {
+    return { isCodeOnly: false, code: '' };
+  }
+  // Support both 'code' (wolfram) and 'command' (bash) field names
+  const codeValue = value.code ?? value.command;
+  if (typeof codeValue === 'string') {
+    return { isCodeOnly: true, code: codeValue };
   }
   return { isCodeOnly: false, code: '' };
 }
