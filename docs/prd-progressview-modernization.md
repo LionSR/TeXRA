@@ -18,7 +18,12 @@ Modernize ProgressView from vanilla JavaScript to Lit + TypeScript with shared Z
 
 3. **Maintenance Burden**
    - `messageHandlers.js`: 1268-line switch statement
-   - 14+ conditional checks for `isToolUse` vs `isWorkflow`
+   - 18 `isToolUse` references (10 actual branching conditionals, 8 derived variables)
+
+4. **Imperative DOM Patterns**
+   - Fragment batching: 53 lines of manual `createDocumentFragment()` + nested loops (lines 632-684)
+   - DOM queries during render: `if (container)` checks while building UI
+   - 8 nearly-identical approval handlers (tool edit, bash, retry, proposal) with show/resolve pairs
 
 ## Goals
 
@@ -196,12 +201,15 @@ The current code has **14+ `isToolUse` conditionals**. The codebase documents th
 
 ### Band-Aids Eliminated
 
-| Pattern                             | Current         | After                      |
-| ----------------------------------- | --------------- | -------------------------- |
-| `activeAgentCategory === 'toolUse'` | 14+ places      | 0 (separate components)    |
-| `group.parentGroupId` filtering     | taskManagers.js | Only in `<workflow-task>`  |
-| `showRun(groupId)`                  | taskManagers.js | Not needed in conversation |
-| `resolveActiveRunId()` fallback     | 30 calls        | Single store               |
+| Pattern                             | Current              | After                      |
+| ----------------------------------- | -------------------- | -------------------------- |
+| `activeAgentCategory === 'toolUse'` | 18 refs (10 branch)  | 0 (separate components)    |
+| `group.parentGroupId` filtering     | taskManagers.js      | Only in `<workflow-task>`  |
+| `showRun(groupId)`                  | taskManagers.js      | Not needed in conversation |
+| `resolveActiveRunId()` fallback     | 9+ explicit calls    | Single store               |
+| Fragment batching                   | 53 lines manual DOM  | Lit `map()` directive      |
+| DOM existence checks                | `if (container)` etc | Reactive state             |
+| Approval handler duplication        | 8 show/resolve pairs | Single parameterized component |
 
 ---
 
@@ -337,12 +345,14 @@ src/progressView/modules/  (entire directory)
 
 ### After M2
 
-| Metric                   | Current | After |
-| ------------------------ | ------- | ----- |
-| Frontend type coverage   | ~20%    | 100%  |
-| Lines of code (frontend) | ~3700   | ~2000 |
-| `isToolUse` conditionals | 14+     | 0     |
-| State tracking locations | 7       | 1     |
+| Metric                    | Current | After |
+| ------------------------- | ------- | ----- |
+| Frontend type coverage    | ~20%    | 100%  |
+| Lines of code (frontend)  | ~3700   | ~2000 |
+| `isToolUse` conditionals  | 18      | 0     |
+| State tracking locations  | 7       | 1     |
+| Manual DOM assembly lines | 53+     | 0     |
+| Duplicate approval handlers | 8     | 1     |
 
 ---
 
@@ -372,10 +382,29 @@ src/progressView/modules/  (entire directory)
 
 ### Band-Aid Workarounds
 
-1. `resolveActiveRunId()` - Expensive fallback iterating multiple maps
-2. `lastRenderedStream` - Detecting stream switches via render state
-3. `_clearAgentCategoryState()` - Wiping state on category change
-4. `RunScopedMap` resolver closure - Implicit activeStream dependency
-5. 14+ `isToolUse` checks - Conditional logic everywhere
+1. `resolveActiveRunId()` - Expensive fallback iterating 4+ maps (called 9+ times per message)
+2. `lastRenderedStream` - Detecting stream switches via render state comparison
+3. `_clearAgentCategoryState()` - Manual state wipe when switching workflow↔tooluse
+4. `RunScopedMap` resolver closure - Hidden `activeStream` dependency through injected function
+5. `_pendingActiveId` - Buffer for UI selection before backend confirms
+6. 18 `isToolUse` references - 10 branching conditionals + 8 derived variables
 
 **Solution**: Clean separation of Workflow and Conversation data models.
+
+### Imperative DOM Patterns (Lit Eliminates)
+
+1. **Fragment batching** (messageHandlers.js:632-684)
+   - 53 lines: `createDocumentFragment()` → nested loops → `appendChild()`
+   - Lit equivalent: `html\`${items.map(i => html\`<div>${i}</div>\`)}\``
+
+2. **DOM queries during render**
+   - Pattern: `const container = document.getElementById(...); if (container) { ... }`
+   - Lit equivalent: Reactive `@property` automatically triggers re-render
+
+3. **Approval handler duplication**
+   - 8 nearly-identical handlers: `showToolEditApproval`, `resolveToolEditApproval`, `showBashApproval`, `resolveBashApproval`, etc.
+   - Lit equivalent: Single `<approval-prompt kind="tool-edit">` component with typed props
+
+4. **Manual class toggling**
+   - Pattern: `element.classList.add/remove/toggle('active', 'hidden', ...)`
+   - Lit equivalent: `class=${classMap({ active: this.isActive, hidden: this.isHidden })}`
