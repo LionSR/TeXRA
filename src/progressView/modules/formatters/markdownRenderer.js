@@ -10,6 +10,10 @@ import { katexMacros } from '../katexMacros.js';
 
 let markdownRenderer;
 
+// LRU cache for rendered markdown (content hash → HTML)
+const CACHE_MAX_SIZE = 500;
+const markdownCache = new Map();
+
 /**
  * Get the shared markdown renderer instance
  * @returns {MarkdownIt} Configured markdown renderer
@@ -77,12 +81,38 @@ export const restoreLatexReferences = (content) => {
 };
 
 /**
+ * Simple hash function for cache keys (FNV-1a variant)
+ * @param {string} str - String to hash
+ * @returns {string} Hash string
+ */
+const hashContent = (str) => {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0;
+  }
+  return hash.toString(36);
+};
+
+/**
  * Process markdown content with LaTeX reference protection
  * @param {string} content - Raw content to process
  * @param {MarkdownIt} [renderer] - Optional custom renderer
  * @returns {string} Processed markdown HTML
  */
 export const processMarkdownContent = (content, renderer) => {
+  // Check cache first (only for default renderer)
+  const useCache = !renderer;
+  const cacheKey = useCache ? hashContent(content) : null;
+
+  if (useCache && markdownCache.has(cacheKey)) {
+    // Move to end for LRU behavior
+    const cached = markdownCache.get(cacheKey);
+    markdownCache.delete(cacheKey);
+    markdownCache.set(cacheKey, cached);
+    return cached;
+  }
+
   // Pre-process LaTeX references to protect them from markdown parsing
   // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
   const protectedContent = protectLatexReferences(content);
@@ -97,5 +127,25 @@ export const processMarkdownContent = (content, renderer) => {
   let parsedMarkdown = md.render(formattedContent);
 
   // Post-process to restore and style LaTeX references
-  return restoreLatexReferences(parsedMarkdown);
+  const result = restoreLatexReferences(parsedMarkdown);
+
+  // Store in cache with LRU eviction
+  if (useCache) {
+    if (markdownCache.size >= CACHE_MAX_SIZE) {
+      // Delete oldest entry (first key)
+      const firstKey = markdownCache.keys().next().value;
+      markdownCache.delete(firstKey);
+    }
+    markdownCache.set(cacheKey, result);
+  }
+
+  return result;
+};
+
+/**
+ * Clear the markdown rendering cache.
+ * Call when switching streams or clearing content.
+ */
+export const clearMarkdownCache = () => {
+  markdownCache.clear();
 };
