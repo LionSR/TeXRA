@@ -323,6 +323,7 @@ function detectRequestId(err: unknown): string | undefined {
 /**
  * Extracts the raw error body from SDK errors.
  * OpenAI SDK stores the parsed JSON response in an `error` property.
+ * Google GenAI SDK stores the raw JSON in the error message.
  * Useful for debugging relay errors where the body contains additional context.
  */
 function detectRawErrorBody(err: unknown): unknown {
@@ -335,15 +336,31 @@ function detectRawErrorBody(err: unknown): unknown {
     body?: unknown;
     data?: unknown;
     response?: { data?: unknown };
+    message?: string;
   };
 
   // Try common SDK property names in order of likelihood
-  return (
+  const directBody =
     candidate.error ?? // OpenAI SDK
     candidate.body ??
     candidate.data ??
-    candidate.response?.data
-  );
+    candidate.response?.data;
+
+  if (directBody !== undefined) {
+    return directBody;
+  }
+
+  // Google GenAI SDK: raw JSON may be in the error message
+  // e.g., ApiError: {"error":{"_relay":"1.8.2","message":"..."}}
+  if (candidate.message && candidate.message.startsWith('{')) {
+    try {
+      return JSON.parse(candidate.message);
+    } catch {
+      // Not valid JSON, ignore
+    }
+  }
+
+  return undefined;
 }
 
 // ============================================================================
@@ -405,9 +422,22 @@ const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
  * Checks if the error body indicates a relay error.
  * Relay errors include `_relay` version field and should generally be retryable
  * so users can fix issues (refresh auth, switch API keys, etc.) and retry.
+ *
+ * Checks multiple locations because SDKs handle error bodies differently:
+ * - OpenAI/Anthropic: extract `error` field, so `_relay` is at top level
+ * - Google GenAI: may preserve full body, so `_relay` is under `error`
  */
 function isRelayError(rawErrorBody: unknown): boolean {
-  return isObject(rawErrorBody) && '_relay' in rawErrorBody;
+  if (!isObject(rawErrorBody)) {
+    return false;
+  }
+  // Direct check (OpenAI/Anthropic SDKs extract the error object)
+  if ('_relay' in rawErrorBody) {
+    return true;
+  }
+  // Nested check (Google GenAI may preserve full response body)
+  const nested = (rawErrorBody as { error?: unknown }).error;
+  return isObject(nested) && '_relay' in nested;
 }
 
 /**
