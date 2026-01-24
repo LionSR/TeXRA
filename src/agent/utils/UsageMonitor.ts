@@ -173,7 +173,11 @@ export class UsageMonitor {
 
       // Use activeGroupId for statistics grouping if set (round-specific),
       // otherwise fall back to storageKey (parent stage or execution ID)
-      usageReporter.report(payload, this.context.storageKey, this.activeGroupId);
+      usageReporter.report(
+        payload,
+        this.context.storageKey,
+        this.activeGroupId,
+      );
 
       // Note: Context state is emitted by model handlers during token counting
       // (Anthropic, Google, OpenAI). This avoids duplicate emissions and ensures
