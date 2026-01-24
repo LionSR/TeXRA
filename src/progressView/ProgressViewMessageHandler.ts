@@ -5,12 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  getAgent,
-  createKey,
-  ensureAgentsLoaded,
-  computeAgentOptions,
-} from '@agent/index/agentRegistry';
+import { getAgent, computeAgentOptions } from '@agent/index/agentRegistry';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
