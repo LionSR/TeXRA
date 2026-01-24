@@ -341,6 +341,14 @@ export class ProgressViewState {
     return this._runInstructions.getInstructions(stream);
   }
 
+  /** Get instruction for a specific run */
+  getRunInstruction(
+    stream: StreamTabId,
+    runId: StorageKey,
+  ): InstructionUpdate | undefined {
+    return this._runInstructions.getInstructions(stream).get(runId);
+  }
+
   /** Set or clear an instruction for a run */
   async setRunInstruction(
     stream: StreamTabId,
