@@ -30,12 +30,15 @@
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
-      "@auth/*": ["src/auth/*"]
+      "@auth/*": ["src/auth/*"],
+      "@shared/*": ["src/shared/*"]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
     "skipLibCheck": true,
-    "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */
+    "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
     /* Additional Checks */
     // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
     // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */

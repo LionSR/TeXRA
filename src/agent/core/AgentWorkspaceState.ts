@@ -290,7 +290,7 @@ const SERVER_TOOL_CONTENT_DEFAULTS: ServerToolContentState = {
 };
 
 // Import todo schemas from single source of truth (eventBus/schemas)
-import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
+import { TodoItemSchema, type TodoItem } from '@shared/schemas';
 
 /** Schema for TodoState serialization */
 export const TodoStateSnapshotSchema = z.object({

@@ -14,15 +14,12 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
-import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
+import { END_GROUP_STATUS } from './messageTypes';
+import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
 import { getEmitFilter } from './filterUtils';
 
 // Type imports
-import type {
-  EndGroupStatus,
-  FileListEntry,
-  MessageType,
-} from './messageTypes';
+import type { EndGroupStatus, FileListEntry } from './messageTypes';
 import type { LogOptions } from './logOptions';
 
 /**

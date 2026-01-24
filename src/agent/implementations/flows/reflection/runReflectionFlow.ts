@@ -21,10 +21,11 @@
 
 import * as path from 'path';
 
-import type { RoundOutput, IOutputHandler } from '@agent/output';
+import type { IOutputHandler } from '@agent/output';
+import type { RoundOutput } from '@shared/schemas';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -43,7 +44,7 @@ import {
   EXECUTION_STATUS,
   executionToEndStatus,
   type ExecutionStatus,
-} from '@common/constants/streamStatus';
+} from '@common/constants';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 

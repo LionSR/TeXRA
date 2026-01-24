@@ -1,33 +1,12 @@
 import { z } from 'zod';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { ExecutionIdSchema } from '@agent/types/IdentifierTypes';
+import { StreamTabInfoSchema, StreamUITraitsSchema } from '@shared/schemas';
 
 // ============================================================================
 // Progress View Schemas
 // ============================================================================
 
-export const StreamUITraitsSchema = z.object({
-  agentCategory: z.enum(AgentCategory),
-  isToolAgent: z.boolean(),
-});
 export type StreamUITraits = z.infer<typeof StreamUITraitsSchema>;
-
-export const StreamTabInfoSchema = z.object({
-  name: z.string(),
-  label: z.string(),
-  model: z.string().optional(),
-  agent: z.string().optional(),
-  agentCategory: z.enum(AgentCategory),
-  uiTraits: StreamUITraitsSchema,
-  hasMultipleOutputs: z.boolean().optional(),
-  isRemote: z.boolean().optional(),
-  lastTimestamp: z.number().optional(),
-  inputFile: z.string().optional(),
-  creationTimestamp: z.number().optional(),
-  status: z.string().optional(),
-  executionId: ExecutionIdSchema.optional(),
-});
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
 export const InstructionMetadataSchema = z.object({

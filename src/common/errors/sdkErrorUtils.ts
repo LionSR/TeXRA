@@ -35,12 +35,10 @@ import { extractErrorMessage, isObject, isString } from '@utils/core';
 import { toErrorMessage } from './errorHandlingUtils';
 
 // Import canonical schemas - SINGLE SOURCE OF TRUTH
-import {
-  type ProviderError,
-  type ErrorLogData,
-  type ErrorContext,
-  type StreamDiagnostics,
-} from './schemas';
+import { type ProviderError, type StreamDiagnostics } from '@shared/schemas';
+
+// Local imports - error schemas
+import { type ErrorLogData, type ErrorContext } from './schemas';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {

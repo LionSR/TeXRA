@@ -24,9 +24,9 @@ import {
   type ProviderError,
   type RetryErrorInfo,
 } from '@common/errors';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS } from '@shared/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,

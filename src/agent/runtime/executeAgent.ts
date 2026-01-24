@@ -54,12 +54,8 @@ import {
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-} from '@agent/types/IdentifierTypes';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
+import { STREAM_STATUS } from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';

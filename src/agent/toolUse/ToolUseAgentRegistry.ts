@@ -8,7 +8,7 @@
 
 // Local imports - agent
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Common interface for anything that can be interrupted.

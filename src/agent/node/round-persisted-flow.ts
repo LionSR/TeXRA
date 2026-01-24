@@ -45,10 +45,7 @@
  */
 
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  EXECUTION_STATUS,
-  type ExecutionStatus,
-} from '@common/constants/streamStatus';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@common/constants';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import type { ExecutionKVStore } from '@agent/storage';

@@ -2,14 +2,24 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
-// Third-party imports
-import { z } from 'zod';
+// Local imports - shared schemas
+import type {
+  AgentFileLocation,
+  ExecutionId,
+  ExternalFileLocation,
+  FileLocation,
+  RunStorageFileLocation,
+  WorkspaceFileLocation,
+} from '@shared/schemas';
 
-// Local imports - identifiers
-import {
-  ExecutionIdSchema,
-  type ExecutionId,
-} from '@agent/types/IdentifierTypes';
+export type {
+  AgentFileLocation,
+  ExecutionId,
+  ExternalFileLocation,
+  FileLocation,
+  RunStorageFileLocation,
+  WorkspaceFileLocation,
+} from '@shared/schemas';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -31,45 +41,7 @@ logger.initialize(CHANNEL);
 /** Directory for task run artifacts (debug JSONs, logs, etc.) */
 export const TASK_RUNS_DIR = 'taskRuns';
 
-// File location schemas (types derived via z.infer)
-export const WorkspaceFileLocationSchema = z.strictObject({
-  kind: z.literal('workspace'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
-});
-
-export const RunStorageFileLocationSchema = z.strictObject({
-  kind: z.literal('runStorage'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
-  executionId: ExecutionIdSchema,
-});
-
-export const ExternalFileLocationSchema = z.strictObject({
-  kind: z.literal('external'),
-  absolutePath: z.string(),
-});
-
-/** Discriminated union of all file location types */
-export const FileLocationSchema = z.discriminatedUnion('kind', [
-  WorkspaceFileLocationSchema,
-  RunStorageFileLocationSchema,
-  ExternalFileLocationSchema,
-]);
-
-/** Agent outputs are workspace or runStorage, never external */
-export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
-  WorkspaceFileLocationSchema,
-  RunStorageFileLocationSchema,
-]);
-
-export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
-export type RunStorageFileLocation = z.infer<
-  typeof RunStorageFileLocationSchema
->;
-export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
-export type FileLocation = z.infer<typeof FileLocationSchema>;
-export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
+// Schemas and types are sourced from @shared/schemas (single source of truth).
 
 export function createWorkspaceLocation(
   absolutePath: string,

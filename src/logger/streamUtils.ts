@@ -6,7 +6,7 @@ import { getCleanAgentName, getMultipleName } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 interface StreamTabIdOptions {
   agentCategory?: AgentCategory;

@@ -54,6 +54,7 @@ const extensionConfig = {
       '@types': path.resolve(__dirname, 'src/types'),
       '@eventBus': path.resolve(__dirname, 'src/eventBus'),
       '@auth': path.resolve(__dirname, 'src/auth'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
     },
     fallback: {
       fs: false,
@@ -86,4 +87,58 @@ const extensionConfig = {
     minimizer: [new TerserPlugin()],
   },
 };
-module.exports = [extensionConfig];
+
+const baseWebviewConfig = {
+  target: 'web',
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '~': path.resolve(__dirname, 'src'),
+      '@common': path.resolve(__dirname, 'src/common'),
+      '@webview': path.resolve(__dirname, 'src/webview'),
+      '@agent': path.resolve(__dirname, 'src/agent'),
+      '@frontend': path.resolve(__dirname, 'src/frontend'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+      '@logger': path.resolve(__dirname, 'src/logger'),
+      '@latex': path.resolve(__dirname, 'src/latex'),
+      '@commands': path.resolve(__dirname, 'src/commands'),
+      '@model': path.resolve(__dirname, 'src/model'),
+      '@housekeeping': path.resolve(__dirname, 'src/housekeeping'),
+      '@progressView': path.resolve(__dirname, 'src/progressView'),
+      '@historyView': path.resolve(__dirname, 'src/historyView'),
+      '@memoryView': path.resolve(__dirname, 'src/memoryView'),
+      '@profileView': path.resolve(__dirname, 'src/profileView'),
+      '@replacement': path.resolve(__dirname, 'src/replacement'),
+      '@tools': path.resolve(__dirname, 'src/tools'),
+      '@types': path.resolve(__dirname, 'src/types'),
+      '@eventBus': path.resolve(__dirname, 'src/eventBus'),
+      '@auth': path.resolve(__dirname, 'src/auth'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
+    },
+    fallback: {
+      path: require.resolve('path-browserify'),
+    },
+  },
+  module: {
+    rules: [{ test: /\.ts$/, use: 'ts-loader', exclude: /node_modules/ }],
+  },
+  devtool: 'nosources-source-map',
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin()],
+  },
+};
+
+/** @type WebpackConfig */
+const progressViewConfig = {
+  ...baseWebviewConfig,
+  name: 'progressView',
+  entry: './src/progressView/frontend/index.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist/progressView'),
+    filename: 'bundle.js',
+  },
+};
+
+module.exports = [extensionConfig, progressViewConfig];

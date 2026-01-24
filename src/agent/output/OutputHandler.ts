@@ -9,14 +9,19 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type {
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundOutput,
+  StorageKey,
+} from '@shared/schemas';
 import type { DiffStats } from '@agent/types/DiffTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   TaskRunFileService,
   flexibleFS,
@@ -33,14 +38,8 @@ import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
 
 import type { IOutputHandler } from './IOutputHandler';
-import {
-  OutputFileInfoSchema,
-  OutputXmlSummarySchema,
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundFileMapping,
-  type RoundOutput,
-} from './types';
+import { OutputFileInfoSchema, OutputXmlSummarySchema } from '@shared/schemas';
+import type { RoundFileMapping } from './types';
 
 /** Schema for internal round data storage */
 const RoundDataSchema = z.object({

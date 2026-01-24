@@ -2,12 +2,18 @@
 import { EventEmitter } from 'events';
 
 // Type imports
-import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
+import type {
+  OutputFileInfo,
+  StreamTabId,
+  StreamStatus,
+  TokenUsageStats,
+  RetryRequestPrompt,
+  ToolEditApprovalPrompt,
+  BashApprovalPrompt,
+  AgentProposalPrompt,
+} from '@shared/schemas';
 import type { ContextStateData } from '@logger/AgentLogger';
-import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
+import type { LogMessageData, LogMessageUpdate } from '@shared/schemas';
 import type {
   AddTaskGroupPayload,
   RunScopedPayload,
@@ -16,12 +22,6 @@ import type {
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from './types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;

@@ -16,17 +16,20 @@ export {
 // Canonical error schemas - SINGLE SOURCE OF TRUTH
 export {
   ProviderErrorSchema,
-  ErrorLogDataSchema,
-  ErrorContextSchema,
-  ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
   StreamDiagnosticsSchema,
   type ProviderError,
+  type RetryErrorInfo,
+  type StreamDiagnostics,
+} from '@shared/schemas';
+
+export {
+  ErrorLogDataSchema,
+  ErrorContextSchema,
+  ProviderErrorPartialSchema,
   type ErrorLogData,
   type ErrorContext,
   type ProviderErrorPartial,
-  type RetryErrorInfo,
-  type StreamDiagnostics,
 } from './schemas';
 
 // Error utility functions

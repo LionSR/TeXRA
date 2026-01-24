@@ -3,7 +3,7 @@
  */
 import { z } from 'zod';
 import { FileLocationSchema } from '@utils/files';
-import { OutputFileInfoSchema } from './types';
+import { OutputFileInfoSchema } from '@shared/schemas';
 
 const DiffStatusSchema = z.enum(['success', 'error']);
 

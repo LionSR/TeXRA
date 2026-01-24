@@ -1,11 +1,11 @@
 // Local imports - identifiers and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskGroup } from '@logger/LogTypes';
+import { TaskGroup } from '@shared/schemas';
 import {
   PersistentMapManager,
   type StateStorage,
@@ -14,7 +14,7 @@ import {
   mapToRecord,
   recordToMap,
 } from '@progressView/persistence/serializationUtils';
-import type { UpdateTaskGroupPayload } from '@eventBus/schemas';
+import type { UpdateTaskGroupPayload } from '@shared/schemas';
 
 /**
  * Manages task groups collection with persistence.
@@ -50,7 +50,7 @@ export class TaskGroupManager extends PersistentMapManager<
 
   /**
    * Update an existing task group.
-   * Uses UpdateTaskGroupPayload from event bus schema as single source of truth.
+   * Uses UpdateTaskGroupPayload from shared schemas as single source of truth.
    */
   async updateGroup({
     streamId,

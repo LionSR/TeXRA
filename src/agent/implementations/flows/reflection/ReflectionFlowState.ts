@@ -27,7 +27,7 @@
 
 import { z } from 'zod';
 
-import { RoundOutputSchema } from '@agent/output';
+import { RoundOutputSchema } from '@shared/schemas';
 import {
   AgentRunStateSnapshotSchema,
   ConversationRoundState,

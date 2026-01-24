@@ -1,10 +1,14 @@
 import * as path from 'path';
 
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type {
+  OutputFileInfo,
+  OutputXmlSummary,
+  StorageKey,
+} from '@shared/schemas';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   replaceInputCommands,
   flexibleFS,
@@ -22,7 +26,6 @@ import {
   cleanupLatexBackups,
 } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-import type { OutputFileInfo, OutputXmlSummary } from './types';
 
 /** Pattern to detect scratchpad XML tags in prefills */
 const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;

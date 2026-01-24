@@ -11,6 +11,16 @@ export * from './taskRunStorage';
 export * from './flexibleFS';
 export * from './latexDiffUtils';
 
+// Shared file location schemas/types (re-exported for convenience)
+export { AgentFileLocationSchema, FileLocationSchema } from '@shared/schemas';
+export type {
+  AgentFileLocation,
+  ExternalFileLocation,
+  FileLocation,
+  RunStorageFileLocation,
+  WorkspaceFileLocation,
+} from '@shared/schemas';
+
 // Note: pastedImageUtils, rulesUtils, and varsUtils are NOT re-exported.
 // Import directly from their source modules:
 //   import { loadTexraRules } from '@utils/files/rulesUtils';

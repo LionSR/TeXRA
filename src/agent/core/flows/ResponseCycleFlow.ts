@@ -22,10 +22,10 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import {
+  MESSAGE_TYPES,
   RetryErrorInfoSchema,
   type RetryErrorInfo,
-} from '@common/errors/schemas';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+} from '@shared/schemas';
 import replacementEngine from '@replacement/engine';
 import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
 import { AbsoluteFS, flexibleFS } from '@utils/files';

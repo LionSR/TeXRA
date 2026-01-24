@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 // Internal imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import * as configModule from '@utils/config';

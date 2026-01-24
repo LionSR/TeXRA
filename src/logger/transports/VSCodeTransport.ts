@@ -9,12 +9,12 @@ import {
   type ContextStateData,
 } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
-import type { LogMessageData } from '@logger/LogTypes';
+import type { LogMessageData } from '@shared/schemas';
 import {
   MESSAGE_TYPES,
   MessageTypeSchema,
   type MessageType,
-} from '@logger/messageTypes';
+} from '@shared/schemas';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel } from '@logger/utils';
 import { serializeError } from '@utils/core';

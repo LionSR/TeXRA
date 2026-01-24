@@ -35,11 +35,11 @@ import { WorkspaceFS } from '@utils/files';
 
 // Local imports - event bus (after utils per import order rules)
 import {
-  WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
-  type WorkflowAgentProposal,
+  WorkflowAgentProposalSchema,
   type ToolUseAgentProposal,
-} from '@eventBus/types';
+  type WorkflowAgentProposal,
+} from '@shared/schemas';
 
 // ============================================================================
 // Shared utilities
