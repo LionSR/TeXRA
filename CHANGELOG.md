@@ -9,36 +9,23 @@ All notable changes to this project will be documented in this file.
 - Added **Zotero integration** tools (`zotero_search`, `zotero_export`, `zotero_add`) via Better BibTeX JSON-RPC for literature management.
 - Added **ShareLaTeX git support** in the clone command for self-hosted Overleaf instances.
 - Added **bib path setting** (`texra.defaultBibPath`) to configure the default bibliography file location.
-- Added **attach agent outputs** option in follow-up mode to include generated files as reference.
-- Added **syntax highlighting** for `write_file` tool content in progress view.
-- Added **inline diff highlighting** for `edit_file` tool output showing additions and deletions.
-- Added **stream diagnostics** in retry UI details panel for debugging failed requests.
-- Added **apply agents** for implementing review suggestions from orchestrated workflows.
+- Added **apply agents** for implementing review suggestions, and **attach agent outputs** option in follow-up mode.
+- Added **bash command approval system** with per-stream YOLO mode bypass, following the same pattern as tool edit approvals. **YOLO mode** is now per-stream with a distinct visual indicator.
 - Added **grep offset parameter** for paginating through large search results.
+- Progress view improvements: **syntax highlighting** for `write_file`, `edit_file` (with inline diff), and bash commands; **selectable tool use headers**; and **stream diagnostics** in retry UI details panel.
 - Agent and model dropdowns now **sync between progress view and main webview**.
-- **YOLO mode** is now per-stream with a distinct visual indicator.
-- Added **bash command approval system** with per-stream YOLO mode bypass, following the same pattern as tool edit approvals.
-- Added **syntax highlighting for bash commands** in the progress view.
-- **Tool use headers** are now selectable with mouse for easier copying.
 - **User messages** can now be sent while tools are executing without ending the turn.
 - Added **automatic token refresh** on relay 401 errors for improved session continuity.
 
 ### Bug Fixes
 
-- Fixed background response handling for improved reliability during retries.
+- Fixed tool display issues: edit tool not showing deletions when `new_str` is empty, grep error handling for empty results, and Wolfram error messages missing timeout/exit code info.
+- Fixed progress view rendering: nested scrollbars in code blocks and KaTeX MathML causing duplicate text.
+- Fixed retry and auth handling: background response reliability, new streams blocked during retry waits, manual retry after 401 refresh failure, and infinite token refresh loop on persistent 401 errors.
+- Fixed session persistence: first user message disappearing for old tool-use sessions and stale log element cache when switching agent categories.
 - Fixed diff naming producing incorrect labels when input file contains round numbers.
-- Fixed nested scrollbars appearing in code blocks.
-- Fixed edit tool not displaying deletions when `new_str` is empty.
-- Fixed grep tool error handling for empty results.
-- Fixed KaTeX MathML causing duplicate text rendering in progress view.
 - Fixed merge agent not respecting multiple outputs setting.
-- Fixed new streams being blocked when an existing stream is waiting for retry.
-- Fixed first user message disappearing for old persisted tool-use sessions.
-- Fixed stale log element cache when switching agent categories.
-- Fixed manual retry not working after relay 401 refresh failure.
-- Fixed infinite token refresh loop on persistent 401 errors.
 - Fixed OpenAI Responses API not waiting for in_progress responses when using `previous_response_id`.
-- Fixed Wolfram error messages missing timeout and exit code information.
 
 ### Improvements
 
