@@ -11,7 +11,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('tooluse-content')
 export class ToolUseContent extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {
@@ -22,35 +22,6 @@ export class ToolUseContent extends LitElement {
     const state = this.streamData?.activeState;
     const runIds = Object.keys(state?.outputFilesByRun ?? {});
 
-    return html`
-      <div class="panel">
-        <h3>Logs</h3>
-        <log-container .logs=${state?.logs ?? []}></log-container>
-      </div>
-      <div class="panel">
-        <h3>Task Groups</h3>
-        ${state?.groups?.length
-          ? state.groups.map(
-              (group) => html`<task-group .group=${group}></task-group>`,
-            )
-          : html`<div class="empty-state">No task groups yet.</div>`}
-      </div>
-      <div class="panel">
-        <h3>Output Files</h3>
-        <run-selector
-          .activeRunId=${state?.activeRunId ?? null}
-          .runIds=${runIds}
-        ></run-selector>
-        <file-list></file-list>
-      </div>
-      <div class="panel">
-        <h3>Todos</h3>
-        <todo-list .todos=${state?.todos ?? []}></todo-list>
-      </div>
-      <div class="panel">
-        <h3>Usage</h3>
-        <usage-panel></usage-panel>
-      </div>
-    `;
+    return html`<task-panels .state=${state} .runIds=${runIds}></task-panels>`;
   }
 }

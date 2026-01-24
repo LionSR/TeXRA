@@ -11,7 +11,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('file-list')
 export class FileList extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {

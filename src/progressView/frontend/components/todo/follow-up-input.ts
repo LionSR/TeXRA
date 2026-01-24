@@ -28,19 +28,21 @@ export class FollowUpInput extends LitElement {
   }
 
   private handleSend(): void {
-    this.sendMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP);
+    this.sendMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, true);
   }
 
   private handlePolish(): void {
-    this.sendMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP);
+    this.sendMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, false);
   }
 
-  private sendMessage(command: string): void {
+  private sendMessage(command: string, shouldClear: boolean): void {
     if (!this.streamId || !this.textarea) return;
     const text = this.textarea.value.trim();
     if (!text) return;
     this.commands.postCommand(command, { stream: this.streamId, text });
-    this.textarea.value = '';
+    if (shouldClear) {
+      this.textarea.value = '';
+    }
   }
 
   render() {

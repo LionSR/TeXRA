@@ -11,7 +11,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {

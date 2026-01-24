@@ -25,7 +25,7 @@ export class ProgressHeader extends LitElement {
   @consume({ context: commandsContext })
   private commands!: CommandsContextValue;
 
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {

@@ -11,7 +11,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('stream-tabs-panel')
 export class StreamTabsPanel extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {

@@ -14,7 +14,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('content-area')
 export class ContentArea extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {

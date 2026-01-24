@@ -18,15 +18,16 @@ export class LogEntry extends LitElement {
   }
 
   render() {
-    switch (this.log.messageType) {
-      case MESSAGE_TYPES.USER_MESSAGE:
-        return html`<user-message .log=${this.log}></user-message>`;
-      case MESSAGE_TYPES.ERROR:
-        return html`<banner-details .log=${this.log}></banner-details>`;
-      case MESSAGE_TYPES.TOOL_USE:
-        return html`<tool-use-entry .log=${this.log}></tool-use-entry>`;
-      default:
-        return html`<log-line .log=${this.log}></log-line>`;
+    const knownTypes = new Set<string>([
+      MESSAGE_TYPES.USER_MESSAGE,
+      MESSAGE_TYPES.ERROR,
+      MESSAGE_TYPES.TOOL_USE,
+    ]);
+
+    if (this.log.messageType && !knownTypes.has(this.log.messageType)) {
+      console.warn(`Unknown message type: ${this.log.messageType}`);
     }
+
+    return html`<log-line .log=${this.log}></log-line>`;
   }
 }

@@ -11,7 +11,7 @@ import { streamContext, type StreamContextValue } from '../../context';
  */
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
-  @consume({ context: streamContext })
+  @consume({ context: streamContext, subscribe: true })
   private streamData?: StreamContextValue;
 
   protected createRenderRoot() {
@@ -22,24 +22,22 @@ export class UsagePanel extends LitElement {
     const usageByRun = this.streamData?.activeState?.usageByRun ?? {};
     const entries = Object.entries(usageByRun);
 
-    if (!entries.length) {
-      return html`<div class="empty-state">No usage yet.</div>`;
-    }
-
     const context = this.streamData?.activeState?.contextState ?? null;
 
     return html`
-      ${entries.map(
-        ([runId, usage]) => html`
-          <div class="log-entry">
-            <div class="log-entry__meta">Run ${runId}</div>
-            <div>
-              Input: ${usage.inputTokens} • Output: ${usage.outputTokens} •
-              Cost: $${usage.cost.toFixed(4)}
-            </div>
-          </div>
-        `,
-      )}
+      ${entries.length
+        ? entries.map(
+            ([runId, usage]) => html`
+              <div class="log-entry">
+                <div class="log-entry__meta">Run ${runId}</div>
+                <div>
+                  Input: ${usage.inputTokens} • Output: ${usage.outputTokens} •
+                  Cost: $${usage.cost.toFixed(4)}
+                </div>
+              </div>
+            `,
+          )
+        : html`<div class="empty-state">No usage yet.</div>`}
       ${context
         ? html`
             <div class="log-entry">

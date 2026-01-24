@@ -16,17 +16,15 @@ import './prompts/retry-prompt';
 import './prompts/tool-edit-prompt';
 
 // Local imports - log components
-import './logs/banner-details';
 import './logs/log-container';
 import './logs/log-entry';
 import './logs/log-line';
-import './logs/tool-use-entry';
-import './logs/user-message';
 
 // Local imports - task components
 import './tasks/content-area';
 import './tasks/instruction-panel';
 import './tasks/run-selector';
+import './tasks/task-panels';
 import './tasks/task-group';
 import './tasks/tooluse-content';
 import './tasks/usage-panel';
