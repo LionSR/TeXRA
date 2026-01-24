@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import * as difflib from 'difflib';
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';

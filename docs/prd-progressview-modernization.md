@@ -103,10 +103,10 @@ src/shared/schemas/
 
 ### Already Duplicated (Consolidate)
 
-| Location 1                                 | Location 2                              | Action                                             |
-| ------------------------------------------ | --------------------------------------- | -------------------------------------------------- |
-| `src/common/webview/commands.ts`           | `src/common/webview/commands.js`        | Keep `.ts`, delete `.js` (ES module dual-export)   |
-| `src/logger/LogTypes.ts` (TaskGroupSchema) | `src/eventBus/schemas.ts`               | Consolidate in `src/shared/schemas/taskGroup.ts`   |
+| Location 1                                 | Location 2                       | Action                                           |
+| ------------------------------------------ | -------------------------------- | ------------------------------------------------ |
+| `src/common/webview/commands.ts`           | `src/common/webview/commands.js` | Keep `.ts`, delete `.js` (ES module dual-export) |
+| `src/logger/LogTypes.ts` (TaskGroupSchema) | `src/eventBus/schemas.ts`        | Consolidate in `src/shared/schemas/taskGroup.ts` |
 
 Note: `src/progressView/modules/constants.js` already imports from `@common/webview/commands.js` (not a duplicate).
 

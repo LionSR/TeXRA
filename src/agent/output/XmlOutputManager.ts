@@ -18,7 +18,7 @@ import {
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { AbsoluteFS, TaskRunFileService, getFileDirectory } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import {
   DOCUMENT_NAME_REGEX,
   addCdataToTags,

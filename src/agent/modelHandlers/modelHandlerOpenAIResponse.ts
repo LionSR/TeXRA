@@ -26,7 +26,7 @@ import type { ModelConfig } from '@model';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';

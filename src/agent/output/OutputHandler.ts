@@ -9,24 +9,42 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
-import type { DiffStats } from '@agent/types/DiffTypes';
+
+// Local imports - shared schemas
+import {
+  FileLocationSchema,
+  MESSAGE_TYPES,
+  OutputFileInfoSchema,
+  type DiffStats,
+  type FileLocation,
+  type OutputFileInfo,
+  type StorageKey,
+} from '@shared/schemas';
+
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - frontend
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// Local imports - logger
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Local imports - utilities
 import {
   TaskRunFileService,
+  getComparablePath,
   flexibleFS,
   pathToLocation,
-  getComparablePath,
-  FileLocationSchema,
-  type FileLocation,
 } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { countLines } from '@utils/text/stringUtils';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Local file imports
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
@@ -34,9 +52,7 @@ import { XmlOutputManager } from './XmlOutputManager';
 
 import type { IOutputHandler } from './IOutputHandler';
 import {
-  OutputFileInfoSchema,
   OutputXmlSummarySchema,
-  type OutputFileInfo,
   type OutputXmlSummary,
   type RoundFileMapping,
   type RoundOutput,

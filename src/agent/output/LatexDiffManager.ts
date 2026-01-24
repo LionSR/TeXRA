@@ -6,14 +6,11 @@ import * as path from 'path';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import {
-  TaskRunFileService,
-  flexibleFS,
-  type FileLocation,
-} from '@utils/files';
+import { TaskRunFileService, flexibleFS } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Internal imports
 import {

@@ -1,5 +1,5 @@
 // Local imports - shared state and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';

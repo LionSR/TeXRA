@@ -10,9 +10,12 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local imports - core utilities
 import { normalizeLatexPath, getPathSegments } from '@utils/core';
 
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+
 // Local file imports
 import { flexibleFS } from './flexibleFS';
-import { getComparablePath, type FileLocation } from './taskRunStorage';
+import { getComparablePath } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.

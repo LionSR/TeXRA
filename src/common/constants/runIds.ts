@@ -9,9 +9,10 @@
  * - For tool-use agents: Use executionId directly as the runId (it's always a UUID)
  * - For ExecutionId values: Never normalize - they are always UUIDs by design
  *
- * @see IdentifierTypes.ts for the full execution model documentation
+ * @see shared/schemas/identifiers for the full execution model documentation
  */
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+// Local imports - shared schemas
+import type { StorageKey } from '@shared/schemas';
 
 /**
  * Sentinel run identifier retained for legacy sessions that predate

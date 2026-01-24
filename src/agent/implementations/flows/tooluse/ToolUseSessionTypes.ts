@@ -21,10 +21,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import {
-  ExecutionIdSchema,
-  StreamTabIdSchema,
-} from '@agent/types/IdentifierTypes';
+import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 
 // ============================================================================
 // Snapshot Schema & Types

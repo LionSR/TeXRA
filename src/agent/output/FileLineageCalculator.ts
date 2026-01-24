@@ -1,11 +1,13 @@
+// Standard library imports
 import * as path from 'path';
 
-import {
-  createFileMapping,
-  getComparablePath,
-  type FileLocation,
-} from '@utils/files';
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
 
+// Local imports - utilities
+import { createFileMapping, getComparablePath } from '@utils/files';
+
+// Local file imports
 import type { OutputFileInfo, RoundFileMapping } from './types';
 
 /**

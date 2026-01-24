@@ -1,7 +1,16 @@
+// Standard library imports
 import * as path from 'path';
 
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { WorkspaceFS, type FileLocation } from '@utils/files';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+
+// Local imports - latex
 import { runLatexFormatter } from '@latex/texFormatter';
 
 interface Logger {

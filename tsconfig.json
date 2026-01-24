@@ -9,6 +9,7 @@
     "paths": {
       "@/*": ["src/*"],
       "~/*": ["src/*"],
+      "@shared/*": ["src/shared/*"],
       "@common/*": ["src/common/*"],
       "@webview/*": ["src/webview/*"],
       "@agent/*": ["src/agent/*"],

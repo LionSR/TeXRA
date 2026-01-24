@@ -2,7 +2,8 @@
 import * as path from 'path';
 
 // Local imports
-import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files';
+import type { AgentFileLocation } from '@shared/schemas';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import { parseFilenameParts, extractLastRoundMatch } from './mergeFileUtils';
 

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports

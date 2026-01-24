@@ -9,7 +9,7 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,

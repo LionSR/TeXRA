@@ -2,11 +2,15 @@
  * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
  */
 
-import { Node } from '@agent/node';
+// Local imports - agent
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { FileLocation } from '@utils/files';
+import { Node } from '@agent/node';
 
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+
+// Local file imports
 import { getFilesForRound } from '../helpers';
 import type {
   ReflectionFlowShared,

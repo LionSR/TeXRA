@@ -25,7 +25,8 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
-import { pathToLocation, type FileLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Type imports
 import type {

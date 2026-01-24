@@ -15,7 +15,7 @@ import {
   createRunStorageLocation,
   createExternalLocation,
 } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';

@@ -21,24 +21,28 @@
  * - modelHandler, logger, setting, prompt, config, context, etc.
  */
 
-import { Node } from '@agent/node';
+// Local imports - agent
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import {
-  createResponseCycleFlow,
-  assertCycleFieldsPopulated,
-} from '@agent/core/flows/ResponseCycleFlow';
 import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { CycleStateSlices } from '@agent/core/flows/CycleServices';
-import type { AgentFileLocation } from '@utils/files';
-
 import {
-  type ReflectionFlowShared,
-  type RoundContext,
+  assertCycleFieldsPopulated,
+  createResponseCycleFlow,
+} from '@agent/core/flows/ResponseCycleFlow';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import { Node } from '@agent/node';
+
+// Local imports - shared schemas
+import type { AgentFileLocation } from '@shared/schemas';
+
+// Local file imports
+import type {
+  ReflectionFlowShared,
+  RoundContext,
 } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,

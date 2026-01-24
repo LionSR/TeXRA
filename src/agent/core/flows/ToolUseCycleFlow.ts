@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { ZodIssue } from 'zod';
 
-// Local imports - core flow primitives
+// Local imports - agent
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow } from '@agent/node';
 import {
@@ -20,8 +20,14 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 
-// Local imports - utilities
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
+
+// Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
@@ -35,7 +41,7 @@ import type { ToolResult } from '@agent/core/ToolTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+
 // Type imports
 import type { ToolDefinition } from '@model';
 import {
@@ -43,7 +49,7 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
-import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 

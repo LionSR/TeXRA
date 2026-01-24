@@ -14,7 +14,7 @@ import {
   MESSAGE_TYPES,
   MessageTypeSchema,
   type MessageType,
-} from '@logger/messageTypes';
+} from '@shared/schemas';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel } from '@logger/utils';
 import { serializeError } from '@utils/core';

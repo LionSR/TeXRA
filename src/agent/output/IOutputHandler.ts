@@ -1,7 +1,8 @@
-// Local imports - agent
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+// Local imports - shared schemas
+import type { FileLocation, StorageKey } from '@shared/schemas';
+
+// Local imports - logger
 import type { AgentLogStage } from '@logger/AgentLogger';
-import type { FileLocation } from '@utils/files';
 
 // Local file imports
 import type { LatexDiffManager } from './LatexDiffManager';

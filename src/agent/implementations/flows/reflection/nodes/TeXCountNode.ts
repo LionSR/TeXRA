@@ -2,11 +2,17 @@
  * TeXCountNode - Computes TeXCount statistics and adds to messages.
  */
 
-import { Node } from '@agent/node';
+// Local imports - agent
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { FileLocation } from '@utils/files';
+import { Node } from '@agent/node';
+
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+
+// Local imports - latex
 import { getTeXCountStats } from '@latex';
 
+// Local file imports
 import { getFilesForRound } from '../helpers';
 import type {
   ReflectionFlowShared,

@@ -10,7 +10,8 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { cleanFileContent } from '@replacement/engine';
 
 // Local imports - files
-import { flexibleFS, type FileLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - xml
 import { extractScratchpad } from '@utils/text/xmlUtils';

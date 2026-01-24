@@ -65,7 +65,7 @@ import replacementEngine from '@replacement/engine';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Internal imports
 import { getConfig } from '@utils/config';

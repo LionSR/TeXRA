@@ -20,12 +20,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ModelCapabilities } from '@model/ModelConfig';
 
 // Internal imports
-import {
-  AbsoluteFS,
-  getMimeType,
-  getShortDisplayPath,
-  type FileLocation,
-} from '@utils/files';
+import { AbsoluteFS, getMimeType, getShortDisplayPath } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 /**
  * Result of loading a media file.

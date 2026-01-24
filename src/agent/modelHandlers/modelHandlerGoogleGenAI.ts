@@ -54,7 +54,7 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Google finish reasons are re-exported from the SDK
 

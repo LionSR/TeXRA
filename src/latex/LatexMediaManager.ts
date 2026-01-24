@@ -9,12 +9,8 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
-  TaskRunFileService,
-  flexibleFS,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
+import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Local file imports
 import { extractFigurePathsFromLatex } from './extractFigure';

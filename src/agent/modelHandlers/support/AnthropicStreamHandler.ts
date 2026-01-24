@@ -12,8 +12,8 @@ import {
 import {
   StreamDiagnosticsSchema,
   type StreamDiagnostics,
-} from '@common/errors';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+} from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';

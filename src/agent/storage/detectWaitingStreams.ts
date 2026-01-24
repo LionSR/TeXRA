@@ -6,7 +6,7 @@
  */
 
 import type { FlowRecord } from '@agent/node/persisted-flow';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { getExecutionStore } from './ExecutionKVStore';
 

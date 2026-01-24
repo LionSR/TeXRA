@@ -10,7 +10,7 @@
  */
 
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 import {
   registerInterruptible,
   unregisterInterruptible,

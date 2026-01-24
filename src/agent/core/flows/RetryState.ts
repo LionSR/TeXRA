@@ -19,14 +19,11 @@ import {
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  formatProviderHttpError,
-  type ProviderError,
-  type RetryErrorInfo,
-} from '@common/errors';
+import { formatProviderHttpError } from '@common/errors';
+import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,

@@ -3,11 +3,8 @@ import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import { FlattenedEditRecordSchema } from '@tools/result';
-import {
-  FileLocationSchema,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
+import { pathToLocation } from '@utils/files';
+import { FileLocationSchema, type FileLocation } from '@shared/schemas';
 
 /** Schema for ThinkingBlock */
 export const ThinkingBlockSchema = z.object({
@@ -289,8 +286,8 @@ const SERVER_TOOL_CONTENT_DEFAULTS: ServerToolContentState = {
   lastAssistantContent: [],
 };
 
-// Import todo schemas from single source of truth (eventBus/schemas)
-import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
+// Import todo schemas from single source of truth (shared/schemas)
+import { TodoItemSchema, type TodoItem } from '@shared/schemas';
 
 /** Schema for TodoState serialization */
 export const TodoStateSnapshotSchema = z.object({

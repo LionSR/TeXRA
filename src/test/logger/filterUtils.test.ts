@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { getEmitFilter } from '@logger/filterUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('getEmitFilter', () => {
   let originalConfig: any;

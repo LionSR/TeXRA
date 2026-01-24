@@ -1,19 +1,25 @@
+// Standard library imports
 import * as path from 'path';
 
+// Local imports - agent
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+
+// Local imports - shared schemas
+import type { FileLocation, StorageKey } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import {
-  replaceInputCommands,
-  flexibleFS,
-  type FileLocation,
-} from '@utils/files';
+
+// Local imports - utilities
+import { replaceInputCommands, flexibleFS } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
+
+// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {

@@ -14,7 +14,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Internal imports
 import {
@@ -27,7 +27,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { getConfig } from '@utils/config';
 
 // Local file imports
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { K_SLICE } from '@utils/config';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {

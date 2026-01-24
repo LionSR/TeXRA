@@ -3,7 +3,7 @@
  *
  * Handles log message events: addLogMessage, updateLogMessage.
  */
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,

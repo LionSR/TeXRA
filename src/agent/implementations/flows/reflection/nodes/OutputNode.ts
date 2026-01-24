@@ -5,13 +5,21 @@
  * Non-critical operations can fail gracefully (logged as warnings).
  */
 
-import { Node } from '@agent/node';
-import type { RoundOutput, RoundFileMapping } from '@agent/output';
+// Local imports - agent
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { Node } from '@agent/node';
+import type { RoundFileMapping, RoundOutput } from '@agent/output';
+
+// Local imports - shared schemas
+import type { AgentFileLocation, FileLocation } from '@shared/schemas';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
-import type { AgentFileLocation, FileLocation } from '@utils/files';
+
+// Local imports - utilities
 import { flexibleFS } from '@utils/files';
 
+// Local file imports
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,

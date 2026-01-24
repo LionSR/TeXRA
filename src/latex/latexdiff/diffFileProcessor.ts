@@ -2,7 +2,8 @@
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
-import { flexibleFS, type FileLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [

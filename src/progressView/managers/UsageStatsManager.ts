@@ -2,12 +2,9 @@
 import { z } from 'zod';
 
 // Local imports - identifiers
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
 // Types - import canonical schema as source of truth
-import {
-  TokenUsageStatsSchema,
-  type TokenUsageStats,
-} from '@agent/types/UsageTypes';
+import { TokenUsageStatsSchema, type TokenUsageStats } from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';

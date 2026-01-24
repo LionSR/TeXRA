@@ -23,15 +23,20 @@
  * Services (modelHandler, client, etc.) are accessed via `_params.services`,
  * which is the PocketFlow pattern for immutable configuration.
  */
-
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - agent
 import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { RetryErrorInfoSchema } from '@common/errors/schemas';
+
+// Local imports - shared schemas
+import type { ExecutionId } from '@shared/schemas';
+import { RetryErrorInfoSchema } from '@shared/schemas';
+
+// Local imports - logger
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================

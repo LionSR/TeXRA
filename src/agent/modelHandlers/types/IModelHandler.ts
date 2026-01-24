@@ -12,7 +12,7 @@ import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmen
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {

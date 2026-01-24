@@ -7,12 +7,8 @@ import * as nunjucks from 'nunjucks';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { renderPrompt } from '@utils/prompt';
-import {
-  flexibleFS,
-  TaskRunFileService,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
+import { flexibleFS, TaskRunFileService, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils

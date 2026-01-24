@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import type { OutputFileInfo } from '@agent/output/types';
+import type { OutputFileInfo } from '@shared/schemas';
 
 // Internal imports
 import {
@@ -22,8 +22,8 @@ import {
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
-  type FileLocation,
 } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { checkToolInstalled } from '@utils/system';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import {

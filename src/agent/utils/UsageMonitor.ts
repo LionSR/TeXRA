@@ -10,7 +10,7 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports

@@ -1,9 +1,11 @@
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - shared schemas
+import type { FileLocation } from '@shared/schemas';
+
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
-import type { FileLocation } from './taskRunStorage';
 
 const CHANNEL = 'flexibleFS';
 logger.initialize(CHANNEL);

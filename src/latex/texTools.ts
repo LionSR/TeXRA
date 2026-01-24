@@ -14,7 +14,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utils
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';

@@ -44,7 +44,7 @@ import {
   CycleFieldsSchema,
   type CycleTransientFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { AgentFileLocationSchema } from '@utils/files';
+import { AgentFileLocationSchema } from '@shared/schemas';
 
 // ============================================================================
 // Schemas (Single Source of Truth)

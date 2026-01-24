@@ -43,7 +43,7 @@ import type { ToolDefinition } from '@model';
 // Internal imports
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';

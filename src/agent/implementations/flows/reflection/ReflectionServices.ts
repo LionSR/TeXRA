@@ -15,11 +15,8 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
-import type {
-  AgentFileLocation,
-  TaskRunFileService,
-  WorkspaceFileLocation,
-} from '@utils/files';
+import type { TaskRunFileService } from '@utils/files';
+import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
 import type { LatexMediaManager } from '@latex';
 import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 

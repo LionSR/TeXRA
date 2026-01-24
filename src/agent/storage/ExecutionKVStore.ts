@@ -15,7 +15,7 @@
 
 import * as path from 'path';
 
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 import { isFileNotFoundError } from '@common/errors';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 

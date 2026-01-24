@@ -9,8 +9,9 @@ import { z } from 'zod';
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
+import { MESSAGE_TYPES } from '@shared/schemas';
+import { flexibleFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils

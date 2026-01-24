@@ -1,7 +1,10 @@
+// Standard library imports
 import { dirname } from 'path';
 
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - agent
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -15,25 +18,32 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
-
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+
+// Local imports - shared schemas
 import {
+  AgentFileLocationSchema,
+  MESSAGE_TYPES,
   RetryErrorInfoSchema,
+  type AgentFileLocation,
   type RetryErrorInfo,
-} from '@common/errors/schemas';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+} from '@shared/schemas';
+
+// Local imports - replacement
 import replacementEngine from '@replacement/engine';
-import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
+
+// Local imports - utilities
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
-import { bestConnectionMethod } from '@latex';
 
+// Local imports - latex
+import { bestConnectionMethod } from '@latex';
+// Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,

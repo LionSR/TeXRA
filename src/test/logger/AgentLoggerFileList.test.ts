@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
 describe('AgentLogger.logFileCategory', () => {

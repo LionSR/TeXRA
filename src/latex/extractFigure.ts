@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';

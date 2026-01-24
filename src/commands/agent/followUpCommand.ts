@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
