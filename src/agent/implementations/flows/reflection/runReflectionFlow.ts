@@ -56,6 +56,7 @@ import {
   type WorkspaceFileLocation,
 } from '@utils/files';
 import { LatexMediaManager } from '@latex';
+import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 
 import {
   createReflectionFlow,
@@ -86,6 +87,9 @@ export interface RunReflectionFlowInput<
 
   /** Optional custom output file location getter (used by merge). */
   getOutputFileLocation?: (round: number) => AgentFileLocation;
+
+  /** Usage monitor for tracking round statistics. */
+  usageMonitor?: UsageMonitor;
 }
 
 /**
@@ -183,6 +187,7 @@ export async function runReflectionFlow<C = unknown>(
     checkInterruption,
     setAbortController,
     getUsageRecorder = () => async () => {},
+    usageMonitor,
   } = input;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
@@ -323,6 +328,12 @@ export async function runReflectionFlow<C = unknown>(
           return await logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
+        },
+        onRoundStart: (context) => {
+          // Set the active group ID for statistics logging so that
+          // statistics are associated with the current round (r0, r1, etc.)
+          // instead of the parent stage
+          usageMonitor?.setActiveGroupId(context.roundStage?.id);
         },
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
