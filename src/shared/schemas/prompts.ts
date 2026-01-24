@@ -2,11 +2,11 @@
 import { z } from 'zod';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from './agentCategory';
 import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
-} from '@agent/core/AgentConfig';
+} from './proposalFields';
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,

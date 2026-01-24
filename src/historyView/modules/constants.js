@@ -3,7 +3,7 @@
 
 // Import standardized commands
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
-import { AGENT_CATEGORY } from '@common/constants/agentTypes.js';
+import { AGENT_CATEGORY } from '@shared/schemas/agentCategory.js';
 
 // Export command map for convenience
 export const COMMANDS = HISTORY_VIEW_COMMANDS;

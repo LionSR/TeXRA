@@ -3,9 +3,9 @@
  * Types are derived from schemas for single source of truth.
  */
 import { z } from 'zod';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   AddTaskGroupPayloadSchema,
+  AgentCategorySchema,
   StreamTabIdSchema,
   ExecutionIdSchema,
   StorageKeySchema,
@@ -47,7 +47,7 @@ export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
 /** Payload for setting the active stream with optional category hint */
 export const SetActiveStreamPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema.nullable(),
-  agentCategory: z.enum(AgentCategory).optional(),
+  agentCategory: AgentCategorySchema.optional(),
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote: z.boolean().optional(),
   /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
