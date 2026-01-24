@@ -405,10 +405,6 @@ export class ProgressViewState {
     }
   }
 
-  getAllTaskStates(): Map<StreamTabId, TaskState> {
-    return new Map(this.taskStates);
-  }
-
   /**
    * Get output files for a stream using storageKey.
    *
@@ -435,11 +431,6 @@ export class ProgressViewState {
 
   getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
     return this._executionIds.get(streamTabId);
-  }
-
-  clearExecutionId(streamTabId: StreamTabId): void {
-    this._executionIds.delete(streamTabId);
-    this.saveExecutionIds();
   }
 
   // Stream cleanup operations
