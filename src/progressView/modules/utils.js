@@ -44,8 +44,9 @@ export function appendFormatted(container, formatted) {
 
 /**
  * Insert an element into a container keeping children sorted chronologically.
- * Handles log groups and log entries by default, but a custom extractor can
- * be provided for specialized cases.
+ * Optimized with fast paths for common cases (empty, append, prepend).
+ * Falls back to linear scan for mid-insertion to correctly handle elements
+ * without timestamps interspersed in the list.
  *
  * @param {HTMLElement} container - Parent element whose children are ordered
  * @param {HTMLElement} element - Element to insert
@@ -68,23 +69,36 @@ export function insertChronologically({
     timestamp instanceof Date ? timestamp.getTime() : timestamp;
   const childExtractor = getChildTimestamp ?? defaultChildTimestamp;
 
-  const lastChild = container.lastElementChild;
-  if (!lastChild) {
+  const children = container.children;
+  const len = children.length;
+
+  // Fast path: empty container
+  if (len === 0) {
     container.appendChild(element);
     return;
   }
 
-  const lastChildTime = childExtractor(lastChild);
+  // Fast path: append at end (most common case for streaming logs)
+  const lastChildTime = childExtractor(children[len - 1]);
   if (lastChildTime !== null && targetTime >= lastChildTime) {
     container.appendChild(element);
     return;
   }
 
-  const children = Array.from(container.children);
-  for (const child of children) {
-    const childTime = childExtractor(child);
+  // Fast path: insert at beginning
+  const firstChildTime = childExtractor(children[0]);
+  if (firstChildTime !== null && targetTime < firstChildTime) {
+    container.insertBefore(element, children[0]);
+    return;
+  }
+
+  // Linear scan for mid-insertion. Binary search doesn't work reliably here
+  // because some elements (file lists, statistics) don't have timestamps,
+  // and treating nulls as "infinitely old" can skip valid insertion points.
+  for (let i = 0; i < len; i++) {
+    const childTime = childExtractor(children[i]);
     if (childTime !== null && targetTime < childTime) {
-      container.insertBefore(element, child);
+      container.insertBefore(element, children[i]);
       return;
     }
   }
