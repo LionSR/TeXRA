@@ -13,6 +13,16 @@ import {
   type ProviderErrorPartial,
 } from '@common/errors/schemas';
 
+/**
+ * Optional stream ID schema - allows empty string for cases where stream context
+ * may not be available (e.g., approval requests during initialization).
+ */
+export const OptionalStreamIdSchema = z.union([
+  StreamTabIdSchema,
+  z.literal(''),
+]);
+export type OptionalStreamId = z.infer<typeof OptionalStreamIdSchema>;
+
 /** Tool edit approval request prompt */
 export const ToolEditApprovalPromptSchema = z.strictObject({
   requestId: z.string(),
@@ -20,7 +30,7 @@ export const ToolEditApprovalPromptSchema = z.strictObject({
   relativePath: z.string(),
   sourceTool: z.string(),
   allowBypass: z.boolean(),
-  streamId: z.union([StreamTabIdSchema, z.literal('')]),
+  streamId: OptionalStreamIdSchema,
   addedLines: z.int().nonnegative(),
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
@@ -34,7 +44,7 @@ export const BashApprovalPromptSchema = z.strictObject({
   requestId: z.string(),
   command: z.string(),
   allowBypass: z.boolean(),
-  streamId: z.union([StreamTabIdSchema, z.literal('')]),
+  streamId: OptionalStreamIdSchema,
 });
 export type BashApprovalPrompt = z.infer<typeof BashApprovalPromptSchema>;
 
