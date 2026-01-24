@@ -156,7 +156,6 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
 
-
 /** @internal Called by unified cleanup in index.ts */
 export function _rejectPendingToolEditApprovalsForStream(
   streamId: StreamTabId,
