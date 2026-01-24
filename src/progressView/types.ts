@@ -38,6 +38,8 @@ export type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
 export const InstructionUpdateSchema = z.object({
   text: z.string(),
   metadata: InstructionMetadataSchema.optional(),
+  /** Timestamp when the instruction was submitted (epoch milliseconds) */
+  timestamp: z.number().optional(),
 });
 export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;
 
