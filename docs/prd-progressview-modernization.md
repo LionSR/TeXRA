@@ -902,6 +902,223 @@ export class WorkflowView extends LitElement {
 
 ---
 
+## Rendering Pattern Migration
+
+The current codebase uses three distinct rendering patterns. Each maps to a Lit equivalent:
+
+### Pattern 1: HTML String Builders → Lit Templates
+
+**Current** (`htmlBuilders.js`):
+```javascript
+export function buildToolUseSection(label, content) {
+  return `
+  <div class="tool-use-section">
+    <div class="tool-use-subsection">
+      <span class="tool-use-sublabel">${label}</span>
+      ${content}
+    </div>
+  </div>
+`;
+}
+
+// Usage: element.innerHTML = buildToolUseSection('Input:', inputHtml);
+```
+
+**Lit equivalent**:
+```typescript
+// Inside component render() method
+private renderToolUseSection(label: string, content: TemplateResult) {
+  return html`
+    <div class="tool-use-section">
+      <div class="tool-use-subsection">
+        <span class="tool-use-sublabel">${label}</span>
+        ${content}
+      </div>
+    </div>
+  `;
+}
+
+// Usage: ${this.renderToolUseSection('Input:', this.renderInput())}
+```
+
+**Key difference**: Lit's `html` tagged template returns a `TemplateResult`, not a string. Lit diffs these efficiently. Never use `innerHTML` in Lit components.
+
+### Pattern 2: Template Cloning → Component Composition
+
+**Current** (`FileList.js`):
+```javascript
+_renderFileItem(template, parent, file) {
+  const clone = template.content.cloneNode(true);
+  const fileItem = clone.querySelector('.file-item');
+  fileItem.dataset.file = file.location.absolutePath;
+  // ... more querySelector + manual property setting
+  parent.appendChild(clone);
+}
+```
+
+**Lit equivalent**:
+```typescript
+// file-item.ts - standalone component
+@customElement('file-item')
+export class FileItem extends LitElement {
+  @property({ type: Object }) file!: OutputFile;
+
+  render() {
+    return html`
+      <div class="file-item" data-file=${this.file.location.absolutePath}>
+        <span class="file-path" title=${this.file.location.relativePath}>
+          ${this.file.displayName}
+        </span>
+        ${this.renderButtons()}
+      </div>
+    `;
+  }
+}
+
+// file-list.ts - parent component
+render() {
+  return html`
+    ${repeat(
+      this.files,
+      (file) => file.id,
+      (file) => html`<file-item .file=${file}></file-item>`
+    )}
+  `;
+}
+```
+
+**Key difference**: No manual DOM manipulation. Pass data down via properties (`.file=${file}`), Lit handles the rest.
+
+### Pattern 3: DOM Element Cache → Reactive State
+
+**Current** (`taskManagers.js`):
+```javascript
+export class TaskGroupDomManager {
+  constructor() {
+    this.groupElements = new Map();  // Manual cache
+    this.toggleListeners = new Map();
+  }
+
+  _registerGroupElement(group, element) {
+    progressViewState.taskGroups.set(group.id, group);
+    this.groupElements.set(group.id, element);
+  }
+
+  updateGroupStatus(groupId, status) {
+    const element = this.groupElements.get(groupId);
+    if (!element) return;
+    element.querySelector('.status').textContent = status;
+  }
+}
+```
+
+**Lit equivalent**:
+```typescript
+@customElement('workflow-task')
+export class WorkflowTask extends LitElement {
+  @property({ type: Object }) task!: WorkflowTask;
+
+  // No cache needed - Lit tracks by key in parent's repeat()
+  render() {
+    return html`
+      <details class="log-group" ?open=${!this.task.collapsed}>
+        <summary>${this.task.label}</summary>
+        <span class="status">${this.task.status}</span>
+        ${this.renderContent()}
+      </details>
+    `;
+  }
+}
+```
+
+**Key difference**: No element cache. Update the data in the store → Lit re-renders affected components. The `repeat()` directive with keys ensures efficient updates.
+
+### Pattern 4: Event Delegation → Declarative Handlers
+
+**Current** (`domHandlers.js`):
+```javascript
+// Single listener on container, check data-* attributes
+document.getElementById('log-content').addEventListener('click', (e) => {
+  const target = e.target.closest('[data-command]');
+  if (!target) return;
+
+  const command = target.dataset.command;
+  const file = target.dataset.file;
+  vscode.postMessage({ type: command, file });
+});
+```
+
+**Lit equivalent**:
+```typescript
+// Declarative in template
+render() {
+  return html`
+    <span
+      class="file-link"
+      @click=${() => this.openFile(this.file.path)}
+    >
+      ${this.file.name}
+    </span>
+  `;
+}
+
+private openFile(path: string) {
+  store.send({ type: 'file/action', action: 'open', path });
+}
+```
+
+**Key difference**: Event handlers are declared inline. No data-* attribute inspection. Type-safe because `this.file.path` is typed.
+
+### Pattern 5: Formatters with Side Effects → Pure Render Functions
+
+**Current** (`markdownRenderer.js`):
+```javascript
+export function renderMarkdown(text, container) {
+  const html = marked.parse(text);
+  container.innerHTML = html;
+  // Side effect: modifies DOM
+  highlightCodeBlocks(container);
+  addCopyButtons(container);
+}
+```
+
+**Lit equivalent**:
+```typescript
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { marked } from 'marked';
+
+// Pure function - no side effects
+function renderMarkdown(text: string): TemplateResult {
+  const html = marked.parse(text);
+  return unsafeHTML(html);
+}
+
+// In component
+render() {
+  return html`
+    <div class="markdown-content">
+      ${renderMarkdown(this.content)}
+    </div>
+  `;
+}
+```
+
+**Note**: `unsafeHTML` is needed for pre-rendered HTML (markdown output). For code highlighting, consider a Lit directive or post-render callback in `updated()`.
+
+### Migration Checklist per File
+
+| Current File | Migration Target | Pattern |
+|--------------|------------------|---------|
+| `htmlBuilders.js` | Inline in components | 1 (templates) |
+| `FileList.js` | `<file-list>` + `<file-item>` | 2 (composition) |
+| `taskManagers.js` | `<workflow-task>` | 3 (reactive) |
+| `domHandlers.js` | Delete (handlers in components) | 4 (declarative) |
+| `markdownRenderer.js` | `renderMarkdown()` util + directive | 5 (pure functions) |
+| `formatters/*.js` | Keep as pure functions, call from `render()` | 5 |
+| `uiManagers/*.js` | One component per manager | 2 + 3 |
+
+---
+
 ## Build Configuration
 
 ### Webpack Changes
