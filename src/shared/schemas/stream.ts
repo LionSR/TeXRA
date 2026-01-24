@@ -4,8 +4,8 @@ import { z } from 'zod';
 // Local imports - identifiers
 import { ExecutionIdSchema } from './identifiers';
 
-// Local imports - agent types
-import { AgentCategory } from '@agent/core/AgentDataclass';
+// Local imports - agent schemas
+import { AgentCategorySchema } from './agent';
 
 export const STREAM_STATUS = {
   RUNNING: 'running',
@@ -43,7 +43,7 @@ export const TaskGroupStatusSchema = z.enum([
 export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
 
 export const StreamUITraitsSchema = z.object({
-  agentCategory: z.enum(AgentCategory),
+  agentCategory: AgentCategorySchema,
   isToolAgent: z.boolean(),
 });
 export type StreamUITraits = z.infer<typeof StreamUITraitsSchema>;
@@ -53,7 +53,7 @@ export const StreamTabInfoSchema = z.object({
   label: z.string(),
   model: z.string().optional(),
   agent: z.string().optional(),
-  agentCategory: z.enum(AgentCategory),
+  agentCategory: AgentCategorySchema,
   uiTraits: StreamUITraitsSchema,
   hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),

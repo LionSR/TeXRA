@@ -9,10 +9,7 @@ import {
   FileLocationSchema,
   OutputFileInfoSchema,
   type FileLocation,
-  type OutputFileInfo,
 } from '@shared/schemas';
-
-export type { OutputFileInfo } from '@shared/schemas';
 
 /** XML summary schema with defaults via prefault */
 export const OutputXmlSummarySchema = z.strictObject({
@@ -24,6 +21,8 @@ export const OutputXmlSummarySchema = z.strictObject({
   sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
+
+export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 
 /** Output from processing a conversation round */
 export const RoundOutputSchema = z.strictObject({

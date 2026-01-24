@@ -4,8 +4,8 @@ import { z } from 'zod';
 // Local imports - identifiers
 import { ExecutionIdSchema } from './identifiers';
 
-// Local imports - tools
-import { LineChangesSchema } from '@tools/result';
+// Local imports - diff schemas
+import { LineChangesSchema } from './diff';
 
 export const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),

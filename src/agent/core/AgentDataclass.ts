@@ -1,11 +1,18 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - model types
-import { ToolDefinitionSchema, type ToolDefinition } from '@model';
+// Local imports - shared schemas
+import { AgentCategory } from '@shared/schemas';
+
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
+// Local imports - model types
+import { ToolDefinitionSchema, type ToolDefinition } from '@model';
+
 const CHANNEL = 'AgentDataclass';
+
+export { AgentCategory } from '@shared/schemas';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
@@ -19,23 +26,6 @@ export const AgentSource = z.enum([
   'remote',
 ]);
 export type AgentSource = z.infer<typeof AgentSource>;
-
-/**
- * Primary discriminator for agent families.
- *
- * **Workflow**: Document processing agents that run for a fixed number of rounds.
- * - Default rounds: max(configured rounds, userRequest length)
- * - Use `rounds: 1` for single-pass processing
- * - XML structure enforcement controlled by `xmlStructureMode` (default: 'scratchpadOnly')
- *
- * **ToolUse**: Interactive agents with tool-calling capabilities.
- * - Continues until user follow-up or interruption
- * - Manages persistent sessions with checkpointing
- */
-export enum AgentCategory {
-  Workflow = 'workflow',
-  ToolUse = 'toolUse',
-}
 
 /** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
