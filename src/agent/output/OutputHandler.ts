@@ -9,8 +9,16 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { DiffStats } from '@agent/types/DiffTypes';
+
+// Local imports - shared schemas
+import {
+  FileLocationSchema,
+  type FileLocation,
+  type StorageKey,
+} from '@shared/schemas';
+
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -22,8 +30,6 @@ import {
   flexibleFS,
   pathToLocation,
   getComparablePath,
-  FileLocationSchema,
-  type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 import { countLines } from '@utils/text/stringUtils';
@@ -33,8 +39,8 @@ import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
 
 import type { IOutputHandler } from './IOutputHandler';
+import { OutputFileInfoSchema } from '@shared/schemas';
 import {
-  OutputFileInfoSchema,
   OutputXmlSummarySchema,
   type OutputFileInfo,
   type OutputXmlSummary,

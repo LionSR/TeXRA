@@ -1,7 +1,14 @@
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - utils
 import { getConfig } from '@utils/config';
-import { MESSAGE_TYPES, MessageTypeSchema } from './messageTypes';
+
+// Local imports - shared schemas
+import { MessageTypeSchema } from '@shared/schemas';
+
+// Local imports - message types
+import { MESSAGE_TYPES } from './messageTypes';
 
 // ============================================================================
 // Filter Schemas

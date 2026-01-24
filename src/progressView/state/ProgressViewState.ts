@@ -10,7 +10,7 @@ import {
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
-} from '@agent/types/IdentifierTypes';
+} from '@shared/schemas';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 // Internal imports
@@ -38,7 +38,7 @@ import type { StateStorage } from '@progressView/persistence/PersistentMapManage
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import type { InstructionUpdate } from '@progressView/types';
 import { getConfig } from '@utils/config';
-import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
+import { TodoItemSchema, type TodoItem } from '@shared/schemas';
 
 /**
  * Schema for ephemeral stream metadata hints.
@@ -422,7 +422,7 @@ export class ProgressViewState {
    *
    * @param stream - The stream tab ID
    * @param options.storageKey - THE branded key for storage lookup.
-   * @see IdentifierTypes.ts for the full execution model documentation
+   * @see src/shared/schemas/identifiers.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,

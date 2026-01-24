@@ -1,17 +1,19 @@
-/**
- * Shared event bus types (avoids circular dependency with progressView).
- */
+// Third-party imports
 import { z } from 'zod';
-import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
+
+// Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from '@agent/core/AgentConfig';
+
+// Local imports - shared schemas
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
-} from '@common/errors/schemas';
+} from './errors';
+import { StreamTabIdSchema } from './identifiers';
 
 /**
  * Optional stream ID schema - allows empty string for cases where stream context
@@ -128,3 +130,5 @@ export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
   ToolUseAgentProposalPromptSchema,
 ]);
 export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
+
+export type { ProviderErrorPartial };

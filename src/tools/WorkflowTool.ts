@@ -30,13 +30,13 @@ import { defineTool } from '@tools/core/define';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-// Local imports - event bus (after utils per import order rules)
+// Local imports - shared schemas
 import {
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
-} from '@eventBus/types';
+} from '@shared/schemas';
 
 // ============================================================================
 // Shared utilities

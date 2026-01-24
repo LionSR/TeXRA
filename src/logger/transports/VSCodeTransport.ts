@@ -3,21 +3,26 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
-// Internal imports
+// Local imports - logger
 import {
   ContextStateDataSchema,
   type ContextStateData,
 } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
-import type { LogMessageData } from '@logger/LogTypes';
-import {
-  MESSAGE_TYPES,
-  MessageTypeSchema,
-  type MessageType,
-} from '@logger/messageTypes';
-import type { EndGroupStatus } from '@logger/messageTypes';
+import { MESSAGE_TYPES, type EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel } from '@logger/utils';
+
+// Local imports - shared schemas
+import {
+  MessageTypeSchema,
+  type LogMessageData,
+  type MessageType,
+} from '@shared/schemas';
+
+// Local imports - utils
 import { serializeError } from '@utils/core';
+
+// Local imports - event bus
 import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {

@@ -2,7 +2,7 @@
 import * as assert from 'assert';
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
 import { WriteFileTool } from '@tools/WriteTool';

@@ -1,35 +1,15 @@
 /**
  * Output file schemas. Types derived from schemas for single source of truth.
  */
+// Third-party imports
 import { z } from 'zod';
-import { DiffStatsSchema } from '@agent/types/DiffTypes';
-import { FileLocationSchema, type FileLocation } from '@utils/files';
 
-/** Minimal output file reference - source name + location */
-export const OutputFileSchema = z.strictObject({
-  source: z.string(),
-  location: FileLocationSchema,
-});
-
-/** File lineage - tracks where files came from */
-export const FileLineageSchema = z.strictObject({
-  original: FileLocationSchema.nullable(),
-  diffBase: FileLocationSchema.nullable(),
-  diffFile: FileLocationSchema.nullable(),
-});
-
-/** Complete output file metadata (extends OutputFileSchema) */
-export const OutputFileInfoSchema = OutputFileSchema.extend({
-  round: z.number().prefault(() => 0), // Default for legacy persisted data
-  lineage: FileLineageSchema.nullable(),
-  diff: DiffStatsSchema.nullable(),
-});
-
-export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
-
-export type OutputFile = z.infer<typeof OutputFileSchema>;
-export type FileLineage = z.infer<typeof FileLineageSchema>;
-export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+// Local imports - shared schemas
+import {
+  FileLocationSchema,
+  OutputFileInfoSchema,
+  type FileLocation,
+} from '@shared/schemas';
 
 /** XML summary schema with defaults via prefault */
 export const OutputXmlSummarySchema = z.strictObject({
@@ -63,3 +43,5 @@ export interface RoundFileMapping {
   /** Output path → original base FileLocation (for tracking lineage) */
   originByOutput: Map<string, FileLocation | undefined>;
 }
+
+export type { FileLineage, OutputFile, OutputFileInfo } from '@shared/schemas';

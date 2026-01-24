@@ -1,9 +1,11 @@
 /**
  * Diff result schema for latexdiff operations.
  */
+// Third-party imports
 import { z } from 'zod';
-import { FileLocationSchema } from '@utils/files';
-import { OutputFileInfoSchema } from './types';
+
+// Local imports - shared schemas
+import { FileLocationSchema, OutputFileInfoSchema } from '@shared/schemas';
 
 const DiffStatusSchema = z.enum(['success', 'error']);
 

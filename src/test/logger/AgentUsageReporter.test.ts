@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { StorageKey } from '@shared/schemas';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';

@@ -4,23 +4,13 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - identifier schemas
-import { StreamTabIdSchema, StorageKeySchema } from './IdentifierTypes';
-
-export const TokenUsageStatsSchema = z.strictObject({
-  /** Number of input tokens consumed */
-  inputTokens: z.number(),
-  /** Number of output tokens generated */
-  outputTokens: z.number(),
-  /** Total cost in USD for the request */
-  cost: z.number(),
-  /** Tokens read from cache (discounted rate) */
-  cacheReadInputTokens: z.number().optional(),
-  /** Tokens written to cache (Anthropic: charged at 1.25x input price) */
-  cacheCreationInputTokens: z.number().optional(),
-});
-
-export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
+// Local imports - shared schemas
+import {
+  StorageKeySchema,
+  StreamTabIdSchema,
+  TokenUsageStatsSchema,
+  type TokenUsageStats,
+} from '@shared/schemas';
 
 /**
  * Extended statistics tracked during agent execution.

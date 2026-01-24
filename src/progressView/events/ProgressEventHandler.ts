@@ -2,15 +2,14 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { StorageKey, StreamTabId, TokenUsageStats } from '@shared/schemas';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { StreamStatus } from '@common/constants/streamStatus';
+import type { StreamStatus } from '@shared/schemas';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import type { TaskGroup } from '@logger/LogTypes';
+import type { TaskGroup } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import {

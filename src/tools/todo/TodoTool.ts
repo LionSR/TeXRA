@@ -9,21 +9,25 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports - agent
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-import { type ToolResult } from '@tools/result';
-import { defineTool } from '@tools/core/define';
 
-const logger = new AgentLogger('TodoWriteTool');
-
-// Import todo schemas from single source of truth
+// Local imports - shared schemas
 import {
   TODO_STATUS,
   TodoItemSchema,
   type TodoItem,
   type TodoStatus,
-} from '@eventBus/schemas';
+} from '@shared/schemas';
+
+// Local imports - tools
+import { type ToolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
+
+const logger = new AgentLogger('TodoWriteTool');
 
 /** Configuration for displaying todo status - icon and label for each status */
 const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
@@ -34,7 +38,7 @@ const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
 
 /**
  * Schema for the todo_write tool input.
- * Uses TodoItemSchema from eventBus/schemas as single source of truth.
+ * Uses TodoItemSchema from shared schemas as single source of truth.
  */
 const TodoWriteInputSchema = z.strictObject({
   /** The complete updated todo list */

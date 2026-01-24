@@ -4,10 +4,11 @@
  *
  * This provides a single source of truth for usage tracking across all providers.
  */
+// Third-party imports
 import { z } from 'zod';
 
-// Local imports - single source of truth for base usage stats
-import { TokenUsageStatsSchema } from './UsageTypes';
+// Local imports - shared schemas
+import { TokenUsageStatsSchema } from '@shared/schemas';
 
 /**
  * Provider identifiers for usage tracking - single source of truth.

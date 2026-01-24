@@ -1,15 +1,31 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Type imports
+// Type imports - agent
 import type { OutputFileInfo } from '@agent/output/types';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
-import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+
+// Type imports - shared schemas
+import type {
+  AgentProposalPrompt,
+  BashApprovalPrompt,
+  LogMessageData,
+  RetryRequestPrompt,
+  StreamStatus,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+  TodoItem,
+  TokenUsageStats,
+  ToolEditApprovalPrompt,
+  UpdateTaskGroupPayload,
+} from '@shared/schemas';
+
+// Type imports - logger
 import type { TaskState } from '@logger/TaskState';
-import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
+
+// Type imports - progress view
+import type { InstructionUpdate } from '@progressView/types';
 
 /** Message payload sent to webview */
 interface WebviewMessage {
@@ -21,13 +37,6 @@ interface WebviewMessage {
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { COMMANDS } from '@progressView/modules/constants.js';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@eventBus/types';
-import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 /**
  * Extra content to include with log updates.

@@ -12,11 +12,12 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { OutputFileInfo } from '@agent/output/types';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import type {
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-} from '@agent/types/IdentifierTypes';
+import {
+  AgentProposalActionMessageSchema,
+  type ExecutionId,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -54,7 +55,6 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { AgentProposalActionMessageSchema } from '@eventBus/types';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,

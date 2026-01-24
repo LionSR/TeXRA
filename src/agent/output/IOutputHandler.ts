@@ -1,5 +1,5 @@
-// Local imports - agent
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+// Local imports - shared schemas
+import type { StorageKey } from '@shared/schemas';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { FileLocation } from '@utils/files';
 

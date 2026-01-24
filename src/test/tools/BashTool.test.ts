@@ -18,7 +18,7 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpe
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/ToolTypes';

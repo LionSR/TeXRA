@@ -20,6 +20,7 @@
       "@commands/*": ["src/commands/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
+      "@shared/*": ["src/shared/*"],
       "@housekeeping": ["src/housekeeping"],
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["src/progressView/*"],

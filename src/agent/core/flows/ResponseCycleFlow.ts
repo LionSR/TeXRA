@@ -21,10 +21,7 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import {
-  RetryErrorInfoSchema,
-  type RetryErrorInfo,
-} from '@common/errors/schemas';
+import { RetryErrorInfoSchema, type RetryErrorInfo } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';

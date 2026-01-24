@@ -16,7 +16,7 @@
  * This design supports concurrent subagents - each run receives updates independently,
  * and the frontend can display multiple runs simultaneously in the future.
  */
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 

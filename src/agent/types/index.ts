@@ -6,10 +6,11 @@
  */
 
 // Identifier types - most commonly used
-export type { StreamTabId, ExecutionId, StorageKey } from './IdentifierTypes';
+export type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 
 // Usage types
-export type { TokenUsageStats, ExtendedTokenUsageStats } from './UsageTypes';
+export type { TokenUsageStats } from '@shared/schemas';
+export type { ExtendedTokenUsageStats } from './UsageTypes';
 export type { NormalizedUsage } from './NormalizedUsage';
 
 // Result types

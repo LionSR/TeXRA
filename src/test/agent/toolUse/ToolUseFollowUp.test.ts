@@ -8,7 +8,7 @@ import { AgentRunState } from '@agent/core/AgentState';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 // Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 

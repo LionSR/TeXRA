@@ -2,7 +2,7 @@
  * Decouples agent runtime from ProgressView UI layer.
  */
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
 
 /** Interface for run state access - implemented by ProgressViewProvider */
 export interface IRunStorageService {

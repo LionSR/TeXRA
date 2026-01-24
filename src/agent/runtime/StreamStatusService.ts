@@ -1,5 +1,5 @@
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 import type { StreamStatus } from '@common/constants/streamStatus';
 
 // Internal imports

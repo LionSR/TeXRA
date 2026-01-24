@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { StorageKey } from '@shared/schemas';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';

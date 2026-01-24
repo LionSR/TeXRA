@@ -2,14 +2,14 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - progress view
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-// Internal imports
+// Local imports - shared schemas
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
   type OutputFileInfo,
-} from '@agent/output/types';
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';

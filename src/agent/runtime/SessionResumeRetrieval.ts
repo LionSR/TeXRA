@@ -17,7 +17,7 @@ import {
   ExecutionIdSchema,
   type StreamTabId,
   type ExecutionId,
-} from '@agent/types/IdentifierTypes';
+} from '@shared/schemas';
 import type { FlowRecord } from '@agent/node/persisted-flow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
