@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 // Type imports
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';

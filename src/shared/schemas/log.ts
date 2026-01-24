@@ -1,6 +1,7 @@
+// Third-party imports
 import { z } from 'zod';
 
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
+import type { TaskGroupStatus } from './stream';
 
 /**
  * Log level constants - single source of truth for severity levels.
@@ -19,20 +20,12 @@ export const LogLevelSchema = z.enum([
   LOG_LEVELS.INFO,
   LOG_LEVELS.DEBUG,
 ]);
+export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
  * End group status - terminal states used when finalizing log groups.
  * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
  * This is a strict subset of TaskGroupStatus (only terminal states).
- *
- * ## Status Semantics
- *
- * - **STOPPED**: Flow completed successfully (all rounds finished normally).
- *   Despite the name, this does NOT mean "user stopped" - it means "finished".
- *   This naming comes from the UI status indicator showing "Stopped" when done.
- *
- * - **ERROR**: Flow terminated due to an error OR was interrupted by user.
- *   Use this for any non-successful termination.
  */
 export const END_GROUP_STATUS = {
   /** Flow terminated due to error or user interruption */
@@ -45,7 +38,6 @@ export const EndGroupStatusSchema = z.enum([
   END_GROUP_STATUS.ERROR,
   END_GROUP_STATUS.STOPPED,
 ]);
-
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
 // Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
@@ -108,8 +100,6 @@ export type MessageType = z.infer<typeof MessageTypeSchema>;
  * - AgentLogger.fileList() and logFileCategory()
  * - Progress view normalizers (normalizeFileListEntries)
  * - userVars.ts LoadedFileEntry type
- *
- * Note: The normalizer defaults missing `source` to 'unknown', so it's optional here.
  */
 export const FileListEntrySchema = z.object({
   /** File path (absolute or relative) */
@@ -127,3 +117,28 @@ export const FileListEntrySchema = z.object({
 });
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
+
+export const LogMessageDataSchema = z.strictObject({
+  /** Unique identifier for this log entry */
+  id: z.string().min(1),
+  /** Raw message text */
+  text: z.string(),
+  /** Severity level */
+  level: LogLevelSchema,
+  /** Unix timestamp (ms) */
+  timestamp: z.number(),
+  /** Optional group association */
+  groupId: z.string().optional(),
+  /** Optional message category */
+  messageType: MessageTypeSchema.optional(),
+  /** Whether verbose details should be displayed */
+  verbose: z.boolean().optional(),
+  /** Optional structured data associated with the entry */
+  data: z.unknown().optional(),
+});
+export type LogMessageData = z.infer<typeof LogMessageDataSchema>;
+
+export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
+  id: true,
+});
+export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;

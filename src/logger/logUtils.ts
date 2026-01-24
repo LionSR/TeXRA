@@ -6,10 +6,10 @@ import { randomUUID } from 'crypto';
 import { registry } from './LogChannelRegistry';
 
 // Local imports - constants
-import { END_GROUP_STATUS } from './messageTypes';
+import { END_GROUP_STATUS } from '@shared/schemas';
 
 // Type imports
-import type { EndGroupStatus } from './messageTypes';
+import type { EndGroupStatus } from '@shared/schemas';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 import type { LogUtilsOptions } from './logOptions';
 

@@ -1,5 +1,5 @@
 // Type imports
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 // Internal imports
 import {
   FileInteractionState,

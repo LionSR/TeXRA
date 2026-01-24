@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - agent
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';

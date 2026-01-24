@@ -2,8 +2,7 @@
  * Diff result schema for latexdiff operations.
  */
 import { z } from 'zod';
-import { FileLocationSchema } from '@utils/files';
-import { OutputFileInfoSchema } from './types';
+import { FileLocationSchema, OutputFileInfoSchema } from '@shared/schemas';
 
 const DiffStatusSchema = z.enum(['success', 'error']);
 

@@ -2,14 +2,9 @@
  * Canonical error schemas - SINGLE SOURCE OF TRUTH
  *
  * All error-related types in the codebase should derive from these schemas.
- * This file has NO internal project imports to avoid circular dependencies.
- *
- * Schema hierarchy:
- * - ProviderErrorSchema: Core error from provider/SDK (base)
- * - ErrorContextSchema: Where/when the error occurred (composition)
- * - ErrorLogDataSchema: Combined for logging (extends both)
  */
 
+// Third-party imports
 import { z } from 'zod';
 
 // ============================================================================
@@ -17,20 +12,8 @@ import { z } from 'zod';
 // ============================================================================
 
 /**
- * Core error details from a provider/SDK.
- * This is THE canonical error schema - all other error types derive from this.
- *
- * Used by:
- * - formatProviderHttpError() return type
- * - Retry request UI (errorDetails)
- * - Progress view error display
- */
-/**
  * Stream diagnostics for debugging Anthropic streaming failures.
  * Shows what was received before the stream errored.
- *
- * Uses prefault() for sensible defaults - allows partial creation
- * while ensuring all fields are present in output.
  */
 export const StreamDiagnosticsSchema = z.object({
   /** Characters of thinking content received */
@@ -149,9 +132,6 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 /**
  * Minimal error info for retry state tracking.
  * Subset of ProviderError fields needed for flow control and persistence.
- *
- * Used by cycle flows to track last error across retry attempts.
- * This is intentionally minimal - full error details are logged separately.
  */
 export const RetryErrorInfoSchema = ProviderErrorSchema.pick({
   message: true,

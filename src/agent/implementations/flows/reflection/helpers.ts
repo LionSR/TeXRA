@@ -1,6 +1,6 @@
 /** Shared helper functions for ReflectionFlow nodes. */
 
-import type { RoundOutput } from '@agent/output';
+import type { RoundOutput } from '@shared/schemas';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { FileLocation, TaskRunFileService } from '@utils/files';
 

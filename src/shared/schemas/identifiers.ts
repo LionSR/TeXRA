@@ -1,17 +1,4 @@
-/**
- * Identifier Types and Execution Model
- *
- * Identity hierarchy:
- *   StreamTabId (UI tab, human-readable)
- *     └── ExecutionIdentity
- *           ├── executionId (unique instance, always UUID)
- *           └── storageKey (THE key for files/usage storage)
- *
- * Key invariants:
- * - ExecutionId is ALWAYS a UUID (never null, never DEFAULT_RUN_ID)
- * - StorageKey is ALWAYS a valid key (UUID or DEFAULT_RUN_ID for legacy)
- * - StreamTabId is human-readable and stable across executions
- */
+// Third-party imports
 import { z } from 'zod';
 
 /** Human-readable ID for UI tabs. Format: "${agentName}@${modelName}: ${inputFileName}" */

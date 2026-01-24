@@ -11,7 +11,7 @@
 
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { ProviderErrorPartial } from '@common/errors/schemas';
+import type { ProviderErrorPartial } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
