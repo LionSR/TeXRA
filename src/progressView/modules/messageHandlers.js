@@ -104,14 +104,74 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     return runId ? { stream, runId } : null;
   }
 
+  _normalizeInstructionText(text) {
+    return typeof text === 'string' ? text.trim() : '';
+  }
+
+  _hasUserMessageInLog(text) {
+    const normalized = this._normalizeInstructionText(text);
+    if (!normalized) {
+      return false;
+    }
+
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!logContent) {
+      return false;
+    }
+
+    const messages = logContent.querySelectorAll('.user-message-content');
+    for (const message of messages) {
+      if ((message.textContent || '').trim() === normalized) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  _getToolUseInstructionForActiveStream() {
+    const stream = state.activeStream;
+    if (!stream) {
+      return null;
+    }
+
+    const pending = state.getPendingInstruction(stream);
+    if (pending?.text) {
+      return pending;
+    }
+
+    const runId =
+      state.getActiveRunId(stream) ?? state.resolveActiveRunId(stream);
+    if (!runId) {
+      return null;
+    }
+
+    return state.getRunInstruction(stream, runId) ?? null;
+  }
+
+  _refreshToolUseInstructionPanel(instruction) {
+    const text = this._normalizeInstructionText(instruction?.text);
+    if (!text) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const shouldShow = !this._hasUserMessageInLog(text);
+    shouldShow
+      ? dom.instructionPanel.show(text, instruction?.metadata)
+      : dom.instructionPanel.hide();
+  }
+
   /**
    * Refresh instruction panel for the active run.
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
   _refreshInstructionForActiveRun(runId) {
-    // Tool-use agents don't use instruction panel
-    if (state.activeAgentCategory === 'toolUse')
-      return dom.instructionPanel.hide();
+    if (state.activeAgentCategory === 'toolUse') {
+      const instruction = this._getToolUseInstructionForActiveStream();
+      this._refreshToolUseInstructionPanel(instruction);
+      return;
+    }
 
     const ctx = this._getActiveRunContext(runId);
     if (!ctx) return dom.instructionPanel.hide();
@@ -730,6 +790,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         appendFormatted(logContent, formatted);
       }
       scrollToBottom(logContent);
+
+      if (
+        state.activeAgentCategory === 'toolUse' &&
+        mergedLogMessage?.messageType === 'userMessage'
+      ) {
+        const instruction = this._getToolUseInstructionForActiveStream();
+        this._refreshToolUseInstructionPanel(instruction);
+      }
     }
 
     this._updatePlaceholderVisibility();
@@ -1006,7 +1074,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const category =
       message.agentCategory || state.activeAgentCategory || 'workflow';
     const isToolUseAgent = category === 'toolUse';
-    const hasText = typeof text === 'string' && text.trim();
+    const normalizedText = this._normalizeInstructionText(text);
+    const hasText = Boolean(normalizedText);
 
     if (message.agentCategory) this._clearAgentCategoryState(category);
     state.activeAgentCategory = category;
@@ -1021,25 +1090,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update run instruction state
     if (activeRunId) {
       if (hasText) {
-        state.setRunInstruction(activeStream, activeRunId, { text, metadata });
+        state.setRunInstruction(activeStream, activeRunId, {
+          text: normalizedText,
+          metadata,
+        });
       } else {
         state.clearRunInstruction(activeStream, activeRunId);
       }
       state.clearPendingInstruction(activeStream);
     }
 
-    // Tool-use agents: instruction panel not used, user messages are in logs
+    // Tool-use agents: show instruction only when logs don't include it.
     if (isToolUseAgent) {
-      dom.instructionPanel.hide();
-      state.clearPendingInstruction(activeStream);
+      if (hasText) {
+        state.setPendingInstruction(activeStream, {
+          text: normalizedText,
+          metadata,
+        });
+      } else {
+        state.clearPendingInstruction(activeStream);
+      }
+      this._refreshToolUseInstructionPanel({ text: normalizedText, metadata });
       return;
     }
 
     // Workflow agents: show in panel or as pending
     if (!activeRunId) {
       if (hasText) {
-        state.setPendingInstruction(activeStream, { text, metadata });
-        dom.instructionPanel.show(text, metadata);
+        state.setPendingInstruction(activeStream, {
+          text: normalizedText,
+          metadata,
+        });
+        dom.instructionPanel.show(normalizedText, metadata);
       } else {
         state.clearPendingInstruction(activeStream);
         dom.instructionPanel.hide();
