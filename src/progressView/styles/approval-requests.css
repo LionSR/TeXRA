@@ -98,3 +98,36 @@
   vscode-toolbar-button[data-action='reject']::part(control) {
   color: var(--vscode-inputValidation-warningBorder);
 }
+
+/**
+ * Bash approval requests styles
+ */
+
+.bash-approval-requests {
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-editor-background);
+}
+
+.bash-approval-requests__header .codicon {
+  color: var(--vscode-terminal-ansiYellow);
+}
+
+.bash-approval-request__command {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--font-size-sm);
+}
+
+.bash-approval-request__command code {
+  display: block;
+  padding: var(--spacing-medium);
+  background: var(--vscode-textCodeBlock-background);
+  border-radius: var(--border-radius);
+  color: var(--vscode-terminal-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.bash-approval-request__actions vscode-toolbar-button {
+  flex: 1 1 12rem;
+}

@@ -12,6 +12,7 @@ import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { FollowupSectionManager } from './uiManagers/FollowupSectionManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
+import { BashApprovalRequests } from './uiManagers/BashApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
 import { WorkflowProposals } from './uiManagers/WorkflowProposals.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
@@ -44,6 +45,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       followUpInput: new FollowUpInputManager(vscode),
       followupSection: new FollowupSectionManager(vscode),
       approvalRequests: new ApprovalRequests(),
+      bashApprovalRequests: new BashApprovalRequests(),
       retryRequests: new RetryRequests(),
       workflowProposals: new WorkflowProposals(),
       todoList: new TodoList(),

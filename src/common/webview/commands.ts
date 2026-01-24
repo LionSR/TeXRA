@@ -193,6 +193,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
   RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
   UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
+  SHOW_BASH_APPROVAL: 'showBashApproval',
+  RESOLVE_BASH_APPROVAL: 'resolveBashApproval',
   SHOW_RETRY_REQUEST: 'showRetryRequest',
   RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
   SHOW_AGENT_PROPOSAL: 'showAgentProposal',
@@ -227,6 +229,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
+  BASH_APPROVAL_ACTION: 'bashApprovalAction',
 
   // Memory
   OPEN_MEMORY_VIEW: 'openMemoryView',
