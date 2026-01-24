@@ -30,6 +30,26 @@ export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
+/** Common interface for pending approval entries that can be rejected */
+export interface RejectablePendingEntry {
+  streamId?: StreamTabId;
+  isSettled: () => boolean;
+  settle: (result: { accepted: false }) => void;
+}
+
+/** Reject all pending entries in a map, optionally filtered by streamId */
+export function rejectPendingEntries<T extends RejectablePendingEntry>(
+  entries: Iterable<T>,
+  streamId?: StreamTabId,
+): void {
+  for (const entry of entries) {
+    const matches = streamId === undefined || entry.streamId === streamId;
+    if (matches && !entry.isSettled()) {
+      entry.settle({ accepted: false });
+    }
+  }
+}
+
 // Approval queue state (pendingApprovals self-cleans via finally block)
 let queue: Promise<void> = Promise.resolve();
 let approvalCounter = 0;
@@ -113,20 +133,12 @@ export async function handleProgressViewBashApprovalAction(payload: {
 
 /** @internal Called by unified cleanup in toolEditApproval.ts */
 export function _rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
-  for (const entry of pendingApprovals.values()) {
-    if (entry.streamId === streamId && !entry.isSettled()) {
-      entry.settle({ accepted: false });
-    }
-  }
+  rejectPendingEntries(pendingApprovals.values(), streamId);
 }
 
 /** @internal Called by unified cleanup in toolEditApproval.ts */
 export function _rejectAllPendingBashApprovals(): void {
-  for (const entry of pendingApprovals.values()) {
-    if (!entry.isSettled()) {
-      entry.settle({ accepted: false });
-    }
-  }
+  rejectPendingEntries(pendingApprovals.values());
 }
 
 export function buildBashApprovalRejectedResult(
