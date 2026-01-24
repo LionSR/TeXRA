@@ -201,6 +201,18 @@ const options: Options = { ... };
 - Create class instances or complex objects
 - Need to capture closures with initialization context
 
+### Render-Time Workarounds (Anti-pattern)
+
+Never compensate for data model problems at render time. Renderers should only transform and display.
+
+**Signs of broken data model:**
+
+- `Date.now()` or synthetic IDs generated during rendering
+- DOM queries to check if data exists before rendering
+- Deduplication logic comparing rendered content
+
+**Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
+
 ### Path Aliases
 
 Common aliases (full list in `tsconfig.json`):
