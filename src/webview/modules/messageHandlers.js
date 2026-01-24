@@ -370,8 +370,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _createStateHandlers() {
     return {
       [MAIN_VIEW_COMMANDS.STATE_RESTORE]: this.handleRestoreState.bind(this),
-      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]:
-        this.handleCheckRestoredBaseFile.bind(this),
     };
   }
 
@@ -1085,14 +1083,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       // Show error to user via status or notification
       this._showError?.('Failed to restore state. Please try again.');
     }
-  }
-
-  handleCheckRestoredBaseFile() {
-    const restoredBaseFileDiv = this._getElement(BASE_FILE);
-    if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
-      fileSelect.updateEdited(restoredBaseFileDiv.value);
-    }
-    this._postHandle();
   }
 
   // Instruction updates
