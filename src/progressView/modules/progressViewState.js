@@ -418,6 +418,13 @@ export class ProgressViewState {
     });
   }
 
+  getPendingInstruction(streamId) {
+    if (streamId == null) {
+      return null;
+    }
+    return this.pendingInstructions.get(streamId) ?? null;
+  }
+
   takePendingInstruction(streamId) {
     if (streamId == null) {
       return null;
