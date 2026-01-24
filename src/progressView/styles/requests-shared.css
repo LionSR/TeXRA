@@ -3,6 +3,7 @@
  */
 
 .approval-requests,
+.bash-approval-requests,
 .retry-requests,
 .workflow-proposals {
   margin: var(--spacing-large) 0;
@@ -15,12 +16,14 @@
 }
 
 .approval-requests.is-visible,
+.bash-approval-requests.is-visible,
 .retry-requests.is-visible,
 .workflow-proposals.is-visible {
   display: flex;
 }
 
 .approval-requests__header,
+.bash-approval-requests__header,
 .retry-requests__header,
 .workflow-proposals__header {
   display: flex;
@@ -31,6 +34,7 @@
 }
 
 .approval-requests__list,
+.bash-approval-requests__list,
 .retry-requests__list,
 .workflow-proposals__list {
   display: flex;
@@ -39,6 +43,7 @@
 }
 
 .approval-request,
+.bash-approval-request,
 .retry-request,
 .workflow-proposal {
   display: flex;
@@ -51,6 +56,7 @@
 }
 
 .approval-request__details,
+.bash-approval-request__details,
 .retry-request__details,
 .workflow-proposal__details {
   display: flex;
@@ -69,6 +75,7 @@
 }
 
 .approval-request__actions,
+.bash-approval-request__actions,
 .retry-request__actions,
 .workflow-proposal__actions {
   display: flex;
@@ -77,6 +84,7 @@
 }
 
 .approval-request__actions::part(container),
+.bash-approval-request__actions::part(container),
 .retry-request__actions::part(container),
 .workflow-proposal__actions::part(container) {
   display: flex;
@@ -85,12 +93,14 @@
 }
 
 .approval-request__actions vscode-toolbar-button,
+.bash-approval-request__actions vscode-toolbar-button,
 .retry-request__actions vscode-toolbar-button,
 .workflow-proposal__actions vscode-toolbar-button {
   min-width: auto;
 }
 
 .approval-request__actions vscode-toolbar-button::part(control),
+.bash-approval-request__actions vscode-toolbar-button::part(control),
 .retry-request__actions vscode-toolbar-button::part(control),
 .workflow-proposal__actions vscode-toolbar-button::part(control) {
   justify-content: flex-start;
