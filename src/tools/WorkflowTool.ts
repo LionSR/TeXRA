@@ -70,12 +70,14 @@ function getRequiredStreamId(): string {
   return streamId;
 }
 
-/** Validate that proposed model is in the visible models list, throw if not. */
+/** Validate that proposed model is in the visible models list, throw if not.
+ * Consistent with filterVisible for agents: if no models configured, allow any model.
+ */
 function validateModel(model: string): void {
   const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0) {
-    throw new Error('No models configured. Please add models in settings.');
-  }
+  // If no models configured, allow any model (consistent with agent filterVisible behavior)
+  if (visibleModels.length === 0) return;
+
   if (!visibleModels.includes(model)) {
     throw new Error(
       `Model '${model}' is not in the visible models list. Available: ${visibleModels.join(', ')}`,
