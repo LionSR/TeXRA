@@ -17,7 +17,6 @@ export const MAIN_VIEW_COMMANDS = {
   // File operations
   FILE_SELECT: 'selectFile',
   FILE_SELECTED: 'fileSelected',
-  FILES_UPDATE: 'updateFiles',
 
   // Execution
   EXECUTE: 'execute',
@@ -98,7 +97,6 @@ export const MAIN_VIEW_COMMANDS = {
   DISMISS_LOGIN_BANNER: 'dismissLoginBanner',
 
   // Extension response events
-  CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
   INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',
   INSTRUCTION_TEXT_POLISH_ERROR: 'instructionTextPolishError',
   INSTRUCTION_TEXT_TRANSCRIBED: 'instructionTextTranscribed',
@@ -160,7 +158,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Stream management
   SWITCH_STREAM: 'switchStream',
   DELETE_STREAM: 'deleteStream',
-  ERASE_STREAM: 'eraseStream',
   CLEAN_STREAM: 'cleanStream',
   STOP_STREAM: 'stopStream',
   UPDATE_STREAMS: 'updateStreams',
@@ -168,7 +165,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Logging
   UPDATE_LOGS: 'updateLogs',
-  CLEAR_LOGS: 'clearLogs',
   APPEND_LOG: 'appendLog',
   UPDATE_LOG: 'updateLog',
 
