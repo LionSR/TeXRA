@@ -417,6 +417,50 @@ export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 ```
 
+### Supporting Schemas (used by Workflow/Conversation)
+
+```typescript
+// src/shared/schemas/files.ts
+import { z } from 'zod';
+
+export const FileLocationSchema = z.object({
+  absolutePath: z.string(),
+  relativePath: z.string(),
+});
+
+export const OutputFileSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  location: FileLocationSchema,
+  round: z.int().optional(),  // Zod v4: z.int() for integers
+  status: z.enum(['pending', 'created', 'modified', 'error']).prefault('pending'),
+});
+
+export type OutputFile = z.infer<typeof OutputFileSchema>;
+```
+
+```typescript
+// src/shared/schemas/usage.ts
+import { z } from 'zod';
+
+export const TokenUsageSchema = z.object({
+  inputTokens: z.int(),
+  outputTokens: z.int(),
+  cacheReadTokens: z.int().prefault(0),
+  cacheWriteTokens: z.int().prefault(0),
+  totalCost: z.number().optional(),
+});
+
+export const ContextStateSchema = z.object({
+  usedTokens: z.int(),
+  maxTokens: z.int(),
+  percentUsed: z.number(),
+});
+
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+export type ContextState = z.infer<typeof ContextStateSchema>;
+```
+
 ### Workflow Schema (replaces TaskGroup for workflow agents)
 
 ```typescript
@@ -470,6 +514,94 @@ export const ConversationTurnSchema = z.object({
 
 export type ConversationTurn = z.infer<typeof ConversationTurnSchema>;
 export type ToolCall = z.infer<typeof ToolCallSchema>;
+```
+
+### Aggregate Schemas (for IPC payloads)
+
+```typescript
+// src/shared/schemas/aggregates.ts
+import { z } from 'zod';
+
+// Per-stream workflow data (used in sync messages)
+export const WorkflowStreamDataSchema = z.object({
+  activeRunId: z.string().nullable(),
+  runs: z.array(WorkflowRunSchema),
+  todos: z.array(TodoItemSchema).prefault([]),
+});
+
+// Per-stream conversation data (used in sync messages)
+export const ConversationStreamDataSchema = z.object({
+  turns: z.array(ConversationTurnSchema),
+  executionId: z.string().nullable(),
+  todos: z.array(TodoItemSchema).prefault([]),
+});
+
+// Todo items (shared by both agent types)
+export const TodoItemSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  status: z.enum(['pending', 'in_progress', 'completed']),
+});
+
+export type WorkflowStreamData = z.infer<typeof WorkflowStreamDataSchema>;
+export type ConversationStreamData = z.infer<typeof ConversationStreamDataSchema>;
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+```
+
+### UI Prompt Schemas (for modal dialogs)
+
+```typescript
+// src/shared/schemas/prompts.ts
+import { z } from 'zod';
+
+// Retry prompt (shown on API errors)
+export const RetryPromptSchema = z.object({
+  kind: z.literal('retry'),
+  streamId: z.string(),
+  errorMessage: z.string(),
+  attemptCount: z.int(),
+  availableModels: z.array(z.string()).prefault([]),
+});
+
+// Approval prompt (for tool edits requiring confirmation)
+export const ApprovalPromptSchema = z.object({
+  kind: z.literal('approval'),
+  requestId: z.string(),
+  toolName: z.string(),
+  filePath: z.string(),
+  diff: z.string().optional(),
+  description: z.string(),
+});
+
+// Proposal prompt (for workflow/agent suggestions)
+export const ProposalPromptSchema = z.discriminatedUnion('agentCategory', [
+  z.object({
+    agentCategory: z.literal('workflow'),
+    proposalId: z.string(),
+    title: z.string(),
+    description: z.string(),
+    inputFiles: z.array(z.string()),
+    referenceFiles: z.array(z.string()),
+  }),
+  z.object({
+    agentCategory: z.literal('toolUse'),
+    proposalId: z.string(),
+    title: z.string(),
+    description: z.string(),
+    // No file fields for toolUse
+  }),
+]);
+
+export const PromptSchema = z.discriminatedUnion('kind', [
+  RetryPromptSchema,
+  ApprovalPromptSchema,
+  ProposalPromptSchema,
+]);
+
+export type RetryPrompt = z.infer<typeof RetryPromptSchema>;
+export type ApprovalPrompt = z.infer<typeof ApprovalPromptSchema>;
+export type ProposalPrompt = z.infer<typeof ProposalPromptSchema>;
+export type Prompt = z.infer<typeof PromptSchema>;
 ```
 
 ---
@@ -557,11 +689,7 @@ export const ToWebviewSchema = z.discriminatedUnion('type', [
 
   z.object({
     type: z.literal('ui/prompt'),
-    prompt: z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('retry'), streamId: z.string(), ...RetryFields }),
-      z.object({ kind: z.literal('approval'), requestId: z.string(), ...ApprovalFields }),
-      z.object({ kind: z.literal('proposal'), proposalId: z.string(), ...ProposalFields }),
-    ]),
+    prompt: PromptSchema,  // See UI Prompt Schemas section above
   }),
 
   z.object({
@@ -645,24 +773,28 @@ export type FromWebview = z.infer<typeof FromWebviewSchema>;
 
 ## EventBus → IPC Mapping
 
-The EventBus remains unchanged. WebviewUpdater translates EventBus payloads to IPC messages:
+The EventBus remains unchanged. WebviewUpdater batches/translates EventBus payloads to IPC messages.
+
+**Key insight**: Most fine-grained EventBus events become embedded in coarse-grained IPC messages. The webview doesn't need separate messages for files, usage, todos—they're part of the stream data.
 
 | EventBus Event | IPC Message | Notes |
 |----------------|-------------|-------|
-| `setActiveStream` | `stream/list` | Full stream list refresh |
-| `updateStreamStatus` | `stream/status` | Single stream update |
-| `addTaskGroup` | `workflow/run-added` or `conversation/turn-added` | Based on agentCategory |
-| `updateTaskGroup` | `workflow/task-updated` or `conversation/tool-updated` | Based on agentCategory |
-| `addLogMessage` | Embedded in turn/task | Logs become part of data model |
-| `addOutputFiles` | `files/updated` | |
-| `updateMissingOutputs` | `files/missing` | |
-| `updateStreamUsage` | `usage/updated` | |
-| `updateContextState` | `context/updated` | |
-| `updateTodos` | `todos/updated` | |
-| `showRetryRequest` | `ui/retry-request` | |
-| `resolveRetryRequest` | `ui/retry-resolved` | |
-| `showToolEditApprovalPrompt` | `ui/approval-request` | |
-| `showAgentProposal` | `ui/proposal` | |
+| `setActiveStream` | `sync/full` | Full state sync on stream switch |
+| `updateStreamStatus` | `stream/status` | Single stream status change |
+| `addTaskGroup` | `workflow/task-append` or `conversation/turn-append` | Based on agentCategory |
+| `updateTaskGroup` | `workflow/task-update` or `conversation/turn-update` | Based on agentCategory |
+| `addLogMessage` | Embedded in task/turn | Logs become `content` field in task/turn |
+| `addOutputFiles` | `sync/stream` | Files embedded in `WorkflowStreamData.runs[].outputs` |
+| `updateMissingOutputs` | `sync/stream` | Missing files embedded in run data |
+| `updateStreamUsage` | `sync/stream` | Usage embedded in `WorkflowStreamData.runs[].usage` |
+| `updateContextState` | `sync/stream` | Context embedded in stream data |
+| `updateTodos` | `sync/stream` | Todos embedded in `workflowData.todos` or `conversationData.todos` |
+| `showRetryRequest` | `ui/prompt` (kind: retry) | |
+| `resolveRetryRequest` | `ui/prompt-resolved` | |
+| `showToolEditApprovalPrompt` | `ui/prompt` (kind: approval) | |
+| `showAgentProposal` | `ui/prompt` (kind: proposal) | |
+
+**Batching strategy**: WebviewUpdater debounces rapid EventBus events (e.g., during streaming) and sends a single `sync/stream` with all accumulated changes. This reduces message overhead without losing data.
 
 ---
 
@@ -816,8 +948,22 @@ interface State {
   streams: Map<string, Stream>;
   workflowData: Map<string, { activeRunId: string | null; runs: WorkflowRun[] }>;
   conversationData: Map<string, { turns: ConversationTurn[] }>;
-  activePrompt: ToWebview['prompt'] | null;  // Current modal, if any
+  activePrompt: Prompt | null;
 }
+
+// Pending updates for entities that don't exist yet (out-of-order messages)
+type PendingUpdate = {
+  type: 'workflow/task-update';
+  streamId: string;
+  runId: string;
+  taskId: string;
+  updates: Partial<WorkflowTask>;
+} | {
+  type: 'conversation/turn-update';
+  streamId: string;
+  turnId: string;
+  updates: Partial<ConversationTurn>;
+};
 
 class ProgressStore {
   private state: State = {
@@ -827,6 +973,9 @@ class ProgressStore {
     conversationData: new Map(),
     activePrompt: null,
   };
+
+  // Queue updates for entities that arrive before their append message
+  private pendingUpdates: PendingUpdate[] = [];
 
   private listeners = new Set<() => void>();
   private vscode = acquireVsCodeApi();
@@ -857,18 +1006,26 @@ class ProgressStore {
 
       case 'workflow/task-append':
         this.appendWorkflowTask(msg.streamId, msg.runId, msg.task);
+        this.applyPendingUpdates('workflow', msg.task.id);  // Apply queued updates
         break;
 
       case 'conversation/turn-append':
         this.appendConversationTurn(msg.streamId, msg.turn);
+        this.applyPendingUpdates('conversation', msg.turn.id);  // Apply queued updates
         break;
 
       case 'workflow/task-update':
-        this.updateWorkflowTask(msg.streamId, msg.runId, msg.taskId, msg.updates);
+        if (!this.updateWorkflowTask(msg.streamId, msg.runId, msg.taskId, msg.updates)) {
+          // Entity doesn't exist yet - queue for later
+          this.pendingUpdates.push(msg);
+        }
         break;
 
       case 'conversation/turn-update':
-        this.updateConversationTurn(msg.streamId, msg.turnId, msg.updates);
+        if (!this.updateConversationTurn(msg.streamId, msg.turnId, msg.updates)) {
+          // Entity doesn't exist yet - queue for later
+          this.pendingUpdates.push(msg);
+        }
         break;
 
       case 'stream/status':
@@ -892,6 +1049,57 @@ class ProgressStore {
 
   send(message: FromWebview) {
     this.vscode.postMessage(message);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Out-of-order message handling
+  // ─────────────────────────────────────────────────────────
+
+  /** Apply queued updates when an entity is finally appended */
+  private applyPendingUpdates(type: 'workflow' | 'conversation', entityId: string) {
+    const toApply = this.pendingUpdates.filter(u => {
+      if (type === 'workflow' && u.type === 'workflow/task-update') {
+        return u.taskId === entityId;
+      }
+      if (type === 'conversation' && u.type === 'conversation/turn-update') {
+        return u.turnId === entityId;
+      }
+      return false;
+    });
+
+    for (const update of toApply) {
+      if (update.type === 'workflow/task-update') {
+        this.updateWorkflowTask(update.streamId, update.runId, update.taskId, update.updates);
+      } else {
+        this.updateConversationTurn(update.streamId, update.turnId, update.updates);
+      }
+    }
+
+    // Remove applied updates from queue
+    this.pendingUpdates = this.pendingUpdates.filter(u => !toApply.includes(u));
+  }
+
+  /** Returns false if entity doesn't exist (caller should queue) */
+  private updateWorkflowTask(
+    streamId: string, runId: string, taskId: string, updates: Partial<WorkflowTask>
+  ): boolean {
+    const data = this.state.workflowData.get(streamId);
+    const run = data?.runs.find(r => r.id === runId);
+    const task = run?.tasks.find(t => t.id === taskId);
+    if (!task) return false;
+    Object.assign(task, updates);
+    return true;
+  }
+
+  /** Returns false if entity doesn't exist (caller should queue) */
+  private updateConversationTurn(
+    streamId: string, turnId: string, updates: Partial<ConversationTurn>
+  ): boolean {
+    const data = this.state.conversationData.get(streamId);
+    const turn = data?.turns.find(t => t.id === turnId);
+    if (!turn) return false;
+    Object.assign(turn, updates);
+    return true;
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1229,12 +1437,51 @@ render() {
 
 ## Build Configuration
 
+### TypeScript Configuration
+
+Lit decorators require these `tsconfig.json` settings:
+
+```jsonc
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,      // Required for @customElement, @property
+    "useDefineForClassFields": false,    // Required for Lit property initialization
+    // ... existing settings
+  }
+}
+```
+
+**Note**: If the project already uses decorators elsewhere, these may already be set. Verify before adding.
+
 ### Webpack Changes
+
+The `@shared` alias must work in **both** contexts (extension host and webview). The key is that webview code runs in a browser sandbox—no Node.js APIs.
 
 ```javascript
 // webpack.config.js
+const path = require('path');
+
+// Shared alias configuration
+const sharedAlias = {
+  '@shared': path.resolve(__dirname, 'src/shared'),
+};
+
+// Extension host (Node.js context)
+const extensionConfig = {
+  target: 'node',
+  entry: './src/extension.ts',
+  output: { path: path.resolve(__dirname, 'dist'), filename: 'extension.js' },
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: sharedAlias,  // Same alias
+  },
+  externals: { vscode: 'commonjs vscode' },
+  // ... other settings
+};
+
+// Webview (browser context - NO Node.js APIs)
 const webviewConfig = {
-  target: 'web',
+  target: 'web',  // Critical: browser target
   entry: {
     progressView: './src/progressView/frontend/index.ts',
   },
@@ -1244,9 +1491,7 @@ const webviewConfig = {
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-      '@shared': path.resolve(__dirname, 'src/shared'),
-    },
+    alias: sharedAlias,  // Same alias - shares schemas
   },
   module: {
     rules: [
@@ -1257,13 +1502,13 @@ const webviewConfig = {
       },
     ],
   },
-  externals: {
-    // Don't bundle vscode-elements, load from CDN
-  },
+  // IMPORTANT: Don't externalize anything - bundle everything for browser
 };
 
 module.exports = [extensionConfig, webviewConfig];
 ```
+
+**Sandbox constraints**: The `src/shared/` schemas must not import any Node.js modules (fs, path, etc.). Zod is browser-compatible. If a schema needs Node.js APIs, it belongs in `src/` not `src/shared/`.
 
 ### Dependencies
 
