@@ -355,32 +355,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const triggerTokens = Math.floor((thresholdPercent / 100) * contextWindow);
 
-    // Thinking clearing is opt-in because the API requires it to be listed
-    // first in edits, which means it runs before tool use clearing and
-    // reduces tokens before the tool use trigger is checked. This can
-    // prevent tool use clearing from triggering in many scenarios.
-    // The API's default behavior (keep last 1 thinking turn) still applies
-    // even without explicit thinking clearing config.
+    // When context management is enabled with thinking, the API's default behavior
+    // clears thinking to keep only the last 1 turn. We must explicitly configure
+    // thinking clearing to control this behavior.
     const enableThinkingClearing = getConfig<boolean>(
       'texra.model.enableThinkingClearing',
       false,
     );
 
     if (
-      enableThinkingClearing &&
       supportsReasoning &&
       options.thinking &&
       !contextManagementEdits.some(
         (edit) => edit.type === 'clear_thinking_20251015',
       )
     ) {
-      // Thinking clearing must come first in the edits array per API requirement
+      // Thinking clearing must come first in the edits array per API requirement.
+      // When disabled (default): preserve all thinking blocks to prevent early clearing.
+      // When enabled: keep last N turns to manage context growth.
       contextManagementEdits.unshift({
         type: 'clear_thinking_20251015' as const,
-        keep: {
-          type: 'thinking_turns' as const,
-          value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-        },
+        keep: enableThinkingClearing
+          ? {
+              type: 'thinking_turns' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+            }
+          : ('all' as const),
       });
     }
 
