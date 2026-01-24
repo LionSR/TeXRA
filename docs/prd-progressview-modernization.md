@@ -34,14 +34,14 @@ This document outlines the modernization of TeXRA's ProgressView component, tran
 
 1. **End-to-end type safety** via shared Zod schemas
 2. **Simplified state management** by separating Workflow and Conversation concerns
-3. **Improved performance** with virtual scrolling and Lit's efficient rendering
-4. **Maintainable architecture** with component-based design
+3. **Maintainable architecture** with component-based design
 
 ## Non-Goals
 
 - Changing the EventBus architecture (it works well)
 - Modifying agent execution logic
 - Adding new features (pure refactor)
+- Virtual scrolling (future optimization, not blocking)
 
 ---
 
@@ -249,61 +249,39 @@ export async function loadPersistedState(): Promise<ProgressState> {
 }
 ```
 
-### Persistence Format Version
+### Migration Strategy: Keep It Simple
 
-Add a version marker to detect format changes:
+**Don't over-engineer persistence migration.** This is ephemeral UI state, not a database.
 
 ```typescript
-// src/shared/schemas/persistence/version.ts
-export const PERSISTENCE_VERSION = 2;  // Increment on breaking changes
-
-export const PersistedRootSchema = z.object({
-  version: z.number(),
-  data: z.unknown(),  // Actual data varies by version
-});
-
-// At save time
-function saveState(state: ProgressState) {
-  workspaceSM.update('texra.progressState', {
-    version: PERSISTENCE_VERSION,
-    data: serializeState(state),
-  });
-}
-
-// At load time
+// At load time - try new format, fall back to legacy, or start fresh
 function loadState(): ProgressState {
-  const raw = workspaceSM.get('texra.progressState');
-
-  if (!raw) {
-    // No saved state, try legacy keys
-    return loadLegacyState();
+  // Try new consolidated format first
+  const newFormat = workspaceSM.get('texra.progressState');
+  if (newFormat) {
+    const result = ProgressStateSchema.safeParse(newFormat);
+    if (result.success) return result.data;
   }
 
-  const parsed = PersistedRootSchema.safeParse(raw);
-  if (!parsed.success) {
-    return loadLegacyState();
+  // Try legacy format (one-time migration)
+  const legacyStreams = workspaceSM.get(WorkspaceStateKey.STREAM_TABS);
+  if (legacyStreams) {
+    const migrated = migrateLegacyState();
+    // Clear old keys after successful migration
+    clearLegacyKeys();
+    return migrated;
   }
 
-  switch (parsed.data.version) {
-    case 2:
-      return parseV2State(parsed.data.data);
-    case 1:
-      return migrateV1ToV2(parsed.data.data);
-    default:
-      console.warn(`Unknown version ${parsed.data.version}, starting fresh`);
-      return createEmptyState();
-  }
+  // Start fresh
+  return createEmptyState();
 }
 ```
 
-### Migration Principles
-
-1. **New format first in union** - Zod tries in order, so canonical format is checked first
-2. **Legacy transforms to canonical** - All legacy formats normalize to one structure
-3. **Parse at entry point only** - `loadPersistedState()` handles all migration
-4. **No conditional handling downstream** - Rest of codebase only sees canonical format
-5. **Version marker** - Enables future migrations without guessing format
-6. **Graceful degradation** - On parse failure, log warning and start fresh
+**Principles:**
+1. **New format first** - Check consolidated key
+2. **One-time legacy migration** - Convert old keys once, then delete them
+3. **Fail fast** - If parse fails, start fresh (users don't care about progress history)
+4. **No version numbers** - If format changes again, just clear and start fresh
 
 ### Consolidated Storage Keys
 
@@ -385,11 +363,9 @@ src/
 │       │   ├── StreamTabs.ts        # Stream tab bar
 │       │   ├── WorkflowView.ts      # Workflow agent UI
 │       │   ├── ConversationView.ts  # ToolUse agent UI
-│       │   └── shared/
-│       │       ├── VirtualList.ts   # Virtual scrolling
-│       │       ├── LogEntry.ts      # Log message component
-│       │       ├── FileList.ts      # Output files
-│       │       └── StatusBar.ts     # Status indicator
+│       │   ├── FileList.ts          # Output files
+│       │   ├── UsageDisplay.ts      # Token usage
+│       │   └── PromptOverlay.ts     # Modal dialogs
 │       ├── state/
 │       │   └── store.ts             # Single state store
 │       ├── ipc/
@@ -496,145 +472,89 @@ export type ToolCall = z.infer<typeof ToolCallSchema>;
 
 ## IPC Protocol
 
+**Design principle: Prefer fewer, coarser messages over many fine-grained ones.**
+
+This isn't a distributed system. The webview lives in the same process. Don't over-engineer.
+
 ### Extension → Webview Messages
 
 ```typescript
 // src/shared/ipc/toWebview.ts
 import { z } from 'zod';
-import { StreamSchema, WorkflowRunSchema, ConversationTurnSchema } from '../schemas';
 
 export const ToWebviewSchema = z.discriminatedUnion('type', [
-  // Stream Management
+  // ─────────────────────────────────────────────────────────
+  // SYNC MESSAGES (coarse-grained state updates)
+  // ─────────────────────────────────────────────────────────
+
+  // Full state sync (on connect, stream switch)
   z.object({
-    type: z.literal('stream/list'),
+    type: z.literal('sync/full'),
     streams: z.array(StreamSchema),
     activeStreamId: z.string().nullable(),
-  }),
-  z.object({
-    type: z.literal('stream/status'),
-    streamId: z.string(),
-    status: StreamStatusSchema,
-  }),
-  z.object({
-    type: z.literal('stream/deleted'),
-    streamId: z.string(),
+    workflowData: z.record(z.string(), WorkflowStreamDataSchema).optional(),
+    conversationData: z.record(z.string(), ConversationStreamDataSchema).optional(),
   }),
 
-  // Workflow Agent Messages
+  // Incremental sync for active stream
   z.object({
-    type: z.literal('workflow/run-added'),
+    type: z.literal('sync/stream'),
     streamId: z.string(),
-    run: WorkflowRunSchema,
-  }),
-  z.object({
-    type: z.literal('workflow/run-updated'),
-    streamId: z.string(),
-    runId: z.string(),
-    updates: WorkflowRunSchema.partial(),
-  }),
-  z.object({
-    type: z.literal('workflow/task-updated'),
-    streamId: z.string(),
-    runId: z.string(),
-    taskId: z.string(),
-    updates: WorkflowTaskSchema.partial(),
+    stream: StreamSchema.partial(),  // Only changed fields
+    workflowData: WorkflowStreamDataSchema.optional(),
+    conversationData: ConversationStreamDataSchema.optional(),
   }),
 
-  // Conversation Agent Messages
+  // ─────────────────────────────────────────────────────────
+  // APPEND MESSAGES (for real-time updates during execution)
+  // ─────────────────────────────────────────────────────────
+
   z.object({
-    type: z.literal('conversation/turn-added'),
+    type: z.literal('workflow/task-append'),
+    streamId: z.string(),
+    runId: z.string(),
+    task: WorkflowTaskSchema,
+  }),
+
+  z.object({
+    type: z.literal('conversation/turn-append'),
     streamId: z.string(),
     turn: ConversationTurnSchema,
   }),
+
+  // ─────────────────────────────────────────────────────────
+  // UI PROMPTS (require user interaction)
+  // ─────────────────────────────────────────────────────────
+
   z.object({
-    type: z.literal('conversation/turn-updated'),
-    streamId: z.string(),
-    turnId: z.string(),
-    updates: ConversationTurnSchema.partial(),
-  }),
-  z.object({
-    type: z.literal('conversation/tool-updated'),
-    streamId: z.string(),
-    turnId: z.string(),
-    toolId: z.string(),
-    updates: ToolCallSchema.partial(),
+    type: z.literal('ui/prompt'),
+    prompt: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('retry'), streamId: z.string(), ...RetryFields }),
+      z.object({ kind: z.literal('approval'), requestId: z.string(), ...ApprovalFields }),
+      z.object({ kind: z.literal('proposal'), proposalId: z.string(), ...ProposalFields }),
+    ]),
   }),
 
-  // Files
   z.object({
-    type: z.literal('files/updated'),
-    streamId: z.string(),
-    runId: z.string().optional(),  // Only for workflow
-    files: z.array(OutputFileSchema),
-  }),
-  z.object({
-    type: z.literal('files/missing'),
-    streamId: z.string(),
-    runId: z.string().optional(),
-    missing: z.array(z.string()),
+    type: z.literal('ui/prompt-resolved'),
+    promptId: z.string(),
   }),
 
-  // Usage
-  z.object({
-    type: z.literal('usage/updated'),
-    streamId: z.string(),
-    runId: z.string().optional(),
-    usage: TokenUsageSchema,
-  }),
-  z.object({
-    type: z.literal('context/updated'),
-    streamId: z.string(),
-    context: ContextStateSchema,
-  }),
+  // ─────────────────────────────────────────────────────────
+  // SETTINGS
+  // ─────────────────────────────────────────────────────────
 
-  // Todos
   z.object({
-    type: z.literal('todos/updated'),
-    streamId: z.string(),
-    todos: z.array(TodoItemSchema),
-  }),
-
-  // UI Prompts
-  z.object({
-    type: z.literal('ui/retry-request'),
-    streamId: z.string(),
-    prompt: RetryRequestSchema,
-  }),
-  z.object({
-    type: z.literal('ui/retry-resolved'),
-    streamId: z.string(),
-  }),
-  z.object({
-    type: z.literal('ui/approval-request'),
-    request: ApprovalRequestSchema,
-  }),
-  z.object({
-    type: z.literal('ui/approval-resolved'),
-    requestId: z.string(),
-  }),
-  z.object({
-    type: z.literal('ui/proposal'),
-    proposal: AgentProposalSchema,
-  }),
-  z.object({
-    type: z.literal('ui/proposal-resolved'),
-    proposalId: z.string(),
-  }),
-
-  // Settings
-  z.object({
-    type: z.literal('settings/theme'),
-    theme: z.enum(['light', 'dark', 'high-contrast']),
-  }),
-  z.object({
-    type: z.literal('settings/bypass-approval'),
-    streamId: z.string(),
-    enabled: z.boolean(),
+    type: z.literal('settings/update'),
+    theme: z.enum(['light', 'dark', 'high-contrast']).optional(),
+    bypassApproval: z.boolean().optional(),
   }),
 ]);
 
 export type ToWebview = z.infer<typeof ToWebviewSchema>;
 ```
+
+**Message count: 6** (down from 20+)
 
 ### Webview → Extension Messages
 
@@ -646,84 +566,51 @@ export const FromWebviewSchema = z.discriminatedUnion('type', [
   // Lifecycle
   z.object({ type: z.literal('ready') }),
 
-  // Stream Actions
+  // Stream actions
   z.object({
-    type: z.literal('stream/switch'),
-    streamId: z.string(),
-  }),
-  z.object({
-    type: z.literal('stream/stop'),
-    streamId: z.string(),
-  }),
-  z.object({
-    type: z.literal('stream/delete'),
-    streamId: z.string(),
-  }),
-  z.object({
-    type: z.literal('stream/delete-all'),
+    type: z.literal('stream/action'),
+    action: z.enum(['switch', 'stop', 'delete', 'delete-all']),
+    streamId: z.string().optional(),
   }),
 
-  // Workflow Actions
+  // Agent actions
   z.object({
-    type: z.literal('workflow/run-selected'),
+    type: z.literal('agent/action'),
+    action: z.enum(['select-run', 'new-run', 'send-followup']),
     streamId: z.string(),
-    runId: z.string(),
-  }),
-  z.object({
-    type: z.literal('workflow/new-run'),
-    streamId: z.string(),
-    instruction: z.string(),
+    runId: z.string().optional(),
+    content: z.string().optional(),
   }),
 
-  // Conversation Actions
+  // File actions
   z.object({
-    type: z.literal('conversation/send-followup'),
-    streamId: z.string(),
-    content: z.string(),
-  }),
-
-  // File Actions
-  z.object({
-    type: z.literal('file/open'),
+    type: z.literal('file/action'),
+    action: z.enum(['open', 'compare', 'accept']),
     path: z.string(),
-  }),
-  z.object({
-    type: z.literal('file/compare'),
-    original: z.string(),
-    revised: z.string(),
-  }),
-  z.object({
-    type: z.literal('file/accept'),
-    path: z.string(),
+    comparePath: z.string().optional(),
   }),
 
-  // UI Responses
+  // UI responses
   z.object({
-    type: z.literal('retry/respond'),
-    streamId: z.string(),
-    action: z.enum(['retry', 'cancel', 'change-model']),
-    newModel: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal('approval/respond'),
-    requestId: z.string(),
-    approved: z.boolean(),
-  }),
-  z.object({
-    type: z.literal('proposal/respond'),
-    proposalId: z.string(),
-    accepted: z.boolean(),
+    type: z.literal('ui/respond'),
+    promptId: z.string(),
+    response: z.union([
+      z.object({ kind: z.literal('retry'), action: z.enum(['retry', 'cancel', 'change-model']), newModel: z.string().optional() }),
+      z.object({ kind: z.literal('approval'), approved: z.boolean() }),
+      z.object({ kind: z.literal('proposal'), accepted: z.boolean() }),
+    ]),
   }),
 
   // Settings
   z.object({
     type: z.literal('settings/toggle-bypass'),
-    streamId: z.string(),
   }),
 ]);
 
 export type FromWebview = z.infer<typeof FromWebviewSchema>;
 ```
+
+**Message count: 6** (down from 15+)
 
 ---
 
@@ -762,67 +649,113 @@ The EventBus remains unchanged. WebviewUpdater translates EventBus payloads to I
   ├── <workflow-view> (when agentCategory === 'workflow')
   │   ├── <run-selector>
   │   ├── <instruction-panel>
-  │   ├── <virtual-list>
+  │   ├── <task-list>
   │   │   └── <workflow-task> (multiple)
   │   ├── <file-list>
   │   └── <usage-display>
   │
-  └── <conversation-view> (when agentCategory === 'toolUse')
-      ├── <virtual-list>
-      │   └── <conversation-turn> (multiple)
-      │       └── <tool-call> (if present)
-      ├── <file-list>
-      ├── <followup-input>
-      └── <usage-display>
+  ├── <conversation-view> (when agentCategory === 'toolUse')
+  │   ├── <turn-list>
+  │   │   └── <conversation-turn> (multiple)
+  │   │       └── <tool-call> (if present)
+  │   ├── <file-list>
+  │   ├── <followup-input>
+  │   └── <usage-display>
+  │
+  └── <prompt-overlay> (modal for retry/approval/proposal)
 ```
+
+**Note**: Virtual scrolling deferred to future optimization. Initial implementation uses simple lists.
 
 ### State Store
 
 ```typescript
 // src/progressView/frontend/state/store.ts
-import { z } from 'zod';
+import { ToWebview, ToWebviewSchema, FromWebview } from '@shared/ipc';
+import type { Stream, WorkflowRun, ConversationTurn } from '@shared/schemas';
 
-const StoreSchema = z.object({
-  // Active state
-  activeStreamId: z.string().nullable(),
-
-  // Stream metadata
-  streams: z.map(z.string(), StreamSchema),
-
-  // Agent-specific data (separated, not overloaded)
-  workflowData: z.map(z.string(), z.object({
-    activeRunId: z.string().nullable(),
-    runs: z.array(WorkflowRunSchema),
-  })),
-  conversationData: z.map(z.string(), z.object({
-    turns: z.array(ConversationTurnSchema),
-  })),
-
-  // UI state
-  pendingApprovals: z.map(z.string(), ApprovalRequestSchema),
-  pendingRetries: z.map(z.string(), RetryRequestSchema),
-});
-
-type Store = z.infer<typeof StoreSchema>;
+interface State {
+  activeStreamId: string | null;
+  streams: Map<string, Stream>;
+  workflowData: Map<string, { activeRunId: string | null; runs: WorkflowRun[] }>;
+  conversationData: Map<string, { turns: ConversationTurn[] }>;
+  activePrompt: ToWebview['prompt'] | null;  // Current modal, if any
+}
 
 class ProgressStore {
-  private state: Store = { /* initial */ };
-  private listeners = new Set<() => void>();
+  private state: State = {
+    activeStreamId: null,
+    streams: new Map(),
+    workflowData: new Map(),
+    conversationData: new Map(),
+    activePrompt: null,
+  };
 
-  // Type-safe updates
-  dispatch(message: ToWebview) {
-    switch (message.type) {
-      case 'stream/list':
-        this.state.streams = new Map(message.streams.map(s => [s.id, s]));
-        this.state.activeStreamId = message.activeStreamId;
+  private listeners = new Set<() => void>();
+  private vscode = acquireVsCodeApi();
+
+  // ─────────────────────────────────────────────────────────
+  // Receive from extension
+  // ─────────────────────────────────────────────────────────
+
+  handleMessage(raw: unknown) {
+    const result = ToWebviewSchema.safeParse(raw);
+    if (!result.success) {
+      console.warn('Invalid message:', result.error);
+      return;
+    }
+
+    const msg = result.data;
+    switch (msg.type) {
+      case 'sync/full':
+        this.state.streams = new Map(msg.streams.map(s => [s.id, s]));
+        this.state.activeStreamId = msg.activeStreamId;
+        if (msg.workflowData) this.state.workflowData = new Map(Object.entries(msg.workflowData));
+        if (msg.conversationData) this.state.conversationData = new Map(Object.entries(msg.conversationData));
         break;
-      case 'workflow/run-added':
-        // ...
+
+      case 'sync/stream':
+        // Incremental update for single stream
         break;
-      // All cases handled with full type inference
+
+      case 'workflow/task-append':
+      case 'conversation/turn-append':
+        // Append to existing data
+        break;
+
+      case 'ui/prompt':
+        this.state.activePrompt = msg.prompt;
+        break;
+
+      case 'ui/prompt-resolved':
+        this.state.activePrompt = null;
+        break;
     }
     this.notify();
   }
+
+  // ─────────────────────────────────────────────────────────
+  // Send to extension
+  // ─────────────────────────────────────────────────────────
+
+  send(message: FromWebview) {
+    this.vscode.postMessage(message);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Accessors (components read from these)
+  // ─────────────────────────────────────────────────────────
+
+  get activeStream(): Stream | undefined {
+    return this.state.activeStreamId ? this.state.streams.get(this.state.activeStreamId) : undefined;
+  }
+
+  getWorkflowData(streamId: string) { return this.state.workflowData.get(streamId); }
+  getConversationData(streamId: string) { return this.state.conversationData.get(streamId); }
+
+  // ─────────────────────────────────────────────────────────
+  // Subscription
+  // ─────────────────────────────────────────────────────────
 
   subscribe(fn: () => void) {
     this.listeners.add(fn);
@@ -835,6 +768,10 @@ class ProgressStore {
 }
 
 export const store = new ProgressStore();
+
+// Wire up on load
+window.addEventListener('message', (e) => store.handleMessage(e.data));
+store.send({ type: 'ready' });
 ```
 
 ### Example Component
@@ -843,6 +780,7 @@ export const store = new ProgressStore();
 // src/progressView/frontend/components/WorkflowView.ts
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { store } from '../state/store.js';
 import type { WorkflowRun } from '@shared/schemas';
 
@@ -852,9 +790,12 @@ export class WorkflowView extends LitElement {
   @state() private activeRunId: string | null = null;
   @state() private runs: WorkflowRun[] = [];
 
+  private unsubscribe?: () => void;
+
   static styles = css`
     :host { display: flex; flex-direction: column; height: 100%; }
-    .run-content { flex: 1; overflow: hidden; }
+    .run-content { flex: 1; overflow-y: auto; }
+    .task-list { display: flex; flex-direction: column; gap: 8px; }
   `;
 
   connectedCallback() {
@@ -869,7 +810,7 @@ export class WorkflowView extends LitElement {
   }
 
   private updateFromStore() {
-    const data = store.state.workflowData.get(this.streamId);
+    const data = store.getWorkflowData(this.streamId);
     if (data) {
       this.activeRunId = data.activeRunId;
       this.runs = data.runs;
@@ -881,29 +822,36 @@ export class WorkflowView extends LitElement {
   }
 
   render() {
+    if (!this.activeRun) {
+      return html`<p>No run selected</p>`;
+    }
+
     return html`
       <run-selector
         .runs=${this.runs}
         .activeRunId=${this.activeRunId}
-        @change=${this.handleRunChange}
+        @run-selected=${this.handleRunChange}
       ></run-selector>
 
       <div class="run-content">
-        ${this.activeRun ? html`
-          <instruction-panel .instruction=${this.activeRun.instruction}></instruction-panel>
-          <virtual-list
-            .items=${this.activeRun.tasks}
-            .renderItem=${(task) => html`<workflow-task .task=${task}></workflow-task>`}
-          ></virtual-list>
-          <file-list .files=${this.activeRun.outputs}></file-list>
-          <usage-display .usage=${this.activeRun.usage}></usage-display>
-        ` : html`<p>No run selected</p>`}
+        <instruction-panel .text=${this.activeRun.instruction}></instruction-panel>
+
+        <div class="task-list">
+          ${repeat(
+            this.activeRun.tasks,
+            (task) => task.id,
+            (task) => html`<workflow-task .task=${task}></workflow-task>`
+          )}
+        </div>
+
+        <file-list .files=${this.activeRun.outputs}></file-list>
+        <usage-display .usage=${this.activeRun.usage}></usage-display>
       </div>
     `;
   }
 
   private handleRunChange(e: CustomEvent<string>) {
-    sendToExtension({ type: 'workflow/run-selected', streamId: this.streamId, runId: e.detail });
+    store.send({ type: 'agent/action', action: 'select-run', streamId: this.streamId, runId: e.detail });
   }
 }
 ```
@@ -964,60 +912,81 @@ Note: `zod` is already a dependency. `@vscode-elements/elements` is already a de
 
 ## Migration Plan
 
-### Phase 1: Shared Schemas & IPC Protocol (Week 1)
+**No phases. Ship incrementally.**
 
-1. Create `src/shared/schemas/` with all Zod schemas
-2. Create `src/shared/ipc/` with ToWebview and FromWebview schemas
-3. Update `WebviewUpdater.ts` to use IPC types (backward compatible)
-4. Delete `commands.js` (keep `commands.ts` temporarily for gradual migration)
+### Step 1: Foundation (1-2 days)
 
-**Deliverable**: Type-safe message sending from extension, no frontend changes yet.
+```bash
+# Create shared schemas
+src/shared/schemas/stream.ts
+src/shared/schemas/workflow.ts
+src/shared/schemas/conversation.ts
+src/shared/ipc/index.ts
 
-### Phase 2: Webpack Webview Bundling (Week 1)
+# Add webpack entry for webview
+webpack.config.js  # Add webviewConfig
 
-1. Add webview entry to `webpack.config.js`
-2. Create `src/progressView/frontend/index.ts` entry point
-3. Create basic `ProgressApp.ts` Lit component
-4. Update `index.html` to load bundled JS instead of import maps
+# Delete duplicates
+rm src/common/webview/commands.js
+rm src/common/constants/streamStatus.js
+```
 
-**Deliverable**: Webview loads Lit app, displays placeholder.
+**Test**: Extension still works, schemas compile.
 
-### Phase 3: Core Components (Week 2)
+### Step 2: Lit Shell (1 day)
 
-1. Implement `store.ts` with Zod-validated state
-2. Implement `StreamTabs.ts` component
-3. Implement `VirtualList.ts` for performance
-4. Implement message handler with `ToWebviewSchema.safeParse()`
+```bash
+# Minimal Lit app that renders existing content
+src/progressView/frontend/index.ts
+src/progressView/frontend/components/ProgressApp.ts
 
-**Deliverable**: Stream tabs work, virtual scrolling foundation.
+# Update HTML to load bundle
+src/progressView/index.html  # Replace import maps with bundle
+```
 
-### Phase 4: Workflow & Conversation Views (Week 2-3)
+**Test**: Webview loads, shows "Hello World".
 
-1. Implement `WorkflowView.ts` with run selector
-2. Implement `ConversationView.ts` with append-only turns
-3. Migrate log rendering to components
-4. Implement file list, usage display
+### Step 3: Wire Up Messages (1-2 days)
 
-**Deliverable**: Both agent types render correctly.
+```bash
+# Message handler using new IPC schema
+src/progressView/frontend/ipc/handler.ts
+src/progressView/frontend/state/store.ts
 
-### Phase 5: UI Prompts & Polish (Week 3)
+# Update backend to send new format
+src/progressView/managers/WebviewUpdater.ts
+```
 
-1. Implement approval request component
-2. Implement retry request component
-3. Implement proposal component
-4. Add keyboard navigation, accessibility
+**Test**: Messages flow, store updates, console.log shows data.
 
-**Deliverable**: Full feature parity.
+### Step 4: Components (3-5 days)
 
-### Phase 6: Cleanup (Week 4)
+Build components one at a time. Each one should work before moving to the next:
 
-1. Delete all `src/progressView/modules/*.js` files
-2. Delete `commands.ts` (now fully replaced by IPC)
-3. Delete duplicate `.js` files (`streamStatus.js`, etc.)
-4. Remove import maps from `index.html`
-5. Update documentation
+1. `StreamTabs.ts` - Can switch streams
+2. `WorkflowView.ts` - Shows runs, tasks, files
+3. `ConversationView.ts` - Shows turns, tool calls
+4. `PromptOverlay.ts` - Retry, approval, proposal dialogs
 
-**Deliverable**: Clean codebase, no legacy code.
+**Test each component individually before integrating.**
+
+### Step 5: Delete Old Code (1 day)
+
+Only after everything works:
+
+```bash
+rm -rf src/progressView/modules/
+```
+
+**Total: ~2 weeks if focused, not 4 weeks of "phases"**
+
+### Escape Hatch
+
+If Step 3 or 4 goes badly, you can revert to the old frontend by:
+1. Restoring `index.html` import maps
+2. Keeping `modules/` around
+
+Don't burn bridges until the new code is proven.
 
 ---
 
@@ -1057,11 +1026,15 @@ src/progressView/modules/formatters/*.js    # → component methods
 | Metric | Current | Target |
 |--------|---------|--------|
 | Type coverage (frontend) | ~20% (JSDoc) | 100% (TypeScript) |
-| Lines of code (progressView frontend) | ~3700 | ~2400 (-35%) |
+| Lines of code (progressView frontend) | ~3700 | ~2000 (-45%) |
 | Duplicate code | 600+ lines | 0 |
-| DOM nodes for 500 messages | 500+ | ~50 (virtual) |
-| Time to switch stream (500 msgs) | ~800ms | <100ms |
-| Message handler complexity | 1268-line switch | ~200-line dispatcher |
+| Message handler complexity | 1268-line switch | ~150-line dispatcher |
+| State tracking locations | 7 | 1 (store.ts) |
+| `isToolUse` conditionals | 14+ | 0 (separate components) |
+
+**Future optimization** (not in scope):
+- Virtual scrolling for large conversations
+- Memoized markdown rendering
 
 ---
 
