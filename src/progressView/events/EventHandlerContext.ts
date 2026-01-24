@@ -52,7 +52,7 @@ export function isWebviewAvailable(ctx: EventHandlerContext): boolean {
  * Check if the stream is the currently active stream.
  * Use to determine if immediate UI updates should occur.
  */
-export function isActiveStream(
+function isActiveStream(
   ctx: EventHandlerContext,
   stream: StreamTabId,
 ): boolean {
