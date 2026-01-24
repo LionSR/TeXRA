@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.35.7] - 2026-01-23
+## [0.35.7] - 2026-01-24
 
 ### Features
 
@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
 - Added **grep offset parameter** for paginating through large search results.
 - Agent and model dropdowns now **sync between progress view and main webview**.
 - **YOLO mode** is now per-stream with a distinct visual indicator.
+- Added **bash command approval system** with per-stream YOLO mode bypass, following the same pattern as tool edit approvals.
+- Added **syntax highlighting for bash commands** in the progress view.
+- **Tool use headers** are now selectable with mouse for easier copying.
+- **User messages** can now be sent while tools are executing without ending the turn.
+- Added **automatic token refresh** on relay 401 errors for improved session continuity.
 
 ### Bug Fixes
 
@@ -27,11 +32,20 @@ All notable changes to this project will be documented in this file.
 - Fixed grep tool error handling for empty results.
 - Fixed KaTeX MathML causing duplicate text rendering in progress view.
 - Fixed merge agent not respecting multiple outputs setting.
+- Fixed new streams being blocked when an existing stream is waiting for retry.
+- Fixed first user message disappearing for old persisted tool-use sessions.
+- Fixed stale log element cache when switching agent categories.
+- Fixed manual retry not working after relay 401 refresh failure.
+- Fixed infinite token refresh loop on persistent 401 errors.
+- Fixed OpenAI Responses API not waiting for in_progress responses when using `previous_response_id`.
+- Fixed Wolfram error messages missing timeout and exit code information.
 
 ### Improvements
 
 - Improved tool error recovery suggestions and result summaries.
-- Updated dependencies including SDK packages and Prettier.
+- Disabled thinking clearing by default to prevent early context management issues.
+- Optimized progress view performance with binary search, root group tracking, markdown caching, and DOM batching.
+- Updated dependencies including SDK packages, Prettier, @supabase/supabase-js, and zod-v3-to-v4.
 
 ## [0.35.6] - 2026-01-19
 
