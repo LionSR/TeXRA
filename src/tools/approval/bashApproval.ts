@@ -86,6 +86,11 @@ async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId?: StreamTabId,
 ): Promise<BashApprovalResult> {
+  // Re-check YOLO mode: user may have enabled it while this request was queued
+  if (streamId && isApprovalBypassedForStream(streamId)) {
+    return { accepted: true };
+  }
+
   const requestId = `bash-${Date.now().toString(36)}-${++approvalCounter}`;
 
   try {

@@ -41,9 +41,9 @@ import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
   handleProgressViewToolEditApprovalAction,
+  handleProgressViewBashApprovalAction,
   toggleToolEditApprovalSessionBypass,
-} from '@tools/approval/toolEditApproval';
-import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
+} from '@tools/approval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
