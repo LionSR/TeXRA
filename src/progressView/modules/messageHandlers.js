@@ -204,6 +204,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (shouldClear) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
+      dom.logEntries.clear(); // Clear stale references to elements in removed task groups
     }
     return shouldClear;
   }
@@ -466,6 +467,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       this._clearActivePanels();
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       if (logContent) logContent.innerHTML = '';
+      dom.logEntries.clear(); // Clear log element lookup cache
       state.lastRenderedStream = '';
       state.clearRunInstructions();
       state.clearAllActiveRuns();
@@ -485,6 +487,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ) {
         const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
         if (logContent) logContent.innerHTML = '';
+        dom.logEntries.clear(); // Clear log element lookup cache
         state.lastRenderedStream = '';
         // Repopulate panels from cached state for the new stream
         const activeRunId = state.resolveActiveRunId(message.activeStream);
@@ -554,6 +557,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const previousRunId = state.getActiveRunId(message.stream);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
+    dom.logEntries.clear(); // Clear log element lookup cache
     state.taskGroups.clear();
     state.clearStreamRunData(message.stream); // Batched clear of all run-scoped data
     logContent.innerHTML = '';
