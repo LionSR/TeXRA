@@ -2,7 +2,10 @@
  * Generic handler for approval/prompt requests with pending state management.
  * Eliminates duplication across tool edit, bash approval, retry, and proposal handlers.
  */
-export class ApprovalRequestHandler<T extends Record<string, unknown>, K extends keyof T> {
+export class ApprovalRequestHandler<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+> {
   private readonly pending = new Map<string, T>();
 
   constructor(

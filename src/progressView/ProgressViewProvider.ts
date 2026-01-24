@@ -111,27 +111,51 @@ export class ProgressViewProvider
     const canSend = () => this.canSendToWebview();
     const u = this.webviewUpdater;
     this.toolEditHandler = new ApprovalRequestHandler(
-      'requestId', (p) => u.showToolEditApprovalPrompt(p), (id) => u.resolveToolEditApprovalPrompt(id), canSend);
+      'requestId',
+      (p) => u.showToolEditApprovalPrompt(p),
+      (id) => u.resolveToolEditApprovalPrompt(id),
+      canSend,
+    );
     this.bashApprovalHandler = new ApprovalRequestHandler(
-      'requestId', (p) => u.showBashApprovalPrompt(p), (id) => u.resolveBashApprovalPrompt(id), canSend);
+      'requestId',
+      (p) => u.showBashApprovalPrompt(p),
+      (id) => u.resolveBashApprovalPrompt(id),
+      canSend,
+    );
     this.retryRequestHandler = new ApprovalRequestHandler(
-      'streamId', (p) => u.showRetryRequest(p), (id) => u.resolveRetryRequest(id), canSend);
+      'streamId',
+      (p) => u.showRetryRequest(p),
+      (id) => u.resolveRetryRequest(id),
+      canSend,
+    );
     this.agentProposalHandler = new ApprovalRequestHandler(
-      'proposalId', (p) => u.showAgentProposal(p), (id) => u.resolveAgentProposal(id), canSend);
+      'proposalId',
+      (p) => u.showAgentProposal(p),
+      (id) => u.resolveAgentProposal(id),
+      canSend,
+    );
 
-    this.eventHandler = new ProgressEventHandler(this.state, this.webviewUpdater, {
-      showRetryRequest: (p) => this.retryRequestHandler.show(p),
-      resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
-      showToolEditApprovalPrompt: (p) => this.toolEditHandler.show(p),
-      resolveToolEditApprovalPrompt: (id) => this.toolEditHandler.resolve(id),
-      updateToolEditApprovalBypassState: (streamId, bypassActive) => {
-        if (canSend()) u.updateToolEditApprovalState(streamId as StreamTabId, bypassActive);
+    this.eventHandler = new ProgressEventHandler(
+      this.state,
+      this.webviewUpdater,
+      {
+        showRetryRequest: (p) => this.retryRequestHandler.show(p),
+        resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
+        showToolEditApprovalPrompt: (p) => this.toolEditHandler.show(p),
+        resolveToolEditApprovalPrompt: (id) => this.toolEditHandler.resolve(id),
+        updateToolEditApprovalBypassState: (streamId, bypassActive) => {
+          if (canSend())
+            u.updateToolEditApprovalState(
+              streamId as StreamTabId,
+              bypassActive,
+            );
+        },
+        showBashApprovalPrompt: (p) => this.bashApprovalHandler.show(p),
+        resolveBashApprovalPrompt: (id) => this.bashApprovalHandler.resolve(id),
+        showAgentProposal: (p) => this.agentProposalHandler.show(p),
+        resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
       },
-      showBashApprovalPrompt: (p) => this.bashApprovalHandler.show(p),
-      resolveBashApprovalPrompt: (id) => this.bashApprovalHandler.resolve(id),
-      showAgentProposal: (p) => this.agentProposalHandler.show(p),
-      resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
-    });
+    );
 
     // Initialize existing components
     this.contentProvider = new ProgressViewContentProvider(context);
