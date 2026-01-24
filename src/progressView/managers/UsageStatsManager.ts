@@ -166,29 +166,6 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Get usage for a specific key without copying the entire map.
-   * More efficient for single-key lookups in read-only scenarios
-   * (e.g., refreshStreamSurface bulk updates, displaying current usage).
-   */
-  getUsageForKey(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-  ): TokenUsageStats | undefined {
-    return this.items.get(stream)?.get(storageKey);
-  }
-
-  /**
-   * Get total usage across all runs for a stream
-   */
-  getStreamTotals(stream: StreamTabId): TokenUsageStats | undefined {
-    const runs = this.items.get(stream);
-    if (!runs || runs.size === 0) {
-      return undefined;
-    }
-    return sumUsageStats(runs.values());
-  }
-
-  /**
    * Set all usage statistics (used during loading).
    * Handles both RunUsageMap entries and legacy single TokenUsageStats entries.
    */
@@ -229,16 +206,6 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     return new Map([[normalizeRunId(null), usage]]);
-  }
-
-  /**
-   * Calculate total usage across all streams
-   */
-  getTotalUsage(): TokenUsageStats {
-    const allUsage = [...this.items.values()].flatMap((runMap) => [
-      ...runMap.values(),
-    ]);
-    return sumUsageStats(allUsage);
   }
 
   /**
