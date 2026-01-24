@@ -696,6 +696,114 @@ The EventBus remains unchanged. WebviewUpdater translates EventBus payloads to I
 
 **Note**: Virtual scrolling deferred to future optimization. Initial implementation uses simple lists.
 
+### Component Separation: Workflow vs ToolUse
+
+The current code has **12+ locations** with `isToolUse` conditionals. The codebase itself documents this as a design problem:
+
+```javascript
+// messageHandlers.js lines 21-37
+/**
+ * ARCHITECTURAL NOTE: Task Groups have different semantics per agent category
+ * - Workflow agents: Each group is a distinct "run" (user switches between runs)
+ * - ToolUse agents: Each group is a conversation "turn" (append-only history)
+ *
+ * This semantic mismatch requires special handling throughout...
+ * A cleaner design would separate these concepts:
+ * - WorkflowRunManager for workflow agents
+ * - ConversationTurnManager for toolUse agents
+ */
+```
+
+#### Current uiManagers Breakdown
+
+| Category | Files | Lit Strategy |
+|----------|-------|--------------|
+| **Workflow-only** | FollowupSectionManager | `<workflow-followup-section>` |
+| **ToolUse-only** | ApprovalRequests, FollowUpInputManager, QueuedFollowUps, TodoList | Separate components |
+| **Shared** | FileList, Status, StreamTabs, Toolbar, Placeholder, RetryRequests | Shared components with props |
+| **Confused** | WorkflowProposals | **Split before migrating** |
+
+#### Band-Aid Patterns to Eliminate
+
+| Pattern | Current Location | Lit Solution |
+|---------|------------------|--------------|
+| `activeAgentCategory === 'toolUse'` | messageHandlers.js (14+ places) | Polymorphic `<workflow-view>` vs `<conversation-view>` |
+| `group.parentGroupId` filtering | taskManagers.js | Only exists in `<workflow-task>` |
+| `showRoundHeaders` toggle | FileList.js | Prop on `<file-list showRoundHeaders>` |
+| `showRun(groupId)` for filtering | taskManagers.js | Not needed in `<conversation-view>` |
+| `runSelector.setDisplayEnabled(!isToolAgent)` | messageHandlers.js | No `<run-selector>` in conversation view |
+| `followUpInput.setContainerVisibility(isToolAgent)` | messageHandlers.js | Only in `<conversation-view>` |
+
+#### Semantic Differences
+
+| Concept | Workflow | ToolUse |
+|---------|----------|---------|
+| **TaskGroup meaning** | "Run" (switchable, one visible at a time) | "Turn" (append-only history, all visible) |
+| **Group hierarchy** | Root + nested children | Single level only |
+| **Instruction display** | Side panel (InstructionPanel) | Inline as user message |
+| **File grouping** | By round (r1, r2, r3...) | Flat list |
+| **User interaction** | Run selector dropdown | Follow-up input textarea |
+| **Toolbar buttons** | RUN_NEW, RESUME, DIFF, PACK, CLEAN | STOP, RESTORE only |
+| **Collapse behavior** | Toggle state persisted | No collapsing |
+
+#### Component-Level Separation
+
+**`<workflow-view>` owns:**
+```
+├── <run-selector>           # Switch between runs
+├── <instruction-panel>      # Shows run instruction
+├── <workflow-task-list>
+│   └── <workflow-task>      # Collapsible, hierarchical
+│       └── <workflow-task>  # Nested children
+├── <file-list showRoundHeaders>
+├── <workflow-followup-section>  # Chat/workflow/merge modes
+└── <workflow-toolbar>       # RUN_NEW, RESUME, DIFF, etc.
+```
+
+**`<conversation-view>` owns:**
+```
+├── <todo-list>              # Task progress
+├── <conversation-turn-list>
+│   └── <conversation-turn>  # Always visible, no hierarchy
+│       └── <tool-call>      # Inline tool results
+├── <file-list>              # No round headers
+├── <followup-input>         # Textarea + YOLO toggle
+├── <queued-followups>       # Pending messages
+└── <conversation-toolbar>   # STOP, RESTORE only
+```
+
+**Shared components (prop-driven):**
+```
+<file-list>           # showRoundHeaders?: boolean
+<stream-tabs>         # Pure display, decorators from data
+<status-indicator>    # Status enum → icon/text
+<prompt-overlay>      # retry/approval/proposal modals
+<placeholder>         # Empty state
+```
+
+#### WorkflowProposals Refactoring
+
+`WorkflowProposals.js` is the only "confused" component—split before migrating:
+
+```typescript
+// Current: mixed conditionals
+const isToolUse = request.agentCategory === 'toolUse';
+categoryBadge.textContent = isToolUse ? 'Tool-Use' : 'Workflow';
+// ... file fields only for workflow
+
+// After: separate components
+<workflow-proposal .proposal=${p}>    // Has file fields
+<tooluse-proposal .proposal=${p}>     // No file fields, different badge
+```
+
+Or use discriminated union in schema:
+```typescript
+const ProposalSchema = z.discriminatedUnion('agentCategory', [
+  z.object({ agentCategory: z.literal('workflow'), inputFiles: ..., referenceFiles: ... }),
+  z.object({ agentCategory: z.literal('toolUse') }),  // No file fields
+]);
+```
+
 ### State Store
 
 ```typescript
