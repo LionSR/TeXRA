@@ -5,6 +5,35 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import type { ModelConfig } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 
+/**
+ * Get the list of visible models from user configuration.
+ * This should be used to validate model selections in proposals.
+ */
+export function getVisibleModels(): string[] {
+  return getConfig<string[]>('texra.models', []);
+}
+
+/**
+ * Resolve a model to a valid visible model.
+ * Returns the model if valid, or falls back to the first visible model.
+ * Consistent with filterVisible for agents: if no models configured, allows any model.
+ *
+ * @returns The resolved model name
+ * @throws Error if models are configured but none are available (shouldn't happen in practice)
+ */
+export function resolveVisibleModel(model: string): string {
+  const visibleModels = getVisibleModels();
+
+  // If no models configured, allow any model (consistent with agent filterVisible)
+  if (visibleModels.length === 0) return model;
+
+  // If model is in visible list, use it
+  if (visibleModels.includes(model)) return model;
+
+  // Fall back to first visible model
+  return visibleModels[0];
+}
+
 /** Format context window number for display. */
 function formatContext(context: number): string {
   if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`;
@@ -90,7 +119,7 @@ async function isModelAvailable(
  * on the current dropdown value before setting innerHTML.
  */
 export async function computeModelOptions(): Promise<string> {
-  const models = getConfig<string[]>('texra.models', []);
+  const models = getVisibleModels();
 
   // Prime caches for availability checks
   const serverSideKeyService = getServerSideKeyService();
