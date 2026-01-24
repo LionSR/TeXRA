@@ -41,15 +41,11 @@ import {
   clearAllApprovalBypass,
   clearApprovalBypassForStream,
   handleProgressViewToolEditApprovalAction,
-  rejectAllPendingToolEditApprovals,
-  rejectPendingToolEditApprovalsForStream,
+  rejectAllPendingApprovals,
+  rejectPendingApprovalsForStream,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import {
-  handleProgressViewBashApprovalAction,
-  rejectPendingBashApprovalsForStream,
-  rejectAllPendingBashApprovals,
-} from '@tools/approval/bashApproval';
+import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -242,8 +238,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
         // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
-        rejectPendingToolEditApprovalsForStream(streamId);
-        rejectPendingBashApprovalsForStream(streamId);
+        rejectPendingApprovalsForStream(streamId);
         clearApprovalBypassForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
@@ -267,8 +262,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
-    rejectAllPendingToolEditApprovals();
-    rejectAllPendingBashApprovals();
+    rejectAllPendingApprovals();
     clearAllApprovalBypass();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
