@@ -38,11 +38,9 @@ import {
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
 import {
-  clearAllApprovalBypass,
-  clearApprovalBypassForStream,
+  cleanupAllApprovals,
+  cleanupApprovalsForStream,
   handleProgressViewToolEditApprovalAction,
-  rejectAllPendingApprovals,
-  rejectPendingApprovalsForStream,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
 import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
@@ -238,8 +236,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
         // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
-        rejectPendingApprovalsForStream(streamId);
-        clearApprovalBypassForStream(streamId);
+        cleanupApprovalsForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
         this.provider.updateWebview({ forceRebuild: true });
@@ -262,8 +259,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
-    rejectAllPendingApprovals();
-    clearAllApprovalBypass();
+    cleanupAllApprovals();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
