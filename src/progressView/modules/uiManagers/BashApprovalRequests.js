@@ -33,7 +33,9 @@ export class BashApprovalRequests extends BaseUIRequestManager {
   }
 
   _updateRequestElement(element, request) {
-    const commandElem = element.querySelector('.bash-approval-request__command');
+    const commandElem = element.querySelector(
+      '.bash-approval-request__command',
+    );
     element.dataset.streamId = request.streamId || '';
 
     if (commandElem) {
