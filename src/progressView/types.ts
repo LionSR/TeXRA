@@ -32,7 +32,6 @@ export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
 
 export const InstructionMetadataSchema = z.object({
   showToggle: z.boolean().optional(),
-  expanded: z.boolean().optional(),
 });
 export type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
 

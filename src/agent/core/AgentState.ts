@@ -20,7 +20,6 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
   continuationCount: z.int().nonnegative().prefault(0),
   responseTimeMs: z.number().nonnegative().prefault(0),
-  outputFile: z.string().prefault(''),
   normalizedUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
 
@@ -41,14 +40,12 @@ export class ConversationRoundState {
   public roundIndex: number;
   public continuationCount: number;
   public responseTimeMs: number;
-  public outputFile: string;
   public normalizedUsage: NormalizedUsage | null;
 
   constructor(roundIndex: number) {
     this.roundIndex = roundIndex;
     this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
     this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
-    this.outputFile = ROUND_STATE_DEFAULTS.outputFile;
     this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
@@ -56,7 +53,6 @@ export class ConversationRoundState {
   private applyDefaults(): void {
     this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
     this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
-    this.outputFile = ROUND_STATE_DEFAULTS.outputFile;
     this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
@@ -66,7 +62,6 @@ export class ConversationRoundState {
     const state = new ConversationRoundState(parsed.roundIndex);
     state.continuationCount = parsed.continuationCount;
     state.responseTimeMs = parsed.responseTimeMs;
-    state.outputFile = parsed.outputFile;
     state.normalizedUsage = parsed.normalizedUsage;
     return state;
   }
@@ -77,7 +72,6 @@ export class ConversationRoundState {
       roundIndex: this.roundIndex,
       continuationCount: this.continuationCount,
       responseTimeMs: this.responseTimeMs,
-      outputFile: this.outputFile,
       normalizedUsage: this.normalizedUsage,
     };
   }
