@@ -23,6 +23,9 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
+// Local imports - model
+import { getVisibleModels } from '@model/computeModelOptions';
+
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -65,6 +68,19 @@ function getRequiredStreamId(): string {
     );
   }
   return streamId;
+}
+
+/** Validate that proposed model is in the visible models list, throw if not. */
+function validateModel(model: string): void {
+  const visibleModels = getVisibleModels();
+  if (visibleModels.length === 0) {
+    throw new Error('No models configured. Please add models in settings.');
+  }
+  if (!visibleModels.includes(model)) {
+    throw new Error(
+      `Model '${model}' is not in the visible models list. Available: ${visibleModels.join(', ')}`,
+    );
+  }
 }
 
 /** Format an agent list for tool descriptions. */
@@ -212,6 +228,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       );
     }
 
+    // Validate model is in visible models list
+    validateModel(input.model);
+
     // Validate inputFile is provided
     if (!input.inputFile) {
       throw new Error('inputFile is required for workflow agents.');
@@ -358,6 +377,9 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
         `'${input.agent}' is not a tool-use agent. Use workflow_agent for document processing.`,
       );
     }
+
+    // Validate model is in visible models list
+    validateModel(input.model);
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
