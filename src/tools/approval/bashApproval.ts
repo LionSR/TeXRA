@@ -111,17 +111,16 @@ export async function handleProgressViewBashApprovalAction(payload: {
   });
 }
 
-/** Reject all pending bash approvals for a deleted stream (prevents memory leak) */
+/** Reject all pending bash approvals for a stream (called by unified cleanup) */
 export function rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
   for (const entry of pendingApprovals.values()) {
     if (entry.streamId === streamId && !entry.isSettled()) {
-      // Settling triggers finally block which emits resolveBashApprovalPrompt
       entry.settle({ accepted: false });
     }
   }
 }
 
-/** Reject all pending bash approvals (used when deleting all streams) */
+/** Reject all pending bash approvals (called by unified cleanup) */
 export function rejectAllPendingBashApprovals(): void {
   for (const entry of pendingApprovals.values()) {
     if (!entry.isSettled()) {
