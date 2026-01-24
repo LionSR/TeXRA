@@ -12,7 +12,7 @@ import {
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
+} from '@tools/approval';
 import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
