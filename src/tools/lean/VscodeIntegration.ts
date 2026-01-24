@@ -9,6 +9,8 @@ import path from 'path';
 import * as vscode from 'vscode';
 import { Hover } from 'vscode-languageserver-protocol';
 
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
@@ -130,13 +132,48 @@ export async function executeFileCommand(
 const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
 /**
+ * Prompt user to install Lean 4 extension if not already installed.
+ * Used when Lean tools are invoked but the extension is not found.
+ */
+export async function promptLean4ExtensionInstall(): Promise<void> {
+  await showInstructionWithSuppress(
+    'lean4-install-tool',
+    'Lean 4 extension is required for this operation. Install now?',
+    [
+      {
+        title: 'Install',
+        callback: async () => {
+          await safeExecuteCommand(
+            'workbench.extensions.installExtension',
+            [LEAN4_EXTENSION_ID],
+            'lean',
+          );
+        },
+      },
+    ],
+  );
+}
+
+/**
+ * Check if Lean 4 extension is installed.
+ */
+export function isLean4ExtensionInstalled(): boolean {
+  return vscode.extensions.getExtension(LEAN4_EXTENSION_ID) !== undefined;
+}
+
+/**
  * Get the Lean 4 extension's client provider.
  * Returns null if the extension is not installed or not ready.
+ * Prompts user to install the extension if not found.
  */
 async function getClientProvider(): Promise<LeanClientProvider | null> {
   const lean4Ext =
     vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
-  if (!lean4Ext) return null;
+  if (!lean4Ext) {
+    // Prompt user to install the extension
+    await promptLean4ExtensionInstall();
+    return null;
+  }
 
   const api = await lean4Ext.activate();
   const features = await api.lean4EnabledFeatures;
