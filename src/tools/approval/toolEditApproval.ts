@@ -33,6 +33,7 @@ import {
 import {
   _rejectAllPendingBashApprovals,
   _rejectPendingBashApprovalsForStream,
+  rejectPendingEntries,
 } from './bashApproval';
 
 export interface ToolEditApprovalRequest {
@@ -165,15 +166,8 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
  * Handles pending approvals (tool edits + bash) and YOLO mode state.
  */
 export function cleanupApprovalsForStream(streamId: StreamTabId): void {
-  // Reject pending tool edit approvals
-  for (const entry of pendingApprovals.values()) {
-    if (entry.streamId === streamId && !entry.isSettled()) {
-      entry.settle({ accepted: false });
-    }
-  }
-  // Reject pending bash approvals
+  rejectPendingEntries(pendingApprovals.values(), streamId);
   _rejectPendingBashApprovalsForStream(streamId);
-  // Clear YOLO mode state
   approvalsBypassedByStream.delete(streamId);
 }
 
@@ -182,15 +176,8 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
  * Handles pending approvals (tool edits + bash) and YOLO mode state.
  */
 export function cleanupAllApprovals(): void {
-  // Reject pending tool edit approvals
-  for (const entry of pendingApprovals.values()) {
-    if (!entry.isSettled()) {
-      entry.settle({ accepted: false });
-    }
-  }
-  // Reject pending bash approvals
+  rejectPendingEntries(pendingApprovals.values());
   _rejectAllPendingBashApprovals();
-  // Clear all YOLO mode state
   approvalsBypassedByStream.clear();
 }
 
