@@ -250,48 +250,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Force refresh the token, bypassing local expiry checks.
-   * Used when relay returns 401 (token invalid/expired on server despite
-   * local expiry time not being reached - e.g., server-side token revocation).
-   *
-   * @returns Fresh access token, or null if no session or refresh failed
-   */
-  async forceRefreshToken(): Promise<string | null> {
-    try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSession(sessionData);
-      if (!session) {
-        logger.warn(
-          'SupabaseAuthProvider',
-          'Cannot force refresh: no session stored',
-        );
-        return null;
-      }
-
-      logger.info(
-        'SupabaseAuthProvider',
-        'Force refreshing token (server returned 401)',
-      );
-      const refreshed = await this.refreshSession(session);
-      if (refreshed) {
-        return refreshed.accessToken;
-      }
-
-      logger.warn(
-        'SupabaseAuthProvider',
-        'Force refresh failed, returning null',
-      );
-      return null;
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error force refreshing token: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
-
-  /**
    * Set URI handler for OAuth callbacks.
    * @param handler - The URI handler to use for auth callbacks
    */
