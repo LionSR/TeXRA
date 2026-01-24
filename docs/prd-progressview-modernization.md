@@ -341,7 +341,13 @@ UPDATE: All imports to use TypeScript sources
 
 ---
 
-### Milestone 2: Lit UI
+### Milestone 2: Lit UI with vscode-elements
+
+#### Current State
+
+**M1 Complete:** Shared schemas in `src/shared/schemas/`, webpack bundle target configured, basic Lit `<progress-app>` shell exists with message handling. The current placeholder uses native HTML buttons instead of vscode-elements.
+
+**Goal:** Rewrite the ProgressView frontend using Lit components while preserving the exact UI (vscode-elements) and all functionality from the legacy implementation.
 
 #### Why Lit
 
@@ -349,280 +355,1400 @@ UPDATE: All imports to use TypeScript sources
 | ----------------------------- | -------------------------------------------------- |
 | 53 lines fragment batching    | `html\`${items.map(i => html\`...\`)}\``           |
 | `if (container)` null checks  | Reactive `@property` auto-renders                  |
-| 8 duplicate approval handlers | Single `<prompt-overlay kind="...">`               |
-| 18 `isToolUse` conditionals   | Separate `<workflow-view>` / `<conversation-view>` |
+| 8 duplicate approval handlers | Single `<approval-panel kind="...">`               |
+| 18 `isToolUse` conditionals   | Separate `<workflow-content>` / `<tooluse-content>`|
 | `classList.add/remove/toggle` | `class=${classMap({ active: this.isActive })}`     |
 | 7 "active" state locations    | Single reactive store                              |
 | Manual event wiring           | Declarative `@click=${this.handler}`               |
+| HTML `<template>` cloning     | Lit template functions (type-safe)                 |
+| DOM queries in handlers       | Component state + refs via `@query`                |
 
-#### Step 2.1: Add Dependencies
+#### Architecture Principles
 
-```bash
-npm install lit
-```
+##### 1. External CSS, Not Lit Scoped Styles
 
-Update `tsconfig.json` (if not already set):
+**Rationale:** The existing 26 CSS files (`src/progressView/styles/`) define a cohesive design system with VS Code theme integration. Rewriting these as Lit `css` tagged templates would be error-prone and wasteful.
 
-```jsonc
-{
-  "compilerOptions": {
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-  },
-}
-```
-
-#### Step 2.2: Create Webpack Entry
-
-Add to `webpack.config.js`:
-
-```javascript
-const progressViewConfig = {
-  name: 'progressView',
-  entry: './src/progressView/frontend/index.ts',
-  output: {
-    path: path.resolve(__dirname, 'dist/progressView'),
-    filename: 'bundle.js',
-  },
-  target: 'web',
-  resolve: {
-    extensions: ['.ts', '.js'],
-    alias: {
-      // Same aliases as main config
-    },
-  },
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
-    ],
-  },
-};
-
-module.exports = [extensionConfig, progressViewConfig];
-```
-
-#### Step 2.3: Create Store
-
-Create `src/progressView/frontend/store.ts`:
+**Strategy:**
+- Keep external CSS files loaded via `<link>` in `index.html`
+- Components render with standard class names (`.log-header`, `.stream-tab`, etc.)
+- Use `static styles = css\`:host { display: contents; }\`` to make components transparent to external styles
+- Only add component-scoped styles for layout that doesn't exist in external CSS
 
 ```typescript
-import { reactive } from '@lit-labs/preact-signals';
-import type {
-  StreamTabInfo,
-  TaskGroup,
-  TodoItem,
-  OutputFileInfo,
-  TokenUsageStats,
-} from '../schemas';
-
-export interface ProgressState {
-  // Stream state
-  activeStreamId: string | null;
-  streams: Map<string, StreamTabInfo>;
-
-  // Workflow data (per stream)
-  taskGroups: Map<string, Map<string, TaskGroup>>;
-  activeRunIds: Map<string, string>;
-  outputFiles: Map<string, OutputFileInfo[]>;
-  usageStats: Map<string, TokenUsageStats>;
-
-  // Conversation data (per stream)
-  todos: Map<string, TodoItem[]>;
-
-  // UI state
-  activePrompt: PromptState | null;
-  streamSortOrder: 'time' | 'agent' | 'inputFile';
-  streamFilter: 'all' | 'workflow' | 'toolUse';
-}
-
-export type PromptState =
-  | { kind: 'toolEdit'; data: ToolEditApprovalPrompt }
-  | { kind: 'bash'; data: BashApprovalPrompt }
-  | { kind: 'retry'; data: RetryRequestPrompt }
-  | { kind: 'proposal'; data: WorkflowAgentProposal | ToolUseAgentProposal };
-
-// Single source of truth
-export const state = reactive<ProgressState>({
-  activeStreamId: null,
-  streams: new Map(),
-  taskGroups: new Map(),
-  activeRunIds: new Map(),
-  outputFiles: new Map(),
-  usageStats: new Map(),
-  todos: new Map(),
-  activePrompt: null,
-  streamSortOrder: 'time',
-  streamFilter: 'all',
-});
-
-// Derived state helpers
-export function getActiveStream(): StreamTabInfo | undefined {
-  return state.activeStreamId
-    ? state.streams.get(state.activeStreamId)
-    : undefined;
-}
-
-export function isWorkflow(): boolean {
-  return getActiveStream()?.agentCategory === 'workflow';
-}
-
-export function getActiveRunId(): string | undefined {
-  return state.activeStreamId
-    ? state.activeRunIds.get(state.activeStreamId)
-    : undefined;
-}
-```
-
-#### Step 2.4: Build Components
-
-**Component Hierarchy:**
-
-```
-<progress-app>                    # Root component, message handler
-  ├── <stream-tabs>               # Tab bar with stream list
-  │
-  ├── <workflow-view>             # agentCategory === 'workflow'
-  │   ├── <run-selector>          # Dropdown to switch runs
-  │   ├── <instruction-panel>     # Shows run instruction
-  │   ├── <task-list>             # Hierarchical task groups
-  │   │   └── <task-group>        # Collapsible group with children
-  │   ├── <file-list>             # Output files with round headers
-  │   └── <workflow-toolbar>      # RUN_NEW, RESUME, DIFF, etc.
-  │
-  ├── <conversation-view>         # agentCategory === 'toolUse'
-  │   ├── <todo-list>             # Todo items
-  │   ├── <turn-list>             # Conversation turns
-  │   │   └── <turn-item>         # Single turn with tool calls
-  │   ├── <file-list>             # Output files (flat)
-  │   ├── <followup-input>        # Input for follow-up messages
-  │   └── <conversation-toolbar>  # STOP, RESTORE
-  │
-  └── <prompt-overlay>            # Modal for approvals/retry/proposal
-      ├── <tool-edit-prompt>
-      ├── <bash-prompt>
-      ├── <retry-prompt>
-      └── <proposal-prompt>
-```
-
-**Build Order:**
-
-| Step | Component                      | Lines (est.) | Eliminates               |
-| ---- | ------------------------------ | ------------ | ------------------------ |
-| 1    | `<progress-app>` shell         | ~100         | Entry point              |
-| 2    | `<stream-tabs>`                | ~150         | Tab management code      |
-| 3    | `<prompt-overlay>`             | ~200         | 8 duplicate handlers     |
-| 4    | `<workflow-view>`              | ~300         | Half of isToolUse checks |
-| 5    | `<conversation-view>`          | ~250         | Other half of isToolUse  |
-| 6    | `<task-list>` + `<task-group>` | ~200         | Fragment batching        |
-| 7    | `<file-list>`                  | ~150         | File rendering logic     |
-| 8    | Remaining small components     | ~200         | Cleanup                  |
-
-**Total: ~1,550 lines replacing ~3,700 lines**
-
-#### Step 2.5: Example Component
-
-`src/progressView/frontend/components/PromptOverlay.ts`:
-
-```typescript
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { when } from 'lit/directives/when.js';
-import type { PromptState } from '../store';
-
-@customElement('prompt-overlay')
-export class PromptOverlay extends LitElement {
-  static styles = css`
-    :host {
-      position: fixed;
-      inset: 0;
-      background: var(--vscode-editor-background, rgba(0, 0, 0, 0.5));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    :host([hidden]) {
-      display: none;
-    }
-
-    .prompt-card {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 16px;
-      max-width: 500px;
-      width: 90%;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 16px;
-    }
-  `;
-
-  @property({ type: Object }) prompt: PromptState | null = null;
+// Components are transparent wrappers around styled DOM
+@customElement('stream-tabs')
+export class StreamTabs extends LitElement {
+  // No shadowRoot styling - external CSS applies to light DOM classes
+  protected createRenderRoot() { return this; }
 
   render() {
-    if (!this.prompt) return null;
-
-    return html`
-      <div class="prompt-card">
-        ${when(this.prompt.kind === 'toolEdit', () => this._renderToolEdit())}
-        ${when(this.prompt.kind === 'bash', () => this._renderBash())}
-        ${when(this.prompt.kind === 'retry', () => this._renderRetry())}
-        ${when(this.prompt.kind === 'proposal', () => this._renderProposal())}
-      </div>
-    `;
-  }
-
-  private _renderToolEdit() {
-    const data = this.prompt!.data as ToolEditApprovalPrompt;
-    return html`
-      <h3>Tool Edit Approval</h3>
-      <p>Allow edit to <code>${data.filePath}</code>?</p>
-      <div class="actions">
-        <button @click=${() => this._respond('reject')}>Reject</button>
-        <button @click=${() => this._respond('approve')}>Approve</button>
-      </div>
-    `;
-  }
-
-  // ... similar for bash, retry, proposal
-
-  private _respond(action: string) {
-    this.dispatchEvent(
-      new CustomEvent('prompt-response', {
-        detail: { kind: this.prompt!.kind, action },
-        bubbles: true,
-      }),
-    );
+    // Classes like .tabs, .tab-container come from external tabs.css
+    return html`<div class="tabs-content">...</div>`;
   }
 }
 ```
 
-#### Step 2.6: Delete Legacy Code
+##### 2. vscode-elements Integration
 
-After all components working:
+**Available Components (from `@vscode-elements/elements`):**
+- Layout: `vscode-split-layout`, `vscode-scrollable`, `vscode-collapsible`
+- Controls: `vscode-button`, `vscode-toolbar-button`, `vscode-toolbar-container`
+- Forms: `vscode-textarea`, `vscode-single-select`, `vscode-option`, `vscode-checkbox`, `vscode-radio`, `vscode-radio-group`
+- Menus: `vscode-context-menu`, `vscode-context-menu-item`
+- Feedback: `vscode-progress-ring`
+
+**Usage in Lit:**
+```typescript
+render() {
+  return html`
+    <vscode-toolbar-container class="header-actions">
+      <vscode-toolbar-button
+        icon="play"
+        label="Run"
+        @click=${this.handleRun}
+      ></vscode-toolbar-button>
+    </vscode-toolbar-container>
+  `;
+}
+```
+
+##### 3. Template Replacement Strategy
+
+The legacy HTML has 17 `<template>` elements for dynamic content. Replace each with a Lit template function:
+
+| Legacy Template                | Lit Replacement                          |
+| ------------------------------ | ---------------------------------------- |
+| `#streamTabTemplate`           | `renderStreamTab(stream: StreamTabInfo)` |
+| `#fileItemTemplate`            | `renderFileItem(file: OutputFileInfo)`   |
+| `#logLineTemplate`             | `renderLogLine(log: LogMessageData)`     |
+| `#approvalRequestTemplate`     | `renderToolEditApproval(prompt)`         |
+| `#bashApprovalRequestTemplate` | `renderBashApproval(prompt)`             |
+| `#retryRequestTemplate`        | `renderRetryRequest(prompt)`             |
+| `#workflowProposalTemplate`    | `renderAgentProposal(proposal)`          |
+| `#userMessageTemplate`         | `renderUserMessage(msg)`                 |
+| `#groupHeaderTemplate`         | `renderGroupHeader(group)`               |
+| `#groupDetailsTemplate`        | `renderGroupContent(group)`              |
+| `#roundHeaderTemplate`         | `renderRoundHeader(round)`               |
+| `#usageTemplate`               | `renderUsageStats(usage)`                |
+| `#queuedFollowUpTemplate`      | `renderQueuedFollowUp(text)`             |
+| `#bannerDetailsTemplate`       | `renderBannerDetails(banner)`            |
+| `#toolUseTemplate`             | `renderToolUse(toolUse)`                 |
+| `#nativeStatusTemplate`        | `renderNativeStatus(status)`             |
+| `#statisticsDetailsTemplate`   | `renderStatistics(stats)`                |
+
+##### 4. State Architecture
+
+**Current ProgressApp.ts State (to keep):**
+```typescript
+@state() private streams: StreamTabInfo[] = [];
+@state() private activeStreamId: StreamTabId | null = null;
+@state() private activeStatus: StreamStatus = STREAM_STATUS.READY;
+@state() private streamFilter: AgentCategoryFilter = 'all';
+@state() private toolEditBypass: Record<string, boolean> = {};
+@state() private toolEditPrompts: ToolEditApprovalPrompt[] = [];
+@state() private bashPrompts: BashApprovalPrompt[] = [];
+@state() private retryPrompts: RetryRequestPrompt[] = [];
+@state() private proposalPrompts: AgentProposalPrompt[] = [];
+private streamStates = new Map<StreamTabId, StreamState>();
+```
+
+**StreamState (per-stream data):**
+```typescript
+interface StreamState {
+  logs: LogMessageData[];
+  groups: TaskGroup[];
+  todos: TodoItem[];
+  queuedFollowUps: string[];
+  runInstructions: Record<string, InstructionUpdate>;
+  activeRunId: string | null;
+  outputFilesByRun: Record<string, Record<string, OutputFileInfo[]>>;
+  missingOutputsByRun: Record<string, Record<string, string[]>>;
+  usageByRun: Record<string, TokenUsageStats>;
+  contextState: ContextState | null;
+  instruction: InstructionUpdate | null;
+}
+```
+
+**Key Pattern:** The current message handling in `ProgressApp.ts` is already well-structured. Keep it; extend the rendering.
+
+---
+
+#### Component Architecture
+
+##### File Structure
 
 ```
-DELETE: src/progressView/modules/ (entire directory - 67+ files)
-UPDATE: src/progressView/index.html to load bundle.js
+src/progressView/frontend/
+├── index.ts                    # Entry: imports ProgressApp
+├── vscode.ts                   # VS Code postMessage wrapper
+├── ProgressApp.ts              # Root component (extend existing)
+└── components/
+    ├── layout/
+    │   ├── SplitLayout.ts      # Main split layout wrapper
+    │   ├── LogHeader.ts        # Header with status, YOLO toggle
+    │   └── UsageFooter.ts      # Context state, run summary
+    ├── streams/
+    │   ├── StreamTabs.ts       # Right panel: tab list + filters
+    │   └── StreamTab.ts        # Single tab with delete button
+    ├── content/
+    │   ├── ContentArea.ts      # Switches workflow/tooluse based on category
+    │   ├── WorkflowContent.ts  # Run selector, instruction, groups, files
+    │   └── ToolUseContent.ts   # Logs, todos, follow-up input
+    ├── logs/
+    │   ├── LogContainer.ts     # vscode-scrollable with log entries
+    │   ├── LogEntry.ts         # Single log line (text, banner, tool-use)
+    │   └── UserMessage.ts      # User message bubble
+    ├── tasks/
+    │   ├── TaskGroup.ts        # Collapsible group with header
+    │   ├── TodoList.ts         # Todo items display
+    │   └── RunSelector.ts      # vscode-single-select for runs
+    ├── files/
+    │   ├── FileList.ts         # Generated files with round headers
+    │   ├── FileItem.ts         # Single file with actions
+    │   └── RoundCollapsible.ts # Round header (vscode-collapsible)
+    ├── prompts/
+    │   ├── PromptContainer.ts  # Container for all prompt types
+    │   ├── ToolEditApproval.ts # File edit approval UI
+    │   ├── BashApproval.ts     # Command approval UI
+    │   ├── RetryRequest.ts     # Retry prompt UI
+    │   └── AgentProposal.ts    # Workflow proposal UI
+    ├── followup/
+    │   ├── FollowUpInput.ts    # vscode-textarea with actions
+    │   ├── FollowUpSection.ts  # Mode toggle, agent/model selects
+    │   └── QueuedFollowUps.ts  # Queued messages collapsible
+    └── shared/
+        ├── InstructionPanel.ts # Instruction display with copy
+        ├── MarkdownContent.ts  # Rendered markdown (reuse formatter)
+        └── StatusIndicator.ts  # Status pill component
 ```
+
+##### Component Hierarchy (Visual)
+
+```
+<progress-app>
+└── <split-layout>                           # vscode-split-layout
+    ├── [slot=start] <content-area>
+    │   ├── <log-header>                     # Stream name, status, YOLO, toolbar
+    │   │   └── <vscode-toolbar-container>
+    │   ├── <run-selector>                   # (workflow only) vscode-single-select
+    │   ├── <instruction-panel>              # (workflow only) Collapsible instruction
+    │   ├── <prompt-container>               # Approval/retry/proposal prompts
+    │   │   ├── <tool-edit-approval>[]
+    │   │   ├── <bash-approval>[]
+    │   │   ├── <retry-request>[]
+    │   │   └── <agent-proposal>[]
+    │   ├── <log-container>                  # vscode-scrollable
+    │   │   ├── <user-message>[]             # (tooluse) User messages
+    │   │   ├── <log-entry>[]                # Log lines, banners, tool-use
+    │   │   └── <task-group>[]               # (workflow) Collapsible groups
+    │   ├── <file-list>                      # vscode-collapsible
+    │   │   └── <round-collapsible>[]
+    │   │       └── <file-item>[]
+    │   ├── <followup-section>               # (workflow) Mode toggle, selects
+    │   ├── <todo-list>                      # vscode-collapsible (tooluse)
+    │   ├── <usage-footer>                   # Context state, run summary
+    │   └── <follow-up-input>                # vscode-textarea + actions
+    │       └── <queued-follow-ups>          # vscode-collapsible
+    │
+    └── [slot=end] <stream-tabs>
+        ├── <stream-tab>[]                   # Tab buttons with delete
+        ├── <vscode-radio-group>             # Filter: All/Workflow/Chat
+        └── <vscode-toolbar-container>       # Sort buttons, delete all
+```
+
+---
+
+#### Migration Steps
+
+##### Step 2.1: Setup Light DOM Rendering
+
+Modify existing `ProgressApp.ts` to use light DOM for external CSS compatibility:
+
+```typescript
+@customElement('progress-app')
+export class ProgressApp extends LitElement {
+  // Use light DOM so external CSS applies
+  protected createRenderRoot() {
+    return this;
+  }
+
+  // ... existing state and handlers ...
+
+  render() {
+    return html`
+      <div class="main-container">
+        <vscode-split-layout initial-handle-position="80%">
+          <div slot="start" class="content-area">
+            ${this.renderLogHeader()}
+            ${this.renderPromptContainer()}
+            ${this.renderContentArea()}
+            ${this.renderFollowUpInput()}
+          </div>
+          <div slot="end" class="tabs">
+            ${this.renderStreamTabs()}
+          </div>
+        </vscode-split-layout>
+      </div>
+    `;
+  }
+}
+```
+
+##### Step 2.2: Port Log Header
+
+Replace imperative DOM with declarative Lit template:
+
+```typescript
+private renderLogHeader() {
+  const stream = this.activeStream;
+  return html`
+    <div class="log-header">
+      <div class="log-header__primary">
+        <div class="header-left">
+          <div class="stream-header">
+            <span id="activeStreamName">${stream?.label ?? ''}</span>
+          </div>
+          <span
+            class="status-indicator ${this.getStatusClass()}"
+            data-status="${this.activeStatus}"
+          ></span>
+          <vscode-toolbar-button
+            id="yoloToggleBtn"
+            icon="shield"
+            label="${this.isYoloEnabled ? 'Disable' : 'Enable'} YOLO mode"
+            title="${this.isYoloEnabled ? 'Disable' : 'Enable'} YOLO mode"
+            class="yolo-toggle-button ${this.isYoloEnabled ? 'active' : ''}"
+            @click=${this.handleToolEditBypassToggle}
+          ></vscode-toolbar-button>
+        </div>
+        ${this.renderToolbar()}
+      </div>
+      ${this.isWorkflow ? this.renderRunSelectorRow() : nothing}
+    </div>
+  `;
+}
+
+private renderToolbar() {
+  const isWorkflow = this.activeStream?.agentCategory === 'workflow';
+  return html`
+    <vscode-toolbar-container class="header-actions">
+      ${isWorkflow ? html`
+        <vscode-toolbar-button icon="play" label="Run" title="Start new run"
+          @click=${() => this.handleStreamAction(PROGRESS_VIEW_COMMANDS.RUN_NEW)}
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button icon="debug-continue" label="Resume" title="Resume"
+          @click=${() => this.handleStreamAction(PROGRESS_VIEW_COMMANDS.RESUME)}
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button icon="diff" label="Diff" title="Compare outputs"
+          @click=${() => this.handleStreamAction(PROGRESS_VIEW_COMMANDS.DIFF_STREAM)}
+        ></vscode-toolbar-button>
+      ` : nothing}
+      <vscode-toolbar-button icon="debug-stop" label="Stop" title="Stop execution"
+        @click=${this.handleStreamStop}
+      ></vscode-toolbar-button>
+      <vscode-toolbar-button icon="folder" label="Storage" title="Open task storage"
+        @click=${() => this.handleStreamAction(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE)}
+      ></vscode-toolbar-button>
+    </vscode-toolbar-container>
+  `;
+}
+```
+
+##### Step 2.3: Port Stream Tabs
+
+Replace template cloning with Lit iteration:
+
+```typescript
+private renderStreamTabs() {
+  return html`
+    <div id="streamTabs" class="tabs-content">
+      ${this.streams.map(stream => this.renderStreamTab(stream))}
+    </div>
+    <div class="clear-all-container">
+      <vscode-radio-group
+        class="agent-filter-group"
+        id="agentFilterButtons"
+        value=${this.streamFilter}
+        @change=${this.handleFilterChange}
+      >
+        <vscode-radio value="all">All</vscode-radio>
+        <vscode-radio value="workflow">Workflow</vscode-radio>
+        <vscode-radio value="toolUse">Chat</vscode-radio>
+      </vscode-radio-group>
+      ${this.renderSortButtons()}
+    </div>
+  `;
+}
+
+private renderStreamTab(stream: StreamTabInfo) {
+  const isActive = stream.name === this.activeStreamId;
+  return html`
+    <div class="tab-container" title="${stream.label}">
+      <button
+        class="tab ${isActive ? 'active' : ''}"
+        data-stream="${stream.name}"
+        @click=${() => this.handleStreamClick(stream.name)}
+      >
+        <div class="tab-header">
+          <span class="tab-status status-indicator ${this.getStreamStatusClass(stream)}"></span>
+          <div class="tab-title">${stream.label}</div>
+        </div>
+        <div class="tab-meta">
+          <span class="model">${stream.model}</span>
+          <span class="last-active">${this.formatTimestamp(stream.lastTimestamp)}</span>
+          ${stream.isRemote ? html`<i class="remote-agent codicon codicon-cloud"></i>` : nothing}
+          <i class="agent-category codicon ${stream.agentCategory === 'workflow' ? 'codicon-workflow' : 'codicon-comment'}"></i>
+        </div>
+      </button>
+      <vscode-toolbar-button
+        class="tab-delete"
+        data-stream="${stream.name}"
+        icon="close"
+        label="Delete stream"
+        title="Delete stream"
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          this.handleStreamDelete(stream.name);
+        }}
+      ></vscode-toolbar-button>
+    </div>
+  `;
+}
+```
+
+##### Step 2.4: Port Approval Prompts
+
+Consolidate 4 approval templates into typed render methods:
+
+```typescript
+private renderPromptContainer() {
+  const hasPrompts = this.toolEditPrompts.length || this.bashPrompts.length ||
+                     this.retryPrompts.length || this.proposalPrompts.length;
+  if (!hasPrompts) return nothing;
+
+  return html`
+    ${this.toolEditPrompts.length ? html`
+      <div id="approvalRequests" class="approval-requests">
+        <div class="approval-requests__header">
+          <i class="codicon codicon-diff"></i>
+          <span>Pending approvals</span>
+        </div>
+        <div class="approval-requests__list">
+          ${this.toolEditPrompts.map(p => this.renderToolEditApproval(p))}
+        </div>
+      </div>
+    ` : nothing}
+
+    ${this.bashPrompts.length ? html`
+      <div id="bashApprovalRequests" class="bash-approval-requests">
+        <div class="bash-approval-requests__header">
+          <i class="codicon codicon-terminal"></i>
+          <span>Command approval</span>
+        </div>
+        <div class="bash-approval-requests__list">
+          ${this.bashPrompts.map(p => this.renderBashApproval(p))}
+        </div>
+      </div>
+    ` : nothing}
+
+    ${this.retryPrompts.length ? html`
+      <div id="retryRequests" class="retry-requests">
+        <div class="retry-requests__header">
+          <i class="codicon codicon-refresh"></i>
+          <span>Retry available</span>
+        </div>
+        <div class="retry-requests__list">
+          ${this.retryPrompts.map(p => this.renderRetryRequest(p))}
+        </div>
+      </div>
+    ` : nothing}
+
+    ${this.proposalPrompts.length ? html`
+      <div id="workflowProposals" class="workflow-proposals">
+        <div class="workflow-proposals__header">
+          <i class="codicon codicon-play-circle"></i>
+          <span>Agent Proposal</span>
+        </div>
+        <div class="workflow-proposals__list">
+          ${this.proposalPrompts.map(p => this.renderAgentProposal(p))}
+        </div>
+      </div>
+    ` : nothing}
+  `;
+}
+
+private renderToolEditApproval(prompt: ToolEditApprovalPrompt) {
+  return html`
+    <div class="approval-request" data-request-id="${prompt.requestId}">
+      <div class="approval-request__details">
+        <div class="approval-request__path">${prompt.relativePath}</div>
+        <div class="approval-request__meta">
+          +${prompt.addedLines} / -${prompt.removedLines} lines
+        </div>
+      </div>
+      <vscode-toolbar-container class="approval-request__actions">
+        <vscode-toolbar-button icon="diff" label="Open diff"
+          @click=${() => this.handlePromptAction(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_OPEN_DIFF, { requestId: prompt.requestId })}
+        >Open diff</vscode-toolbar-button>
+        <vscode-toolbar-button icon="check" label="Approve"
+          @click=${() => this.handlePromptAction(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, { requestId: prompt.requestId, action: 'approve' })}
+        >Approve</vscode-toolbar-button>
+        <vscode-toolbar-button icon="close" label="Reject"
+          @click=${() => this.handlePromptAction(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, { requestId: prompt.requestId, action: 'reject' })}
+        >Reject</vscode-toolbar-button>
+      </vscode-toolbar-container>
+    </div>
+  `;
+}
+
+// Similar patterns for renderBashApproval, renderRetryRequest, renderAgentProposal
+```
+
+##### Step 2.5: Port File List with Collapsibles
+
+```typescript
+private renderFileList() {
+  const state = this.activeStreamState;
+  if (!state) return nothing;
+
+  const runId = state.activeRunId ?? Object.keys(state.outputFilesByRun).at(-1);
+  if (!runId) return nothing;
+
+  const rounds = state.outputFilesByRun[runId] ?? {};
+  const roundEntries = Object.entries(rounds).sort(([a], [b]) => Number(a) - Number(b));
+  if (!roundEntries.length) return nothing;
+
+  const showRoundHeaders = this.activeStream?.agentCategory !== 'toolUse';
+
+  return html`
+    <vscode-collapsible
+      id="generatedFilesCollapsible"
+      title="Generated Files"
+      class="progress-collapsible files-collapsible"
+      open
+    >
+      <div id="generatedFiles" class="files-container">
+        ${roundEntries.map(([round, files]) =>
+          showRoundHeaders
+            ? this.renderRoundCollapsible(round, files)
+            : files.map(f => this.renderFileItem(f))
+        )}
+      </div>
+    </vscode-collapsible>
+  `;
+}
+
+private renderRoundCollapsible(round: string, files: OutputFileInfo[]) {
+  return html`
+    <vscode-collapsible class="round-collapsible" open title="Round ${round}">
+      <div class="round-content">
+        ${files.map(f => this.renderFileItem(f))}
+      </div>
+    </vscode-collapsible>
+  `;
+}
+
+private renderFileItem(file: OutputFileInfo) {
+  const location = file.location;
+  const displayPath = location.kind === 'workspace' || location.kind === 'runStorage'
+    ? location.relativePath
+    : location.absolutePath;
+
+  return html`
+    <div class="file-item">
+      <span class="file-name">
+        <span class="file-path clickable-link" @click=${() => this.handleFileOpen(file)}>
+          <span class="file-dir">${this.getDirPart(displayPath)}</span>
+          <span class="file-basename">${this.getBasename(displayPath)}</span>
+        </span>
+      </span>
+      <vscode-toolbar-container class="file-actions">
+        <vscode-toolbar-button class="compare-btn" icon="diff" label="Compare with base"
+          @click=${() => this.handleFileCompareOriginal(file)}
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button class="accept-btn" icon="check" label="Accept edits"
+          @click=${() => this.handleFileAccept(file)}
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button class="merge-btn" icon="git-merge" label="Merge edits"
+          @click=${() => this.handleFileMerge(file)}
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button class="prev-btn" icon="diff-added" label="Compare with previous"
+          @click=${() => this.handleFileComparePrevious(file)}
+        ></vscode-toolbar-button>
+      </vscode-toolbar-container>
+    </div>
+  `;
+}
+```
+
+##### Step 2.6: Port Follow-Up Input
+
+```typescript
+private renderFollowUpInput() {
+  if (!this.activeStream) return nothing;
+
+  const queued = this.activeStreamState?.queuedFollowUps ?? [];
+
+  return html`
+    <div id="followUpContainer" class="follow-up-container">
+      ${queued.length ? html`
+        <vscode-collapsible
+          id="queuedFollowUpsCollapsible"
+          title="Queued Messages"
+          class="queued-follow-ups-collapsible"
+          open
+        >
+          <div id="queuedFollowUpsList" class="queued-follow-ups-list">
+            ${queued.map(text => html`
+              <div class="queued-follow-up-item">
+                <i class="codicon codicon-comment queued-follow-up-icon"></i>
+                <span class="queued-follow-up-text">${text}</span>
+              </div>
+            `)}
+          </div>
+        </vscode-collapsible>
+      ` : nothing}
+
+      <div class="follow-up-input-row">
+        <vscode-textarea
+          id="followUpInput"
+          placeholder="Send follow-up message"
+          rows="10"
+          resize="vertical"
+          @keydown=${this.handleFollowUpKeydown}
+        ></vscode-textarea>
+        <div class="follow-up-actions">
+          <vscode-toolbar-button id="polishFollowUpBtn" icon="sparkle"
+            label="Polish" title="Polish with AI"
+            @click=${this.handleFollowUpPolish}
+          ></vscode-toolbar-button>
+          <vscode-toolbar-button id="clearFollowUpBtn" icon="clear-all"
+            label="Clear" title="Clear input"
+            @click=${this.handleFollowUpClear}
+          ></vscode-toolbar-button>
+          <vscode-toolbar-button id="sendFollowUpBtn" icon="send"
+            label="Send" title="Send follow-up"
+            @click=${this.handleFollowUpSend}
+          ></vscode-toolbar-button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+```
+
+##### Step 2.7: Port Log Container with Entry Types
+
+```typescript
+private renderLogContainer() {
+  const logs = this.activeStreamState?.logs ?? [];
+  const groups = this.activeStreamState?.groups ?? [];
+  const isWorkflow = this.activeStream?.agentCategory === 'workflow';
+
+  return html`
+    <vscode-scrollable id="logContent" class="log-container">
+      ${isWorkflow
+        ? groups.map(group => this.renderTaskGroup(group))
+        : logs.map(log => this.renderLogEntry(log))
+      }
+    </vscode-scrollable>
+  `;
+}
+
+private renderLogEntry(log: LogMessageData) {
+  // Dispatch to appropriate renderer based on log type
+  switch (log.messageType) {
+    case 'userMessage':
+      return this.renderUserMessage(log);
+    case 'toolUse':
+      return this.renderToolUseEntry(log);
+    case 'banner':
+      return this.renderBannerDetails(log);
+    default:
+      return this.renderLogLine(log);
+  }
+}
+
+private renderLogLine(log: LogMessageData) {
+  return html`
+    <div class="log-line" data-id="${log.id}">
+      <span class="timestamp">${this.formatTime(log.timestamp)}</span>
+      <span class="level ${log.level}">${log.level}</span>
+      <span class="message">${log.text}</span>
+    </div>
+  `;
+}
+
+private renderUserMessage(log: LogMessageData) {
+  return html`
+    <div class="user-message-container">
+      <div class="user-message">
+        <div class="user-message-header">
+          <i class="codicon codicon-account user-message-icon"></i>
+          <span class="user-message-timestamp">${this.formatTime(log.timestamp)}</span>
+        </div>
+        <div class="user-message-content">${log.text}</div>
+      </div>
+    </div>
+  `;
+}
+
+private renderTaskGroup(group: TaskGroup) {
+  return html`
+    <div class="log-group" data-group-id="${group.id}" data-run-id="${group.runId}">
+      <details class="log-group-details" ?open=${group.status !== 'completed'}>
+        <summary class="log-group-header">
+          <span class="group-status-icon ${group.status}"></span>
+          <span class="group-title">${group.name}</span>
+          <span class="group-time">
+            <span class="group-start-time">${this.formatTime(group.startTime)}</span>
+            ${group.duration ? html`<span class="group-duration">${group.duration}ms</span>` : nothing}
+          </span>
+        </summary>
+        <div class="log-group-content">
+          ${group.children?.map(child => this.renderTaskGroup(child)) ?? nothing}
+        </div>
+      </details>
+    </div>
+  `;
+}
+```
+
+---
+
+#### Lit Patterns Reference
+
+##### Conditional Rendering
+
+```typescript
+// Use `nothing` for empty output (not null/undefined)
+${condition ? html`<div>content</div>` : nothing}
+
+// Use `when` directive for lazy evaluation
+${when(this.isLoading, () => html`<vscode-progress-ring></vscode-progress-ring>`)}
+```
+
+##### List Rendering with Keys
+
+```typescript
+// Use `repeat` for keyed lists (better performance for reordering)
+${repeat(this.streams, stream => stream.name, stream => this.renderStreamTab(stream))}
+
+// Use `map` for simple lists
+${this.logs.map(log => this.renderLogLine(log))}
+```
+
+##### Class Binding
+
+```typescript
+// Use classMap for multiple conditional classes
+class=${classMap({
+  'stream-tab': true,
+  'active': this.isActive,
+  'is-running': this.status === 'running',
+})}
+```
+
+##### Event Handling
+
+```typescript
+// Inline handlers for simple cases
+@click=${this.handleClick}
+
+// Arrow functions for parameters
+@click=${() => this.handleAction(item.id)}
+
+// Stop propagation inline
+@click=${(e: Event) => { e.stopPropagation(); this.handleDelete(id); }}
+```
+
+##### DOM Queries
+
+```typescript
+// Use @query decorator instead of getElementById
+@query('#followUpInput') private followUpInput!: HTMLTextAreaElement;
+
+// Access in methods
+this.followUpInput.value = '';
+this.followUpInput.focus();
+```
+
+##### Refs for vscode-elements
+
+```typescript
+// vscode-elements have custom properties/methods
+@query('vscode-single-select') private runSelector!: HTMLElement & { value: string };
+
+handleRunChange() {
+  const runId = this.runSelector.value;
+  this.postCommand(PROGRESS_VIEW_COMMANDS.SELECT_RUN, { runId });
+}
+```
+
+---
+
+#### Migration Checklist
+
+| Legacy Module                | Status | Lit Replacement                        |
+| ---------------------------- | ------ | -------------------------------------- |
+| `messageHandlers.js`         | ✅     | Already ported to `ProgressApp.ts`     |
+| `progressViewState.js`       | ✅     | Using `@state()` decorators            |
+| `domHandlers.js`             | 🔄     | Replace with render methods            |
+| `StreamTabs.js`              | 🔄     | `renderStreamTabs()` + `renderStreamTab()` |
+| `Toolbar.js`                 | 🔄     | `renderToolbar()`                      |
+| `Status.js`                  | 🔄     | Inline in `renderLogHeader()`          |
+| `FileList.js`                | 🔄     | `renderFileList()` + `renderFileItem()` |
+| `RunSelector.js`             | 🔄     | `renderRunSelectorRow()`               |
+| `InstructionPanel.js`        | 🔄     | `renderInstructionPanel()`             |
+| `FollowUpInputManager.js`    | 🔄     | `renderFollowUpInput()`                |
+| `ApprovalRequests.js`        | 🔄     | `renderToolEditApproval()`             |
+| `BashApprovalRequests.js`    | 🔄     | `renderBashApproval()`                 |
+| `RetryRequests.js`           | 🔄     | `renderRetryRequest()`                 |
+| `WorkflowProposals.js`       | 🔄     | `renderAgentProposal()`                |
+| `TodoList.js`                | 🔄     | `renderTodoList()`                     |
+| `FollowupSectionManager.js`  | 🔄     | `renderFollowupSection()`              |
+| `formatters/*.js`            | 🔄     | Port to TypeScript, use in renders     |
+| `handlers/themeHandlers.js`  | ✅     | Keep external (CSS handles theming)    |
+| `taskManagers.js`            | ✅     | Backend handles task management        |
+| `usageManagers.js`           | 🔄     | `renderUsageFooter()`                  |
+
+**Legend:** ✅ Complete | 🔄 To Port | ❌ Delete
+
+---
+
+---
+
+### Modern Lit Architecture Plan
+
+#### Design Principles
+
+1. **Preserve Backend Consolidations** - The manager pattern (`PersistentMapManager`, `ApprovalRequestHandler<T,K>`) is excellent; keep frontend state aligned
+2. **Context for Actions, Props for Data** - Use `@lit/context` for command dispatch; use props for rendering data
+3. **Controllers for Reusable Logic** - Extract message handling, keyboard shortcuts into reactive controllers
+4. **Single Responsibility Components** - Each component handles one concern (rendering, not orchestration)
+5. **External CSS** - Use light DOM with existing CSS files; no scoped styles duplication
+
+#### State Architecture: Stateless View with Cache
+
+**Principle:** The frontend is a stateless view. Backend is the source of truth. Frontend receives data via messages, caches it for fast tab switching, and renders.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        ProgressApp (Root)                           │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                    MessageController                         │   │
+│  │  - Listens to window 'message' events                        │   │
+│  │  - Validates payloads with Zod schemas                       │   │
+│  │  - Updates view cache + triggers re-render                   │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  Reactive State (@state - auto-triggers re-render):                 │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ streams: StreamTabInfo[]     # List of all streams           │   │
+│  │ activeStreamId: string|null  # Currently selected stream     │   │
+│  │ activeStatus: StreamStatus   # Status of active stream       │   │
+│  │ streamFilter: AgentCategory  # Filter setting                │   │
+│  │ toolEditPrompts: []          # Pending tool edit approvals   │   │
+│  │ bashPrompts: []              # Pending bash approvals        │   │
+│  │ retryPrompts: []             # Pending retry requests        │   │
+│  │ proposalPrompts: []          # Pending agent proposals       │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  View Cache (NOT reactive - requires manual requestUpdate()):       │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  streamViewCache: Map<StreamId, StreamViewData>              │   │
+│  │  ├─ logs: LogMessageData[]                                   │   │
+│  │  ├─ groups: TaskGroup[]                                      │   │
+│  │  ├─ todos: TodoItem[]                                        │   │
+│  │  ├─ outputFilesByRun: Record<runId, Record<round, files>>    │   │
+│  │  ├─ usageByRun: Record<runId, TokenUsageStats>               │   │
+│  │  └─ ...                                                      │   │
+│  │                                                              │   │
+│  │  Purpose: Cache last-received data per stream for instant    │   │
+│  │  tab switching. Backend remains source of truth.             │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  Context Provider (actions only, no state):                         │
+│  ┌─────────────────────┐                                           │
+│  │ CommandsContext     │                                           │
+│  │ - postCommand()     │  ← Dispatch actions to backend            │
+│  └─────────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                   Props (data flows down)
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+    Child Components    Child Components    Child Components
+    (receive props)     (receive props)     (receive props)
+    (consume context    (consume context    (consume context
+     for actions)        for actions)        for actions)
+```
+
+##### Why View Cache (Map)?
+
+| Without Cache | With Cache |
+|---------------|------------|
+| Tab switch → backend re-sends all data | Tab switch → instant render from cache |
+| Slow UX, network round-trip | Fast UX, backend only sends updates |
+| Simpler code | Requires cache invalidation awareness |
+
+**The Map is NOT state** — it's a cache of "last received from backend". Backend remains the single source of truth.
+
+##### Map Reactivity Pattern
+
+Maps don't trigger Lit's reactive updates. Two patterns to handle this:
+
+**Pattern A: Manual `requestUpdate()` (current implementation)**
+
+```typescript
+private streamViewCache = new Map<StreamTabId, StreamViewData>();
+
+private updateCache(streamId: StreamTabId, update: Partial<StreamViewData>): void {
+  const current = this.streamViewCache.get(streamId) ?? createEmptyViewData();
+  this.streamViewCache.set(streamId, { ...current, ...update });
+  this.requestUpdate(); // Manual trigger required after every Map mutation
+}
+```
+
+**Pattern B: Immutable Map replacement (cleaner, recommended)**
+
+```typescript
+@state() private streamViewCache = new Map<StreamTabId, StreamViewData>();
+
+private updateCache(streamId: StreamTabId, update: Partial<StreamViewData>): void {
+  const current = this.streamViewCache.get(streamId) ?? createEmptyViewData();
+  const newMap = new Map(this.streamViewCache);
+  newMap.set(streamId, { ...current, ...update });
+  this.streamViewCache = newMap; // Assignment triggers @state reactivity
+}
+```
+
+##### Prompt Arrays: Keep Separate (No Consolidation)
+
+**Decision:** Keep 4 separate `@state()` arrays. Do NOT consolidate into a Map.
+
+**Rationale:**
+- Arrays with `@state()` are already reactive — no manual `requestUpdate()`
+- Map consolidation would require filtering on every render: `[...map.values()].filter()`
+- Filtering creates garbage and is less efficient than direct array access
+- Current pattern is explicit, simple, and works
+
+```typescript
+// ✅ Keep this pattern
+@state() private toolEditPrompts: ToolEditApprovalPrompt[] = [];
+@state() private bashPrompts: BashApprovalPrompt[] = [];
+@state() private retryPrompts: RetryRequestPrompt[] = [];
+@state() private proposalPrompts: AgentProposalPrompt[] = [];
+
+// ❌ Don't do this
+@state() private pendingPrompts = new Map<string, PendingPrompt>(); // Requires filtering
+```
+
+#### Context: Actions Only
+
+Only provide `CommandsContext` for action dispatch. Data flows via props, not context.
+
+**Why no data context?**
+- Props make data flow explicit and components testable
+- Context for data creates hidden dependencies
+- Changing context value re-renders all consumers (performance issue)
+
+```typescript
+// src/progressView/frontend/context/commands.ts
+import { createContext } from '@lit/context';
+
+export interface CommandsContextValue {
+  postCommand: (command: string, payload?: Record<string, unknown>) => void;
+}
+
+export const commandsContext = createContext<CommandsContextValue>('commands');
+
+// Usage in ProgressApp (provider)
+@provide({ context: commandsContext })
+private commands: CommandsContextValue = {
+  postCommand: (command, payload) => postMessage({ command, ...payload }),
+};
+
+// Usage in child component (consumer) - just @consume, no @property
+@consume({ context: commandsContext })
+private commands!: CommandsContextValue;
+```
+
+#### Reactive Controller
+
+```typescript
+// src/progressView/frontend/controllers/MessageController.ts
+import { ReactiveController, ReactiveControllerHost } from 'lit';
+
+export interface MessageHost extends ReactiveControllerHost {
+  handleIncomingMessage(message: unknown): void;
+}
+
+/**
+ * Manages VS Code webview message lifecycle.
+ * Automatically adds/removes event listener on connect/disconnect.
+ */
+export class MessageController implements ReactiveController {
+  private host: MessageHost;
+  private abortController: AbortController | null = null;
+
+  constructor(host: MessageHost) {
+    this.host = host;
+    host.addController(this);
+  }
+
+  hostConnected() {
+    this.abortController = new AbortController();
+    window.addEventListener('message', this.handleMessage, {
+      signal: this.abortController.signal,
+    });
+    postMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY });
+  }
+
+  hostDisconnected() {
+    this.abortController?.abort();
+  }
+
+  private handleMessage = (event: MessageEvent) => {
+    const message = event.data;
+    if (!message?.command) return;
+    this.host.handleIncomingMessage(message);
+  };
+}
+```
+
+---
+
+#### Component Architecture
+
+##### File Structure (Final)
+
+```
+src/progressView/frontend/
+├── index.ts                          # Entry point
+├── ProgressApp.ts                    # Root orchestrator (~400 lines)
+│
+├── context/
+│   ├── index.ts                      # Barrel export
+│   └── commands.ts                   # CommandsContext (actions only, no state)
+│
+├── controllers/
+│   ├── index.ts                      # Barrel export
+│   ├── MessageController.ts          # Message lifecycle + validation
+│   └── KeyboardController.ts         # Keyboard shortcuts (optional)
+│
+├── types/
+│   ├── index.ts                      # Barrel export
+│   ├── prompts.ts                    # PendingPrompt union type
+│   └── state.ts                      # StreamState interface (if not in schemas)
+│
+├── components/
+│   ├── index.ts                      # Barrel export for all components
+│   │
+│   ├── layout/
+│   │   ├── index.ts
+│   │   ├── progress-split-layout.ts  # vscode-split-layout wrapper
+│   │   ├── progress-header.ts        # Stream name, status, YOLO, toolbar
+│   │   └── progress-footer.ts        # Context state, run summary
+│   │
+│   ├── streams/
+│   │   ├── index.ts
+│   │   ├── stream-tabs-panel.ts      # Right panel container
+│   │   ├── stream-tab.ts             # Single tab button
+│   │   └── stream-filters.ts         # Radio group + sort buttons
+│   │
+│   ├── content/
+│   │   ├── index.ts
+│   │   ├── content-area.ts           # Switches workflow/tooluse
+│   │   ├── workflow-content.ts       # Workflow-specific layout
+│   │   └── tooluse-content.ts        # ToolUse-specific layout
+│   │
+│   ├── logs/
+│   │   ├── index.ts
+│   │   ├── log-container.ts          # vscode-scrollable wrapper
+│   │   ├── log-entry.ts              # Dispatches to specific renderers
+│   │   ├── log-line.ts               # Simple text log
+│   │   ├── user-message.ts           # User message bubble
+│   │   ├── banner-details.ts         # Collapsible banner
+│   │   └── tool-use-entry.ts         # Tool use details
+│   │
+│   ├── tasks/
+│   │   ├── index.ts
+│   │   ├── task-group.ts             # Collapsible group
+│   │   ├── run-selector.ts           # vscode-single-select for runs
+│   │   └── instruction-panel.ts      # Readonly instruction display
+│   │
+│   ├── todos/
+│   │   ├── index.ts
+│   │   └── todo-list.ts              # Todo items in collapsible
+│   │
+│   ├── files/
+│   │   ├── index.ts
+│   │   ├── file-list.ts              # Generated files collapsible
+│   │   ├── file-item.ts              # Single file with actions
+│   │   └── round-collapsible.ts      # Round header wrapper
+│   │
+│   ├── prompts/
+│   │   ├── index.ts
+│   │   ├── prompt-container.ts       # Renders all pending prompts
+│   │   ├── tool-edit-prompt.ts       # File edit approval
+│   │   ├── bash-prompt.ts            # Command approval
+│   │   ├── retry-prompt.ts           # Retry request
+│   │   └── agent-proposal.ts         # Workflow proposal
+│   │
+│   └── followup/
+│       ├── index.ts
+│       ├── follow-up-input.ts        # Textarea + action buttons
+│       ├── follow-up-section.ts      # Mode toggle, agent/model selects
+│       └── queued-follow-ups.ts      # Queued messages collapsible
+│
+└── utils/
+    ├── index.ts
+    ├── formatters.ts                 # Time formatting, path utilities
+    └── vscode.ts                     # postMessage wrapper
+```
+
+##### Component Responsibilities
+
+| Component | Responsibility | Props (In) | Events (Out) |
+|-----------|---------------|------------|--------------|
+| `ProgressApp` | Orchestration, state, context providers | — | — |
+| `progress-split-layout` | Layout structure | — | — |
+| `progress-header` | Stream name, status pill, toolbar | `stream`, `status`, `isYolo` | `yolo-toggle`, `toolbar-action` |
+| `stream-tabs-panel` | Tab list container | `streams`, `activeId` | — |
+| `stream-tab` | Single tab rendering | `stream`, `isActive` | `select`, `delete` |
+| `stream-filters` | Filter radio + sort buttons | `filter`, `sortOrder` | `filter-change`, `sort-change` |
+| `content-area` | Workflow/ToolUse switcher | `agentCategory` | — |
+| `log-container` | Scrollable log area | `logs`, `groups`, `isWorkflow` | — |
+| `log-entry` | Entry type dispatcher | `log` | — |
+| `task-group` | Collapsible task group | `group` | — |
+| `run-selector` | Run dropdown | `runs`, `activeRunId` | `run-change` |
+| `instruction-panel` | Instruction display | `instruction` | `copy` |
+| `todo-list` | Todo items | `todos` | — |
+| `file-list` | Files by round | `filesByRound`, `showRoundHeaders` | — |
+| `file-item` | Single file actions | `file` | `open`, `compare`, `accept`, `merge` |
+| `prompt-container` | Render all prompts | `prompts` | — |
+| `tool-edit-prompt` | Edit approval UI | `prompt` | `approve`, `reject`, `open-diff` |
+| `bash-prompt` | Command approval UI | `prompt` | `approve`, `reject` |
+| `retry-prompt` | Retry UI | `prompt` | `retry`, `dismiss` |
+| `agent-proposal` | Proposal UI | `proposal` | `approve`, `reject`, `setup` |
+| `follow-up-input` | Input + actions | `disabled` | `send`, `polish`, `clear` |
+| `queued-follow-ups` | Queued messages | `messages` | — |
+
+##### Event Flow Pattern
+
+```
+User Action (click)
+       │
+       ▼
+Child Component dispatches CustomEvent
+       │
+       ▼
+Parent catches event OR event bubbles to ProgressApp
+       │
+       ▼
+ProgressApp calls context.postCommand()
+       │
+       ▼
+VS Code webview postMessage()
+       │
+       ▼
+Backend ProgressViewMessageHandler
+```
+
+**Example: File Open**
+
+```typescript
+// file-item.ts
+@customElement('file-item')
+export class FileItem extends LitElement {
+  @property({ type: Object }) file!: OutputFileInfo;
+  @consume({ context: commandsContext }) commands!: CommandsContextValue;
+
+  private handleOpen() {
+    this.commands.postCommand(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
+      file: this.file.location.absolutePath,
+    });
+  }
+
+  render() {
+    return html`
+      <div class="file-item">
+        <span class="file-path clickable-link" @click=${this.handleOpen}>
+          ${this.file.location.relativePath}
+        </span>
+        <!-- ... actions ... -->
+      </div>
+    `;
+  }
+}
+```
+
+---
+
+#### Implementation Phases
+
+##### Phase 2.1: Foundation (Controllers + Context)
+
+**Goal:** Set up infrastructure without changing UI
+
+1. Create `context/commands.ts` and `context/stream.ts`
+2. Create `MessageController.ts` (extract from ProgressApp)
+3. Add `@lit/context` dependency
+4. Modify ProgressApp to provide contexts
+5. **Test:** Verify message handling still works
+
+**Files changed:** 4 new, 1 modified
+
+##### Phase 2.2: Layout Components
+
+**Goal:** Extract layout structure
+
+1. Create `progress-split-layout.ts`
+2. Create `progress-header.ts`
+3. Create `progress-footer.ts`
+4. Update ProgressApp to use layout components
+5. **Test:** Verify layout renders correctly
+
+**Files changed:** 3 new, 1 modified
+
+##### Phase 2.3: Stream Tabs
+
+**Goal:** Extract stream tab management
+
+1. Create `stream-tabs-panel.ts`
+2. Create `stream-tab.ts`
+3. Create `stream-filters.ts`
+4. Update ProgressApp to use stream components
+5. **Test:** Verify tab switching, filtering, sorting work
+
+**Files changed:** 3 new, 1 modified
+
+##### Phase 2.4: Prompt Components
+
+**Goal:** Extract prompt rendering into separate components (keep 4 arrays)
+
+1. Create `prompt-container.ts` (receives 4 arrays as props)
+2. Create `tool-edit-prompt.ts`, `bash-prompt.ts`, `retry-prompt.ts`, `agent-proposal.ts`
+3. Update ProgressApp to use prompt components
+4. **Test:** Verify all approval flows work
+
+**Files changed:** 5 new, 1 modified
+
+##### Phase 2.5: Log Components
+
+**Goal:** Extract log rendering
+
+1. Create `log-container.ts`
+2. Create `log-entry.ts` (dispatcher)
+3. Create `log-line.ts`, `user-message.ts`, `banner-details.ts`, `tool-use-entry.ts`
+4. Update ProgressApp/content-area to use log components
+5. **Test:** Verify log rendering for both workflow/tooluse
+
+**Files changed:** 6 new, 1 modified
+
+##### Phase 2.6: Task Components
+
+**Goal:** Extract task/workflow components
+
+1. Create `task-group.ts`
+2. Create `run-selector.ts`
+3. Create `instruction-panel.ts`
+4. Create `content-area.ts`, `workflow-content.ts`, `tooluse-content.ts`
+5. **Test:** Verify run selection, instruction display, task groups
+
+**Files changed:** 6 new, 1 modified
+
+##### Phase 2.7: File Components
+
+**Goal:** Extract file list rendering
+
+1. Create `file-list.ts`
+2. Create `file-item.ts`
+3. Create `round-collapsible.ts`
+4. Update content components to use file components
+5. **Test:** Verify file actions (open, compare, accept, merge)
+
+**Files changed:** 3 new, 1 modified
+
+##### Phase 2.8: Todo + Follow-up Components
+
+**Goal:** Extract remaining components
+
+1. Create `todo-list.ts`
+2. Create `follow-up-input.ts`
+3. Create `follow-up-section.ts`
+4. Create `queued-follow-ups.ts`
+5. Update ProgressApp to use follow-up components
+6. **Test:** Verify todo display, follow-up send/polish
+
+**Files changed:** 4 new, 1 modified
+
+##### Phase 2.9: Cleanup + Polish
+
+**Goal:** Final refinements
+
+1. Remove unused code from ProgressApp
+2. Add missing barrel exports
+3. Verify all CSS classes still work
+4. Run full test suite
+5. Update component documentation
+
+---
+
+#### Component Template (Reference)
+
+```typescript
+// src/progressView/frontend/components/files/file-item.ts
+import { LitElement, html, nothing } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { classMap } from 'lit/directives/class-map.js';
+
+import { commandsContext, type CommandsContextValue } from '../../context';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import type { OutputFileInfo } from '@shared/schemas';
+
+/**
+ * Renders a single output file with action buttons.
+ *
+ * @fires open - When file path is clicked
+ * @fires compare - When compare button is clicked
+ * @fires accept - When accept button is clicked
+ * @fires merge - When merge button is clicked
+ */
+@customElement('file-item')
+export class FileItem extends LitElement {
+  // Use light DOM for external CSS
+  protected createRenderRoot() {
+    return this;
+  }
+
+  /** The output file to render */
+  @property({ type: Object }) file!: OutputFileInfo;
+
+  /** Whether to show the accept/merge buttons */
+  @property({ type: Boolean }) showEditActions = true;
+
+  /** Commands context for postMessage - just @consume, no @property needed */
+  @consume({ context: commandsContext })
+  private commands!: CommandsContextValue;
+
+  private get displayPath(): string {
+    const loc = this.file.location;
+    return loc.kind === 'workspace' || loc.kind === 'runStorage'
+      ? loc.relativePath
+      : loc.absolutePath;
+  }
+
+  private handleOpen() {
+    this.commands.postCommand(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
+      file: this.file.location.absolutePath,
+    });
+  }
+
+  private handleCompare() {
+    this.commands.postCommand(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL, {
+      file: this.file.location.absolutePath,
+      base: this.file.lineage?.original?.absolutePath,
+    });
+  }
+
+  private handleAccept() {
+    this.commands.postCommand(PROGRESS_VIEW_COMMANDS.ACCEPT_EDITS, {
+      file: this.file.location.absolutePath,
+    });
+  }
+
+  private handleMerge() {
+    this.commands.postCommand(PROGRESS_VIEW_COMMANDS.MERGE_EDITS, {
+      file: this.file.location.absolutePath,
+    });
+  }
+
+  render() {
+    return html`
+      <div class="file-item">
+        <span class="file-name">
+          <span class="file-path clickable-link" @click=${this.handleOpen}>
+            ${this.displayPath}
+          </span>
+        </span>
+        <vscode-toolbar-container class="file-actions">
+          <vscode-toolbar-button
+            class="compare-btn"
+            icon="diff"
+            label="Compare with base"
+            title="Compare with base"
+            @click=${this.handleCompare}
+          ></vscode-toolbar-button>
+          ${this.showEditActions ? html`
+            <vscode-toolbar-button
+              class="accept-btn"
+              icon="check"
+              label="Accept edits"
+              title="Accept edits"
+              @click=${this.handleAccept}
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
+              class="merge-btn"
+              icon="git-merge"
+              label="Merge edits"
+              title="Merge edits"
+              @click=${this.handleMerge}
+            ></vscode-toolbar-button>
+          ` : nothing}
+        </vscode-toolbar-container>
+      </div>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'file-item': FileItem;
+  }
+}
+```
+
+---
 
 #### M2 Deliverables
 
-- Lit-based UI with reactive state
-- 18 `isToolUse` conditionals → 0 (separate components)
-- 7 state tracking locations → 1 (store.ts)
-- 8 approval handlers → 1 (`<prompt-overlay>`)
-- ~3,700 lines → ~1,550 lines
-- 67+ files deleted
+**Functional:**
+- Full UI parity with legacy implementation
+- All vscode-elements components working
+- All 17 templates replaced with Lit components
+- Message handling via MessageController
+
+**Architecture:**
+- ~25 focused components (single responsibility)
+- 1 context provider (CommandsContext for actions only)
+- 1 reactive controller (MessageController)
+- 4 prompt arrays (keep separate, already reactive via @state)
+- View cache Map with immutable update pattern
+
+**Code Quality:**
+- ProgressApp reduced to ~400 lines (orchestration only)
+- Each component: 50-150 lines
+- Type-safe props and events
+- JSDoc on all public APIs
+- Barrel exports for clean imports
+
+**Files:**
+- New: `~30 files` (components, context, controllers, types)
+- Modified: `ProgressApp.ts` (slimmed down)
+- Kept: `src/progressView/styles/` (all 26 CSS files)
+- Kept: `src/progressView/index.html` (minimal)
+
+**Metrics:**
+- Components: ~25 (vs 1 monolithic)
+- Lines per component: ~100 avg (vs 1500+)
+- Context providers: 1 (commands only; data via props)
+- External CSS: 26 files preserved
 
 ---
 

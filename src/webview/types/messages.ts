@@ -6,8 +6,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { StreamTabIdSchema } from '@shared/schemas';
+import { AgentCategorySchema, StreamTabIdSchema } from '@shared/schemas';
 import {
   TOOL_EDIT_APPROVAL_ACTIONS,
   BASH_APPROVAL_ACTIONS,
@@ -307,7 +306,7 @@ export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
 
 /** Filter streams message */
 export const FilterStreamsMessageSchema = z.object({
-  filter: z.union([z.literal('all'), z.enum(AgentCategory)]),
+  filter: z.union([z.literal('all'), AgentCategorySchema]),
 });
 
 export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;

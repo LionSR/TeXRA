@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentCategorySchema } from '@shared/schemas';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
@@ -31,7 +31,7 @@ const RemoteAgentPayloadSchema = z.object({
   name: z.string(),
   description: z.string(),
   visibility: z.array(z.string()),
-  category: z.enum(AgentCategory),
+  category: AgentCategorySchema,
   supportsMultipleOutput: z.boolean(),
 });
 type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;

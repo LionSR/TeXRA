@@ -1,6 +1,6 @@
 // Local imports - webview
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-import { AGENT_CATEGORY } from '@common/constants/agentTypes.js';
+import { AgentCategory } from '@shared/schemas/agentCategory.js';
 
 // Basic file types
 export const FILE_TYPES = [
@@ -116,8 +116,11 @@ export const ELEMENT_IDS = {
   TOOL_USE_AGENT_SELECT: 'toolUseAgent',
 };
 
-// Re-export AGENT_CATEGORY as SESSION_TYPES for backwards compatibility
-export const SESSION_TYPES = AGENT_CATEGORY;
+// Session types mapped from AgentCategory
+export const SESSION_TYPES = {
+  WORKFLOW: AgentCategory.Workflow,
+  TOOL_USE: AgentCategory.ToolUse,
+};
 
 export const SESSION_TYPE_INPUT = 'sessionType';
 

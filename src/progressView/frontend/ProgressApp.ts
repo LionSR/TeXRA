@@ -44,7 +44,7 @@ import {
 } from '@progressView/types';
 
 // Local imports - agent types
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@shared/schemas';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 
 // Local imports - webview API

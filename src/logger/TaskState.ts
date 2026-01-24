@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentCategorySchema } from '@shared/schemas';
 import {
   liftLegacyAgentCategory,
   type AgentConfig,
@@ -36,7 +36,7 @@ const ActiveFilesSchema = z.partialRecord(
  */
 const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
-  z.looseObject({ agentCategory: z.enum(AgentCategory) }),
+  z.looseObject({ agentCategory: AgentCategorySchema }),
 );
 
 /** Schema for workflow task state */
@@ -75,12 +75,12 @@ export const TaskStateSchema = z.union([
 export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export interface WorkflowTaskState {
-  agentConfig: AgentConfig & { agentCategory: AgentCategory.Workflow };
+  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.Workflow };
   activeFiles: Record<FileType, boolean>;
 }
 
 export interface ToolUseTaskState {
-  agentConfig: AgentConfig & { agentCategory: AgentCategory.ToolUse };
+  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
   toolSessionState?: ToolSessionState;
 }
 
