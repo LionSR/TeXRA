@@ -22,14 +22,13 @@ npm run package
 npm run build
 # Creates: releases/texra-{version}.vsix
 
-# Run all tests with linting
-npm test
-
 # Run linting only
 npm run lint
 
 # Format code with Prettier
 npm run format
+
+# NOTE: Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 ```
 
 ## Architecture Overview
