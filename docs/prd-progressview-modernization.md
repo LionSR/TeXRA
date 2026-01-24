@@ -1,279 +1,245 @@
 # PRD: ProgressView Modernization
 
-**Depends on**: [Webview Shared Infrastructure](./prd-webview-shared-infrastructure.md)
-
 ## Overview
 
-Modernize ProgressView from vanilla JavaScript to Lit + TypeScript. This is the highest-complexity webview (1,526-line handler, 67+ modules) and serves as the pilot for the shared infrastructure.
+Add type safety to ProgressView by relocating existing Zod schemas to a browser-compatible location. Optionally rewrite the UI in Lit if type safety alone doesn't solve the maintenance burden.
 
 ## Problem Statement
 
-### 1. No Type Safety Across Process Boundary
+1. **No Type Safety Across Process Boundary**
+   - EventBus has Zod schemas, but webview receives untyped messages
+   - Frontend uses JSDoc (~367 lines) instead of real types
 
-- EventBus has Zod schemas, but webview messages are untyped
-- `commands.js` / `commands.ts` duplicated (300 lines each)
-- Frontend uses JSDoc (~367 lines) instead of real types
+2. **Overengineered State Management**
+   - 7 places track "active" state
+   - TaskGroup means "run" for Workflow, "turn" for ToolUse (semantic overloading)
+   - 6 band-aid workarounds scattered across codebase
 
-### 2. Overengineered State Management
+3. **Maintenance Burden**
+   - `messageHandlers.js`: 1268-line switch statement
+   - 18 `isToolUse` references (10 branching conditionals, 8 derived)
 
-- 7 places track "active" state (see Appendix)
-- TaskGroup means "run" for Workflow, "turn" for ToolUse (semantic overloading)
-- 6 band-aid workarounds scattered across codebase
-
-### 3. Maintenance Burden
-
-- `messageHandlers.js`: 1268-line switch statement
-- 18 `isToolUse` references (10 actual branching conditionals, 8 derived variables)
-
-### 4. Imperative DOM Patterns
-
-- Fragment batching: 53 lines of manual `createDocumentFragment()` + nested loops (lines 632-684)
-- DOM queries during render: `if (container)` checks while building UI
-- 8 nearly-identical approval handlers (tool edit, bash, retry, proposal) with show/resolve pairs
+4. **Imperative DOM Patterns**
+   - 53 lines of manual fragment batching
+   - 8 nearly-identical approval handlers
 
 ## Goals
 
-**Milestone 1 (shippable alone):**
+**Milestone 1**: Type-safe IPC via schema relocation — delivers 80% of benefit
 
-- End-to-end type safety via shared Zod schemas — delivers 80% of maintenance benefit
-
-**Milestone 2:**
-
-- Simplified state by separating Workflow and Conversation data models
-- Maintainable UI with Lit components
+**Milestone 2** (only if M1 insufficient): Lit UI rewrite
 
 ## Non-Goals
 
-- Changing EventBus architecture
-- Virtual scrolling (future optimization)
-- Adding new features
+- Shared component library (premature)
+- Modernizing other webviews (they're small, leave them alone)
+- Adding features
 
 ---
 
-## ProgressView-Specific Schemas
+## Existing Schemas (Relocation, Not Creation)
 
-Extends base schemas from `src/shared/schemas/ipc.ts`.
+**60+ Zod schemas already exist.** The work is relocation, not invention.
+
+### Browser-Ready (No Changes Needed)
+
+| Location | Schemas | Purpose |
+|----------|---------|---------|
+| `src/eventBus/schemas.ts` | `TaskGroupSchema`, `TodoItemSchema`, `AddTaskGroupPayloadSchema`, etc. | Event payloads |
+| `src/eventBus/types.ts` | `ToolEditApprovalPromptSchema`, `RetryRequestPromptSchema`, etc. | Prompt types |
+| `src/logger/LogTypes.ts` | `TaskGroupSchema`, `LogMessageDataSchema` | Log entries |
+| `src/logger/messageTypes.ts` | `MessageTypeSchema`, `LogLevelSchema` | Enums |
+| `src/agent/types/UsageTypes.ts` | `TokenUsageStatsSchema`, `ExtendedTokenUsageStatsSchema` | Token counts |
+| `src/agent/types/IdentifierTypes.ts` | `StreamTabIdSchema`, `ExecutionIdSchema` | Identifiers |
+| `src/common/constants/streamStatus.ts` | `StreamStatusSchema`, `TaskGroupStatusSchema` | Status enums |
+| `src/common/errors/schemas.ts` | `ProviderErrorSchema`, `RetryErrorInfoSchema` | Error types |
+| `src/progressView/types.ts` | `StreamTabInfoSchema`, `InstructionMetadataSchema` | UI state |
+
+### Requires Extraction
+
+| File | Issue | Solution |
+|------|-------|----------|
+| `src/utils/files/taskRunStorage.ts` | Mixes schemas with Node.js utilities (`path`, `fs`) | Extract `FileLocationSchema` to separate file |
+
+### Already Duplicated (Delete One)
+
+| Backend | Frontend | Action |
+|---------|----------|--------|
+| `src/common/webview/commands.ts` | `src/progressView/modules/commands.js` | Delete JS, import from TS |
+| `src/common/constants/streamStatus.ts` | `src/progressView/modules/constants/streamStatus.js` | Delete JS, import from TS |
+
+---
+
+## Architecture
+
+### Current Flow (Untyped)
+
+```
+EventBus (typed) → WebviewUpdater → postMessage (untyped) → Frontend JS (untyped)
+```
+
+### After M1 (Typed)
+
+```
+EventBus (typed) → WebviewUpdater (typed) → postMessage (validated) → Frontend (typed)
+```
+
+No new IPC protocol. Same messages, now validated.
+
+---
+
+## Milestone 1: Type Safety
+
+### Step 1: Extract FileLocationSchema
+
+Create `src/utils/files/FileLocationSchemas.ts` with schema definitions only:
 
 ```typescript
-// src/shared/schemas/progress.ts
-
-// Stream metadata
-export const StreamSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  agentCategory: z.enum(['workflow', 'toolUse']),
-  status: z.enum(['idle', 'running', 'completed', 'error']),
-});
-
-// Workflow mode - hierarchical runs
-export const WorkflowRunSchema = z.object({
-  id: z.string(),
-  instruction: z.string(),
-  status: z.enum(['pending', 'running', 'completed', 'error']),
-  tasks: z.array(WorkflowTaskSchema),
-  outputs: z.array(OutputFileSchema),
-  usage: TokenUsageSchema.optional(),
-});
-
-// ToolUse mode - flat conversation turns
-export const ConversationTurnSchema = z.object({
-  id: z.string(),
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string(),
-  toolCalls: z.array(ToolCallSchema).optional(),
-  timestamp: z.number(),
-});
+// Extract from taskRunStorage.ts (lines 34-72)
+export const WorkspaceFileLocationSchema = z.object({...});
+export const RunStorageFileLocationSchema = z.object({...});
+export const ExternalFileLocationSchema = z.object({...});
+export const FileLocationSchema = z.discriminatedUnion('kind', [...]);
 ```
 
-### IPC Protocol
+Update `taskRunStorage.ts` to import from new file.
 
-**9 messages to webview** (down from 20+):
+### Step 2: Create Schema Re-Export
 
-| Message | Purpose |
-|---------|---------|
-| `sync/full` | Full state on connect/stream switch |
-| `sync/stream` | Incremental update (batched) |
-| `workflow/task-append` | New task added |
-| `workflow/task-update` | Task status changed |
-| `conversation/turn-append` | New turn added |
-| `conversation/turn-update` | Turn content growing (streaming) |
-| `stream/status` | Stream lifecycle change |
-| `ui/prompt` | Show retry/approval/proposal |
-| `ui/prompt-resolved` | Dismiss prompt |
-
-**6 messages from webview:**
-
-- `ready`, `stream/action`, `agent/action`, `file/action`, `ui/respond`, `settings/toggle-bypass`
-
----
-
-## Component Architecture
-
-### Semantic Differences Requiring Separation
-
-| Concept | Workflow | ToolUse |
-|---------|----------|---------|
-| TaskGroup meaning | "Run" (switchable) | "Turn" (append-only) |
-| Group hierarchy | Root + nested children | Single level |
-| File grouping | By round (r1, r2, r3...) | Flat list |
-| User interaction | Run selector | Follow-up input |
-| Toolbar | RUN_NEW, RESUME, DIFF... | STOP, RESTORE only |
-
-### Component Hierarchy
-
-```
-<progress-app>
-  ├── <stream-tabs>                    # Uses <texra-tabs>
-  │
-  ├── <workflow-view>                  # when agentCategory === 'workflow'
-  │   ├── <run-selector>
-  │   ├── <instruction-panel>
-  │   ├── <workflow-task-list>
-  │   │   └── <workflow-task>          # Collapsible, hierarchical
-  │   ├── <file-list showRoundHeaders>
-  │   └── <workflow-toolbar>           # Uses <texra-toolbar>
-  │
-  ├── <conversation-view>              # when agentCategory === 'toolUse'
-  │   ├── <todo-list>
-  │   ├── <conversation-turn-list>
-  │   │   └── <conversation-turn>
-  │   │       └── <tool-call>
-  │   ├── <file-list>
-  │   ├── <followup-input>
-  │   └── <conversation-toolbar>
-  │
-  └── <prompt-overlay>                 # Uses <texra-modal>
-```
-
-### Band-Aids Eliminated
-
-| Pattern | Current | After |
-|---------|---------|-------|
-| `activeAgentCategory === 'toolUse'` | 18 refs (10 branch) | 0 (separate components) |
-| `group.parentGroupId` filtering | taskManagers.js | Only in `<workflow-task>` |
-| `showRun(groupId)` | taskManagers.js | Not needed in conversation |
-| `resolveActiveRunId()` fallback | 9+ explicit calls | Single store |
-| Fragment batching | 53 lines manual DOM | Lit `map()` directive |
-| DOM existence checks | `if (container)` etc | Reactive state |
-| Approval handler duplication | 8 show/resolve pairs | Single `<prompt-overlay>` |
-
----
-
-## Frontend State
+Create `src/progressView/schemas.ts`:
 
 ```typescript
-// Single source of truth for webview
-interface ProgressState {
-  activeStreamId: string | null;
-  streams: Map<string, Stream>;
-  workflowData: Map<string, WorkflowStreamData>;
-  conversationData: Map<string, ConversationStreamData>;
-  activePrompt: Prompt | null;
+// Re-export existing schemas for browser use
+// NO NEW SCHEMAS - just imports
+
+// Identifiers
+export { StreamTabIdSchema, ExecutionIdSchema } from '@agent/types/IdentifierTypes';
+
+// Status
+export { StreamStatusSchema, TaskGroupStatusSchema } from '@common/constants/streamStatus';
+
+// Task Groups
+export { TaskGroupSchema } from '@logger/LogTypes';
+export { AddTaskGroupPayloadSchema, UpdateTaskGroupPayloadSchema } from '@eventBus/schemas';
+
+// Usage
+export { TokenUsageStatsSchema } from '@agent/types/UsageTypes';
+
+// Errors
+export { ProviderErrorSchema, RetryErrorInfoSchema } from '@common/errors/schemas';
+
+// Prompts
+export {
+  ToolEditApprovalPromptSchema,
+  BashApprovalPromptSchema,
+  RetryRequestPromptSchema,
+} from '@eventBus/types';
+
+// Output Files
+export { OutputFileInfoSchema } from '@agent/output/types';
+
+// Todos
+export { TodoItemSchema, UpdateTodosPayloadSchema } from '@eventBus/schemas';
+```
+
+### Step 3: Validate in Message Handler
+
+Update `ProgressViewMessageHandler.ts`:
+
+```typescript
+import { AddTaskGroupPayloadSchema } from './schemas';
+
+// In handleMessage:
+case 'addTaskGroup': {
+  const result = AddTaskGroupPayloadSchema.safeParse(message.payload);
+  if (!result.success) {
+    console.error('Invalid addTaskGroup payload', result.error);
+    return;
+  }
+  this.state.taskGroups.addGroup(result.data);
 }
 ```
 
-Message handling: If `task-update` arrives before `task-append`, drop it. Full sync recovers on next stream switch.
+### Step 4: Delete Duplicates
 
----
-
-## Persistence Migration
-
-### Current Keys (12) → New Keys (4)
-
-| Old Keys | New Key |
-|----------|---------|
-| `streamTabs`, `activeStreamTab`, `taskStates` | `texra.streams` |
-| `taskGroups`, `runInstructions`, `outputFiles`, `usageStats`, `activeRunIds` | `texra.workflowData` |
-| `executionIds` | `texra.conversationData` |
-| `streamSortOrder`, `streamAgentFilter` | `texra.uiPreferences` |
-
-### Migration Strategy
-
-```typescript
-function loadState(): ProgressState {
-  const newFormat = workspaceSM.get('texra.progressState');
-  if (newFormat) {
-    const result = ProgressStateSchema.safeParse(newFormat);
-    if (result.success) return result.data;
-  }
-
-  const legacyStreams = workspaceSM.get('texra.streamTabs');
-  if (legacyStreams) {
-    const migrated = migrateLegacyState();
-    clearLegacyKeys();
-    return migrated;
-  }
-
-  return createEmptyState();
-}
+```
+DELETE: src/progressView/modules/commands.js (298 lines)
+DELETE: src/progressView/modules/constants/streamStatus.js
 ```
 
-**Principle**: If migration fails, start fresh. Users don't care about progress history.
+### Deliverable
+
+- All messages validated with existing schemas
+- 600+ duplicate lines deleted
+- Frontend receives typed data
+- No UI changes, no new dependencies
 
 ---
 
-## Migration Plan
+## Milestone 2: Lit UI (Only If Needed)
 
-### Milestone 1: Type Safety
+**Evaluate after M1 ships.** If the 1268-line switch statement and 18 isToolUse conditionals are still painful, proceed.
 
-**Prerequisite**: Shared infrastructure from Phase 0.
+### Approach
 
-1. Add ProgressView schemas to `src/shared/schemas/progress.ts`
-2. Wire up validation in `ProgressViewMessageHandler.ts`
-3. Delete duplicates: `commands.js`, `streamStatus.js`
+1. Add `lit` dependency
+2. Create single `<progress-app>` component (~500 lines)
+3. Extract child components only when a file exceeds 300 lines
+4. No shared component library
 
-**Test**: Extension works, messages typed correctly.
+### Component Extraction Order
 
-### Milestone 2: Lit UI
+Start monolithic, extract as needed:
 
-**Only after Milestone 1 is stable.**
-
-1. Create `src/progressView/frontend/` directory
-2. Create minimal Lit shell (`<progress-app>`)
-3. Wire up store + message handler
-4. Build components incrementally:
-   - `StreamTabs.ts` (uses `<texra-tabs>`)
-   - `WorkflowView.ts` + children
-   - `ConversationView.ts` + children
-   - `PromptOverlay.ts` (uses `<texra-modal>`)
-5. Delete `src/progressView/modules/` after everything works
+```
+Week 1: <progress-app> (everything in one file)
+        ↓
+Week 2: Extract <stream-tabs> (if tabs logic > 100 lines)
+        Extract <prompt-overlay> (if prompt handling > 100 lines)
+        ↓
+Week 3: Extract <workflow-view> and <conversation-view>
+        (only if isToolUse conditionals are still a problem)
+```
 
 ### Escape Hatch
 
-If Milestone 2 fails: revert `index.html`, keep `modules/`. Schemas from M1 remain valuable.
+If M2 fails: revert `index.html`, keep `modules/`. M1 type safety remains.
 
 ---
 
-## Deletion List
+## What We're NOT Doing
 
-**Milestone 1:**
-
-```
-src/common/webview/commands.js
-src/common/constants/streamStatus.js
-```
-
-**Milestone 2:**
-
-```
-src/progressView/modules/  (entire directory - 67+ files)
-```
+| Temptation | Why Not |
+|------------|---------|
+| Shared component library | Build when needed twice, not before |
+| Modernize HistoryView (160 lines) | Works fine, maintenance cost ≈ 0 |
+| Modernize ProfileView (211 lines) | Works fine, maintenance cost ≈ 0 |
+| Modernize MemoryView (278 lines) | Works fine, maintenance cost ≈ 0 |
+| Redesign IPC protocol | Same messages, just validated |
+| Design tokens | VS Code already provides `--vscode-*` |
+| Webpack multi-entry for 5 views | Need it for 1 view, build for 1 |
 
 ---
 
 ## Risks
 
-### High: Persistence Migration
+### High: Breaking Existing Behavior
 
-12 storage keys → 4. **Mitigation**: Test on real data. If migration fails, start fresh.
+Schema validation may reject messages that currently "work" due to loose typing.
 
-### Medium: Message Ordering
+**Mitigation**: Use `safeParse`, log failures, don't crash. Fix upstream.
 
-If `task-update` arrives before `task-append`, drop it. Full sync on next stream switch recovers.
+### Medium: FileLocationSchema Extraction
 
-### Low: Component Complexity
+Separating schemas from utilities may break imports.
 
-Workflow vs Conversation separation is significant refactor. **Mitigation**: Separate components mean isolated testing.
+**Mitigation**: Re-export from original file for backward compatibility.
+
+### Low: M2 Scope Creep
+
+Tendency to build component library during UI rewrite.
+
+**Mitigation**: Hard rule — no file in `src/shared/` until something is used by 2+ webviews.
 
 ---
 
@@ -283,19 +249,17 @@ Workflow vs Conversation separation is significant refactor. **Mitigation**: Sep
 
 | Metric | Current | After |
 |--------|---------|-------|
-| Backend→Webview type safety | 0% | 100% |
-| Duplicate code | 600+ lines | 0 |
+| Typed messages | 0% | 100% |
+| Duplicate schema code | 600+ lines | 0 |
+| New code written | - | ~50 lines (re-exports) |
 
-### After M2
+### After M2 (if done)
 
 | Metric | Current | After |
 |--------|---------|-------|
-| Frontend type coverage | ~20% | 100% |
-| Lines of code (frontend) | ~3700 | ~2000 |
 | `isToolUse` conditionals | 18 | 0 |
 | State tracking locations | 7 | 1 |
-| Manual DOM assembly lines | 53+ | 0 |
-| Duplicate approval handlers | 8 | 1 |
+| Frontend lines | ~3700 | ~2000 |
 
 ---
 
@@ -313,33 +277,11 @@ Workflow vs Conversation separation is significant refactor. **Mitigation**: Sep
 | Frontend `runSelector._pendingActiveId` | UI selection |
 | Frontend `streamStatuses` | Lifecycle |
 
-**Solution**: Single `store.ts` with `activeStreamId` and agent-specific data maps.
-
 ### Band-Aid Workarounds
 
-1. `resolveActiveRunId()` - Expensive fallback iterating 4+ maps (called 9+ times per message)
-2. `lastRenderedStream` - Detecting stream switches via render state comparison
-3. `_clearAgentCategoryState()` - Manual state wipe when switching workflow↔tooluse
-4. `RunScopedMap` resolver closure - Hidden `activeStream` dependency through injected function
+1. `resolveActiveRunId()` - Iterates 4+ maps (called 9+ times per message)
+2. `lastRenderedStream` - Detecting stream switches via render state
+3. `_clearAgentCategoryState()` - Manual state wipe on category change
+4. `RunScopedMap` resolver closure - Hidden `activeStream` dependency
 5. `_pendingActiveId` - Buffer for UI selection before backend confirms
-6. 18 `isToolUse` references - 10 branching conditionals + 8 derived variables
-
-**Solution**: Clean separation of Workflow and Conversation data models.
-
-### Imperative DOM Patterns (Lit Eliminates)
-
-1. **Fragment batching** (messageHandlers.js:632-684)
-   - 53 lines: `createDocumentFragment()` → nested loops → `appendChild()`
-   - Lit equivalent: `html\`${items.map(i => html\`<div>${i}</div>\`)}\``
-
-2. **DOM queries during render**
-   - Pattern: `const container = document.getElementById(...); if (container) { ... }`
-   - Lit equivalent: Reactive `@property` automatically triggers re-render
-
-3. **Approval handler duplication**
-   - 8 nearly-identical handlers: `showToolEditApproval`, `resolveToolEditApproval`, `showBashApproval`, `resolveBashApproval`, etc.
-   - Lit equivalent: Single `<prompt-overlay kind="tool-edit">` component with typed props
-
-4. **Manual class toggling**
-   - Pattern: `element.classList.add/remove/toggle('active', 'hidden', ...)`
-   - Lit equivalent: `class=${classMap({ active: this.isActive, hidden: this.isHidden })}`
+6. 18 `isToolUse` references - Conditional logic everywhere
