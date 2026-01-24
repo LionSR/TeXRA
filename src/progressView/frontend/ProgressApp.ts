@@ -1,10 +1,13 @@
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { cache } from 'lit/directives/cache.js';
+import { when } from 'lit/directives/when.js';
 import { z } from 'zod';
 
-// Local imports - shared agent categories
-import { AGENT_CATEGORY, AgentCategorySchema } from '@shared/schemas';
+// Local imports - shared base
+import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { postMessage } from '@shared/vscode';
 
 // Local imports - shared schemas
 import {
@@ -23,18 +26,27 @@ import {
   ToolEditApprovalPromptSchema,
   UpdateTaskGroupPayloadSchema,
 } from '@shared/schemas';
-import type {
-  LogMessageData,
-  OutputFileInfo,
-  StreamTabId,
-  StreamTabInfo,
+import {
+  AGENT_CATEGORY,
+  AgentCategorySchema,
+  type LogMessageData,
+  type StreamTabId,
+  type StreamTabInfo,
+  type TaskGroup,
 } from '@shared/schemas';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
+// Local imports - common helpers
+import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
+import { setChevronIconHorizontal } from '@common/modules/domUtils.js';
+import {
+  insertTextAtCursor,
+  resolveTextareaTarget,
+} from '@common/modules/textareaUtils.js';
+
 // Local imports - progress view frontend
-import { postMessage } from './vscode';
 import {
   createEmptyStreamState,
   createInitialState,
@@ -43,9 +55,15 @@ import {
   type ProgressState,
   type StreamFilter,
   type StreamSort,
+  type StreamState,
 } from './store';
-import './components/PromptOverlay';
+import './components';
 import type { PromptState } from './components/PromptOverlay';
+import type {
+  FollowupMode,
+  FollowupOptions,
+} from './components/FollowupSection';
+import type { RunInfo } from './components/RunSelector';
 
 const AgentCategoryFilterSchema = z.union([
   z.literal('all'),
@@ -216,169 +234,202 @@ const ResolveAgentProposalSchema = z.object({
   proposalId: z.string(),
 });
 
+const FollowUpTextPolishedSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
+  text: z.string(),
+});
+
+const FollowUpTextTranscribedSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED),
+  text: z.string().optional(),
+});
+
+const RecordingStartedSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
+});
+
+const RecordingStoppedSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED),
+});
+
+const RecordingErrorSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_ERROR),
+});
+
+const SetFollowupOptionsSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
+  workflowAgentsHtml: z.string().optional(),
+  toolUseAgentsHtml: z.string().optional(),
+  modelOptionsHtml: z.string().optional(),
+  defaultMergeModel: z.string().optional(),
+});
+
+const DeleteStreamSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const DeleteAllSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
+});
+
+const TOGGLE_ICON_CLASSES = new Set([
+  'banner-details',
+  'file-list-details',
+  'missing-outputs-details',
+  'latexdiff-details',
+  'statistics-details',
+  'context-management-details',
+]);
+
 @customElement('progress-app')
-export class ProgressApp extends LitElement {
-  static styles = css`
-    :host {
-      display: block;
-      height: 100vh;
-    }
-
-    .main-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .stream-tabs {
-      display: flex;
-      gap: 8px;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-wrap: wrap;
-    }
-
-    .stream-tab {
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      border: 1px solid transparent;
-      background: var(--vscode-sideBar-background);
-    }
-
-    .stream-tab.active {
-      border-color: var(--vscode-focusBorder);
-      background: var(--vscode-button-secondaryBackground);
-    }
-
-    .content-area {
-      flex: 1;
-      overflow: auto;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .log-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .status-indicator {
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      background: var(--vscode-badge-background);
-      color: var(--vscode-badge-foreground);
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .section {
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 12px;
-      background: var(--vscode-editor-background);
-    }
-
-    .section h3 {
-      margin: 0 0 8px 0;
-      font-size: 13px;
-    }
-
-    .logs {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .log-entry {
-      padding: 6px 8px;
-      border-radius: 4px;
-      background: var(--vscode-list-hoverBackground);
-      font-size: 12px;
-      white-space: pre-wrap;
-    }
-
-    .task-group-list,
-    .todo-list,
-    .file-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .todo-item {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-    }
-
-    .follow-up {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 80px;
-      resize: vertical;
-    }
-  `;
-
+export class ProgressApp extends BaseWebviewApp {
   @state() private state: ProgressState = createInitialState();
   @state() private prompts: PromptState[] = [];
-  @state() private followUpText = '';
+  @state() private followupOptions: FollowupOptions | null = null;
 
-  private readonly messageListener = (event: MessageEvent) => {
-    this.handleMessage(event.data);
-  };
-
-  connectedCallback(): void {
-    super.connectedCallback();
-    window.addEventListener('message', this.messageListener);
+  protected override onWebviewReady(): void {
     postMessage(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, {});
   }
 
-  disconnectedCallback(): void {
-    window.removeEventListener('message', this.messageListener);
-    super.disconnectedCallback();
-  }
-
-  render() {
+  override render() {
     const activeStream = this.getActiveStreamInfo();
     const streamState = activeStream
       ? getStreamState(this.state, activeStream.name)
       : null;
     const runId = streamState ? getEffectiveRunId(streamState) : null;
+    const isToolUse = activeStream?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+    const usage = runId && streamState ? streamState.runUsage[runId] : null;
+    const filesByRound =
+      runId && streamState ? streamState.runFiles[runId] : {};
+    const hasFiles = Boolean(
+      filesByRound && Object.keys(filesByRound).length > 0,
+    );
 
     return html`
-      <div class="main-container">
-        ${this.renderStreamTabs()}
-        <div class="content-area">
-          ${activeStream
-            ? html`
-                ${this.renderHeader(activeStream, streamState)}
-                ${this.renderInstruction(streamState, runId)}
-                ${this.renderTaskGroups(streamState, activeStream)}
-                ${this.renderTodos(streamState, activeStream)}
-                ${this.renderLogs(streamState)}
-                ${this.renderUsage(streamState, runId)}
-                ${this.renderFiles(streamState, runId)}
-                ${this.renderQueuedFollowUps(streamState)}
-                ${this.renderFollowUpInput(activeStream)}
-              `
-            : html`<div class="section">No active streams yet.</div>`}
-        </div>
+      <div
+        class="main-container"
+        @click=${this.handleRootClick}
+        @toggle=${this.handleRootToggle}
+      >
+        <vscode-split-layout>
+          <div class="content-area">
+            ${when(activeStream, () => {
+              if (!activeStream) return null;
+              return html`
+                <stream-header
+                  .stream=${activeStream}
+                  .status=${streamState?.status ??
+                  activeStream?.status ??
+                  'ready'}
+                  .agentCategory=${activeStream.agentCategory}
+                  .executionAvailable=${Boolean(activeStream.executionId)}
+                  @command=${this.handleStreamCommand}
+                >
+                  <run-selector
+                    slot="run-selector"
+                    .runs=${this.getRunInfo(streamState)}
+                    .activeRunId=${streamState?.activeRunId ?? null}
+                    .selectedRunId=${streamState?.selectedRunId ?? null}
+                    .visible=${!isToolUse}
+                    @run-select=${this.handleRunSelect}
+                  ></run-selector>
+                </stream-header>
+                <instruction-panel
+                  .instruction=${this.getInstruction(streamState, runId)}
+                ></instruction-panel>
+              `;
+            })}
+            ${cache(
+              isToolUse
+                ? html`
+                    <todo-list
+                      .todos=${streamState?.todos ?? []}
+                      .visible=${Boolean(activeStream)}
+                    ></todo-list>
+                    <log-list .logs=${streamState?.logs ?? []}></log-list>
+                    <usage-panel
+                      .usage=${usage}
+                      .contextState=${streamState?.contextState ?? null}
+                      .visible=${Boolean(activeStream)}
+                    ></usage-panel>
+                    <file-list
+                      .filesByRound=${filesByRound ?? {}}
+                      .showRoundHeaders=${false}
+                      .visible=${hasFiles}
+                    ></file-list>
+                    <follow-up-input
+                      .streamId=${activeStream?.name ?? null}
+                      .value=${streamState?.followUpText ?? ''}
+                      .visible=${Boolean(activeStream)}
+                      .bypassActive=${streamState?.toolEditBypass ?? false}
+                      .recording=${streamState?.isRecording ?? false}
+                      .polishing=${streamState?.isPolishing ?? false}
+                      @send-followup=${this.handleSendFollowup}
+                      @polish-followup=${this.handlePolishFollowup}
+                      @clear-followup=${this.handleClearFollowup}
+                      @toggle-bypass=${this.handleToggleBypass}
+                      @toggle-recording=${this.handleToggleRecording}
+                      @followup-input-change=${this.handleFollowupInputChange}
+                    >
+                      <queued-follow-ups
+                        slot="queued"
+                        .messages=${streamState?.queuedFollowUps ?? []}
+                        .visible=${Boolean(activeStream)}
+                      ></queued-follow-ups>
+                    </follow-up-input>
+                  `
+                : html`
+                    <task-group-list
+                      .groups=${this.getTaskGroups(streamState)}
+                      .logs=${streamState?.logs ?? []}
+                    ></task-group-list>
+                    <usage-panel
+                      .usage=${usage}
+                      .contextState=${streamState?.contextState ?? null}
+                      .visible=${Boolean(activeStream)}
+                    ></usage-panel>
+                    <file-list
+                      .filesByRound=${filesByRound ?? {}}
+                      .showRoundHeaders=${true}
+                      .visible=${hasFiles}
+                    ></file-list>
+                    <followup-section
+                      .options=${this.followupOptions}
+                      .mode=${streamState?.followupMode ?? 'chat'}
+                      .agent=${streamState?.followupAgent ?? ''}
+                      .model=${streamState?.followupModel ?? ''}
+                      .initialQuestion=${streamState?.followupInitialQuestion ??
+                      ''}
+                      .includeInstruction=${streamState?.followupIncludeInstruction ??
+                      false}
+                      .attachOutputs=${streamState?.followupAttachOutputs ??
+                      false}
+                      .visible=${this.shouldShowFollowupSection(
+                        activeStream,
+                        streamState,
+                        runId,
+                      )}
+                      @followup-state-change=${this.handleFollowupStateChange}
+                      @followup-opened=${this.handleFollowupOpened}
+                      @followup-setup=${this.handleFollowupSetup}
+                      @followup-run=${this.handleFollowupRun}
+                    ></followup-section>
+                  `,
+            )}
+          </div>
+          <stream-tabs
+            .streams=${this.getFilteredStreams()}
+            .activeStream=${this.state.activeStreamId}
+            .filter=${this.state.streamFilter}
+            .sort=${this.state.streamSort}
+            @stream-select=${this.handleStreamSelect}
+            @stream-delete=${this.handleStreamDelete}
+            @stream-delete-all=${this.handleDeleteAll}
+            @filter-change=${this.handleFilterChange}
+            @sort-change=${this.handleSortChange}
+          ></stream-tabs>
+        </vscode-split-layout>
       </div>
       <prompt-overlay
         ?hidden=${this.prompts.length === 0}
@@ -388,462 +439,313 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  private renderStreamTabs() {
-    const streams = this.getFilteredStreams();
-    return html`
-      <div class="stream-tabs">
-        <div class="toolbar">
-          <button @click=${() => this.setFilter('all')}>All</button>
-          <button @click=${() => this.setFilter('workflow')}>Workflow</button>
-          <button @click=${() => this.setFilter('toolUse')}>Tool use</button>
-          <button @click=${() => this.setSort('time')}>Sort: Time</button>
-          <button @click=${() => this.setSort('agent')}>Sort: Agent</button>
-          <button @click=${() => this.setSort('inputFile')}>Sort: File</button>
-        </div>
-        ${streams.map((stream) => {
-          const isActive = stream.name === this.state.activeStreamId;
-          return html`
-            <div
-              class="stream-tab ${isActive ? 'active' : ''}"
-              @click=${() => this.switchStream(stream.name)}
-            >
-              ${stream.label}
-            </div>
-          `;
-        })}
-        ${streams.length === 0 ? html`<span>No streams available</span>` : null}
-      </div>
-    `;
+  private getTaskGroups(streamState: StreamState | null): TaskGroup[] {
+    if (!streamState) return [];
+    return Object.values(streamState.taskGroups);
   }
 
-  private renderHeader(
-    activeStream: StreamTabInfo,
-    streamState: ReturnType<typeof getStreamState> | null,
-  ) {
-    const status = streamState?.status ?? activeStream.status ?? 'ready';
-    return html`
-      <div class="log-header section">
-        <div>
-          <div><strong>${activeStream.label}</strong></div>
-          <div class="status-indicator">${status}</div>
-          ${this.renderRunSelector(activeStream, streamState)}
-        </div>
-        <div class="toolbar">
-          <button
-            @click=${() =>
-              this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.STOP_STREAM)}
-          >
-            Stop
-          </button>
-          ${activeStream.agentCategory === AGENT_CATEGORY.WORKFLOW
-            ? html`
-                <button
-                  @click=${() =>
-                    this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.RUN_NEW)}
-                >
-                  Run new
-                </button>
-                <button
-                  @click=${() =>
-                    this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.RESUME)}
-                >
-                  Resume
-                </button>
-                <button
-                  @click=${() =>
-                    this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.DIFF_STREAM)}
-                >
-                  Diff
-                </button>
-                <button
-                  @click=${() =>
-                    this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM)}
-                >
-                  Clean
-                </button>
-                <button
-                  @click=${() =>
-                    this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.PACK_STREAM)}
-                >
-                  Pack
-                </button>
-              `
-            : html``}
-          <button
-            @click=${() =>
-              this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.RESTORE_STATE)}
-          >
-            Restore
-          </button>
-          <button
-            @click=${() =>
-              this.sendStreamCommand(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE)}
-          >
-            Storage
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderRunSelector(
-    activeStream: StreamTabInfo,
-    streamState: ReturnType<typeof getStreamState> | null,
-  ): TemplateResult | null {
-    if (
-      !streamState ||
-      activeStream.agentCategory !== AGENT_CATEGORY.WORKFLOW
-    ) {
-      return null;
-    }
-    const runIds = new Set<string>([
-      ...streamState.runInstructions.keys(),
-      ...streamState.runUsage.keys(),
-      ...streamState.runFiles.keys(),
-    ]);
-    if (runIds.size === 0) return null;
-    const selected = getEffectiveRunId(streamState) ?? '';
-    return html`
-      <div>
-        <label>
-          Run:
-          <select
-            @change=${(event: Event) =>
-              this.handleRunSelection(event, activeStream.name)}
-          >
-            ${[...runIds].map(
-              (id) =>
-                html`<option value=${id} ?selected=${id === selected}>
-                  ${id}
-                </option>`,
-            )}
-          </select>
-        </label>
-      </div>
-    `;
-  }
-
-  private handleRunSelection(event: Event, streamId: StreamTabId) {
-    const target = event.target as HTMLSelectElement | null;
-    const runId = target?.value ?? '';
-    this.setStreamState(streamId, (prev) => ({
-      ...prev,
-      selectedRunId: runId || null,
+  private getRunInfo(streamState: StreamState | null): RunInfo[] {
+    if (!streamState) return [];
+    const groups = Object.values(streamState.taskGroups).filter(
+      (group) => !group.parentGroupId,
+    );
+    return groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      startTime: group.startTime,
     }));
   }
 
-  private renderInstruction(
-    streamState: ReturnType<typeof getStreamState> | null,
+  private getInstruction(
+    streamState: StreamState | null,
     runId: string | null,
   ) {
     if (!streamState || !runId) return null;
-    const instruction = streamState.runInstructions.get(runId);
-    if (!instruction) return null;
-    return html`
-      <div class="section">
-        <h3>Instruction</h3>
-        <pre>${instruction.text}</pre>
-      </div>
-    `;
+    return streamState.runInstructions[runId]?.text ?? null;
   }
 
-  private renderTaskGroups(
-    streamState: ReturnType<typeof getStreamState> | null,
-    activeStream: StreamTabInfo,
-  ) {
-    if (!streamState) return null;
-    const groups = [...streamState.taskGroups.values()];
-    if (groups.length === 0) return null;
-    return html`
-      <div class="section">
-        <h3>
-          ${activeStream.agentCategory === AGENT_CATEGORY.WORKFLOW
-            ? 'Task groups'
-            : 'Turns'}
-        </h3>
-        <div class="task-group-list">
-          ${groups.map(
-            (group) => html`
-              <div><strong>${group.name}</strong> – ${group.status}</div>
-            `,
-          )}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderTodos(
-    streamState: ReturnType<typeof getStreamState> | null,
-    activeStream: StreamTabInfo,
+  private shouldShowFollowupSection(
+    stream: StreamTabInfo | null,
+    streamState: StreamState | null,
+    runId: string | null,
   ) {
     if (
+      !stream ||
       !streamState ||
-      activeStream.agentCategory !== AGENT_CATEGORY.TOOL_USE
+      stream.agentCategory !== AGENT_CATEGORY.WORKFLOW
     ) {
-      return null;
+      return false;
     }
-    if (streamState.todos.length === 0) return null;
-    return html`
-      <div class="section">
-        <h3>Todos</h3>
-        <div class="todo-list">
-          ${streamState.todos.map(
-            (todo) => html`
-              <div class="todo-item">
-                <span>${todo.content}</span>
-                <span>${todo.status}</span>
-              </div>
-            `,
-          )}
-        </div>
-      </div>
-    `;
+    if (streamState.status !== 'stopped') return false;
+    if (!runId) return false;
+    const files = streamState.runFiles[runId];
+    const fileCount = files
+      ? Object.values(files).reduce((sum, round) => sum + round.length, 0)
+      : 0;
+    return fileCount > 0;
   }
 
-  private renderLogs(streamState: ReturnType<typeof getStreamState> | null) {
-    if (!streamState) return null;
-    return html`
-      <div class="section">
-        <h3>Logs</h3>
-        <div class="logs">
-          ${streamState.logs.map(
-            (log) => html`
-              <div class="log-entry">
-                <strong>${log.messageType ?? log.level}</strong>: ${log.text}
-              </div>
-            `,
-          )}
-        </div>
-      </div>
-    `;
-  }
+  private handleRootClick = async (event: Event) => {
+    if (!(event.target instanceof Element)) return;
 
-  private renderFiles(
-    streamState: ReturnType<typeof getStreamState> | null,
-    runId: string | null,
-  ) {
-    if (!streamState || !runId) return null;
-    const roundMap = streamState.runFiles.get(runId);
-    if (!roundMap || roundMap.size === 0) return null;
-    const rounds = [...roundMap.entries()].sort((a, b) => a[0] - b[0]);
-    return html`
-      <div class="section">
-        <h3>Output files</h3>
-        <div class="file-list">
-          ${rounds.map(
-            ([round, files]) => html`
-              <div>
-                <strong>Round ${round}</strong>
-                <ul>
-                  ${files.map(
-                    (file) => html`
-                      <li>
-                        <a @click=${() => this.openFile(file)}>
-                          ${file.source}
-                        </a>
-                      </li>
-                    `,
-                  )}
-                </ul>
-              </div>
-            `,
-          )}
-        </div>
-      </div>
-    `;
-  }
+    const commandElement = event.target.closest('[data-command]');
+    if (commandElement instanceof HTMLElement) {
+      const { command, file, base, prev } = commandElement.dataset;
+      if (command) {
+        postMessage(command, {
+          ...(file && { file }),
+          ...(base && { base }),
+          ...(prev && { prev }),
+        });
+        return;
+      }
+    }
 
-  private renderUsage(
-    streamState: ReturnType<typeof getStreamState> | null,
-    runId: string | null,
-  ) {
-    if (!streamState || !runId) return null;
-    const usage = streamState.runUsage.get(runId);
-    if (!usage && !streamState.contextState) return null;
-    return html`
-      <div class="section">
-        <h3>Usage</h3>
-        ${usage
-          ? html`
-              <div>Input tokens: ${usage.inputTokens}</div>
-              <div>Output tokens: ${usage.outputTokens}</div>
-              <div>Cost: $${usage.cost.toFixed(4)}</div>
-            `
-          : null}
-        ${streamState.contextState
-          ? html`
-              <div>
-                Context: ${streamState.contextState.utilizationPercent}% used
-              </div>
-            `
-          : null}
-      </div>
-    `;
-  }
+    const fileLink = event.target.closest('.file-link');
+    if (fileLink instanceof HTMLElement && fileLink.dataset.file) {
+      const payload: Record<string, unknown> = { file: fileLink.dataset.file };
+      if (fileLink.dataset.fileLine) {
+        payload.line = Number(fileLink.dataset.fileLine);
+      }
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, payload);
+      return;
+    }
 
-  private renderQueuedFollowUps(
-    streamState: ReturnType<typeof getStreamState> | null,
-  ) {
-    if (!streamState || streamState.queuedFollowUps.length === 0) return null;
-    return html`
-      <div class="section">
-        <h3>Queued follow-ups</h3>
-        <ul>
-          ${streamState.queuedFollowUps.map((item) => html`<li>${item}</li>`)}
-        </ul>
-      </div>
-    `;
-  }
+    const latexRef = event.target.closest('.latex-ref');
+    if (latexRef instanceof HTMLElement && latexRef.dataset.label) {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
+        label: latexRef.dataset.label,
+      });
+      return;
+    }
 
-  private renderFollowUpInput(activeStream: StreamTabInfo) {
-    return html`
-      <div class="section follow-up">
-        <h3>Follow-up</h3>
-        <textarea
-          .value=${this.followUpText}
-          @input=${(event: InputEvent) => this.updateFollowUpText(event)}
-        ></textarea>
-        <div class="toolbar">
-          <button @click=${() => this.sendFollowUp(activeStream.name)}>
-            Send
-          </button>
-          <button @click=${() => this.polishFollowUp(activeStream.name)}>
-            Polish
-          </button>
-          <button @click=${() => this.toggleBypass(activeStream.name)}>
-            ${this.getBypassLabel(activeStream.name)}
-          </button>
-        </div>
-      </div>
-    `;
-  }
+    const copyButton = event.target.closest('.banner-content-copy');
+    if (copyButton instanceof HTMLElement) {
+      event.stopPropagation();
+      const contentElem = copyButton
+        .closest('.banner-details')
+        ?.querySelector('.banner-content') as HTMLElement | null;
+      if (!contentElem) return;
 
-  private updateFollowUpText(event: InputEvent) {
-    const target = event.target as HTMLTextAreaElement | null;
-    this.followUpText = target?.value ?? '';
-  }
+      const textToCopy =
+        contentElem.dataset.rawContent ?? contentElem.textContent ?? '';
+      if (!textToCopy.trim()) return;
 
-  private sendFollowUp(streamId: StreamTabId) {
-    const text = this.followUpText.trim();
-    if (!text) return;
+      await copyWithFeedback(copyButton, textToCopy, {
+        defaultTitle:
+          copyButton.dataset.defaultTitle ||
+          copyButton.getAttribute('title') ||
+          'Copy content',
+        successTitle: copyButton.dataset.successTitle || 'Copied!',
+      });
+      return;
+    }
+
+    const codeBlockCopy = event.target.closest('.code-block-copy');
+    if (codeBlockCopy instanceof HTMLElement) {
+      event.stopPropagation();
+      const codeBlock = codeBlockCopy.closest('.code-block');
+      const codeElem = codeBlock?.querySelector('code');
+      if (!codeElem) return;
+
+      const textToCopy = codeElem.textContent ?? '';
+      if (!textToCopy.trim()) return;
+
+      await copyWithFeedback(codeBlockCopy, textToCopy, {
+        defaultTitle: 'Copy to clipboard',
+        successTitle: 'Copied!',
+        successClass: 'copied',
+      });
+    }
+  };
+
+  private handleRootToggle = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const hasToggleClass = Array.from(TOGGLE_ICON_CLASSES).some((cls) =>
+      target.classList.contains(cls),
+    );
+    if (!hasToggleClass) return;
+
+    const toggleIcon = target.querySelector('.toggle-icon');
+    if (toggleIcon) {
+      setChevronIconHorizontal(toggleIcon, (target as HTMLDetailsElement).open);
+    }
+  };
+
+  private handleStreamCommand = (event: CustomEvent<{ command: string }>) => {
+    if (!this.state.activeStreamId) return;
+    postMessage(event.detail.command, { stream: this.state.activeStreamId });
+  };
+
+  private handleStreamSelect = (event: CustomEvent<{ streamId: string }>) => {
+    postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
+      stream: event.detail.streamId,
+    });
+  };
+
+  private handleStreamDelete = (event: CustomEvent<{ streamId: string }>) => {
+    postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, {
+      stream: event.detail.streamId,
+    });
+  };
+
+  private handleDeleteAll = () => {
+    postMessage(PROGRESS_VIEW_COMMANDS.DELETE_ALL, {});
+  };
+
+  private handleFilterChange = (
+    event: CustomEvent<{ filter: StreamFilter }>,
+  ) => {
+    this.state = { ...this.state, streamFilter: event.detail.filter };
+    postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, {
+      filter: event.detail.filter,
+    });
+  };
+
+  private handleSortChange = (event: CustomEvent<{ sort: StreamSort }>) => {
+    this.state = { ...this.state, streamSort: event.detail.sort };
+    postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, {
+      sortBy: event.detail.sort,
+    });
+  };
+
+  private handleRunSelect = (event: CustomEvent<{ runId: string | null }>) => {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({
+      ...prev,
+      selectedRunId: event.detail.runId,
+    }));
+  };
+
+  private handleFollowupInputChange = (
+    event: CustomEvent<{ text: string }>,
+  ) => {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({
+      ...prev,
+      followUpText: event.detail.text,
+    }));
+  };
+
+  private handleSendFollowup = (event: CustomEvent<{ text: string }>) => {
+    const streamId = this.state.activeStreamId;
+    const text = event.detail.text.trim();
+    if (!streamId || !text) return;
     postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
       stream: streamId,
       text,
     });
-    this.followUpText = '';
-  }
+    this.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
+  };
 
-  private polishFollowUp(streamId: StreamTabId) {
-    const text = this.followUpText.trim();
-    if (!text) return;
+  private handlePolishFollowup = (event: CustomEvent<{ text: string }>) => {
+    const streamId = this.state.activeStreamId;
+    const text = event.detail.text.trim();
+    if (!streamId || !text) return;
+    this.setStreamState(streamId, (prev) => ({ ...prev, isPolishing: true }));
     postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
       stream: streamId,
       text,
     });
-  }
+  };
 
-  private toggleBypass(streamId: StreamTabId) {
+  private handleClearFollowup = () => {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
+  };
+
+  private handleToggleBypass = () => {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
     postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS, {
       stream: streamId,
     });
-  }
+  };
 
-  private getBypassLabel(streamId: StreamTabId): string {
-    const streamState = getStreamState(this.state, streamId);
-    return streamState.toolEditBypass ? 'Disable YOLO' : 'Enable YOLO';
-  }
-
-  private openFile(file: OutputFileInfo) {
-    postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
-      file: file.location.absolutePath,
-    });
-  }
-
-  private switchStream(streamId: StreamTabId) {
-    postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
-  }
-
-  private setFilter(filter: StreamFilter) {
-    this.state = { ...this.state, streamFilter: filter };
-    postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
-  }
-
-  private setSort(sort: StreamSort) {
-    this.state = { ...this.state, streamSort: sort };
-    postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, { sortBy: sort });
-  }
-
-  private sendStreamCommand(command: string) {
+  private handleToggleRecording = (
+    event: CustomEvent<{ recording: boolean }>,
+  ) => {
     const streamId = this.state.activeStreamId;
     if (!streamId) return;
-    postMessage(command, { stream: streamId });
-  }
-
-  private getActiveStreamInfo(): StreamTabInfo | null {
-    if (!this.state.activeStreamId) return null;
-    return (
-      this.state.streams.find(
-        (stream) => stream.name === this.state.activeStreamId,
-      ) ?? null
+    postMessage(
+      event.detail.recording
+        ? PROGRESS_VIEW_COMMANDS.START_RECORDING
+        : PROGRESS_VIEW_COMMANDS.STOP_RECORDING,
+      {},
     );
+  };
+
+  private handleFollowupStateChange = (
+    event: CustomEvent<{
+      mode?: FollowupMode;
+      agent?: string;
+      model?: string;
+      initialQuestion?: string;
+      includeInstruction?: boolean;
+      attachOutputs?: boolean;
+    }>,
+  ) => {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({
+      ...prev,
+      followupMode: event.detail.mode ?? prev.followupMode,
+      followupAgent: event.detail.agent ?? prev.followupAgent,
+      followupModel: event.detail.model ?? prev.followupModel,
+      followupInitialQuestion:
+        event.detail.initialQuestion ?? prev.followupInitialQuestion,
+      followupIncludeInstruction:
+        event.detail.includeInstruction ?? prev.followupIncludeInstruction,
+      followupAttachOutputs:
+        event.detail.attachOutputs ?? prev.followupAttachOutputs,
+    }));
+  };
+
+  private handleFollowupOpened = () => {
+    postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, {});
+  };
+
+  private handleFollowupSetup = () => {
+    const payload = this.buildFollowupPayload();
+    if (!payload) return;
+    postMessage(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP, payload);
+  };
+
+  private handleFollowupRun = () => {
+    const payload = this.buildFollowupPayload();
+    if (!payload) return;
+    postMessage(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP, payload);
+  };
+
+  private buildFollowupPayload() {
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return null;
+    const streamState = getStreamState(this.state, streamId);
+    const mode = streamState.followupMode;
+    const agent = mode === 'merge' ? 'merge' : streamState.followupAgent;
+    const model =
+      streamState.followupModel || this.followupOptions?.defaultMergeModel;
+    if (!agent || !model) return null;
+
+    return {
+      stream: streamId,
+      mode,
+      agent,
+      model,
+      includeInstruction:
+        mode === 'workflow' ? streamState.followupIncludeInstruction : false,
+      attachAgentOutputs:
+        mode === 'workflow' ? streamState.followupAttachOutputs : false,
+      initialQuestion: streamState.followupInitialQuestion.trim(),
+    };
   }
 
-  private getFilteredStreams(): StreamTabInfo[] {
-    const streams = [...this.state.streams];
-    const filter = this.state.streamFilter;
-    const sorted = this.sortStreams(streams, this.state.streamSort);
-    if (filter === 'all') return sorted;
-    return sorted.filter((stream) => stream.agentCategory === filter);
-  }
-
-  private sortStreams(
-    streams: StreamTabInfo[],
-    sort: StreamSort,
-  ): StreamTabInfo[] {
-    return [...streams].sort((a, b) => {
-      switch (sort) {
-        case 'agent':
-          return (a.agent ?? '').localeCompare(b.agent ?? '');
-        case 'inputFile':
-          return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
-        case 'time':
-        default: {
-          const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
-          const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
-          return bTime - aTime;
-        }
-      }
-    });
-  }
-
-  private setStreamState(
-    streamId: StreamTabId,
-    updater: (
-      prev: ReturnType<typeof getStreamState>,
-    ) => ReturnType<typeof getStreamState>,
-  ) {
-    const nextStates = new Map(this.state.streamStates);
-    const current = getStreamState(this.state, streamId);
-    nextStates.set(streamId, updater(current));
-    this.state = { ...this.state, streamStates: nextStates };
-  }
-
-  private updateStreamInfo(streams: StreamTabInfo[]) {
-    const nextStates = new Map(this.state.streamStates);
-    const knownStreams = new Set(streams.map((stream) => stream.name));
-    for (const key of nextStates.keys()) {
-      if (!knownStreams.has(key)) {
-        nextStates.delete(key);
-      }
-    }
-    for (const stream of streams) {
-      const existing = nextStates.get(stream.name) ?? createEmptyStreamState();
-      nextStates.set(stream.name, { ...existing, info: stream });
-    }
-    this.state = { ...this.state, streams, streamStates: nextStates };
-  }
-
-  private handlePromptAction(event: CustomEvent) {
+  private handlePromptAction = (event: CustomEvent) => {
     const { prompt, action } = event.detail as {
       prompt: PromptState;
       action: string;
@@ -879,9 +781,9 @@ export class ProgressApp extends LitElement {
         });
         break;
     }
-  }
+  };
 
-  private handleMessage(raw: unknown) {
+  protected handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object') return;
     const message = raw as { command?: string };
     if (!message.command) return;
@@ -930,6 +832,22 @@ export class ProgressApp extends LitElement {
         this.handleShowAgentProposal(raw),
       [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: () =>
         this.handleResolveAgentProposal(raw),
+      [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: () =>
+        this.handleFollowUpTextPolished(raw),
+      [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: () =>
+        this.handleFollowUpTextTranscribed(raw),
+      [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: () =>
+        this.handleRecordingStarted(raw),
+      [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: () =>
+        this.handleRecordingStopped(raw),
+      [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: () =>
+        this.handleRecordingError(raw),
+      [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: () =>
+        this.handleSetFollowupOptions(raw),
+      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: () =>
+        this.handleDeleteStream(raw),
+      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () =>
+        this.handleDeleteAllMessage(raw),
     };
 
     handlers[message.command]?.();
@@ -952,43 +870,45 @@ export class ProgressApp extends LitElement {
     if (!result.success) return;
     const { stream, messages, groups, action } = result.data;
 
+    const sortedMessages = [...messages].sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeA - timeB;
+    });
+
     this.setStreamState(stream, (prev) => {
       const next = { ...prev };
       if (action === 'clear') {
         next.logs = [];
-        next.taskGroups = new Map();
+        next.taskGroups = {};
       } else {
-        next.logs = messages;
+        next.logs = sortedMessages;
         if (groups) {
-          next.taskGroups = new Map(groups.map((group) => [group.id, group]));
+          next.taskGroups = Object.fromEntries(
+            groups.map((group) => [group.id, group]),
+          );
         }
       }
       if (result.data.activeRunId !== undefined) {
         next.activeRunId = result.data.activeRunId;
       }
       if (result.data.runInstructions) {
-        next.runInstructions = this.mergeRecordIntoMap(
-          next.runInstructions,
-          result.data.runInstructions,
-        );
+        next.runInstructions = {
+          ...next.runInstructions,
+          ...result.data.runInstructions,
+        };
       }
       if (result.data.runUsage) {
-        next.runUsage = this.mergeRecordIntoMap(
-          next.runUsage,
-          result.data.runUsage,
-        );
+        next.runUsage = { ...next.runUsage, ...result.data.runUsage };
       }
       if (result.data.runFiles) {
-        next.runFiles = this.mergeRunRoundMap(
-          next.runFiles,
-          result.data.runFiles,
-        );
+        next.runFiles = { ...next.runFiles, ...result.data.runFiles };
       }
       if (result.data.runMissingOutputs) {
-        next.runMissingOutputs = this.mergeRunRoundMap(
-          next.runMissingOutputs,
-          result.data.runMissingOutputs,
-        );
+        next.runMissingOutputs = {
+          ...next.runMissingOutputs,
+          ...result.data.runMissingOutputs,
+        };
       }
       if (result.data.contextState) {
         next.contextState = result.data.contextState;
@@ -1056,15 +976,9 @@ export class ProgressApp extends LitElement {
     const { stream, runId, rounds, reset } = result.data;
     if (!runId || !rounds) return;
     this.setStreamState(stream, (prev) => {
-      const runFiles = reset ? new Map() : new Map(prev.runFiles);
-      const existingRounds = reset
-        ? new Map<number, OutputFileInfo[]>()
-        : new Map(runFiles.get(runId) ?? new Map());
-      const nextRounds = this.recordToRoundMap(rounds);
-      for (const [round, files] of nextRounds.entries()) {
-        existingRounds.set(round, files);
-      }
-      runFiles.set(runId, existingRounds);
+      const runFiles = reset ? {} : { ...prev.runFiles };
+      const existingRounds = reset ? {} : { ...(runFiles[runId] ?? {}) };
+      runFiles[runId] = { ...existingRounds, ...rounds };
       return { ...prev, runFiles };
     });
   }
@@ -1075,17 +989,11 @@ export class ProgressApp extends LitElement {
     const { stream, runId, rounds, reset } = result.data;
     if (!runId || !rounds) return;
     this.setStreamState(stream, (prev) => {
-      const runMissingOutputs = reset
-        ? new Map()
-        : new Map(prev.runMissingOutputs);
+      const runMissingOutputs = reset ? {} : { ...prev.runMissingOutputs };
       const existingRounds = reset
-        ? new Map<number, string[]>()
-        : new Map(runMissingOutputs.get(runId) ?? new Map());
-      const nextRounds = this.recordToRoundMap(rounds);
-      for (const [round, files] of nextRounds.entries()) {
-        existingRounds.set(round, files);
-      }
-      runMissingOutputs.set(runId, existingRounds);
+        ? {}
+        : { ...(runMissingOutputs[runId] ?? {}) };
+      runMissingOutputs[runId] = { ...existingRounds, ...rounds };
       return { ...prev, runMissingOutputs };
     });
   }
@@ -1096,11 +1004,11 @@ export class ProgressApp extends LitElement {
     if (!result.data.stream) return;
     this.setStreamState(result.data.stream, (prev) => {
       const runId = prev.activeRunId ?? 'default';
-      const runInstructions = new Map(prev.runInstructions);
+      const runInstructions = { ...prev.runInstructions };
       if (result.data.instruction) {
-        runInstructions.set(runId, result.data.instruction);
+        runInstructions[runId] = result.data.instruction;
       } else {
-        runInstructions.delete(runId);
+        delete runInstructions[runId];
       }
       return { ...prev, runInstructions };
     });
@@ -1119,11 +1027,10 @@ export class ProgressApp extends LitElement {
     const result = UpdateRunUsageSchema.safeParse(raw);
     if (!result.success) return;
     const { stream, runId, usage } = result.data;
-    this.setStreamState(stream, (prev) => {
-      const runUsage = new Map(prev.runUsage);
-      runUsage.set(runId, usage);
-      return { ...prev, runUsage };
-    });
+    this.setStreamState(stream, (prev) => ({
+      ...prev,
+      runUsage: { ...prev.runUsage, [runId]: usage },
+    }));
   }
 
   private handleUpdateContextState(raw: unknown) {
@@ -1138,11 +1045,13 @@ export class ProgressApp extends LitElement {
   private handleAddTaskGroup(raw: unknown) {
     const result = AddTaskGroupMessageSchema.safeParse(raw);
     if (!result.success) return;
-    this.setStreamState(result.data.stream, (prev) => {
-      const taskGroups = new Map(prev.taskGroups);
-      taskGroups.set(result.data.group.id, result.data.group);
-      return { ...prev, taskGroups };
-    });
+    this.setStreamState(result.data.stream, (prev) => ({
+      ...prev,
+      taskGroups: {
+        ...prev.taskGroups,
+        [result.data.group.id]: result.data.group,
+      },
+    }));
   }
 
   private handleUpdateTaskGroup(raw: unknown) {
@@ -1150,16 +1059,19 @@ export class ProgressApp extends LitElement {
     if (!result.success) return;
     const { streamId, id, status, endTime } = result.data.update;
     this.setStreamState(streamId, (prev) => {
-      const taskGroups = new Map(prev.taskGroups);
-      const existing = taskGroups.get(id);
-      if (existing) {
-        taskGroups.set(id, {
-          ...existing,
-          status: status ?? existing.status,
-          endTime: endTime ?? existing.endTime,
-        });
-      }
-      return { ...prev, taskGroups };
+      const existing = prev.taskGroups[id];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        taskGroups: {
+          ...prev.taskGroups,
+          [id]: {
+            ...existing,
+            status: status ?? existing.status,
+            endTime: endTime ?? existing.endTime,
+          },
+        },
+      };
     });
   }
 
@@ -1257,36 +1169,161 @@ export class ProgressApp extends LitElement {
     );
   }
 
-  private recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
-    const map = new Map<number, T[]>();
-    for (const [key, items] of Object.entries(record)) {
-      const round = Number(key);
-      if (!Number.isNaN(round)) {
-        map.set(round, items);
+  private handleFollowUpTextPolished(raw: unknown) {
+    const result = FollowUpTextPolishedSchema.safeParse(raw);
+    if (!result.success) return;
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({
+      ...prev,
+      followUpText: result.data.text,
+      isPolishing: false,
+    }));
+  }
+
+  private handleFollowUpTextTranscribed(raw: unknown) {
+    const result = FollowUpTextTranscribedSchema.safeParse(raw);
+    if (!result.success) return;
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+
+    const text = result.data.text ?? '';
+    const textarea = this.querySelector('#followUpInput');
+    const resolved = resolveTextareaTarget(textarea as HTMLElement | null);
+    if (resolved?.textarea && text) {
+      insertTextAtCursor(resolved.textarea, text);
+      this.setStreamState(streamId, (prev) => ({
+        ...prev,
+        followUpText: resolved.textarea?.value ?? prev.followUpText,
+        isRecording: false,
+      }));
+      return;
+    }
+
+    this.setStreamState(streamId, (prev) => ({
+      ...prev,
+      isRecording: false,
+    }));
+  }
+
+  private handleRecordingStarted(raw: unknown) {
+    if (!RecordingStartedSchema.safeParse(raw).success) return;
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({ ...prev, isRecording: true }));
+  }
+
+  private handleRecordingStopped(raw: unknown) {
+    if (!RecordingStoppedSchema.safeParse(raw).success) return;
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({ ...prev, isRecording: false }));
+  }
+
+  private handleRecordingError(raw: unknown) {
+    if (!RecordingErrorSchema.safeParse(raw).success) return;
+    const streamId = this.state.activeStreamId;
+    if (!streamId) return;
+    this.setStreamState(streamId, (prev) => ({ ...prev, isRecording: false }));
+  }
+
+  private handleSetFollowupOptions(raw: unknown) {
+    const result = SetFollowupOptionsSchema.safeParse(raw);
+    if (!result.success) return;
+    this.followupOptions = {
+      workflowAgentsHtml: result.data.workflowAgentsHtml,
+      toolUseAgentsHtml: result.data.toolUseAgentsHtml,
+      modelOptionsHtml: result.data.modelOptionsHtml,
+      defaultMergeModel: result.data.defaultMergeModel,
+    };
+  }
+
+  private handleDeleteStream(raw: unknown) {
+    const result = DeleteStreamSchema.safeParse(raw);
+    if (!result.success) return;
+    const streamId = result.data.stream;
+    const nextStates = new Map(this.state.streamStates);
+    nextStates.delete(streamId);
+    this.state = {
+      ...this.state,
+      streams: this.state.streams.filter((stream) => stream.name !== streamId),
+      streamStates: nextStates,
+      activeStreamId:
+        this.state.activeStreamId === streamId
+          ? null
+          : this.state.activeStreamId,
+    };
+  }
+
+  private handleDeleteAllMessage(raw: unknown) {
+    if (!DeleteAllSchema.safeParse(raw).success) return;
+    this.state = createInitialState();
+  }
+
+  private getActiveStreamInfo(): StreamTabInfo | null {
+    if (!this.state.activeStreamId) return null;
+    return (
+      this.state.streams.find(
+        (stream) => stream.name === this.state.activeStreamId,
+      ) ?? null
+    );
+  }
+
+  private getFilteredStreams(): StreamTabInfo[] {
+    const streams = [...this.state.streams];
+    const filter = this.state.streamFilter;
+    const sorted = this.sortStreams(streams, this.state.streamSort);
+    if (filter === 'all') return sorted;
+    return sorted.filter((stream) => stream.agentCategory === filter);
+  }
+
+  private sortStreams(
+    streams: StreamTabInfo[],
+    sort: StreamSort,
+  ): StreamTabInfo[] {
+    return [...streams].sort((a, b) => {
+      switch (sort) {
+        case 'agent':
+          return (a.agent ?? '').localeCompare(b.agent ?? '');
+        case 'inputFile':
+          return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
+        case 'time':
+        default: {
+          const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
+          const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
+          return bTime - aTime;
+        }
+      }
+    });
+  }
+
+  private setStreamState(
+    streamId: StreamTabId,
+    updater: (prev: StreamState) => StreamState,
+  ) {
+    const nextStates = new Map(this.state.streamStates);
+    const current = getStreamState(this.state, streamId);
+    nextStates.set(streamId, updater(current));
+    this.state = { ...this.state, streamStates: nextStates };
+  }
+
+  private updateStreamInfo(streams: StreamTabInfo[]) {
+    const nextStates = new Map(this.state.streamStates);
+    const knownStreams = new Set(streams.map((stream) => stream.name));
+    for (const key of nextStates.keys()) {
+      if (!knownStreams.has(key)) {
+        nextStates.delete(key);
       }
     }
-    return map;
-  }
-
-  private mergeRecordIntoMap<T>(
-    current: Map<string, T>,
-    record: Record<string, T>,
-  ): Map<string, T> {
-    const next = new Map(current);
-    for (const [key, value] of Object.entries(record)) {
-      next.set(key, value);
+    for (const stream of streams) {
+      const existing = nextStates.get(stream.name) ?? createEmptyStreamState();
+      const followupModel = existing.followupModel || stream.model || '';
+      nextStates.set(stream.name, {
+        ...existing,
+        info: stream,
+        followupModel,
+      });
     }
-    return next;
-  }
-
-  private mergeRunRoundMap<T>(
-    current: Map<string, Map<number, T[]>>,
-    record: Record<string, Record<string, T[]>>,
-  ): Map<string, Map<number, T[]>> {
-    const next = new Map(current);
-    for (const [runId, rounds] of Object.entries(record)) {
-      next.set(runId, this.recordToRoundMap(rounds));
-    }
-    return next;
+    this.state = { ...this.state, streams, streamStates: nextStates };
   }
 }

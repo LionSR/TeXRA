@@ -24,17 +24,26 @@ export interface StreamState {
   info?: StreamTabInfo;
   status?: StreamStatus;
   logs: LogMessageData[];
-  taskGroups: Map<string, TaskGroup>;
+  taskGroups: Record<string, TaskGroup>;
   todos: TodoItem[];
   queuedFollowUps: string[];
-  runInstructions: Map<string, InstructionUpdate>;
-  runUsage: Map<string, TokenUsageStats>;
-  runFiles: Map<string, Map<number, OutputFileInfo[]>>;
-  runMissingOutputs: Map<string, Map<number, string[]>>;
+  runInstructions: Record<string, InstructionUpdate>;
+  runUsage: Record<string, TokenUsageStats>;
+  runFiles: Record<string, Record<string, OutputFileInfo[]>>;
+  runMissingOutputs: Record<string, Record<string, string[]>>;
   activeRunId: string | null;
   selectedRunId: string | null;
   contextState?: ContextState;
   toolEditBypass?: boolean;
+  followUpText: string;
+  followupMode: 'chat' | 'workflow' | 'merge';
+  followupAgent: string;
+  followupModel: string;
+  followupInitialQuestion: string;
+  followupIncludeInstruction: boolean;
+  followupAttachOutputs: boolean;
+  isRecording: boolean;
+  isPolishing: boolean;
 }
 
 export interface ProgressState {
@@ -48,15 +57,25 @@ export interface ProgressState {
 export function createEmptyStreamState(): StreamState {
   return {
     logs: [],
-    taskGroups: new Map(),
+    taskGroups: {},
     todos: [],
     queuedFollowUps: [],
-    runInstructions: new Map(),
-    runUsage: new Map(),
-    runFiles: new Map(),
-    runMissingOutputs: new Map(),
+    runInstructions: {},
+    runUsage: {},
+    runFiles: {},
+    runMissingOutputs: {},
     activeRunId: null,
     selectedRunId: null,
+    followUpText: '',
+    followupMode: 'chat',
+    followupAgent: '',
+    followupModel: '',
+    followupInitialQuestion: '',
+    followupIncludeInstruction: false,
+    followupAttachOutputs: false,
+    isRecording: false,
+    isPolishing: false,
+    toolEditBypass: false,
   };
 }
 

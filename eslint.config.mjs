@@ -162,6 +162,7 @@ export default tseslint.config(
       'src/historyView/modules/**/*.js',
       'src/memoryView/modules/**/*.js',
       'src/progressView/modules/**/*.js',
+      'src/progressView/frontend/**/*.js',
       'src/webview/modules/**/*.js',
       'src/common/*.js',
       'src/common/modules/*.js',

@@ -8,6 +8,13 @@
 
 ---
 
+### Implementation Status
+
+- ✅ Extracted a shared Lit base class (`src/shared/BaseWebviewApp.ts`) and VS Code wrapper (`src/shared/vscode.ts`).
+- ✅ ProgressView now uses shared infrastructure and Lit directives (`cache`, `repeat`, `guard`, `live`, `when`, `classMap`).
+- ✅ CSS bundling added to the ProgressView webpack target (style-loader + css-loader).
+- ✅ Legacy ProgressView JS modules removed after Lit migration completed.
+
 ### Lit Features Evaluation
 
 #### Evaluated: Lit Context (`@lit/context`)

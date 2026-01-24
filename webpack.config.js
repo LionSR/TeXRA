@@ -4,6 +4,7 @@
 
 const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -113,6 +114,10 @@ const progressViewConfig = {
           },
         ],
       },
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+      },
     ],
   },
   devtool: 'nosources-source-map',
@@ -121,7 +126,7 @@ const progressViewConfig = {
   },
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin()],
+    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
   },
 };
 

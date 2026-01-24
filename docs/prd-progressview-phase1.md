@@ -224,21 +224,21 @@ This milestone rewrites the ProgressView frontend from imperative DOM manipulati
 
 ##### Milestone 2: Core Components
 
-| Component         | File                             | Status     | Notes                                           |
-| ----------------- | -------------------------------- | ---------- | ----------------------------------------------- |
-| Root app          | `ProgressApp.ts`                 | ⚠️ Partial | Message handlers work, rendering is placeholder |
-| Prompt overlay    | `components/PromptOverlay.ts`    | ✅ Done    | Tool edit, bash, retry, proposal                |
-| Stream tabs       | `components/StreamTabs.ts`       | ❌ TODO    | Extract from ProgressApp                        |
-| Stream header     | `components/StreamHeader.ts`     | ❌ TODO    | Status + toolbar                                |
-| Run selector      | `components/RunSelector.ts`      | ❌ TODO    | Workflow only                                   |
-| Instruction panel | `components/InstructionPanel.ts` | ❌ TODO    |                                                 |
-| Todo list         | `components/TodoList.ts`         | ❌ TODO    | Tool-use only                                   |
-| File list         | `components/FileList.ts`         | ❌ TODO    | With round headers                              |
-| Task groups       | `components/TaskGroupList.ts`    | ❌ TODO    |                                                 |
-| Log list          | `components/LogList.ts`          | ❌ TODO    | Complex formatters                              |
-| Usage panel       | `components/UsagePanel.ts`       | ❌ TODO    |                                                 |
-| Follow-up input   | `components/FollowUpInput.ts`    | ❌ TODO    |                                                 |
-| Queued follow-ups | `components/QueuedFollowUps.ts`  | ❌ TODO    |                                                 |
+| Component         | File                             | Status  | Notes                                |
+| ----------------- | -------------------------------- | ------- | ------------------------------------ |
+| Root app          | `ProgressApp.ts`                 | ✅ Done | Layout and message handling migrated |
+| Prompt overlay    | `components/PromptOverlay.ts`    | ✅ Done | Tool edit, bash, retry, proposal     |
+| Stream tabs       | `components/StreamTabs.ts`       | ✅ Done | Filter, sort, delete                 |
+| Stream header     | `components/StreamHeader.ts`     | ✅ Done | Status + toolbar                     |
+| Run selector      | `components/RunSelector.ts`      | ✅ Done | Workflow only                        |
+| Instruction panel | `components/InstructionPanel.ts` | ✅ Done |                                      |
+| Todo list         | `components/TodoList.ts`         | ✅ Done | Tool-use only                        |
+| File list         | `components/FileList.ts`         | ✅ Done | With round headers                   |
+| Task groups       | `components/TaskGroupList.ts`    | ✅ Done | Log group rendering                  |
+| Log list          | `components/LogList.ts`          | ✅ Done | Formatter-backed log rendering       |
+| Usage panel       | `components/UsagePanel.ts`       | ✅ Done |                                      |
+| Follow-up input   | `components/FollowUpInput.ts`    | ✅ Done |                                      |
+| Queued follow-ups | `components/QueuedFollowUps.ts`  | ✅ Done |                                      |
 
 ##### Message Handling (in ProgressApp.ts)
 
@@ -273,19 +273,19 @@ This milestone rewrites the ProgressView frontend from imperative DOM manipulati
 
 | Formatter         | File                             | Status  | Notes            |
 | ----------------- | -------------------------------- | ------- | ---------------- |
-| Log formatter     | `formatters/logFormatter.ts`     | ❌ TODO | Port from legacy |
-| Markdown renderer | `formatters/markdownRenderer.ts` | ❌ TODO | Port from legacy |
-| Timestamp utils   | `formatters/timestampUtils.ts`   | ❌ TODO | Port from legacy |
-| Word diff         | `formatters/wordDiff.ts`         | ❌ TODO | Port from legacy |
+| Log formatter     | `formatters/logFormatter.ts`     | ✅ Done | Ported utilities |
+| Markdown renderer | `formatters/markdownRenderer.ts` | ✅ Done | Ported utilities |
+| Timestamp utils   | `formatters/timestampUtils.ts`   | ✅ Done | Ported utilities |
+| Word diff         | `formatters/wordDiff.ts`         | ✅ Done | Ported utilities |
 
 ##### Legacy Modules (to delete after migration)
 
-| Category    | Files        | Lines       | Status              |
-| ----------- | ------------ | ----------- | ------------------- |
-| UI Managers | 17 files     | ~1,800      | ❌ Pending deletion |
-| Formatters  | 11 files     | ~1,200      | ❌ Pending deletion |
-| Core        | 5 files      | ~800        | ❌ Pending deletion |
-| **Total**   | **40 files** | **~10,000** |                     |
+| Category    | Files        | Lines       | Status      |
+| ----------- | ------------ | ----------- | ----------- |
+| UI Managers | 17 files     | ~1,800      | ✅ Deleted  |
+| Formatters  | 11 files     | ~1,200      | ✅ Migrated |
+| Core        | 5 files      | ~800        | ✅ Deleted  |
+| **Total**   | **40 files** | **~10,000** | ✅ Removed  |
 
 ##### CSS Files (26 files - preserved, no changes needed)
 
