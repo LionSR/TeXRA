@@ -506,7 +506,7 @@ export const ToWebviewSchema = z.discriminatedUnion('type', [
   }),
 
   // ─────────────────────────────────────────────────────────
-  // APPEND MESSAGES (for real-time updates during execution)
+  // APPEND MESSAGES (new items during execution)
   // ─────────────────────────────────────────────────────────
 
   z.object({
@@ -520,6 +520,31 @@ export const ToWebviewSchema = z.discriminatedUnion('type', [
     type: z.literal('conversation/turn-append'),
     streamId: z.string(),
     turn: ConversationTurnSchema,
+  }),
+
+  // ─────────────────────────────────────────────────────────
+  // UPDATE MESSAGES (streaming changes to existing items)
+  // ─────────────────────────────────────────────────────────
+
+  z.object({
+    type: z.literal('workflow/task-update'),
+    streamId: z.string(),
+    runId: z.string(),
+    taskId: z.string(),
+    updates: WorkflowTaskSchema.partial(),  // Only changed fields
+  }),
+
+  z.object({
+    type: z.literal('conversation/turn-update'),
+    streamId: z.string(),
+    turnId: z.string(),
+    updates: ConversationTurnSchema.partial(),  // e.g., content growing
+  }),
+
+  z.object({
+    type: z.literal('stream/status'),
+    streamId: z.string(),
+    status: StreamStatusSchema,
   }),
 
   // ─────────────────────────────────────────────────────────
@@ -554,7 +579,7 @@ export const ToWebviewSchema = z.discriminatedUnion('type', [
 export type ToWebview = z.infer<typeof ToWebviewSchema>;
 ```
 
-**Message count: 6** (down from 20+)
+**Message count: 9** (down from 20+)
 
 ### Webview → Extension Messages
 
@@ -719,8 +744,23 @@ class ProgressStore {
         break;
 
       case 'workflow/task-append':
+        this.appendWorkflowTask(msg.streamId, msg.runId, msg.task);
+        break;
+
       case 'conversation/turn-append':
-        // Append to existing data
+        this.appendConversationTurn(msg.streamId, msg.turn);
+        break;
+
+      case 'workflow/task-update':
+        this.updateWorkflowTask(msg.streamId, msg.runId, msg.taskId, msg.updates);
+        break;
+
+      case 'conversation/turn-update':
+        this.updateConversationTurn(msg.streamId, msg.turnId, msg.updates);
+        break;
+
+      case 'stream/status':
+        this.updateStreamStatus(msg.streamId, msg.status);
         break;
 
       case 'ui/prompt':
