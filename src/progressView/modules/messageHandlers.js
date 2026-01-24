@@ -656,11 +656,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // For tool-use agents, ungrouped messages (like user instructions) typically
-    // have earlier timestamps and should appear at the top. Insert them first.
+    // have earlier timestamps and should appear at the top. Prepend them before
+    // any group containers that were already rendered.
     // For workflow agents, task groups are rendered first and ungrouped messages
     // (if any) should appear after.
     if (isToolUseAgent && ungroupedFragment.childNodes.length > 0) {
-      logContent.appendChild(ungroupedFragment);
+      logContent.prepend(ungroupedFragment);
     }
 
     // Append grouped messages to their containers
