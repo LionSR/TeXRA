@@ -8,7 +8,10 @@ import { z } from 'zod';
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
-import { PROGRESS_VIEW_APPROVAL_ACTIONS } from '@tools/approval/toolEditApproval';
+import {
+  TOOL_EDIT_APPROVAL_ACTIONS,
+  BASH_APPROVAL_ACTIONS,
+} from '@tools/approval';
 
 // --- Base Schemas (composable building blocks) ---
 
@@ -242,11 +245,22 @@ export type InfoMessage = z.infer<typeof InfoMessageSchema>;
 /** Approval action message from progress view */
 export const ApprovalActionMessageSchema = z.object({
   requestId: z.string().min(1),
-  action: z.enum(PROGRESS_VIEW_APPROVAL_ACTIONS),
+  action: z.enum(TOOL_EDIT_APPROVAL_ACTIONS),
   feedback: z.string().optional(),
 });
 
 export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
+
+/** Bash approval action message from progress view */
+export const BashApprovalActionMessageSchema = z.object({
+  requestId: z.string().min(1),
+  action: z.enum(BASH_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
+export type BashApprovalActionMessage = z.infer<
+  typeof BashApprovalActionMessageSchema
+>;
 
 /** Followup task message from progress view */
 export const FollowupTaskMessageSchema = z.object({
