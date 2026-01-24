@@ -629,7 +629,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Batch all messages via DocumentFragment to avoid layout thrashing.
     // Check container existence during iteration to preserve chronological order for fallbacks.
+    // For tool-use agents, separate user messages to ensure they always appear first.
     const ungroupedFragment = document.createDocumentFragment();
+    const userMessageFragment = isToolUseAgent
+      ? document.createDocumentFragment()
+      : null;
     const groupedFragments = new Map(); // groupId → fragment
 
     for (const msg of sortedMessages) {
@@ -650,18 +654,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           // Group container missing - add to ungrouped to preserve chronological order
           appendFormatted(ungroupedFragment, formatted);
         }
+      } else if (isToolUseAgent && msg.messageType === 'userMessage') {
+        // For tool-use agents, user messages go to separate fragment to ensure they appear first
+        appendFormatted(userMessageFragment, formatted);
       } else {
         appendFormatted(ungroupedFragment, formatted);
       }
     }
 
-    // For tool-use agents, ungrouped messages (like user instructions) typically
-    // have earlier timestamps and should appear at the top. Prepend them before
-    // any group containers that were already rendered.
-    // For workflow agents, task groups are rendered first and ungrouped messages
-    // (if any) should appear after.
-    if (isToolUseAgent && ungroupedFragment.childNodes.length > 0) {
-      logContent.prepend(ungroupedFragment);
+    // For tool-use agents, render in order: user messages first, then other ungrouped messages.
+    // This ensures user instructions always appear at the top regardless of timestamp issues.
+    // For workflow agents, task groups are rendered first and ungrouped messages appear after.
+    if (isToolUseAgent) {
+      // Prepend other ungrouped messages first (they'll be after user messages)
+      if (ungroupedFragment.childNodes.length > 0) {
+        logContent.prepend(ungroupedFragment);
+      }
+      // Then prepend user messages (they'll be before everything else)
+      if (userMessageFragment && userMessageFragment.childNodes.length > 0) {
+        logContent.prepend(userMessageFragment);
+      }
     }
 
     // Append grouped messages to their containers
