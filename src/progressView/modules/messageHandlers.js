@@ -385,6 +385,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         this.handleResolveToolEditApproval.bind(this),
       [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]:
         this.handleUpdateToolEditApprovalState.bind(this),
+      [COMMANDS.SHOW_BASH_APPROVAL]: this.handleShowBashApproval.bind(this),
+      [COMMANDS.RESOLVE_BASH_APPROVAL]:
+        this.handleResolveBashApproval.bind(this),
       [COMMANDS.SHOW_RETRY_REQUEST]: this.handleShowRetryRequest.bind(this),
       [COMMANDS.RESOLVE_RETRY_REQUEST]:
         this.handleResolveRetryRequest.bind(this),
@@ -477,6 +480,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // No need to restore from frontend cache here
 
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
+    dom.bashApprovalRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.workflowProposals.setActiveStream(message.activeStream, isToolAgent);
 
@@ -953,6 +957,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleResolveToolEditApproval(message) {
     if (message?.requestId) dom.approvalRequests.resolve(message.requestId);
+  }
+
+  handleShowBashApproval(message) {
+    if (message?.request) dom.bashApprovalRequests.show(message.request);
+  }
+
+  handleResolveBashApproval(message) {
+    if (message?.requestId) dom.bashApprovalRequests.resolve(message.requestId);
   }
 
   handleUpdateToolEditApprovalState(message) {

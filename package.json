@@ -1012,6 +1012,12 @@
             "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
             "scope": "resource"
           },
+          "texra.toolUse.requireBashApproval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Require user approval before tool-use agents execute bash commands",
+            "scope": "resource"
+          },
           "texra.toolUse.persistence.enabled": {
             "type": "boolean",
             "default": true,
