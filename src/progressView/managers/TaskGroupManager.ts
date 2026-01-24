@@ -113,14 +113,6 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
-   * Get a specific task group
-   */
-  getGroup(stream: StreamTabId, groupId: string): TaskGroup | undefined {
-    const streamGroups = this.get(stream);
-    return streamGroups?.get(groupId);
-  }
-
-  /**
    * Get all groups for a stream
    */
   getStreamGroups(stream: StreamTabId): Map<string, TaskGroup> {
