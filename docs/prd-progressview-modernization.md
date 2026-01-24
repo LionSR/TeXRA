@@ -32,16 +32,20 @@ This document outlines the modernization of TeXRA's ProgressView component, tran
 
 ## Goals
 
-1. **End-to-end type safety** via shared Zod schemas
-2. **Simplified state management** by separating Workflow and Conversation concerns
-3. **Maintainable architecture** with component-based design
+**Primary (Milestone 1):**
+1. **End-to-end type safety** via shared Zod schemas — this alone delivers 80% of maintenance benefit
+
+**Secondary (Milestone 2):**
+2. **Simplified state management** by separating Workflow and Conversation data models
+3. **Maintainable UI** with Lit component-based design
 
 ## Non-Goals
 
 - Changing the EventBus architecture (it works well)
 - Modifying agent execution logic
 - Adding new features (pure refactor)
-- Virtual scrolling (future optimization, not blocking)
+- Virtual scrolling (future optimization)
+- Boiling the ocean — Milestone 1 is shippable alone
 
 ---
 
@@ -952,65 +956,84 @@ Note: `zod` is already a dependency. `@vscode-elements/elements` is already a de
 
 ## Migration Plan
 
-**No phases. Ship incrementally.**
+**Two milestones. First one is shippable alone.**
 
-### Step 1: Foundation (1-2 days)
+The type safety from shared schemas delivers 80% of the maintenance benefit. The Lit UI refactor is polish. Ship schemas first, validate, then decide if the UI rewrite is worth it.
+
+---
+
+### Milestone 1: Type Safety (3-4 days)
+
+**This milestone is independently valuable.** You can stop here and still win.
+
+#### 1.1 Create shared schemas
 
 ```bash
-# Create shared schemas
 src/shared/schemas/stream.ts
 src/shared/schemas/workflow.ts
 src/shared/schemas/conversation.ts
 src/shared/ipc/index.ts
+```
 
+Import schemas in backend code. Replace ad-hoc interfaces with `z.infer<>` types. The frontend keeps using JSDoc for now—but backend→webview messages are now validated.
+
+**Test**: Extension works, `npm run lint` passes, schemas compile.
+
+#### 1.2 Delete duplicates
+
+```bash
+rm src/common/webview/commands.js    # Use commands.ts
+rm src/common/constants/streamStatus.js  # Use streamStatus.ts
+```
+
+**Test**: Extension works. This is safe—just removing dead code.
+
+#### 1.3 Update WebviewUpdater to use IPC schemas
+
+`WebviewUpdater.ts` starts using `ToWebviewSchema` types. Messages are validated before sending. Frontend still receives same shape—no breaking changes yet.
+
+**Test**: Run agent, check messages are typed correctly.
+
+**Milestone 1 complete.** Ship it. See if anything breaks in production.
+
+---
+
+### Milestone 2: Lit UI (1-2 weeks)
+
+**Only start this after Milestone 1 is stable.**
+
+#### 2.1 Webpack + Lit shell
+
+```bash
 # Add webpack entry for webview
 webpack.config.js  # Add webviewConfig
 
-# Delete duplicates
-rm src/common/webview/commands.js
-rm src/common/constants/streamStatus.js
-```
-
-**Test**: Extension still works, schemas compile.
-
-### Step 2: Lit Shell (1 day)
-
-```bash
-# Minimal Lit app that renders existing content
+# Minimal Lit app
 src/progressView/frontend/index.ts
 src/progressView/frontend/components/ProgressApp.ts
-
-# Update HTML to load bundle
-src/progressView/index.html  # Replace import maps with bundle
 ```
 
-**Test**: Webview loads, shows "Hello World".
+**Test**: Bundle builds, webview loads "Hello World".
 
-### Step 3: Wire Up Messages (1-2 days)
+#### 2.2 Wire up store + message handler
 
 ```bash
-# Message handler using new IPC schema
-src/progressView/frontend/ipc/handler.ts
 src/progressView/frontend/state/store.ts
-
-# Update backend to send new format
-src/progressView/managers/WebviewUpdater.ts
+src/progressView/frontend/ipc/handler.ts
 ```
 
-**Test**: Messages flow, store updates, console.log shows data.
+**Test**: Messages flow, `console.log` shows data in store.
 
-### Step 4: Components (3-5 days)
+#### 2.3 Build components (one at a time)
 
-Build components one at a time. Each one should work before moving to the next:
+Each component must work before starting the next:
 
-1. `StreamTabs.ts` - Can switch streams
-2. `WorkflowView.ts` - Shows runs, tasks, files
-3. `ConversationView.ts` - Shows turns, tool calls
-4. `PromptOverlay.ts` - Retry, approval, proposal dialogs
+1. `StreamTabs.ts` - Switch streams
+2. `WorkflowView.ts` - Runs, tasks, files
+3. `ConversationView.ts` - Turns, tool calls
+4. `PromptOverlay.ts` - Retry, approval, proposal
 
-**Test each component individually before integrating.**
-
-### Step 5: Delete Old Code (1 day)
+#### 2.4 Delete old code
 
 Only after everything works:
 
@@ -1018,43 +1041,80 @@ Only after everything works:
 rm -rf src/progressView/modules/
 ```
 
-**Total: ~2 weeks if focused, not 4 weeks of "phases"**
+---
 
 ### Escape Hatch
 
-If Step 3 or 4 goes badly, you can revert to the old frontend by:
-1. Restoring `index.html` import maps
-2. Keeping `modules/` around
+If Milestone 2 goes badly:
+1. Revert `index.html` to use import maps
+2. Keep `modules/` around (don't delete until proven)
 
-Don't burn bridges until the new code is proven.
+The schemas from Milestone 1 remain valuable regardless.
+
+---
+
+## Risks
+
+### High Risk: Persistence Migration (12 → 4 keys)
+
+The `migrateTaskGroups()` function must handle every edge case that accumulated in production:
+- Streams with no runs
+- Runs with no tasks
+- Orphaned task groups (parent deleted, children remain)
+- Mixed agent categories in same stream (shouldn't happen, but might)
+- Corrupted timestamps (null, undefined, 0)
+
+**Mitigation:**
+1. Test migration on **real persisted data**, not just fixtures
+2. Export anonymized workspace state from 5+ users before implementing
+3. Add defensive `.catch()` and `.default()` in Zod schemas
+4. If migration fails, start fresh (users don't care about progress history)
+
+### Medium Risk: IPC Message Ordering
+
+During streaming, messages arrive rapidly. If `task-update` arrives before `task-append`, the update targets a non-existent task.
+
+**Mitigation:**
+- Backend sends `append` before any `update` for same entity
+- Frontend queues updates for unknown IDs, applies when entity appears
+- Or simpler: just drop updates for unknown IDs (they'll get full sync on next stream switch)
+
+### Low Risk: Lit Bundle Size
+
+Lit adds ~5KB gzipped. Acceptable for a panel that loads once per session.
 
 ---
 
 ## Deletion List
 
-### Files to Delete
+### Milestone 1: Delete Immediately
 
 ```
-src/common/webview/commands.js              # 300 lines (duplicate)
-src/common/constants/streamStatus.js        # duplicate
-src/progressView/modules/messageHandlers.js # 1268 lines → components
-src/progressView/modules/taskManagers.js    # 544 lines → components
+src/common/webview/commands.js         # 300 lines (duplicate of commands.ts)
+src/common/constants/streamStatus.js   # duplicate of streamStatus.ts
+```
+
+### Milestone 2: Delete After Lit Migration
+
+```
+src/progressView/modules/messageHandlers.js   # 1268 lines → store.ts
+src/progressView/modules/taskManagers.js      # 544 lines → components
 src/progressView/modules/progressViewState.js # → store.ts
-src/progressView/modules/domHandlers.js     # → Lit handles DOM
-src/progressView/modules/formatters.js      # → component methods
-src/progressView/modules/utils.js           # → shared utils
-src/progressView/modules/constants.js       # → shared schemas
-src/progressView/modules/usageManagers.js   # → UsageDisplay component
-src/progressView/modules/uiManagers/*.js    # All 14 files → Lit components
-src/progressView/modules/handlers/*.js      # → component methods
-src/progressView/modules/formatters/*.js    # → component methods
+src/progressView/modules/domHandlers.js       # → Lit handles DOM
+src/progressView/modules/formatters.js        # → component methods
+src/progressView/modules/utils.js             # → shared utils
+src/progressView/modules/constants.js         # → shared schemas
+src/progressView/modules/usageManagers.js     # → UsageDisplay component
+src/progressView/modules/uiManagers/*.js      # 14 files → Lit components
+src/progressView/modules/handlers/*.js        # → component methods
+src/progressView/modules/formatters/*.js      # → component methods
 ```
 
-### Code Patterns to Remove
+### Code Patterns Eliminated (Milestone 2)
 
-- `lastRenderedStream` hack (stream switch detection)
+- `lastRenderedStream` hack
 - `resolveActiveRunId()` fallback chain
-- `_clearAgentCategoryState()` category switch workaround
+- `_clearAgentCategoryState()` workaround
 - `RunScopedMap` with resolver closure
 - 14+ `isToolUse` / `isWorkflow` conditionals
 - ~367 lines of JSDoc type comments
@@ -1063,14 +1123,26 @@ src/progressView/modules/formatters/*.js    # → component methods
 
 ## Success Metrics
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Type coverage (frontend) | ~20% (JSDoc) | 100% (TypeScript) |
-| Lines of code (progressView frontend) | ~3700 | ~2000 (-45%) |
+### After Milestone 1 (Type Safety)
+
+| Metric | Current | After M1 |
+|--------|---------|----------|
+| Backend→Webview type safety | 0% | 100% |
 | Duplicate code | 600+ lines | 0 |
+| Shared schemas | 0 | 6 files |
+
+**You can stop here.** This alone makes the codebase significantly more maintainable.
+
+### After Milestone 2 (Lit UI)
+
+| Metric | Current | After M2 |
+|--------|---------|----------|
+| Frontend type coverage | ~20% (JSDoc) | 100% (TypeScript) |
+| Lines of code (frontend) | ~3700 | ~2000 (-45%) |
 | Message handler complexity | 1268-line switch | ~150-line dispatcher |
 | State tracking locations | 7 | 1 (store.ts) |
 | `isToolUse` conditionals | 14+ | 0 (separate components) |
+| JSDoc comments | ~367 lines | 0 |
 
 **Future optimization** (not in scope):
 - Virtual scrolling for large conversations
