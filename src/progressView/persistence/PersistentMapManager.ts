@@ -7,16 +7,38 @@ export interface StateStorage {
   update<T>(key: string, value: T): Thenable<void>;
 }
 
+/** Default debounce delay for persistence saves (ms) */
+const DEFAULT_SAVE_DEBOUNCE_MS = 500;
+
 /**
  * Generic manager for map-based state with persistence support.
  * Handles common map operations and storage serialization.
+ *
+ * Performance: Uses debounced saves to reduce disk I/O when multiple
+ * updates happen in quick succession (common during streaming).
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
   protected readonly storage: StateStorage;
   protected readonly storageKey: WorkspaceStateKey;
 
-  constructor(storageKey: WorkspaceStateKey, storage?: StateStorage) {
+  /** Debounce timer handle for save operations */
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Promise for the pending save operation */
+  private pendingSave: Promise<void> | null = null;
+
+  /** Resolve function for the pending save promise */
+  private pendingSaveResolve: (() => void) | null = null;
+
+  /** Debounce delay in milliseconds */
+  protected readonly saveDebounceMs: number;
+
+  constructor(
+    storageKey: WorkspaceStateKey,
+    storage?: StateStorage,
+    saveDebounceMs: number = DEFAULT_SAVE_DEBOUNCE_MS,
+  ) {
     const resolvedStorage = storage ?? workspaceSM;
     if (!resolvedStorage) {
       throw new Error('workspace state manager is not initialized');
@@ -24,6 +46,7 @@ export abstract class PersistentMapManager<K extends string, V> {
 
     this.storage = resolvedStorage;
     this.storageKey = storageKey;
+    this.saveDebounceMs = saveDebounceMs;
   }
 
   /** Add an entry to the map and persist it */
@@ -93,13 +116,80 @@ export abstract class PersistentMapManager<K extends string, V> {
     }
   }
 
-  /** Save current state to persistence */
+  /**
+   * Save current state to persistence with debouncing.
+   * Multiple rapid calls will be coalesced into a single save operation.
+   * Returns a promise that resolves when the save completes.
+   */
   async save(): Promise<void> {
+    // If there's already a pending save, just wait for it
+    if (this.pendingSave) {
+      // Reset the debounce timer to extend the delay
+      if (this.saveTimer) {
+        clearTimeout(this.saveTimer);
+      }
+      this.saveTimer = setTimeout(() => this.executeSave(), this.saveDebounceMs);
+      return this.pendingSave;
+    }
+
+    // Create a new pending save promise
+    this.pendingSave = new Promise<void>((resolve) => {
+      this.pendingSaveResolve = resolve;
+    });
+
+    // Start the debounce timer
+    this.saveTimer = setTimeout(() => this.executeSave(), this.saveDebounceMs);
+
+    return this.pendingSave;
+  }
+
+  /**
+   * Execute the actual save operation.
+   * Called by the debounce timer.
+   */
+  private async executeSave(): Promise<void> {
+    this.saveTimer = null;
+
     const record: Record<string, unknown> = {};
     for (const [key, value] of this.items) {
       record[key] = this.serialize(value, key);
     }
+
+    try {
+      await this.storage.update(this.storageKey, record);
+    } finally {
+      // Resolve the pending promise and reset state
+      if (this.pendingSaveResolve) {
+        this.pendingSaveResolve();
+      }
+      this.pendingSave = null;
+      this.pendingSaveResolve = null;
+    }
+  }
+
+  /**
+   * Force an immediate save, bypassing debounce.
+   * Useful when the extension is deactivating.
+   */
+  async saveImmediate(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+
+    const record: Record<string, unknown> = {};
+    for (const [key, value] of this.items) {
+      record[key] = this.serialize(value, key);
+    }
+
     await this.storage.update(this.storageKey, record);
+
+    // Resolve any pending promise
+    if (this.pendingSaveResolve) {
+      this.pendingSaveResolve();
+    }
+    this.pendingSave = null;
+    this.pendingSaveResolve = null;
   }
 
   private async populateFromRecord(

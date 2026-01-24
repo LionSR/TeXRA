@@ -17,6 +17,21 @@ interface WebviewMessage {
   [key: string]: unknown;
 }
 
+/** Default throttle interval for batching messages (ms) */
+const DEFAULT_THROTTLE_MS = 100;
+
+/** Commands that bypass batching and are sent immediately (critical UI updates) */
+const IMMEDIATE_COMMANDS = new Set([
+  'updateStatus',
+  'updateStreamStatus',
+  'showToolEditApproval',
+  'resolveToolEditApproval',
+  'showRetryRequest',
+  'resolveRetryRequest',
+  'showAgentProposal',
+  'resolveAgentProposal',
+]);
+
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { COMMANDS } from '@progressView/modules/constants.js';
@@ -60,17 +75,97 @@ export interface LogContentExtras {
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
  * Supports multiple webviews (e.g., sidebar + editor tab panel).
+ *
+ * Performance: Uses message batching to reduce postMessage overhead.
+ * Non-critical messages are queued and sent in batches at regular intervals.
+ * Critical messages (status updates, approval prompts) bypass batching.
  */
 export class WebviewUpdater {
-  constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
+  /** Queue of messages waiting to be sent */
+  private messageQueue: WebviewMessage[] = [];
 
-  /** Helper to send messages to all registered webviews */
-  private sendMessage(message: WebviewMessage): void {
+  /** Timer handle for throttled flush */
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Throttle interval in milliseconds */
+  private readonly throttleMs: number;
+
+  constructor(
+    private getWebviews: () => (vscode.Webview | undefined)[],
+    throttleMs: number = DEFAULT_THROTTLE_MS,
+  ) {
+    this.throttleMs = throttleMs;
+  }
+
+  /**
+   * Send messages to all registered webviews.
+   * @param messages - Array of messages to send (batched for efficiency)
+   */
+  private postMessages(messages: WebviewMessage[]): void {
+    if (messages.length === 0) return;
+
     for (const webview of this.getWebviews()) {
       if (webview) {
-        webview.postMessage(message);
+        // Send as batch if multiple messages, single message otherwise
+        if (messages.length === 1) {
+          webview.postMessage(messages[0]);
+        } else {
+          webview.postMessage({ command: 'batch', messages });
+        }
       }
     }
+  }
+
+  /**
+   * Flush all queued messages immediately.
+   * Called by the throttle timer or can be called manually.
+   */
+  flush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    if (this.messageQueue.length > 0) {
+      const messages = this.messageQueue;
+      this.messageQueue = [];
+      this.postMessages(messages);
+    }
+  }
+
+  /** Schedule a flush if not already scheduled */
+  private scheduleFlush(): void {
+    if (this.flushTimer === null) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flush();
+      }, this.throttleMs);
+    }
+  }
+
+  /**
+   * Queue a message for batched sending.
+   * Critical messages (in IMMEDIATE_COMMANDS) are sent immediately.
+   */
+  private sendMessage(message: WebviewMessage): void {
+    // Critical messages bypass batching
+    if (IMMEDIATE_COMMANDS.has(message.command)) {
+      // Flush any pending messages first to maintain order
+      this.flush();
+      this.postMessages([message]);
+      return;
+    }
+
+    // Queue non-critical messages for batching
+    this.messageQueue.push(message);
+    this.scheduleFlush();
+  }
+
+  /**
+   * Dispose of the updater, flushing any pending messages.
+   */
+  dispose(): void {
+    this.flush();
   }
 
   static createInstructionUpdate(

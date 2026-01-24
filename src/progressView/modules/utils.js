@@ -44,6 +44,8 @@ export function appendFormatted(container, formatted) {
 
 /**
  * Insert an element into a container keeping children sorted chronologically.
+ * Uses binary search for O(log n) insertion point finding instead of O(n) linear scan.
+ *
  * Handles log groups and log entries by default, but a custom extractor can
  * be provided for specialized cases.
  *
@@ -74,21 +76,62 @@ export function insertChronologically({
     return;
   }
 
+  // Fast path: append at end (most common case for streaming)
   const lastChildTime = childExtractor(lastChild);
   if (lastChildTime !== null && targetTime >= lastChildTime) {
     container.appendChild(element);
     return;
   }
 
-  const children = Array.from(container.children);
-  for (const child of children) {
+  // Fast path: insert at beginning
+  const firstChild = container.firstElementChild;
+  const firstChildTime = firstChild ? childExtractor(firstChild) : null;
+  if (firstChildTime !== null && targetTime < firstChildTime) {
+    container.insertBefore(element, firstChild);
+    return;
+  }
+
+  // Binary search for insertion point
+  const children = container.children;
+  const childCount = children.length;
+
+  // Skip binary search for small containers (threshold where linear is faster)
+  if (childCount <= 8) {
+    for (let i = 0; i < childCount; i++) {
+      const child = children[i];
+      const childTime = childExtractor(child);
+      if (childTime !== null && targetTime < childTime) {
+        container.insertBefore(element, child);
+        return;
+      }
+    }
+    container.appendChild(element);
+    return;
+  }
+
+  // Binary search: find first child with timestamp > targetTime
+  let low = 0;
+  let high = childCount;
+
+  while (low < high) {
+    const mid = (low + high) >>> 1; // Unsigned right shift for floor division
+    const child = children[mid];
     const childTime = childExtractor(child);
-    if (childTime !== null && targetTime < childTime) {
-      container.insertBefore(element, child);
-      return;
+
+    // Treat null timestamps as infinity (insert before them)
+    if (childTime === null || targetTime < childTime) {
+      high = mid;
+    } else {
+      low = mid + 1;
     }
   }
-  container.appendChild(element);
+
+  // Insert at found position
+  if (low < childCount) {
+    container.insertBefore(element, children[low]);
+  } else {
+    container.appendChild(element);
+  }
 }
 
 /**

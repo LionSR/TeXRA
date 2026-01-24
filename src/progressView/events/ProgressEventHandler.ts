@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Type imports
+import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
@@ -17,7 +18,6 @@ import {
   ProgressViewState,
   type ActiveStreamId,
 } from '@progressView/state/ProgressViewState';
-import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -336,6 +336,9 @@ export class ProgressEventHandler {
    * isn't blocked by potentially large log payloads, and provides fault isolation
    * if the large payload has issues.
    *
+   * Performance: Only serializes the active run's files/missing outputs by default.
+   * Other runs' data is loaded on-demand when the user switches runs.
+   *
    * @param stream - Stream to refresh, or empty string to clear all content.
    * @param options.updateInstruction - If true (default), also update instruction panel.
    * @returns The resolved active run ID, useful for callers that need to pass it
@@ -360,19 +363,47 @@ export class ProgressEventHandler {
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
     const activeRunId = this.state.getActiveRunId(stream);
 
+    // Serialize only instructions (small) and active run's files/outputs (needed for display)
+    // Other runs' data is kept in state and sent on-demand when user switches runs
     const runInstructions = Object.fromEntries(
       this.state.getRunInstructions(stream).entries(),
     );
-    const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
-    const runMissingOutputs = nestedMapToRecord(
-      this.state.outputFiles.getMissingOutputs(stream),
-    ) as Record<string, { [key: number]: string[] }>;
+
+    // Only serialize active run's files and missing outputs (performance optimization)
+    // This reduces serialization overhead from O(runs * rounds * files) to O(rounds * files)
+    let runFiles: Record<string, { [key: number]: OutputFileInfo[] }> = {};
+    let runMissingOutputs: Record<string, { [key: number]: string[] }> = {};
+
+    if (activeRunId) {
+      const activeFiles = this.state.outputFiles.getRunFiles(stream, activeRunId);
+      if (activeFiles && activeFiles.size > 0) {
+        runFiles = {
+          [activeRunId]: Object.fromEntries(
+            Array.from(activeFiles, ([k, v]) => [String(k), v]),
+          ),
+        };
+      }
+
+      const activeMissing = this.state.outputFiles.getRunMissingOutputs(
+        stream,
+        activeRunId,
+      );
+      if (activeMissing && activeMissing.size > 0) {
+        runMissingOutputs = {
+          [activeRunId]: Object.fromEntries(
+            Array.from(activeMissing, ([k, v]) => [String(k), v]),
+          ),
+        };
+      }
+    }
+
+    // Usage stats are small, serialize all runs (needed for aggregate display)
     const runUsage = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
+
     const contextState = this.state.getContextState(stream);
     const todos = this.state.getTodos(stream) ?? [];
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
     // Clear pendingTaskGroups since we're doing a full refresh from state.taskGroups.
     // This handles both: (1) processSetActiveStream flow (replayPendingTaskGroups called first),
@@ -381,7 +412,7 @@ export class ProgressEventHandler {
 
     // NOTE: Status already sent via updateAll() → UPDATE_STREAMS → handleUpdateStreams.
 
-    // Send primary content update (includes all run-scoped data in single message)
+    // Send primary content update (includes active run's data)
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,

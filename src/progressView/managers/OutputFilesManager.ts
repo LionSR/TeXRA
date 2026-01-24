@@ -255,6 +255,32 @@ export class OutputFilesManager extends PersistentMapManager<
     return missing ? new Map(missing) : new Map();
   }
 
+  /**
+   * Get missing outputs for a specific run (more efficient for single-run access).
+   * Returns undefined if the run has no missing outputs.
+   */
+  getRunMissingOutputs(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): Map<number, string[]> | undefined {
+    if (!this.missingOutputsLoaded) {
+      throw new Error('Missing outputs requested before load completed');
+    }
+    const target = this._missingOutputs.get(stream)?.get(storageKey);
+    return target ? new Map(target) : undefined;
+  }
+
+  /**
+   * Get output files for a specific run (alias for getRun, for API consistency).
+   * Returns undefined if the run has no files.
+   */
+  getRunFiles(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): Map<number, OutputFileInfo[]> | undefined {
+    return this.getRun(stream, storageKey);
+  }
+
   /** Clear missing outputs for a stream */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     await this.ensureMissingOutputsLoaded();

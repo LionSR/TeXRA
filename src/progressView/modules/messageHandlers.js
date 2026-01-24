@@ -329,6 +329,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   _createHandlers() {
     return {
+      // Batch handler for processing multiple messages efficiently
+      batch: this.handleBatch.bind(this),
       [COMMANDS.UPDATE_STREAMS]: this.handleUpdateStreams.bind(this),
       [COMMANDS.UPDATE_LOGS]: this.handleUpdateLogs.bind(this),
       [COMMANDS.APPEND_LOG]: this.handleAppendLog.bind(this),
@@ -371,6 +373,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         this.handleUpdateQueuedFollowUps.bind(this),
       [COMMANDS.SET_FOLLOWUP_OPTIONS]: this.handleSetFollowupOptions.bind(this),
     };
+  }
+
+  /**
+   * Handle batched messages from the extension host.
+   * Processes multiple messages in a single event loop tick to reduce overhead.
+   * @param {{ messages: Array<{command: string, [key: string]: unknown}> }} message
+   */
+  handleBatch(message) {
+    const messages = message?.messages;
+    if (!Array.isArray(messages)) {
+      return;
+    }
+
+    for (const msg of messages) {
+      const handler = this._handlers[msg.command];
+      if (handler) {
+        try {
+          handler(msg);
+        } catch (error) {
+          console.error(`[batch] Error handling ${msg.command}:`, error);
+        }
+      } else {
+        console.debug(`[batch] Unknown command: ${msg.command}`);
+      }
+    }
   }
 
   handleUpdateStreams(message) {
