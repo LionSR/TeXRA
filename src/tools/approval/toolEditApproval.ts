@@ -30,11 +30,7 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from './latexPreview';
-import {
-  _rejectAllPendingBashApprovals,
-  _rejectPendingBashApprovalsForStream,
-  rejectPendingEntries,
-} from './bashApproval';
+import { rejectPendingEntries } from './bashApproval';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -66,7 +62,7 @@ interface PendingApprovalEntry extends LatexPreviewEntry {
 }
 
 /** All valid approval actions for tool edit prompts */
-export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
+export const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
@@ -74,12 +70,12 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'previewProposed',
 ] as const;
 
-export type ProgressViewApprovalAction =
-  (typeof PROGRESS_VIEW_APPROVAL_ACTIONS)[number];
+export type ToolEditApprovalAction =
+  (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
-interface ProgressViewApprovalActionPayload {
+interface ToolEditApprovalActionPayload {
   requestId: string;
-  action: ProgressViewApprovalAction;
+  action: ToolEditApprovalAction;
   feedback?: string;
 }
 
@@ -161,23 +157,25 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
 }
 
 
-/**
- * Clean up all approval state for a deleted stream.
- * Handles pending approvals (tool edits + bash) and YOLO mode state.
- */
-export function cleanupApprovalsForStream(streamId: StreamTabId): void {
+/** @internal Called by unified cleanup in index.ts */
+export function _rejectPendingToolEditApprovalsForStream(
+  streamId: StreamTabId,
+): void {
   rejectPendingEntries(pendingApprovals.values(), streamId);
-  _rejectPendingBashApprovalsForStream(streamId);
+}
+
+/** @internal Called by unified cleanup in index.ts */
+export function _rejectAllPendingToolEditApprovals(): void {
+  rejectPendingEntries(pendingApprovals.values());
+}
+
+/** @internal Called by unified cleanup in index.ts */
+export function _clearApprovalBypassForStream(streamId: StreamTabId): void {
   approvalsBypassedByStream.delete(streamId);
 }
 
-/**
- * Clean up all approval state when deleting all streams.
- * Handles pending approvals (tool edits + bash) and YOLO mode state.
- */
-export function cleanupAllApprovals(): void {
-  rejectPendingEntries(pendingApprovals.values());
-  _rejectAllPendingBashApprovals();
+/** @internal Called by unified cleanup in index.ts */
+export function _clearAllApprovalBypass(): void {
   approvalsBypassedByStream.clear();
 }
 
@@ -679,7 +677,7 @@ export async function writeApprovedContent(
 }
 
 export async function handleProgressViewToolEditApprovalAction(
-  payload: ProgressViewApprovalActionPayload,
+  payload: ToolEditApprovalActionPayload,
 ): Promise<void> {
   const entry = pendingApprovals.get(payload.requestId);
   if (!entry || entry.isSettled()) {
