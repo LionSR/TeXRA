@@ -23,7 +23,7 @@ export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 
 /**
  * Named constants for code that uses `AgentCategory.Workflow` syntax.
- * Maintains backward compatibility with existing TypeScript enum usage.
+ * Works in both TypeScript and JavaScript (webview modules).
  *
  * @example
  * if (setting.agentCategory === AgentCategory.Workflow) { ... }
@@ -31,15 +31,4 @@ export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 export const AgentCategory = {
   Workflow: 'workflow',
   ToolUse: 'toolUse',
-} as const satisfies Record<string, AgentCategory>;
-
-/**
- * Legacy constant format for JavaScript webview code.
- * Use `AgentCategory` for new TypeScript code.
- *
- * @deprecated Use `AgentCategory` instead
- */
-export const AGENT_CATEGORY = {
-  WORKFLOW: 'workflow',
-  TOOL_USE: 'toolUse',
 } as const satisfies Record<string, AgentCategory>;

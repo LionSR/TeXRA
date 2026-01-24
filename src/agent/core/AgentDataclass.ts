@@ -8,9 +8,7 @@ import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 export {
   AgentCategory,
   AgentCategorySchema,
-  AGENT_CATEGORY,
   AGENT_CATEGORY_VALUES,
-  type AgentCategory as AgentCategoryType,
 } from '@shared/schemas/agentCategory';
 
 // Import for internal use

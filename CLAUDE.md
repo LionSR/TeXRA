@@ -22,10 +22,10 @@ npm run package
 npm run build
 # Creates: releases/texra-{version}.vsix
 
-# Run all tests with linting
+# Run all tests with linting (requires VS Code environment)
 npm test
 
-# Run linting only
+# Run linting only (requires VS Code environment)
 npm run lint
 
 # Format code with Prettier

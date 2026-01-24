@@ -4,7 +4,7 @@ import {
   ELEMENT_IDS,
   CLASS_NAMES,
   LABELS,
-  AGENT_CATEGORY,
+  AgentCategory,
 } from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
 import {
@@ -66,7 +66,7 @@ export class HistoryRenderer {
     const date = new Date(item.timestamp).toLocaleString();
 
     // Determine agent category display
-    const isToolUse = config?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+    const isToolUse = config?.agentCategory === AgentCategory.ToolUse;
     const category = isToolUse ? 'toolUse' : 'workflow';
     const { icon: categoryIcon, label: categoryLabel } =
       getAgentCategoryDecorator(category);
