@@ -470,6 +470,8 @@ export class TaskGroupDomManager {
 export class LogEntryManager {
   constructor() {
     this.entryFormatter = getSharedLogEntryFormatter();
+    // Map of logId → DOM element for O(1) lookup instead of querySelector
+    this.logElements = new Map();
   }
 
   /**
@@ -490,6 +492,11 @@ export class LogEntryManager {
             logMessage,
           );
           return true;
+        }
+
+        // Register element in lookup map for O(1) updates
+        if (logMessage.id) {
+          this.logElements.set(logMessage.id, logLineElement);
         }
 
         // Extract timestamp from the message for chronological ordering
@@ -524,7 +531,18 @@ export class LogEntryManager {
    * @returns {boolean} Whether the log entry was updated
    */
   update(logMessage) {
-    const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
+    // Use Map lookup for O(1) access instead of querySelector O(n)
+    let existing = this.logElements.get(logMessage.id);
+
+    // Fallback to querySelector if not in map (e.g., elements from full rebuild)
+    if (!existing) {
+      existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
+      if (existing) {
+        // Register for future lookups
+        this.logElements.set(logMessage.id, existing);
+      }
+    }
+
     if (existing) {
       // Preserve the expanded/collapsed state for thinking and scratchpad
       const wasOpen = existing.hasAttribute('open');
@@ -533,12 +551,23 @@ export class LogEntryManager {
       });
       if (!newEl) {
         existing.remove();
+        this.logElements.delete(logMessage.id);
         return true;
       }
 
       existing.replaceWith(newEl);
+      // Update map with new element reference
+      this.logElements.set(logMessage.id, newEl);
       return true;
     }
     return false;
+  }
+
+  /**
+   * Clear the log element lookup map.
+   * Call when switching streams or clearing content.
+   */
+  clear() {
+    this.logElements.clear();
   }
 }
