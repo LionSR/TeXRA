@@ -24,7 +24,7 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import * as logger from '@logger/logUtils';
 
 // Local imports - model
-import { getVisibleModels } from '@model/computeModelOptions';
+import { resolveVisibleModel } from '@model/computeModelOptions';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
@@ -68,21 +68,6 @@ function getRequiredStreamId(): string {
     );
   }
   return streamId;
-}
-
-/** Validate that proposed model is in the visible models list, throw if not.
- * Consistent with filterVisible for agents: if no models configured, allow any model.
- */
-function validateModel(model: string): void {
-  const visibleModels = getVisibleModels();
-  // If no models configured, allow any model (consistent with agent filterVisible behavior)
-  if (visibleModels.length === 0) return;
-
-  if (!visibleModels.includes(model)) {
-    throw new Error(
-      `Model '${model}' is not in the visible models list. Available: ${visibleModels.join(', ')}`,
-    );
-  }
 }
 
 /** Format an agent list for tool descriptions. */
@@ -230,8 +215,8 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       );
     }
 
-    // Validate model is in visible models list
-    validateModel(input.model);
+    // Resolve model to a visible model (falls back to first visible if needed)
+    const model = resolveVisibleModel(input.model);
 
     // Validate inputFile is provided
     if (!input.inputFile) {
@@ -280,7 +265,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
-      model: input.model,
+      model,
       instruction: input.instruction,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
@@ -322,7 +307,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       output: [
         `Workflow agent '${input.agent}' started.`,
         `Input: ${input.inputFile}`,
-        `Model: ${input.model}`,
+        `Model: ${model}`,
         outputInfo,
         'Monitor ProgressBoard for status.',
       ].join('\n'),
@@ -380,14 +365,14 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       );
     }
 
-    // Validate model is in visible models list
-    validateModel(input.model);
+    // Resolve model to a visible model (falls back to first visible if needed)
+    const model = resolveVisibleModel(input.model);
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
-      model: input.model,
+      model,
       instruction: input.instruction,
     } satisfies ToolUseAgentProposal);
 
@@ -413,7 +398,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       summary: `Delegated task to '${input.agent}'`,
       output: [
         `Tool-use agent '${input.agent}' started.`,
-        `Model: ${input.model}`,
+        `Model: ${model}`,
         `Task: ${input.instruction.slice(0, 100)}${input.instruction.length > 100 ? '...' : ''}`,
         'Monitor ProgressBoard for status.',
       ].join('\n'),
