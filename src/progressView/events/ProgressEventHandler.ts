@@ -310,7 +310,7 @@ export class ProgressEventHandler {
     // Preserve existing timestamp if instruction already stored for this run
     const existingInstruction = runId
       ? this.state.getRunInstruction(stream, runId)
-      : null;
+      : undefined;
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(
       taskState,
       existingInstruction?.timestamp,
