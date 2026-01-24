@@ -12,21 +12,32 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
+// Local imports - agent core
 import { Node, type NonIterableObject } from '@agent/node';
 import {
   retryCoordinator,
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+
+// Local imports - auth
 import { SupabaseClient } from '@auth/SupabaseClient';
+
+// Local imports - error handling
+import { formatProviderHttpError } from '@common/errors';
+
+// Local imports - shared schemas
 import {
-  formatProviderHttpError,
+  MESSAGE_TYPES,
+  STREAM_STATUS,
   type ProviderError,
   type RetryErrorInfo,
-} from '@common/errors';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+} from '@shared/schemas';
+
+// Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Local imports - configuration
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,

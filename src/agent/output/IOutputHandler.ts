@@ -1,5 +1,5 @@
 // Local imports - agent
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { StorageKey } from '@shared/schemas';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { FileLocation } from '@utils/files';
 
@@ -8,9 +8,9 @@ import type { LatexDiffManager } from './LatexDiffManager';
 import type {
   OutputFileInfo,
   OutputXmlSummary,
-  RoundFileMapping,
   RoundOutput,
-} from './types';
+} from '@shared/schemas';
+import type { RoundFileMapping } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {

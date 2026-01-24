@@ -9,14 +9,10 @@ import { getAgent, computeAgentOptions } from '@agent/index/agentRegistry';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import type { OutputFileInfo } from '@agent/output/types';
+import type { OutputFileInfo } from '@shared/schemas';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import type {
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-} from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -54,7 +50,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { AgentProposalActionMessageSchema } from '@eventBus/types';
+import { AgentProposalActionMessageSchema } from '@shared/schemas';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,

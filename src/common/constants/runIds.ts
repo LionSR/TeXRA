@@ -11,7 +11,7 @@
  *
  * @see IdentifierTypes.ts for the full execution model documentation
  */
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { StorageKey } from '@shared/schemas';
 
 /**
  * Sentinel run identifier retained for legacy sessions that predate

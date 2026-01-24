@@ -6,7 +6,8 @@ import {
   type FileLocation,
 } from '@utils/files';
 
-import type { OutputFileInfo, RoundFileMapping } from './types';
+import type { OutputFileInfo } from '@shared/schemas';
+import type { RoundFileMapping } from './types';
 
 /**
  * Calculates file lineage and mappings between base files, previous round outputs,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { getConfig } from '@utils/config';
-import { MESSAGE_TYPES, MessageTypeSchema } from './messageTypes';
+import { MESSAGE_TYPES, MessageTypeSchema } from '@shared/schemas';
 
 // ============================================================================
 // Filter Schemas

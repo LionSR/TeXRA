@@ -8,11 +8,8 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
-import {
-  STREAM_STATUS,
-  isTerminalStatus,
-  type StreamStatus,
-} from '@common/constants/streamStatus';
+import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { isTerminalStatus } from '@common/constants/streamStatus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,

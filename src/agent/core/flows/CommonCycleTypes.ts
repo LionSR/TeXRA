@@ -30,8 +30,8 @@ import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { RetryErrorInfoSchema } from '@common/errors/schemas';
+import type { ExecutionId } from '@shared/schemas';
+import { RetryErrorInfoSchema } from '@shared/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================

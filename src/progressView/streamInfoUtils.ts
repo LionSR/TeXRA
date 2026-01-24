@@ -8,7 +8,7 @@ import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from './types';
+import type { StreamTabInfo } from '@shared/schemas';
 
 const sortComparators: Record<
   string,

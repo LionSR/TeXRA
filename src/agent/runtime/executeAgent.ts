@@ -54,12 +54,8 @@ import {
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-} from '@agent/types/IdentifierTypes';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
+import { STREAM_STATUS } from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -69,7 +65,7 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
