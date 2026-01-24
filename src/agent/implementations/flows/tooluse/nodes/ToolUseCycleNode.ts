@@ -12,7 +12,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import type { TodoItem } from '@eventBus/schemas';
+import type { TodoItem } from '@shared/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {

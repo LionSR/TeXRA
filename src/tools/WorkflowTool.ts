@@ -15,6 +15,7 @@ import {
   getVisibleWorkflowAgents,
   getVisibleToolUseAgents,
 } from '@agent/index/agentRegistry';
+import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
@@ -33,13 +34,14 @@ import { defineTool } from '@tools/core/define';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-// Local imports - event bus (after utils per import order rules)
+// Local imports - shared schemas
 import {
+  AGENT_CATEGORY,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
-} from '@eventBus/types';
+} from '@shared/schemas';
 
 // ============================================================================
 // Shared utilities
@@ -52,7 +54,15 @@ logger.initialize(LOG_CHANNEL);
 function executeAgentWithLogging(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): void {
-  executeAgent(proposal).catch((error: unknown) => {
+  const configPayload: AgentConfigPayload = {
+    ...proposal,
+    agentCategory:
+      proposal.agentCategory === AGENT_CATEGORY.TOOL_USE
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow,
+  };
+
+  executeAgent(configPayload).catch((error: unknown) => {
     logger.error(LOG_CHANNEL, `Failed to start agent '${proposal.agent}'`, {
       data: error,
     });

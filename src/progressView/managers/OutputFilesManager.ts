@@ -3,13 +3,13 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - progress view
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
 // Internal imports
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
   type OutputFileInfo,
-} from '@agent/output/types';
+} from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';

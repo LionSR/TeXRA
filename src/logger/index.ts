@@ -12,7 +12,7 @@ export { AgentLogger, type AgentLogStage } from './AgentLogger';
 export * as logUtils from './logUtils';
 
 // Message types - commonly used constants
-export { MESSAGE_TYPES, type MessageType } from './messageTypes';
+export { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
 
 // Task state - commonly used for type checking
 export {

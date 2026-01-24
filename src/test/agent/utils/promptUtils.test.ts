@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - prompt utilities
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 import { writePromptToXml } from '@utils/prompt';
 // Local imports - storage
 // Internal imports

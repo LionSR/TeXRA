@@ -6,11 +6,9 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
 
 // Type imports
-import type {
-  TokenUsageStats,
-  ExtendedTokenUsageStats,
-} from '@agent/types/UsageTypes';
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+import type { TokenUsageStats } from '@shared/schemas';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports

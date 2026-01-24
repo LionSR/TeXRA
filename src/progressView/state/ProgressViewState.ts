@@ -10,8 +10,8 @@ import {
   type StreamTabId,
   type ExecutionId,
   type StorageKey,
-} from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
+} from '@shared/schemas';
+import type { OutputFileInfo } from '@shared/schemas';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -36,9 +36,9 @@ import {
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import type { InstructionUpdate } from '@progressView/types';
+import type { InstructionUpdate } from '@shared/schemas';
 import { getConfig } from '@utils/config';
-import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
+import { TodoItemSchema, type TodoItem } from '@shared/schemas';
 
 /**
  * Schema for ephemeral stream metadata hints.
