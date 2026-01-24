@@ -76,6 +76,7 @@ export class WebviewUpdater {
 
   static createInstructionUpdate(
     taskState?: TaskState,
+    existingTimestamp?: number,
   ): InstructionUpdate | undefined {
     const text = taskState?.agentConfig?.instruction?.trim();
     if (!text) {
@@ -84,7 +85,11 @@ export class WebviewUpdater {
 
     const lineCount = text.split(/\r?\n/).length;
     const showToggle = lineCount > 6 || text.length > 600;
-    return showToggle ? { text, metadata: { showToggle: true } } : { text };
+    // Preserve existing timestamp or set new one when instruction is first created
+    const timestamp = existingTimestamp ?? Date.now();
+    return showToggle
+      ? { text, metadata: { showToggle: true }, timestamp }
+      : { text, timestamp };
   }
 
   /**

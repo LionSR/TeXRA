@@ -581,8 +581,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const instruction = instructions[0];
 
         if (instruction?.text) {
-          // Place instruction just before the first message for correct ordering
-          const timestamp = (firstMsg.timestamp ?? Date.now()) - 1;
+          // Use stored instruction timestamp if available, otherwise fall back
+          // to just before the first message for correct ordering
+          const timestamp =
+            instruction.timestamp ?? (firstMsg.timestamp ?? Date.now()) - 1;
           sortedMessages.unshift({
             id: `compat-instruction-${message.stream}`,
             messageType: 'userMessage',
@@ -653,6 +655,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
+    // For tool-use agents, ungrouped messages (like user instructions) typically
+    // have earlier timestamps and should appear at the top. Insert them first.
+    // For workflow agents, task groups are rendered first and ungrouped messages
+    // (if any) should appear after.
+    if (isToolUseAgent && ungroupedFragment.childNodes.length > 0) {
+      logContent.appendChild(ungroupedFragment);
+    }
+
     // Append grouped messages to their containers
     for (const [groupId, frag] of groupedFragments) {
       const container = dom.logEntries.getGroupContainer(groupId);
@@ -668,8 +678,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Append ungrouped messages (and fallback grouped) to main log
-    if (ungroupedFragment.childNodes.length > 0) {
+    // Append ungrouped messages for workflow agents (tool-use already handled above)
+    if (!isToolUseAgent && ungroupedFragment.childNodes.length > 0) {
       logContent.appendChild(ungroupedFragment);
     }
     scrollToBottom(logContent);
