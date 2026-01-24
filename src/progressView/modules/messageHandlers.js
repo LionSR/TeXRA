@@ -108,68 +108,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     return typeof text === 'string' ? text.trim() : '';
   }
 
-  _hasUserMessageInLog(text) {
-    const normalized = this._normalizeInstructionText(text);
-    if (!normalized) {
-      return false;
-    }
-
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!logContent) {
-      return false;
-    }
-
-    const messages = logContent.querySelectorAll('.user-message-content');
-    for (const message of messages) {
-      if ((message.textContent || '').trim() === normalized) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  _getToolUseInstructionForActiveStream() {
-    const stream = state.activeStream;
-    if (!stream) {
-      return null;
-    }
-
-    const pending = state.getPendingInstruction(stream);
-    if (pending?.text) {
-      return pending;
-    }
-
-    const runId =
-      state.getActiveRunId(stream) ?? state.resolveActiveRunId(stream);
-    if (!runId) {
-      return null;
-    }
-
-    return state.getRunInstruction(stream, runId) ?? null;
-  }
-
-  _refreshToolUseInstructionPanel(instruction) {
-    const text = this._normalizeInstructionText(instruction?.text);
-    if (!text) {
-      dom.instructionPanel.hide();
-      return;
-    }
-
-    const shouldShow = !this._hasUserMessageInLog(text);
-    shouldShow
-      ? dom.instructionPanel.show(text, instruction?.metadata)
-      : dom.instructionPanel.hide();
-  }
-
   /**
    * Refresh instruction panel for the active run.
+   * Tool-use agents don't use instruction panel (user messages are in log).
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
   _refreshInstructionForActiveRun(runId) {
+    // Tool-use agents: no instruction panel, user messages are in log
     if (state.activeAgentCategory === 'toolUse') {
-      const instruction = this._getToolUseInstructionForActiveStream();
-      this._refreshToolUseInstructionPanel(instruction);
+      dom.instructionPanel.hide();
       return;
     }
 
@@ -790,14 +737,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         appendFormatted(logContent, formatted);
       }
       scrollToBottom(logContent);
-
-      if (
-        state.activeAgentCategory === 'toolUse' &&
-        mergedLogMessage?.messageType === 'userMessage'
-      ) {
-        const instruction = this._getToolUseInstructionForActiveStream();
-        this._refreshToolUseInstructionPanel(instruction);
-      }
     }
 
     this._updatePlaceholderVisibility();
@@ -1100,17 +1039,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearPendingInstruction(activeStream);
     }
 
-    // Tool-use agents: show instruction only when logs don't include it.
+    // Tool-use agents: no instruction panel, user messages are in log
     if (isToolUseAgent) {
-      if (hasText) {
-        state.setPendingInstruction(activeStream, {
-          text: normalizedText,
-          metadata,
-        });
-      } else {
-        state.clearPendingInstruction(activeStream);
-      }
-      this._refreshToolUseInstructionPanel({ text: normalizedText, metadata });
+      dom.instructionPanel.hide();
+      state.clearPendingInstruction(activeStream);
       return;
     }
 
