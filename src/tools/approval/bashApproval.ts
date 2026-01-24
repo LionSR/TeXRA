@@ -72,13 +72,19 @@ export async function requestBashApproval(
   const streamId = request.streamId ?? context?.streamId;
 
   // Skip if globally disabled or YOLO mode active
-  if (!approvalsEnabled || (streamId && isApprovalBypassedForStream(streamId))) {
+  if (
+    !approvalsEnabled ||
+    (streamId && isApprovalBypassedForStream(streamId))
+  ) {
     return { accepted: true };
   }
 
   // Enqueue to serialize approval prompts
   const operation = queue.then(() => showApprovalPrompt(request, streamId));
-  queue = operation.then(() => {}, () => {});
+  queue = operation.then(
+    () => {},
+    () => {},
+  );
   return operation;
 }
 
@@ -132,12 +138,15 @@ export async function handleProgressViewBashApprovalAction(payload: {
 
   entry.settle({
     accepted: payload.action === 'approve',
-    userMessage: payload.action === 'reject' ? payload.feedback?.trim() : undefined,
+    userMessage:
+      payload.action === 'reject' ? payload.feedback?.trim() : undefined,
   });
 }
 
 /** @internal Called by unified cleanup in toolEditApproval.ts */
-export function _rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
+export function _rejectPendingBashApprovalsForStream(
+  streamId: StreamTabId,
+): void {
   rejectPendingEntries(pendingApprovals.values(), streamId);
 }
 

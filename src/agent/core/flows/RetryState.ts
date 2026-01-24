@@ -267,13 +267,18 @@ export abstract class RetryableInvocationNode<
           } catch (retryErr) {
             // If retry also fails with 401, it's not a token issue - skip auto-retries
             const retryFormatted = formatProviderHttpError(retryErr);
-            if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+            if (
+              retryFormatted.isRelayError &&
+              retryFormatted.statusCode === 401
+            ) {
               services.logger.debug(
                 'Still 401 after token refresh, skipping auto-retries',
               );
               // Store error for fast-fail on subsequent retry attempts
               this._persistent401Error =
-                retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+                retryErr instanceof Error
+                  ? retryErr
+                  : new Error(String(retryErr));
             }
             throw retryErr;
           }

@@ -1638,7 +1638,7 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.7.0",
+    "@stylistic/eslint-plugin": "^5.7.1",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
     "@types/fs-extra": "^11.0.4",
@@ -1672,7 +1672,7 @@
     "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1",
-    "zod-v3-to-v4": "^1.13.0"
+    "zod-v3-to-v4": "^1.14.0"
   },
   "repository": {
     "type": "git",
@@ -1709,7 +1709,7 @@
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@openrouter/sdk": "^0.4.0",
-    "@supabase/supabase-js": "^2.91.0",
+    "@supabase/supabase-js": "^2.91.1",
     "@vscode-elements/elements": "^2.4.0",
     "@vscode/codicons": "^0.0.44",
     "arxiv-client": "^0.0.9",
