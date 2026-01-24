@@ -23,9 +23,11 @@ Modernize ProgressView from vanilla JavaScript to Lit + TypeScript with shared Z
 ## Goals
 
 **Milestone 1 (shippable alone):**
+
 - End-to-end type safety via shared Zod schemas — delivers 80% of maintenance benefit
 
 **Milestone 2:**
+
 - Simplified state by separating Workflow and Conversation data models
 - Maintainable UI with Lit components
 
@@ -55,16 +57,16 @@ Webview Frontend (Lit + TypeScript + Zod)
 
 ### Shared Schemas (src/shared/)
 
-| Schema | Purpose |
-|--------|---------|
-| `StreamSchema` | Stream metadata (id, label, agentCategory, status) |
-| `WorkflowRunSchema` | Run with tasks, outputs, usage |
-| `WorkflowTaskSchema` | Individual task in a run |
-| `ConversationTurnSchema` | Chat turn with optional tool calls |
-| `ToolCallSchema` | Tool invocation details |
-| `OutputFileSchema` | File location and status |
-| `TokenUsageSchema` | Input/output/cache tokens |
-| `PromptSchema` | Retry, approval, proposal dialogs |
+| Schema                   | Purpose                                            |
+| ------------------------ | -------------------------------------------------- |
+| `StreamSchema`           | Stream metadata (id, label, agentCategory, status) |
+| `WorkflowRunSchema`      | Run with tasks, outputs, usage                     |
+| `WorkflowTaskSchema`     | Individual task in a run                           |
+| `ConversationTurnSchema` | Chat turn with optional tool calls                 |
+| `ToolCallSchema`         | Tool invocation details                            |
+| `OutputFileSchema`       | File location and status                           |
+| `TokenUsageSchema`       | Input/output/cache tokens                          |
+| `PromptSchema`           | Retry, approval, proposal dialogs                  |
 
 Key principle: browser-compatible only (no Node.js APIs in `src/shared/`).
 
@@ -105,32 +107,33 @@ export const ConversationStreamDataSchema = z.object({
 
 **9 messages** (down from 20+):
 
-| Message | Direction | Purpose |
-|---------|-----------|---------|
-| `sync/full` | → webview | Full state on connect/stream switch |
-| `sync/stream` | → webview | Incremental update (batched) |
-| `workflow/task-append` | → webview | New task added |
-| `workflow/task-update` | → webview | Task status changed |
-| `conversation/turn-append` | → webview | New turn added |
-| `conversation/turn-update` | → webview | Turn content growing (streaming) |
-| `stream/status` | → webview | Stream lifecycle change |
-| `ui/prompt` | → webview | Show retry/approval/proposal |
-| `ui/prompt-resolved` | → webview | Dismiss prompt |
+| Message                    | Direction | Purpose                             |
+| -------------------------- | --------- | ----------------------------------- |
+| `sync/full`                | → webview | Full state on connect/stream switch |
+| `sync/stream`              | → webview | Incremental update (batched)        |
+| `workflow/task-append`     | → webview | New task added                      |
+| `workflow/task-update`     | → webview | Task status changed                 |
+| `conversation/turn-append` | → webview | New turn added                      |
+| `conversation/turn-update` | → webview | Turn content growing (streaming)    |
+| `stream/status`            | → webview | Stream lifecycle change             |
+| `ui/prompt`                | → webview | Show retry/approval/proposal        |
+| `ui/prompt-resolved`       | → webview | Dismiss prompt                      |
 
 **6 messages from webview:**
+
 - `ready`, `stream/action`, `agent/action`, `file/action`, `ui/respond`, `settings/toggle-bypass`
 
 ### EventBus → IPC Mapping
 
 Most EventBus events batch into `sync/stream`:
 
-| EventBus Event | IPC Message |
-|----------------|-------------|
-| `setActiveStream` | `sync/full` |
-| `addTaskGroup` | `workflow/task-append` or `conversation/turn-append` |
-| `updateTaskGroup` | `workflow/task-update` or `conversation/turn-update` |
-| `addOutputFiles`, `updateStreamUsage`, `updateTodos` | `sync/stream` (batched) |
-| `showRetryRequest` | `ui/prompt` (kind: retry) |
+| EventBus Event                                       | IPC Message                                          |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `setActiveStream`                                    | `sync/full`                                          |
+| `addTaskGroup`                                       | `workflow/task-append` or `conversation/turn-append` |
+| `updateTaskGroup`                                    | `workflow/task-update` or `conversation/turn-update` |
+| `addOutputFiles`, `updateStreamUsage`, `updateTodos` | `sync/stream` (batched)                              |
+| `showRetryRequest`                                   | `ui/prompt` (kind: retry)                            |
 
 ---
 
@@ -157,13 +160,13 @@ The current code has **14+ `isToolUse` conditionals**. The codebase documents th
 
 ### Semantic Differences
 
-| Concept | Workflow | ToolUse |
-|---------|----------|---------|
-| TaskGroup meaning | "Run" (switchable) | "Turn" (append-only) |
-| Group hierarchy | Root + nested children | Single level |
-| File grouping | By round (r1, r2, r3...) | Flat list |
-| User interaction | Run selector | Follow-up input |
-| Toolbar | RUN_NEW, RESUME, DIFF... | STOP, RESTORE only |
+| Concept           | Workflow                 | ToolUse              |
+| ----------------- | ------------------------ | -------------------- |
+| TaskGroup meaning | "Run" (switchable)       | "Turn" (append-only) |
+| Group hierarchy   | Root + nested children   | Single level         |
+| File grouping     | By round (r1, r2, r3...) | Flat list            |
+| User interaction  | Run selector             | Follow-up input      |
+| Toolbar           | RUN_NEW, RESUME, DIFF... | STOP, RESTORE only   |
 
 ### Component Hierarchy
 
@@ -193,12 +196,12 @@ The current code has **14+ `isToolUse` conditionals**. The codebase documents th
 
 ### Band-Aids Eliminated
 
-| Pattern | Current | After |
-|---------|---------|-------|
-| `activeAgentCategory === 'toolUse'` | 14+ places | 0 (separate components) |
-| `group.parentGroupId` filtering | taskManagers.js | Only in `<workflow-task>` |
-| `showRun(groupId)` | taskManagers.js | Not needed in conversation |
-| `resolveActiveRunId()` fallback | 30 calls | Single store |
+| Pattern                             | Current         | After                      |
+| ----------------------------------- | --------------- | -------------------------- |
+| `activeAgentCategory === 'toolUse'` | 14+ places      | 0 (separate components)    |
+| `group.parentGroupId` filtering     | taskManagers.js | Only in `<workflow-task>`  |
+| `showRun(groupId)`                  | taskManagers.js | Not needed in conversation |
+| `resolveActiveRunId()` fallback     | 30 calls        | Single store               |
 
 ---
 
@@ -206,12 +209,12 @@ The current code has **14+ `isToolUse` conditionals**. The codebase documents th
 
 ### Current Keys (12) → New Keys (4)
 
-| Old Keys | New Key |
-|----------|---------|
-| `streamTabs`, `activeStreamTab`, `taskStates` | `texra.streams` |
-| `taskGroups`, `runInstructions`, `outputFiles`, `usageStats`, `activeRunIds` | `texra.workflowData` |
-| `executionIds` | `texra.conversationData` |
-| `streamSortOrder`, `streamAgentFilter` | `texra.uiPreferences` |
+| Old Keys                                                                     | New Key                  |
+| ---------------------------------------------------------------------------- | ------------------------ |
+| `streamTabs`, `activeStreamTab`, `taskStates`                                | `texra.streams`          |
+| `taskGroups`, `runInstructions`, `outputFiles`, `usageStats`, `activeRunIds` | `texra.workflowData`     |
+| `executionIds`                                                               | `texra.conversationData` |
+| `streamSortOrder`, `streamAgentFilter`                                       | `texra.uiPreferences`    |
 
 ### Migration Strategy
 
@@ -276,12 +279,13 @@ If Milestone 2 fails: revert `index.html`, keep `modules/`. Schemas from M1 rema
 ## Build Configuration
 
 **tsconfig.json** (if not already set):
+
 ```jsonc
 {
   "compilerOptions": {
     "experimentalDecorators": true,
-    "useDefineForClassFields": false
-  }
+    "useDefineForClassFields": false,
+  },
 }
 ```
 
@@ -308,12 +312,14 @@ If `task-update` arrives before `task-append`, drop the update. Full sync on nex
 ## Deletion List
 
 **Milestone 1:**
+
 ```
 src/common/webview/commands.js
 src/common/constants/streamStatus.js
 ```
 
 **Milestone 2:**
+
 ```
 src/progressView/modules/  (entire directory)
 ```
@@ -324,19 +330,19 @@ src/progressView/modules/  (entire directory)
 
 ### After M1
 
-| Metric | Current | After |
-|--------|---------|-------|
-| Backend→Webview type safety | 0% | 100% |
-| Duplicate code | 600+ lines | 0 |
+| Metric                      | Current    | After |
+| --------------------------- | ---------- | ----- |
+| Backend→Webview type safety | 0%         | 100%  |
+| Duplicate code              | 600+ lines | 0     |
 
 ### After M2
 
-| Metric | Current | After |
-|--------|---------|-------|
-| Frontend type coverage | ~20% | 100% |
-| Lines of code (frontend) | ~3700 | ~2000 |
-| `isToolUse` conditionals | 14+ | 0 |
-| State tracking locations | 7 | 1 |
+| Metric                   | Current | After |
+| ------------------------ | ------- | ----- |
+| Frontend type coverage   | ~20%    | 100%  |
+| Lines of code (frontend) | ~3700   | ~2000 |
+| `isToolUse` conditionals | 14+     | 0     |
+| State tracking locations | 7       | 1     |
 
 ---
 
@@ -352,15 +358,15 @@ src/progressView/modules/  (entire directory)
 
 ### Seven Places Track "Active" State
 
-| Location | Tracks |
-|----------|--------|
-| Backend `_activeStream` | Current stream |
+| Location                                 | Tracks         |
+| ---------------------------------------- | -------------- |
+| Backend `_activeStream`                  | Current stream |
 | Backend `StreamSessionState.activeRunId` | Per-stream run |
-| Frontend `state.activeStream` | Current stream |
-| Frontend `state.lastRenderedStream` | Last rendered |
-| Frontend `state.activeRunIds` | Per-stream run |
-| Frontend `runSelector._pendingActiveId` | UI selection |
-| Frontend `streamStatuses` | Lifecycle |
+| Frontend `state.activeStream`            | Current stream |
+| Frontend `state.lastRenderedStream`      | Last rendered  |
+| Frontend `state.activeRunIds`            | Per-stream run |
+| Frontend `runSelector._pendingActiveId`  | UI selection   |
+| Frontend `streamStatuses`                | Lifecycle      |
 
 **Solution**: Single `store.ts` with `activeStreamId` and agent-specific data maps.
 
