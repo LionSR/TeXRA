@@ -339,6 +339,12 @@ export abstract class RetryableInvocationNode<
       this._userCancelled = true;
     }
 
+    // Clear persistent 401 error on manual retry - user may have re-authenticated
+    if (result.shouldRetry) {
+      this._persistent401Error = null;
+      this._hasAttemptedTokenRefresh = false;
+    }
+
     return result.shouldRetry;
   }
 
