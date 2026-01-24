@@ -301,12 +301,20 @@ export class ProgressEventHandler {
     }
 
     const taskState = this.state.getTaskState(stream);
-    const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const category = this.getStreamCategory(stream);
 
     // Use provided runId or read cached activeRunId (no expensive resolution)
     const runId =
       runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
+
+    // Preserve existing timestamp if instruction already stored for this run
+    const existingInstruction = runId
+      ? this.state.getRunInstruction(stream, runId)
+      : undefined;
+    const instructionUpdate = WebviewUpdater.createInstructionUpdate(
+      taskState,
+      existingInstruction?.timestamp,
+    );
 
     // Persist instruction if both runId and instruction exist
     if (runId) {
