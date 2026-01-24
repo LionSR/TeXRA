@@ -18,6 +18,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   formatProviderHttpError,
   type ProviderError,
@@ -169,6 +170,19 @@ export abstract class RetryableInvocationNode<
    */
   protected _userCancelled = false;
 
+  /**
+   * Tracks if we've already attempted token refresh for relay 401 errors.
+   * Prevents infinite refresh loops when 401 is due to account issues (suspended,
+   * permissions revoked) rather than just an expired token.
+   */
+  protected _hasAttemptedTokenRefresh = false;
+
+  /**
+   * Stores persistent 401 error after token refresh failed to fix it.
+   * When set, subsequent retry attempts fast-fail without making API calls.
+   */
+  protected _persistent401Error: Error | null = null;
+
   constructor() {
     const config = getNodeRetryConfig();
     super(config.maxRetries, config.wait);
@@ -189,13 +203,15 @@ export abstract class RetryableInvocationNode<
   }
 
   /**
-   * Reset user-cancelled flag on clone to prevent stale state.
+   * Reset instance flags on clone to prevent stale state.
    * Note: BaseNode.clone() shallow-copies with Object.assign. Subclasses with
    * object/array properties must override to deep-copy them.
    */
   clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
+    cloned._hasAttemptedTokenRefresh = false;
+    cloned._persistent401Error = null;
     return cloned;
   }
 
@@ -203,6 +219,10 @@ export abstract class RetryableInvocationNode<
    * Wraps an async operation with AbortController lifecycle management.
    * Creates controller, registers with Node.signal, sets on services, executes
    * operation, and cleans up in finally block.
+   *
+   * On relay 401 errors, automatically refreshes token and retries once
+   * BEFORE throwing to the retry loop. This avoids wasting N auto-retries
+   * with a stale token.
    *
    * @example
    * return this.withAbortController(async (signal) => {
@@ -213,13 +233,53 @@ export abstract class RetryableInvocationNode<
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
+    // Fast-fail if we already know 401 persists after token refresh
+    if (this._persistent401Error) {
+      throw this._persistent401Error;
+    }
+
     const services = this.getServices();
-    services.setAbortController(abortController);
+    let activeController = new AbortController();
+    this.signal = activeController.signal;
+    services.setAbortController(activeController);
+
     try {
-      return await operation(abortController.signal);
+      return await operation(activeController.signal);
+    } catch (err) {
+      // Detect relay 401 and refresh token immediately, before retry loop wastes attempts
+      const formatted = formatProviderHttpError(err);
+      if (
+        formatted.isRelayError &&
+        formatted.statusCode === 401 &&
+        !this._hasAttemptedTokenRefresh
+      ) {
+        this._hasAttemptedTokenRefresh = true;
+        services.logger.debug('Relay 401, refreshing token before retry loop');
+        const refreshed = await SupabaseClient.getAccessToken();
+        if (refreshed) {
+          // Create fresh AbortController for retry - original signal may be in bad state
+          activeController = new AbortController();
+          this.signal = activeController.signal;
+          services.setAbortController(activeController);
+          services.logger.debug('Token refreshed, retrying immediately');
+          try {
+            return await operation(activeController.signal);
+          } catch (retryErr) {
+            // If retry also fails with 401, it's not a token issue - skip auto-retries
+            const retryFormatted = formatProviderHttpError(retryErr);
+            if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+              services.logger.debug(
+                'Still 401 after token refresh, skipping auto-retries',
+              );
+              // Store error for fast-fail on subsequent retry attempts
+              this._persistent401Error =
+                retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+            }
+            throw retryErr;
+          }
+        }
+      }
+      throw err;
     } finally {
       // Clear service reference to allow GC and prevent stale abort calls.
       // NOTE: We intentionally keep this.signal set so Node._exec() can check
@@ -279,21 +339,24 @@ export abstract class RetryableInvocationNode<
       this._userCancelled = true;
     }
 
+    // Clear persistent 401 error on manual retry - user may have re-authenticated
+    if (result.shouldRetry) {
+      this._persistent401Error = null;
+      this._hasAttemptedTokenRefresh = false;
+    }
+
     return result.shouldRetry;
   }
 
   /**
    * Handles the manual retry prompt UI flow.
-   * Extracted as a protected method for better cohesion with retry logic.
+   * Shows retry UI for retryable errors and waits for user action.
    */
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.getServices();
     const operationName = this.getOperationName();
-    // Format error for this method's scope (retryable error handling)
-    // Note: getFallbackResult() formats separately for non-retryable errors
-    // to ensure each path logs exactly once at the appropriate point
     const formatted = formatProviderHttpError(error);
 
     // If not retryable, don't show UI - go straight to execFallback
@@ -301,7 +364,7 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    // Log the error before showing retry UI - pass FULL formatted error
+    // Log the error before showing retry UI
     logger.logErrorData(
       `${operationName} failed: ${formatted.message}`,
       formatted, // Pass complete ProviderError - no field loss
