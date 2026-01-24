@@ -17,8 +17,8 @@ When updating CHANGELOG.md:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile` to ensure the webpack build succeeds.
    - Lint TypeScript sources with `npm run lint`.
-   - Execute `npm test` to run the VS Code test suite when possible.
-3. Commit only when `npm run lint` completes without errors. If tests fail due to environment issues, note this in the PR.
+   - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
+3. Commit only when `npm run lint` completes without errors.
 
 ## Commit messages
 
