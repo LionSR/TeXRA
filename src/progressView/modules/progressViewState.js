@@ -462,6 +462,7 @@ export class ProgressViewState {
     this.runInstructions.set(targetStream, runId, {
       text: text.trim(),
       metadata: instruction?.metadata,
+      timestamp: instruction?.timestamp,
     });
   }
 
