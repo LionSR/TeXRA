@@ -10,7 +10,7 @@
  */
 
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -18,11 +18,9 @@ import {
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
-import {
-  EXECUTION_STATUS,
-  executionToEndStatus,
-} from '@common/constants/streamStatus';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
+import { EXECUTION_STATUS } from '@shared/schemas';
+import { executionToEndStatus } from '@common/constants/streamStatus';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 
 import { getDefaultToolRegistry } from '@tools/registry';
 import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';

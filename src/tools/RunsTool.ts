@@ -10,7 +10,7 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@shared/schemas';
 
 // Local imports - common
 import { AgentHistoryManager } from '@common/history';

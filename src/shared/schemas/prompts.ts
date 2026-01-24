@@ -1,17 +1,17 @@
-/**
- * Shared event bus types (avoids circular dependency with progressView).
- */
+// Third-party imports
 import { z } from 'zod';
-import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+
+// Local imports
+import { AGENT_CATEGORY } from './agent';
 import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
-} from '@agent/core/AgentConfig';
+} from './proposalFields';
 import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
-} from '@common/errors/schemas';
+} from './errors';
+import { StreamTabIdSchema } from './identifiers';
 
 /**
  * Optional stream ID schema - allows empty string for cases where stream context
@@ -76,7 +76,7 @@ export type AgentProposalActionMessage = z.infer<
  * Workflow agents receive files directly and process them.
  */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal(AgentCategory.Workflow),
+  agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
   ...WorkflowSpecificFieldsSchema.shape,
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
@@ -87,7 +87,7 @@ export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
  * File paths are mentioned in the instruction text.
  */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal(AgentCategory.ToolUse),
+  agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
@@ -128,3 +128,5 @@ export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
   ToolUseAgentProposalPromptSchema,
 ]);
 export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
+
+export type { ProviderErrorPartial };

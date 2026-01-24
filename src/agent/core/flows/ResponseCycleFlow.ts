@@ -21,13 +21,13 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import {
-  RetryErrorInfoSchema,
-  type RetryErrorInfo,
-} from '@common/errors/schemas';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { RetryErrorInfoSchema, type RetryErrorInfo } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import replacementEngine from '@replacement/engine';
-import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
+import {
+  AgentFileLocationSchema,
+  type AgentFileLocation,
+} from '@shared/schemas';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { getSystemPromptWithRules } from '@utils/prompt';

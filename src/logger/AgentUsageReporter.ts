@@ -1,5 +1,5 @@
 // Local imports - agent types
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 

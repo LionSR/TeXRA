@@ -45,6 +45,7 @@ const extensionConfig = {
       '@commands': path.resolve(__dirname, 'src/commands'),
       '@model': path.resolve(__dirname, 'src/model'),
       '@housekeeping': path.resolve(__dirname, 'src/housekeeping'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
       '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@memoryView': path.resolve(__dirname, 'src/memoryView'),
@@ -86,4 +87,42 @@ const extensionConfig = {
     minimizer: [new TerserPlugin()],
   },
 };
-module.exports = [extensionConfig];
+
+/** @type WebpackConfig */
+const progressViewConfig = {
+  name: 'progressView',
+  target: 'web',
+  mode: 'none',
+  entry: './src/progressView/frontend/index.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist/progressView'),
+    filename: 'bundle.js',
+  },
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: extensionConfig.resolve.alias,
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader',
+          },
+        ],
+      },
+    ],
+  },
+  devtool: 'nosources-source-map',
+  infrastructureLogging: {
+    level: 'log',
+  },
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin()],
+  },
+};
+
+module.exports = [extensionConfig, progressViewConfig];

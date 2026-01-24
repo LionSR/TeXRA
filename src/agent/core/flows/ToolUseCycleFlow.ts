@@ -35,7 +35,7 @@ import type { ToolResult } from '@agent/core/ToolTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 // Type imports
 import type { ToolDefinition } from '@model';
 import {

@@ -2,14 +2,18 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { OutputFileInfo } from '@agent/output/types';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
-import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import type {
+  InstructionUpdate,
+  LogMessageData,
+  OutputFileInfo,
+  StreamStatus,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+  TokenUsageStats,
+} from '@shared/schemas';
 import type { TaskState } from '@logger/TaskState';
-import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 
 /** Message payload sent to webview */
 interface WebviewMessage {
@@ -19,15 +23,16 @@ interface WebviewMessage {
 
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import { COMMANDS } from '@progressView/modules/constants.js';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
+  AgentProposalPrompt,
+  BashApprovalPrompt,
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@eventBus/types';
-import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
+  TodoItem,
+  UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
 /**
  * Extra content to include with log updates.
@@ -101,7 +106,7 @@ export class WebviewUpdater {
     agentFilter: AgentCategoryFilter,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STREAMS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
       agentFilter,
@@ -131,7 +136,7 @@ export class WebviewUpdater {
     action: 'render' | 'clear' = 'render',
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_LOGS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOGS,
       stream: streamId,
       messages,
       groups,
@@ -145,7 +150,7 @@ export class WebviewUpdater {
    */
   appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
     this.sendMessage({
-      command: COMMANDS.APPEND_LOG,
+      command: PROGRESS_VIEW_COMMANDS.APPEND_LOG,
       stream,
       logMessage,
     });
@@ -156,7 +161,7 @@ export class WebviewUpdater {
    */
   updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_LOG,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOG,
       stream,
       logMessage,
     });
@@ -174,7 +179,7 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_FILES,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
       stream,
       ...payload,
     });
@@ -192,7 +197,7 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
       stream,
       ...payload,
     });
@@ -200,14 +205,14 @@ export class WebviewUpdater {
 
   showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
       request: prompt,
     });
   }
 
   resolveToolEditApprovalPrompt(requestId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
       requestId,
     });
   }
@@ -217,7 +222,7 @@ export class WebviewUpdater {
     bypassActive: boolean,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       stream,
       bypassActive,
     });
@@ -225,42 +230,42 @@ export class WebviewUpdater {
 
   showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_BASH_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
       request: prompt,
     });
   }
 
   resolveBashApprovalPrompt(requestId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_BASH_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
       requestId,
     });
   }
 
   showRetryRequest(request: RetryRequestPrompt): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_RETRY_REQUEST,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
       request,
     });
   }
 
   resolveRetryRequest(streamId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_RETRY_REQUEST,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST,
       streamId,
     });
   }
 
   showAgentProposal(proposal: AgentProposalPrompt): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_AGENT_PROPOSAL,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,
     });
   }
 
   resolveAgentProposal(proposalId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_AGENT_PROPOSAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL,
       proposalId,
     });
   }
@@ -275,7 +280,7 @@ export class WebviewUpdater {
     usage: TokenUsageStats,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_RUN_USAGE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
       stream,
       runId,
       usage,
@@ -295,7 +300,7 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_CONTEXT_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE,
       stream,
       contextState,
     });
@@ -311,7 +316,7 @@ export class WebviewUpdater {
     agentCategory?: string,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_INSTRUCTION,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
       agentCategory,
@@ -323,7 +328,7 @@ export class WebviewUpdater {
    */
   updateTheme(theme: 'dark' | 'light'): void {
     this.sendMessage({
-      command: COMMANDS.THEME_SET,
+      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
       theme,
     });
   }
@@ -333,7 +338,7 @@ export class WebviewUpdater {
    */
   updateStatus(status: StreamStatus): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STATUS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STATUS,
       status,
     });
   }
@@ -349,7 +354,7 @@ export class WebviewUpdater {
     lastTimestamp?: number,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STREAM_STATUS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
       lastTimestamp,
@@ -361,7 +366,7 @@ export class WebviewUpdater {
    */
   addTaskGroup(stream: StreamTabId, group: TaskGroup): void {
     this.sendMessage({
-      command: COMMANDS.ADD_TASK_GROUP,
+      command: PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP,
       stream,
       group,
     });
@@ -372,7 +377,7 @@ export class WebviewUpdater {
    */
   updateTaskGroup(update: UpdateTaskGroupPayload): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TASK_GROUP,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP,
       update,
     });
   }
@@ -382,7 +387,7 @@ export class WebviewUpdater {
    */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TODOS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
       stream,
       todos,
     });
@@ -393,7 +398,7 @@ export class WebviewUpdater {
    */
   updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
       stream,
       messages,
     });

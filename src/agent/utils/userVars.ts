@@ -14,7 +14,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { FileListEntry } from '@logger/messageTypes';
+import type { FileListEntry } from '@shared/schemas';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
