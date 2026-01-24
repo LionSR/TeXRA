@@ -31,8 +31,8 @@ import {
   runLatexdiff,
 } from './latexPreview';
 import {
-  rejectAllPendingBashApprovals,
-  rejectPendingBashApprovalsForStream,
+  _rejectAllPendingBashApprovals,
+  _rejectPendingBashApprovalsForStream,
 } from './bashApproval';
 
 export interface ToolEditApprovalRequest {
@@ -159,15 +159,6 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
 
-/** Clear YOLO mode state for a deleted stream (prevents memory leak) */
-export function clearApprovalBypassForStream(streamId: StreamTabId): void {
-  approvalsBypassedByStream.delete(streamId);
-}
-
-/** Clear all YOLO mode state (used when deleting all streams) */
-export function clearAllApprovalBypass(): void {
-  approvalsBypassedByStream.clear();
-}
 
 /**
  * Clean up all approval state for a deleted stream.
@@ -181,7 +172,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
     }
   }
   // Reject pending bash approvals
-  rejectPendingBashApprovalsForStream(streamId);
+  _rejectPendingBashApprovalsForStream(streamId);
   // Clear YOLO mode state
   approvalsBypassedByStream.delete(streamId);
 }
@@ -198,7 +189,7 @@ export function cleanupAllApprovals(): void {
     }
   }
   // Reject pending bash approvals
-  rejectAllPendingBashApprovals();
+  _rejectAllPendingBashApprovals();
   // Clear all YOLO mode state
   approvalsBypassedByStream.clear();
 }

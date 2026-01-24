@@ -7,7 +7,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - tools
 import { WriteFileTool } from '@tools/WriteTool';
 import {
-  clearAllApprovalBypass,
+  cleanupAllApprovals,
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
@@ -32,7 +32,7 @@ describe('Tool edit approval gating', () => {
     originalWrite = WorkspaceFS.write;
     originalAppend = WorkspaceFS.appendFile;
     originalGetConfig = configModule.getConfig;
-    clearAllApprovalBypass();
+    cleanupAllApprovals();
   });
 
   afterEach(() => {
@@ -43,7 +43,7 @@ describe('Tool edit approval gating', () => {
     (configModule as { getConfig: typeof originalGetConfig }).getConfig =
       originalGetConfig;
     setToolEditApprovalHandler();
-    clearAllApprovalBypass();
+    cleanupAllApprovals();
   });
 
   it('write_file applies changes after approval', async () => {

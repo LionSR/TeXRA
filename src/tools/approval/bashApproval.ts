@@ -111,8 +111,8 @@ export async function handleProgressViewBashApprovalAction(payload: {
   });
 }
 
-/** Reject all pending bash approvals for a stream (called by unified cleanup) */
-export function rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
+/** @internal Called by unified cleanup in toolEditApproval.ts */
+export function _rejectPendingBashApprovalsForStream(streamId: StreamTabId): void {
   for (const entry of pendingApprovals.values()) {
     if (entry.streamId === streamId && !entry.isSettled()) {
       entry.settle({ accepted: false });
@@ -120,8 +120,8 @@ export function rejectPendingBashApprovalsForStream(streamId: StreamTabId): void
   }
 }
 
-/** Reject all pending bash approvals (called by unified cleanup) */
-export function rejectAllPendingBashApprovals(): void {
+/** @internal Called by unified cleanup in toolEditApproval.ts */
+export function _rejectAllPendingBashApprovals(): void {
   for (const entry of pendingApprovals.values()) {
     if (!entry.isSettled()) {
       entry.settle({ accepted: false });
