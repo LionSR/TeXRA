@@ -18,6 +18,8 @@ export class TaskGroupDomManager {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
+    /** @type {Set<string>} IDs of root groups (runs) for faster showRun iteration */
+    this._rootGroupIds = new Set();
     this.toggleListeners = new Map();
     this.runSelector = runSelector || null;
   }
@@ -80,6 +82,10 @@ export class TaskGroupDomManager {
   _registerGroupElement(group, element) {
     progressViewState.taskGroups.set(group.id, group);
     this.groupElements.set(group.id, element);
+    // Track root groups separately for O(roots) iteration in showRun
+    if (!group.parentGroupId) {
+      this._rootGroupIds.add(group.id);
+    }
   }
 
   _resolveGroupContent(parentGroupId) {
@@ -300,6 +306,8 @@ export class TaskGroupDomManager {
    * For toolUse agents, always shows ALL groups (conversation history).
    * For workflow agents, shows only the specified run (or all if null).
    *
+   * Optimized to iterate only root groups O(roots) instead of all groups O(n).
+   *
    * @param {string|null} groupId - The run ID to show, or null to show all
    */
   showRun(groupId) {
@@ -308,16 +316,14 @@ export class TaskGroupDomManager {
     const showAll =
       progressViewState.activeAgentCategory === 'toolUse' ||
       !groupId ||
-      !this.groupElements.has(groupId);
+      !this._rootGroupIds.has(groupId);
 
-    for (const [id, element] of this.groupElements.entries()) {
-      if (!element) continue;
-
-      const group = progressViewState.taskGroups.get(id);
-      // Skip child groups (they follow parent visibility)
-      if (!group || group.parentGroupId) continue;
-
-      element.hidden = !showAll && id !== groupId;
+    // Only iterate root groups - child groups follow parent visibility via CSS
+    for (const id of this._rootGroupIds) {
+      const element = this.groupElements.get(id);
+      if (element) {
+        element.hidden = !showAll && id !== groupId;
+      }
     }
   }
 
@@ -438,6 +444,7 @@ export class TaskGroupDomManager {
       this._removeToggleListener(groupId);
     }
     this.groupElements.clear();
+    this._rootGroupIds.clear();
     this.toggleListeners.clear();
     this.previousActiveGroupId = null;
     if (this.runSelector) {
@@ -460,6 +467,7 @@ export class TaskGroupDomManager {
     }
     this._removeToggleListener(groupId);
     this.groupElements.delete(groupId);
+    this._rootGroupIds.delete(groupId);
     progressViewState.taskGroups.delete(groupId);
   }
 }
