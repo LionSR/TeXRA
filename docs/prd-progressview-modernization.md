@@ -137,38 +137,59 @@ html`<texra-file-list .files=${this.outputFiles}></texra-file-list>`
 
 ---
 
-## Existing Schemas (Relocation, Not Creation)
+## Existing Schemas (Single Source of Truth)
 
-**60+ Zod schemas already exist.** The work is relocation, not invention.
+**60+ Zod schemas already exist.** The work is relocation to `src/shared/`, not re-exporting.
 
-### Browser-Ready (No Changes Needed)
+### Principle: No Re-Exports
 
-| Location | Schemas | Purpose |
-|----------|---------|---------|
-| `src/eventBus/schemas.ts` | `TaskGroupSchema`, `TodoItemSchema`, `AddTaskGroupPayloadSchema`, `UpdateTaskGroupPayloadSchema`, `UpdateTodosPayloadSchema`, `SetActiveStreamPayloadSchema` | Event payloads |
-| `src/eventBus/types.ts` | `ToolEditApprovalPromptSchema`, `BashApprovalPromptSchema`, `RetryRequestPromptSchema`, `WorkflowAgentProposalSchema`, `ToolUseAgentProposalSchema` | Prompt types |
-| `src/logger/LogTypes.ts` | `TaskGroupSchema`, `LogMessageDataSchema`, `LogMessageUpdateSchema` | Log entries |
-| `src/logger/messageTypes.ts` | `MessageTypeSchema`, `LogLevelSchema`, `EndGroupStatusSchema`, `FileListEntrySchema` | Enums and types |
-| `src/logger/UsageLogTypes.ts` | `UsageLogEntrySchema`, `UsageLogStatsSchema`, `UsageLogMetadataSchema` | Usage tracking |
-| `src/agent/types/UsageTypes.ts` | `TokenUsageStatsSchema`, `ExtendedTokenUsageStatsSchema`, `StreamUsageMessageSchema` | Token counts |
-| `src/agent/types/IdentifierTypes.ts` | `StreamTabIdSchema`, `ExecutionIdSchema`, `StorageKeySchema`, `ExecutionIdentitySchema` | Identifiers |
-| `src/agent/output/types.ts` | `OutputFileSchema`, `OutputFileInfoSchema`, `FileLineageSchema` | Output files |
-| `src/common/constants/streamStatus.ts` | `StreamStatusSchema`, `TaskGroupStatusSchema`, `ExecutionStatusSchema` | Status enums |
-| `src/common/errors/schemas.ts` | `ProviderErrorSchema`, `RetryErrorInfoSchema`, `ErrorLogDataSchema` | Error types |
-| `src/progressView/types.ts` | `StreamTabInfoSchema`, `StreamUITraitsSchema`, `InstructionMetadataSchema` | UI state |
+Instead of creating `schemas.ts` files that re-export from multiple locations, **move schemas to a single location**:
 
-### Requires Extraction
+```
+BEFORE (scattered):
+src/eventBus/schemas.ts      → TaskGroupSchema
+src/logger/LogTypes.ts       → TaskGroupSchema (duplicate!)
+src/agent/types/UsageTypes.ts → TokenUsageStatsSchema
+
+AFTER (single source):
+src/shared/schemas/
+├── taskGroup.ts      → TaskGroupSchema (one location)
+├── usage.ts          → TokenUsageStatsSchema
+├── stream.ts         → StreamStatusSchema, StreamTabInfoSchema
+├── prompts.ts        → ToolEditApprovalPromptSchema, etc.
+├── output.ts         → OutputFileInfoSchema, FileLocationSchema
+├── errors.ts         → ProviderErrorSchema
+└── index.ts          → barrel export (only file that re-exports)
+```
+
+### Current Schema Locations (To Be Relocated)
+
+| Current Location | Schemas | New Location |
+|------------------|---------|--------------|
+| `src/eventBus/schemas.ts` | `TodoItemSchema`, `AddTaskGroupPayloadSchema`, `UpdateTaskGroupPayloadSchema` | `src/shared/schemas/taskGroup.ts`, `src/shared/schemas/todo.ts` |
+| `src/eventBus/types.ts` | `ToolEditApprovalPromptSchema`, `BashApprovalPromptSchema`, `RetryRequestPromptSchema` | `src/shared/schemas/prompts.ts` |
+| `src/logger/LogTypes.ts` | `TaskGroupSchema`, `LogMessageDataSchema` | `src/shared/schemas/taskGroup.ts`, `src/shared/schemas/log.ts` |
+| `src/logger/messageTypes.ts` | `MessageTypeSchema`, `LogLevelSchema` | `src/shared/schemas/log.ts` |
+| `src/agent/types/UsageTypes.ts` | `TokenUsageStatsSchema` | `src/shared/schemas/usage.ts` |
+| `src/agent/types/IdentifierTypes.ts` | `StreamTabIdSchema`, `ExecutionIdSchema` | `src/shared/schemas/identifiers.ts` |
+| `src/agent/output/types.ts` | `OutputFileInfoSchema`, `FileLineageSchema` | `src/shared/schemas/output.ts` |
+| `src/common/constants/streamStatus.ts` | `StreamStatusSchema`, `TaskGroupStatusSchema` | `src/shared/schemas/stream.ts` |
+| `src/common/errors/schemas.ts` | `ProviderErrorSchema`, `RetryErrorInfoSchema` | `src/shared/schemas/errors.ts` |
+| `src/progressView/types.ts` | `StreamTabInfoSchema`, `StreamUITraitsSchema` | `src/shared/schemas/stream.ts` |
+
+### Requires Extraction (Node.js Dependency)
 
 | File | Issue | Solution |
 |------|-------|----------|
-| `src/utils/files/taskRunStorage.ts` | Mixes schemas with Node.js utilities (`path`, `fs`) | Extract `FileLocationSchema`, `WorkspaceFileLocationSchema`, `RunStorageFileLocationSchema`, `ExternalFileLocationSchema` to `src/utils/files/FileLocationSchemas.ts` |
+| `src/utils/files/taskRunStorage.ts` | Mixes schemas with Node.js utilities (`path`, `fs`) | Move `FileLocationSchema` to `src/shared/schemas/output.ts` |
 
-### Already Duplicated (Delete Frontend Copy)
+### Already Duplicated (Delete Both, Consolidate)
 
-| Backend (TypeScript) | Frontend (JavaScript) | Action |
-|----------------------|----------------------|--------|
-| `src/common/webview/commands.ts` | `src/progressView/modules/commands.js` | Delete JS (298 lines) |
-| `src/common/constants/streamStatus.ts` | `src/progressView/modules/constants/streamStatus.js` | Delete JS |
+| Location 1 | Location 2 | Action |
+|------------|------------|--------|
+| `src/common/webview/commands.ts` | `src/progressView/modules/commands.js` | Delete both, define in `src/shared/schemas/commands.ts` |
+| `src/common/constants/streamStatus.ts` | `src/progressView/modules/constants/streamStatus.js` | Delete both, define in `src/shared/schemas/stream.ts` |
+| `src/logger/LogTypes.ts` (TaskGroupSchema) | `src/eventBus/schemas.ts` (TaskGroupSchema) | Consolidate in `src/shared/schemas/taskGroup.ts` |
 
 ---
 
@@ -176,13 +197,46 @@ html`<texra-file-list .files=${this.outputFiles}></texra-file-list>`
 
 ### Milestone 1: Type-Safe IPC
 
-#### Step 1.1: Extract FileLocationSchema
+#### Step 1.1: Create Shared Schema Directory
 
-Create `src/utils/files/FileLocationSchemas.ts`:
+Create `src/shared/schemas/` with consolidated schemas (single source of truth):
 
+```
+src/shared/schemas/
+├── identifiers.ts    # StreamTabIdSchema, ExecutionIdSchema
+├── stream.ts         # StreamStatusSchema, StreamTabInfoSchema
+├── taskGroup.ts      # TaskGroupSchema, TaskGroupStatusSchema
+├── log.ts            # LogMessageDataSchema, MessageTypeSchema, LogLevelSchema
+├── usage.ts          # TokenUsageStatsSchema
+├── output.ts         # OutputFileInfoSchema, FileLocationSchema
+├── prompts.ts        # ToolEditApprovalPromptSchema, BashApprovalPromptSchema, etc.
+├── todo.ts           # TodoItemSchema, TodoStatusSchema
+├── errors.ts         # ProviderErrorSchema, RetryErrorInfoSchema
+├── commands.ts       # All command constants (replaces duplicates)
+└── index.ts          # Single barrel export
+```
+
+**Example: `src/shared/schemas/identifiers.ts`**
 ```typescript
 import { z } from 'zod';
-import { ExecutionIdSchema } from '@agent/types/IdentifierTypes';
+
+export const StreamTabIdSchema = z.string().min(1);
+export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
+
+export const ExecutionIdSchema = z.string().uuid();
+export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
+
+export const StorageKeySchema = z.union([
+  z.string().uuid(),
+  z.literal('__default__'),
+]);
+export type StorageKey = z.infer<typeof StorageKeySchema>;
+```
+
+**Example: `src/shared/schemas/output.ts`** (includes relocated FileLocationSchema)
+```typescript
+import { z } from 'zod';
+import { ExecutionIdSchema } from './identifiers';
 
 export const WorkspaceFileLocationSchema = z.object({
   kind: z.literal('workspace'),
@@ -209,118 +263,44 @@ export const FileLocationSchema = z.discriminatedUnion('kind', [
 ]);
 
 export type FileLocation = z.infer<typeof FileLocationSchema>;
-export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
-export type RunStorageFileLocation = z.infer<typeof RunStorageFileLocationSchema>;
-export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
+
+export const OutputFileInfoSchema = z.object({
+  source: z.string(),
+  location: FileLocationSchema,
+  round: z.number().optional(),
+  // ... other fields
+});
+
+export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 ```
 
-Update `taskRunStorage.ts` to import from new file (backward compatible re-export).
+#### Step 1.2: Update Original Locations to Import from Shared
 
-#### Step 1.2: Create Schema Re-Export
-
-Create `src/progressView/schemas.ts`:
+Update files that previously defined schemas to import from `@shared/schemas`:
 
 ```typescript
-// Re-export existing schemas for browser use
-// NO NEW SCHEMAS - just imports from existing locations
+// src/eventBus/schemas.ts - BEFORE
+export const TaskGroupSchema = z.object({...});
 
-// ============ Identifiers ============
-export {
-  StreamTabIdSchema,
-  ExecutionIdSchema,
-  StorageKeySchema,
-  ExecutionIdentitySchema,
-  type StreamTabId,
-  type ExecutionId,
-} from '@agent/types/IdentifierTypes';
-
-// ============ Status ============
-export {
-  StreamStatusSchema,
-  TaskGroupStatusSchema,
-  ExecutionStatusSchema,
-  type StreamStatus,
-  type TaskGroupStatus,
-} from '@common/constants/streamStatus';
-
-// ============ Task Groups ============
-export {
-  TaskGroupSchema,
-  LogMessageDataSchema,
-  type TaskGroup,
-  type LogMessageData,
-} from '@logger/LogTypes';
-
-export {
-  AddTaskGroupPayloadSchema,
-  UpdateTaskGroupPayloadSchema,
-  type AddTaskGroupPayload,
-  type UpdateTaskGroupPayload,
-} from '@eventBus/schemas';
-
-// ============ Usage ============
-export {
-  TokenUsageStatsSchema,
-  ExtendedTokenUsageStatsSchema,
-  type TokenUsageStats,
-} from '@agent/types/UsageTypes';
-
-// ============ Errors ============
-export {
-  ProviderErrorSchema,
-  RetryErrorInfoSchema,
-  type ProviderError,
-} from '@common/errors/schemas';
-
-// ============ Prompts ============
-export {
-  ToolEditApprovalPromptSchema,
-  BashApprovalPromptSchema,
-  RetryRequestPromptSchema,
-  WorkflowAgentProposalSchema,
-  ToolUseAgentProposalSchema,
-  type ToolEditApprovalPrompt,
-  type BashApprovalPrompt,
-  type RetryRequestPrompt,
-} from '@eventBus/types';
-
-// ============ Output Files ============
-export {
-  OutputFileSchema,
-  OutputFileInfoSchema,
-  FileLineageSchema,
-  type OutputFileInfo,
-} from '@agent/output/types';
-
-export {
-  FileLocationSchema,
-  type FileLocation,
-} from '@utils/files/FileLocationSchemas';
-
-// ============ Todos ============
-export {
-  TodoItemSchema,
-  TodoStatusSchema,
-  UpdateTodosPayloadSchema,
-  type TodoItem,
-} from '@eventBus/schemas';
-
-// ============ UI State ============
-export {
-  StreamTabInfoSchema,
-  StreamUITraitsSchema,
-  InstructionMetadataSchema,
-  type StreamTabInfo,
-} from './types';
-
-// ============ Log Message Types ============
-export {
-  MessageTypeSchema,
-  LogLevelSchema,
-  type MessageType,
-  type LogLevel,
-} from '@logger/messageTypes';
+// src/eventBus/schemas.ts - AFTER
+export { TaskGroupSchema, type TaskGroup } from '@shared/schemas';
+// Keep only eventBus-specific logic, not schema definitions
 ```
+
+```typescript
+// src/utils/files/taskRunStorage.ts - BEFORE
+export const FileLocationSchema = z.discriminatedUnion(...);
+function createRunStorageDir() { /* Node.js code */ }
+
+// src/utils/files/taskRunStorage.ts - AFTER
+export { FileLocationSchema, type FileLocation } from '@shared/schemas';
+function createRunStorageDir() { /* Node.js code stays here */ }
+```
+
+This ensures:
+- **Single source of truth** in `src/shared/schemas/`
+- **Backward compatibility** via re-exports from original locations
+- **Browser safety** - `src/shared/` has no Node.js dependencies
 
 #### Step 1.3: Add Message Validation
 
@@ -677,12 +657,13 @@ Already exists in `src/common/`:
 
 | Pattern | From ProgressView | Shared Location |
 |---------|-------------------|-----------------|
-| Schema re-export pattern | `progressView/schemas.ts` | `src/shared/schemas/index.ts` |
 | Base Lit app class | `ProgressApp.ts` | `src/shared/BaseWebviewApp.ts` |
 | Common Lit components | `<prompt-overlay>`, etc. | `src/shared/components/` |
 | Reactive store pattern | `store.ts` | `src/shared/createStore.ts` |
 | VS Code API wrapper | Message posting | `src/shared/vscode.ts` |
 | Design tokens | CSS variables | `src/shared/styles/tokens.css` |
+
+Note: Schemas already live in `src/shared/schemas/` from Phase 1 (single source of truth).
 
 ### Shared Components (Proven in ProgressView)
 
