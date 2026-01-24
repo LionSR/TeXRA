@@ -51,6 +51,98 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 - Adding new features during migration
 - Changing EventBus architecture
 - Virtual scrolling (future optimization)
+- CLI or web app support (but architecture doesn't preclude it)
+
+---
+
+## IPC Architecture
+
+### Current Message Flow
+
+```
+Agent Runtime
+     ↓
+EventBus.emit('addTaskGroup', payload)     ← Backend pub/sub (pure Node.js)
+     ↓
+ProgressEventHandler.handleAddTaskGroup()  ← Translates to webview calls
+     ↓
+WebviewUpdater.addTaskGroup()              ← Calls vscode.Webview.postMessage()
+     ↓
+VS Code IPC Bridge                         ← Platform-specific
+     ↓
+window.addEventListener('message')         ← Browser sandbox
+     ↓
+messageHandlers['addTaskGroup'](payload)   ← Routes by command name
+```
+
+### What's Platform-Agnostic vs VS Code-Specific
+
+| Layer | Platform Dependency | Notes |
+|-------|---------------------|-------|
+| **Zod Schemas** | None | Works everywhere |
+| **EventBus** | None (pure EventEmitter) | Could drive CLI output |
+| **ProgressEventHandler** | Light (`vscode.Disposable`) | Easy to abstract |
+| **WebviewUpdater** | Heavy (`vscode.Webview`) | VS Code specific |
+| **Webview JS** | Heavy (`acquireVsCodeApi`) | VS Code specific |
+
+### How EventBus Relates to IPC
+
+**EventBus** = Backend-to-backend communication (within extension host)
+**IPC** = Extension host to webview communication (across process boundary)
+
+```typescript
+// EventBus: Internal events (30+ types)
+bus.emit('updateStreamStatus', { streamId, status });
+bus.emit('addLogMessage', { streamId, logMessage });
+bus.emit('showToolEditApprovalPrompt', { request });
+
+// IPC: Webview messages (via WebviewUpdater)
+webview.postMessage({ command: 'updateStreamStatus', stream, status });
+webview.postMessage({ command: 'showToolEditApproval', request });
+```
+
+The `ProgressEventHandler` bridges these - it subscribes to EventBus and calls WebviewUpdater.
+
+### Why Schemas in `src/shared/`
+
+Schemas define the **contract** for both EventBus payloads and IPC messages:
+
+```typescript
+// Same schema validates:
+// 1. EventBus payload (backend)
+// 2. WebviewUpdater message (IPC)
+// 3. Frontend state (webview)
+
+import { TaskGroupSchema } from '@shared/schemas';
+
+// Backend: Validate before emitting
+const validated = TaskGroupSchema.parse(group);
+bus.emit('addTaskGroup', { streamId, group: validated });
+
+// Frontend: Validate on receive
+const result = TaskGroupSchema.safeParse(message.group);
+if (result.success) store.addGroup(result.data);
+```
+
+### Future Extensibility (Not In Scope)
+
+If CLI or web support is needed later, the architecture supports it:
+
+```typescript
+// Potential abstraction (NOT implementing now)
+interface IProgressSink {
+  onStreamStatus(streamId: string, status: StreamStatus): void;
+  onTaskGroup(streamId: string, group: TaskGroup): void;
+  onLogMessage(streamId: string, log: LogMessageData): void;
+}
+
+// Implementations could include:
+// - VsCodeWebviewSink (current)
+// - CliSink (writes to terminal)
+// - WebSocketSink (for web app)
+```
+
+The Zod schemas in `src/shared/schemas/` would be shared by all implementations.
 
 ---
 
@@ -274,32 +366,46 @@ export const OutputFileInfoSchema = z.object({
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 ```
 
-#### Step 1.2: Update Original Locations to Import from Shared
+#### Step 1.2: Update All Imports to Use Shared Directly
 
-Update files that previously defined schemas to import from `@shared/schemas`:
+**No re-exports for backward compatibility.** Update all imports to point to `@shared/schemas`:
 
 ```typescript
-// src/eventBus/schemas.ts - BEFORE
-export const TaskGroupSchema = z.object({...});
+// BEFORE: Import from scattered locations
+import { TaskGroupSchema } from '@logger/LogTypes';
+import { StreamStatusSchema } from '@common/constants/streamStatus';
+import { FileLocationSchema } from '@utils/files/taskRunStorage';
 
-// src/eventBus/schemas.ts - AFTER
-export { TaskGroupSchema, type TaskGroup } from '@shared/schemas';
-// Keep only eventBus-specific logic, not schema definitions
+// AFTER: Import from single source
+import {
+  TaskGroupSchema,
+  StreamStatusSchema,
+  FileLocationSchema
+} from '@shared/schemas';
 ```
 
-```typescript
-// src/utils/files/taskRunStorage.ts - BEFORE
-export const FileLocationSchema = z.discriminatedUnion(...);
-function createRunStorageDir() { /* Node.js code */ }
+**Migration approach:**
+1. Create schemas in `src/shared/schemas/`
+2. Find all imports of the old location (use grep/find-references)
+3. Update imports to `@shared/schemas`
+4. Delete the schema definition from the old file
+5. If old file is now empty, delete it
 
-// src/utils/files/taskRunStorage.ts - AFTER
-export { FileLocationSchema, type FileLocation } from '@shared/schemas';
-function createRunStorageDir() { /* Node.js code stays here */ }
+**Example: `src/utils/files/taskRunStorage.ts`**
+```typescript
+// BEFORE: Schema + Node.js utilities mixed
+export const FileLocationSchema = z.discriminatedUnion(...);
+export function createRunStorageDir() { /* Node.js code */ }
+
+// AFTER: Only Node.js utilities remain
+import { FileLocationSchema } from '@shared/schemas';  // Use, don't define
+export function createRunStorageDir() { /* Node.js code */ }
 ```
 
 This ensures:
-- **Single source of truth** in `src/shared/schemas/`
-- **Backward compatibility** via re-exports from original locations
+- **Single source of truth** - schema lives in ONE file
+- **No re-export chains** - imports go directly to source
+- **Clear ownership** - grep for schema name finds definition immediately
 - **Browser safety** - `src/shared/` has no Node.js dependencies
 
 #### Step 1.3: Add Message Validation
