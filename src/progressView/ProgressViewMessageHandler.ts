@@ -38,11 +38,12 @@ import {
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
 import {
-  clearAllApprovalBypass,
-  clearApprovalBypassForStream,
+  cleanupAllApprovals,
+  cleanupApprovalsForStream,
   handleProgressViewToolEditApprovalAction,
+  handleProgressViewBashApprovalAction,
   toggleToolEditApprovalSessionBypass,
-} from '@tools/approval/toolEditApproval';
+} from '@tools/approval';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -63,6 +64,7 @@ import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
   ApprovalActionMessageSchema,
+  BashApprovalActionMessageSchema,
   FollowupTaskMessageSchema,
   StreamMessageSchema,
   RetryStreamMessageSchema,
@@ -160,6 +162,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleToggleToolEditApprovalBypass.bind(this),
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]:
         this.handleAgentProposalAction.bind(this),
+      [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]:
+        this.handleBashApprovalAction.bind(this),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
@@ -230,9 +234,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           return;
         }
 
-        // Clear pending task groups and YOLO state to prevent memory leaks
+        // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
         this.provider.eventHandler.clearPendingTaskGroups(streamId);
-        clearApprovalBypassForStream(streamId);
+        cleanupApprovalsForStream(streamId);
         await this.provider.state.clearStream(streamId);
         // Force rebuild since we deleted a stream
         this.provider.updateWebview({ forceRebuild: true });
@@ -253,9 +257,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups and YOLO state to prevent memory leaks
+    // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
-    clearAllApprovalBypass();
+    cleanupAllApprovals();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -553,10 +557,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       async ({ stream: streamId }) => {
         const isNowEnabled = toggleToolEditApprovalSessionBypass(streamId);
         const infoMessage = isNowEnabled
-          ? 'YOLO mode enabled: Tool edits will be auto-approved for this stream.'
-          : 'YOLO mode disabled: Tool edits will prompt for approval.';
+          ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool actions will prompt for approval.';
         await vscode.window.showInformationMessage(infoMessage);
       },
+    );
+  }
+
+  private async handleBashApprovalAction(message: unknown): Promise<void> {
+    await this.withValidatedMessage(
+      BashApprovalActionMessageSchema,
+      message,
+      'bashApprovalAction',
+      handleProgressViewBashApprovalAction,
     );
   }
 

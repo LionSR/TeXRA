@@ -24,6 +24,7 @@ import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
+  BashApprovalPrompt,
   AgentProposalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
@@ -214,6 +215,20 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       stream,
       bypassActive,
+    });
+  }
+
+  showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
+    this.sendMessage({
+      command: COMMANDS.SHOW_BASH_APPROVAL,
+      request: prompt,
+    });
+  }
+
+  resolveBashApprovalPrompt(requestId: string): void {
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_BASH_APPROVAL,
+      requestId,
     });
   }
 

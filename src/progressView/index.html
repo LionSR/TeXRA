@@ -47,6 +47,7 @@
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/uiManagers/ApprovalRequests.js": "${approvalRequestsUri}",
+          "./modules/uiManagers/BashApprovalRequests.js": "${bashApprovalRequestsUri}",
           "./modules/uiManagers/RetryRequests.js": "${retryRequestsUri}",
           "./modules/uiManagers/WorkflowProposals.js": "${workflowProposalsUri}",
           "./modules/uiManagers/TodoList.js": "${todoListUri}",
@@ -181,6 +182,13 @@
               <span>Pending approvals</span>
             </div>
             <div class="approval-requests__list"></div>
+          </div>
+          <div id="bashApprovalRequests" class="bash-approval-requests" hidden>
+            <div class="bash-approval-requests__header">
+              <i class="codicon codicon-terminal"></i>
+              <span>Command approval</span>
+            </div>
+            <div class="bash-approval-requests__list"></div>
           </div>
           <div id="retryRequests" class="retry-requests" hidden>
             <div class="retry-requests__header">
@@ -691,6 +699,29 @@
                   icon="close"
                   label="Reject"
                   title="Reject (click to add feedback)"
+                  data-action="reject"
+                  >Reject</vscode-toolbar-button
+                >
+              </vscode-toolbar-container>
+            </div>
+          </template>
+          <template id="bashApprovalRequestTemplate">
+            <div class="bash-approval-request">
+              <div class="bash-approval-request__details">
+                <div class="bash-approval-request__command"></div>
+              </div>
+              <vscode-toolbar-container class="bash-approval-request__actions">
+                <vscode-toolbar-button
+                  icon="check"
+                  label="Approve"
+                  title="Allow this command to execute"
+                  data-action="approve"
+                  >Approve</vscode-toolbar-button
+                >
+                <vscode-toolbar-button
+                  icon="close"
+                  label="Reject"
+                  title="Reject this command"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
                 >

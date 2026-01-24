@@ -33,6 +33,10 @@ const PROGRESS_VIEW_MODULES = [
     key: 'approvalRequestsUri',
     path: 'modules/uiManagers/ApprovalRequests.js',
   },
+  {
+    key: 'bashApprovalRequestsUri',
+    path: 'modules/uiManagers/BashApprovalRequests.js',
+  },
   { key: 'retryRequestsUri', path: 'modules/uiManagers/RetryRequests.js' },
   {
     key: 'workflowProposalsUri',
