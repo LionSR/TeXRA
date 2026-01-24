@@ -15,6 +15,25 @@ const STATUS_CLASSES = Object.values(STREAM_STATUS).map((s) => `is-${s}`);
  * Manages stream tab UI updates.
  */
 export class StreamTabs {
+  /** @type {{ tabsContainer: HTMLElement, streamNameElem: HTMLElement | null } | null} */
+  _elements = null;
+
+  /**
+   * Get cached DOM elements, initializing cache on first call.
+   * @returns {{ tabsContainer: HTMLElement, streamNameElem: HTMLElement | null } | null}
+   */
+  _getElements() {
+    if (!this._elements) {
+      const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
+      if (!tabsContainer) return null;
+      const streamNameElem = document.getElementById(
+        ELEMENT_IDS.ACTIVE_STREAM_NAME,
+      );
+      this._elements = { tabsContainer, streamNameElem };
+    }
+    return this._elements;
+  }
+
   /**
    * Updates UI to show stream tabs and highlight the active stream
    * @param {Array} streams - Array of stream metadata objects
@@ -25,11 +44,12 @@ export class StreamTabs {
       console.error('StreamTabs.update: streams must be an array');
       return;
     }
-    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
-    if (!tabsContainer) {
+    const elements = this._getElements();
+    if (!elements) {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
+    const { tabsContainer, streamNameElem } = elements;
     tabsContainer.innerHTML = '';
     let activeInfo = null;
     const fragment = document.createDocumentFragment();
@@ -66,10 +86,7 @@ export class StreamTabs {
     }
     tabsContainer.appendChild(fragment);
 
-    // Update active stream name
-    const streamNameElem = document.getElementById(
-      ELEMENT_IDS.ACTIVE_STREAM_NAME,
-    );
+    // Update active stream name (using cached element)
     if (streamNameElem) {
       const label = activeInfo?.label || '';
       streamNameElem.textContent = label;
@@ -143,10 +160,11 @@ export class StreamTabs {
       return false;
     }
 
-    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
-    if (!tabsContainer) {
+    const elements = this._getElements();
+    if (!elements) {
       return false;
     }
+    const { tabsContainer } = elements;
 
     // Find the tab for this stream
     const tabEl = tabsContainer.querySelector(

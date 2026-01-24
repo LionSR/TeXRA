@@ -9,6 +9,26 @@ import { setVisibilityState } from '@common/domUtils.js';
  * Uses native VS Code collapsible for the container.
  */
 export class FileList {
+  /** @type {{ container: HTMLElement, collapsible: HTMLElement, template: HTMLTemplateElement } | null} */
+  _elements = null;
+
+  /**
+   * Get cached DOM elements, initializing cache on first call.
+   * @returns {{ container: HTMLElement, collapsible: HTMLElement, template: HTMLTemplateElement } | null}
+   */
+  _getElements() {
+    if (!this._elements) {
+      const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+      const collapsible = document.getElementById(
+        ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
+      );
+      const template = document.getElementById(ELEMENT_IDS.FILE_ITEM_TEMPLATE);
+      if (!container || !template) return null;
+      this._elements = { container, collapsible, template };
+    }
+    return this._elements;
+  }
+
   /**
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
@@ -18,19 +38,11 @@ export class FileList {
    */
   update(filesByRound, options = {}) {
     const { showRoundHeaders = true } = options;
-    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
-    const collapsible = document.getElementById(
-      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
-    );
-    if (!container) return;
+    const elements = this._getElements();
+    if (!elements) return;
 
+    const { container, collapsible, template } = elements;
     container.innerHTML = '';
-
-    const template = document.getElementById(ELEMENT_IDS.FILE_ITEM_TEMPLATE);
-    if (!template) {
-      console.error('File item template not found');
-      return;
-    }
 
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
       // Hide the collapsible when there are no files
@@ -216,13 +228,10 @@ export class FileList {
    * Clear the file list and hide the collapsible container.
    */
   clear() {
-    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
-    const collapsible = document.getElementById(
-      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
-    );
-    if (container) {
-      container.innerHTML = '';
+    const elements = this._getElements();
+    if (elements) {
+      elements.container.innerHTML = '';
+      setVisibilityState(elements.collapsible, false);
     }
-    setVisibilityState(collapsible, false);
   }
 }

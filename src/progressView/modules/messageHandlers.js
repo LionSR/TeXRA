@@ -86,11 +86,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (activeStream) {
       state.setActiveRunId(activeStream, runId);
     }
-    dom.taskGroups.showRun(runId);
-    // Pass runId directly to avoid redundant resolveActiveRunId calls
-    this._refreshInstructionForActiveRun(runId);
-    this._refreshOutputsForActiveRun(runId);
-    this._refreshUsageForActiveRun();
+    // Batch all DOM updates in a single animation frame to reduce layout thrashing
+    requestAnimationFrame(() => {
+      dom.taskGroups.showRun(runId);
+      // Pass runId directly to avoid redundant resolveActiveRunId calls
+      this._refreshInstructionForActiveRun(runId);
+      this._refreshOutputsForActiveRun(runId);
+      this._refreshUsageForActiveRun();
+    });
   }
 
   /**
