@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add type safety to ProgressView by relocating existing Zod schemas to a browser-compatible location. Optionally rewrite the UI in Lit if type safety alone doesn't solve the maintenance burden.
+Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod schemas.
 
 ## Problem Statement
 
@@ -25,13 +25,13 @@ Add type safety to ProgressView by relocating existing Zod schemas to a browser-
 
 ## Goals
 
-**Milestone 1**: Type-safe IPC via schema relocation — delivers 80% of benefit
+**Milestone 1**: Type-safe IPC via schema relocation
 
-**Milestone 2** (only if M1 insufficient): Lit UI rewrite
+**Milestone 2**: Lit UI rewrite — eliminates imperative DOM, separates Workflow/Conversation
 
 ## Non-Goals
 
-- Shared component library (premature)
+- Shared component library (extract only when used twice)
 - Modernizing other webviews (they're small, leave them alone)
 - Adding features
 
@@ -176,29 +176,50 @@ DELETE: src/progressView/modules/constants/streamStatus.js
 
 ---
 
-## Milestone 2: Lit UI (Only If Needed)
+## Milestone 2: Lit UI
 
-**Evaluate after M1 ships.** If the 1268-line switch statement and 18 isToolUse conditionals are still painful, proceed.
+### Why Lit
+
+| Vanilla JS Pain | Lit Solution |
+|-----------------|--------------|
+| 53 lines fragment batching | `html\`${items.map(...)}\`` |
+| `if (container)` checks | Reactive `@property` |
+| 8 duplicate approval handlers | Single `<prompt-overlay kind="...">` |
+| 18 `isToolUse` conditionals | Separate `<workflow-view>` / `<conversation-view>` |
+| `classList.add/remove/toggle` | `class=${classMap({...})}` |
+| 7 "active" state locations | Single reactive store |
 
 ### Approach
 
 1. Add `lit` dependency
-2. Create single `<progress-app>` component (~500 lines)
-3. Extract child components only when a file exceeds 300 lines
-4. No shared component library
+2. Start with single `<progress-app>` component
+3. Extract child components when they exceed ~200 lines
+4. Separate `<workflow-view>` and `<conversation-view>` to eliminate `isToolUse` branching
 
-### Component Extraction Order
-
-Start monolithic, extract as needed:
+### Component Hierarchy
 
 ```
-Week 1: <progress-app> (everything in one file)
-        ↓
-Week 2: Extract <stream-tabs> (if tabs logic > 100 lines)
-        Extract <prompt-overlay> (if prompt handling > 100 lines)
-        ↓
-Week 3: Extract <workflow-view> and <conversation-view>
-        (only if isToolUse conditionals are still a problem)
+<progress-app>
+  ├── <stream-tabs>
+  ├── <workflow-view>          # agentCategory === 'workflow'
+  │   ├── <run-selector>
+  │   ├── <task-list>
+  │   └── <file-list>
+  ├── <conversation-view>      # agentCategory === 'toolUse'
+  │   ├── <turn-list>
+  │   ├── <file-list>
+  │   └── <followup-input>
+  └── <prompt-overlay>         # Unified approval/retry/proposal
+```
+
+### Build Order
+
+```
+Step 1: <progress-app> shell + <stream-tabs>
+Step 2: <prompt-overlay> (consolidates 8 handlers)
+Step 3: <workflow-view> (extract from monolith)
+Step 4: <conversation-view> (extract from monolith)
+Step 5: Delete src/progressView/modules/ (67+ files)
 ```
 
 ### Escape Hatch
@@ -253,13 +274,16 @@ Tendency to build component library during UI rewrite.
 | Duplicate schema code | 600+ lines | 0 |
 | New code written | - | ~50 lines (re-exports) |
 
-### After M2 (if done)
+### After M2
 
 | Metric | Current | After |
 |--------|---------|-------|
 | `isToolUse` conditionals | 18 | 0 |
 | State tracking locations | 7 | 1 |
 | Frontend lines | ~3700 | ~2000 |
+| Manual DOM assembly | 53+ lines | 0 |
+| Approval handlers | 8 duplicates | 1 component |
+| Files deleted | - | 67+ (entire modules/) |
 
 ---
 
