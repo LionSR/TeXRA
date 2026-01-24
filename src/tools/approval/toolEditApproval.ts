@@ -170,33 +170,37 @@ export function clearAllApprovalBypass(): void {
 }
 
 /**
- * Reject all pending approvals (tool edits + bash) for a deleted stream.
- * Unified cleanup function that handles both approval types.
+ * Clean up all approval state for a deleted stream.
+ * Handles pending approvals (tool edits + bash) and YOLO mode state.
  */
-export function rejectPendingApprovalsForStream(streamId: StreamTabId): void {
-  // Tool edit approvals
+export function cleanupApprovalsForStream(streamId: StreamTabId): void {
+  // Reject pending tool edit approvals
   for (const entry of pendingApprovals.values()) {
     if (entry.streamId === streamId && !entry.isSettled()) {
       entry.settle({ accepted: false });
     }
   }
-  // Bash approvals
+  // Reject pending bash approvals
   rejectPendingBashApprovalsForStream(streamId);
+  // Clear YOLO mode state
+  approvalsBypassedByStream.delete(streamId);
 }
 
 /**
- * Reject all pending approvals (tool edits + bash).
- * Unified cleanup function used when deleting all streams.
+ * Clean up all approval state when deleting all streams.
+ * Handles pending approvals (tool edits + bash) and YOLO mode state.
  */
-export function rejectAllPendingApprovals(): void {
-  // Tool edit approvals
+export function cleanupAllApprovals(): void {
+  // Reject pending tool edit approvals
   for (const entry of pendingApprovals.values()) {
     if (!entry.isSettled()) {
       entry.settle({ accepted: false });
     }
   }
-  // Bash approvals
+  // Reject pending bash approvals
   rejectAllPendingBashApprovals();
+  // Clear all YOLO mode state
+  approvalsBypassedByStream.clear();
 }
 
 export function initializeToolEditApproval(
