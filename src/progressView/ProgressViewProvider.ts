@@ -19,7 +19,7 @@ import type {
   AgentProposalPrompt,
 } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
-import { WebviewUpdater } from './managers';
+import { ApprovalRequestHandler, WebviewUpdater } from './managers';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
@@ -72,22 +72,24 @@ export class ProgressViewProvider
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private _hasResolved = false;
   private readonly logger: AgentLogger;
-  private readonly pendingApprovalPrompts = new Map<
-    string,
-    ToolEditApprovalPrompt
-  >();
-  private readonly pendingBashApprovalPrompts = new Map<
-    string,
-    BashApprovalPrompt
-  >();
-  private readonly pendingRetryRequests = new Map<
-    string,
-    ProgressEventPayloads['showRetryRequest']
-  >();
-  private readonly pendingAgentProposals = new Map<
-    string,
-    AgentProposalPrompt
-  >();
+
+  // Approval request handlers - replaces 4 separate pending Maps with generic handlers
+  private readonly toolEditHandler: ApprovalRequestHandler<
+    ToolEditApprovalPrompt,
+    'requestId'
+  >;
+  private readonly bashApprovalHandler: ApprovalRequestHandler<
+    BashApprovalPrompt,
+    'requestId'
+  >;
+  private readonly retryRequestHandler: ApprovalRequestHandler<
+    ProgressEventPayloads['showRetryRequest'],
+    'streamId'
+  >;
+  private readonly agentProposalHandler: ApprovalRequestHandler<
+    AgentProposalPrompt,
+    'proposalId'
+  >;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -104,23 +106,32 @@ export class ProgressViewProvider
       this._view?.webview,
       this._panelView?.webview,
     ]);
-    this.eventHandler = new ProgressEventHandler(
-      this.state,
-      this.webviewUpdater,
-      {
-        showRetryRequest: this.showRetryRequest.bind(this),
-        resolveRetryRequest: this.resolveRetryRequest.bind(this),
-        showToolEditApprovalPrompt: this.showToolEditApprovalPrompt.bind(this),
-        resolveToolEditApprovalPrompt:
-          this.resolveToolEditApprovalPrompt.bind(this),
-        updateToolEditApprovalBypassState:
-          this.updateToolEditApprovalBypassState.bind(this),
-        showBashApprovalPrompt: this.showBashApprovalPrompt.bind(this),
-        resolveBashApprovalPrompt: this.resolveBashApprovalPrompt.bind(this),
-        showAgentProposal: this.showAgentProposal.bind(this),
-        resolveAgentProposal: this.resolveAgentProposal.bind(this),
+
+    // Initialize approval request handlers
+    const canSend = () => this.canSendToWebview();
+    const u = this.webviewUpdater;
+    this.toolEditHandler = new ApprovalRequestHandler(
+      'requestId', (p) => u.showToolEditApprovalPrompt(p), (id) => u.resolveToolEditApprovalPrompt(id), canSend);
+    this.bashApprovalHandler = new ApprovalRequestHandler(
+      'requestId', (p) => u.showBashApprovalPrompt(p), (id) => u.resolveBashApprovalPrompt(id), canSend);
+    this.retryRequestHandler = new ApprovalRequestHandler(
+      'streamId', (p) => u.showRetryRequest(p), (id) => u.resolveRetryRequest(id), canSend);
+    this.agentProposalHandler = new ApprovalRequestHandler(
+      'proposalId', (p) => u.showAgentProposal(p), (id) => u.resolveAgentProposal(id), canSend);
+
+    this.eventHandler = new ProgressEventHandler(this.state, this.webviewUpdater, {
+      showRetryRequest: (p) => this.retryRequestHandler.show(p),
+      resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
+      showToolEditApprovalPrompt: (p) => this.toolEditHandler.show(p),
+      resolveToolEditApprovalPrompt: (id) => this.toolEditHandler.resolve(id),
+      updateToolEditApprovalBypassState: (streamId, bypassActive) => {
+        if (canSend()) u.updateToolEditApprovalState(streamId as StreamTabId, bypassActive);
       },
-    );
+      showBashApprovalPrompt: (p) => this.bashApprovalHandler.show(p),
+      resolveBashApprovalPrompt: (id) => this.bashApprovalHandler.resolve(id),
+      showAgentProposal: (p) => this.agentProposalHandler.show(p),
+      resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
+    });
 
     // Initialize existing components
     this.contentProvider = new ProgressViewContentProvider(context);
@@ -284,14 +295,13 @@ export class ProgressViewProvider
    * YOLO mode is shared between tool edits and bash commands.
    */
   private sendYoloStateForStream(streamId: StreamTabId): void {
+    if (!this.canSendToWebview()) return;
     const bypassActive = streamId
       ? isApprovalBypassedForStream(streamId)
       : false;
-    this.sendIfReady(() =>
-      this.webviewUpdater.updateToolEditApprovalState(
-        streamId || ('' as StreamTabId),
-        bypassActive,
-      ),
+    this.webviewUpdater.updateToolEditApprovalState(
+      streamId || ('' as StreamTabId),
+      bypassActive,
     );
   }
 
@@ -324,104 +334,23 @@ export class ProgressViewProvider
       return;
     }
 
-    for (const prompt of this.pendingApprovalPrompts.values()) {
-      this.webviewUpdater.showToolEditApprovalPrompt(prompt);
-    }
-
-    for (const prompt of this.pendingBashApprovalPrompts.values()) {
-      this.webviewUpdater.showBashApprovalPrompt(prompt);
-    }
+    // Replay all pending requests using handlers
+    this.toolEditHandler.replay();
+    this.bashApprovalHandler.replay();
 
     // Send per-stream YOLO state for active stream (handles empty stream case)
     this.sendYoloStateForStream(this.state.activeStream);
 
-    for (const payload of this.pendingRetryRequests.values()) {
-      this.webviewUpdater.showRetryRequest(payload);
-    }
-
-    for (const proposal of this.pendingAgentProposals.values()) {
-      this.webviewUpdater.showAgentProposal(proposal);
-    }
-  }
-
-  public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
-    this.pendingApprovalPrompts.set(prompt.requestId, prompt);
-    this.sendIfReady(() =>
-      this.webviewUpdater.showToolEditApprovalPrompt(prompt),
-    );
-  }
-
-  public resolveToolEditApprovalPrompt(requestId: string): void {
-    this.pendingApprovalPrompts.delete(requestId);
-    this.sendIfReady(() =>
-      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId),
-    );
-  }
-
-  public updateToolEditApprovalBypassState(
-    streamId: StreamTabId,
-    bypassActive: boolean,
-  ): void {
-    // toolEditApproval.ts is the single source of truth for YOLO state
-    // This method just relays the state change to the webview
-    this.sendIfReady(() =>
-      this.webviewUpdater.updateToolEditApprovalState(streamId, bypassActive),
-    );
-  }
-
-  public showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
-    this.pendingBashApprovalPrompts.set(prompt.requestId, prompt);
-    this.sendIfReady(() => this.webviewUpdater.showBashApprovalPrompt(prompt));
-  }
-
-  public resolveBashApprovalPrompt(requestId: string): void {
-    this.pendingBashApprovalPrompts.delete(requestId);
-    this.sendIfReady(() =>
-      this.webviewUpdater.resolveBashApprovalPrompt(requestId),
-    );
-  }
-
-  public showRetryRequest(
-    payload: ProgressEventPayloads['showRetryRequest'],
-  ): void {
-    this.pendingRetryRequests.set(payload.streamId, payload);
-    this.sendIfReady(() => this.webviewUpdater.showRetryRequest(payload));
-  }
-
-  public resolveRetryRequest(streamId: string): void {
-    this.pendingRetryRequests.delete(streamId);
-    this.sendIfReady(() => this.webviewUpdater.resolveRetryRequest(streamId));
-  }
-
-  public showAgentProposal(prompt: AgentProposalPrompt): void {
-    this.pendingAgentProposals.set(prompt.proposalId, prompt);
-    this.sendIfReady(() => this.webviewUpdater.showAgentProposal(prompt));
-  }
-
-  public resolveAgentProposal(proposalId: string): void {
-    this.pendingAgentProposals.delete(proposalId);
-    this.sendIfReady(() =>
-      this.webviewUpdater.resolveAgentProposal(proposalId),
-    );
+    this.retryRequestHandler.replay();
+    this.agentProposalHandler.replay();
   }
 
   public getPendingAgentProposal(
     proposalId: string,
   ): AgentProposalPrompt | undefined {
-    return this.pendingAgentProposals.get(proposalId);
+    return this.agentProposalHandler.get(proposalId);
   }
 
-  /** Send to webview if ready, otherwise skip (pending state will be replayed later) */
-  private sendIfReady(send: () => void): void {
-    if (this.canSendToWebview()) {
-      send();
-    }
-  }
-
-  /**
-   * Check if webview is ready to receive messages.
-   * Combines readiness check with availability check.
-   */
   private canSendToWebview(): boolean {
     return this.isAnyViewReady() && this.webviewUpdater.isAvailable();
   }
