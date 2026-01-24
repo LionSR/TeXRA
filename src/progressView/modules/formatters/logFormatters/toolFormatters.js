@@ -157,8 +157,15 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const { element, headerLabel, contentElem } = toolElement;
 
   // Build title based on state
+  // For normal tool use, just show the tool name (no "Tool Use:" prefix)
+  // Keep prefixes for special states: "Tool Error:" and "User Feedback:"
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
-  const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
+  const isNormalToolUse = !isUserFeedback && !showAsError;
+  const titleBase = toolName
+    ? isNormalToolUse
+      ? toolName
+      : `${titlePrefix}: ${toolName}`
+    : titlePrefix;
 
   const headerSummary = normalizedToolLog.headerSummary ?? '';
 
