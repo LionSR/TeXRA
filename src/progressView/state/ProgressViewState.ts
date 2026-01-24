@@ -26,7 +26,6 @@ import {
   TaskState,
   TaskStateSchema,
   isToolUseTaskState,
-  isWorkflowTaskState,
 } from '@logger/TaskState';
 import {
   StreamTabsManager,
@@ -385,44 +384,6 @@ export class ProgressViewState {
     void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, record);
   }
 
-  /**
-   * Reset workflow output metadata for the provided stream.
-   *
-   * Clears outputFiles, useMultipleOutputs, and the output flag.
-   * Returns true when state was modified and persisted, false when
-   * already cleared or not a workflow task.
-   */
-  clearOutputState(streamTabId: StreamTabId): boolean {
-    const taskState = this.getTaskState(streamTabId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      return false;
-    }
-
-    const hasPersistedOutputs = taskState.agentConfig.outputFiles.length > 0;
-    const usesMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
-    const outputFlagEnabled = taskState.activeFiles.output;
-
-    if (!hasPersistedOutputs && !usesMultipleOutputs && !outputFlagEnabled) {
-      return false;
-    }
-
-    const updatedState = {
-      ...taskState,
-      agentConfig: {
-        ...taskState.agentConfig,
-        outputFiles: [],
-        useMultipleOutputs: false,
-      },
-      activeFiles: {
-        ...taskState.activeFiles,
-        output: false,
-      },
-    };
-
-    this.setTaskState(streamTabId, updatedState);
-    return true;
-  }
-
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, taskState);
@@ -474,14 +435,6 @@ export class ProgressViewState {
 
   getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
     return this._executionIds.get(streamTabId);
-  }
-
-  /**
-   * Get all execution IDs as a read-only Map.
-   * Used for detecting waiting streams from persisted flows on startup.
-   */
-  getAllExecutionIds(): ReadonlyMap<StreamTabId, ExecutionId> {
-    return this._executionIds;
   }
 
   clearExecutionId(streamTabId: StreamTabId): void {
