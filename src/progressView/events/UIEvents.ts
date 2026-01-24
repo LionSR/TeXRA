@@ -19,7 +19,7 @@ import { withEventErrorHandling } from './errorHandling';
 const MODULE = 'UIEvents';
 
 /** Callbacks for retry event handling. */
-export interface RetryCallbacks {
+interface RetryCallbacks {
   showRetryRequest: (
     payload: ProgressEventPayloads['showRetryRequest'],
   ) => void;
@@ -27,7 +27,7 @@ export interface RetryCallbacks {
 }
 
 /** Callbacks for approval event handling. */
-export interface ApprovalCallbacks {
+interface ApprovalCallbacks {
   showToolEditApprovalPrompt: (
     payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
   ) => void;
@@ -39,7 +39,7 @@ export interface ApprovalCallbacks {
 }
 
 /** Callbacks for bash approval event handling. */
-export interface BashApprovalCallbacks {
+interface BashApprovalCallbacks {
   showBashApprovalPrompt: (
     payload: ProgressEventPayloads['showBashApprovalPrompt'],
   ) => void;
@@ -47,7 +47,7 @@ export interface BashApprovalCallbacks {
 }
 
 /** Callbacks for agent proposal handling (workflow or tool-use). */
-export interface AgentProposalCallbacks {
+interface AgentProposalCallbacks {
   showAgentProposal: (
     payload: ProgressEventPayloads['showAgentProposal'],
   ) => void;
