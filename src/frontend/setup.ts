@@ -208,6 +208,46 @@ const GLOBAL_IF_UNSET = {
 } as const;
 
 /**
+ * Prompt user to install Lean 4 extension if not already installed.
+ * Similar to LaTeX Workshop prompt - shows once and can be dismissed.
+ */
+export async function configureLean4Settings() {
+  try {
+    const lean4 = vscode.extensions.getExtension('leanprover.lean4');
+
+    if (lean4) {
+      logger.info('extension', 'Lean 4 extension detected');
+    } else {
+      logger.info(
+        'extension',
+        'Lean 4 extension not found, prompting installation',
+      );
+      await showInstructionWithSuppress(
+        'lean4-install',
+        'Lean 4 extension is recommended for Lean proof verification (LSP support, goal state, and diagnostics). Install now?',
+        [
+          {
+            title: 'Install',
+            callback: async () => {
+              await safeExecuteCommand(
+                'workbench.extensions.installExtension',
+                ['leanprover.lean4'],
+                'extension',
+              );
+            },
+          },
+        ],
+      );
+    }
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Error configuring Lean 4 settings: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
+/**
  * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
  */
 export async function configureLatexSettings() {
