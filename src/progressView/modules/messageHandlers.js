@@ -563,6 +563,33 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Tool-use agents don't create task groups but still have usage data
     this._updateRunMetadata(message.stream, message);
 
+    // Backward compatibility: For tool-use agents with old persisted data,
+    // the instruction may not be in the message log (it was sent via UPDATE_INSTRUCTION).
+    // If the first message is not a user message, prepend the instruction.
+    const isToolUseAgent = state.activeAgentCategory === 'toolUse';
+    if (isToolUseAgent && sortedMessages.length > 0) {
+      const firstMsg = sortedMessages[0];
+      const hasUserMessageFirst = firstMsg.messageType === 'userMessage';
+
+      if (!hasUserMessageFirst && message.runInstructions) {
+        // Find instruction from runInstructions (any run - tool-use doesn't use runs)
+        const instructions = Object.values(message.runInstructions);
+        const instruction = instructions[0];
+
+        if (instruction?.text) {
+          // Place instruction just before the first message for correct ordering
+          const timestamp = (firstMsg.timestamp ?? Date.now()) - 1;
+          sortedMessages.unshift({
+            id: `compat-instruction-${message.stream}`,
+            messageType: 'userMessage',
+            text: instruction.text,
+            timestamp,
+            level: 'info',
+          });
+        }
+      }
+    }
+
     if (groups.length > 0) {
       const parentGroups = groups.filter((g) => !g.parentGroupId);
       dom.runSelector.setRuns(parentGroups);
