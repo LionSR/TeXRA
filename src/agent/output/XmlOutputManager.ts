@@ -30,7 +30,7 @@ import {
 } from '@utils/text/xmlUtils';
 
 // Local file imports
-import type { OutputFileInfo } from './types';
+import type { OutputFileInfo } from '@shared/schemas';
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');

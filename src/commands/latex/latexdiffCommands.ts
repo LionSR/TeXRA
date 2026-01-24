@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import type { OutputFileInfo } from '@agent/output/types';
+import type { OutputFileInfo } from '@shared/schemas';
 
 // Internal imports
 import {

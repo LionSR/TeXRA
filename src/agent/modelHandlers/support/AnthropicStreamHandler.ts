@@ -2,26 +2,27 @@
  * Dedicated stream handler for Anthropic responses.
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
+// Third-party imports
 import { z } from 'zod';
-
-import {
-  extractDomain,
-  type WebSearchResult,
-  type WebSearchResultEntry,
-} from '@agent/modelHandlers/types/ServerToolTypes';
-import {
-  StreamDiagnosticsSchema,
-  type StreamDiagnostics,
-} from '@common/errors';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
-
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+
+// Local imports - agent
+import {
+  extractDomain,
+  type WebSearchResult,
+  type WebSearchResultEntry,
+} from '@agent/modelHandlers/types/ServerToolTypes';
+import {
+  MESSAGE_TYPES,
+  StreamDiagnosticsSchema,
+  type StreamDiagnostics,
+} from '@shared/schemas';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Duck-typed interface for Anthropic message streams.

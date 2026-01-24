@@ -40,7 +40,7 @@ import {
   type ErrorLogData,
   type ErrorContext,
   type StreamDiagnostics,
-} from './schemas';
+} from '@shared/schemas';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {

@@ -8,7 +8,7 @@
  */
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local file imports - individual approval modules
 import {

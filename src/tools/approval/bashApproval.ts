@@ -1,5 +1,5 @@
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
