@@ -1129,45 +1129,132 @@ handleRunChange() {
 4. **Single Responsibility Components** - Each component handles one concern (rendering, not orchestration)
 5. **External CSS** - Use light DOM with existing CSS files; no scoped styles duplication
 
-#### State Management Architecture
+#### State Architecture: Stateless View with Cache
+
+**Principle:** The frontend is a stateless view. Backend is the source of truth. Frontend receives data via messages, caches it for fast tab switching, and renders.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        ProgressApp (Root)                           │
+│                                                                     │
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │                    MessageController                         │   │
-│  │  - Handles window.addEventListener('message')                │   │
-│  │  - Validates with Zod schemas                                │   │
-│  │  - Updates ProgressApp state                                 │   │
+│  │  - Listens to window 'message' events                        │   │
+│  │  - Validates payloads with Zod schemas                       │   │
+│  │  - Updates view cache + triggers re-render                   │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
-│  State (@state decorated):                                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐    │
-│  │ streams[]   │  │ activeId    │  │ promptQueues (unified)  │    │
-│  │ filter      │  │ status      │  │ Map<id, PromptUnion>    │    │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘    │
-│                                                                     │
+│  Reactive State (@state - auto-triggers re-render):                 │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │        streamStates: Map<StreamId, StreamState>              │   │
-│  │  (per-stream: logs, groups, todos, files, usage, etc.)       │   │
+│  │ streams: StreamTabInfo[]     # List of all streams           │   │
+│  │ activeStreamId: string|null  # Currently selected stream     │   │
+│  │ activeStatus: StreamStatus   # Status of active stream       │   │
+│  │ streamFilter: AgentCategory  # Filter setting                │   │
+│  │ toolEditPrompts: []          # Pending tool edit approvals   │   │
+│  │ bashPrompts: []              # Pending bash approvals        │   │
+│  │ retryPrompts: []             # Pending retry requests        │   │
+│  │ proposalPrompts: []          # Pending agent proposals       │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
-│  Context Providers:                                                 │
-│  ┌─────────────────────┐  ┌────────────────────────────────────┐   │
-│  │ CommandsContext     │  │ ActiveStreamContext                │   │
-│  │ - postCommand()     │  │ - activeStreamId                   │   │
-│  │ - postMessage()     │  │ - activeStreamState                │   │
-│  └─────────────────────┘  │ - activeStream (StreamTabInfo)     │   │
-│                           └────────────────────────────────────┘   │
+│  View Cache (NOT reactive - requires manual requestUpdate()):       │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  streamViewCache: Map<StreamId, StreamViewData>              │   │
+│  │  ├─ logs: LogMessageData[]                                   │   │
+│  │  ├─ groups: TaskGroup[]                                      │   │
+│  │  ├─ todos: TodoItem[]                                        │   │
+│  │  ├─ outputFilesByRun: Record<runId, Record<round, files>>    │   │
+│  │  ├─ usageByRun: Record<runId, TokenUsageStats>               │   │
+│  │  └─ ...                                                      │   │
+│  │                                                              │   │
+│  │  Purpose: Cache last-received data per stream for instant    │   │
+│  │  tab switching. Backend remains source of truth.             │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  Context Provider (actions only, no state):                         │
+│  ┌─────────────────────┐                                           │
+│  │ CommandsContext     │                                           │
+│  │ - postCommand()     │  ← Dispatch actions to backend            │
+│  └─────────────────────┘                                           │
 └─────────────────────────────────────────────────────────────────────┘
+                              │
+                   Props (data flows down)
                               │
           ┌───────────────────┼───────────────────┐
           ▼                   ▼                   ▼
     Child Components    Child Components    Child Components
-    (consume context)   (consume context)   (consume context)
+    (receive props)     (receive props)     (receive props)
+    (consume context    (consume context    (consume context
+     for actions)        for actions)        for actions)
 ```
 
-#### Context Definitions
+##### Why View Cache (Map)?
+
+| Without Cache | With Cache |
+|---------------|------------|
+| Tab switch → backend re-sends all data | Tab switch → instant render from cache |
+| Slow UX, network round-trip | Fast UX, backend only sends updates |
+| Simpler code | Requires cache invalidation awareness |
+
+**The Map is NOT state** — it's a cache of "last received from backend". Backend remains the single source of truth.
+
+##### Map Reactivity Pattern
+
+Maps don't trigger Lit's reactive updates. Two patterns to handle this:
+
+**Pattern A: Manual `requestUpdate()` (current implementation)**
+
+```typescript
+private streamViewCache = new Map<StreamTabId, StreamViewData>();
+
+private updateCache(streamId: StreamTabId, update: Partial<StreamViewData>): void {
+  const current = this.streamViewCache.get(streamId) ?? createEmptyViewData();
+  this.streamViewCache.set(streamId, { ...current, ...update });
+  this.requestUpdate(); // Manual trigger required after every Map mutation
+}
+```
+
+**Pattern B: Immutable Map replacement (cleaner, recommended)**
+
+```typescript
+@state() private streamViewCache = new Map<StreamTabId, StreamViewData>();
+
+private updateCache(streamId: StreamTabId, update: Partial<StreamViewData>): void {
+  const current = this.streamViewCache.get(streamId) ?? createEmptyViewData();
+  const newMap = new Map(this.streamViewCache);
+  newMap.set(streamId, { ...current, ...update });
+  this.streamViewCache = newMap; // Assignment triggers @state reactivity
+}
+```
+
+##### Prompt Arrays: Keep Separate (No Consolidation)
+
+**Decision:** Keep 4 separate `@state()` arrays. Do NOT consolidate into a Map.
+
+**Rationale:**
+- Arrays with `@state()` are already reactive — no manual `requestUpdate()`
+- Map consolidation would require filtering on every render: `[...map.values()].filter()`
+- Filtering creates garbage and is less efficient than direct array access
+- Current pattern is explicit, simple, and works
+
+```typescript
+// ✅ Keep this pattern
+@state() private toolEditPrompts: ToolEditApprovalPrompt[] = [];
+@state() private bashPrompts: BashApprovalPrompt[] = [];
+@state() private retryPrompts: RetryRequestPrompt[] = [];
+@state() private proposalPrompts: AgentProposalPrompt[] = [];
+
+// ❌ Don't do this
+@state() private pendingPrompts = new Map<string, PendingPrompt>(); // Requires filtering
+```
+
+#### Context: Actions Only
+
+Only provide `CommandsContext` for action dispatch. Data flows via props, not context.
+
+**Why no data context?**
+- Props make data flow explicit and components testable
+- Context for data creates hidden dependencies
+- Changing context value re-renders all consumers (performance issue)
 
 ```typescript
 // src/progressView/frontend/context/commands.ts
@@ -1179,34 +1266,36 @@ export interface CommandsContextValue {
 
 export const commandsContext = createContext<CommandsContextValue>('commands');
 
-// src/progressView/frontend/context/stream.ts
-export interface ActiveStreamContextValue {
-  streamId: StreamTabId | null;
-  stream: StreamTabInfo | undefined;
-  state: StreamState | undefined;
-  isWorkflow: boolean;
-}
+// Usage in ProgressApp (provider)
+@provide({ context: commandsContext })
+private commands: CommandsContextValue = {
+  postCommand: (command, payload) => postMessage({ command, ...payload }),
+};
 
-export const activeStreamContext = createContext<ActiveStreamContextValue>('active-stream');
+// Usage in child component (consumer) - just @consume, no @property
+@consume({ context: commandsContext })
+private commands!: CommandsContextValue;
 ```
 
-#### Reactive Controllers
+#### Reactive Controller
 
 ```typescript
 // src/progressView/frontend/controllers/MessageController.ts
 import { ReactiveController, ReactiveControllerHost } from 'lit';
 
+export interface MessageHost extends ReactiveControllerHost {
+  handleIncomingMessage(message: unknown): void;
+}
+
 /**
- * Handles VS Code webview message lifecycle.
- * - Adds/removes message listener on host connect/disconnect
- * - Validates messages with Zod schemas
- * - Calls host update methods
+ * Manages VS Code webview message lifecycle.
+ * Automatically adds/removes event listener on connect/disconnect.
  */
 export class MessageController implements ReactiveController {
-  private host: ReactiveControllerHost & ProgressAppHost;
+  private host: MessageHost;
   private abortController: AbortController | null = null;
 
-  constructor(host: ReactiveControllerHost & ProgressAppHost) {
+  constructor(host: MessageHost) {
     this.host = host;
     host.addController(this);
   }
@@ -1226,35 +1315,9 @@ export class MessageController implements ReactiveController {
   private handleMessage = (event: MessageEvent) => {
     const message = event.data;
     if (!message?.command) return;
-    // Dispatch to appropriate handler based on command
     this.host.handleIncomingMessage(message);
   };
 }
-```
-
-#### Consolidated Prompt Queue
-
-Replace 4 separate arrays with a single discriminated union Map:
-
-```typescript
-// src/progressView/frontend/types/prompts.ts
-export type PendingPrompt =
-  | { kind: 'toolEdit'; data: ToolEditApprovalPrompt }
-  | { kind: 'bash'; data: BashApprovalPrompt }
-  | { kind: 'retry'; data: RetryRequestPrompt }
-  | { kind: 'proposal'; data: AgentProposalPrompt };
-
-// In ProgressApp:
-@state() private pendingPrompts = new Map<string, PendingPrompt>();
-
-// Add prompt
-this.pendingPrompts.set(prompt.requestId, { kind: 'toolEdit', data: prompt });
-
-// Remove prompt
-this.pendingPrompts.delete(requestId);
-
-// Render by kind
-const toolEdits = [...this.pendingPrompts.values()].filter(p => p.kind === 'toolEdit');
 ```
 
 ---
@@ -1270,8 +1333,7 @@ src/progressView/frontend/
 │
 ├── context/
 │   ├── index.ts                      # Barrel export
-│   ├── commands.ts                   # CommandsContext definition
-│   └── stream.ts                     # ActiveStreamContext definition
+│   └── commands.ts                   # CommandsContext (actions only, no state)
 │
 ├── controllers/
 │   ├── index.ts                      # Barrel export
@@ -1465,15 +1527,14 @@ export class FileItem extends LitElement {
 
 **Files changed:** 3 new, 1 modified
 
-##### Phase 2.4: Prompts (Consolidated)
+##### Phase 2.4: Prompt Components
 
-**Goal:** Extract prompt rendering with unified queue
+**Goal:** Extract prompt rendering into separate components (keep 4 arrays)
 
-1. Consolidate 4 prompt arrays → `pendingPrompts` Map
-2. Create `prompt-container.ts`
-3. Create `tool-edit-prompt.ts`, `bash-prompt.ts`, `retry-prompt.ts`, `agent-proposal.ts`
-4. Update ProgressApp to use prompt components
-5. **Test:** Verify all approval flows work
+1. Create `prompt-container.ts` (receives 4 arrays as props)
+2. Create `tool-edit-prompt.ts`, `bash-prompt.ts`, `retry-prompt.ts`, `agent-proposal.ts`
+3. Update ProgressApp to use prompt components
+4. **Test:** Verify all approval flows work
 
 **Files changed:** 5 new, 1 modified
 
@@ -1572,10 +1633,9 @@ export class FileItem extends LitElement {
   /** Whether to show the accept/merge buttons */
   @property({ type: Boolean }) showEditActions = true;
 
-  /** Commands context for postMessage */
-  @consume({ context: commandsContext, subscribe: true })
-  @property({ attribute: false })
-  commands!: CommandsContextValue;
+  /** Commands context for postMessage - just @consume, no @property needed */
+  @consume({ context: commandsContext })
+  private commands!: CommandsContextValue;
 
   private get displayPath(): string {
     const loc = this.file.location;
@@ -1666,9 +1726,10 @@ declare global {
 
 **Architecture:**
 - ~25 focused components (single responsibility)
-- 2 context providers (commands, active stream)
+- 1 context provider (CommandsContext for actions only)
 - 1 reactive controller (MessageController)
-- Consolidated prompt queue (Map with discriminated union)
+- 4 prompt arrays (keep separate, already reactive via @state)
+- View cache Map with immutable update pattern
 
 **Code Quality:**
 - ProgressApp reduced to ~400 lines (orchestration only)
@@ -1684,9 +1745,9 @@ declare global {
 - Kept: `src/progressView/index.html` (minimal)
 
 **Metrics:**
-- Components: 25 (vs 1 monolithic)
+- Components: ~25 (vs 1 monolithic)
 - Lines per component: ~100 avg (vs 1500+)
-- Context providers: 2 (eliminates prop drilling)
+- Context providers: 1 (commands only; data via props)
 - External CSS: 26 files preserved
 
 ---
