@@ -17,7 +17,6 @@ import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
-  configureLean4Settings,
   refreshModelListIfNeeded,
 } from '@frontend/setup';
 import { FileLister } from '@frontend/files';
@@ -210,9 +209,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
-
-  // Prompt for Lean 4 extension if not installed
-  configureLean4Settings();
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
