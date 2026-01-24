@@ -30,6 +30,10 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from './latexPreview';
+import {
+  rejectAllPendingBashApprovals,
+  rejectPendingBashApprovalsForStream,
+} from './bashApproval';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -165,25 +169,34 @@ export function clearAllApprovalBypass(): void {
   approvalsBypassedByStream.clear();
 }
 
-/** Reject all pending tool edit approvals for a deleted stream (prevents memory leak) */
-export function rejectPendingToolEditApprovalsForStream(
-  streamId: StreamTabId,
-): void {
+/**
+ * Reject all pending approvals (tool edits + bash) for a deleted stream.
+ * Unified cleanup function that handles both approval types.
+ */
+export function rejectPendingApprovalsForStream(streamId: StreamTabId): void {
+  // Tool edit approvals
   for (const entry of pendingApprovals.values()) {
     if (entry.streamId === streamId && !entry.isSettled()) {
-      // Settling triggers finally block which cleans up temp files and emits resolve event
       entry.settle({ accepted: false });
     }
   }
+  // Bash approvals
+  rejectPendingBashApprovalsForStream(streamId);
 }
 
-/** Reject all pending tool edit approvals (used when deleting all streams) */
-export function rejectAllPendingToolEditApprovals(): void {
+/**
+ * Reject all pending approvals (tool edits + bash).
+ * Unified cleanup function used when deleting all streams.
+ */
+export function rejectAllPendingApprovals(): void {
+  // Tool edit approvals
   for (const entry of pendingApprovals.values()) {
     if (!entry.isSettled()) {
       entry.settle({ accepted: false });
     }
   }
+  // Bash approvals
+  rejectAllPendingBashApprovals();
 }
 
 export function initializeToolEditApproval(
