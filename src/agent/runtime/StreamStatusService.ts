@@ -36,16 +36,20 @@ export const StreamStatusService = {
    * Returns true if acquired (sets INITIALIZING), false if already active.
    *
    * This is an atomic check-and-set to prevent race conditions when launching
-   * workflows concurrently. Blocks on RUNNING, RESUMING, and INITIALIZING.
+   * workflows concurrently. Blocks on RUNNING, RESUMING, INITIALIZING, and WAITING.
+   *
+   * WAITING is blocked because the stream is awaiting user action (e.g., retry
+   * after 429 rate limit). Starting a new stream would interrupt the retry flow.
    */
   tryAcquire(stream: StreamTabId): boolean {
     const current = statusMemory.get(stream);
 
-    // Block if already active (running/resuming) or initializing
+    // Block if already active (running/resuming), initializing, or waiting for retry
     if (
       current === STREAM_STATUS.RUNNING ||
       current === STREAM_STATUS.RESUMING ||
-      current === STREAM_STATUS.INITIALIZING
+      current === STREAM_STATUS.INITIALIZING ||
+      current === STREAM_STATUS.WAITING
     ) {
       return false;
     }
