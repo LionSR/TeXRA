@@ -23,6 +23,9 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
+// Local imports - model
+import { resolveVisibleModel } from '@model/computeModelOptions';
+
 // Local imports - tools
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
@@ -212,6 +215,9 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       );
     }
 
+    // Resolve model to a visible model (falls back to first visible if needed)
+    const model = resolveVisibleModel(input.model);
+
     // Validate inputFile is provided
     if (!input.inputFile) {
       throw new Error('inputFile is required for workflow agents.');
@@ -259,7 +265,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
-      model: input.model,
+      model,
       instruction: input.instruction,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
@@ -301,7 +307,7 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       output: [
         `Workflow agent '${input.agent}' started.`,
         `Input: ${input.inputFile}`,
-        `Model: ${input.model}`,
+        `Model: ${model}`,
         outputInfo,
         'Monitor ProgressBoard for status.',
       ].join('\n'),
@@ -359,11 +365,14 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       );
     }
 
+    // Resolve model to a visible model (falls back to first visible if needed)
+    const model = resolveVisibleModel(input.model);
+
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
-      model: input.model,
+      model,
       instruction: input.instruction,
     } satisfies ToolUseAgentProposal);
 
@@ -389,7 +398,7 @@ Example: agent=search, instruction="The paper at paper.tex proposes a new attent
       summary: `Delegated task to '${input.agent}'`,
       output: [
         `Tool-use agent '${input.agent}' started.`,
-        `Model: ${input.model}`,
+        `Model: ${model}`,
         `Task: ${input.instruction.slice(0, 100)}${input.instruction.length > 100 ? '...' : ''}`,
         'Monitor ProgressBoard for status.',
       ].join('\n'),
