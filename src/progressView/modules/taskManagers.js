@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
+import { ELEMENT_IDS, GROUP_DOM_IDS, getCategoryUIConfig } from './constants.js';
 import {
   TaskGroupHeaderFormatter,
   getSharedLogEntryFormatter,
@@ -297,16 +297,20 @@ export class TaskGroupDomManager {
   /**
    * Show/hide task groups based on the selected run.
    *
-   * For toolUse agents, always shows ALL groups (conversation history).
-   * For workflow agents, shows only the specified run (or all if null).
+   * Uses centralized category config to determine visibility behavior:
+   * - taskGroupsAreSwitchable=false: Show ALL groups (conversation history)
+   * - taskGroupsAreSwitchable=true: Show only the specified run
    *
    * @param {string|null} groupId - The run ID to show, or null to show all
    */
   showRun(groupId) {
-    // ToolUse agents show all groups as conversation turns (append-only history)
-    // Workflow agents filter to single run (mutually exclusive runs)
+    const categoryConfig = getCategoryUIConfig(
+      progressViewState.activeAgentCategory,
+    );
+    // Non-switchable groups (e.g., toolUse conversation turns) always show all
+    // Switchable groups (e.g., workflow runs) filter to single run
     const showAll =
-      progressViewState.activeAgentCategory === 'toolUse' ||
+      !categoryConfig.taskGroupsAreSwitchable ||
       !groupId ||
       !this.groupElements.has(groupId);
 

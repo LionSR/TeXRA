@@ -29,6 +29,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
+  createTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
@@ -606,24 +607,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    // Build the agentConfig based on proposal type
-    // Workflow proposals have file fields; tool-use proposals don't
+    // Type narrowing check - proposal type is a discriminated union
+    // This narrows the type so TypeScript knows file fields exist
     const isWorkflow = proposal.agentCategory === 'workflow';
 
     // Helper to check if a file array has content
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
-    // Build activeFiles - only relevant for workflow agents
-    const activeFiles = {
-      input: isWorkflow && hasFiles(proposal.inputFiles),
-      reference: isWorkflow && hasFiles(proposal.referenceFiles),
-      auxiliary: isWorkflow && hasFiles(proposal.auxiliaryFiles),
-      media: isWorkflow && hasFiles(proposal.mediaFiles),
-      output: isWorkflow && hasFiles(proposal.outputFiles),
-    };
-
     // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
-    // For tool-use agents, file fields will get default values from AgentConfigSchema
+    // File fields only relevant for workflow agents (type narrowing via isWorkflow)
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
@@ -642,21 +634,27 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         outputFiles: proposal.outputFiles,
         useMultipleOutputs: proposal.useMultipleOutputs,
         // Set visibility flags for file arrays that have content
-        inputFilesActive: activeFiles.input,
-        referenceFilesActive: activeFiles.reference,
-        auxiliaryFilesActive: activeFiles.auxiliary,
-        mediaFilesActive: activeFiles.media,
-        outputFilesActive: activeFiles.output,
+        inputFilesActive: hasFiles(proposal.inputFiles),
+        referenceFilesActive: hasFiles(proposal.referenceFiles),
+        auxiliaryFilesActive: hasFiles(proposal.auxiliaryFiles),
+        mediaFilesActive: hasFiles(proposal.mediaFiles),
+        outputFilesActive: hasFiles(proposal.outputFiles),
       }),
     });
 
-    // Build the appropriate TaskState variant based on agent category
-    // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
-    // Cast needed because agentConfig.agentCategory is typed as the general
-    // AgentCategory enum, not the specific literal type that TaskState requires
-    const taskState = (
-      isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
-    ) as TaskState;
+    // Build the appropriate TaskState variant using the factory
+    // Factory handles category-specific fields automatically
+    const taskState = createTaskState(agentConfig, {
+      activeFiles: isWorkflow
+        ? {
+            input: hasFiles(proposal.inputFiles),
+            reference: hasFiles(proposal.referenceFiles),
+            auxiliary: hasFiles(proposal.auxiliaryFiles),
+            media: hasFiles(proposal.mediaFiles),
+            output: hasFiles(proposal.outputFiles),
+          }
+        : undefined,
+    });
 
     // Resolve the proposal with 'setup' action to dismiss it from the UI
     // (user will manually execute from the main view after editing)

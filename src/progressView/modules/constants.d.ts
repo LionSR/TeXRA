@@ -30,3 +30,21 @@ export declare const FILTER_BUTTONS: ReadonlyArray<{
   label: string;
   filter: string;
 }>;
+
+export interface CategoryUIConfig {
+  readonly showRunSelector: boolean;
+  readonly showRoundHeaders: boolean;
+  readonly showInstructionPanel: boolean;
+  readonly taskGroupsAreSwitchable: boolean;
+  readonly hasFileFields: boolean;
+  readonly toolbar: ReadonlyArray<Record<string, unknown>>;
+}
+
+export declare const CATEGORY_UI_CONFIG: Readonly<{
+  workflow: CategoryUIConfig;
+  toolUse: CategoryUIConfig;
+}>;
+
+export declare function getCategoryUIConfig(
+  category: string,
+): CategoryUIConfig;

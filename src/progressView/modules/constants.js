@@ -182,7 +182,7 @@ const WORKFLOW_TOOLBAR = [
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   RESTORE_STATE_BUTTON,
-  { ...OPEN_TASK_STORAGE_BUTTON },
+  OPEN_TASK_STORAGE_BUTTON,
 ];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
@@ -190,6 +190,50 @@ export const TOOLBAR_BUTTONS = {
   workflow: WORKFLOW_TOOLBAR,
   toolUse: TOOL_USE_TOOLBAR,
 };
+
+/**
+ * Centralized configuration for category-specific UI behavior.
+ *
+ * This eliminates scattered conditional checks (e.g., `if (category === 'toolUse')`)
+ * by consolidating all category-dependent behavior into a single lookup.
+ *
+ * @typedef {Object} CategoryUIConfig
+ * @property {boolean} showRunSelector - Whether to show the run selector dropdown
+ * @property {boolean} showRoundHeaders - Whether to show round headers in file list
+ * @property {boolean} showInstructionPanel - Whether to show the instruction panel
+ * @property {boolean} taskGroupsAreSwitchable - Whether task groups represent switchable runs
+ * @property {boolean} hasFileFields - Whether file fields are relevant for this category
+ * @property {ToolbarButtonDefinition[]} toolbar - Toolbar buttons for this category
+ */
+
+/** @type {Record<'workflow' | 'toolUse', CategoryUIConfig>} */
+export const CATEGORY_UI_CONFIG = Object.freeze({
+  workflow: Object.freeze({
+    showRunSelector: true,
+    showRoundHeaders: true,
+    showInstructionPanel: true,
+    taskGroupsAreSwitchable: true,
+    hasFileFields: true,
+    toolbar: WORKFLOW_TOOLBAR,
+  }),
+  toolUse: Object.freeze({
+    showRunSelector: false,
+    showRoundHeaders: false,
+    showInstructionPanel: false,
+    taskGroupsAreSwitchable: false,
+    hasFileFields: false,
+    toolbar: TOOL_USE_TOOLBAR,
+  }),
+});
+
+/**
+ * Get the UI configuration for an agent category.
+ * @param {string} category - 'workflow' or 'toolUse'
+ * @returns {CategoryUIConfig}
+ */
+export function getCategoryUIConfig(category) {
+  return CATEGORY_UI_CONFIG[category] ?? CATEGORY_UI_CONFIG.workflow;
+}
 
 export const SORT_BUTTONS = [
   {

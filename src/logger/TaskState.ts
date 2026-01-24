@@ -103,3 +103,84 @@ export function isToolUseTaskState(
 ): taskState is ToolUseTaskState {
   return taskState.agentConfig.agentCategory === AgentCategory.ToolUse;
 }
+
+// -----------------------------------------------------------------------------
+// Factory Functions
+// -----------------------------------------------------------------------------
+// These factories encapsulate the category-specific TaskState construction,
+// eliminating scattered conditional logic throughout the codebase.
+
+/** Default active files record (all false) */
+const DEFAULT_ACTIVE_FILES: Record<FileType, boolean> = Object.fromEntries(
+  FILE_TYPES.map((type) => [type, false]),
+) as Record<FileType, boolean>;
+
+/**
+ * Options for creating a TaskState.
+ */
+export interface CreateTaskStateOptions {
+  /**
+   * Active files record for workflow agents.
+   * If not provided, defaults to all false.
+   * Ignored for tool-use agents.
+   */
+  activeFiles?: Partial<Record<FileType, boolean>>;
+
+  /**
+   * Tool session state for tool-use agents.
+   * Ignored for workflow agents.
+   */
+  toolSessionState?: ToolSessionState;
+}
+
+/**
+ * Create a TaskState from an AgentConfig.
+ *
+ * This factory handles the category-specific structure automatically:
+ * - Workflow agents get `activeFiles` (defaulting to all false if not provided)
+ * - ToolUse agents get `toolSessionState` (optional)
+ *
+ * @param agentConfig - The agent configuration (determines category)
+ * @param options - Optional category-specific fields
+ * @returns The appropriate TaskState variant
+ *
+ * @example
+ * ```typescript
+ * // Workflow agent with some active files
+ * const workflowState = createTaskState(workflowConfig, {
+ *   activeFiles: { input: true, reference: true },
+ * });
+ *
+ * // ToolUse agent (no options needed)
+ * const toolUseState = createTaskState(toolUseConfig);
+ * ```
+ */
+export function createTaskState(
+  agentConfig: AgentConfig,
+  options: CreateTaskStateOptions = {},
+): TaskState {
+  if (agentConfig.agentCategory === AgentCategory.Workflow) {
+    return {
+      agentConfig: agentConfig as AgentConfig & {
+        agentCategory: AgentCategory.Workflow;
+      },
+      activeFiles: {
+        ...DEFAULT_ACTIVE_FILES,
+        ...options.activeFiles,
+      },
+    };
+  }
+
+  // ToolUse agent
+  const toolUseState: ToolUseTaskState = {
+    agentConfig: agentConfig as AgentConfig & {
+      agentCategory: AgentCategory.ToolUse;
+    },
+  };
+
+  if (options.toolSessionState) {
+    toolUseState.toolSessionState = options.toolSessionState;
+  }
+
+  return toolUseState;
+}

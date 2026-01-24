@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { COMMANDS, ELEMENT_IDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS, getCategoryUIConfig } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common helpers
@@ -151,17 +151,20 @@ export class FollowupSectionManager {
 
   /**
    * Update the followup section visibility based on stream data.
-   * Shows the section for completed workflow or tool-use streams with output files.
+   * Shows the section for completed workflow streams with output files.
+   * Uses centralized category config to determine eligibility.
    * @param {Object} streamData - The stream data
    */
   updateForStream(streamData) {
     this._currentStreamData = streamData;
     const collapsible = safeGetElementById(ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE);
 
-    // Show for workflow streams that have generated files
-    const isValidCategory = streamData?.agentCategory === 'workflow';
+    // Show for categories that have file fields (workflow agents) when stopped with outputs
+    const categoryConfig = getCategoryUIConfig(
+      streamData?.agentCategory || 'workflow',
+    );
     const shouldShow =
-      isValidCategory &&
+      categoryConfig.hasFileFields &&
       streamData?.status === 'stopped' &&
       streamData?.hasOutputFiles;
 

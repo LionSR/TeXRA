@@ -4,6 +4,7 @@ import {
   STREAM_STATUS,
   ELEMENT_IDS,
   GROUP_DOM_IDS,
+  getCategoryUIConfig,
 } from './constants.js';
 import { progressViewDomHandler } from './domHandlers.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
@@ -21,7 +22,7 @@ import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 /**
  * ARCHITECTURAL NOTE: Task Groups have different semantics per agent category
  *
- * The "task group" abstraction is currently overloaded:
+ * The "task group" abstraction is overloaded with different meanings:
  *
  * - Workflow agents: Each group is a distinct "run" (user can switch between runs,
  *   only one visible at a time via run selector dropdown)
@@ -30,12 +31,15 @@ import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
  *   response with tool calls). All turns should always be visible as continuous
  *   conversation history.
  *
- * This semantic mismatch requires special handling throughout (checking isToolUse
- * before calling showRun). A cleaner design would separate these concepts:
- * - WorkflowRunManager for workflow agents (switching between runs)
- * - ConversationTurnManager for toolUse agents (append-only history)
+ * Category-specific behavior is now centralized in CATEGORY_UI_CONFIG (constants.js)
+ * and accessed via getCategoryUIConfig(). This eliminates scattered `isToolUse` checks
+ * and makes behavioral differences explicit and discoverable.
  *
- * TODO: Consider refactoring to separate these concerns in a future PR.
+ * Key config properties:
+ * - showRunSelector: Whether to show run switching UI
+ * - showRoundHeaders: Whether round numbers are meaningful
+ * - showInstructionPanel: Whether instruction panel is used
+ * - taskGroupsAreSwitchable: Whether groups represent discrete switchable runs
  */
 
 // Create shorter aliases for internal use
@@ -109,9 +113,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
   _refreshInstructionForActiveRun(runId) {
-    // Tool-use agents don't use instruction panel
-    if (state.activeAgentCategory === 'toolUse')
+    const categoryConfig = getCategoryUIConfig(state.activeAgentCategory);
+    if (!categoryConfig.showInstructionPanel) {
       return dom.instructionPanel.hide();
+    }
 
     const ctx = this._getActiveRunContext(runId);
     if (!ctx) return dom.instructionPanel.hide();
@@ -131,9 +136,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const filesByRound = ctx
       ? (state.getRunFiles(ctx.stream, ctx.runId) ?? {})
       : {};
-    // Hide round headers for tool-use agents where round numbers don't have meaning
-    const showRoundHeaders = state.activeAgentCategory !== 'toolUse';
-    dom.fileList.update(filesByRound, { showRoundHeaders });
+    const categoryConfig = getCategoryUIConfig(state.activeAgentCategory);
+    dom.fileList.update(filesByRound, {
+      showRoundHeaders: categoryConfig.showRoundHeaders,
+    });
   }
 
   _refreshUsageForActiveRun() {
@@ -413,7 +419,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       (s) => s.name === message.activeStream,
     );
     const category = this._resolveAgentCategory(activeStreamInfo);
-    const isToolAgent = category === 'toolUse';
+    const categoryConfig = getCategoryUIConfig(category);
 
     // Only clear state if we have confirmed stream info for the category change
     if (activeStreamInfo) {
@@ -422,15 +428,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.activeAgentCategory = category;
 
     dom.runSelector.setDisplayEnabled(
-      Boolean(message.activeStream) && !isToolAgent,
+      Boolean(message.activeStream) && categoryConfig.showRunSelector,
     );
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
+    const showFollowUp = !categoryConfig.taskGroupsAreSwitchable; // ToolUse agents show follow-up
     if (container) {
-      container.classList.toggle('is-visible', isToolAgent);
-      container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
+      container.classList.toggle('is-visible', showFollowUp);
+      container.setAttribute('aria-hidden', showFollowUp ? 'false' : 'true');
     }
-    dom.followUpInput.setContainerVisibility(Boolean(isToolAgent && container));
+    dom.followUpInput.setContainerVisibility(Boolean(showFollowUp && container));
 
     // Restore follow-up text for the new stream
     if (message.activeStream && previousStream !== message.activeStream) {
@@ -440,9 +447,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // YOLO state is sent by backend via updateToolEditApprovalState message
     // No need to restore from frontend cache here
 
-    dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
-    dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
-    dom.workflowProposals.setActiveStream(message.activeStream, isToolAgent);
+    dom.approvalRequests.setActiveStream(message.activeStream, showFollowUp);
+    dom.retryRequests.setActiveStream(message.activeStream, showFollowUp);
+    dom.workflowProposals.setActiveStream(message.activeStream, showFollowUp);
 
     dom.toolbar.render(category);
 
@@ -1005,7 +1012,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const metadata = message.instruction?.metadata;
     const category =
       message.agentCategory || state.activeAgentCategory || 'workflow';
-    const isToolUseAgent = category === 'toolUse';
+    const categoryConfig = getCategoryUIConfig(category);
     const hasText = typeof text === 'string' && text.trim();
 
     if (message.agentCategory) this._clearAgentCategoryState(category);
@@ -1029,7 +1036,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Tool-use agents: render instruction as user message in log
-    if (isToolUseAgent) {
+    if (!categoryConfig.showInstructionPanel) {
       dom.instructionPanel.hide();
       state.clearPendingInstruction(activeStream);
       if (hasText)
