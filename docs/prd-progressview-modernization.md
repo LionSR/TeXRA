@@ -54,6 +54,89 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ---
 
+## Cross-Webview Coordination Benefits
+
+The codebase has significant cross-webview coordination that benefits from unified Lit + Zod infrastructure.
+
+### Current Coordination Patterns
+
+**1. Central Event Bus (ProgressEventBus)**
+- Broadcasts 30+ event types to all subscribers
+- Typed `ProgressEventPayloads` interface
+- Event buffer replays events for late subscribers
+
+**2. WebviewUpdater - Multi-View Broadcasting**
+```typescript
+// Sends to BOTH sidebar AND panel simultaneously
+this.webviewUpdater = new WebviewUpdater(() => [
+  this._view?.webview,      // Sidebar
+  this._panelView?.webview, // Editor tab panel
+]);
+```
+
+**3. Dual-View Architecture**
+- ProgressView runs as both sidebar AND editor tab
+- Both share single `ProgressViewState` (single source of truth)
+- `retainContextWhenHidden: true` keeps webviews alive
+
+**4. Promise-Based Coordinators**
+- `RetryRequestCoordinator` - waits for user retry decision
+- `AgentProposalCoordinator` - waits for proposal approval
+- Tool approval handlers with YOLO bypass state per-stream
+
+**5. Shared State via WorkspaceState**
+```typescript
+// Keys accessed by multiple views
+STREAM_TABS, TASK_GROUPS, OUTPUT_FILES, ACTIVE_RUN_IDS,
+ACTIVE_STREAM_TAB, TASK_STATES, EXECUTION_IDS, USAGE_STATS
+```
+
+### Shared Utilities Already Exist
+
+| Utility | Used By | Purpose |
+|---------|---------|---------|
+| `BaseViewContentProvider` | All 5 views | HTML generation, module loading |
+| `BaseViewMessageHandler` | All 5 views | Message routing, validation |
+| `BaseWebviewProvider` | All 5 views | Lifecycle, panel management |
+| `domUtils.js` | All 5 views | 25+ DOM manipulation functions |
+| `templateUtils.js` | All 5 views | Template cloning, icon buttons |
+| `common.css` | All 5 views | Design tokens, component styles |
+| `WebviewStateManager` | All 5 views | VS Code state persistence |
+| `ToggleStateStore` | Progress, History | Collapse/expand tracking |
+| `RecordingManager` | Main, Progress | Audio recording |
+
+### How Lit + Shared Schemas Help
+
+| Current Pain | Improvement |
+|--------------|-------------|
+| 5 providers with boilerplate | Shared `BaseWebviewApp` Lit class |
+| Untyped `postMessage` payloads | Zod-validated message schemas |
+| Scattered visibility tracking | Unified lifecycle in Lit components |
+| Duplicate UI patterns (badges, lists, collapsibles) | Shared Lit components |
+| Manual DOM in `domUtils.js` | Declarative Lit templates |
+| CSS class toggling | Lit's `classMap()` directive |
+| Event handler registration | Type-safe event decorators |
+
+### New Coordination Opportunities
+
+With unified infrastructure:
+
+```typescript
+// Type-safe cross-view messaging
+import { SyncStreamMessageSchema } from '@shared/schemas';
+
+// In any webview
+const result = SyncStreamMessageSchema.safeParse(message);
+if (result.success) {
+  store.updateStream(result.data);  // Same store pattern everywhere
+}
+
+// Shared components work identically in all views
+html`<texra-file-list .files=${this.outputFiles}></texra-file-list>`
+```
+
+---
+
 ## Existing Schemas (Relocation, Not Creation)
 
 **60+ Zod schemas already exist.** The work is relocation, not invention.
@@ -575,15 +658,31 @@ UPDATE: src/progressView/index.html to load bundle.js
 
 **After ProgressView is stable**, extract patterns for other webviews.
 
-### What Gets Extracted
+### Existing Infrastructure to Leverage
+
+Already exists in `src/common/`:
+
+| Existing | Location | Lit Migration Path |
+|----------|----------|-------------------|
+| `BaseViewContentProvider` | `common/webview/` | Keep for HTML shell generation |
+| `BaseViewMessageHandler` | `common/webview/` | Replace with `BaseWebviewApp` Lit class |
+| `BaseWebviewProvider` | `common/webview/` | Keep, add Lit bundle loading |
+| `domUtils.js` | `common/modules/` | Delete after Lit migration |
+| `templateUtils.js` | `common/modules/` | Delete after Lit migration |
+| `common.css` | `common/styles/` | Port design tokens to Lit CSS |
+| `WebviewStateManager` | `common/modules/` | Wrap in Lit reactive controller |
+| `ToggleStateStore` | `common/modules/` | Replace with Lit `@state` |
+
+### What Gets Extracted from ProgressView
 
 | Pattern | From ProgressView | Shared Location |
 |---------|-------------------|-----------------|
 | Schema re-export pattern | `progressView/schemas.ts` | `src/shared/schemas/index.ts` |
-| Base message handler | `ProgressApp.ts` message handling | `src/shared/BaseWebviewApp.ts` |
-| Common components | `<prompt-overlay>`, etc. | `src/shared/components/` |
-| Store utilities | `store.ts` reactive pattern | `src/shared/store.ts` |
-| VS Code API bridge | `vscode.postMessage` wrapper | `src/shared/vscode.ts` |
+| Base Lit app class | `ProgressApp.ts` | `src/shared/BaseWebviewApp.ts` |
+| Common Lit components | `<prompt-overlay>`, etc. | `src/shared/components/` |
+| Reactive store pattern | `store.ts` | `src/shared/createStore.ts` |
+| VS Code API wrapper | Message posting | `src/shared/vscode.ts` |
+| Design tokens | CSS variables | `src/shared/styles/tokens.css` |
 
 ### Shared Components (Proven in ProgressView)
 
