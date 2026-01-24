@@ -74,11 +74,29 @@ export interface UsageMonitorContext {
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
 export class UsageMonitor {
+  /**
+   * Active group ID for statistics logging.
+   * When set, statistics are logged with this group ID instead of storageKey.
+   * This allows statistics to be associated with individual rounds (r0, r1)
+   * rather than the parent stage.
+   */
+  private activeGroupId: string | undefined;
+
   constructor(
     private readonly modelInfo: UsageMonitorModelInfo,
     private readonly context: UsageMonitorContext,
     private readonly metadata?: UsageMonitorMetadata,
   ) {}
+
+  /**
+   * Set the active group ID for statistics logging.
+   * Call this when entering a new round to associate statistics with that round.
+   *
+   * @param groupId - The round stage ID (e.g., r0, r1) or undefined to use storageKey
+   */
+  setActiveGroupId(groupId: string | undefined): void {
+    this.activeGroupId = groupId;
+  }
 
   async recordUsage(
     stateGlobal: AgentRunState,
@@ -153,7 +171,9 @@ export class UsageMonitor {
         payload.toolUseTokens = toolUseTokens;
       }
 
-      usageReporter.report(payload, this.context.storageKey);
+      // Use activeGroupId for statistics grouping if set (round-specific),
+      // otherwise fall back to storageKey (parent stage or execution ID)
+      usageReporter.report(payload, this.context.storageKey, this.activeGroupId);
 
       // Note: Context state is emitted by model handlers during token counting
       // (Anthropic, Google, OpenAI). This avoids duplicate emissions and ensures
