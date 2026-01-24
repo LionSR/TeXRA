@@ -36,8 +36,15 @@ export class AgentUsageReporter {
    *
    * @param stats - Token usage statistics to report
    * @param storageKey - THE key for storage (from context.storageKey) - REQUIRED
+   * @param groupId - Optional group ID for statistics logging. If provided, statistics
+   *                  are logged with this group ID (e.g., round stage ID like r0, r1).
+   *                  If not provided, uses storageKey as the group ID.
    */
-  public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
+  public report(
+    stats: ExtendedTokenUsageStats,
+    storageKey: StorageKey,
+    groupId?: string,
+  ): void {
     bus.emit('updateStreamUsage', {
       streamId: this.streamId,
       storageKey,
@@ -51,7 +58,8 @@ export class AgentUsageReporter {
     });
 
     if (this.agentCategory === AgentCategory.Workflow) {
-      this.logger.statistics(stats, storageKey);
+      // Use groupId if provided (round-specific), otherwise fall back to storageKey
+      this.logger.statistics(stats, groupId ?? storageKey);
     }
   }
 
