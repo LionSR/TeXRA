@@ -323,6 +323,7 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_STATUS.INITIALIZING]: 'already launching',
   [STREAM_STATUS.RESUMING]: 'resuming',
   [STREAM_STATUS.RUNNING]: 'already running',
+  [STREAM_STATUS.WAITING]: 'waiting for retry',
 };
 
 /**
