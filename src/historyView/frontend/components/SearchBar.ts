@@ -15,11 +15,25 @@ export class SearchBar extends LitElement {
 
   @property({ type: String }) matchCount = '';
 
+  private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  override disconnectedCallback(): void {
+    if (this.searchTimeoutId) {
+      clearTimeout(this.searchTimeoutId);
+      this.searchTimeoutId = null;
+    }
+    super.disconnectedCallback();
+  }
+
   private handleInput = (event: Event): void => {
     const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      HistoryViewEvents.searchChange({ term: target?.value ?? '' }),
-    );
+    const term = target?.value?.trim() ?? '';
+    if (this.searchTimeoutId) {
+      clearTimeout(this.searchTimeoutId);
+    }
+    this.searchTimeoutId = setTimeout(() => {
+      this.dispatchEvent(HistoryViewEvents.searchChange({ term }));
+    }, 300);
   };
 
   private handleNext = (): void => {
