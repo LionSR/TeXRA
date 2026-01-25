@@ -1,8 +1,19 @@
 // Local imports
-import { type ProgressState, type StreamSort, type StreamState } from './store';
+import {
+  getEffectiveRunId,
+  type ProgressState,
+  type StreamSort,
+  type StreamState,
+} from './store';
 
 // Local imports - shared schemas
-import type { StreamTabInfo, TaskGroup } from '@shared/schemas';
+import type {
+  InstructionUpdate,
+  OutputFileInfo,
+  StreamTabInfo,
+  TaskGroup,
+  TokenUsageStats,
+} from '@shared/schemas';
 
 /**
  * Updates a nested Record<runId, Record<round, T[]>> structure.
@@ -50,7 +61,7 @@ export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
 /**
  * Sort streams by the specified criteria.
  */
-export function sortStreams(
+function sortStreams(
   streams: StreamTabInfo[],
   sort: StreamSort,
 ): StreamTabInfo[] {
