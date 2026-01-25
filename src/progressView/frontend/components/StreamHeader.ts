@@ -205,8 +205,7 @@ export class StreamHeader extends LitElement {
     };
 
     const enabledButtons = new Set(statusMap[status] ?? []);
-    const hidden =
-      executionDependent.has(buttonId) && !hasExecutionId;
+    const hidden = executionDependent.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons.has(buttonId);
 
     return { disabled, hidden };

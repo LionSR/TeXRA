@@ -5,9 +5,8 @@
 // Local imports - formatter helpers
 import { createBannerEntry } from '../baseLogFormatter';
 import { formatTimestamp } from '../timestampUtils';
-import { extractTrimmedContent } from '../normalizers';
 import { processMarkdownContent } from '../markdownRenderer';
-import type { NormalizedPayload } from '../normalizers';
+import type { NormalizedPayload } from '../parseUtils';
 
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
@@ -44,11 +43,11 @@ export function formatBannerContent(
   groupId: string | undefined,
   timestamp: number,
 ): HTMLElement | null {
-  const { trimmed: trimmedContent, isEmpty } =
-    extractTrimmedContent(normalizedPayload);
-  if (isEmpty) return null;
+  // Use decodedText directly (backend sends text in message.text field)
+  const trimmedContent = (normalizedPayload?.decodedText ?? '').trim();
+  if (!trimmedContent) return null;
 
-  const config = BANNER_CONFIG[contentType] || BANNER_CONFIG.Thinking;
+  const config = BANNER_CONFIG[contentType] ?? BANNER_CONFIG.Thinking;
   const { fullTimestamp } = formatTimestamp(new Date(timestamp));
   const bannerEntry = createBannerEntry({
     logId,
@@ -85,7 +84,7 @@ export function formatModelResponse({
   content: NormalizedPayload;
   level: LogLevel;
 }): HTMLElement | null {
-  const trimmedContent = (content?.decodedText || '').trim();
+  const trimmedContent = (content?.decodedText ?? '').trim();
   if (!trimmedContent) return null;
 
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(

@@ -3,10 +3,7 @@
  */
 
 // Re-export icon constants for single import source
-export {
-  CHEVRON_RIGHT_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/modules/iconConstants.js';
+export { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
 
 // Constants
 export const BULLET_MARKUP =

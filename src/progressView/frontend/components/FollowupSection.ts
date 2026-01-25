@@ -5,7 +5,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - common helpers
 import {
@@ -55,6 +55,24 @@ export class FollowupSection extends LitElement {
   @property({ type: Object }) options: FollowupOptions | null = null;
   @property({ type: String }) mode: FollowupMode = 'chat';
   @property({ type: String }) streamModel: string | null = null;
+
+  @query(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`)
+  private declare agentSelect: (HTMLElement & { value?: string }) | null;
+
+  @query(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`)
+  private declare modelSelect: (HTMLElement & { value?: string }) | null;
+
+  @query(`#${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}`)
+  private declare includeCheckbox: (HTMLElement & { checked?: boolean }) | null;
+
+  @query(`#${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}`)
+  private declare attachCheckbox: (HTMLElement & { checked?: boolean }) | null;
+
+  @query(`#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`)
+  private declare questionInput: (HTMLElement & { value?: string }) | null;
+
+  @query('#followupModeGroup')
+  private declare modeGroup: HTMLElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -189,32 +207,16 @@ export class FollowupSection extends LitElement {
   }
 
   private getFormData(): FollowupFormData | null {
-    const agentSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`) as
-      | (HTMLElement & { value?: string })
-      | null;
-    const modelSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`) as
-      | (HTMLElement & { value?: string })
-      | null;
-    const includeCheckbox = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}`,
-    ) as (HTMLElement & { checked?: boolean }) | null;
-    const attachCheckbox = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}`,
-    ) as (HTMLElement & { checked?: boolean }) | null;
-    const questionInput = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`,
-    ) as (HTMLElement & { value?: string }) | null;
-
-    const agent = this.mode === 'merge' ? 'merge' : agentSelect?.value;
-    const model = modelSelect?.value;
+    const agent = this.mode === 'merge' ? 'merge' : this.agentSelect?.value;
+    const model = this.modelSelect?.value;
     if (!agent || !model) return null;
 
     return {
       agent,
       model,
-      includeInstruction: includeCheckbox?.checked ?? false,
-      attachOutputs: attachCheckbox?.checked ?? false,
-      initialQuestion: questionInput?.value?.trim() ?? '',
+      includeInstruction: this.includeCheckbox?.checked ?? false,
+      attachOutputs: this.attachCheckbox?.checked ?? false,
+      initialQuestion: this.questionInput?.value?.trim() ?? '',
     };
   }
 
@@ -235,42 +237,32 @@ export class FollowupSection extends LitElement {
   }
 
   private syncRadioGroup(): void {
-    const group = this.querySelector(
-      '#followupModeGroup',
-    ) as HTMLElement | null;
-    if (group) {
-      setRadioGroupValue(group, this.mode);
+    if (this.modeGroup) {
+      setRadioGroupValue(this.modeGroup, this.mode);
     }
   }
 
   private applyOptions(): void {
     if (!this.options) return;
 
-    const agentSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`) as
-      | (HTMLElement & { value?: string })
-      | null;
-    const modelSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`) as
-      | (HTMLElement & { value?: string })
-      | null;
-
-    if (agentSelect) {
+    if (this.agentSelect) {
       const agentsHtml =
         this.mode === 'chat'
           ? this.options.toolUseAgentsHtml
           : this.options.workflowAgentsHtml;
       applyAgentOptions(
-        agentSelect,
+        this.agentSelect,
         withPlaceholder(agentsHtml, AGENT_PLACEHOLDER),
       );
     }
 
-    if (modelSelect && this.options.modelOptionsHtml) {
+    if (this.modelSelect && this.options.modelOptionsHtml) {
       const preferredModel =
         this.mode === 'merge'
           ? this.options.defaultMergeModel
-          : this.streamModel || modelSelect.value;
+          : this.streamModel || this.modelSelect.value;
       applyModelOptions(
-        modelSelect,
+        this.modelSelect,
         withPlaceholder(this.options.modelOptionsHtml, MODEL_PLACEHOLDER),
         { preserveValue: preferredModel },
       );

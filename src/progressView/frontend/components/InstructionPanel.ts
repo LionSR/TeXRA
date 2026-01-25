@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - common helpers
 import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
@@ -14,6 +14,9 @@ import type { InstructionUpdate } from '@shared/schemas';
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   @property({ type: Object }) instruction: InstructionUpdate | null = null;
+
+  @query(`#${ELEMENT_IDS.INSTRUCTION_COPY_BTN}`)
+  private declare copyButton: HTMLElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -63,13 +66,10 @@ export class InstructionPanel extends LitElement {
     const text = this.instruction?.text ?? '';
     if (!text.trim()) return;
 
-    const button = this.querySelector(
-      `#${ELEMENT_IDS.INSTRUCTION_COPY_BTN}`,
-    ) as HTMLElement | null;
-    if (!button) return;
+    if (!this.copyButton) return;
 
-    await copyWithFeedback(button, text, {
-      defaultTitle: button.getAttribute('title') || 'Copy instruction',
+    await copyWithFeedback(this.copyButton, text, {
+      defaultTitle: this.copyButton.getAttribute('title') || 'Copy instruction',
       successTitle: 'Copied!',
     });
   }
