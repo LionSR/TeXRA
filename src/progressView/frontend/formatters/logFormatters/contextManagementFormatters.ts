@@ -2,13 +2,14 @@
  * Context management message formatters.
  * Displays context management events (compaction, clearing, max_tokens reduction)
  * as native UI elements in the progress view.
+ *
+ * Uses Lit templates for declarative DOM construction.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import { html, ifDefined, renderToElement } from '../litTemplates';
 
 // Local imports - formatter helpers
-import { initToggleIcon } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
 // Actions that show tokens freed stat
@@ -50,6 +51,8 @@ const ACTION_CONFIG: Record<
   },
 };
 
+type StatItem = { icon: string; label: string; value: string };
+
 /** Format context management event for display. */
 export function formatContextManagement(
   data: unknown,
@@ -58,12 +61,6 @@ export function formatContextManagement(
   if (!data || typeof data !== 'object') {
     return null;
   }
-
-  const element = createFromTemplate('contextManagementTemplate');
-  if (!element) return null;
-
-  const contentElem = element.querySelector('.context-management-content');
-  initToggleIcon(element, false);
 
   const {
     action,
@@ -84,31 +81,8 @@ export function formatContextManagement(
     color: 'var(--vscode-foreground)',
   };
 
-  // Update the icon and title
-  const iconElem = element.querySelector('.context-management-icon');
-  if (iconElem instanceof HTMLElement) {
-    iconElem.className = `codicon ${config.icon} context-management-icon`;
-    iconElem.style.color = config.color;
-  }
-
-  const titleElem = element.querySelector('.context-management-title');
-  if (titleElem instanceof HTMLElement) {
-    titleElem.textContent = config.label;
-    titleElem.style.color = config.color;
-  }
-
   // Build stat items
-  const items: string[] = [];
-  const pushItem = (
-    icon: string,
-    label: string,
-    value: string,
-    suffix = '',
-  ) => {
-    items.push(
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
-    );
-  };
+  const items: StatItem[] = [];
 
   // For max_tokens_reduced, show the reduction
   if (
@@ -116,11 +90,11 @@ export function formatContextManagement(
     typeof originalMaxTokens === 'number' &&
     typeof reducedMaxTokens === 'number'
   ) {
-    pushItem(
-      'codicon-arrow-down',
-      'Max tokens reduced',
-      `${formatTokens(originalMaxTokens)} → ${formatTokens(reducedMaxTokens)}`,
-    );
+    items.push({
+      icon: 'codicon-arrow-down',
+      label: 'Max tokens reduced',
+      value: `${formatTokens(originalMaxTokens)} → ${formatTokens(reducedMaxTokens)}`,
+    });
   }
 
   // For clearing actions, show tokens freed
@@ -131,7 +105,11 @@ export function formatContextManagement(
   ) {
     const tokensFreed = tokensBefore - tokensAfter;
     if (tokensFreed > 0) {
-      pushItem('codicon-dash', 'Tokens freed', formatTokens(tokensFreed));
+      items.push({
+        icon: 'codicon-dash',
+        label: 'Tokens freed',
+        value: formatTokens(tokensFreed),
+      });
     }
   }
 
@@ -141,23 +119,55 @@ export function formatContextManagement(
       typeof utilizationAfter === 'number'
         ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
         : `${utilizationBefore.toFixed(1)}%`;
-    pushItem('codicon-pie-chart', 'Context utilization', utilizationDisplay);
+    items.push({
+      icon: 'codicon-pie-chart',
+      label: 'Context utilization',
+      value: utilizationDisplay,
+    });
   }
 
   // Show context window
   if (typeof contextWindow === 'number') {
-    pushItem('codicon-window', 'Context window', formatTokens(contextWindow));
+    items.push({
+      icon: 'codicon-window',
+      label: 'Context window',
+      value: formatTokens(contextWindow),
+    });
   }
 
   // Show details if present
   if (typeof details === 'string' && details) {
-    pushItem('codicon-info', 'Details', details);
+    items.push({
+      icon: 'codicon-info',
+      label: 'Details',
+      value: details,
+    });
   }
 
-  if (contentElem instanceof HTMLElement) {
-    contentElem.innerHTML = items.join('');
-    if (logId) contentElem.dataset.logId = logId;
-  }
-
-  return element;
+  return renderToElement(html`
+    <details class="banner-details context-management-details">
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i
+          class=${`codicon ${config.icon} context-management-icon`}
+          style=${`color: ${config.color}`}
+        ></i>
+        <span class="context-management-title" style=${`color: ${config.color}`}
+          >${config.label}</span
+        >
+      </summary>
+      <div
+        class="context-management-content"
+        data-log-id=${ifDefined(logId || undefined)}
+      >
+        ${items.map(
+          (item) => html`
+            <span class="stat-item detail-item" title=${item.label}>
+              <i class=${`codicon ${item.icon}`}></i> ${item.value}
+            </span>
+          `,
+        )}
+      </div>
+    </details>
+  `);
 }

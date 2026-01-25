@@ -8,7 +8,8 @@
  * MathML is kept for accessibility and copy-tex LaTeX extraction.
  * See: https://github.com/KaTeX/KaTeX/issues/645
  */
-.markdown-content .katex-mathml {
+/* Hide KaTeX MathML globally - applies wherever KaTeX renders */
+.katex-mathml {
   display: none;
 }
 
