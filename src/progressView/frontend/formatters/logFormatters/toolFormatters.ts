@@ -1,10 +1,11 @@
-// @ts-nocheck
 /**
  * Tool-style formatters for tool use and web search messages.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
+// Local imports - formatter helpers
 import {
   setElementDataset,
   initToggleIcon,
@@ -19,6 +20,7 @@ import {
   normalizeToolUseLog,
   stringifyWithLanguage,
   extractCodeOnlyInput,
+  type NormalizedPayload,
 } from '../normalizers';
 import {
   TOOLS_WITH_DIFF_INPUT,
@@ -47,6 +49,25 @@ const STATUS_ICONS = {
   in_progress: 'codicon codicon-sync spin',
 };
 
+type ToolSectionOptions = {
+  toolName?: string;
+  language?: string;
+  extraClass?: string;
+};
+
+type WebSearchResult = {
+  url?: string;
+  title?: string;
+  domain?: string;
+};
+
+type WebSearchPayload = {
+  query?: string;
+  results?: WebSearchResult[];
+  provider?: string;
+  status?: string;
+};
+
 /**
  * Build a tool section with appropriate code highlighting based on tool type and content.
  * Uses explicit language from tool config or content metadata - never auto-detects.
@@ -59,7 +80,11 @@ const STATUS_ICONS = {
  * @param {string} [options.extraClass] - Additional CSS class for the content
  * @returns {string} HTML for the section
  */
-function buildToolSection(label, text, options = {}) {
+function buildToolSection(
+  label: string,
+  text: string,
+  options: ToolSectionOptions = {},
+): string {
   const { toolName = '', language: contentLanguage, extraClass = '' } = options;
 
   // Determine language: tool config > content metadata > plaintext
@@ -87,7 +112,7 @@ function buildToolSection(label, text, options = {}) {
  * @param {boolean} isError - Whether this is an error state
  * @returns {string} The title prefix
  */
-function getToolTitlePrefix(isUserFeedback, isError) {
+function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   if (isUserFeedback) return 'User Feedback';
   if (isError) return 'Tool Error';
   return 'Tool Use';
@@ -101,21 +126,39 @@ function getToolTitlePrefix(isUserFeedback, isError) {
  * @param {string} iconClass - Initial icon class (e.g., 'codicon-wrench')
  * @returns {{element: HTMLElement, headerLabel: HTMLElement|null, iconElem: HTMLElement|null, contentElem: HTMLElement|null}|null}
  */
-function createToolElement(logId, groupId, timestamp, iconClass) {
+function createToolElement(
+  logId: string,
+  groupId: string | undefined,
+  timestamp: number,
+  iconClass: string,
+): {
+  element: HTMLElement;
+  headerLabel: HTMLElement | null;
+  iconElem: Element | null;
+  contentElem: HTMLElement | null;
+} | null {
   const element = createFromTemplate('toolUseTemplate');
   if (!element) return null;
 
-  setElementDataset(element, { logId, groupId, timestamp });
+  const fullTimestamp = new Date(timestamp).toISOString();
+  setElementDataset(element, { logId, groupId, timestamp: fullTimestamp });
   initToggleIcon(element, false);
 
   const headerLabel = element.querySelector('.tool-use-title');
   const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
   const contentElem = element.querySelector('.banner-content');
 
-  if (iconElem) iconElem.className = `codicon ${iconClass}`;
+  if (iconElem instanceof HTMLElement) {
+    iconElem.className = `codicon ${iconClass}`;
+  }
   element.classList.remove('tool-use-error');
 
-  return { element, headerLabel, iconElem, contentElem };
+  return {
+    element,
+    headerLabel: headerLabel instanceof HTMLElement ? headerLabel : null,
+    iconElem: iconElem instanceof HTMLElement ? iconElem : null,
+    contentElem: contentElem instanceof HTMLElement ? contentElem : null,
+  };
 }
 
 /**
@@ -126,7 +169,12 @@ function createToolElement(logId, groupId, timestamp, iconClass) {
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} Tool use element or null
  */
-export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
+export function formatToolUse(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+  groupId: string | undefined,
+  timestamp: number,
+): HTMLElement | null {
   const { structured } = normalizedPayload ?? {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
@@ -186,19 +234,25 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     return element;
   }
 
-  const sections = [];
+  const sections: string[] = [];
 
   // Get file path from input for specialized formatting
   const filePath =
-    typeof input === 'object' && input !== null ? input.path : '';
+    typeof input === 'object' && input !== null && 'path' in input
+      ? String((input as { path?: string }).path ?? '')
+      : '';
 
   // Handle edit tools with diff display for input
   // Note: edit_file uses old_str/new_str field names
   // old_str must be non-empty, but new_str can be empty (deletion operation)
   if (
     TOOLS_WITH_DIFF_INPUT.has(toolName) &&
-    input?.old_str &&
-    typeof input?.new_str === 'string'
+    typeof input === 'object' &&
+    input !== null &&
+    'old_str' in input &&
+    'new_str' in input &&
+    typeof (input as { old_str?: string }).old_str === 'string' &&
+    typeof (input as { new_str?: string }).new_str === 'string'
   ) {
     if (filePath) {
       sections.push(
@@ -208,13 +262,19 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     sections.push(
       buildToolUseSection(
         'Changes:',
-        buildEditDiffSection(input.old_str, input.new_str),
+        buildEditDiffSection(
+          (input as { old_str: string }).old_str,
+          (input as { new_str: string }).new_str,
+        ),
       ),
     );
   }
   // Handle read tools with file link instead of full content
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
-    const range = input?.range;
+    const range =
+      typeof input === 'object' && input !== null && 'range' in input
+        ? (input as { range?: { start?: number; end?: number } }).range
+        : undefined;
     sections.push(
       buildToolUseSection(
         'File:',
@@ -229,14 +289,19 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   else if (
     TOOLS_WITH_FILE_CONTENT.has(toolName) &&
     filePath &&
-    input?.content !== undefined
+    typeof input === 'object' &&
+    input !== null &&
+    'content' in input
   ) {
     sections.push(
       buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
     );
     const contentLanguage = getLanguageFromPath(filePath);
+    const rawContent = (input as { content?: unknown }).content;
+    const contentText =
+      typeof rawContent === 'string' ? rawContent : String(rawContent ?? '');
     sections.push(
-      buildToolSection('Content:', input.content, {
+      buildToolSection('Content:', contentText, {
         toolName,
         language: contentLanguage,
       }),
@@ -332,7 +397,12 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} Web search element or null
  */
-export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
+export function formatWebSearch(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+  groupId: string | undefined,
+  timestamp: number,
+): HTMLElement | null {
   const toolElement = createToolElement(
     logId,
     groupId,
@@ -352,11 +422,15 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
     return null;
   }
 
-  const { query, results, provider, status } = structured;
+  const { query, results, provider, status } = structured as WebSearchPayload;
   const resultCount = Array.isArray(results) ? results.length : 0;
+  const providerKey = typeof provider === 'string' ? provider : 'web';
+  const statusKey = typeof status === 'string' ? status : '';
 
-  const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
-  const statusSuffix = STATUS_SUFFIXES[status] ?? '';
+  const providerLabel =
+    PROVIDER_LABELS[providerKey as keyof typeof PROVIDER_LABELS] ?? 'Web';
+  const statusSuffix =
+    STATUS_SUFFIXES[statusKey as keyof typeof STATUS_SUFFIXES] ?? '';
 
   let titleText = `${providerLabel} Search`;
   if (query) {
@@ -366,19 +440,21 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
-    iconElem.className = STATUS_ICONS[status] ?? 'codicon codicon-globe';
+    iconElem.className =
+      STATUS_ICONS[statusKey as keyof typeof STATUS_ICONS] ??
+      'codicon codicon-globe';
   }
-  element.classList.toggle('tool-use-error', status === 'failed');
+  element.classList.toggle('tool-use-error', statusKey === 'failed');
 
   // Build content sections
-  const sections = [];
+  const sections: string[] = [];
 
   if (query) {
     sections.push(buildToolUseSection('Query:', wrapInPre(query)));
   }
 
   if (resultCount > 0) {
-    const resultItems = results.map((r) => {
+    const resultItems = (results ?? []).map((r) => {
       const url = r.url || '';
       const title = encodeHtml(r.title || r.domain || url);
       const domainSuffix = r.domain
@@ -393,7 +469,7 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
         `<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems.join('')}</ul>`,
       ),
     );
-  } else if (status === 'completed') {
+  } else if (statusKey === 'completed') {
     sections.push(
       buildToolUseSection(
         'Sources:',

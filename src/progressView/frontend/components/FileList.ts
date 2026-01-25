@@ -66,14 +66,16 @@ export class FileList extends LitElement {
 
     const location = file.location;
     const relativePath =
-      location.kind === 'external'
-        ? location.absolutePath
-        : location.relativePath;
+      location.kind === 'workspace' || location.kind === 'runStorage'
+        ? location.relativePath
+        : location.absolutePath;
     const originalLocation = file.lineage?.original;
     const originalRelativePath =
-      originalLocation?.kind === 'external'
-        ? originalLocation.absolutePath
-        : originalLocation?.relativePath;
+      originalLocation &&
+      (originalLocation.kind === 'workspace' ||
+        originalLocation.kind === 'runStorage')
+        ? originalLocation.relativePath
+        : originalLocation?.absolutePath;
     const displayPath = originalRelativePath || relativePath;
     const normalizedPath = displayPath.replaceAll('\\', '/');
     const lastSlash = normalizedPath.lastIndexOf('/');

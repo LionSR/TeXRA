@@ -2,15 +2,15 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - progress view constants
-import { ELEMENT_IDS } from '../constants';
-import type { ContextState } from '../store';
-
 // Local imports - shared schemas
 import type { TokenUsageStats } from '@shared/schemas';
 
 // Local imports - progress view formatters
 import { formatTokens } from '../formatters/timestampUtils';
+
+// Local imports - progress view constants
+import { ELEMENT_IDS } from '../constants';
+import type { ContextState } from '../store';
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {

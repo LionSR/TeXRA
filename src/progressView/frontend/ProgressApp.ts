@@ -27,13 +27,6 @@ import {
   ToolEditApprovalPromptSchema,
   UpdateTaskGroupPayloadSchema,
 } from '@shared/schemas';
-import type {
-  InstructionUpdate,
-  OutputFileInfo,
-  StreamTabId,
-  StreamTabInfo,
-  TaskGroup,
-} from '@shared/schemas';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -50,6 +43,15 @@ import {
   type StreamFilter,
   type StreamSort,
 } from './store';
+
+// Local imports - shared schemas (types)
+import type {
+  InstructionUpdate,
+  OutputFileInfo,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+} from '@shared/schemas';
 
 // Local imports - progress view components
 import './components/StreamTabs';
@@ -87,7 +89,7 @@ const UpdateStreamsMessageSchema = z.object({
 
 const UpdateLogsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
-  stream: StreamTabIdSchema,
+  stream: z.union([StreamTabIdSchema, z.literal('')]),
   messages: z.array(LogMessageDataSchema),
   groups: z.array(TaskGroupSchema).optional(),
   action: z.enum(['render', 'clear']).optional(),
@@ -835,6 +837,22 @@ export class ProgressApp extends BaseWebviewApp {
     if (!result.success) return;
     const { stream, messages, groups, action } = result.data;
 
+    if (!stream && action === 'clear') {
+      this.state = { ...this.state, streamStates: new Map() };
+      this.logListRef.value?.renderLogs({
+        streamId: '',
+        messages: [],
+        groups: [],
+        action: 'clear',
+        activeRunId: null,
+        runInstructions: null,
+      });
+      return;
+    }
+    if (!stream) {
+      return;
+    }
+
     this.setStreamState(stream, (prev) => {
       const next = { ...prev };
       if (action === 'clear') {
@@ -976,6 +994,21 @@ export class ProgressApp extends BaseWebviewApp {
     const result = UpdateMissingOutputsMessageSchema.safeParse(raw);
     if (!result.success) return;
     const { stream, runId, rounds, reset } = result.data;
+    if (reset && !runId) {
+      this.setStreamState(stream, (prev) => ({
+        ...prev,
+        runMissingOutputs: {},
+      }));
+      return;
+    }
+    if (reset && runId && !rounds) {
+      this.setStreamState(stream, (prev) => {
+        const runMissingOutputs = { ...prev.runMissingOutputs };
+        delete runMissingOutputs[runId];
+        return { ...prev, runMissingOutputs };
+      });
+      return;
+    }
     if (!runId || !rounds) return;
     this.setStreamState(stream, (prev) => {
       const runMissingOutputs = reset ? {} : { ...prev.runMissingOutputs };
