@@ -1,17 +1,17 @@
 // Local imports - agent types
-import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
-import type { ToolResult } from '@tools/result';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import type { ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports - shared YOLO state (cleanup handled by toolEditApproval.ts)
 import { isApprovalBypassedForStream } from './toolEditApproval';
+import type { StreamTabId } from '@shared/schemas';
 
 export interface BashApprovalRequest {
   command: string;

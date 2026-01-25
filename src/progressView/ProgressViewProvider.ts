@@ -2,10 +2,8 @@
 import * as vscode from 'vscode';
 
 // Internal imports
-import type { OutputFileInfo } from '@shared/schemas';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
-import type { StreamTabId, StorageKey } from '@shared/schemas';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -13,16 +11,18 @@ import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type {
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@shared/schemas';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { ApprovalRequestHandler, WebviewUpdater } from './managers';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
+import type {
+  ToolEditApprovalPrompt,
+  BashApprovalPrompt,
+  AgentProposalPrompt,
+} from '@shared/schemas';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
+import type { OutputFileInfo } from '@shared/schemas';
 
 // Types
 

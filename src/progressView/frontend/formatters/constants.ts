@@ -3,10 +3,10 @@
  */
 
 // Local imports - shared schemas
+import { getBasename } from '@shared/utils/path';
 import type { LogLevel } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
 
 export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   error: '🔴',

@@ -13,7 +13,6 @@ import {
 } from '../litTemplates';
 
 // Local imports - shared schemas
-import type { WebSearchPayload } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -24,6 +23,7 @@ import {
   buildEditDiffSection,
   buildCodeBlock,
   initToggleIcon,
+  buildDetailsSummary,
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
@@ -36,6 +36,7 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
+import type { WebSearchPayload } from '@shared/schemas';
 
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
@@ -300,11 +301,12 @@ export function formatToolUse(
         'tool-use-user-feedback': isUserFeedback,
       })}
     >
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class=${`codicon ${iconClass}`}></i>
-        <span class="tool-use-title">${titleText}</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass,
+        label: titleText,
+        labelClass: 'tool-use-title',
+        includeIconClass: false,
+      })}
       <div
         class="banner-content log-entry-content"
         data-log-id=${ifDefined(logId)}

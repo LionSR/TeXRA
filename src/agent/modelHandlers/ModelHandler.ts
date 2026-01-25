@@ -5,6 +5,7 @@ import { FinishReason } from '@google/genai';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
@@ -14,7 +15,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Internal imports
 import {

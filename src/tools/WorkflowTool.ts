@@ -11,6 +11,13 @@ import { z } from 'zod';
 
 // Local imports - agent
 import {
+  AGENT_CATEGORY,
+  WorkflowAgentProposalSchema,
+  ToolUseAgentProposalSchema,
+  type WorkflowAgentProposal,
+  type ToolUseAgentProposal,
+} from '@shared/schemas';
+import {
   getAgent,
   getVisibleWorkflowAgents,
   getVisibleToolUseAgents,
@@ -35,13 +42,6 @@ import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - shared schemas
-import {
-  AGENT_CATEGORY,
-  WorkflowAgentProposalSchema,
-  ToolUseAgentProposalSchema,
-  type WorkflowAgentProposal,
-  type ToolUseAgentProposal,
-} from '@shared/schemas';
 
 // ============================================================================
 // Shared utilities

@@ -64,3 +64,14 @@
   margin: 0;
   border-radius: 0;
 }
+
+/* Remove whitespace from template literal formatting */
+.code-block pre code {
+  display: block;
+}
+
+/* Trim leading/trailing whitespace in pre elements */
+.code-block pre::before,
+.code-block pre::after {
+  content: none;
+}

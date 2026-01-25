@@ -1,6 +1,3 @@
-// Local imports - shared schemas
-import type { LogMessageData, StreamTabId } from '@shared/schemas';
-
 // Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
@@ -12,6 +9,9 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+
+// Type imports
+import type { LogMessageData, StreamTabId } from '@shared/schemas';
 
 /**
  * Manages stream tabs collection with persistence.

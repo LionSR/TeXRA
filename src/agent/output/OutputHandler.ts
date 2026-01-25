@@ -3,19 +3,6 @@ import { diff_match_patch } from 'diff-match-patch';
 import { z } from 'zod';
 
 // Local imports - agent
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentWorkflowSetting,
-  requireWorkflowSetting,
-} from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@shared/schemas';
-import type { DiffStats } from '@agent/types/DiffTypes';
-import { normalizeRunId } from '@common/constants/runIds';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   FileLocationSchema,
   MESSAGE_TYPES,
@@ -26,18 +13,31 @@ import {
   OutputFileInfoSchema,
   OutputXmlSummarySchema,
 } from '@shared/schemas';
+import type { DiffStats } from '@agent/types/DiffTypes';
+import {
+  AgentSetting,
+  AgentWorkflowSetting,
+  requireWorkflowSetting,
+} from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { normalizeRunId } from '@common/constants/runIds';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
   getComparablePath,
 } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { countLines } from '@utils/text/stringUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
+import type { StorageKey } from '@shared/schemas';
 
 import type { IOutputHandler } from './IOutputHandler';
 import type { RoundFileMapping } from './types';

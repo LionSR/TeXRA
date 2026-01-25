@@ -42,17 +42,23 @@ import {
 } from '@shared/schemas';
 
 // Local imports - progress view
-import type { PromptState } from './components/PromptOverlay';
-import type { FrontendEventHandlerContext } from './eventHandlers';
 import {
   createEmptyStreamState,
   getEffectiveRunId,
   getStreamState,
+  isToolUseState,
+  isWorkflowState,
   type ProgressState,
-  type StreamFilter,
   type StreamState,
 } from './store';
-import { resolveActiveRunId, updateNestedRounds } from './stateUtils';
+import {
+  resolveActiveRunId,
+  updateNestedRounds,
+  updateToolUseState,
+  updateWorkflowState,
+} from './stateUtils';
+import type { PromptState } from './components/PromptOverlay';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 
 /**
  * Stores pending log updates that arrive before their APPEND_LOG.
@@ -105,10 +111,12 @@ function removePrompt(
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
+  backendStates?: Record<string, unknown>,
 ): ProgressState {
   const nextStates = new Map(state.streamStates);
   const knownStreams = new Set(streams.map((stream) => stream.name));
 
+  // Remove states for streams that no longer exist
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
@@ -116,8 +124,20 @@ function updateStreamInfo(
   }
 
   for (const stream of streams) {
-    const existing = nextStates.get(stream.name) ?? createEmptyStreamState();
-    nextStates.set(stream.name, { ...existing, info: stream });
+    // Use backend state if provided (source of truth), otherwise create/update locally
+    const backendState = backendStates?.[stream.name] as
+      | StreamState
+      | undefined;
+    if (backendState) {
+      // Backend provides discriminated state - use it directly with info
+      nextStates.set(stream.name, { ...backendState, info: stream });
+    } else {
+      // Fallback: create state locally (for backwards compatibility)
+      const existing =
+        nextStates.get(stream.name) ??
+        createEmptyStreamState(stream.agentCategory);
+      nextStates.set(stream.name, { ...existing, info: stream });
+    }
   }
 
   return { ...state, streams, streamStates: nextStates };
@@ -133,7 +153,15 @@ export function handleUpdateStreams(
   const previousState = ctx.getState();
   const previousStreamId = previousState.activeStreamId;
   const activeStream = result.data.activeStream ?? null;
-  const updated = updateStreamInfo(previousState, result.data.streams);
+  // Use backend-provided stream states (source of truth) when available
+  const backendStates = result.data.streamStates as
+    | Record<string, unknown>
+    | undefined;
+  const updated = updateStreamInfo(
+    previousState,
+    result.data.streams,
+    backendStates,
+  );
 
   ctx.setState(() => ({
     ...updated,
@@ -188,36 +216,46 @@ export function handleUpdateLogs(
       contextState,
     } = result.data;
 
-    return {
+    // Base fields shared by all stream types
+    const baseUpdate = {
       ...prev,
       logs: isClear ? [] : messages,
       taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
-      activeRunId: activeRunId ?? prev.activeRunId,
-      runInstructions: runInstructions
-        ? { ...prev.runInstructions, ...runInstructions }
-        : prev.runInstructions,
-      runUsage: runUsage ? { ...prev.runUsage, ...runUsage } : prev.runUsage,
-      runFiles: runFiles ? { ...prev.runFiles, ...runFiles } : prev.runFiles,
-      runMissingOutputs: runMissingOutputs
-        ? { ...prev.runMissingOutputs, ...runMissingOutputs }
-        : prev.runMissingOutputs,
       contextState: contextState ?? prev.contextState,
     };
+
+    // Workflow-specific fields only apply to workflow streams
+    if (isWorkflowState(prev)) {
+      return {
+        ...baseUpdate,
+        activeRunId: activeRunId ?? prev.activeRunId,
+        runInstructions: runInstructions
+          ? { ...prev.runInstructions, ...runInstructions }
+          : prev.runInstructions,
+        runUsage: runUsage ? { ...prev.runUsage, ...runUsage } : prev.runUsage,
+        runFiles: runFiles ? { ...prev.runFiles, ...runFiles } : prev.runFiles,
+        runMissingOutputs: runMissingOutputs
+          ? { ...prev.runMissingOutputs, ...runMissingOutputs }
+          : prev.runMissingOutputs,
+      };
+    }
+
+    return baseUpdate;
   });
 
   const state = ctx.getState();
   if (state.activeStreamId === stream) {
     const streamState = getStreamState(state, stream);
-    const isToolUse =
-      (streamState.info?.agentCategory ?? AGENT_CATEGORY.WORKFLOW) ===
-      AGENT_CATEGORY.TOOL_USE;
+    const isToolUse = isToolUseState(streamState);
     logList?.renderLogs({
       streamId: stream,
       messages: streamState.logs,
       groups: streamState.taskGroups,
       action: action ?? 'render',
       activeRunId: getEffectiveRunId(streamState),
-      runInstructions: streamState.runInstructions,
+      runInstructions: isWorkflowState(streamState)
+        ? streamState.runInstructions
+        : null,
       isToolUse,
     });
   }
@@ -350,7 +388,7 @@ export function handleUpdateFiles(
   if (!result.success) return;
 
   const { stream, ...update } = result.data;
-  ctx.setStreamState(stream, (prev) => ({
+  updateWorkflowState(ctx, stream, (prev) => ({
     ...prev,
     runFiles: updateNestedRounds(prev.runFiles, update),
   }));
@@ -364,7 +402,7 @@ export function handleUpdateMissingOutputs(
   if (!result.success) return;
 
   const { stream, ...update } = result.data;
-  ctx.setStreamState(stream, (prev) => ({
+  updateWorkflowState(ctx, stream, (prev) => ({
     ...prev,
     runMissingOutputs: updateNestedRounds(prev.runMissingOutputs, update),
   }));
@@ -380,10 +418,9 @@ export function handleUpdateInstruction(
   const { stream, instruction } = result.data;
   if (!stream) return;
 
-  ctx.setStreamState(stream, (prev) => {
+  updateWorkflowState(ctx, stream, (prev) => {
     const runId = resolveActiveRunId(prev) ?? 'default';
     const { [runId]: _, ...rest } = prev.runInstructions;
-
     return {
       ...prev,
       runInstructions: instruction ? { ...rest, [runId]: instruction } : rest,
@@ -398,7 +435,7 @@ export function handleUpdateQueuedFollowUps(
   const result = UpdateQueuedFollowUpsMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.setStreamState(result.data.stream, (prev) => ({
+  updateToolUseState(ctx, result.data.stream, (prev) => ({
     ...prev,
     queuedFollowUps: result.data.messages,
   }));
@@ -412,7 +449,7 @@ export function handleUpdateRunUsage(
   if (!result.success) return;
 
   const { stream, runId, usage } = result.data;
-  ctx.setStreamState(stream, (prev) => ({
+  updateWorkflowState(ctx, stream, (prev) => ({
     ...prev,
     runUsage: { ...prev.runUsage, [runId]: usage },
   }));
@@ -481,7 +518,7 @@ export function handleUpdateTodos(
   const result = UpdateTodosMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.setStreamState(result.data.stream, (prev) => ({
+  updateToolUseState(ctx, result.data.stream, (prev) => ({
     ...prev,
     todos: result.data.todos,
   }));
@@ -512,7 +549,7 @@ export function handleUpdateToolEditApprovalState(
   const result = UpdateToolEditApprovalStateMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.setStreamState(result.data.stream, (prev) => ({
+  updateToolUseState(ctx, result.data.stream, (prev) => ({
     ...prev,
     toolEditBypass: result.data.bypassActive,
   }));
@@ -582,7 +619,7 @@ export function handleFollowUpTextPolished(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
-  ctx.setStreamState(streamId, (prev) => ({
+  updateToolUseState(ctx, streamId, (prev) => ({
     ...prev,
     followUpText: result.data.text,
   }));
@@ -734,7 +771,7 @@ export function handleUpdateUsage(
   if (!result.success) return;
 
   const { stream, usage } = result.data;
-  ctx.setStreamState(stream, (prev) => ({
+  updateWorkflowState(ctx, stream, (prev) => ({
     ...prev,
     runUsage: usage,
   }));

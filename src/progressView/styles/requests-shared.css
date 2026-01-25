@@ -2,10 +2,13 @@
  * Shared styles for approval-requests, retry-requests, and workflow-proposals
  */
 
-.approval-requests,
-.bash-approval-requests,
-.retry-requests,
-.workflow-proposals {
+/* Request container base */
+:is(
+  .approval-requests,
+  .bash-approval-requests,
+  .retry-requests,
+  .workflow-proposals
+) {
   margin: var(--spacing-large) 0;
   padding: var(--spacing-large);
   border-radius: var(--border-radius-large);
@@ -15,17 +18,22 @@
   gap: var(--spacing-large);
 }
 
-.approval-requests.is-visible,
-.bash-approval-requests.is-visible,
-.retry-requests.is-visible,
-.workflow-proposals.is-visible {
+:is(
+  .approval-requests,
+  .bash-approval-requests,
+  .retry-requests,
+  .workflow-proposals
+).is-visible {
   display: flex;
 }
 
-.approval-requests__header,
-.bash-approval-requests__header,
-.retry-requests__header,
-.workflow-proposals__header {
+/* Request headers */
+:is(
+  .approval-requests__header,
+  .bash-approval-requests__header,
+  .retry-requests__header,
+  .workflow-proposals__header
+) {
   display: flex;
   align-items: center;
   gap: var(--spacing-medium);
@@ -33,19 +41,25 @@
   color: var(--vscode-editor-foreground);
 }
 
-.approval-requests__list,
-.bash-approval-requests__list,
-.retry-requests__list,
-.workflow-proposals__list {
+/* Request lists */
+:is(
+  .approval-requests__list,
+  .bash-approval-requests__list,
+  .retry-requests__list,
+  .workflow-proposals__list
+) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-large);
 }
 
-.approval-request,
-.bash-approval-request,
-.retry-request,
-.workflow-proposal {
+/* Individual request items */
+:is(
+  .approval-request,
+  .bash-approval-request,
+  .retry-request,
+  .workflow-proposal
+) {
   display: flex;
   flex-direction: column;
   border-radius: var(--border-radius);
@@ -55,17 +69,20 @@
   gap: var(--spacing-medium);
 }
 
-.approval-request__details,
-.bash-approval-request__details,
-.retry-request__details,
-.workflow-proposal__details {
+/* Request details */
+:is(
+  .approval-request__details,
+  .bash-approval-request__details,
+  .retry-request__details,
+  .workflow-proposal__details
+) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-small);
 }
 
-.approval-request__meta,
-.retry-request__meta {
+/* Request meta */
+:is(.approval-request__meta, .retry-request__meta) {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   display: flex;
@@ -74,35 +91,46 @@
   flex-wrap: wrap;
 }
 
-.approval-request__actions,
-.bash-approval-request__actions,
-.retry-request__actions,
-.workflow-proposal__actions {
+/* Request actions */
+:is(
+  .approval-request__actions,
+  .bash-approval-request__actions,
+  .retry-request__actions,
+  .workflow-proposal__actions
+) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-small);
 }
 
-.approval-request__actions::part(container),
-.bash-approval-request__actions::part(container),
-.retry-request__actions::part(container),
-.workflow-proposal__actions::part(container) {
+:is(
+  .approval-request__actions,
+  .bash-approval-request__actions,
+  .retry-request__actions,
+  .workflow-proposal__actions
+)::part(container) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-small);
 }
 
-.approval-request__actions vscode-toolbar-button,
-.bash-approval-request__actions vscode-toolbar-button,
-.retry-request__actions vscode-toolbar-button,
-.workflow-proposal__actions vscode-toolbar-button {
+:is(
+    .approval-request__actions,
+    .bash-approval-request__actions,
+    .retry-request__actions,
+    .workflow-proposal__actions
+  )
+  vscode-toolbar-button {
   min-width: auto;
 }
 
-.approval-request__actions vscode-toolbar-button::part(control),
-.bash-approval-request__actions vscode-toolbar-button::part(control),
-.retry-request__actions vscode-toolbar-button::part(control),
-.workflow-proposal__actions vscode-toolbar-button::part(control) {
+:is(
+    .approval-request__actions,
+    .bash-approval-request__actions,
+    .retry-request__actions,
+    .workflow-proposal__actions
+  )
+  vscode-toolbar-button::part(control) {
   justify-content: flex-start;
   gap: var(--spacing-small);
 }

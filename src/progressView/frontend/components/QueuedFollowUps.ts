@@ -1,8 +1,12 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
+
+// Local imports - shared styles
+// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -11,11 +15,64 @@ const MAX_MESSAGE_LENGTH = 200;
 
 @customElement('queued-follow-ups')
 export class QueuedFollowUps extends LitElement {
-  @property({ type: Array }) messages: string[] = [];
+  static styles = [
+    codiconStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
+      :host([hidden]) {
+        display: none;
+      }
+
+      .queued-follow-ups-collapsible {
+        border-radius: var(--border-radius);
+        background-color: var(--vscode-inputValidation-infoBackground);
+        border: 1px solid var(--vscode-inputValidation-infoBorder);
+      }
+
+      .queued-follow-ups-collapsible::part(header) {
+        font-weight: 500;
+        background-color: transparent;
+      }
+
+      .queued-follow-ups-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
+
+      .queued-follow-up-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) var(--spacing-small);
+        font-size: var(--font-size);
+        line-height: 1.4;
+        background-color: var(--vscode-editor-background);
+        border-radius: var(--border-radius-small);
+        border: var(--border-thin) solid var(--color-border);
+      }
+
+      .queued-follow-up-icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-icon-sm);
+        line-height: 1.4;
+        margin-top: var(--border-thin);
+        color: var(--vscode-inputValidation-infoBorder);
+      }
+
+      .queued-follow-up-text {
+        flex: 1;
+        word-break: break-word;
+        white-space: pre-wrap;
+        color: var(--vscode-foreground);
+      }
+    `,
+  ];
+
+  @property({ type: Array }) messages: string[] = [];
 
   private truncateMessage(message: string): {
     display: string;

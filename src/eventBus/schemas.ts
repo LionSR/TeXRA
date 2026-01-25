@@ -3,7 +3,6 @@
  * Types are derived from schemas for single source of truth.
  */
 import { z } from 'zod';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   AddTaskGroupPayloadSchema,
   UpdateTaskGroupPayloadSchema,
@@ -12,6 +11,7 @@ import {
   ExecutionIdSchema,
   StorageKeySchema,
 } from '@shared/schemas';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
 /**
