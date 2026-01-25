@@ -147,7 +147,7 @@ export class ProgressApp extends BaseWebviewApp {
 
     return html`
       <div class="main-container">
-        <vscode-split-layout split="vertical" initial-handle-position="72%">
+        <vscode-split-layout initial-handle-position="80%">
           <div slot="start" class="content-area">
             ${activeStream
               ? html`

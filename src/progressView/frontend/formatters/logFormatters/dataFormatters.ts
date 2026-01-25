@@ -5,12 +5,18 @@
 // Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - shared utilities
 import { encodeHtml } from '@shared/utils/html';
 import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
-import { MissingOutputsPayloadSchema } from '@shared/schemas';
+import {
+  FileListEntrySchema,
+  MissingOutputsPayloadSchema,
+} from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -18,7 +24,6 @@ import {
   initToggleIcon,
   buildFileLink,
 } from '../htmlBuilders';
-import { normalizeFileListData } from '../logDataParsers';
 import { formatTokens } from '../timestampUtils';
 
 type DiffResultEntry = Record<string, unknown>;
@@ -36,11 +41,11 @@ export function formatFileList(
   const summaryElem = element.querySelector('.summary-text');
   initToggleIcon(element, false);
 
-  // Parse and normalize file list data using Zod schema
-  const parsed = normalizeFileListData(data);
+  // Validate with Zod schema - renderer handles display field computation
+  const parseResult = z.array(FileListEntrySchema).safeParse(data);
 
   // Raw fallback when parsing fails
-  if (!parsed) {
+  if (!parseResult.success) {
     if (summaryElem instanceof HTMLElement) {
       summaryElem.textContent = 'Files (raw)';
     }
@@ -51,7 +56,7 @@ export function formatFileList(
     return element;
   }
 
-  const renderData = buildFileListRender(parsed);
+  const renderData = buildFileListRender(parseResult.data);
   if (summaryElem instanceof HTMLElement) {
     summaryElem.textContent = renderData?.summary ?? 'Files';
   }

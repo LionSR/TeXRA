@@ -33,22 +33,22 @@
 
 **Mixed State (Lit components using non-Lit patterns):**
 
-| Priority | Issue                         | Location                    | Resolution Phase | Notes                                              |
-| -------- | ----------------------------- | --------------------------- | ---------------- | -------------------------------------------------- |
-| High     | JS utility imports            | `FollowUpInput.ts`          | Phase 3b-2       | `textareaUtils.js`, `RecordingButtonManager.js`    |
-| High     | Formatters return HTMLElement | `formatters/*.ts` (6 files) | Phase 3b-3       | Convert to `TemplateResult` for Lit rendering      |
-| High     | `LogList` uses innerHTML      | `components/LogList.ts`     | Phase 3b-3       | Integrate formatters into Lit reactive rendering   |
-| High     | `TaskGroupDomManager` manual  | `managers/TaskGroupDomManager.ts` | Phase 3b-3  | Convert to Lit component or integrate into parent  |
-| Medium   | `htmlBuilders.ts` strings     | `formatters/htmlBuilders.ts`| Phase 3b-3       | Convert to Lit template functions                  |
-| Medium   | `templates.ts` cloning        | `frontend/templates.ts`     | Phase 3b-3       | Delete after formatters converted                  |
+| Priority | Issue                         | Location                          | Resolution Phase | Notes                                             |
+| -------- | ----------------------------- | --------------------------------- | ---------------- | ------------------------------------------------- |
+| High     | JS utility imports            | `FollowUpInput.ts`                | Phase 3b-2       | `textareaUtils.js`, `RecordingButtonManager.js`   |
+| High     | Formatters return HTMLElement | `formatters/*.ts` (6 files)       | Phase 3b-3       | Convert to `TemplateResult` for Lit rendering     |
+| High     | `LogList` uses innerHTML      | `components/LogList.ts`           | Phase 3b-3       | Integrate formatters into Lit reactive rendering  |
+| High     | `TaskGroupDomManager` manual  | `managers/TaskGroupDomManager.ts` | Phase 3b-3       | Convert to Lit component or integrate into parent |
+| Medium   | `htmlBuilders.ts` strings     | `formatters/htmlBuilders.ts`      | Phase 3b-3       | Convert to Lit template functions                 |
+| Medium   | `templates.ts` cloning        | `frontend/templates.ts`           | Phase 3b-3       | Delete after formatters converted                 |
 
 **Other Technical Debt:**
 
-| Priority | Issue                  | Location                           | Notes                                                |
-| -------- | ---------------------- | ---------------------------------- | ---------------------------------------------------- |
-| High     | UI regressions         | Various                            | Ongoing testing required (Phase 3b-1)                |
-| Medium   | Inline param types     | `formatters/*.ts`                  | Extract interfaces for complex param objects         |
-| Low      | TodoList repeat key    | `TodoList.ts`                      | Use unique ID instead of `content-status`            |
+| Priority | Issue               | Location          | Notes                                        |
+| -------- | ------------------- | ----------------- | -------------------------------------------- |
+| High     | UI regressions      | Various           | Ongoing testing required (Phase 3b-1)        |
+| Medium   | Inline param types  | `formatters/*.ts` | Extract interfaces for complex param objects |
+| Low      | TodoList repeat key | `TodoList.ts`     | Use unique ID instead of `content-status`    |
 
 ### Remaining JS Codebase Analysis (2026-01-25)
 
@@ -61,6 +61,31 @@
 | `profileView/modules/` | 6     | ~636   | Low      | Static settings display                |
 | `historyView/modules/` | 7     | ~610   | Low      | Simple list/search UI                  |
 | `memoryView/modules/`  | 5     | ~305   | Low      | Simple toggle state UI                 |
+
+### Duplicate Constant Files to Delete
+
+Several JS constant files are duplicates of TypeScript sources or will be superseded during migration:
+
+| File                               | Lines | Duplicate Of                    | Delete When                       |
+| ---------------------------------- | ----- | ------------------------------- | --------------------------------- |
+| `common/webview/commands.js`       | 298   | `common/webview/commands.ts`    | **Immediate** - TS version exists |
+| `common/webview/themeHandlers.js`  | ~50   | N/A                             | Phase 3a - migrate to TS          |
+| `historyView/modules/constants.js` | 37    | Will be `frontend/constants.ts` | Phase 3c - HistoryView migration  |
+| `profileView/modules/constants.js` | 41    | Will be `frontend/constants.ts` | Phase 3c - ProfileView migration  |
+| `memoryView/modules/constants.js`  | 24    | Will be `frontend/constants.ts` | Phase 3c - MemoryView migration   |
+| `webview/modules/constants.js`     | 162   | Will be `frontend/constants.ts` | Phase 3c - MainView migration     |
+
+**Pattern:** Each view's `modules/constants.js` contains:
+
+1. Re-export of view commands from `@common/webview/commands.js`
+2. View-specific `ELEMENT_IDS`, `CLASS_NAMES`, `LABELS`
+
+**After migration:** Each view will have `frontend/constants.ts` (like ProgressView already has) that:
+
+1. Imports from `@common/webview/commands.ts` (TypeScript)
+2. Defines view-specific constants with proper types
+
+**Total duplicate lines to delete:** ~612 lines
 
 ---
 
@@ -91,47 +116,81 @@ Phase 3a enables type-safe imports; Phase 3c rewrites UI.
 
 ### Completed Migrations (2026-01-25)
 
-The following pure-function utilities have been migrated to `src/shared/utils/`:
+**Utilities migrated to `src/shared/utils/`:**
 
-| JS Original | TS Replacement | Status |
-|-------------|----------------|--------|
-| `htmlEncoding.js` | `@shared/utils/html.ts` | ✅ Done |
-| `iconConstants.js` | `@shared/utils/icons.ts` | ✅ Done |
-| `pathUtils.js` | `@shared/utils/path.ts` | ✅ Done |
-| `stringUtils.js` | `@shared/utils/string.ts` | ✅ Done |
+| JS Original          | TS Replacement              | Status  |
+| -------------------- | --------------------------- | ------- |
+| `htmlEncoding.js`    | `@shared/utils/html.ts`     | ✅ Done |
+| `iconConstants.js`   | `@shared/utils/icons.ts`    | ✅ Done |
+| `pathUtils.js`       | `@shared/utils/path.ts`     | ✅ Done |
+| `stringUtils.js`     | `@shared/utils/string.ts`   | ✅ Done |
+| `clipboardUtils.js`  | `@shared/utils/clipboard.ts`| ✅ Done |
+| `domUtils.js` (partial) | `@shared/utils/dom.ts`   | ✅ Done |
 
-### Remaining JS Utilities (ProgressView-only)
+**State managers migrated to `src/shared/state/`:**
 
-**Key Finding**: All remaining JS utilities are **only imported by ProgressView**. No other webviews use them. This means they can be:
-1. Migrated to `src/shared/utils/` if they're truly reusable
-2. Migrated into `src/progressView/frontend/` if they're ProgressView-specific
-3. Replaced entirely by Lit patterns (especially for DOM manipulation)
+| JS Original          | TS Replacement                       | Status  |
+| -------------------- | ------------------------------------ | ------- |
+| `ToggleStateStore.js`| `@shared/state/ToggleStateStore.ts`  | ✅ Done |
+| `webviewState.js`    | `@shared/state/WebviewStateManager.ts`| ✅ Done |
 
-| JS File | Usages | Scope | Recommended Approach |
-|---------|--------|-------|---------------------|
-| `templateUtils.js` | 7 | ProgressView-only | Replace with Lit templates |
-| `domUtils.js` | 3 | ProgressView-only | Migrate radio helpers to shared; rest replace with Lit |
-| `ToggleStateStore.js` | 2 | ProgressView-only | Migrate to `@shared/state/` |
-| `clipboardUtils.js` | 2 | Reusable | Migrate to `@shared/utils/clipboard.ts` |
-| `dropdownUtils.js` | 1 | ProgressView-only | Keep as progressView local util until other views need it |
-| `webviewState.js` | 1 | ProgressView-only | Migrate to `@shared/state/` |
-| `textareaUtils.js` | 1 | ProgressView-only | Keep as progressView local util |
-| `RecordingButtonManager.js` | 1 | Reusable | Migrate to `@shared/components/` (used by MainView too) |
+**Migration stats:** JS imports reduced from 18 → 10 (44% reduction)
+
+### Remaining JS Utilities (Require Architectural Changes)
+
+**Key Finding**: All remaining JS utilities are **only imported by ProgressView**. They cannot be simply converted to TypeScript - they require Lit pattern replacement.
+
+| JS File                     | Usages | Resolution                                                |
+| --------------------------- | ------ | --------------------------------------------------------- |
+| `templateUtils.js`          | 7      | Replace `createFromTemplate()` with Lit `html` (Phase 3b-3) |
+| `dropdownUtils.js`          | 1      | Keep as local util; refactor when FollowupSection uses Lit fully |
+| `textareaUtils.js`          | 1      | Keep as local util; VS Code textarea upgrade helper |
+| `RecordingButtonManager.js` | 1      | Convert to Lit reactive controller (Phase 3b-2) |
+
+### Review Checklist (Verify Nothing Missed)
+
+Before considering Phase 3a complete, verify:
+
+- [ ] **No JS imports in Lit components** (except the 4 deferred above)
+- [ ] **All shared utilities have proper types** (no `any`, proper function signatures)
+- [ ] **Index files updated** (`src/shared/utils/index.ts`, `src/shared/state/index.ts`)
+- [ ] **Build compiles without errors** (`npm run compile`)
+- [ ] **Original JS files can be deleted** (after all consumers migrated)
+
+**Files to eventually delete from `src/common/modules/`:**
+
+```
+htmlEncoding.js      # ✅ Can delete - fully migrated
+iconConstants.js     # ✅ Can delete - fully migrated
+pathUtils.js         # ✅ Can delete - fully migrated
+stringUtils.js       # ✅ Can delete - fully migrated
+clipboardUtils.js    # ✅ Can delete - fully migrated
+ToggleStateStore.js  # ✅ Can delete - fully migrated
+webviewState.js      # ✅ Can delete - fully migrated
+domUtils.js          # ⏳ Keep - still has unused functions that other views may need
+templateUtils.js     # ⏳ Keep - used by formatters until Phase 3b-3
+dropdownUtils.js     # ⏳ Keep - used by FollowupSection
+textareaUtils.js     # ⏳ Keep - used by FollowUpInput
+RecordingButtonManager.js  # ⏳ Keep - used by FollowUpInput
+```
 
 ### Migration Strategy
 
 **Immediate (shared utilities):**
+
 - `clipboardUtils.js` → `@shared/utils/clipboard.ts`
 - `ToggleStateStore.js` → `@shared/state/ToggleStateStore.ts`
 - `webviewState.js` → `@shared/state/WebviewStateManager.ts`
 
 **Deferred (ProgressView-specific, replace with Lit patterns):**
+
 - `templateUtils.js` - Replace `createFromTemplate()` with Lit `html` templates
 - `domUtils.js` - Most functions become unnecessary with Lit; migrate `getRadioChangeValue`/`setRadioGroupValue` if needed
 - `dropdownUtils.js` - Keep as local util or inline into component
 - `textareaUtils.js` - Keep as local util or inline into component
 
 **Phase 3c (when MainView migrates):**
+
 - `RecordingButtonManager.js` → `@shared/components/RecordingButton.ts`
 
 ### Type Definitions Needed
@@ -189,6 +248,7 @@ View-specific JS modules will be **replaced** (not migrated) by Lit components:
 **Prerequisite:** Phase 2 migration complete (Lit components exist)
 
 **Goals:**
+
 1. Achieve full UI/UX parity with legacy JavaScript implementation
 2. Convert "mixed state" patterns to fully native Lit solutions
 
@@ -207,27 +267,30 @@ View-specific JS modules will be **replaced** (not migrated) by Lit components:
 
 ProgressView currently has Lit components that bypass reactive rendering. These should be converted to fully native Lit patterns:
 
-| Pattern | Current (Mixed) | Target (Native Lit) | Files Affected |
-|---------|-----------------|---------------------|----------------|
-| **Textarea utilities** | `awaitTextareaUpgrade()`, `insertTextAtCursor()` from JS | Use `@query` + `updateComplete`, Lit `live()` directive | `FollowUpInput.ts` |
-| **Recording manager** | `RecordingButtonManager.js` class | Convert to Lit reactive controller or child component | `FollowUpInput.ts` |
-| **Log formatters** | Return `HTMLElement` via `document.createElement()` | Return `TemplateResult` via `html\`...\`` | 6 formatter files |
-| **Task group DOM** | `TaskGroupDomManager` with manual DOM ops | Integrate into `TaskGroupList` Lit component | `TaskGroupDomManager.ts` |
-| **Log entry manager** | `LogEntryManager` with `innerHTML` | Integrate into `LogList` Lit component | `LogList.ts`, `TaskGroupDomManager.ts` |
-| **Template cloning** | `createFromTemplate()` from JS | Use Lit templates directly | `templates.ts`, formatters |
-| **HTML builders** | String concatenation → `innerHTML` | Template literals with `html\`...\`` | `htmlBuilders.ts` |
+| Pattern                | Current (Mixed)                                          | Target (Native Lit)                                     | Files Affected                         |
+| ---------------------- | -------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------- |
+| **Textarea utilities** | `awaitTextareaUpgrade()`, `insertTextAtCursor()` from JS | Use `@query` + `updateComplete`, Lit `live()` directive | `FollowUpInput.ts`                     |
+| **Recording manager**  | `RecordingButtonManager.js` class                        | Convert to Lit reactive controller or child component   | `FollowUpInput.ts`                     |
+| **Log formatters**     | Return `HTMLElement` via `document.createElement()`      | Return `TemplateResult` via `html\`...\``               | 6 formatter files                      |
+| **Task group DOM**     | `TaskGroupDomManager` with manual DOM ops                | Integrate into `TaskGroupList` Lit component            | `TaskGroupDomManager.ts`               |
+| **Log entry manager**  | `LogEntryManager` with `innerHTML`                       | Integrate into `LogList` Lit component                  | `LogList.ts`, `TaskGroupDomManager.ts` |
+| **Template cloning**   | `createFromTemplate()` from JS                           | Use Lit templates directly                              | `templates.ts`, formatters             |
+| **HTML builders**      | String concatenation → `innerHTML`                       | Template literals with `html\`...\``                    | `htmlBuilders.ts`                      |
 
 ### Conversion Strategy
 
 **Phase 3b-1: Stabilization (current)**
+
 - Fix remaining UI regressions
 - Keep mixed patterns working
 
 **Phase 3b-2: After Phase 3a (shared utils migrated)**
+
 - Convert `textareaUtils.js` → `@shared/utils/textarea.ts` with proper types
 - Convert `RecordingButtonManager.js` → Lit reactive controller
 
 **Phase 3b-3: After Phase 3c (other webviews done)**
+
 - Convert formatters from `HTMLElement` → `TemplateResult`
 - Refactor `LogList` to use Lit rendering instead of `innerHTML`
 - Refactor `TaskGroupDomManager` into proper Lit component
@@ -236,6 +299,7 @@ ProgressView currently has Lit components that bypass reactive rendering. These 
 ### Formatter Conversion Example
 
 **Current (returns HTMLElement):**
+
 ```typescript
 // formatters/logFormatters/bannerFormatters.ts
 export function formatBannerContent(
@@ -251,6 +315,7 @@ export function formatBannerContent(
 ```
 
 **Target (returns TemplateResult):**
+
 ```typescript
 // formatters/logFormatters/bannerFormatters.ts
 import { html, TemplateResult } from 'lit';
@@ -273,6 +338,7 @@ export function formatBannerContent(
 ```
 
 **Benefits:**
+
 - Type-safe templates (no string concatenation)
 - Lit's efficient DOM diffing
 - Declarative event binding (`@click=${handler}`)
@@ -316,11 +382,11 @@ export function formatBannerContent(
 
 **Phase 3b-2: Utility Conversion (after 3a)**
 
-| Item                                | Status         |
-| ----------------------------------- | -------------- |
-| `textareaUtils.js` → TypeScript     | ⬜ Not Started |
-| `RecordingButtonManager` → Lit      | ⬜ Not Started |
-| Remove JS imports from FollowUpInput| ⬜ Not Started |
+| Item                                 | Status         |
+| ------------------------------------ | -------------- |
+| `textareaUtils.js` → TypeScript      | ⬜ Not Started |
+| `RecordingButtonManager` → Lit       | ⬜ Not Started |
+| Remove JS imports from FollowUpInput | ⬜ Not Started |
 
 **Phase 3b-3: Formatter Conversion (after 3c)**
 
@@ -417,15 +483,15 @@ UPDATE: src/{viewName}/index.html
 
 **Message types:**
 
-| Command           | Direction          | Purpose                |
-| ----------------- | ------------------ | ---------------------- |
-| `GET_HISTORY_DATA`| webview → backend  | Request history list   |
-| `UPDATE_HISTORY`  | backend → webview  | Send history items     |
-| `RERUN_AGENT`     | webview → backend  | Re-execute agent       |
-| `RESTORE_AGENT`   | webview → backend  | Load config to main    |
-| `DELETE_AGENT`    | webview → backend  | Remove history item    |
-| `CLEAR_HISTORY`   | webview → backend  | Clear all history      |
-| `HISTORY_CLEARED` | backend → webview  | Confirm clear complete |
+| Command            | Direction         | Purpose                |
+| ------------------ | ----------------- | ---------------------- |
+| `GET_HISTORY_DATA` | webview → backend | Request history list   |
+| `UPDATE_HISTORY`   | backend → webview | Send history items     |
+| `RERUN_AGENT`      | webview → backend | Re-execute agent       |
+| `RESTORE_AGENT`    | webview → backend | Load config to main    |
+| `DELETE_AGENT`     | webview → backend | Remove history item    |
+| `CLEAR_HISTORY`    | webview → backend | Clear all history      |
+| `HISTORY_CLEARED`  | backend → webview | Confirm clear complete |
 
 **Key features to preserve:**
 
@@ -483,14 +549,14 @@ src/historyView/
 
 **Message types:**
 
-| Command              | Direction          | Purpose                    |
-| -------------------- | ------------------ | -------------------------- |
-| `GET_PROFILE_DATA`   | webview → backend  | Request user profile       |
-| `UPDATE_PROFILE`     | backend → webview  | Send profile data          |
-| `SELECT_AGENT`       | webview → backend  | Select remote agent        |
-| `SIGN_IN`            | webview → backend  | Initiate authentication    |
-| `SIGN_OUT`           | webview → backend  | Sign out user              |
-| `SET_API_ACCESS_MODE`| webview → backend  | Toggle included/personal   |
+| Command               | Direction         | Purpose                  |
+| --------------------- | ----------------- | ------------------------ |
+| `GET_PROFILE_DATA`    | webview → backend | Request user profile     |
+| `UPDATE_PROFILE`      | backend → webview | Send profile data        |
+| `SELECT_AGENT`        | webview → backend | Select remote agent      |
+| `SIGN_IN`             | webview → backend | Initiate authentication  |
+| `SIGN_OUT`            | webview → backend | Sign out user            |
+| `SET_API_ACCESS_MODE` | webview → backend | Toggle included/personal |
 
 **Key features to preserve:**
 
@@ -552,16 +618,16 @@ src/profileView/
 
 **Message types:**
 
-| Command                | Direction          | Purpose                    |
-| ---------------------- | ------------------ | -------------------------- |
-| `GET_MEMORY_DATA`      | webview → backend  | Request memory file list   |
-| `UPDATE_MEMORY`        | backend → webview  | Send memory items          |
-| `OPEN_MEMORY_FILE`     | webview → backend  | Open file in editor        |
-| `OPEN_MEMORY_FOLDER`   | webview → backend  | Open folder in OS explorer |
-| `DELETE_MEMORY`        | webview → backend  | Delete a memory file       |
-| `GET_MEMORY_ENABLED`   | webview → backend  | Query toggle state         |
-| `SET_MEMORY_ENABLED`   | webview → backend  | Update toggle state        |
-| `UPDATE_MEMORY_ENABLED`| backend → webview  | Confirm toggle state       |
+| Command                 | Direction         | Purpose                    |
+| ----------------------- | ----------------- | -------------------------- |
+| `GET_MEMORY_DATA`       | webview → backend | Request memory file list   |
+| `UPDATE_MEMORY`         | backend → webview | Send memory items          |
+| `OPEN_MEMORY_FILE`      | webview → backend | Open file in editor        |
+| `OPEN_MEMORY_FOLDER`    | webview → backend | Open folder in OS explorer |
+| `DELETE_MEMORY`         | webview → backend | Delete a memory file       |
+| `GET_MEMORY_ENABLED`    | webview → backend | Query toggle state         |
+| `SET_MEMORY_ENABLED`    | webview → backend | Update toggle state        |
+| `UPDATE_MEMORY_ENABLED` | backend → webview | Confirm toggle state       |
 
 **Key features to preserve:**
 
@@ -675,13 +741,13 @@ src/webview/
 
 ### Webview Migration Summary
 
-| Webview       | JS Lines | Components | Complexity | Estimate    |
-| ------------- | -------- | ---------- | ---------- | ----------- |
-| HistoryView   | ~610     | 4          | Moderate   | 3-4 days    |
-| ProfileView   | ~636     | 5          | Medium-High| 4-5 days    |
-| MemoryView    | ~305     | 5          | Low-Medium | 2-3 days    |
-| MainView      | ~2,259   | 8+         | High       | 2-3 weeks   |
-| **Total**     | ~3,810   | 22+        |            | ~4-5 weeks  |
+| Webview     | JS Lines | Components | Complexity  | Estimate   |
+| ----------- | -------- | ---------- | ----------- | ---------- |
+| HistoryView | ~610     | 4          | Moderate    | 3-4 days   |
+| ProfileView | ~636     | 5          | Medium-High | 4-5 days   |
+| MemoryView  | ~305     | 5          | Low-Medium  | 2-3 days   |
+| MainView    | ~2,259   | 8+         | High        | 2-3 weeks  |
+| **Total**   | ~3,810   | 22+        |             | ~4-5 weeks |
 
 ---
 
@@ -750,14 +816,14 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 ### Phase 3a (JS → TS Migration)
 
-| Metric                              | Before | Current | Target |
-| ----------------------------------- | ------ | ------- | ------ |
-| TS files in `src/shared/utils/`     | 0      | 5       | 8+     |
-| JS imports in ProgressView          | 12     | 8       | 0      |
-| Pure-function utils migrated        | 0      | 4       | 4      |
-| ProgressView-only utils remaining   | -      | 8       | 0*     |
+| Metric                            | Before | Current | Target |
+| --------------------------------- | ------ | ------- | ------ |
+| TS files in `src/shared/utils/`   | 0      | 5       | 8+     |
+| JS imports in ProgressView        | 12     | 8       | 0      |
+| Pure-function utils migrated      | 0      | 4       | 4      |
+| ProgressView-only utils remaining | -      | 8       | 0\*    |
 
-*ProgressView-only utilities will be migrated to Lit patterns or local TS in Phase 3b.
+\*ProgressView-only utilities will be migrated to Lit patterns or local TS in Phase 3b.
 
 ### Phase 3b (ProgressView Stabilization & Native Conversion)
 
@@ -777,12 +843,12 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 **3b-3: Formatter Conversion**
 
-| Metric                                | Before | After |
-| ------------------------------------- | ------ | ----- |
-| Formatters returning `HTMLElement`    | 15+    | 0     |
-| Manual `innerHTML` assignments        | 10+    | 0     |
-| `document.createElement()` calls      | 30+    | 0     |
-| String-based HTML builders            | 20+    | 0     |
+| Metric                             | Before | After |
+| ---------------------------------- | ------ | ----- |
+| Formatters returning `HTMLElement` | 15+    | 0     |
+| Manual `innerHTML` assignments     | 10+    | 0     |
+| `document.createElement()` calls   | 30+    | 0     |
+| String-based HTML builders         | 20+    | 0     |
 
 ### Phase 3c (Webview Migration)
 
@@ -851,6 +917,7 @@ Smaller webviews may not benefit as much from Lit migration.
 Search highlighting via mark.js may need adaptation for Lit's reactive rendering.
 
 **Mitigation**:
+
 - Use `ref()` directive to get DOM reference for mark.js
 - Re-apply marks in `updated()` lifecycle when items change
 - Consider extracting to reactive controller if pattern is useful elsewhere
@@ -860,6 +927,7 @@ Search highlighting via mark.js may need adaptation for Lit's reactive rendering
 The `vscode-checkbox` web component must be defined before setting `checked` property.
 
 **Mitigation**:
+
 - Use `customElements.whenDefined('vscode-checkbox')` before setting state
 - Or use Lit's `@query` with `updateComplete` promise
 

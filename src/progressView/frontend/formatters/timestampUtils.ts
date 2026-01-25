@@ -56,24 +56,3 @@ export function formatDuration(durationMs: number): string {
   if (seconds === 0) return `${minutes}min`;
   return `${minutes}min, ${seconds}sec`;
 }
-
-/**
- * Extracts timestamps from HTML messages.
- */
-export class MessageTimestampExtractor {
-  /** Extract timestamp from a log line element. */
-  extract(element: HTMLElement): string {
-    const logLine = element.classList.contains('log-line')
-      ? element
-      : element.querySelector('.log-line');
-    if (logLine instanceof HTMLElement && logLine.dataset.fullTimestamp) {
-      return logLine.dataset.fullTimestamp;
-    }
-
-    const text = logLine
-      ? (logLine.textContent ?? '')
-      : (element.textContent ?? '');
-    const match = text.match(/\[(.*?)\]/);
-    return match ? match[1] : '';
-  }
-}

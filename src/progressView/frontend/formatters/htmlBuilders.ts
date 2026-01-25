@@ -9,9 +9,10 @@ import hljs from 'highlight.js';
 // Local imports - shared utilities
 import { encodeHtml } from '@shared/utils/html';
 import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
+import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
-import type { NormalizedFileEntry } from '@shared/schemas';
+import type { FileListEntry } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -104,17 +105,19 @@ export function initToggleIcon(element: HTMLElement, expanded = false): void {
   }
 }
 
-/** Build rendered HTML for file list. */
+/** Build rendered HTML for file list. Computes display fields inline. */
 export function buildFileListRender(
-  files: NormalizedFileEntry[],
+  files: FileListEntry[],
 ): { items: string; summary: string } | null {
   if (!Array.isArray(files)) return null;
 
   const items = files
     .map((file) => {
       const icon = file.ok ? 'codicon-check' : 'codicon-warning';
-      const escaped = encodeHtml(file.filePath);
-      const fileNameEscaped = encodeHtml(file.fileName);
+      const filePath = file.path;
+      const escaped = encodeHtml(filePath);
+      const fileName = getBasename(filePath);
+      const fileNameEscaped = encodeHtml(fileName);
 
       const metaParts = [];
       if (file.varName) {
@@ -122,8 +125,9 @@ export function buildFileListRender(
           `<span class="file-var">[${encodeHtml(file.varName)}]</span>`,
         );
       }
-      if (file.source && file.source !== 'unknown') {
-        const sourceDisplay = encodeHtml(file.sourceDisplay);
+      const source = file.source ?? 'unknown';
+      if (source !== 'unknown') {
+        const sourceDisplay = encodeHtml(file.sourceDisplay ?? source);
         const sourceText = file.internal
           ? `${sourceDisplay}, internal`
           : sourceDisplay;
@@ -148,21 +152,6 @@ export function buildFileLink(filePath: string, displayName: string): string {
     return `<span>${encodeHtml(displayName)}</span>`;
   }
   return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}">${encodeHtml(displayName)}</span>`;
-}
-
-/** Build detail list item with icon. */
-export function buildDetailItem(
-  iconClass: string,
-  content: string,
-  options: { title?: string; runId?: string } = {},
-): string {
-  const titleAttr = options.title
-    ? ` title="${encodeHtml(options.title)}"`
-    : '';
-  const runAttr = options.runId
-    ? ` data-run-id="${encodeHtml(options.runId)}"`
-    : '';
-  return `<li class="detail-item"${runAttr}><i class="codicon ${iconClass}"${titleAttr}></i> ${content}</li>`;
 }
 
 /** Get appropriate icon class for a tool. */
