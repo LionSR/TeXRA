@@ -157,15 +157,17 @@ export class FollowupSection extends LitElement {
           </div>
 
           <div class="followup-initial-question">
-            <vscode-text-area
+            <vscode-textarea
               id=${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}
               placeholder="What would you like to discuss about the results?"
               rows="2"
-            ></vscode-text-area>
+            ></vscode-textarea>
           </div>
 
           <div class="followup-options">
-            <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION} checked
+            <vscode-checkbox
+              id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}
+              checked
               >Include previous instruction</vscode-checkbox
             >
             <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}

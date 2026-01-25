@@ -29,7 +29,7 @@ export class FileList extends LitElement {
       <vscode-collapsible
         id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
         class="files-collapsible progress-collapsible"
-        title="Generated files"
+        title="Generated Files"
         ?open=${hasFiles}
         ?hidden=${!hasFiles}
         aria-hidden=${hasFiles ? 'false' : 'true'}
@@ -63,7 +63,9 @@ export class FileList extends LitElement {
     `;
   }
 
-  private renderFileItem(file: OutputFileInfo): TemplateResult | typeof nothing {
+  private renderFileItem(
+    file: OutputFileInfo,
+  ): TemplateResult | typeof nothing {
     if (!file?.location) return nothing;
 
     const location = file.location;
@@ -107,8 +109,8 @@ export class FileList extends LitElement {
                 file: location.absolutePath,
               })}
           >
-            <span class="file-basename">${basename}</span>
             <span class="file-dir">${dir}</span>
+            <span class="file-basename">${basename}</span>
           </span>
         </span>
         ${when(
@@ -123,14 +125,15 @@ export class FileList extends LitElement {
             </span>
           `,
         )}
-        <div class="file-actions">
+        <vscode-toolbar-container class="file-actions">
           ${when(
             effectiveBase,
             () => html`
               <vscode-toolbar-button
                 class="compare-btn"
                 icon="diff"
-                title="Compare with original"
+                label="Compare with base"
+                title="Compare with base"
                 @click=${() =>
                   this.emitFileAction(COMMANDS.COMPARE_ORIGINAL, {
                     file: location.absolutePath,
@@ -139,8 +142,9 @@ export class FileList extends LitElement {
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="accept-btn"
-                icon="pass"
-                title="Accept output"
+                icon="check"
+                label="Accept edits"
+                title="Accept edits"
                 @click=${() =>
                   this.emitFileAction(COMMANDS.ACCEPT_FILE, {
                     file: location.absolutePath,
@@ -150,7 +154,8 @@ export class FileList extends LitElement {
               <vscode-toolbar-button
                 class="merge-btn"
                 icon="git-merge"
-                title="Merge changes"
+                label="Merge edits"
+                title="Merge edits"
                 @click=${() =>
                   this.emitFileAction(COMMANDS.MERGE_FILE, {
                     file: location.absolutePath,
@@ -159,8 +164,9 @@ export class FileList extends LitElement {
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="diff-btn"
-                icon="diff-multiple"
-                title="Run latexdiff"
+                icon="diff-single"
+                label="LaTeXdiff"
+                title="LaTeXdiff"
                 @click=${() =>
                   this.emitFileAction(COMMANDS.LATEXDIFF_FILE, {
                     file: location.absolutePath,
@@ -174,8 +180,9 @@ export class FileList extends LitElement {
             () => html`
               <vscode-toolbar-button
                 class="prev-btn"
-                icon="history"
-                title="Compare with previous"
+                icon="diff-added"
+                label="Compare with previous round"
+                title="Compare with previous round"
                 @click=${() =>
                   this.emitFileAction(COMMANDS.COMPARE_PREVIOUS, {
                     file: location.absolutePath,
@@ -185,7 +192,7 @@ export class FileList extends LitElement {
               ></vscode-toolbar-button>
             `,
           )}
-        </div>
+        </vscode-toolbar-container>
       </div>
     `;
   }

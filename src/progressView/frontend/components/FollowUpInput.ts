@@ -92,20 +92,16 @@ export class FollowUpInput extends LitElement {
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
 
         <div class="follow-up-input-row">
-          <vscode-text-area
+          <vscode-textarea
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
-            placeholder="Ask a follow-up..."
+            placeholder="Send follow-up message"
+            rows="10"
+            resize="vertical"
             .value=${live(this.value)}
             @input=${this.handleInput}
-          ></vscode-text-area>
+          ></vscode-textarea>
 
-          <vscode-toolbar-container class="follow-up-actions">
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
-              icon="mic"
-              label="Record"
-              title="Record follow-up with microphone"
-            ></vscode-toolbar-button>
+          <div class="follow-up-actions">
             <vscode-toolbar-button
               id=${ELEMENT_IDS.YOLO_TOGGLE_BTN}
               class=${classMap({
@@ -120,34 +116,38 @@ export class FollowUpInput extends LitElement {
             <vscode-toolbar-button
               id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}
               icon="sparkle"
-              label="Polish"
-              title="Polish follow-up text"
+              label="Polish follow-up"
+              title="Polish follow-up with AI"
               @click=${this.emitPolish}
+            ></vscode-toolbar-button>
+            <vscode-progress-ring
+              id="polishFollowUpProgressContainer"
+              class=${classMap({ 'is-visible': this.polishing })}
+              style="display: ${this.polishing ? 'inline-block' : 'none'}; width: 16px; height: 16px"
+            ></vscode-progress-ring>
+            <vscode-toolbar-button
+              id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
+              icon="mic"
+              label="Record follow-up"
+              title="Record follow-up with microphone"
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
               icon="clear-all"
-              label="Clear"
-              title="Clear follow-up"
+              label="Clear input"
+              title="Clear input"
               @click=${this.emitClear}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}
               icon="send"
               label="Send"
-              title="Send follow-up"
+              title="Send follow-up message"
               @click=${this.emitSend}
             ></vscode-toolbar-button>
-          </vscode-toolbar-container>
+          </div>
         </div>
 
-        <div
-          id="polishFollowUpProgressContainer"
-          class=${classMap({ 'is-visible': this.polishing })}
-          ?hidden=${!this.polishing}
-        >
-          Polishing follow-up...
-        </div>
       </div>
     `;
   }

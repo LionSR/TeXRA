@@ -41,15 +41,12 @@ export const getMarkdownRenderer = (): MarkdownIt => {
 };
 
 /** Create LaTeX reference HTML element. */
-export const createLatexReferenceHtml = (
-  refType: string,
-  label: string,
-): string => {
+const createLatexReferenceHtml = (refType: string, label: string): string => {
   return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
 };
 
 /** Protect LaTeX references from markdown parsing. */
-export const protectLatexReferences = (content: string): string => {
+const protectLatexReferences = (content: string): string => {
   content = content.replaceAll(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
   content = content.replaceAll(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
   content = content.replaceAll(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
@@ -57,7 +54,7 @@ export const protectLatexReferences = (content: string): string => {
 };
 
 /** Restore LaTeX references from placeholders to clickable elements. */
-export const restoreLatexReferences = (content: string): string => {
+const restoreLatexReferences = (content: string): string => {
   return content
     .replaceAll(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
       createLatexReferenceHtml('ref', label),
@@ -132,12 +129,4 @@ export const processMarkdownContent = (
   }
 
   return result;
-};
-
-/**
- * Clear the markdown rendering cache.
- * Call when switching streams or clearing content.
- */
-export const clearMarkdownCache = (): void => {
-  markdownCache.clear();
 };

@@ -29,9 +29,12 @@ export class RunSelector extends LitElement {
     return html`
       <vscode-single-select
         id="runSelector"
+        class="run-selector"
+        aria-label="Select session"
         .value=${this.activeRunId ?? ''}
         @change=${this.handleChange}
       >
+        <span slot="placeholder">No sessions</span>
         ${sortedRuns.map(
           (run) => html`
             <vscode-option value=${run.id}>

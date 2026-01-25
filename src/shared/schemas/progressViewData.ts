@@ -6,9 +6,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports
-import { FileListEntrySchema } from './log';
-
 /**
  * Schema for MISSING_OUTPUTS message data.
  * Contains information about expected output files that were not found.
