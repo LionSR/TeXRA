@@ -1,5 +1,5 @@
 // Local imports - common
-import { vscode } from '@common/webviewContext.js';
+import { vscode } from './webviewContext.js';
 
 /**
  * Manages persistence of state for a single webview.
