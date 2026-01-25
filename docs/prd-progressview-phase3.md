@@ -12,6 +12,9 @@
 - **Message validation**: All handlers validate with Zod schemas before processing
 - **Nested record helper**: `updateNestedRounds<T>()` centralizes `Record<runId, Record<round, T[]>>` updates
 - **Component boundaries**: Child components emit complete payloads (e.g., `FollowupSection.getFormData()`)
+- **JSDoc cleanup**: Removed redundant `@param {type}` annotations from all formatters (TS types are the documentation)
+- **Lifecycle cleanup**: Added `disconnectedCallback()` to `FollowUpInput` for timer and recording manager disposal
+- **Event handler types**: Shared `events.ts` module with typed event creators (`ProgressEvents`) used by both dispatch and handler sides
 
 ### Patterns Established
 
@@ -27,6 +30,7 @@
 | High     | `@ts-nocheck` directives | `formatters/*.ts`, `LogList.ts`, `TaskGroupDomManager.ts` | Incrementally enable type checking                                           |
 | High     | `LogList` bypasses Lit   | `components/LogList.ts`                                   | Uses `innerHTML` and manual DOM; convert to proper Lit or plain class        |
 | Medium   | `htmlBuilders.ts` SRP    | `formatters/htmlBuilders.ts` (~336 lines)                 | Split into `syntaxHighlighting.ts`, `diffRendering.ts`, `fileListBuilder.ts` |
+| Medium   | Inline param types       | `formatters/*.ts`                                         | Extract interfaces for complex param objects                                 |
 | Low      | Duplicate DOM queries    | `FollowUpInput.ts`                                        | Extract to `getTextarea()` helper                                            |
 | Low      | TodoList repeat key      | `TodoList.ts`                                             | Use unique ID instead of `content-status`                                    |
 
@@ -85,21 +89,21 @@ src/shared/
 
 ### Priority Order
 
-| Priority | File                       | Lines | Complexity | Notes                      |
-| -------- | -------------------------- | ----- | ---------- | -------------------------- |
-| 1        | `htmlEncoding.js`          | 30    | Low        | Pure functions, easy win   |
-| 2        | `iconConstants.js`         | ~50   | Low        | Just constants             |
-| 3        | `pathUtils.js`             | ~30   | Low        | Pure functions             |
-| 4        | `stringUtils.js`           | ~50   | Low        | Pure functions             |
-| 5        | `clipboardUtils.js`        | ~30   | Low        | Simple async               |
-| 6        | `domUtils.js`              | 443   | Medium     | Many functions, DOM types  |
-| 7        | `templateUtils.js`         | 97    | Medium     | DOM manipulation           |
-| 8        | `dropdownUtils.js`         | ~100  | Medium     | VS Code component types    |
-| 9        | `textareaUtils.js`         | ~80   | Medium     | Textarea handling          |
-| 10       | `ToggleStateStore.js`      | ~50   | Medium     | Class with state           |
-| 11       | `webviewState.js`          | ~100  | Medium     | State management           |
-| 12       | `themeHandlers.js`         | ~50   | Low        | Theme utilities            |
-| 13       | `RecordingButtonManager.js`| ~150  | High       | Complex component          |
+| Priority | File                        | Lines | Complexity | Notes                     |
+| -------- | --------------------------- | ----- | ---------- | ------------------------- |
+| 1        | `htmlEncoding.js`           | 30    | Low        | Pure functions, easy win  |
+| 2        | `iconConstants.js`          | ~50   | Low        | Just constants            |
+| 3        | `pathUtils.js`              | ~30   | Low        | Pure functions            |
+| 4        | `stringUtils.js`            | ~50   | Low        | Pure functions            |
+| 5        | `clipboardUtils.js`         | ~30   | Low        | Simple async              |
+| 6        | `domUtils.js`               | 443   | Medium     | Many functions, DOM types |
+| 7        | `templateUtils.js`          | 97    | Medium     | DOM manipulation          |
+| 8        | `dropdownUtils.js`          | ~100  | Medium     | VS Code component types   |
+| 9        | `textareaUtils.js`          | ~80   | Medium     | Textarea handling         |
+| 10       | `ToggleStateStore.js`       | ~50   | Medium     | Class with state          |
+| 11       | `webviewState.js`           | ~100  | Medium     | State management          |
+| 12       | `themeHandlers.js`          | ~50   | Low        | Theme utilities           |
+| 13       | `RecordingButtonManager.js` | ~150  | High       | Complex component         |
 
 ### Type Definitions Needed
 
@@ -107,13 +111,26 @@ src/shared/
 // src/shared/utils/html.ts
 export function encodeHtml(value: unknown): string;
 export function decodeHtml(value: unknown): string;
-export function encodeListForHtml(values: unknown[], separator?: string): string;
+export function encodeListForHtml(
+  values: unknown[],
+  separator?: string,
+): string;
 
 // src/shared/utils/dom.ts
-export function getRadioChangeValue(event: Event, radioGroup: HTMLElement | null): string;
-export function setRadioGroupValue(radioGroup: HTMLElement, value: string, selector?: string): void;
+export function getRadioChangeValue(
+  event: Event,
+  radioGroup: HTMLElement | null,
+): string;
+export function setRadioGroupValue(
+  radioGroup: HTMLElement,
+  value: string,
+  selector?: string,
+): void;
 export function setElementDisabled(element: Element, disabled: boolean): void;
-export function waitForElement(selector: string, options?: { timeout?: number }): {
+export function waitForElement(
+  selector: string,
+  options?: { timeout?: number },
+): {
   promise: Promise<Element | null>;
   dispose: () => void;
 };
@@ -320,13 +337,13 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 ### Phase 3a (JS → TS Migration)
 
-| Metric                              | Before    | After   |
-| ----------------------------------- | --------- | ------- |
-| JS files in `src/common/modules/`   | 25+       | 0       |
-| JS files in `src/common/constants/` | 4         | 0       |
-| TS files in `src/shared/utils/`     | 0         | 8+      |
-| TS files in `src/shared/constants/` | 0         | 3+      |
-| Mixed JS/TS imports in ProgressView | 27        | 0       |
+| Metric                              | Before | After |
+| ----------------------------------- | ------ | ----- |
+| JS files in `src/common/modules/`   | 25+    | 0     |
+| JS files in `src/common/constants/` | 4      | 0     |
+| TS files in `src/shared/utils/`     | 0      | 8+    |
+| TS files in `src/shared/constants/` | 0      | 3+    |
+| Mixed JS/TS imports in ProgressView | 27     | 0     |
 
 ### Phase 3b (Webview Migration)
 

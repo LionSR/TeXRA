@@ -9,6 +9,7 @@ import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
 } from '@shared/schemas';
+import { ProgressEvents } from '../events';
 
 export type PromptState =
   | { kind: 'toolEdit'; data: ToolEditApprovalPrompt }
@@ -196,11 +197,7 @@ export class PromptOverlay extends LitElement {
   private emitAction(action: string) {
     if (!this.prompt) return;
     this.dispatchEvent(
-      new CustomEvent('prompt-action', {
-        detail: { prompt: this.prompt, action },
-        bubbles: true,
-        composed: true,
-      }),
+      ProgressEvents.promptAction({ prompt: this.prompt, action }),
     );
   }
 }

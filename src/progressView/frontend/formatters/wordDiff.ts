@@ -9,14 +9,7 @@ import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 // Local imports - common helpers
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
 
-/**
- * Generate inline diff HTML showing changes between old and new text.
- * Uses Google's diff-match-patch for reliable diffing.
- *
- * @param {string} oldText - Original text (null/undefined treated as empty)
- * @param {string} newText - New text (null/undefined treated as empty)
- * @returns {string} HTML string with inline diff highlighting
- */
+/** Generate inline diff HTML showing changes between old and new text. Uses diff-match-patch for reliable diffing. */
 export function generateInlineDiff(oldText: string, newText: string): string {
   const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(oldText ?? '', newText ?? '');

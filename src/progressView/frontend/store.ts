@@ -1,5 +1,6 @@
 // Local imports
 import type {
+  ContextState,
   InstructionUpdate,
   LogMessageData,
   OutputFileInfo,
@@ -15,11 +16,7 @@ export type StreamFilter = 'all' | 'workflow' | 'toolUse';
 export type StreamSort = 'time' | 'agent' | 'inputFile';
 export type FollowupMode = 'chat' | 'workflow' | 'merge';
 
-export interface ContextState {
-  inputTokens: number;
-  contextWindow: number;
-  utilizationPercent: number;
-}
+export type { ContextState };
 
 export interface StreamState {
   info?: StreamTabInfo;

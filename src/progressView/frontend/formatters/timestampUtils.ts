@@ -9,10 +9,7 @@ import { DATETIME_FORMAT_OPTIONS, TIME_FORMAT_OPTIONS } from './constants';
 let TIME_FORMATTER: Intl.DateTimeFormat | null = null;
 let DATE_TIME_FORMATTER: Intl.DateTimeFormat | null = null;
 
-/**
- * Get the time-only formatter
- * @returns {Intl.DateTimeFormat} Time formatter
- */
+/** Get the time-only formatter. */
 export const getTimeFormatter = (): Intl.DateTimeFormat => {
   if (!TIME_FORMATTER) {
     TIME_FORMATTER = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
@@ -20,10 +17,7 @@ export const getTimeFormatter = (): Intl.DateTimeFormat => {
   return TIME_FORMATTER;
 };
 
-/**
- * Get the date-time formatter
- * @returns {Intl.DateTimeFormat} Date-time formatter
- */
+/** Get the date-time formatter. */
 export const getDateTimeFormatter = (): Intl.DateTimeFormat => {
   if (!DATE_TIME_FORMATTER) {
     DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
@@ -34,11 +28,7 @@ export const getDateTimeFormatter = (): Intl.DateTimeFormat => {
   return DATE_TIME_FORMATTER;
 };
 
-/**
- * Format a timestamp for display
- * @param {Date} date - Date object to format
- * @returns {{fullTimestamp: string, timeDisplay: string, tooltipTimestamp: string}} Formatted timestamps
- */
+/** Format a timestamp for display. */
 export const formatTimestamp = (
   date: Date,
 ): { fullTimestamp: string; timeDisplay: string; tooltipTimestamp: string } => {
@@ -51,14 +41,7 @@ export const formatTimestamp = (
   };
 };
 
-/**
- * Format token counts for display.
- * - Values >= 100,000 display as "M" (millions), e.g., "1.2M"
- * - Values > 4096 display as "k" (thousands), e.g., "50k"
- * - Values <= 4096 display as raw numbers
- * @param {number} tokens - Raw token count
- * @returns {string} Formatted token count
- */
+/** Format token counts for display. Values >= 100k display as "M", > 4096 as "k", otherwise raw. */
 export const formatTokens = (tokens: number): string => {
   if (tokens >= 100_000) {
     return `${(tokens / 1_000_000).toFixed(1)}M`;
@@ -69,11 +52,7 @@ export const formatTokens = (tokens: number): string => {
   return `${tokens}`;
 };
 
-/**
- * Format duration in milliseconds to human-readable string
- * @param {number} durationMs - Duration in milliseconds
- * @returns {string} Formatted duration string
- */
+/** Format duration in milliseconds to human-readable string. */
 export const formatDuration = (durationMs: number): string => {
   // Handle edge cases
   if (durationMs < 0) return '0s';
@@ -99,11 +78,7 @@ export const formatDuration = (durationMs: number): string => {
  * Extracts timestamps from HTML messages.
  */
 export class MessageTimestampExtractor {
-  /**
-   * Extract timestamp from a log line element
-   * @param {HTMLElement} element - Log line element
-   * @returns {string} Extracted timestamp
-   */
+  /** Extract timestamp from a log line element. */
   extract(element: HTMLElement): string {
     const logLine = element.classList.contains('log-line')
       ? element

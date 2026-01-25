@@ -1,10 +1,8 @@
 // Shared utility functions for the progress view frontend.
 
-const DECIMAL_RADIX = 10;
-
 export function parseTimestamp(timestampStr: string | null | undefined): Date {
   if (!timestampStr) return new Date();
-  const numericValue = parseInt(timestampStr, DECIMAL_RADIX);
+  const numericValue = parseInt(timestampStr, 10);
   if (!Number.isNaN(numericValue) && numericValue > 0) {
     return new Date(numericValue);
   }
@@ -89,7 +87,7 @@ function defaultChildTimestamp(child: Element): number | null {
     const startElem = child.querySelector('.group-start-time');
     if (startElem instanceof HTMLElement) {
       const start = startElem.dataset.start;
-      return start ? parseInt(start, DECIMAL_RADIX) : null;
+      return start ? parseInt(start, 10) : null;
     }
     return null;
   }

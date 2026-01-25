@@ -22,12 +22,7 @@ import {
 import { generateInlineDiff } from './wordDiff';
 import type { NormalizedFileEntry } from './normalizers';
 
-/**
- * Build a tool-use section HTML block
- * @param {string} label - The section label (e.g., "Input:", "Output:")
- * @param {string} content - The HTML content for the section
- * @returns {string} HTML string for the section
- */
+/** Build a tool-use section HTML block. */
 export function buildToolUseSection(label: string, content: string): string {
   return `
   <div class="tool-use-section">
@@ -50,11 +45,7 @@ const DIFF_LINE_PATTERNS = [
   { prefix: '-', className: 'diff-remove' },
 ];
 
-/**
- * Get diff line class based on line content
- * @param {string} line - Line to check
- * @returns {string|null} CSS class or null if not a diff line
- */
+/** Get diff line class based on line content. */
 function getDiffLineClass(line: string): string | null {
   for (const { prefix, className } of DIFF_LINE_PATTERNS) {
     if (line.startsWith(prefix)) return className;
@@ -62,12 +53,7 @@ function getDiffLineClass(line: string): string | null {
   return null;
 }
 
-/**
- * Check if text appears to be diff output.
- * Examines first N lines for diff markers (@@, +++, ---).
- * @param {string} text - Text to check
- * @returns {boolean} True if text looks like diff output
- */
+/** Check if text appears to be diff output. Examines first N lines for diff markers. */
 function isDiffContent(text: string): boolean {
   const lines = text.split('\n').slice(0, DIFF_DETECTION_LINE_LIMIT);
   const diffMarkers = lines.filter(
@@ -77,12 +63,7 @@ function isDiffContent(text: string): boolean {
   return diffMarkers >= DIFF_MARKER_THRESHOLD;
 }
 
-/**
- * Wrap text in a pre element with optional class and diff highlighting
- * @param {string} text - Text to wrap (will be HTML encoded)
- * @param {string} [className] - Optional CSS class
- * @returns {string} HTML string
- */
+/** Wrap text in a pre element with optional class and diff highlighting. */
 export function wrapInPre(text: string, className = ''): string {
   const classAttr = className ? ` class="${className}"` : '';
 
@@ -100,11 +81,7 @@ export function wrapInPre(text: string, className = ''): string {
   return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
 }
 
-/**
- * Set common dataset attributes on an element
- * @param {HTMLElement} element - The element to modify
- * @param {{logId?: string, groupId?: string, timestamp?: string}} data - Dataset values
- */
+/** Set common dataset attributes on an element. */
 export function setElementDataset(
   element: HTMLElement,
   {
@@ -118,11 +95,7 @@ export function setElementDataset(
   if (timestamp) element.dataset.fullTimestamp = timestamp;
 }
 
-/**
- * Initialize toggle icon on a collapsible element
- * @param {HTMLElement} element - Element containing toggle icon
- * @param {boolean} [expanded=false] - Whether the element is expanded
- */
+/** Initialize toggle icon on a collapsible element. */
 export function initToggleIcon(element: HTMLElement, expanded = false): void {
   const toggleIcon = element.querySelector('.toggle-icon');
   if (toggleIcon) {
@@ -132,11 +105,7 @@ export function initToggleIcon(element: HTMLElement, expanded = false): void {
   }
 }
 
-/**
- * Build rendered HTML for file list
- * @param {Array} files - Array of normalized file entries
- * @returns {{items: string, summary: string}|null} Rendered items and summary
- */
+/** Build rendered HTML for file list. */
 export function buildFileListRender(
   files: NormalizedFileEntry[],
 ): { items: string; summary: string } | null {
@@ -174,12 +143,7 @@ export function buildFileListRender(
   return { items, summary };
 }
 
-/**
- * Build file link HTML element
- * @param {string} filePath - Absolute file path
- * @param {string} displayName - Display name for the link
- * @returns {string} HTML string for the file link
- */
+/** Build file link HTML element. */
 export function buildFileLink(filePath: string, displayName: string): string {
   if (!filePath) {
     return `<span>${encodeHtml(displayName)}</span>`;
@@ -187,15 +151,7 @@ export function buildFileLink(filePath: string, displayName: string): string {
   return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}">${encodeHtml(displayName)}</span>`;
 }
 
-/**
- * Build detail list item with icon
- * @param {string} iconClass - Codicon class (e.g., 'codicon-check')
- * @param {string} content - Inner HTML content
- * @param {object} [options] - Optional attributes
- * @param {string} [options.title] - Title attribute
- * @param {string} [options.runId] - data-run-id attribute
- * @returns {string} HTML string for list item
- */
+/** Build detail list item with icon. */
 export function buildDetailItem(
   iconClass: string,
   content: string,
@@ -210,15 +166,10 @@ export function buildDetailItem(
   return `<li class="detail-item"${runAttr}><i class="codicon ${iconClass}"${titleAttr}></i> ${content}</li>`;
 }
 
-/**
- * Get appropriate icon class for a tool
- * @param {string} toolName - Name of the tool
- * @param {boolean} isError - Whether the tool execution errored
- * @returns {string} Codicon class name
- */
+/** Get appropriate icon class for a tool. */
 export function getToolIconClass(toolName: string, isError = false): string {
   if (isError) return 'codicon-error';
-  return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
+  return TOOL_ICON_MAP[toolName] ?? 'codicon-wrench';
 }
 
 // ============================================================================
@@ -236,27 +187,12 @@ const LANGUAGE_LABELS: Record<string, string> = {
   plaintext: 'Text',
 };
 
-/**
- * Get display label for a language
- * @param {string} language - Language identifier
- * @returns {string} Human-readable label
- */
+/** Get display label for a language. */
 function getLanguageLabel(language: string): string {
   return LANGUAGE_LABELS[language] || language || 'Text';
 }
 
-/**
- * Build a code block with optional syntax highlighting, language badge, and copy button.
- * Does NOT use auto-detection - requires explicit language or defaults to plaintext.
- *
- * @param {string} text - Code text to display
- * @param {object} [options] - Configuration options
- * @param {string} [options.language='plaintext'] - Language for syntax highlighting
- * @param {string} [options.className] - Additional CSS class for the pre element
- * @param {boolean} [options.showLanguage=false] - Show language badge
- * @param {boolean} [options.showCopy=false] - Show copy button
- * @returns {string} HTML string for the code block
- */
+/** Build a code block with optional syntax highlighting, language badge, and copy button. Does NOT use auto-detection - requires explicit language or defaults to plaintext. */
 export function buildCodeBlock(
   text: string,
   options: {
@@ -316,14 +252,7 @@ export function buildCodeBlock(
 // File Links with Line Numbers
 // ============================================================================
 
-/**
- * Build a file link with optional line number for VS Code navigation
- * @param {string} filePath - Absolute file path
- * @param {object} [options] - Options
- * @param {number} [options.startLine] - Starting line number (1-based)
- * @param {number} [options.endLine] - Ending line number (1-based)
- * @returns {string} HTML string for the file link
- */
+/** Build a file link with optional line number for VS Code navigation. */
 export function buildFileLinkWithLines(
   filePath: string,
   options: { startLine?: number; endLine?: number } = {},
@@ -351,13 +280,7 @@ export function buildFileLinkWithLines(
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
-/**
- * Build edit diff section showing old_string → new_string with inline highlighting.
- * Deleted text shown with red strikethrough, added text shown with green highlight.
- * @param {string} oldString - Original text being replaced
- * @param {string} newString - Replacement text
- * @returns {string} HTML for the diff display
- */
+/** Build edit diff section showing old_string to new_string with inline highlighting. Deleted text shown with red strikethrough, added text shown with green highlight. */
 export function buildEditDiffSection(
   oldString: string,
   newString: string,

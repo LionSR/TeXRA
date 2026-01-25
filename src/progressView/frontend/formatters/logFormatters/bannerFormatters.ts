@@ -36,15 +36,7 @@ const BANNER_CONFIG: Record<
   },
 };
 
-/**
- * Format thinking or scratchpad banner content
- * @param {object} normalizedPayload - Normalized payload with decodedText
- * @param {string} contentType - 'Thinking' or 'Scratchpad'
- * @param {string} logId - Log entry ID
- * @param {string} groupId - Group ID
- * @param {string} timestamp - Timestamp
- * @returns {HTMLElement|null} Banner element or null
- */
+/** Format thinking or scratchpad banner content. */
 export function formatBannerContent(
   normalizedPayload: NormalizedPayload,
   contentType: string,
@@ -76,17 +68,7 @@ export function formatBannerContent(
   return bannerEntry.element;
 }
 
-/**
- * Format a model response with markdown rendering
- * @param {object} params - Response parameters
- * @param {string} params.id - Log entry ID
- * @param {string} params.groupId - Group ID
- * @param {string} params.timestamp - Timestamp
- * @param {boolean} params.verbose - Whether to show verbose timestamp
- * @param {object} params.content - Normalized content
- * @param {string} params.level - Log level
- * @returns {HTMLElement|null} Model response element or null
- */
+/** Format a model response with markdown rendering. */
 export function formatModelResponse({
   id,
   groupId,

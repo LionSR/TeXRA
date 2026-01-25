@@ -128,18 +128,12 @@ const TEMPLATES: Array<{ id: string; html: string }> = [
   },
 ];
 
-function ensureTemplate(id: string, html: string): void {
-  if (document.getElementById(id)) {
-    return;
-  }
-  const template = document.createElement('template');
-  template.id = id;
-  template.innerHTML = html.trim();
-  document.body.appendChild(template);
-}
-
 export function registerProgressViewTemplates(): void {
   for (const { id, html } of TEMPLATES) {
-    ensureTemplate(id, html);
+    if (document.getElementById(id)) continue;
+    const template = document.createElement('template');
+    template.id = id;
+    template.innerHTML = html.trim();
+    document.body.appendChild(template);
   }
 }
