@@ -21,6 +21,11 @@
 - **Native Lit patterns**: StreamTabs uses `.value` binding on radio group instead of manual DOM sync
 - **KaTeX rendering**: Proper CSS import and class targeting for math rendering
 - **Missing message handlers**: Added DELETE_STREAM, DELETE_ALL, UPDATE_USAGE handlers
+- **Message handler registry**: Replaced 27-case switch with `MESSAGE_HANDLERS` registry pattern
+- **Type safety**: Added `VSCodeValueElement` type for safer web component casting
+- **DiffResult schemas**: Added Zod schemas for latexdiff operations in `@shared/schemas`
+- **Component refactoring**: Moved `yoloActive` prop from FollowUpInput to StreamHeader
+- **Formatter simplification**: Cleaner rendering patterns in log formatters
 
 ### Directory Architecture: `common/` vs `shared/`
 
@@ -58,6 +63,7 @@ This is intentional during migration. ProgressView imports from `@shared/`, whil
 6. **Stream switch = clear**: Changing active stream or filtering to empty category must clear log content
 7. **Pending updates for race conditions**: Handle UPDATE_LOG arriving before APPEND_LOG via Map storage
 8. **VS Code radio groups**: Use `.value` binding on `vscode-radio-group`, not `.checked` on individual radios; read `group.value` in change handler
+9. **Handler registry pattern**: Use `Record<string, MessageHandler>` instead of switch statements for message routing; enables type inference and easier testing
 
 ### Technical Debt Remaining
 
@@ -414,6 +420,8 @@ export function formatBannerContent(
 | KaTeX only showing MathML              | `katex.min.css` not loaded                                    | Added `import 'katex/dist/katex.min.css'` to index.ts                       |
 | Context % position wrong               | Order swapped in UsagePanel                                   | Fixed element order in template                                             |
 | `LogListState` type error              | Interface didn't satisfy `Record<string, unknown>` constraint | Changed to type with explicit index signature                               |
+| 27-case switch unmaintainable          | Large switch in `handleMessage` hard to maintain              | Replace with `MESSAGE_HANDLERS` registry pattern                            |
+| Unsafe web component casting           | `as HTMLElement & { value }` scattered throughout             | Added `VSCodeValueElement` type in store.ts                                 |
 
 ### Stabilization Deliverables
 
