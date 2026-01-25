@@ -5,6 +5,9 @@
  * Uses Lit templates for declarative DOM construction.
  */
 
+// Local imports - shared utilities
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
+
 // Local imports - Lit template utilities
 import {
   html,
@@ -152,7 +155,7 @@ export function formatError(message: LogMessageData): HTMLElement | null {
     >
       <summary class="details-summary">
         <i
-          class="toggle-icon"
+          class="${CHEVRON_RIGHT_CLASS} toggle-icon"
           style=${hasDetails ? '' : 'visibility: hidden'}
         ></i>
         <i class="codicon icon codicon-error"></i>

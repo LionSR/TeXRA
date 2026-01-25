@@ -33,7 +33,6 @@ import {
   buildFileLink,
   buildFileListRender,
   buildDetailsSummary,
-  initToggleIcon,
 } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
@@ -206,13 +205,14 @@ export function formatLatexdiff(
       ? 'Latexdiff result'
       : `Latexdiff results (${entries.length})`;
 
-  const element = renderToElement(html`
+  return renderToElement(html`
     <details class="banner-details latexdiff-details" open>
       ${buildDetailsSummary({
         iconClass: 'codicon-diff',
         label: summaryText,
         labelClass: 'summary-text',
         includeIconClass: false,
+        expanded: true,
       })}
       <ul
         class="latexdiff-content"
@@ -223,8 +223,6 @@ export function formatLatexdiff(
       </ul>
     </details>
   `);
-  if (element) initToggleIcon(element, true);
-  return element;
 }
 
 // =============================================================================

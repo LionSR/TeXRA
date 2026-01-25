@@ -22,7 +22,6 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildCodeBlock,
-  initToggleIcon,
   buildDetailsSummary,
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
@@ -306,6 +305,7 @@ export function formatToolUse(
         label: titleText,
         labelClass: 'tool-use-title',
         includeIconClass: false,
+        expanded: false,
       })}
       <div
         class="banner-content log-entry-content"
@@ -318,9 +318,7 @@ export function formatToolUse(
     </details>
   `;
 
-  const element = renderToElement(template);
-  if (element) initToggleIcon(element, false);
-  return element;
+  return renderToElement(template);
 }
 
 /** Format web search results from native provider tools. */
@@ -400,11 +398,13 @@ export function formatWebSearch(
         'tool-use-error': statusKey === 'failed',
       })}
     >
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class=${iconClass}></i>
-        <span class="tool-use-title">${titleText}</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass,
+        label: titleText,
+        labelClass: 'tool-use-title',
+        includeIconClass: false,
+        expanded: false,
+      })}
       <div
         class="banner-content log-entry-content"
         data-log-id=${ifDefined(logId)}
@@ -416,7 +416,5 @@ export function formatWebSearch(
     </details>
   `;
 
-  const element = renderToElement(template);
-  if (element) initToggleIcon(element, false);
-  return element;
+  return renderToElement(template);
 }

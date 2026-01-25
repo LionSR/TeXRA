@@ -15,7 +15,7 @@ import {
 // Local imports - formatter helpers
 import { formatTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
-import { initToggleIcon, buildDetailsSummary } from '../htmlBuilders';
+import { buildDetailsSummary } from '../htmlBuilders';
 
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
@@ -70,6 +70,7 @@ export function formatBannerContent(
         iconClass: config.iconClass,
         label: config.labelText,
         copyButton: { title: config.copyTitle },
+        expanded: false,
       })}
       <div
         class="banner-content log-entry-content ${config.contentClass}"
@@ -80,9 +81,7 @@ export function formatBannerContent(
     </details>
   `;
 
-  const element = renderToElement(template);
-  if (element) initToggleIcon(element, false);
-  return element;
+  return renderToElement(template);
 }
 
 /** Format a model response with markdown rendering. */
@@ -124,6 +123,7 @@ export function formatModelResponse({
           ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
           : undefined,
         copyButton: { title: 'Copy model output' },
+        expanded: true,
       })}
       <div
         class=${classMap({
@@ -139,7 +139,5 @@ export function formatModelResponse({
     </details>
   `;
 
-  const element = renderToElement(template);
-  if (element) initToggleIcon(element, true);
-  return element;
+  return renderToElement(template);
 }
