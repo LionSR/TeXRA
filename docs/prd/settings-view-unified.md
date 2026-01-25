@@ -979,6 +979,514 @@ vscode.setState({ activeTab: 'models' });  // Persist
 
 ---
 
+## Lessons Learned (PR #2206 Review)
+
+Based on code review feedback from the initial implementation attempt, the following issues must be addressed:
+
+### Critical: Single Source of Truth Violations
+
+#### Command Constants Duplication
+
+**Problem:** `SETTINGS_VIEW_COMMANDS` was defined in THREE places:
+- `src/settingsView/schemas.ts` (TypeScript)
+- `src/settingsView/modules/constants.js` (JavaScript)
+- `src/common/webview/commands.ts` (shared)
+
+**Impact:** Commands can drift out of sync, causing silent message routing failures.
+
+**Solution:** Define commands ONLY in `src/common/webview/commands.ts`:
+```typescript
+// src/common/webview/commands.ts - SINGLE SOURCE OF TRUTH
+export const SETTINGS_VIEW_COMMANDS = {
+  // Extension → Webview
+  SET_INITIAL_DATA: 'SET_INITIAL_DATA',
+  SET_MODELS_DATA: 'SET_MODELS_DATA',
+  // ... all commands
+} as const;
+
+// src/settingsView/schemas.ts - IMPORT, don't redefine
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
+export { SETTINGS_VIEW_COMMANDS };
+
+// src/settingsView/modules/constants.js - IMPORT from shared
+// Use import map to access common/webview/commands.js
+```
+
+#### Provider Metadata Duplication
+
+**Problem:** `PROVIDER_META` defined in both:
+- `SettingsViewMessageHandler.ts` (TypeScript backend)
+- `constants.js` (JavaScript frontend)
+
+**Solution:** Define provider metadata ONCE in backend and send to frontend via `InitialData`:
+```typescript
+// Backend: Include in collectInitialData()
+const initialData = {
+  // ... other data
+  providerMeta: PROVIDER_META,  // Send to frontend
+};
+
+// Frontend: Access from state, don't hardcode
+const provider = settingsViewState.providerMeta[providerId];
+```
+
+---
+
+### Security Issues
+
+#### XSS Vulnerability in HTML Rendering
+
+**Problem:** Template literals directly interpolate user data without escaping:
+```javascript
+// ❌ VULNERABLE - file.path could contain malicious HTML
+<div class="memory-file" data-path="${file.path}">
+  ${file.name}
+</div>
+
+// ❌ VULNERABLE - agent names from user YAML files
+<span class="agent-name">${agent.name}</span>
+```
+
+**Solution:** Always escape user-controlled data:
+```javascript
+import { escapeHtml } from '@common/modules/htmlEncoding.js';
+
+// ✅ SAFE - escape all user data
+<div class="memory-file" data-path="${escapeHtml(file.path)}">
+  ${escapeHtml(file.name)}
+</div>
+
+// ✅ SAFE - use textContent via DOM API
+const nameEl = row.querySelector('.agent-name');
+nameEl.textContent = agent.name;  // Automatically escaped
+```
+
+**Files requiring escaping:**
+- `HistoryTab.js` - `item.agentName`, `item.modelName`, `item.inputFile`, `item.id`
+- `MemoryTab.js` - `file.name`, `file.path`
+- `AgentListRenderer.js` - `agent.name`, `agent.description`
+- `ModelListRenderer.js` - `model.name`, `provider.name`
+
+#### Path Traversal in Memory Operations
+
+**Problem:** File paths from webview used directly without validation:
+```typescript
+// ❌ VULNERABLE - path could be "../../../etc/passwd"
+async ({ path: storagePath }) => {
+  const absolutePath = StorageFS.fullPath(storagePath);
+  await vscode.window.showTextDocument(uri);
+}
+```
+
+**Solution:** Validate paths are within expected directory:
+```typescript
+import { resolveMemoryStoragePath, MEMORY_STORAGE_ROOT } from '@tools/memory/memoryStorage';
+
+async ({ path: storagePath }) => {
+  // ✅ SAFE - validate path is within memory storage
+  const resolvedPath = resolveMemoryStoragePath(storagePath);
+  if (!resolvedPath) {
+    this.logger.warn('Invalid memory path attempted:', storagePath);
+    return;
+  }
+  const uri = vscode.Uri.file(resolvedPath);
+  await vscode.window.showTextDocument(uri);
+}
+```
+
+#### Unvalidated Setting Keys
+
+**Problem:** `settingKey` parameter accepted any string:
+```typescript
+// ❌ Could modify arbitrary VS Code settings
+await config.update(settingKey, value);
+```
+
+**Solution:** Whitelist allowed configuration keys in schema:
+```typescript
+export const SaveSettingSchema = z.object({
+  command: z.literal('SAVE_SETTING'),
+  key: z.enum([
+    'texra.latex.formatter',
+    'texra.latex.latexindentConfig',
+    'texra.latexdiff.mathMarkup',
+    // ... explicit whitelist
+  ]),
+  value: z.unknown(),
+});
+```
+
+---
+
+### Missing Functionality
+
+#### Missing Command Handlers
+
+**Problem:** Commands defined in frontend but handlers missing in backend:
+- `BROWSE_AGENTS_DIRECTORY` - Browse button in Agents tab
+- `OPEN_AGENTS_DIRECTORY` - Open button in Agents tab
+
+**Solution:** Ensure every command in `constants.js` has a corresponding handler in `createHandlers()`.
+
+**Checklist pattern:**
+```typescript
+// In MessageHandler, verify all commands have handlers
+protected createHandlers(): Record<string, MessageHandler> {
+  const handlers = {
+    // Verify EVERY command from SETTINGS_VIEW_COMMANDS is here
+    [SETTINGS_VIEW_COMMANDS.GET_INITIAL_DATA]: this.handleGetInitialData.bind(this),
+    [SETTINGS_VIEW_COMMANDS.BROWSE_AGENTS_DIRECTORY]: this.handleBrowseAgentsDir.bind(this),
+    [SETTINGS_VIEW_COMMANDS.OPEN_AGENTS_DIRECTORY]: this.handleOpenAgentsDir.bind(this),
+    // ...
+  };
+
+  // Optional: Runtime check that all commands have handlers
+  for (const cmd of Object.values(SETTINGS_VIEW_COMMANDS)) {
+    if (!handlers[cmd]) {
+      console.warn(`Missing handler for command: ${cmd}`);
+    }
+  }
+  return handlers;
+}
+```
+
+#### Memory/History Data Not in Initial Load
+
+**Problem:** `collectInitialData()` didn't include memory files or history items, causing tabs to be empty on first load.
+
+**Solution:** Include ALL tab data in initial payload:
+```typescript
+async collectInitialData(): Promise<InitialData> {
+  const [account, models, providers, agents, latex, history, memory] =
+    await Promise.all([
+      this.collectAccountData(),
+      this.collectModelsData(),
+      this.collectProvidersData(),
+      this.collectAgentsData(),
+      this.collectLatexSettings(),
+      this.collectHistoryData(),    // ✅ Include history
+      this.collectMemoryData(),     // ✅ Include memory
+    ]);
+
+  return {
+    account, models, providers, agents, latexSettings: latex,
+    historyItems: history,  // ✅ Must be in payload
+    memoryFiles: memory,    // ✅ Must be in payload
+    memoryEnabled: true,
+  };
+}
+```
+
+Also update `updateFromInitialData()` in state manager:
+```javascript
+updateFromInitialData(data) {
+  this.updateAccount(data.account);
+  this.updateModels(data.models);
+  this.updateAgents(data.agents);
+  this.updateLatexSettings(data.latexSettings);
+  this.updateHistoryItems(data.historyItems);  // ✅ Don't forget
+  this.updateMemoryFiles(data.memoryFiles);    // ✅ Don't forget
+}
+```
+
+#### Tab Selection Not Applied
+
+**Problem:** When opening Settings View to a specific tab (e.g., via `texra.showAgentHistory`), the requested tab was ignored.
+
+**Solution:** Apply tab selection in frontend message handler:
+```javascript
+handleSetInitialData(message) {
+  settingsViewState.updateFromInitialData(message);
+
+  // ✅ Apply selected tab from initial data
+  if (message.selectedTab) {
+    settingsViewState.selectedTab = message.selectedTab;
+    tabManager.selectTab(message.selectedTab);  // Actually switch tab
+  }
+
+  this.renderAllTabs();
+}
+```
+
+#### API Access Mode Toggle Missing
+
+**Problem:** Paid subscribers lost the ability to toggle between "included access" (TeXRA's API keys) and "personal keys" (their own API keys).
+
+**Solution:** Add API access mode to Models tab or header bar:
+```typescript
+// In SettingsViewMessageHandler
+[SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: this.handleSetApiAccessMode.bind(this),
+
+private async handleSetApiAccessMode(message: unknown): Promise<void> {
+  await this.withValidatedMessage(
+    SetApiAccessModeSchema,
+    message,
+    'setApiAccessMode',
+    async ({ mode }) => {
+      const useIncluded = mode === 'included';
+      await getServerSideKeyService().setUseIncludedModelAccess(useIncluded);
+      // Refresh UI
+    }
+  );
+}
+```
+
+---
+
+### UX Issues
+
+#### Missing Confirmation Dialogs
+
+**Problem:** Destructive actions executed immediately without user confirmation:
+- `clearAllMemory()` deletes all files
+- `handleClearHistory()` deletes all history
+
+**Solution:** Add confirmation dialogs:
+```typescript
+// Backend handler
+private async handleClearAllMemory(): Promise<void> {
+  const confirmed = await vscode.window.showWarningMessage(
+    'Delete all memory files? This cannot be undone.',
+    { modal: true },
+    'Delete All'
+  );
+
+  if (confirmed !== 'Delete All') return;
+
+  // Proceed with deletion
+}
+```
+
+Or in frontend with VS Code-style:
+```javascript
+async clearAllMemory() {
+  // Send confirmation request to backend
+  vscode.postMessage({
+    command: SETTINGS_VIEW_COMMANDS.CONFIRM_CLEAR_ALL_MEMORY,
+  });
+  // Backend shows dialog and proceeds if confirmed
+}
+```
+
+---
+
+### Data Consistency Issues
+
+#### Inconsistent Default Values
+
+**Problem:** Default values differed between Settings View and execution code:
+```typescript
+// Settings View used 'fine'
+latexdiffMathMarkup: getConfig('texra.latexdiff.mathMarkup', 'fine'),
+
+// Execution code used 'coarse'
+const mathMarkup = getConfig('texra.latexdiff.mathMarkup', 'coarse');
+```
+
+**Solution:** Define defaults in ONE place (settingsSchema.ts):
+```typescript
+// settingsSchema.ts - SINGLE SOURCE OF TRUTH
+export const MathMarkupSchema = z.enum(['off', 'whole', 'coarse', 'fine']).default('coarse');
+
+// Everywhere else - use schema default
+const mathMarkup = MathMarkupSchema.parse(getConfig('texra.latexdiff.mathMarkup'));
+```
+
+#### Provider ID Case Mismatch
+
+**Problem:** Provider IDs inconsistently cased:
+```typescript
+// Schema used camelCase
+ProviderIdSchema = z.enum(['anthropic', 'openai', 'openRouter', ...]);
+
+// Model configs used lowercase
+MODEL_CONFIGS[model].provider.toLowerCase() === 'openrouter'  // ❌ Mismatch!
+```
+
+**Solution:** Use consistent lowercase for all provider IDs:
+```typescript
+export const ProviderIdSchema = z.enum([
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',  // ✅ Lowercase
+  'deepseek',
+  'xai',
+  'moonshot',
+  'dashscope',
+]);
+```
+
+#### Settings Migration Missing
+
+**Problem:** When moving settings from VS Code config to workspace storage, existing user values were lost.
+
+**Solution:** Add migration on activation:
+```typescript
+// In extension.ts or settings initialization
+async function migrateSettings() {
+  const config = vscode.workspace.getConfiguration('texra');
+  const storage = context.workspaceState;
+
+  const settingsToMigrate = [
+    { old: 'latex.formatter', new: WorkspaceStateKey.FORMATTER },
+    { old: 'latexdiff.mathMarkup', new: WorkspaceStateKey.MATH_MARKUP },
+  ];
+
+  for (const { old, new: newKey } of settingsToMigrate) {
+    const existing = storage.get(newKey);
+    if (existing === undefined) {
+      const value = config.get(old);
+      if (value !== undefined) {
+        await storage.update(newKey, value);
+      }
+    }
+  }
+}
+```
+
+---
+
+### Architecture Recommendations
+
+#### Large MessageHandler Class
+
+**Problem:** `SettingsViewMessageHandler.ts` grew to 1000+ lines.
+
+**Solution:** Extract domain-specific handler classes:
+```
+src/settingsView/
+├── SettingsViewMessageHandler.ts      # Orchestrates, ~200 lines
+├── handlers/
+│   ├── ModelHandlers.ts               # Model/provider operations
+│   ├── AgentHandlers.ts               # Agent CRUD operations
+│   ├── LatexHandlers.ts               # LaTeX settings
+│   ├── HistoryHandlers.ts             # History operations
+│   └── MemoryHandlers.ts              # Memory file operations
+```
+
+Usage:
+```typescript
+export class SettingsViewMessageHandler extends BaseViewMessageHandler {
+  private modelHandlers: ModelHandlers;
+  private agentHandlers: AgentHandlers;
+  // ...
+
+  protected createHandlers(): Record<string, MessageHandler> {
+    return {
+      ...this.modelHandlers.getHandlers(),
+      ...this.agentHandlers.getHandlers(),
+      // ...
+    };
+  }
+}
+```
+
+#### Performance: Lazy Loading for Large Data
+
+**Problem:** Loading all memory files with content previews could be slow.
+
+**Solution:** Lazy load previews on expand:
+```javascript
+// Initial load: metadata only
+const memoryFiles = files.map(f => ({
+  name: f.name,
+  path: f.path,
+  size: f.size,
+  // preview: NOT included initially
+}));
+
+// On expand: fetch preview
+async expandFile(filePath) {
+  vscode.postMessage({
+    command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+    path: filePath,
+  });
+}
+```
+
+---
+
+### Test Coverage Requirements
+
+No tests were included in the initial implementation. Required test coverage:
+
+| Area | Test Type | Priority |
+|------|-----------|----------|
+| **Zod Schemas** | Unit tests for validation edge cases | High |
+| **Message Handlers** | Unit tests for each handler | High |
+| **State Management** | Tests for settingsViewState.js | Medium |
+| **Data Collection** | Tests for collectModelsData, etc. | Medium |
+| **Tab Switching** | Integration tests | Medium |
+| **API Key Flow** | Integration tests | High |
+| **Legacy Redirects** | Verify old commands work | Medium |
+
+Example test structure:
+```typescript
+// tests/settingsView/schemas.test.ts
+describe('SettingsView Schemas', () => {
+  describe('SaveSettingSchema', () => {
+    it('rejects unknown setting keys', () => {
+      const result = SaveSettingSchema.safeParse({
+        command: 'SAVE_SETTING',
+        key: 'texra.unknown.setting',  // Not in whitelist
+        value: 'test',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+});
+
+// tests/settingsView/messageHandler.test.ts
+describe('SettingsViewMessageHandler', () => {
+  it('handles all defined commands', () => {
+    const handler = new SettingsViewMessageHandler(mockContext);
+    const handlers = handler['createHandlers']();
+
+    for (const cmd of Object.values(SETTINGS_VIEW_COMMANDS)) {
+      expect(handlers[cmd]).toBeDefined(`Missing handler for ${cmd}`);
+    }
+  });
+});
+```
+
+---
+
+## Implementation Checklist
+
+Before merging Settings View implementation, verify:
+
+### Single Source of Truth
+- [ ] Commands defined in ONE file only (`commands.ts`)
+- [ ] Provider metadata defined in ONE file, sent via InitialData
+- [ ] Default values defined in `settingsSchema.ts`
+- [ ] Provider IDs use consistent casing (lowercase)
+
+### Security
+- [ ] All user data escaped before HTML interpolation
+- [ ] Memory file paths validated against storage root
+- [ ] Setting keys whitelisted in schema
+- [ ] API keys use SecretManager (never in state/config)
+
+### Completeness
+- [ ] Every frontend command has a backend handler
+- [ ] All tabs receive data in InitialData
+- [ ] Tab selection from parameters actually applied
+- [ ] API access mode toggle included (for paid users)
+
+### UX Safety
+- [ ] Destructive actions have confirmation dialogs
+- [ ] Error messages shown for failed operations
+- [ ] Loading states for async operations
+
+### Testing
+- [ ] Schema validation tests
+- [ ] Handler routing tests
+- [ ] State management tests
+- [ ] Legacy command redirect tests
+
+---
+
 ## References
 
 - **VS Code Elements:** `@vscode-elements/elements` (v2.4.0)
@@ -986,3 +1494,4 @@ vscode.setState({ activeTab: 'models' });  // Persist
 - **Shared Modules:** `src/common/modules/*.js`
 - **Shared Styles:** `src/common/styles/common.css`
 - **Existing Views:** `src/profileView/`, `src/historyView/`, `src/progressView/`
+- **PR Review:** #2206 - Initial implementation attempt with review feedback
