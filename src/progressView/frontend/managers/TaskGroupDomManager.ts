@@ -1,6 +1,8 @@
 // Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
-import { ToggleStateStore } from '@common/modules/ToggleStateStore.js';
+
+// Local imports - shared state
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS, STREAM_STATUS } from '../constants';

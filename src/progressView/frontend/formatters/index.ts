@@ -8,7 +8,6 @@ export { formatTokens } from './timestampUtils';
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter';
 
 // Local imports - formatter helpers
-import { normalizeStructuredContent } from './parseUtils';
 import {
   applyOpenState,
   safeFormat,
@@ -36,18 +35,13 @@ import {
 
 // Local imports - shared schemas
 import type { LogMessageData, MessageType } from '@shared/schemas';
-import type { NormalizedPayload } from './parseUtils';
 
 type LogFormatOptions = {
   preservedOpen?: boolean;
   defaultOpen?: boolean;
 };
 
-type LogMessageWithPayload = LogMessageData & {
-  normalizedPayload: NormalizedPayload;
-};
-
-type FormatterFn = (message: LogMessageWithPayload) => HTMLElement | null;
+type FormatterFn = (message: LogMessageData) => HTMLElement | null;
 type FormatterMap = Record<string, FormatterFn | null | undefined>;
 
 /**
@@ -81,42 +75,31 @@ export class LogEntryFormatter {
     // Wrap formatter functions with error handling for graceful degradation
     const safe =
       (fn: FormatterFn, label: string) =>
-      (m: LogMessageWithPayload): HTMLElement | null =>
+      (m: LogMessageData): HTMLElement | null =>
         safeFormat(() => fn(m), label);
 
-    // Field extractors for common formatter signatures
-    const withPayloadId =
-      (fn: (payload: NormalizedPayload, id: string) => HTMLElement | null) =>
-      (m: LogMessageWithPayload) =>
-        fn(m.normalizedPayload, m.id);
-    const withFullMeta =
-      (
-        fn: (
-          payload: NormalizedPayload,
-          id: string,
-          groupId: string | undefined,
-          timestamp: number,
-        ) => HTMLElement | null,
-      ) =>
-      (m: LogMessageWithPayload) =>
-        fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
-
-    // Banner formatter (thinking/scratchpad)
-    const banner = (title: string) =>
-      withFullMeta((p, id, gid, ts) =>
-        formatBannerContent(p, title, id, gid, ts),
-      );
-
     return {
-      // Collapsible content banners
-      thinking: safe(banner('Thinking'), 'thinking'),
-      scratchpad: safe(banner('Scratchpad'), 'scratchpad'),
+      // Collapsible content banners (use text directly)
+      thinking: safe(
+        (m) => formatBannerContent(m.text, 'Thinking', m.id, m.groupId, m.timestamp),
+        'thinking',
+      ),
+      scratchpad: safe(
+        (m) => formatBannerContent(m.text, 'Scratchpad', m.id, m.groupId, m.timestamp),
+        'scratchpad',
+      ),
 
-      // Tool/search results (need full metadata)
-      toolUse: safe(withFullMeta(formatToolUse), 'tool use'),
-      webSearch: safe(withFullMeta(formatWebSearch), 'web search'),
+      // Tool/search results (use data directly)
+      toolUse: safe(
+        (m) => formatToolUse(m.data, m.id, m.groupId, m.timestamp),
+        'tool use',
+      ),
+      webSearch: safe(
+        (m) => formatWebSearch(m.data, m.id, m.groupId, m.timestamp),
+        'web search',
+      ),
 
-      // Model response (custom field mapping)
+      // Model response (use text directly)
       modelResponse: safe(
         (m) =>
           formatModelResponse({
@@ -124,29 +107,29 @@ export class LogEntryFormatter {
             groupId: m.groupId,
             timestamp: m.timestamp,
             verbose: m.verbose,
-            content: m.normalizedPayload,
+            text: m.text,
             level: m.level,
           }),
         'Assistant',
       ),
 
-      // Data formatters (payload + id only)
-      fileList: safe(withPayloadId(formatFileList), 'file list'),
+      // Data formatters (use data directly)
+      fileList: safe((m) => formatFileList(m.data, m.text, m.id), 'file list'),
       missingOutputs: safe(
-        withPayloadId(formatMissingOutputs),
+        (m) => formatMissingOutputs(m.data, m.id),
         'missing outputs',
       ),
-      latexdiff: safe(withPayloadId(formatLatexdiff), 'latexdiff'),
-      statistics: safe(withPayloadId(formatStatistics), 'statistics'),
+      latexdiff: safe((m) => formatLatexdiff(m.data, m.id), 'latexdiff'),
+      statistics: safe((m) => formatStatistics(m.data, m.id), 'statistics'),
       contextManagement: safe(
-        withPayloadId(formatContextManagement),
+        (m) => formatContextManagement(m.data, m.id),
         'context management',
       ),
 
       // Special cases
       contextState: () => null, // Displayed in footer
       userMessage: safe(
-        (m) => formatUserMessage(m.normalizedPayload, m.id, m.timestamp),
+        (m) => formatUserMessage(m.text, m.id, m.timestamp),
         'user message',
       ),
       progressStatus: safe(formatProgressStatus, 'progress status'),
@@ -159,20 +142,12 @@ export class LogEntryFormatter {
     logMessage: LogMessageData,
     options: LogFormatOptions = {},
   ): HTMLElement | null {
-    const messageWithPayload = {
-      ...logMessage,
-      normalizedPayload: normalizeStructuredContent(
-        logMessage.text,
-        logMessage.data,
-      ),
-    };
-
-    const { messageType } = messageWithPayload;
+    const { messageType } = logMessage;
 
     const formatter = messageType ? this._formatters[messageType] : null;
 
     if (messageType && typeof formatter === 'function') {
-      const result = formatter(messageWithPayload);
+      const result = formatter(logMessage);
       if (result) {
         if (result instanceof HTMLElement) {
           const openOverride = resolveOpenState(
@@ -191,7 +166,7 @@ export class LogEntryFormatter {
     }
 
     // Default formatting for regular log messages
-    return formatDefaultLogMessage(messageWithPayload);
+    return formatDefaultLogMessage(logMessage);
   }
 }
 

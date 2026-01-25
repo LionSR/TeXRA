@@ -5,14 +5,11 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - shared webview
 import { postMessage } from '@shared/vscode';
 
-// Local imports - common helpers
-import {
-  scrollToBottom,
-  setChevronIconHorizontal,
-} from '@common/modules/domUtils.js';
-import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
-import { WebviewStateManager } from '@common/modules/webviewState.js';
-import { ToggleStateStore } from '@common/modules/ToggleStateStore.js';
+// Local imports - shared utilities
+import { copyWithFeedback } from '@shared/utils/clipboard';
+import { scrollToBottom, setChevronIconHorizontal } from '@shared/utils/dom';
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -37,9 +34,14 @@ const PLACEHOLDER_HTML =
   '<a href="command:texra.cloneOverleafProject">clone an Overleaf project</a>, or ' +
   '<a href="command:texra.downloadArXivSource">download an arXiv source</a>.';
 
+type LogListState = {
+  groupToggleStates?: Array<[string, boolean]>;
+  [key: string]: unknown;
+};
+
 @customElement('log-list')
 export class LogList extends LitElement {
-  private stateManager: WebviewStateManager;
+  private stateManager: WebviewStateManager<LogListState>;
   private toggleStates: ToggleStateStore;
   private groupManager: TaskGroupDomManager;
   private logManager: LogEntryManager;
@@ -50,7 +52,7 @@ export class LogList extends LitElement {
 
   constructor() {
     super();
-    this.stateManager = new WebviewStateManager();
+    this.stateManager = new WebviewStateManager<LogListState>();
     const previous = this.stateManager.getState();
     this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
     if (Array.isArray(previous?.groupToggleStates)) {

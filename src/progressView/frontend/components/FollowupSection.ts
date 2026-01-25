@@ -15,10 +15,9 @@ import {
   AGENT_PLACEHOLDER,
   MODEL_PLACEHOLDER,
 } from '@common/modules/dropdownUtils.js';
-import {
-  getRadioChangeValue,
-  setRadioGroupValue,
-} from '@common/modules/domUtils.js';
+
+// Local imports - shared utilities
+import { getRadioChangeValue, setRadioGroupValue } from '@shared/utils/dom';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -57,22 +56,22 @@ export class FollowupSection extends LitElement {
   @property({ type: String }) streamModel: string | null = null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`)
-  private declare agentSelect: (HTMLElement & { value?: string }) | null;
+  declare private agentSelect: (HTMLElement & { value?: string }) | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`)
-  private declare modelSelect: (HTMLElement & { value?: string }) | null;
+  declare private modelSelect: (HTMLElement & { value?: string }) | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}`)
-  private declare includeCheckbox: (HTMLElement & { checked?: boolean }) | null;
+  declare private includeCheckbox: (HTMLElement & { checked?: boolean }) | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}`)
-  private declare attachCheckbox: (HTMLElement & { checked?: boolean }) | null;
+  declare private attachCheckbox: (HTMLElement & { checked?: boolean }) | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`)
-  private declare questionInput: (HTMLElement & { value?: string }) | null;
+  declare private questionInput: (HTMLElement & { value?: string }) | null;
 
   @query('#followupModeGroup')
-  private declare modeGroup: HTMLElement | null;
+  declare private modeGroup: HTMLElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -101,7 +100,7 @@ export class FollowupSection extends LitElement {
       <vscode-collapsible
         id=${ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE}
         class="followup-collapsible progress-collapsible"
-        title="Follow-up"
+        title="Followup"
         ?hidden=${!visible}
         aria-hidden=${visible ? 'false' : 'true'}
         @vsc-collapsible-toggle=${this.handleToggle}
@@ -110,6 +109,8 @@ export class FollowupSection extends LitElement {
           <div class="followup-mode-toggle">
             <vscode-radio-group
               id="followupModeGroup"
+              orientation="horizontal"
+              .value=${this.mode}
               @change=${this.handleModeChange}
             >
               <vscode-radio
@@ -138,45 +139,47 @@ export class FollowupSection extends LitElement {
 
           <div class="followup-selects">
             <div class="followup-select-group">
-              <i class="codicon codicon-tools"></i>
+              <i class="codicon codicon-sparkle"></i>
               <vscode-single-select
                 id=${ELEMENT_IDS.FOLLOWUP_AGENT}
                 class="followup-agent-select"
+                position="above"
               ></vscode-single-select>
             </div>
             <div class="followup-select-group">
-              <i class="codicon codicon-chip"></i>
+              <i class="codicon codicon-robot"></i>
               <vscode-single-select
                 id=${ELEMENT_IDS.FOLLOWUP_MODEL}
                 class="followup-model-select"
+                position="above"
               ></vscode-single-select>
             </div>
           </div>
 
           <div class="followup-initial-question">
-            <label for=${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}>
-              Initial question
-            </label>
             <vscode-text-area
               id=${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}
-              placeholder="Ask the agent to continue from this output..."
+              placeholder="What would you like to discuss about the results?"
+              rows="2"
             ></vscode-text-area>
           </div>
 
           <div class="followup-options">
-            <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}
-              >Include original instruction</vscode-checkbox
+            <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION} checked
+              >Include previous instruction</vscode-checkbox
             >
             <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}
-              >Attach agent outputs</vscode-checkbox
+              >Modify originals (attach outputs as reference)</vscode-checkbox
             >
           </div>
 
           <div class="followup-actions">
             <vscode-button
               id=${ELEMENT_IDS.FOLLOWUP_SETUP_BTN}
+              appearance="secondary"
               @click=${this.emitSetup}
             >
+              <span slot="start" class="codicon codicon-reply"></span>
               Setup
             </vscode-button>
             <vscode-button
@@ -184,6 +187,7 @@ export class FollowupSection extends LitElement {
               appearance="primary"
               @click=${this.emitRun}
             >
+              <span slot="start" class="codicon codicon-play"></span>
               Run
             </vscode-button>
           </div>

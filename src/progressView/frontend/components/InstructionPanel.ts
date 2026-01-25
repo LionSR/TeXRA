@@ -1,9 +1,10 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
-// Local imports - common helpers
-import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
+// Local imports - shared utilities
+import { copyWithFeedback } from '@shared/utils/clipboard';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -16,7 +17,7 @@ export class InstructionPanel extends LitElement {
   @property({ type: Object }) instruction: InstructionUpdate | null = null;
 
   @query(`#${ELEMENT_IDS.INSTRUCTION_COPY_BTN}`)
-  private declare copyButton: HTMLElement | null;
+  declare private copyButton: HTMLElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -29,33 +30,40 @@ export class InstructionPanel extends LitElement {
     return html`
       <div
         id=${ELEMENT_IDS.INSTRUCTION_CONTAINER}
-        class="instruction-panel ${isVisible ? 'is-visible' : ''}"
+        class=${classMap({
+          'instruction-panel': true,
+          'is-visible': isVisible,
+        })}
         aria-hidden=${isVisible ? 'false' : 'true'}
       >
         <div class="instruction-panel__header">
-          <div class="instruction-panel__title">
-            <i class="codicon codicon-lightbulb"></i>
-            Instruction
-          </div>
-          <div class="instruction-panel__actions">
+          <span class="instruction-panel__title">
+            <i class="codicon codicon-notebook"></i>
+            <span>Instructions</span>
+          </span>
+          <vscode-toolbar-container class="instruction-panel__actions">
             <vscode-toolbar-button
               id=${ELEMENT_IDS.INSTRUCTION_COPY_BTN}
               class="instruction-panel__copy"
               icon="copy"
+              label="Copy instruction"
               title="Copy instruction"
-              aria-label="Copy instruction"
+              data-default-title="Copy instruction"
+              data-success-title="Copied!"
               ?disabled=${!isVisible}
               @click=${this.handleCopy}
             ></vscode-toolbar-button>
-          </div>
+          </vscode-toolbar-container>
         </div>
-        <div class="instruction-panel__body">
-          <vscode-text-area
+        <div class="instruction-panel__body" role="presentation">
+          <vscode-textarea
             id=${ELEMENT_IDS.INSTRUCTION_TEXT}
             class="instruction-panel__text"
             .value=${text}
             readonly
-          ></vscode-text-area>
+            resize="none"
+            rows="8"
+          ></vscode-textarea>
         </div>
       </div>
     `;
