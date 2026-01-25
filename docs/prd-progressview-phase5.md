@@ -22,7 +22,7 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 | CODICON | All         | 403 Forbidden font loading error | ⬜ Not Started |
 | H1      | History     | Mark highlight colors SWAPPED    | ⬜ Not Started |
 | TOKENS  | All         | CSS spacing 2-4px larger         | ⬜ Not Started |
-| **R12** | ProgressView| FollowUp section never visible   | ⬜ Not Started |
+| **R12** | ProgressView| FollowUp section never visible   | ✅ Fixed       |
 | **R13** | MainView    | Dropdowns invisible (clickable)  | ⬜ Not Started |
 | **R14** | MainView    | Run button shows text not icon   | ⬜ Not Started |
 
@@ -367,7 +367,7 @@ declare module 'sortablejs' {
 **Problem:** Lines 21 and 30 use `any`:
 
 ```typescript
-// themeHandlers.js (should be .ts)
+// themeHandlers.ts (should be .ts)
 [commands.THEME_SET]: (message: any) => { ... }
 [commands.DEBUG_MODE_SET]: (message: any) => { ... }
 ```
@@ -464,24 +464,24 @@ private get isToolUse(): boolean {
 
 ## Implementation Plan
 
-### Step 1: Message Validation (Week 1)
+### Step 1: Message Validation
 
 1. Create `src/shared/schemas/mainViewMessages.ts` with all 58 schemas
 2. Create `src/webview/frontend/handlers/messageHandlers.ts` with registry pattern
 3. Update MainApp to use registry + Zod validation
 4. Delete redundant debug mode handler
 
-### Step 2: Component Extraction (Week 2)
+### Step 2: Component Extraction
 
 1. Extract `FileSelectGroup.ts` component
 2. Extract `BannerGroup.ts` components
 3. Extract `LatexDiffsSection.ts` component
 4. Update MainApp imports
 
-### Step 3: Type Safety (Week 3)
+### Step 3: Type Safety
 
 1. Install `@types/sortablejs` or expand local types
-2. Convert `themeHandlers.js` → `themeHandlers.ts`
+2. Add Zod validation to `themeHandlers.ts`
 3. Extract 37 inline arrows to class methods
 4. Add computed getters for derived state
 
@@ -1253,16 +1253,14 @@ render(formatTaskLog(log), container);
 
 **Migration scope:**
 
-| Formatter File | Functions | Effort |
-|----------------|-----------|--------|
-| `taskLog.ts` | 3 | 30 min |
-| `toolUseLog.ts` | 5 | 1 hour |
-| `streamHeader.ts` | 2 | 30 min |
-| `agentLog.ts` | 4 | 1 hour |
-| `litTemplates.ts` | 8 | 2 hours |
-| Others (10 files) | ~20 | 4 hours |
-
-**Total estimated effort:** ~9 hours
+| Formatter File | Functions |
+|----------------|-----------|
+| `taskLog.ts` | 3 |
+| `toolUseLog.ts` | 5 |
+| `streamHeader.ts` | 2 |
+| `agentLog.ts` | 4 |
+| `litTemplates.ts` | 8 |
+| Others (10 files) | ~20 |
 
 **Benefits:**
 - Shadow DOM encapsulation possible
@@ -1498,30 +1496,30 @@ The following normalizers were eliminated during ProgressView migration:
 
 ### Immediate (Before Release)
 
-| ID | Issue | Effort |
-|----|-------|--------|
-| R1 | Missing SET_SELECTED_AGENT handler | 30 min |
-| Codicon | 403 Forbidden font error | 1 hour |
-| H1 | Mark highlight colors swapped | 15 min |
-| J1 | Missing debounce on instruction input | 30 min |
+| ID | Issue |
+|----|-------|
+| R1 | Missing SET_SELECTED_AGENT handler |
+| Codicon | 403 Forbidden font error |
+| H1 | Mark highlight colors swapped |
+| J1 | Missing debounce on instruction input |
 
-### High Priority (Next Sprint)
+### High Priority
 
-| ID | Issue | Effort |
-|----|-------|--------|
-| R2 | Missing Merge button | 30 min |
-| CSS Tokens | All spacing 2-4px larger | 2 hours |
-| H2-H5 | HistoryView styling regressions | 2 hours |
-| P1-P2 | ProfileView missing styles | 1 hour |
+| ID | Issue |
+|----|-------|
+| R2 | Missing Merge button |
+| CSS Tokens | All spacing 2-4px larger |
+| H2-H5 | HistoryView styling regressions |
+| P1-P2 | ProfileView missing styles |
 
-### Medium Priority (Backlog)
+### Medium Priority
 
-| ID | Issue | Effort |
-|----|-------|--------|
-| R3-R4 | Missing LaTeXDiffs buttons | 1 hour |
-| M1 | MainView missing CSS variables | 1 hour |
-| J2-J4 | Minor JS behavioral differences | 2 hours |
-| H6-H15 | Remaining HistoryView styles | 2 hours |
+| ID | Issue |
+|----|-------|
+| R3-R4 | Missing LaTeXDiffs buttons |
+| M1 | MainView missing CSS variables |
+| J2-J4 | Minor JS behavioral differences |
+| H6-H15 | Remaining HistoryView styles |
 
 ---
 
