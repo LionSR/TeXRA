@@ -226,7 +226,9 @@ export class PromptOverlay extends LitElement {
     `;
   }
 
-  private renderWorkflowFiles(prompt: WorkflowAgentProposalPrompt): TemplateResult {
+  private renderWorkflowFiles(
+    prompt: WorkflowAgentProposalPrompt,
+  ): TemplateResult {
     const combine = (single: string | null | undefined, arr: string[] = []) =>
       [single, ...arr].filter((f): f is string => Boolean(f));
 
@@ -255,12 +257,13 @@ export class PromptOverlay extends LitElement {
       <div class="file-list">
         <span class="file-list-label">${label}:</span>
         ${files.map(
-          (file, i) => html`${i > 0 ? ', ' : ''}<span
-              class="file-link"
-              title=${file}
-              @click=${() => this.openFile(file)}
-              >${getBasename(file)}</span
-            >`,
+          (file, i) =>
+            html`${i > 0 ? ', ' : ''}<span
+                class="file-link"
+                title=${file}
+                @click=${() => this.openFile(file)}
+                >${getBasename(file)}</span
+              >`,
         )}
       </div>
     `;
