@@ -218,6 +218,15 @@ export const profileViewStyles: CSSResult = css`
     margin-top: var(--spacing-medium);
   }
 
+  .model-access-error {
+    margin-top: var(--spacing-medium);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+  }
+
   .model-access-summary {
     display: flex;
     align-items: center;

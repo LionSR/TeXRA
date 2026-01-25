@@ -22,29 +22,42 @@ import { css, type CSSResult } from 'lit';
 export const designTokens: CSSResult = css`
   :host {
     /* Spacing - consistent spacing scale */
-    --spacing-tiny: 4px;
-    --spacing-small: 8px;
-    --spacing-medium: 12px;
-    --spacing-large: 16px;
-    --spacing-xlarge: 24px;
+    --spacing-tiny: 2px;
+    --spacing-small: 4px;
+    --spacing-medium: 8px;
+    --spacing-large: 12px;
+    --spacing-xlarge: 20px;
 
     /* Heights - control and content heights */
-    --height-control: 26px;
-    --height-large: 200px;
+    --height-control: 24px;
+    --height-button: 30px;
+    --height-small: 100px;
+    --height-medium: 200px;
+    --height-large: 300px;
     --height-xlarge: 400px;
+    --height-max: 1000px;
+
+    /* Widths */
+    --width-icon: 16px;
+    --width-button-min: 80px;
+    --width-dropdown: 160px;
 
     /* Typography */
-    --font-size: 13px;
-    --font-size-sm: 12px;
-    --font-size-xs: 11px;
-    --font-size-icon: 16px;
-    --font-size-icon-sm: 14px;
+    --font-size: var(--vscode-font-size);
+    --font-size-lg: calc(var(--font-size) * 1.2);
+    --font-size-sm: calc(var(--font-size) * 0.9);
+    --font-size-xs: calc(var(--font-size) * 0.8);
+    --font-size-icon: var(--font-size-lg);
+    --font-size-icon-sm: var(--font-size);
     --font-family: var(--vscode-font-family, sans-serif);
+    --font-weight: var(--vscode-font-weight);
 
     /* Borders */
     --border-thin: 1px;
+    --border-medium: 2px;
+    --border-thick: 3px;
     --border-radius-small: 2px;
-    --border-radius-medium: 4px;
+    --border-radius: 3px;
     --border-radius-large: 6px;
 
     /* Colors - semantic colors using VS Code variables */
@@ -58,6 +71,7 @@ export const designTokens: CSSResult = css`
     /* Opacity - consistent opacity scale */
     --opacity-subtle: 0.7;
     --opacity-disabled: 0.5;
+    --opacity-normal: 0.85;
     --opacity-full: 1;
   }
 `;

@@ -4,7 +4,6 @@ function createEvent<T>(type: string, detail: T): CustomEvent<T> {
 
 export const ProfileViewEvents = {
   signIn: () => createEvent('profile-sign-in', undefined),
-  signOut: () => createEvent('profile-sign-out', undefined),
   selectAgent: (detail: { agentName: string }) =>
     createEvent('profile-select-agent', detail),
   setApiAccessMode: (detail: { mode: 'included' | 'personal' }) =>

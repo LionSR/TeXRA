@@ -73,6 +73,12 @@ export const mainViewStyles: CSSResult = css`
     top: calc(100% + var(--spacing-tiny));
     right: 0;
     z-index: 100;
+    display: block;
+    background-color: var(--vscode-menu-background);
+    color: var(--vscode-menu-foreground);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: var(--border-radius);
+    min-width: var(--width-dropdown);
   }
 
   .dropdown-container.dropdown-left .dropdown-menu {
@@ -85,6 +91,10 @@ export const mainViewStyles: CSSResult = css`
     flex-direction: column;
     gap: 0;
     padding: var(--spacing-tiny);
+  }
+
+  .dropdown-container .dropdown-menu:not([show]) {
+    display: none;
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox {

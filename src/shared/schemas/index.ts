@@ -21,6 +21,7 @@ export * from './progressViewData';
 export * from './memoryViewMessages';
 export * from './historyViewMessages';
 export * from './profileViewMessages';
+export * from './mainViewMessages';
 
 // Composite schemas (depend on message schemas)
 export * from './streamState';

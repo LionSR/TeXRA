@@ -1,4 +1,5 @@
 export * from './clipboard';
+export * from './debounce';
 export * from './dropdown';
 export * from './dom';
 export * from './html';

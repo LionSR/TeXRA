@@ -10,6 +10,7 @@ import Sortable from 'sortablejs';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 import { WebviewStateManager } from '@shared/state';
+import { debounce } from '@shared/utils';
 import {
   decorateAgentOptions,
   decorateModelOptions,
@@ -26,8 +27,39 @@ import { resolveTextareaTarget, syncHostValue } from '@shared/utils/textarea';
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
+// Local imports - shared schemas
+import {
+  MainViewAddMediaFileMessageSchema,
+  MainViewFileSelectedMessageSchema,
+  MainViewInstructionTextPolishedMessageSchema,
+  MainViewInstructionTextPolishErrorMessageSchema,
+  MainViewInstructionTextTranscribedMessageSchema,
+  MainViewMessageSchema,
+  MainViewRecordingErrorMessageSchema,
+  MainViewRecordingStartedMessageSchema,
+  MainViewRecordingStoppedMessageSchema,
+  MainViewSetAgentOptionsMessageSchema,
+  MainViewSetAllSingleFilesMessageSchema,
+  MainViewSetBaseFileMessageSchema,
+  MainViewSetCurrentFileMessageSchema,
+  MainViewSetDefaultOutputFilesMessageSchema,
+  MainViewSetModelOptionsMessageSchema,
+  MainViewSetMultipleFilesMessageSchema,
+  MainViewSetOpenedFilesMessageSchema,
+  MainViewSetRecentCommitsMessageSchema,
+  MainViewSetSelectedAgentMessageSchema,
+  MainViewSetSelectedCommitMessageSchema,
+  MainViewSetSingleFileMessageSchema,
+  MainViewShowAgentConfigBannerMessageSchema,
+  MainViewShowApiKeyBannerMessageSchema,
+  MainViewShowDependencyBannerMessageSchema,
+  MainViewStateRestoreMessageSchema,
+  MainViewThemeSetMessageSchema,
+  MainViewToggleBannerMessageSchema,
+} from '@shared/schemas';
+
 // Local imports - webview commands
-import { MAIN_VIEW_COMMANDS, COMMON_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - main view
 import {
@@ -234,6 +266,17 @@ export class MainApp extends BaseWebviewApp {
     new WebviewStateManager<MainViewPersistedState>(DEFAULT_STATE);
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
+  private readonly debouncedInstructionSave = debounce(
+    (value: string): void => {
+      if (value.trim()) {
+        this.stopPlaceholderRotation();
+      } else {
+        this.startPlaceholderRotation();
+      }
+      this.saveState();
+    },
+    250,
+  );
   private sortables: Sortable[] = [];
   private readonly documentClickHandler = (event: MouseEvent) => {
     const path = event.composedPath();
@@ -265,184 +308,409 @@ export class MainApp extends BaseWebviewApp {
     }
   };
 
+  private readonly messageHandlers: Record<string, (raw: unknown) => void> = {
+    [MAIN_VIEW_COMMANDS.THEME_SET]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewThemeSetMessageSchema,
+        raw,
+        (data) => this.applyTheme(data.theme ?? ''),
+        'Theme',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetModelOptionsMessageSchema,
+        raw,
+        (data) => this.applyModelOptions(data.options ?? ''),
+        'Model options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetAgentOptionsMessageSchema,
+        raw,
+        (data) => this.applyAgentOptions(data.options ?? undefined),
+        'Agent options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSingleFileMessageSchema,
+        raw,
+        (data) => this.handleSetSingleFileOptions(data),
+        'Single file options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSingleFileMessageSchema,
+        raw,
+        (data) => this.handleSetSingleFileOptions(data),
+        'Single file options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSingleFileMessageSchema,
+        raw,
+        (data) => this.handleSetSingleFileOptions(data),
+        'Single file options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSingleFileMessageSchema,
+        raw,
+        (data) => this.handleSetSingleFileOptions(data),
+        'Single file options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSingleFileMessageSchema,
+        raw,
+        (data) => this.handleSetSingleFileOptions(data),
+        'Single file options',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetBaseFileMessageSchema,
+        raw,
+        (data) => this.handleSetBaseFile(data),
+        'Base file options',
+      ),
+    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewFileSelectedMessageSchema,
+        raw,
+        (data) => this.handleSingleFileSelected(data),
+        'Single file selected',
+      ),
+    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewFileSelectedMessageSchema,
+        raw,
+        (data) => this.handleSingleFileSelected(data),
+        'Single file selected',
+      ),
+    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewFileSelectedMessageSchema,
+        raw,
+        (data) => this.handleSingleFileSelected(data),
+        'Single file selected',
+      ),
+    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewFileSelectedMessageSchema,
+        raw,
+        (data) => this.handleSingleFileSelected(data),
+        'Single file selected',
+      ),
+    [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewFileSelectedMessageSchema,
+        raw,
+        (data) => this.handleSingleFileSelected(data),
+        'Single file selected',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetMultipleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetMultipleFiles(data),
+        'Multiple files update',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetMultipleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetMultipleFiles(data),
+        'Multiple files update',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetMultipleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetMultipleFiles(data),
+        'Multiple files update',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetMultipleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetMultipleFiles(data),
+        'Multiple files update',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetMultipleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetMultipleFiles(data),
+        'Multiple files update',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetDefaultOutputFilesMessageSchema,
+        raw,
+        (data) => this.handleSetDefaultOutputFiles(data),
+        'Default output files',
+      ),
+    [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewAddMediaFileMessageSchema,
+        raw,
+        (data) => this.handleAddMediaFile(data),
+        'Add media file',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetRecentCommitsMessageSchema,
+        raw,
+        (data) => this.handleSetRecentCommits(data),
+        'Recent commits',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetCurrentFileMessageSchema,
+        raw,
+        (data) => this.handleSetCurrentFile(data),
+        'Current file',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSelectedCommitMessageSchema,
+        raw,
+        (data) => this.handleSetSelectedCommit(data),
+        'Selected commit',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetOpenedFilesMessageSchema,
+        raw,
+        (data) => this.handleSetOpenedFiles(data),
+        'Opened files',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetAllSingleFilesMessageSchema,
+        raw,
+        (data) => this.handleSetAllSingleFiles(data),
+        'All single files',
+      ),
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewInstructionTextPolishedMessageSchema,
+        raw,
+        (data) => this.handleInstructionTextPolished(data),
+        'Instruction polished',
+      ),
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewInstructionTextPolishErrorMessageSchema,
+        raw,
+        (data) => this.handleInstructionTextPolishError(data),
+        'Instruction polish error',
+      ),
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewInstructionTextTranscribedMessageSchema,
+        raw,
+        (data) => this.handleInstructionTextTranscribed(data),
+        'Instruction transcribed',
+      ),
+    [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewRecordingStartedMessageSchema,
+        raw,
+        () => {
+          this.isRecording = true;
+        },
+        'Recording started',
+      ),
+    [MAIN_VIEW_COMMANDS.RECORDING_STOPPED]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewRecordingStoppedMessageSchema,
+        raw,
+        () => {
+          this.isRecording = false;
+        },
+        'Recording stopped',
+      ),
+    [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewRecordingErrorMessageSchema,
+        raw,
+        () => {
+          this.isRecording = false;
+        },
+        'Recording error',
+      ),
+    [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewShowApiKeyBannerMessageSchema,
+        raw,
+        (data) => {
+          this.apiKeyBanner = {
+            visible: true,
+            provider: data.provider ?? '',
+            requiresKey: data.requiresKey ?? false,
+          };
+        },
+        'API key banner',
+      ),
+    [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewShowAgentConfigBannerMessageSchema,
+        raw,
+        (data) => {
+          this.agentConfigBanner = {
+            visible: true,
+            agentName: data.agentName ?? '',
+            customDirSet: data.customDirSet ?? false,
+          };
+        },
+        'Agent config banner',
+      ),
+    [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewShowDependencyBannerMessageSchema,
+        raw,
+        (data) => {
+          this.dependencyBanner = {
+            visible: true,
+            missingTools: data.missingTools ?? [],
+          };
+        },
+        'Dependency banner',
+      ),
+    [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.apiKeyBanner = { visible: false };
+        },
+        'Hide API key banner',
+      ),
+    [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.agentConfigBanner = { visible: false };
+        },
+        'Hide agent config banner',
+      ),
+    [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.dependencyBanner = { visible: false };
+        },
+        'Hide dependency banner',
+      ),
+    [MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.gettingStartedVisible = true;
+        },
+        'Show getting started banner',
+      ),
+    [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.gettingStartedVisible = false;
+        },
+        'Hide getting started banner',
+      ),
+    [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.loginBannerVisible = true;
+        },
+        'Show login banner',
+      ),
+    [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewToggleBannerMessageSchema,
+        raw,
+        () => {
+          this.loginBannerVisible = false;
+        },
+        'Hide login banner',
+      ),
+    [MAIN_VIEW_COMMANDS.STATE_RESTORE]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewStateRestoreMessageSchema,
+        raw,
+        (data) => this.handleRestoreState(data),
+        'State restore',
+      ),
+    [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (raw) =>
+      this.handleMessageWithSchema(
+        MainViewSetSelectedAgentMessageSchema,
+        raw,
+        (data) => this.handleSetSelectedAgent(data),
+        'Selected agent',
+      ),
+  };
+
+  private handleMessageWithSchema<T>(
+    schema: {
+      safeParse: (
+        data: unknown,
+      ) => { success: true; data: T } | { success: false; error: unknown };
+    },
+    raw: unknown,
+    handler: (data: T) => void,
+    context: string,
+  ): void {
+    const result = schema.safeParse(raw);
+    if (!result.success) {
+      this.logSchemaError(
+        `[MainApp] ${context} validation failed.`,
+        result.error,
+      );
+      return;
+    }
+    handler(result.data);
+  }
+
   override connectedCallback(): void {
     super.connectedCallback();
-    window.addEventListener('message', this.handleDebugModeMessage);
     document.addEventListener('click', this.documentClickHandler);
     this.restorePersistedState();
   }
 
   override disconnectedCallback(): void {
     document.removeEventListener('click', this.documentClickHandler);
-    window.removeEventListener('message', this.handleDebugModeMessage);
     this.sortables.forEach((sortable) => sortable.destroy());
     this.sortables = [];
+    this.debouncedInstructionSave.cancel();
     this.stopPlaceholderRotation();
     super.disconnectedCallback();
   }
-
-  private handleDebugModeMessage = (event: MessageEvent): void => {
-    const message = event.data as { command?: string; debugMode?: boolean };
-    if (message?.command === COMMON_COMMANDS.DEBUG_MODE_SET) {
-      this.debugMode = Boolean(message.debugMode);
-    }
-  };
 
   protected handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object' || !('command' in raw)) {
       return;
     }
-    const message = raw as { command: string; [key: string]: unknown };
+    const command = (raw as { command?: string }).command;
+    if (!command) return;
 
-    switch (message.command) {
-      case MAIN_VIEW_COMMANDS.THEME_SET: {
-        const theme = typeof message.theme === 'string' ? message.theme : '';
-        document.body.className = theme;
-        return;
-      }
-      case MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS:
-        if (typeof message.options === 'string') {
-          this.modelOptionsHtml = message.options;
-          if (this.model && !this.hasOptionValue(message.options, this.model)) {
-            this.model = '';
-          }
-        }
-        return;
-      case MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS: {
-        const options = message.options as
-          | { workflow?: string; toolUse?: string }
-          | undefined;
-        if (options?.workflow !== undefined && options.workflow !== null) {
-          this.workflowAgentOptionsHtml = options.workflow;
-          if (
-            this.workflowAgent &&
-            !this.hasOptionValue(options.workflow, this.workflowAgent)
-          ) {
-            this.workflowAgent = '';
-          }
-        }
-        if (options?.toolUse !== undefined && options.toolUse !== null) {
-          this.toolUseAgentOptionsHtml = options.toolUse;
-          if (
-            this.toolUseAgent &&
-            !this.hasOptionValue(options.toolUse, this.toolUseAgent)
-          ) {
-            this.toolUseAgent = '';
-          }
-        }
-        return;
-      }
-      case MAIN_VIEW_COMMANDS.SET_INPUT_FILE:
-      case MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE:
-      case MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE:
-      case MAIN_VIEW_COMMANDS.SET_MEDIA_FILE:
-      case MAIN_VIEW_COMMANDS.SET_EDITED_FILE:
-        this.handleSetSingleFileOptions(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_BASE_FILE:
-        this.handleSetBaseFile(message);
-        return;
-      case MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED:
-      case MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED:
-      case MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED:
-      case MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED:
-      case MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED:
-        this.handleSingleFileSelected(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_INPUT_FILES:
-      case MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES:
-      case MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES:
-      case MAIN_VIEW_COMMANDS.SET_MEDIA_FILES:
-      case MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES:
-        this.handleSetMultipleFiles(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES:
-        this.handleSetDefaultOutputFiles(message);
-        return;
-      case MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE:
-        this.handleAddMediaFile(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS:
-        this.handleSetRecentCommits(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_CURRENT_FILE:
-        this.handleSetCurrentFile(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT:
-        this.handleSetSelectedCommit(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_OPENED_FILES:
-        this.handleSetOpenedFiles(message);
-        return;
-      case MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES:
-        this.handleSetAllSingleFiles(message);
-        return;
-      case MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED:
-        this.handleInstructionTextPolished(message);
-        return;
-      case MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR:
-        this.handleInstructionTextPolishError(message);
-        return;
-      case MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED:
-        this.handleInstructionTextTranscribed(message);
-        return;
-      case MAIN_VIEW_COMMANDS.RECORDING_STARTED:
-        this.isRecording = true;
-        return;
-      case MAIN_VIEW_COMMANDS.RECORDING_STOPPED:
-      case MAIN_VIEW_COMMANDS.RECORDING_ERROR:
-        this.isRecording = false;
-        return;
-      case MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER:
-        this.apiKeyBanner = {
-          visible: true,
-          provider:
-            typeof message.provider === 'string' ? message.provider : '',
-          requiresKey: Boolean(message.requiresKey),
-        };
-        return;
-      case MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER:
-        this.apiKeyBanner = { visible: false };
-        return;
-      case MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER:
-        this.agentConfigBanner = {
-          visible: true,
-          agentName:
-            typeof message.agentName === 'string' ? message.agentName : '',
-          customDirSet: Boolean(message.customDirSet),
-        };
-        return;
-      case MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER:
-        this.agentConfigBanner = { visible: false };
-        return;
-      case MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER:
-        this.dependencyBanner = {
-          visible: true,
-          missingTools: Array.isArray(message.missingTools)
-            ? (message.missingTools as string[])
-            : [],
-        };
-        return;
-      case MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER:
-        this.dependencyBanner = { visible: false };
-        return;
-      case MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER:
-        this.gettingStartedVisible = true;
-        return;
-      case MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER:
-        this.gettingStartedVisible = false;
-        return;
-      case MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER:
-        this.loginBannerVisible = true;
-        return;
-      case MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER:
-        this.loginBannerVisible = false;
-        return;
-      case MAIN_VIEW_COMMANDS.STATE_RESTORE:
-        this.handleRestoreState(message);
-        return;
-      default:
-        break;
+    const handler = this.messageHandlers[command];
+    if (handler) {
+      handler(raw);
+      return;
+    }
+
+    const fallback = MainViewMessageSchema.safeParse(raw);
+    if (!fallback.success) {
+      this.logSchemaError(
+        '[MainApp] Unrecognized message payload.',
+        fallback.error,
+      );
     }
   }
 
@@ -491,6 +759,41 @@ export class MainApp extends BaseWebviewApp {
           updateAgentSelectTooltip(select);
         }
       });
+    }
+  }
+
+  private applyTheme(theme: string): void {
+    document.body.className = theme;
+  }
+
+  private applyModelOptions(options: string): void {
+    this.modelOptionsHtml = options;
+    if (this.model && !this.hasOptionValue(options, this.model)) {
+      this.model = '';
+    }
+  }
+
+  private applyAgentOptions(options?: {
+    workflow?: string | null;
+    toolUse?: string | null;
+  }): void {
+    if (options?.workflow !== undefined && options.workflow !== null) {
+      this.workflowAgentOptionsHtml = options.workflow;
+      if (
+        this.workflowAgent &&
+        !this.hasOptionValue(options.workflow, this.workflowAgent)
+      ) {
+        this.workflowAgent = '';
+      }
+    }
+    if (options?.toolUse !== undefined && options.toolUse !== null) {
+      this.toolUseAgentOptionsHtml = options.toolUse;
+      if (
+        this.toolUseAgent &&
+        !this.hasOptionValue(options.toolUse, this.toolUseAgent)
+      ) {
+        this.toolUseAgent = '';
+      }
     }
   }
 
@@ -657,11 +960,12 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private handleSetSingleFileOptions(message: Record<string, unknown>): void {
-    const files = Array.isArray(message.files)
-      ? (message.files as string[])
-      : [];
-    const command = typeof message.command === 'string' ? message.command : '';
+  private handleSetSingleFileOptions(message: {
+    command: string;
+    files?: string[] | null;
+  }): void {
+    const files = Array.isArray(message.files) ? message.files : [];
+    const command = message.command;
     const targetId = this.getSingleSelectId(command);
     if (!targetId) return;
 
@@ -674,10 +978,11 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetBaseFile(message: Record<string, unknown>): void {
-    const files = Array.isArray(message.files)
-      ? (message.files as string[])
-      : [];
+  private handleSetBaseFile(message: {
+    files?: string[] | null;
+    preserveBaseFile?: boolean | null;
+  }): void {
+    const files = Array.isArray(message.files) ? message.files : [];
     this.fileOptions = { ...this.fileOptions, baseFile: files };
 
     if (
@@ -690,20 +995,24 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSingleFileSelected(message: Record<string, unknown>): void {
-    const value = typeof message.filePath === 'string' ? message.filePath : '';
-    const command = typeof message.command === 'string' ? message.command : '';
+  private handleSingleFileSelected(message: {
+    command: string;
+    filePath?: string | null;
+  }): void {
+    const value = message.filePath ?? '';
+    const command = message.command;
     const key = this.getSingleSelectKey(command);
     if (!key) return;
     this.singleFiles = { ...this.singleFiles, [key]: value };
     this.saveState();
   }
 
-  private handleSetMultipleFiles(message: Record<string, unknown>): void {
-    const files = Array.isArray(message.files)
-      ? (message.files as string[])
-      : [];
-    const command = typeof message.command === 'string' ? message.command : '';
+  private handleSetMultipleFiles(message: {
+    command: string;
+    files?: string[] | null;
+  }): void {
+    const files = Array.isArray(message.files) ? message.files : [];
+    const command = message.command;
     const listId = this.getMultipleListId(command);
     if (!listId) return;
 
@@ -723,16 +1032,18 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetDefaultOutputFiles(message: Record<string, unknown>): void {
+  private handleSetDefaultOutputFiles(message: {
+    files?: string[] | null;
+  }): void {
     if (Array.isArray(message.files)) {
-      this.defaultOutputFiles = [...message.files] as string[];
+      this.defaultOutputFiles = [...message.files];
       if (this.outputFilesActive && this.multiFiles.outputFiles.length === 0) {
         this.initializeOutputFiles();
       }
     }
   }
 
-  private handleAddMediaFile(message: Record<string, unknown>): void {
+  private handleAddMediaFile(message: { file?: string | null }): void {
     if (typeof message.file !== 'string') return;
     const existing = this.multiFiles.mediaFiles;
     if (existing.includes(message.file)) return;
@@ -744,10 +1055,11 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetRecentCommits(message: Record<string, unknown>): void {
-    const commits = Array.isArray(message.commits)
-      ? (message.commits as string[])
-      : [];
+  private handleSetRecentCommits(message: {
+    commits?: string[] | null;
+    isGitRepo?: boolean | null;
+  }): void {
+    const commits = Array.isArray(message.commits) ? message.commits : [];
     this.isGitRepo = message.isGitRepo !== false;
 
     this.fileOptions = {
@@ -766,11 +1078,12 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetCurrentFile(message: Record<string, unknown>): void {
-    const fileType =
-      typeof message.fileType === 'string' ? message.fileType : '';
-    const filePath =
-      typeof message.filePath === 'string' ? message.filePath : '';
+  private handleSetCurrentFile(message: {
+    fileType?: string | null;
+    filePath?: string | null;
+  }): void {
+    const fileType = message.fileType ?? '';
+    const filePath = message.filePath ?? '';
     const key = `${fileType}File`;
     if (!filePath || !(key in this.singleFiles)) return;
 
@@ -790,11 +1103,12 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetSelectedCommit(message: Record<string, unknown>): void {
-    const commitHash =
-      typeof message.commitHash === 'string' ? message.commitHash : '';
-    const commitLabel =
-      typeof message.commitLabel === 'string' ? message.commitLabel : '';
+  private handleSetSelectedCommit(message: {
+    commitHash?: string | null;
+    commitLabel?: string | null;
+  }): void {
+    const commitHash = message.commitHash ?? '';
+    const commitLabel = message.commitLabel ?? '';
 
     if (!commitHash) return;
     const options = this.fileOptions.commit ?? [];
@@ -808,18 +1122,19 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetOpenedFiles(message: Record<string, unknown>): void {
-    const fileType =
-      typeof message.fileType === 'string' ? message.fileType : '';
+  private handleSetOpenedFiles(message: {
+    fileType?: string | null;
+    files?: string[] | null;
+    shouldFilter?: boolean | null;
+  }): void {
+    const fileType = message.fileType ?? '';
     const normalizedType = fileType.endsWith('Files')
       ? fileType
       : `${fileType}Files`;
     const listId = normalizedType;
     if (!(listId in this.multiFiles)) return;
 
-    const files = Array.isArray(message.files)
-      ? (message.files as string[])
-      : [];
+    const files = Array.isArray(message.files) ? message.files : [];
     let filesToAdd = files;
 
     if (message.shouldFilter) {
@@ -843,7 +1158,12 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleSetAllSingleFiles(message: Record<string, unknown>): void {
+  private handleSetAllSingleFiles(message: {
+    inputFiles?: string[] | null;
+    referenceFiles?: string[] | null;
+    auxiliaryFiles?: string[] | null;
+    mediaFiles?: string[] | null;
+  }): void {
     this.blockSave();
     try {
       const updates: Record<string, string[]> = {};
@@ -875,9 +1195,9 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private handleInstructionTextPolished(
-    message: Record<string, unknown>,
-  ): void {
+  private handleInstructionTextPolished(message: {
+    text?: string | null;
+  }): void {
     if (typeof message.text === 'string' && message.text.trim()) {
       this.instruction = message.text;
       this.isPolishing = false;
@@ -888,19 +1208,19 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private handleInstructionTextPolishError(
-    message: Record<string, unknown>,
-  ): void {
+  private handleInstructionTextPolishError(message: {
+    error?: string | null;
+  }): void {
     this.isPolishing = false;
-    const errorText = typeof message.error === 'string' ? message.error : '';
+    const errorText = message.error ?? '';
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
       text: `Error polishing text: ${errorText || 'Unknown error'}`,
     });
   }
 
-  private handleInstructionTextTranscribed(
-    message: Record<string, unknown>,
-  ): void {
+  private handleInstructionTextTranscribed(message: {
+    text?: string | null;
+  }): void {
     if (typeof message.text !== 'string' || !message.text) {
       this.isRecording = false;
       return;
@@ -936,7 +1256,11 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleRestoreState(message: Record<string, unknown>): void {
+  private handleRestoreState(message: {
+    state?: Record<string, unknown> | null;
+    isResetOperation?: boolean | null;
+    executeImmediately?: boolean | null;
+  }): void {
     if (message.isResetOperation === true) {
       this.clearForNewSession();
       return;
@@ -997,6 +1321,23 @@ export class MainApp extends BaseWebviewApp {
     if (message.executeImmediately) {
       this.executeAgent();
     }
+  }
+
+  private handleSetSelectedAgent(message: {
+    agentValue?: string | null;
+    sessionType?: SessionType | null;
+  }): void {
+    const sessionType =
+      parseSessionType(message.sessionType ?? undefined) ?? this.sessionType;
+    this.sessionType = sessionType;
+    const agentValue = message.agentValue ?? '';
+    if (!agentValue) return;
+    if (sessionType === SESSION_TYPES.TOOL_USE) {
+      this.toolUseAgent = agentValue;
+    } else {
+      this.workflowAgent = agentValue;
+    }
+    this.saveState();
   }
 
   private determineSessionType(state: Record<string, unknown>): SessionType {
@@ -1275,6 +1616,12 @@ export class MainApp extends BaseWebviewApp {
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
   }
 
+  private handleRefreshEditedFiles(): void {
+    postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, {
+      baseFile: this.singleFiles.baseFile,
+    });
+  }
+
   private handleSessionTypeChange(value: string): void {
     const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
     if (parsed === this.sessionType) return;
@@ -1356,12 +1703,7 @@ export class MainApp extends BaseWebviewApp {
       const { textarea } = resolveTextareaTarget(instructionHost);
       if (!textarea) return;
       this.instruction = textarea.value;
-      this.saveState();
-      if (textarea.value.trim()) {
-        this.stopPlaceholderRotation();
-      } else {
-        this.startPlaceholderRotation();
-      }
+      this.debouncedInstructionSave(textarea.value);
     });
 
     instructionHost.addEventListener('paste', async (event: Event) => {
@@ -2058,10 +2400,10 @@ export class MainApp extends BaseWebviewApp {
               <vscode-button
                 id="executeButton"
                 appearance="primary"
+                icon="play"
+                title="Execute"
                 @click=${this.executeAgent}
-              >
-                Run
-              </vscode-button>
+              ></vscode-button>
             </div>
           </div>
 
@@ -2628,6 +2970,13 @@ export class MainApp extends BaseWebviewApp {
                   @click=${() => this.handleGetCurrentFile('edited')}
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
+                  id="refreshEditedFileButton"
+                  icon="edit"
+                  label="Refresh edited files"
+                  title="Refresh edited files"
+                  @click=${this.handleRefreshEditedFiles}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
                   id="emptyEditedFileButton"
                   icon="close"
                   label="Clear edited file"
@@ -2659,6 +3008,7 @@ export class MainApp extends BaseWebviewApp {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <i class="codicon codicon-git-commit"></i>
                 <label for="commit">Commit</label>
               </div>
               <vscode-toolbar-container class="file-select-actions">
@@ -2713,6 +3063,13 @@ export class MainApp extends BaseWebviewApp {
               label="Clean LaTeXDiff VC"
               title="Clean LaTeXDiff VC"
               @click=${() => this.handleLatexdiffVCPack('clean')}
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
+              id="mergeButton"
+              icon="merge"
+              label="Merge edits"
+              title="Merge edits"
+              @click=${this.handleMerge}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id="compareButton"

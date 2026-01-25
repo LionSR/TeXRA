@@ -208,7 +208,7 @@ export class HistoryItem extends LitElement {
         <div class="history-details basic-details">
           <span class="history-label">Category:</span>
           <span class="history-value">
-            <span class="badge ${categoryClass}">
+            <span class="badge agent-category-badge ${categoryClass}">
               ${decorator.icon
                 ? html`<i
                     class=${ifDefined(`codicon codicon-${decorator.icon}`)}
