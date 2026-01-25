@@ -1,0 +1,17 @@
+function createEvent<T>(type: string, detail: T): CustomEvent<T> {
+  return new CustomEvent(type, { detail, bubbles: true, composed: true });
+}
+
+export const HistoryViewEvents = {
+  searchChange: (detail: { term: string }) =>
+    createEvent('history-search-change', detail),
+  searchNext: () => createEvent('history-search-next', undefined),
+  searchPrev: () => createEvent('history-search-prev', undefined),
+  toggleItem: (detail: { historyId: string; open: boolean }) =>
+    createEvent('history-toggle', detail),
+  historyAction: (detail: { action: string; historyId: string }) =>
+    createEvent('history-action', detail),
+  clearHistory: () => createEvent('history-clear', undefined),
+  matchCount: (detail: { display: string }) =>
+    createEvent('history-match-count', detail),
+};

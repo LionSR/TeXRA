@@ -9,103 +9,24 @@
     />
     <link rel="stylesheet" href="${tokensStyleUri}" />
     <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
     <link
       rel="stylesheet"
       href="${codiconUri}"
       id="vscode-codicon-stylesheet"
     />
     <title>TeXRA Memory</title>
-    <script type="importmap" nonce="${nonce}">
-      {
-        "imports": {
-          "./modules/domHandlers.js": "${domHandlersUri}",
-          "./modules/constants.js": "${constantsUri}",
-          "./modules/uiManagers/MemoryEventsManager.js": "${eventsUri}",
-          "./modules/uiManagers/MemoryRenderer.js": "${memoryRendererUri}",
-          "./modules/memoryViewState.js": "${memoryViewStateUri}",
-          "./modules/messageHandlers.js": "${messageHandlersUri}",
-          "@common/webviewState.js": "${webviewStateUri}",
-          "@common/webview/commands.js": "${commandsUri}",
-          "@common/webviewContext.js": "${webviewContextUri}",
-          "@common/domUtils.js": "${domUtilsUri}",
-          "@common/stringUtils.js": "${stringUtilsUri}",
-          "@common/templateUtils.js": "${templateUtilsUri}",
-          "@common/htmlEncoding.js": "${htmlEncodingUri}",
-          "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
-          "@common/BaseDomHandler.js": "${baseDomHandlerUri}"
-        }
-      }
+  </head>
+
+  <body>
+    <memory-app></memory-app>
+    <script nonce="${nonce}">
+      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
     </script>
     <script
       type="module"
       nonce="${nonce}"
       src="${vscodeElementsBundleUri}"
     ></script>
-    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-  </head>
-
-  <body>
-    <div class="memory-view-container">
-      <header class="view-header">
-        <h2>Agent Memory</h2>
-        <vscode-toolbar-container>
-          <vscode-toolbar-button
-            id="refreshMemoryBtn"
-            icon="refresh"
-            label="Refresh"
-            title="Refresh"
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="openMemoryFolderBtn"
-            icon="folder-opened"
-            label="Open Folder"
-            title="Open in file explorer"
-          ></vscode-toolbar-button>
-        </vscode-toolbar-container>
-      </header>
-
-      <div class="memory-settings">
-        <vscode-checkbox id="memoryEnabledToggle">
-          Enable memory for chat agents
-        </vscode-checkbox>
-      </div>
-
-      <p class="text-secondary memory-description">
-        The AI assistant can save notes here to remember important information
-        across conversations. These notes help the assistant provide more
-        contextual and personalized help.
-      </p>
-
-      <div id="memoryList" class="memory-list">
-        <!-- Memory items will be inserted here -->
-      </div>
-    </div>
-
-    <template id="memoryItemTemplate">
-      <div class="list-item memory-item">
-        <div class="list-item-header">
-          <div class="memory-path"></div>
-          <vscode-toolbar-container>
-            <vscode-toolbar-button
-              class="open-memory-btn"
-              icon="go-to-file"
-              label="Open"
-              title="Open in editor"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              class="delete-memory-btn"
-              icon="trash"
-              label="Delete"
-              title="Delete this memory"
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
-        </div>
-        <div class="text-secondary memory-meta"></div>
-        <vscode-collapsible class="collapsible">
-          <pre class="memory-preview"></pre>
-        </vscode-collapsible>
-      </div>
-    </template>
+    <script type="module" nonce="${nonce}" src="${memoryBundleUri}"></script>
   </body>
 </html>

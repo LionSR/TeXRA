@@ -9,167 +9,24 @@
     />
     <link rel="stylesheet" href="${tokensStyleUri}" />
     <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
     <link
       rel="stylesheet"
       href="${codiconUri}"
       id="vscode-codicon-stylesheet"
     />
     <title>TeXRA Profile</title>
-    <script type="importmap" nonce="${nonce}">
-      {
-        "imports": {
-          "./modules/domHandlers.js": "${domHandlersUri}",
-          "./modules/constants.js": "${constantsUri}",
-          "./modules/profileViewState.js": "${profileViewStateUri}",
-          "./modules/uiManagers/AgentsTable.js": "${agentsTableUri}",
-          "./modules/uiManagers/ProfileEventsManager.js": "${profileEventsUri}",
-          "./modules/messageHandlers.js": "${messageHandlersUri}",
-          "@common/webviewState.js": "${webviewStateUri}",
-          "@common/webview/commands.js": "${commandsUri}",
-          "@common/webviewContext.js": "${webviewContextUri}",
-          "@common/domUtils.js": "${domUtilsUri}",
-          "@common/templateUtils.js": "${templateUtilsUri}",
-          "@common/htmlEncoding.js": "${htmlEncodingUri}",
-          "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
-          "@common/BaseDomHandler.js": "${baseDomHandlerUri}"
-        }
-      }
+  </head>
+
+  <body>
+    <profile-app></profile-app>
+    <script nonce="${nonce}">
+      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
     </script>
     <script
       type="module"
       nonce="${nonce}"
       src="${vscodeElementsBundleUri}"
     ></script>
-    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-  </head>
-
-  <body>
-    <div class="profile-container">
-      <header class="view-header">
-        <h1>TeXRA Account</h1>
-      </header>
-
-      <div id="profileInfo" class="profile-info">
-        <div class="info-row">
-          <span class="label">Email:</span>
-          <span id="userEmail" class="value">Loading...</span>
-        </div>
-        <div class="info-row">
-          <span class="label">User ID:</span>
-          <span id="userId" class="value">Loading...</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Tier:</span>
-          <span id="userTier" class="badge tier-badge">Loading...</span>
-        </div>
-        <div id="accessExpirationRow" class="info-row" style="display: none">
-          <span class="label">Access Expires:</span>
-          <span id="accessExpiration" class="value"></span>
-        </div>
-      </div>
-
-      <div
-        id="apiAccessSection"
-        class="api-access-section"
-        style="display: none"
-      >
-        <h2>Model Access</h2>
-        <p class="api-access-description">
-          As a subscriber, you can use TeXRA's included model access or provide
-          your own API keys.
-        </p>
-        <div class="api-access-options">
-          <label class="api-access-option">
-            <input
-              type="radio"
-              name="apiAccessMode"
-              value="included"
-              id="apiAccessIncluded"
-            />
-            <span class="option-content">
-              <span class="option-title">Use Included Access</span>
-              <span class="option-description"
-                >Works automatically. No setup needed.</span
-              >
-            </span>
-          </label>
-          <label class="api-access-option">
-            <input
-              type="radio"
-              name="apiAccessMode"
-              value="personal"
-              id="apiAccessPersonal"
-            />
-            <span class="option-content">
-              <span class="option-title">Use My Own Keys</span>
-              <span class="option-description"
-                >Provide your own API keys from OpenAI, Anthropic, etc.</span
-              >
-            </span>
-          </label>
-        </div>
-        <details
-          id="modelAccessInfo"
-          class="model-access-info"
-          style="display: none"
-        >
-          <summary class="model-access-summary">
-            <span id="enabledProvidersInfo"></span>
-            <span class="separator">·</span>
-            <span id="allowedModelsInfo"></span>
-          </summary>
-          <div id="modelsListContainer" class="models-list-container"></div>
-        </details>
-      </div>
-
-      <div
-        id="notAuthenticated"
-        class="not-authenticated"
-        style="display: none"
-      >
-        <p>You are not signed in to TeXRA.</p>
-        <vscode-button id="signInBtn">
-          <span slot="start" class="codicon codicon-sign-in"></span>
-          Sign In
-        </vscode-button>
-      </div>
-
-      <div
-        id="remoteAgentsSection"
-        class="remote-agents-section"
-        style="display: none"
-      >
-        <h2>Available Remote Agents</h2>
-        <div id="agentsTableContainer">
-          <!-- Agents table will be rendered here -->
-        </div>
-        <p id="noAgentsMessage" class="no-agents" style="display: none">
-          No remote agents available. Contact support@texra.ai for assistance.
-        </p>
-      </div>
-    </div>
-
-    <template id="agentRowTemplate">
-      <tr class="agent-row">
-        <td class="agent-name"></td>
-        <td class="agent-category">
-          <span class="badge badge--small category-badge"></span>
-        </td>
-        <td class="agent-multi-output">
-          <span class="badge badge--small multi-output-badge"></span>
-        </td>
-        <td class="agent-description"></td>
-        <td class="agent-visibility">
-          <span class="badge badge--small visibility-badge"></span>
-        </td>
-        <td class="agent-action">
-          <vscode-button class="select-btn" appearance="primary">
-            <span slot="start" class="codicon codicon-arrow-right"></span>
-            Select
-          </vscode-button>
-        </td>
-      </tr>
-    </template>
+    <script type="module" nonce="${nonce}" src="${profileBundleUri}"></script>
   </body>
 </html>
