@@ -33,6 +33,7 @@ export class FollowUpInput extends LitElement {
     stopCommand: COMMANDS.STOP_RECORDING,
     startTitle: 'Record follow-up with microphone',
     stopTitle: 'Stop recording',
+    root: this,
   });
 
   protected createRenderRoot(): HTMLElement {
