@@ -72,9 +72,11 @@ export class FollowupSection extends LitElement {
   }
 
   render(): TemplateResult {
+    const status = this.streamData?.status;
+    const isTerminal = status === 'stopped' || status === 'ready';
     const visible =
       this.streamData?.agentCategory === 'workflow' &&
-      this.streamData?.status === 'stopped' &&
+      isTerminal &&
       Boolean(this.streamData?.hasOutputFiles);
 
     return html`

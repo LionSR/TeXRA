@@ -62,6 +62,7 @@ export function formatBannerContent(
     return bannerEntry?.element ?? null;
   }
 
+  bannerEntry.contentElem.classList.add('markdown-content');
   bannerEntry.contentElem.dataset.rawContent = trimmedContent;
   bannerEntry.contentElem.innerHTML = processMarkdownContent(trimmedContent);
 
@@ -118,7 +119,7 @@ export function formatModelResponse({
   }
 
   if (contentElem) {
-    contentElem.classList.add(`message-${level}`);
+    contentElem.classList.add(`message-${level}`, 'markdown-content');
     contentElem.dataset.rawContent = trimmedContent;
     contentElem.innerHTML = processMarkdownContent(trimmedContent);
   }

@@ -52,10 +52,10 @@ const ACTION_CONFIG: Record<
 };
 
 /** Format context management event for display. */
-export const formatContextManagement = (
+export function formatContextManagement(
   normalizedPayload: NormalizedPayload,
   logId: string,
-): HTMLElement | null => {
+): HTMLElement | null {
   const parsed = normalizedPayload?.structured;
   if (!parsed || typeof parsed !== 'object') {
     return null;
@@ -162,4 +162,4 @@ export const formatContextManagement = (
   }
 
   return element;
-};
+}

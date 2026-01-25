@@ -37,12 +37,10 @@ export function applyOpenState(
   element: HTMLElement,
   shouldOpen?: boolean,
 ): void {
-  if (!(element instanceof HTMLDetailsElement) || shouldOpen === undefined) {
-    return;
+  if (element instanceof HTMLDetailsElement && shouldOpen !== undefined) {
+    element.open = shouldOpen;
+    initToggleIcon(element, shouldOpen);
   }
-
-  element.open = shouldOpen;
-  initToggleIcon(element, shouldOpen);
 }
 
 /** Create a banner entry from template. */

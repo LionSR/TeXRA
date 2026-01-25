@@ -14,12 +14,10 @@ export function appendFormatted(
   formatted: HTMLElement | string | null,
 ): void {
   if (!formatted) return;
+
   if (formatted instanceof HTMLElement) {
     container.appendChild(formatted);
-    return;
-  }
-
-  if (typeof formatted === 'string') {
+  } else {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = formatted;
     if (wrapper.firstElementChild) {

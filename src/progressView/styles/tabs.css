@@ -2,6 +2,15 @@
  * Tab styles for ProgressView
  */
 
+/* Custom element must participate in flex layout */
+stream-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .tabs {
   display: flex;
   flex-direction: column;

@@ -104,14 +104,25 @@ export function handleUpdateStreams(
   const result = UpdateStreamsMessageSchema.safeParse(raw);
   if (!result.success) return;
 
+  const previousState = ctx.getState();
+  const previousStreamId = previousState.activeStreamId;
   const activeStream = result.data.activeStream ?? null;
-  const updated = updateStreamInfo(ctx.getState(), result.data.streams);
+  const updated = updateStreamInfo(previousState, result.data.streams);
 
   ctx.setState(() => ({
     ...updated,
     activeStreamId: activeStream || null,
     streamFilter: result.data.agentFilter as StreamFilter,
   }));
+
+  // Clear log content when:
+  // 1. No active stream (filtered to empty category, or no streams at all)
+  // 2. Stream switched (need fresh render from UPDATE_LOGS)
+  const isStreamSwitch = activeStream !== previousStreamId;
+  if (!activeStream || isStreamSwitch) {
+    const logList = ctx.getLogListRef();
+    logList?.clear();
+  }
 }
 
 export function handleUpdateLogs(
