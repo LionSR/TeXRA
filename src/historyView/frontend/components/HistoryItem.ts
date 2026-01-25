@@ -112,7 +112,7 @@ export class HistoryItem extends LitElement {
           ([key, value]) => html`
             <div class="config-item">
               <span class="config-key">${key}:</span>
-              <span>${this.renderValue(value)}</span>
+              <span class="config-value">${this.renderValue(value)}</span>
             </div>
           `,
         )}
@@ -171,7 +171,9 @@ export class HistoryItem extends LitElement {
               return html`
                 <div class="config-item">
                   <span class="config-key">${key}:</span>
-                  <span>${this.renderValue(value as ConfigValue)}</span>
+                  <span class="config-value">
+                    ${this.renderValue(value as ConfigValue)}
+                  </span>
                 </div>
               `;
             })}
@@ -208,7 +210,7 @@ export class HistoryItem extends LitElement {
         <div class="history-details basic-details">
           <span class="history-label">Category:</span>
           <span class="history-value">
-            <span class="badge ${categoryClass}">
+            <span class="badge agent-category-badge ${categoryClass}">
               ${decorator.icon
                 ? html`<i
                     class=${ifDefined(`codicon codicon-${decorator.icon}`)}

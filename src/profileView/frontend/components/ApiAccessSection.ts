@@ -34,7 +34,14 @@ export class ApiAccessSection extends LitElement {
 
     const providerCount = this.enabledProviders.length;
     if (providerCount === 0) {
-      return html``;
+      return html`
+        <div
+          class="model-access-error"
+          title="Try signing out and back in to refresh."
+        >
+          Unable to load model access. Try signing out and back in to refresh.
+        </div>
+      `;
     }
 
     const providerLabel = `${providerCount} provider${
