@@ -108,9 +108,9 @@ const TEMPLATES: Array<{ id: string; html: string }> = [
   {
     id: 'groupDetailsTemplate',
     html: `
-      <details class="log-group">
+      <div class="log-group">
         <div class="log-group-content"></div>
-      </details>
+      </div>
     `,
   },
   {
@@ -139,5 +139,7 @@ function ensureTemplate(id: string, html: string): void {
 }
 
 export function registerProgressViewTemplates(): void {
-  TEMPLATES.forEach((template) => ensureTemplate(template.id, template.html));
+  for (const { id, html } of TEMPLATES) {
+    ensureTemplate(id, html);
+  }
 }

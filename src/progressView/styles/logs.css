@@ -10,6 +10,7 @@
   font-family: var(--font-family);
   font-size: var(--font-size);
   position: relative;
+  overflow-y: auto;
 }
 
 .log-line {

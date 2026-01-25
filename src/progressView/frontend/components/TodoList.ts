@@ -4,11 +4,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-// Local imports - common constants
-import { TODO_STATUS } from '@common/constants/todoStatus';
-
 // Local imports - shared schemas
-import type { TodoItem } from '@shared/schemas';
+import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';

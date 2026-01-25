@@ -27,6 +27,8 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) yoloActive = false;
   @property({ type: Array }) queuedMessages: string[] = [];
 
+  private focusTimer: ReturnType<typeof setTimeout> | null = null;
+
   private recordingManager = new RecordingButtonManager(vscode, {
     buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
     startCommand: COMMANDS.START_RECORDING,
@@ -137,17 +139,35 @@ export class FollowUpInput extends LitElement {
   }
 
   focusInput(options: { scrollIntoView?: boolean } = {}): void {
-    const textArea = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOW_UP_INPUT}`,
-    ) as HTMLElement | null;
-    if (!textArea || !this.visible) return;
+    // Clear any pending focus attempt
+    this.clearPendingFocus();
 
-    const { textarea } = resolveTextareaTarget(textArea);
-    if (!textarea) return;
+    // Don't focus if not visible
+    if (!this.visible) return;
 
-    textarea.focus();
-    if (options.scrollIntoView) {
-      textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Debounce focus to prevent multiple rapid focus attempts
+    this.focusTimer = setTimeout(() => {
+      this.focusTimer = null;
+
+      const textArea = this.querySelector(
+        `#${ELEMENT_IDS.FOLLOW_UP_INPUT}`,
+      ) as HTMLElement | null;
+      if (!textArea || !this.visible) return;
+
+      const { textarea } = resolveTextareaTarget(textArea);
+      if (!textarea) return;
+
+      textarea.focus();
+      if (options.scrollIntoView) {
+        textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 50);
+  }
+
+  private clearPendingFocus(): void {
+    if (this.focusTimer !== null) {
+      clearTimeout(this.focusTimer);
+      this.focusTimer = null;
     }
   }
 
