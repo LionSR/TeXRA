@@ -6,6 +6,19 @@
 
 **After ProgressView is stable**, extract patterns for other webviews.
 
+### Implementation Status (2026-01-24)
+
+| Item                           | Status      | Notes                                                                 |
+| ------------------------------ | ----------- | --------------------------------------------------------------------- |
+| Base Lit app class             | ✅ Done     | `src/shared/BaseWebviewApp.ts` extracted and ProgressView now extends |
+| VS Code webview wrapper        | ✅ Done     | `src/shared/vscode.ts` + ProgressView import updated                  |
+| Reactive store helper          | ✅ Done     | `src/shared/createStore.ts` added for reuse                           |
+| Design tokens extraction       | ✅ Done     | `src/shared/styles/tokens.css` + common.css imports it                |
+| Shared resource roots          | ✅ Done     | `src/common/webview/resourceRoots.ts` includes shared styles          |
+| CSS bundling                   | ✅ Done     | ProgressView bundle now inlines CSS via custom webpack loader         |
+| Shared components              | ⏸️ Deferred | No components shared by 2+ webviews yet (rule preserved)              |
+| Legacy ProgressView JS cleanup | ✅ Done     | Removed legacy JS modules and script after Lit parity                 |
+
 ---
 
 ### Lit Features Evaluation
@@ -358,7 +371,7 @@ const progressViewConfig = {
       { test: /\.ts$/, use: 'ts-loader' },
       {
         test: /\.css$/,
-        use: ['style-loader', 'css-loader'], // Injects CSS into bundle
+        use: [path.resolve(__dirname, 'scripts/inlineCssLoader.js')], // Inlines CSS + @import
       },
     ],
   },
@@ -374,7 +387,6 @@ import './ProgressApp';
 **Benefits:**
 
 - Single bundle request instead of 30+ CSS files
-- CSS minification via `css-minimizer-webpack-plugin`
 - Dead code elimination for unused styles (future)
 
 **Note:** Keep external CSS loading as fallback for development hot-reload.
@@ -408,6 +420,8 @@ Already exists in `src/common/`:
 
 Note: Schemas already live in `src/shared/schemas/` from Phase 1 (single source of truth).
 
+Shared components remain in view folders until a second webview adopts them.
+
 ### Shared Components (Proven in ProgressView)
 
 Only extract components **actually used** by multiple webviews:
@@ -433,10 +447,11 @@ src/
 │ │ ├── status.ts # StreamStatus, TaskGroupStatus
 │ │ └── errors.ts # ProviderError, RetryErrorInfo
 │ ├── components/
-│ │ ├── Button.ts
-│ │ ├── Tabs.ts
-│ │ └── index.ts
+│ │ └── index.ts # Placeholder until shared components are reused
+│ ├── styles/
+│ │ └── tokens.css # Design tokens
 │ ├── BaseWebviewApp.ts # Message handling base class
+│ ├── createStore.ts # Reactive store helper
 │ └── vscode.ts # VS Code API wrapper
 │
 ├── progressView/
