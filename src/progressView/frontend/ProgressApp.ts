@@ -9,7 +9,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 // Local imports - webview commands
 import { WebviewStateManager } from '@shared/state';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import { createThemeHandlers } from '@common/webview/themeHandlers.js';
+import { createThemeHandlers } from '@common/webview/themeHandlers';
 
 // Local imports - progress view frontend
 import {

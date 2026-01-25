@@ -156,8 +156,6 @@ export abstract class BaseViewContentProvider {
       { key: 'commonStyleUri', path: 'styles/common.css' },
       { key: 'webviewStateUri', path: 'modules/webviewState.js' },
       { key: 'webviewContextUri', path: 'modules/webviewContext.js' },
-      { key: 'commandsUri', path: 'webview/commands.js' },
-      { key: 'webviewThemeHandlersUri', path: 'webview/themeHandlers.js' },
       { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
       {
         key: 'recordingButtonManagerUri',

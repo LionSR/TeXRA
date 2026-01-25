@@ -4,14 +4,14 @@
 
 ## Phase 3 Status Summary
 
-| Sub-Phase  | Scope                      | Status      | Notes                            |
-| ---------- | -------------------------- | ----------- | -------------------------------- |
-| **3a**     | JS → TS shared utilities   | ✅ Complete | 7 utils + 2 state managers       |
-| **3b-1**   | UI parity/stabilization    | ✅ Complete | Regressions fixed, handlers done |
-| **3b-1.5** | CSS pilot (TodoList)       | ✅ Complete | Shadow DOM pattern validated     |
-| **3b-1.6** | CSS batch migration        | ✅ Complete | 11 components to Shadow DOM      |
+| Sub-Phase  | Scope                      | Status         | Notes                                  |
+| ---------- | -------------------------- | -------------- | -------------------------------------- |
+| **3a**     | JS → TS shared utilities   | ✅ Complete    | 7 utils + 2 state managers             |
+| **3b-1**   | UI parity/stabilization    | ✅ Complete    | Regressions fixed, handlers done       |
+| **3b-1.5** | CSS pilot (TodoList)       | ✅ Complete    | Shadow DOM pattern validated           |
+| **3b-1.6** | CSS batch migration        | ✅ Complete    | 11 components to Shadow DOM            |
 | **3b-2**   | Utility conversion         | 🟡 In Progress | 1 JS import remains (themeHandlers.js) |
-| **3b-3**   | Formatter → TemplateResult | 🔶 Bridge   | Using renderToElement() bridge pattern |
+| **3b-3**   | Formatter → TemplateResult | 🔶 Bridge      | Using renderToElement() bridge pattern |
 
 **Note:** Phase 3c (other webview migrations) has been moved to **[Phase 4](./prd-progressview-phase4.md)**.
 
@@ -145,10 +145,10 @@ Several JS constant files are duplicates of TypeScript sources or will be supers
 
 ### Outstanding Cleanup Tasks
 
-| File                         | Action          | Effort  | Notes                                    |
-| ---------------------------- | --------------- | ------- | ---------------------------------------- |
-| `common/webview/commands.js` | DELETE          | 1 min   | TS version exists, identical content     |
-| `common/webview/themeHandlers.js` | Migrate to TS | 15 min  | 35 lines, imported by ProgressApp.ts:12  |
+| File                              | Action        | Effort | Notes                                   |
+| --------------------------------- | ------------- | ------ | --------------------------------------- |
+| `common/webview/commands.js`      | DELETE        | 1 min  | TS version exists, identical content    |
+| `common/webview/themeHandlers.js` | Migrate to TS | 15 min | 35 lines, imported by ProgressApp.ts:12 |
 
 ---
 
@@ -684,6 +684,7 @@ export function formatBannerContent(
 **Bridge function:** `src/progressView/frontend/formatters/litTemplates.ts:28-33`
 
 **To complete Phase 3b-3:**
+
 1. Remove `renderToElement()` calls from formatters (return `TemplateResult` directly)
 2. Update `LogList.renderLogs()` to use Lit's `render()` instead of `appendChild()`
 3. Migrate LogList/TaskGroupList to Shadow DOM
