@@ -4,6 +4,7 @@
 
 const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');
+const webpack = require('webpack');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -88,6 +89,14 @@ const extensionConfig = {
   },
 };
 
+/**
+ * Webview configurations for Lit-based frontends.
+ *
+ * Lit-specific optimizations:
+ * - DefinePlugin removes development-only code in production
+ * - Tree shaking via usedExports + sideEffects
+ * - Terser configured to preserve template literal structure
+ */
 const webviewConfigs = [
   'progressView',
   'memoryView',
@@ -117,6 +126,8 @@ const webviewConfigs = [
             loader: 'ts-loader',
           },
         ],
+        // Enable tree shaking for Lit components
+        sideEffects: false,
       },
       {
         test: /\.css$/,
@@ -124,13 +135,44 @@ const webviewConfigs = [
       },
     ],
   },
+  plugins: [
+    // Enable Lit production mode (removes dev warnings and assertions)
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(
+        process.env.NODE_ENV || 'production'
+      ),
+    }),
+  ],
   devtool: 'nosources-source-map',
   infrastructureLogging: {
     level: 'log',
   },
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin()],
+    // Enable tree shaking
+    usedExports: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          // Preserve template literal structure for Lit templates
+          ecma: 2020,
+          compress: {
+            // Don't inline functions (can break Lit's tagged template caching)
+            inline: 1,
+            // Keep class names for better debugging
+            keep_classnames: true,
+          },
+          mangle: {
+            // Don't mangle property names (Lit uses property reflection)
+            properties: false,
+          },
+          format: {
+            // Preserve comments for @customElement decorators if needed
+            comments: false,
+          },
+        },
+      }),
+    ],
   },
 }));
 
