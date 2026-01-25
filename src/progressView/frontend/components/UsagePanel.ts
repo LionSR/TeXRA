@@ -37,18 +37,18 @@ export class UsagePanel extends LitElement {
     return html`
       <div class="usage-summary-footer" ?hidden=${!hasUsage && !hasContext}>
         <div
-          id=${ELEMENT_IDS.RUN_SUMMARY}
-          class="run-summary"
-          aria-label=${this.buildUsageLabel()}
-        >
-          ${this.renderUsage()}
-        </div>
-        <div
           id=${ELEMENT_IDS.CONTEXT_STATE}
           class="context-state"
           ?hidden=${!hasContext}
         >
           ${this.renderContext()}
+        </div>
+        <div
+          id=${ELEMENT_IDS.RUN_SUMMARY}
+          class="run-summary"
+          aria-label=${this.buildUsageLabel()}
+        >
+          ${this.renderUsage()}
         </div>
       </div>
     `;
