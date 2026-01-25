@@ -37,20 +37,20 @@ export class UsagePanel extends LitElement {
 
     return html`
       <div class="usage-summary-footer" ?hidden=${!hasUsage && !hasContext}>
-        <div
+        <span
           id=${ELEMENT_IDS.CONTEXT_STATE}
           class="context-state"
           ?hidden=${!hasContext}
         >
           ${this.renderContext()}
-        </div>
-        <div
+        </span>
+        <span
           id=${ELEMENT_IDS.RUN_SUMMARY}
           class="run-summary"
           aria-label=${this.buildUsageLabel()}
         >
           ${this.renderUsage()}
-        </div>
+        </span>
       </div>
     `;
   }
@@ -72,21 +72,23 @@ export class UsagePanel extends LitElement {
         >${formatTokens(inputTokens)}
         ${when(
           cacheRead > 0,
-          () => html` ·
-            <i
-              class="codicon codicon-cloud-download"
-              title="Cache read tokens (discounted)"
-            ></i>
-            ${formatTokens(cacheRead)}`,
+          () =>
+            html` ·
+              <i
+                class="codicon codicon-cloud-download"
+                title="Cache read tokens (discounted)"
+              ></i>
+              ${formatTokens(cacheRead)}`,
         )}
         ${when(
           cacheWrite > 0,
-          () => html` ·
-            <i
-              class="codicon codicon-database"
-              title="Cache creation tokens (1.25x cost)"
-            ></i>
-            ${formatTokens(cacheWrite)}`,
+          () =>
+            html` ·
+              <i
+                class="codicon codicon-database"
+                title="Cache creation tokens (1.25x cost)"
+              ></i>
+              ${formatTokens(cacheWrite)}`,
         )}
         ·
         <i class="codicon codicon-arrow-down" title="Output tokens"></i

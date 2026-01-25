@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared utilities
-import { getRadioChangeValue, setRadioGroupValue } from '@shared/utils/dom';
+import { getRadioChangeValue } from '@shared/utils/dom';
 import { formatRelativeTime } from '@shared/utils/string';
 import {
   AGENT_DECORATORS,
@@ -58,8 +58,9 @@ export class StreamTabs extends LitElement {
   }
 
   private syncFilterRadioGroup(): void {
-    if (this.filterGroup) {
-      setRadioGroupValue(this.filterGroup, this.filter);
+    const group = this.filterGroup as HTMLElement & { value?: string } | null;
+    if (group) {
+      group.value = this.filter;
     }
   }
 
@@ -83,34 +84,32 @@ export class StreamTabs extends LitElement {
           <vscode-radio-group
             id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
             class="agent-filter-group"
+            .value=${this.filter}
             @change=${this.handleFilterChange}
           >
             ${FILTER_BUTTONS.map(
               (btn) => html`
-                <vscode-radio
-                  id=${btn.id}
-                  value=${btn.filter}
-                  .checked=${this.filter === btn.filter}
-                >
+                <vscode-radio id=${btn.id} value=${btn.filter}>
                   ${btn.label}
                 </vscode-radio>
               `,
             )}
           </vscode-radio-group>
 
-          <div id="sortButtons" @click=${this.handleSortClick}>
+          <vscode-toolbar-container id="sortButtons" @click=${this.handleSortClick}>
             ${SORT_BUTTONS.map(
               (btn) => html`
                 <vscode-toolbar-button
                   id=${btn.id}
                   class="sort-btn"
                   icon=${btn.icon}
+                  label=${btn.title}
                   title=${btn.title}
                   data-sort=${btn.sort}
                 ></vscode-toolbar-button>
               `,
             )}
-          </div>
+          </vscode-toolbar-container>
 
           <vscode-toolbar-button
             id=${ELEMENT_IDS.DELETE_ALL_BTN}

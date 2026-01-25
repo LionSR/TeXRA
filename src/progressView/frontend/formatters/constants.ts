@@ -5,10 +5,6 @@
 // Re-export icon constants for single import source
 export { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
 
-// Constants
-export const BULLET_MARKUP =
-  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
-
 export const EMOJI_BY_LEVEL: Record<string, string> = {
   error: '🔴',
   warn: '🟡',

@@ -53,7 +53,7 @@ import {
   type StreamFilter,
   type StreamState,
 } from './store';
-import { updateNestedRounds } from './stateUtils';
+import { resolveActiveRunId, updateNestedRounds } from './stateUtils';
 
 /**
  * Stores pending log updates that arrive before their APPEND_LOG.
@@ -362,7 +362,8 @@ export function handleUpdateInstruction(
   if (!result.data.stream) return;
 
   ctx.setStreamState(result.data.stream, (prev) => {
-    const runId = prev.activeRunId ?? 'default';
+    // Use sophisticated run ID resolution when no explicit activeRunId is set
+    const runId = resolveActiveRunId(prev) ?? 'default';
     const runInstructions = { ...prev.runInstructions };
     if (result.data.instruction) {
       runInstructions[runId] = result.data.instruction as InstructionUpdate;

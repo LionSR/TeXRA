@@ -1,14 +1,23 @@
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports
+// Local imports - shared
 import type {
   AgentProposalPrompt,
   BashApprovalPrompt,
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
+  WorkflowAgentProposalPrompt,
 } from '@shared/schemas';
+import { AGENT_CATEGORY } from '@shared/schemas';
+import { getBasename } from '@shared/utils/path';
+import { postMessage } from '@shared/vscode';
+
+// Local imports - webview commands
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - progress view
 import { ProgressEvents } from '../events';
 
 export type PromptState =
@@ -78,6 +87,25 @@ export class PromptOverlay extends LitElement {
     button.secondary {
       background: var(--vscode-button-secondaryBackground, transparent);
       color: var(--vscode-button-secondaryForeground, inherit);
+    }
+
+    .file-list {
+      margin: 4px 0;
+    }
+
+    .file-list-label {
+      color: var(--vscode-descriptionForeground);
+      margin-right: 4px;
+    }
+
+    .file-link {
+      color: var(--vscode-textLink-foreground);
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .file-link:hover {
+      text-decoration: underline;
     }
   `;
 
@@ -175,12 +203,16 @@ export class PromptOverlay extends LitElement {
   }
 
   private renderProposal(prompt: AgentProposalPrompt): TemplateResult {
+    const isWorkflow = prompt.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
+
     return html`
-      <div class="prompt-header">Agent proposal</div>
+      <div class="prompt-header">Agent proposal (${categoryLabel})</div>
       <div class="prompt-body">
         <p><strong>Agent:</strong> ${prompt.agent}</p>
         <p><strong>Model:</strong> ${prompt.model}</p>
         <p><strong>Instruction:</strong> ${prompt.instruction}</p>
+        ${isWorkflow ? this.renderWorkflowFiles(prompt) : nothing}
       </div>
       <div class="prompt-actions">
         <button class="secondary" @click=${() => this.emitAction('reject')}>
@@ -192,6 +224,50 @@ export class PromptOverlay extends LitElement {
         <button @click=${() => this.emitAction('approve')}>Approve</button>
       </div>
     `;
+  }
+
+  private renderWorkflowFiles(prompt: WorkflowAgentProposalPrompt): TemplateResult {
+    const combine = (single: string | null | undefined, arr: string[] = []) =>
+      [single, ...arr].filter((f): f is string => Boolean(f));
+
+    const inputFiles = combine(prompt.inputFile, prompt.inputFiles);
+    const referenceFiles = combine(prompt.referenceFile, prompt.referenceFiles);
+    const auxiliaryFiles = combine(prompt.auxiliaryFile, prompt.auxiliaryFiles);
+    const mediaFiles = combine(prompt.mediaFile, prompt.mediaFiles);
+    const outputFiles = prompt.outputFiles ?? [];
+
+    return html`
+      ${this.renderFileList('Input', inputFiles)}
+      ${this.renderFileList('Reference', referenceFiles)}
+      ${this.renderFileList('Auxiliary', auxiliaryFiles)}
+      ${this.renderFileList('Media', mediaFiles)}
+      ${this.renderFileList('Output', outputFiles)}
+    `;
+  }
+
+  private renderFileList(
+    label: string,
+    files: string[],
+  ): TemplateResult | typeof nothing {
+    if (files.length === 0) return nothing;
+
+    return html`
+      <div class="file-list">
+        <span class="file-list-label">${label}:</span>
+        ${files.map(
+          (file, i) => html`${i > 0 ? ', ' : ''}<span
+              class="file-link"
+              title=${file}
+              @click=${() => this.openFile(file)}
+              >${getBasename(file)}</span
+            >`,
+        )}
+      </div>
+    `;
+  }
+
+  private openFile(filePath: string): void {
+    postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
   }
 
   private emitAction(action: string) {

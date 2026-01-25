@@ -30,7 +30,7 @@ export class TodoList extends LitElement {
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible progress-collapsible"
-        title="Todos"
+        title="Task Progress"
         ?open=${visible}
         ?hidden=${!visible}
         aria-hidden=${visible ? 'false' : 'true'}
