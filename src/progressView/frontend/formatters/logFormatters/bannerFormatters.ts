@@ -1,15 +1,27 @@
-// @ts-nocheck
 /**
  * Banner-style formatters for thinking, scratchpad, and model response messages.
  */
 
+// Local imports - formatter helpers
 import { createBannerEntry } from '../baseLogFormatter';
 import { formatTimestamp } from '../timestampUtils';
 import { extractTrimmedContent } from '../normalizers';
 import { processMarkdownContent } from '../markdownRenderer';
+import type { NormalizedPayload } from '../normalizers';
+
+// Local imports - shared schemas
+import type { LogLevel } from '@shared/schemas';
 
 // Banner configuration by content type
-const BANNER_CONFIG = {
+const BANNER_CONFIG: Record<
+  string,
+  {
+    iconClass: string;
+    labelText: string;
+    copyTitle: string;
+    contentClass: string;
+  }
+> = {
   Thinking: {
     iconClass: 'codicon-lightbulb',
     labelText: 'Thinking',
@@ -34,21 +46,22 @@ const BANNER_CONFIG = {
  * @returns {HTMLElement|null} Banner element or null
  */
 export function formatBannerContent(
-  normalizedPayload,
-  contentType,
-  logId,
-  groupId,
-  timestamp,
-) {
+  normalizedPayload: NormalizedPayload,
+  contentType: string,
+  logId: string,
+  groupId: string | undefined,
+  timestamp: number,
+): HTMLElement | null {
   const { trimmed: trimmedContent, isEmpty } =
     extractTrimmedContent(normalizedPayload);
   if (isEmpty) return null;
 
   const config = BANNER_CONFIG[contentType] || BANNER_CONFIG.Thinking;
+  const { fullTimestamp } = formatTimestamp(new Date(timestamp));
   const bannerEntry = createBannerEntry({
     logId,
     groupId,
-    timestamp,
+    timestamp: fullTimestamp,
     ...config,
     open: false,
   });
@@ -81,7 +94,14 @@ export function formatModelResponse({
   verbose,
   content,
   level,
-}) {
+}: {
+  id: string;
+  groupId?: string;
+  timestamp: number;
+  verbose?: boolean;
+  content: NormalizedPayload;
+  level: LogLevel;
+}): HTMLElement | null {
   const trimmedContent = (content?.decodedText || '').trim();
   if (!trimmedContent) return null;
 

@@ -1,13 +1,16 @@
-// @ts-nocheck
 /**
  * Context management message formatters.
  * Displays context management events (compaction, clearing, max_tokens reduction)
  * as native UI elements in the progress view.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
+
+// Local imports - formatter helpers
 import { initToggleIcon } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
+import type { NormalizedPayload } from '../normalizers';
 
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
@@ -20,7 +23,10 @@ const TOKENS_FREED_ACTIONS = new Set([
  * Action display configuration
  * @type {Record<string, {icon: string, label: string, color: string}>}
  */
-const ACTION_CONFIG = {
+const ACTION_CONFIG: Record<
+  string,
+  { icon: string; label: string; color: string }
+> = {
   compaction: {
     icon: 'codicon-fold',
     label: 'Compacted',
@@ -54,7 +60,10 @@ const ACTION_CONFIG = {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Context management element or null
  */
-export const formatContextManagement = (normalizedPayload, logId) => {
+export const formatContextManagement = (
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+): HTMLElement | null => {
   const parsed = normalizedPayload?.structured;
   if (!parsed || typeof parsed !== 'object') {
     return null;
@@ -76,30 +85,36 @@ export const formatContextManagement = (normalizedPayload, logId) => {
     originalMaxTokens,
     reducedMaxTokens,
     details,
-  } = parsed;
+  } = parsed as Record<string, unknown>;
 
-  const config = ACTION_CONFIG[action] || {
+  const actionValue = typeof action === 'string' ? action : '';
+  const config = ACTION_CONFIG[actionValue] || {
     icon: 'codicon-history',
-    label: action || 'Context Management',
+    label: actionValue || 'Context Management',
     color: 'var(--vscode-foreground)',
   };
 
   // Update the icon and title
   const iconElem = element.querySelector('.context-management-icon');
-  if (iconElem) {
+  if (iconElem instanceof HTMLElement) {
     iconElem.className = `codicon ${config.icon} context-management-icon`;
     iconElem.style.color = config.color;
   }
 
   const titleElem = element.querySelector('.context-management-title');
-  if (titleElem) {
+  if (titleElem instanceof HTMLElement) {
     titleElem.textContent = config.label;
     titleElem.style.color = config.color;
   }
 
   // Build stat items
-  const items = [];
-  const pushItem = (icon, label, value, suffix = '') => {
+  const items: string[] = [];
+  const pushItem = (
+    icon: string,
+    label: string,
+    value: string,
+    suffix = '',
+  ) => {
     items.push(
       `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
     );
@@ -107,9 +122,9 @@ export const formatContextManagement = (normalizedPayload, logId) => {
 
   // For max_tokens_reduced, show the reduction
   if (
-    action === 'max_tokens_reduced' &&
-    originalMaxTokens &&
-    reducedMaxTokens
+    actionValue === 'max_tokens_reduced' &&
+    typeof originalMaxTokens === 'number' &&
+    typeof reducedMaxTokens === 'number'
   ) {
     pushItem(
       'codicon-arrow-down',
@@ -120,9 +135,9 @@ export const formatContextManagement = (normalizedPayload, logId) => {
 
   // For clearing actions, show tokens freed
   if (
-    TOKENS_FREED_ACTIONS.has(action) &&
-    tokensBefore !== undefined &&
-    tokensAfter !== undefined
+    TOKENS_FREED_ACTIONS.has(actionValue) &&
+    typeof tokensBefore === 'number' &&
+    typeof tokensAfter === 'number'
   ) {
     const tokensFreed = tokensBefore - tokensAfter;
     if (tokensFreed > 0) {
@@ -131,25 +146,25 @@ export const formatContextManagement = (normalizedPayload, logId) => {
   }
 
   // Show context utilization
-  if (utilizationBefore !== undefined) {
+  if (typeof utilizationBefore === 'number') {
     const utilizationDisplay =
-      utilizationAfter !== undefined
+      typeof utilizationAfter === 'number'
         ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
         : `${utilizationBefore.toFixed(1)}%`;
     pushItem('codicon-pie-chart', 'Context utilization', utilizationDisplay);
   }
 
   // Show context window
-  if (contextWindow !== undefined) {
+  if (typeof contextWindow === 'number') {
     pushItem('codicon-window', 'Context window', formatTokens(contextWindow));
   }
 
   // Show details if present
-  if (details) {
+  if (typeof details === 'string' && details) {
     pushItem('codicon-info', 'Details', details);
   }
 
-  if (contentElem) {
+  if (contentElem instanceof HTMLElement) {
     contentElem.innerHTML = items.join('');
     if (logId) contentElem.dataset.logId = logId;
   }

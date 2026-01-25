@@ -1,21 +1,26 @@
-// @ts-nocheck
 /**
  * HTML generation utilities for progress view formatters.
  * These functions create HTML fragments from normalized data.
  */
 
+// Third-party imports
 import hljs from 'highlight.js';
+
+// Local imports - common helpers
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/modules/iconConstants.js';
+
+// Local imports - formatter helpers
 import {
   TOOL_ICON_MAP,
   DIFF_DETECTION_LINE_LIMIT,
   DIFF_MARKER_THRESHOLD,
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
+import type { NormalizedFileEntry } from './normalizers';
 
 /**
  * Build a tool-use section HTML block
@@ -23,7 +28,7 @@ import { generateInlineDiff } from './wordDiff';
  * @param {string} content - The HTML content for the section
  * @returns {string} HTML string for the section
  */
-export function buildToolUseSection(label, content) {
+export function buildToolUseSection(label: string, content: string): string {
   return `
   <div class="tool-use-section">
     <div class="tool-use-subsection">
@@ -50,7 +55,7 @@ const DIFF_LINE_PATTERNS = [
  * @param {string} line - Line to check
  * @returns {string|null} CSS class or null if not a diff line
  */
-function getDiffLineClass(line) {
+function getDiffLineClass(line: string): string | null {
   for (const { prefix, className } of DIFF_LINE_PATTERNS) {
     if (line.startsWith(prefix)) return className;
   }
@@ -63,7 +68,7 @@ function getDiffLineClass(line) {
  * @param {string} text - Text to check
  * @returns {boolean} True if text looks like diff output
  */
-function isDiffContent(text) {
+function isDiffContent(text: string): boolean {
   const lines = text.split('\n').slice(0, DIFF_DETECTION_LINE_LIMIT);
   const diffMarkers = lines.filter(
     (line) =>
@@ -78,7 +83,7 @@ function isDiffContent(text) {
  * @param {string} [className] - Optional CSS class
  * @returns {string} HTML string
  */
-export function wrapInPre(text, className = '') {
+export function wrapInPre(text: string, className = ''): string {
   const classAttr = className ? ` class="${className}"` : '';
 
   // Apply diff highlighting if content looks like a diff
@@ -100,7 +105,14 @@ export function wrapInPre(text, className = '') {
  * @param {HTMLElement} element - The element to modify
  * @param {{logId?: string, groupId?: string, timestamp?: string}} data - Dataset values
  */
-export function setElementDataset(element, { logId, groupId, timestamp }) {
+export function setElementDataset(
+  element: HTMLElement,
+  {
+    logId,
+    groupId,
+    timestamp,
+  }: { logId?: string; groupId?: string; timestamp?: string },
+): void {
   if (logId) element.dataset.logId = logId;
   if (groupId) element.dataset.groupId = groupId;
   if (timestamp) element.dataset.fullTimestamp = timestamp;
@@ -111,7 +123,7 @@ export function setElementDataset(element, { logId, groupId, timestamp }) {
  * @param {HTMLElement} element - Element containing toggle icon
  * @param {boolean} [expanded=false] - Whether the element is expanded
  */
-export function initToggleIcon(element, expanded = false) {
+export function initToggleIcon(element: HTMLElement, expanded = false): void {
   const toggleIcon = element.querySelector('.toggle-icon');
   if (toggleIcon) {
     toggleIcon.className = `${
@@ -125,7 +137,9 @@ export function initToggleIcon(element, expanded = false) {
  * @param {Array} files - Array of normalized file entries
  * @returns {{items: string, summary: string}|null} Rendered items and summary
  */
-export function buildFileListRender(files) {
+export function buildFileListRender(
+  files: NormalizedFileEntry[],
+): { items: string; summary: string } | null {
   if (!Array.isArray(files)) return null;
 
   const items = files
@@ -166,7 +180,7 @@ export function buildFileListRender(files) {
  * @param {string} displayName - Display name for the link
  * @returns {string} HTML string for the file link
  */
-export function buildFileLink(filePath, displayName) {
+export function buildFileLink(filePath: string, displayName: string): string {
   if (!filePath) {
     return `<span>${encodeHtml(displayName)}</span>`;
   }
@@ -182,7 +196,11 @@ export function buildFileLink(filePath, displayName) {
  * @param {string} [options.runId] - data-run-id attribute
  * @returns {string} HTML string for list item
  */
-export function buildDetailItem(iconClass, content, options = {}) {
+export function buildDetailItem(
+  iconClass: string,
+  content: string,
+  options: { title?: string; runId?: string } = {},
+): string {
   const titleAttr = options.title
     ? ` title="${encodeHtml(options.title)}"`
     : '';
@@ -198,7 +216,7 @@ export function buildDetailItem(iconClass, content, options = {}) {
  * @param {boolean} isError - Whether the tool execution errored
  * @returns {string} Codicon class name
  */
-export function getToolIconClass(toolName, isError = false) {
+export function getToolIconClass(toolName: string, isError = false): string {
   if (isError) return 'codicon-error';
   return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
 }
@@ -208,7 +226,7 @@ export function getToolIconClass(toolName, isError = false) {
 // ============================================================================
 
 /** Human-readable labels for language badges */
-const LANGUAGE_LABELS = {
+const LANGUAGE_LABELS: Record<string, string> = {
   bash: 'Bash',
   json: 'JSON',
   yaml: 'YAML',
@@ -223,7 +241,7 @@ const LANGUAGE_LABELS = {
  * @param {string} language - Language identifier
  * @returns {string} Human-readable label
  */
-function getLanguageLabel(language) {
+function getLanguageLabel(language: string): string {
   return LANGUAGE_LABELS[language] || language || 'Text';
 }
 
@@ -239,7 +257,15 @@ function getLanguageLabel(language) {
  * @param {boolean} [options.showCopy=false] - Show copy button
  * @returns {string} HTML string for the code block
  */
-export function buildCodeBlock(text, options = {}) {
+export function buildCodeBlock(
+  text: string,
+  options: {
+    language?: string;
+    className?: string;
+    showLanguage?: boolean;
+    showCopy?: boolean;
+  } = {},
+): string {
   const {
     language = 'plaintext',
     className = '',
@@ -298,7 +324,10 @@ export function buildCodeBlock(text, options = {}) {
  * @param {number} [options.endLine] - Ending line number (1-based)
  * @returns {string} HTML string for the file link
  */
-export function buildFileLinkWithLines(filePath, options = {}) {
+export function buildFileLinkWithLines(
+  filePath: string,
+  options: { startLine?: number; endLine?: number } = {},
+): string {
   if (!filePath) return '';
 
   const { startLine, endLine } = options;
@@ -329,7 +358,10 @@ export function buildFileLinkWithLines(filePath, options = {}) {
  * @param {string} newString - Replacement text
  * @returns {string} HTML for the diff display
  */
-export function buildEditDiffSection(oldString, newString) {
+export function buildEditDiffSection(
+  oldString: string,
+  newString: string,
+): string {
   const diffHtml = generateInlineDiff(oldString, newString);
   return `<div class="edit-diff-container"><pre class="diff-inline-view">${diffHtml}</pre></div>`;
 }

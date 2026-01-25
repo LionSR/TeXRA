@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Constants and configuration for progress view formatters.
  */
@@ -13,7 +12,7 @@ export {
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
-export const EMOJI_BY_LEVEL = {
+export const EMOJI_BY_LEVEL: Record<string, string> = {
   error: '🔴',
   warn: '🟡',
   info: '🟢',
@@ -21,7 +20,7 @@ export const EMOJI_BY_LEVEL = {
 };
 
 // DateTimeFormat options for consistent timestamp formatting
-export const DATETIME_FORMAT_OPTIONS = {
+export const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -31,7 +30,7 @@ export const DATETIME_FORMAT_OPTIONS = {
   hour12: false,
 };
 
-export const TIME_FORMAT_OPTIONS = {
+export const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
@@ -63,7 +62,7 @@ export const TOOLS_WITH_FILE_CONTENT = new Set(['write_file']);
  * Maps tool name to default language hint for output.
  * Use 'bash' for shell commands, 'plaintext' for tools with variable output.
  */
-export const TOOL_OUTPUT_LANGUAGES = new Map([
+export const TOOL_OUTPUT_LANGUAGES = new Map<string, string>([
   ['bash', 'bash'],
   ['execute', 'plaintext'], // Could be any language - don't guess
   ['run', 'plaintext'], // Could be any language - don't guess
@@ -74,7 +73,7 @@ export const TOOL_OUTPUT_LANGUAGES = new Map([
  * Maps tool name to highlight.js language for the code field.
  * Supports 'code' field (wolfram) and 'command' field (bash).
  */
-export const TOOL_CODE_LANGUAGES = new Map([
+export const TOOL_CODE_LANGUAGES = new Map<string, string>([
   ['bash', 'bash'],
   ['wolfram', 'mathematica'],
 ]);
@@ -83,7 +82,7 @@ export const TOOL_CODE_LANGUAGES = new Map([
  * Map file extensions that don't match highlight.js language names.
  * Focused on LaTeX research context. Unknown extensions try the extension directly.
  */
-const EXTENSION_ALIASES = new Map([
+const EXTENSION_ALIASES = new Map<string, string>([
   // LaTeX ecosystem
   ['tex', 'latex'],
   ['sty', 'latex'],
@@ -112,7 +111,7 @@ const EXTENSION_ALIASES = new Map([
  * @param {string} filePath - File path to extract extension from
  * @returns {string} Language identifier (highlight.js validates it later)
  */
-export function getLanguageFromPath(filePath) {
+export function getLanguageFromPath(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') {
     return 'plaintext';
   }
@@ -143,7 +142,7 @@ export const DIFF_MARKER_THRESHOLD = 2;
  * Tool icon mapping for different tool types.
  * Maps tool names to VS Code codicon classes.
  */
-export const TOOL_ICON_MAP = {
+export const TOOL_ICON_MAP: Record<string, string> = {
   // File operations
   read_file: 'codicon-file',
   write_file: 'codicon-new-file',

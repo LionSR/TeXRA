@@ -1,9 +1,8 @@
-// @ts-nocheck
 // Shared utility functions for the progress view frontend.
 
 const DECIMAL_RADIX = 10;
 
-export function parseTimestamp(timestampStr) {
+export function parseTimestamp(timestampStr: string | null | undefined): Date {
   if (!timestampStr) return new Date();
   const numericValue = parseInt(timestampStr, DECIMAL_RADIX);
   if (!Number.isNaN(numericValue) && numericValue > 0) {
@@ -12,7 +11,11 @@ export function parseTimestamp(timestampStr) {
   return new Date(timestampStr);
 }
 
-export function appendFormatted(container, formatted) {
+export function appendFormatted(
+  container: HTMLElement | DocumentFragment,
+  formatted: HTMLElement | string | null,
+): void {
+  if (!formatted) return;
   if (formatted instanceof HTMLElement) {
     container.appendChild(formatted);
     return;
@@ -27,12 +30,19 @@ export function appendFormatted(container, formatted) {
   }
 }
 
+type ChildTimestampExtractor = (child: Element) => number | null;
+
 export function insertChronologically({
   container,
   element,
   timestamp,
   getChildTimestamp,
-}) {
+}: {
+  container: HTMLElement;
+  element: HTMLElement;
+  timestamp: number | Date;
+  getChildTimestamp?: ChildTimestampExtractor;
+}): void {
   if (!container || !element || timestamp === undefined || timestamp === null) {
     return;
   }
@@ -71,14 +81,17 @@ export function insertChronologically({
   container.appendChild(element);
 }
 
-function defaultChildTimestamp(child) {
-  if (!child || !child.classList) {
+function defaultChildTimestamp(child: Element): number | null {
+  if (!(child instanceof HTMLElement)) {
     return null;
   }
   if (child.classList.contains('log-group')) {
     const startElem = child.querySelector('.group-start-time');
-    const start = startElem?.dataset.start;
-    return start ? parseInt(start, DECIMAL_RADIX) : null;
+    if (startElem instanceof HTMLElement) {
+      const start = startElem.dataset.start;
+      return start ? parseInt(start, DECIMAL_RADIX) : null;
+    }
+    return null;
   }
 
   if (

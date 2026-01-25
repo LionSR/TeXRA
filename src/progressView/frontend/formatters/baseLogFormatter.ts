@@ -1,22 +1,47 @@
-// @ts-nocheck
 /**
  * Base log formatter with shared utilities for creating banner entries.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
+
+// Local imports - formatter helpers
 import { setElementDataset, initToggleIcon } from './htmlBuilders';
+
+type BannerEntry = {
+  element: HTMLElement;
+  contentElem: HTMLElement | null;
+  copyButton: HTMLElement | null;
+  summaryElem: HTMLElement | null;
+};
+
+type BannerEntryOptions = {
+  logId?: string;
+  groupId?: string;
+  timestamp?: string;
+  iconClass?: string;
+  labelText?: string;
+  copyTitle?: string;
+  contentClass?: string;
+  open?: boolean;
+  templateId?: string;
+};
+
+type FormatOptions = {
+  preservedOpen?: boolean;
+  defaultOpen?: boolean;
+};
 
 /**
  * Apply open/closed state to a details element
  * @param {HTMLElement} element - Details element
  * @param {boolean} [shouldOpen] - Whether element should be open
  */
-export function applyOpenState(element, shouldOpen) {
-  if (
-    !(element instanceof HTMLElement) ||
-    element.tagName !== 'DETAILS' ||
-    shouldOpen === undefined
-  ) {
+export function applyOpenState(
+  element: HTMLElement,
+  shouldOpen?: boolean,
+): void {
+  if (!(element instanceof HTMLDetailsElement) || shouldOpen === undefined) {
     return;
   }
 
@@ -48,7 +73,7 @@ export function createBannerEntry({
   contentClass,
   open = false,
   templateId = 'bannerDetailsTemplate',
-}) {
+}: BannerEntryOptions): BannerEntry | null {
   const element = createFromTemplate(templateId);
   if (!element) return null;
 
@@ -56,7 +81,7 @@ export function createBannerEntry({
   setElementDataset(element, { logId, groupId, timestamp });
 
   const iconElem = element.querySelector('.icon');
-  if (iconElem) {
+  if (iconElem instanceof HTMLElement) {
     iconElem.className = 'codicon icon';
     if (iconClass) {
       iconElem.classList.add(iconClass);
@@ -67,7 +92,7 @@ export function createBannerEntry({
   }
 
   const labelElem = element.querySelector('.label');
-  if (labelElem) {
+  if (labelElem instanceof HTMLElement) {
     labelElem.textContent = labelText ?? '';
   }
 
@@ -76,22 +101,26 @@ export function createBannerEntry({
     const defaultTitle =
       copyTitle ||
       (labelText ? `Copy ${labelText.toLowerCase()}` : 'Copy content');
-    copyButton.dataset.defaultTitle = defaultTitle;
-    copyButton.dataset.successTitle = 'Copied!';
-    copyButton.setAttribute('title', defaultTitle);
-    copyButton.setAttribute('aria-label', defaultTitle);
+    if (copyButton instanceof HTMLElement) {
+      copyButton.dataset.defaultTitle = defaultTitle;
+      copyButton.dataset.successTitle = 'Copied!';
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+    }
   }
 
   const contentElem = element.querySelector('.banner-content');
-  if (contentElem && contentClass) {
+  if (contentElem instanceof HTMLElement && contentClass) {
     contentElem.classList.add(contentClass);
   }
 
   return {
     element,
-    contentElem,
-    copyButton,
-    summaryElem: element.querySelector('.details-summary'),
+    contentElem: contentElem instanceof HTMLElement ? contentElem : null,
+    copyButton: copyButton instanceof HTMLElement ? copyButton : null,
+    summaryElem: element.querySelector(
+      '.details-summary',
+    ) as HTMLElement | null,
   };
 }
 
@@ -101,7 +130,10 @@ export function createBannerEntry({
  * @param {string} errorContext - Context for error message
  * @returns {*} Result of formatter or null if error
  */
-export function safeFormat(formatter, errorContext) {
+export function safeFormat<T>(
+  formatter: () => T,
+  errorContext: string,
+): T | null {
   try {
     return formatter();
   } catch (e) {
@@ -117,7 +149,11 @@ export function safeFormat(formatter, errorContext) {
  * @param {Set<string>} autoExpandedTypes - Set of types that auto-expand
  * @returns {boolean|undefined}
  */
-export function resolveOpenState(messageType, options, autoExpandedTypes) {
+export function resolveOpenState(
+  messageType: string,
+  options: FormatOptions | undefined,
+  autoExpandedTypes: Set<string>,
+): boolean | undefined {
   if (!options) return undefined;
 
   // Preserved state takes precedence
