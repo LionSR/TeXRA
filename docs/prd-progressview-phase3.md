@@ -18,6 +18,9 @@
 - **CSS flex layout fixes**: Custom elements (`log-list`, `task-group-list`, `stream-tabs`) need explicit `display: flex`
 - **Regression fixes**: Duplicate content on tab click, leftover content on filter switch, placeholder display
 - **Message handler edge cases**: Pending log updates Map, auto-expand thinking/scratchpad, stream-scoped prompt filtering
+- **Native Lit patterns**: StreamTabs uses `.value` binding on radio group instead of manual DOM sync
+- **KaTeX rendering**: Proper CSS import and class targeting for math rendering
+- **Missing message handlers**: Added DELETE_STREAM, DELETE_ALL, UPDATE_USAGE handlers
 
 ### Directory Architecture: `common/` vs `shared/`
 
@@ -161,7 +164,7 @@ Phase 3a enables type-safe imports; Phase 3c rewrites UI.
 | `ToggleStateStore.js` | `@shared/state/ToggleStateStore.ts`    | ✅ Done |
 | `webviewState.js`     | `@shared/state/WebviewStateManager.ts` | ✅ Done |
 
-**Migration stats:** JS imports reduced from 18 → 10 (44% reduction)
+**Migration stats:** JS imports reduced from 18 → 7 (61% reduction)
 
 ### Remaining JS Utilities (Require Architectural Changes)
 
@@ -169,7 +172,7 @@ Phase 3a enables type-safe imports; Phase 3c rewrites UI.
 
 | JS File                     | Usages | Resolution                                                       |
 | --------------------------- | ------ | ---------------------------------------------------------------- |
-| `templateUtils.js`          | 7      | Replace `createFromTemplate()` with Lit `html` (Phase 3b-3)      |
+| `templateUtils.js`          | 4      | Replace `createFromTemplate()` with Lit `html` (Phase 3b-3)      |
 | `dropdownUtils.js`          | 1      | Keep as local util; refactor when FollowupSection uses Lit fully |
 | `textareaUtils.js`          | 1      | Keep as local util; VS Code textarea upgrade helper              |
 | `RecordingButtonManager.js` | 1      | Convert to Lit reactive controller (Phase 3b-2)                  |
@@ -400,6 +403,18 @@ export function formatBannerContent(
 3. Document any discrepancies as GitHub issues
 4. Track fixes in this PRD
 
+### Recent Fixes (2026-01-25)
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| Radio button not immediately selecting | Using `?checked` attribute binding + manual sync | Use `.value` binding on `vscode-radio-group`, read `group.value` in handler |
+| Clear all button style changed | Was `vscode-button`, should be toolbar button | Changed to `vscode-toolbar-button` with `icon="close-all"` |
+| Leftover content on empty filter | Log list not cleared when switching to filter with no streams | Added clear logic in `handleFilterChange` |
+| KaTeX showing both rendered + MathML | `.katex-mathml` not hidden due to CSS selector | Added `markdown-content` class to banner content |
+| KaTeX only showing MathML | `katex.min.css` not loaded | Added `import 'katex/dist/katex.min.css'` to index.ts |
+| Context % position wrong | Order swapped in UsagePanel | Fixed element order in template |
+| `LogListState` type error | Interface didn't satisfy `Record<string, unknown>` constraint | Changed to type with explicit index signature |
+
 ### Stabilization Deliverables
 
 **Phase 3b-1: UI Parity**
@@ -407,9 +422,9 @@ export function formatBannerContent(
 | Item                          | Status         |
 | ----------------------------- | -------------- |
 | All layout issues resolved    | 🟡 In Progress |
-| All data flow issues resolved | 🟡 In Progress |
-| All vscode-element issues     | 🟡 In Progress |
-| Visual parity achieved        | ⬜ Not Started |
+| All data flow issues resolved | ✅ Done        |
+| All vscode-element issues     | ✅ Done        |
+| Visual parity achieved        | 🟡 In Progress |
 | Full manual test pass         | ⬜ Not Started |
 
 **Phase 3b-2: Utility Conversion (after 3a)**
@@ -850,13 +865,13 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 | Metric                          | Before | Current | Target |
 | ------------------------------- | ------ | ------- | ------ |
-| TS files in `src/shared/utils/` | 0      | 6       | 6 ✅   |
+| TS files in `src/shared/utils/` | 0      | 7       | 7 ✅   |
 | TS files in `src/shared/state/` | 0      | 2       | 2 ✅   |
-| JS imports in ProgressView      | 18     | 10      | 4\*    |
-| Pure-function utils migrated    | 0      | 6       | 6 ✅   |
+| JS imports in ProgressView      | 18     | 7       | 0      |
+| Pure-function utils migrated    | 0      | 7       | 7 ✅   |
 | State managers migrated         | 0      | 2       | 2 ✅   |
 
-\*The 10 remaining JS imports are from 4 deferred utilities that require Lit pattern replacement in Phase 3b.
+\*The 7 remaining JS imports are from 4 files: `templateUtils.js` (4 formatters), `textareaUtils.js`, `RecordingButtonManager.js`, `dropdownUtils.js`. These require Lit pattern replacement in Phase 3b.
 
 ### Phase 3b (ProgressView Stabilization & Native Conversion)
 
