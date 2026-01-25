@@ -17,6 +17,18 @@ import type { StreamState } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
+interface ToolbarButton {
+  id: string;
+  icon: string;
+  iconActive?: string;
+  command: string;
+  title: string;
+  titleActive?: string;
+  className?: string;
+  disabled?: boolean;
+  isToggle?: boolean;
+}
+
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   @property({ type: Object }) stream: StreamTabInfo | null = null;
@@ -27,6 +39,7 @@ export class StreamHeader extends LitElement {
     name: string;
     startTime: number;
   }> = [];
+  @property({ type: Boolean }) yoloActive = false;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -73,24 +86,30 @@ export class StreamHeader extends LitElement {
               data-agent-mode=${agentCategory}
               @click=${this.handleToolbarClick}
             >
-              ${toolbarButtons.map((btn) => {
+              ${(toolbarButtons as ToolbarButton[]).map((btn) => {
                 const { disabled, hidden } = this.resolveButtonState(
                   btn.id,
                   status,
                   hasExecutionId,
                 );
+                const isActive = Boolean(btn.isToggle && this.yoloActive);
+                const icon =
+                  isActive && btn.iconActive ? btn.iconActive : btn.icon;
+                const title =
+                  isActive && btn.titleActive ? btn.titleActive : btn.title;
                 return html`
                   <vscode-toolbar-button
                     id=${btn.id}
-                    icon=${btn.icon}
-                    label=${btn.title}
-                    title=${btn.title}
+                    icon=${icon}
+                    label=${title}
+                    title=${title}
                     data-command=${btn.command}
                     aria-hidden=${hidden ? 'true' : 'false'}
                     ?disabled=${disabled}
                     class=${classMap({
                       [btn.className || '']: Boolean(btn.className),
                       'toolbar-button--hidden': hidden,
+                      'is-active': isActive,
                     })}
                   ></vscode-toolbar-button>
                 `;
@@ -162,6 +181,7 @@ export class StreamHeader extends LitElement {
     const statusMap: Record<string, string[]> = {
       [STREAM_STATUS.RUNNING]: [
         ELEMENT_IDS.STOP_STREAM_BTN,
+        ELEMENT_IDS.YOLO_TOGGLE_BTN,
         ELEMENT_IDS.RESTORE_STATE_BTN,
         ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
       ],
@@ -193,11 +213,13 @@ export class StreamHeader extends LitElement {
       ],
       [STREAM_STATUS.WAITING]: [
         ELEMENT_IDS.STOP_STREAM_BTN,
+        ELEMENT_IDS.YOLO_TOGGLE_BTN,
         ELEMENT_IDS.RESTORE_STATE_BTN,
         ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
       ],
       [STREAM_STATUS.RESUMING]: [
         ELEMENT_IDS.STOP_STREAM_BTN,
+        ELEMENT_IDS.YOLO_TOGGLE_BTN,
         ELEMENT_IDS.RESTORE_STATE_BTN,
         ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
       ],

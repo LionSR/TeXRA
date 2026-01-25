@@ -75,6 +75,33 @@ export interface MessageHandlerContext extends FrontendEventHandlerContext {
   setPrompts(prompts: PromptState[]): void;
 }
 
+/**
+ * Type for message handler functions.
+ * All handlers take raw message data and a context object.
+ */
+export type MessageHandler = (raw: unknown, ctx: MessageHandlerContext) => void;
+
+/** Add a prompt to the prompt list. */
+function addPrompt(ctx: MessageHandlerContext, prompt: PromptState): void {
+  ctx.setPrompts([...ctx.getPrompts(), prompt]);
+}
+
+/** Remove a prompt by kind and ID field. */
+function removePrompt(
+  ctx: MessageHandlerContext,
+  kind: PromptState['kind'],
+  idField: string,
+  idValue: string,
+): void {
+  ctx.setPrompts(
+    ctx.getPrompts().filter((p) => {
+      if (p.kind !== kind) return true;
+      const data = p.data as Record<string, unknown>;
+      return data[idField] !== idValue;
+    }),
+  );
+}
+
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
@@ -151,41 +178,31 @@ export function handleUpdateLogs(
   if (!stream) return;
 
   ctx.setStreamState(stream, (prev) => {
-    const next = { ...prev };
-    if (action === 'clear') {
-      next.logs = [];
-      next.taskGroups = [];
-    } else {
-      next.logs = messages;
-      if (groups) {
-        next.taskGroups = groups;
-      }
-    }
-    if (result.data.activeRunId !== undefined) {
-      next.activeRunId = result.data.activeRunId;
-    }
-    if (result.data.runInstructions) {
-      next.runInstructions = {
-        ...next.runInstructions,
-        ...result.data.runInstructions,
-      };
-    }
-    if (result.data.runUsage) {
-      next.runUsage = { ...next.runUsage, ...result.data.runUsage };
-    }
-    if (result.data.runFiles) {
-      next.runFiles = { ...next.runFiles, ...result.data.runFiles };
-    }
-    if (result.data.runMissingOutputs) {
-      next.runMissingOutputs = {
-        ...next.runMissingOutputs,
-        ...result.data.runMissingOutputs,
-      };
-    }
-    if (result.data.contextState) {
-      next.contextState = result.data.contextState;
-    }
-    return next;
+    const isClear = action === 'clear';
+    const {
+      activeRunId,
+      runInstructions,
+      runUsage,
+      runFiles,
+      runMissingOutputs,
+      contextState,
+    } = result.data;
+
+    return {
+      ...prev,
+      logs: isClear ? [] : messages,
+      taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
+      activeRunId: activeRunId ?? prev.activeRunId,
+      runInstructions: runInstructions
+        ? { ...prev.runInstructions, ...runInstructions }
+        : prev.runInstructions,
+      runUsage: runUsage ? { ...prev.runUsage, ...runUsage } : prev.runUsage,
+      runFiles: runFiles ? { ...prev.runFiles, ...runFiles } : prev.runFiles,
+      runMissingOutputs: runMissingOutputs
+        ? { ...prev.runMissingOutputs, ...runMissingOutputs }
+        : prev.runMissingOutputs,
+      contextState: contextState ?? prev.contextState,
+    };
   });
 
   const state = ctx.getState();
@@ -358,18 +375,18 @@ export function handleUpdateInstruction(
 ): void {
   const result = UpdateInstructionMessageSchema.safeParse(raw);
   if (!result.success) return;
-  if (!result.data.stream) return;
 
-  ctx.setStreamState(result.data.stream, (prev) => {
-    // Use sophisticated run ID resolution when no explicit activeRunId is set
+  const { stream, instruction } = result.data;
+  if (!stream) return;
+
+  ctx.setStreamState(stream, (prev) => {
     const runId = resolveActiveRunId(prev) ?? 'default';
-    const runInstructions = { ...prev.runInstructions };
-    if (result.data.instruction) {
-      runInstructions[runId] = result.data.instruction;
-    } else {
-      delete runInstructions[runId];
-    }
-    return { ...prev, runInstructions };
+    const { [runId]: _, ...rest } = prev.runInstructions;
+
+    return {
+      ...prev,
+      runInstructions: instruction ? { ...rest, [runId]: instruction } : rest,
+    };
   });
 }
 
@@ -475,11 +492,7 @@ export function handleShowToolEditApproval(
 ): void {
   const result = ShowToolEditApprovalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts([
-    ...ctx.getPrompts(),
-    { kind: 'toolEdit', data: result.data.request },
-  ]);
+  addPrompt(ctx, { kind: 'toolEdit', data: result.data.request });
 }
 
 export function handleResolveToolEditApproval(
@@ -488,16 +501,7 @@ export function handleResolveToolEditApproval(
 ): void {
   const result = ResolveToolEditApprovalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts(
-    ctx
-      .getPrompts()
-      .filter(
-        (prompt) =>
-          prompt.kind !== 'toolEdit' ||
-          prompt.data.requestId !== result.data.requestId,
-      ),
-  );
+  removePrompt(ctx, 'toolEdit', 'requestId', result.data.requestId);
 }
 
 export function handleUpdateToolEditApprovalState(
@@ -519,11 +523,7 @@ export function handleShowBashApproval(
 ): void {
   const result = ShowBashApprovalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts([
-    ...ctx.getPrompts(),
-    { kind: 'bash', data: result.data.request },
-  ]);
+  addPrompt(ctx, { kind: 'bash', data: result.data.request });
 }
 
 export function handleResolveBashApproval(
@@ -532,16 +532,7 @@ export function handleResolveBashApproval(
 ): void {
   const result = ResolveBashApprovalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts(
-    ctx
-      .getPrompts()
-      .filter(
-        (prompt) =>
-          prompt.kind !== 'bash' ||
-          prompt.data.requestId !== result.data.requestId,
-      ),
-  );
+  removePrompt(ctx, 'bash', 'requestId', result.data.requestId);
 }
 
 export function handleShowRetryRequest(
@@ -550,11 +541,7 @@ export function handleShowRetryRequest(
 ): void {
   const result = ShowRetryRequestMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts([
-    ...ctx.getPrompts(),
-    { kind: 'retry', data: result.data.request },
-  ]);
+  addPrompt(ctx, { kind: 'retry', data: result.data.request });
 }
 
 export function handleResolveRetryRequest(
@@ -563,16 +550,7 @@ export function handleResolveRetryRequest(
 ): void {
   const result = ResolveRetryRequestMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts(
-    ctx
-      .getPrompts()
-      .filter(
-        (prompt) =>
-          prompt.kind !== 'retry' ||
-          prompt.data.streamId !== result.data.streamId,
-      ),
-  );
+  removePrompt(ctx, 'retry', 'streamId', result.data.streamId);
 }
 
 export function handleShowAgentProposal(
@@ -581,11 +559,7 @@ export function handleShowAgentProposal(
 ): void {
   const result = ShowAgentProposalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts([
-    ...ctx.getPrompts(),
-    { kind: 'proposal', data: result.data.proposal },
-  ]);
+  addPrompt(ctx, { kind: 'proposal', data: result.data.proposal });
 }
 
 export function handleResolveAgentProposal(
@@ -594,16 +568,7 @@ export function handleResolveAgentProposal(
 ): void {
   const result = ResolveAgentProposalMessageSchema.safeParse(raw);
   if (!result.success) return;
-
-  ctx.setPrompts(
-    ctx
-      .getPrompts()
-      .filter(
-        (prompt) =>
-          prompt.kind !== 'proposal' ||
-          prompt.data.proposalId !== result.data.proposalId,
-      ),
-  );
+  removePrompt(ctx, 'proposal', 'proposalId', result.data.proposalId);
 }
 
 export function handleFollowUpTextPolished(

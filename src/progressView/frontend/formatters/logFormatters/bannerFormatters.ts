@@ -1,12 +1,21 @@
 /**
  * Banner-style formatters for thinking, scratchpad, and model response messages.
- * These formatters use logMessage.text directly - no NormalizedPayload indirection.
+ * Uses Lit templates with unsafeHTML for markdown content rendering.
  */
 
+// Local imports - Lit utilities
+import {
+  html,
+  unsafeHTML,
+  classMap,
+  ifDefined,
+  renderToElement,
+} from '../litTemplates';
+
 // Local imports - formatter helpers
-import { createBannerEntry } from '../baseLogFormatter';
 import { formatTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
+import { initToggleIcon } from '../htmlBuilders';
 
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
@@ -48,23 +57,40 @@ export function formatBannerContent(
 
   const config = BANNER_CONFIG[contentType] ?? BANNER_CONFIG.Thinking;
   const { fullTimestamp } = formatTimestamp(new Date(timestamp));
-  const bannerEntry = createBannerEntry({
-    logId,
-    groupId,
-    timestamp: fullTimestamp,
-    ...config,
-    open: false,
-  });
+  const markdownHtml = processMarkdownContent(trimmedContent);
 
-  if (!bannerEntry?.contentElem) {
-    return bannerEntry?.element ?? null;
-  }
+  const template = html`
+    <details
+      class="banner-details"
+      data-log-id=${ifDefined(logId)}
+      data-group-id=${ifDefined(groupId)}
+      data-timestamp=${ifDefined(fullTimestamp)}
+    >
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon icon ${config.iconClass}"></i>
+        <span class="label">${config.labelText}</span>
+        <vscode-toolbar-button
+          class="banner-content-copy"
+          icon="copy"
+          title=${config.copyTitle}
+          aria-label=${config.copyTitle}
+          data-default-title=${config.copyTitle}
+          data-success-title="Copied!"
+        ></vscode-toolbar-button>
+      </summary>
+      <div
+        class="banner-content log-entry-content ${config.contentClass}"
+        data-raw-content=${trimmedContent}
+      >
+        ${unsafeHTML(markdownHtml)}
+      </div>
+    </details>
+  `;
 
-  bannerEntry.contentElem.classList.add('markdown-content');
-  bannerEntry.contentElem.dataset.rawContent = trimmedContent;
-  bannerEntry.contentElem.innerHTML = processMarkdownContent(trimmedContent);
-
-  return bannerEntry.element;
+  const element = renderToElement(template);
+  if (element) initToggleIcon(element, false);
+  return element;
 }
 
 /** Format a model response with markdown rendering. */
@@ -89,38 +115,48 @@ export function formatModelResponse({
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
+  const markdownHtml = processMarkdownContent(trimmedContent);
+  const timestampText = verbose ? `[${timeDisplay}]` : '';
 
-  const bannerEntry = createBannerEntry({
-    logId: id,
-    groupId,
-    timestamp: fullTimestamp,
-    iconClass: 'codicon-sparkle',
-    labelText: 'Assistant',
-    copyTitle: 'Copy model output',
-    contentClass: 'banner-content--model',
-    open: true,
-  });
+  const template = html`
+    <details
+      class="banner-details"
+      open
+      data-log-id=${ifDefined(id)}
+      data-group-id=${ifDefined(groupId)}
+      data-timestamp=${ifDefined(fullTimestamp)}
+    >
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon icon codicon-sparkle"></i>
+        <span class="label">Assistant</span>
+        <span class="timestamp" title=${tooltipTimestamp}
+          >${timestampText}</span
+        >
+        <vscode-toolbar-button
+          class="banner-content-copy"
+          icon="copy"
+          title="Copy model output"
+          aria-label="Copy model output"
+          data-default-title="Copy model output"
+          data-success-title="Copied!"
+        ></vscode-toolbar-button>
+      </summary>
+      <div
+        class=${classMap({
+          'banner-content': true,
+          'log-entry-content': true,
+          'banner-content--model': true,
+          [`message-${level}`]: true,
+        })}
+        data-raw-content=${trimmedContent}
+      >
+        ${unsafeHTML(markdownHtml)}
+      </div>
+    </details>
+  `;
 
-  if (!bannerEntry) return null;
-
-  const { element, contentElem, summaryElem } = bannerEntry;
-
-  if (summaryElem) {
-    const timestampElem = document.createElement('span');
-    timestampElem.classList.add('timestamp');
-    timestampElem.title = tooltipTimestamp;
-    timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
-    summaryElem.insertBefore(
-      timestampElem,
-      summaryElem.querySelector('.banner-content-copy'),
-    );
-  }
-
-  if (contentElem) {
-    contentElem.classList.add(`message-${level}`, 'markdown-content');
-    contentElem.dataset.rawContent = trimmedContent;
-    contentElem.innerHTML = processMarkdownContent(trimmedContent);
-  }
-
+  const element = renderToElement(template);
+  if (element) initToggleIcon(element, true);
   return element;
 }
