@@ -280,6 +280,10 @@ export class ProgressApp extends BaseWebviewApp {
   private logListRef = createRef<LogList>();
   private followUpRef = createRef<FollowUpInput>();
 
+  protected createRenderRoot(): HTMLElement {
+    return this;
+  }
+
   protected override get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
   }
