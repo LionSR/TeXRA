@@ -43,7 +43,6 @@ import {
   handleFollowUpClear,
   handleFollowUpPolish,
   handleFollowUpSend,
-  handleFollowUpToggleBypass,
   handleFollowupModeChange,
   handleFollowupRequestOptions,
   handleFollowupRun,
@@ -90,8 +89,53 @@ import {
   handleUpdateTodos,
   handleUpdateToolEditApprovalState,
   handleUpdateUsage,
+  type MessageHandler,
   type MessageHandlerContext,
 } from './messageHandlers';
+
+/**
+ * Registry mapping commands to their message handlers.
+ * Using a registry pattern improves maintainability over a large switch statement.
+ */
+const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: handleUpdateStreams,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_LOGS]: handleUpdateLogs,
+  [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: handleAppendLog,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: handleUpdateLog,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STATUS]: handleUpdateStatus,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: handleUpdateStreamStatus,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: handleUpdateFiles,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS]: handleUpdateMissingOutputs,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: handleUpdateInstruction,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
+    handleUpdateQueuedFollowUps,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: handleUpdateRunUsage,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: handleUpdateContextState,
+  [PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP]: handleAddTaskGroup,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP]: handleUpdateTaskGroup,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_TODOS]: handleUpdateTodos,
+  [PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: handleShowToolEditApproval,
+  [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]:
+    handleResolveToolEditApproval,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]:
+    handleUpdateToolEditApprovalState,
+  [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: handleShowBashApproval,
+  [PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL]: handleResolveBashApproval,
+  [PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST]: handleShowRetryRequest,
+  [PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST]: handleResolveRetryRequest,
+  [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: handleShowAgentProposal,
+  [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: handleResolveAgentProposal,
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: handleFollowUpTextPolished,
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]:
+    handleFollowUpTextTranscribed,
+  [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: handleRecordingStarted,
+  [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: handleRecordingStopped,
+  [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: handleRecordingError,
+  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: handleSetFollowupOptions,
+  [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: handleDeleteStream,
+  [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: handleDeleteAllMessage,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: handleUpdateUsage,
+};
 import { getFilteredStreams, getRunGroups } from './stateUtils';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 
@@ -179,6 +223,7 @@ export class ProgressApp extends BaseWebviewApp {
                     .streamState=${streamState}
                     .runId=${runId}
                     .runs=${getRunGroups(streamState?.taskGroups ?? [])}
+                    .yoloActive=${Boolean(streamState?.toolEditBypass)}
                     @toolbar-command=${this.onToolbarCommand}
                     @run-selected=${this.onRunSelected}
                   ></stream-header>
@@ -218,13 +263,11 @@ export class ProgressApp extends BaseWebviewApp {
                     ${ref(this.followUpRef)}
                     .visible=${isToolUse}
                     .value=${streamState?.followUpText ?? ''}
-                    .yoloActive=${Boolean(streamState?.toolEditBypass)}
                     .queuedMessages=${streamState?.queuedFollowUps ?? []}
                     @followup-change=${this.onFollowUpChange}
                     @followup-send=${this.onFollowUpSend}
                     @followup-polish=${this.onFollowUpPolish}
                     @followup-clear=${this.onFollowUpClear}
-                    @followup-toggle-bypass=${this.onFollowUpToggleBypass}
                   ></follow-up-input>
 
                   <followup-section
@@ -286,109 +329,10 @@ export class ProgressApp extends BaseWebviewApp {
       return;
     }
 
-    const ctx = this.createMessageHandlerContext();
-
-    // Handle app-specific commands
-    switch (command) {
-      case PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS:
-        handleUpdateStreams(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_LOGS:
-        handleUpdateLogs(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.APPEND_LOG:
-        handleAppendLog(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_LOG:
-        handleUpdateLog(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_STATUS:
-        handleUpdateStatus(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS:
-        handleUpdateStreamStatus(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_FILES:
-        handleUpdateFiles(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS:
-        handleUpdateMissingOutputs(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION:
-        handleUpdateInstruction(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS:
-        handleUpdateQueuedFollowUps(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE:
-        handleUpdateRunUsage(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE:
-        handleUpdateContextState(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP:
-        handleAddTaskGroup(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP:
-        handleUpdateTaskGroup(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_TODOS:
-        handleUpdateTodos(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL:
-        handleShowToolEditApproval(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL:
-        handleResolveToolEditApproval(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE:
-        handleUpdateToolEditApprovalState(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL:
-        handleShowBashApproval(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL:
-        handleResolveBashApproval(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST:
-        handleShowRetryRequest(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST:
-        handleResolveRetryRequest(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL:
-        handleShowAgentProposal(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL:
-        handleResolveAgentProposal(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED:
-        handleFollowUpTextPolished(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED:
-        handleFollowUpTextTranscribed(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RECORDING_STARTED:
-        handleRecordingStarted(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED:
-        handleRecordingStopped(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.RECORDING_ERROR:
-        handleRecordingError(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS:
-        handleSetFollowupOptions(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.DELETE_STREAM:
-        handleDeleteStream(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.DELETE_ALL:
-        handleDeleteAllMessage(raw, ctx);
-        break;
-      case PROGRESS_VIEW_COMMANDS.UPDATE_USAGE:
-        handleUpdateUsage(raw, ctx);
-        break;
+    // Look up and invoke the appropriate message handler
+    const handler = MESSAGE_HANDLERS[command];
+    if (handler) {
+      handler(raw, this.createMessageHandlerContext());
     }
   }
 
@@ -476,8 +420,6 @@ export class ProgressApp extends BaseWebviewApp {
     handleFollowUpPolish(this.createEventHandlerContext());
   private onFollowUpClear = (): void =>
     handleFollowUpClear(this.createEventHandlerContext());
-  private onFollowUpToggleBypass = (): void =>
-    handleFollowUpToggleBypass(this.createEventHandlerContext());
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.createEventHandlerContext());
   private onFollowupModeChange = (e: CustomEvent): void =>
