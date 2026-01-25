@@ -92,13 +92,10 @@ export class TaskGroupDomManager {
 
     while (traversalQueue.length > 0) {
       const parentId = traversalQueue.shift();
-      if (!parentId) {
-        continue;
-      }
+      if (!parentId) continue;
+
       const children = childrenByParent.get(parentId);
-      if (!children || children.length === 0) {
-        continue;
-      }
+      if (!children?.length) continue;
 
       const parentContent = this._resolveGroupContent(parentId);
       if (!parentContent) {
@@ -180,7 +177,6 @@ export class TaskGroupDomManager {
   }
 
   updateGroup(update: Partial<TaskGroup> & { id: string }): void {
-    if (!update || typeof update !== 'object') return;
     const { id, status, endTime } = update;
     if (!id) return;
 
@@ -410,12 +406,9 @@ export class TaskGroupDomManager {
   }
 
   _getById(id: string): HTMLElement | null {
-    if (this.root && this.root !== document) {
-      if (this.root instanceof Element) {
-        return this.root.querySelector(`#${CSS.escape(id)}`);
-      }
-    }
-    return document.getElementById(id);
+    return this.root instanceof Element
+      ? this.root.querySelector(`#${CSS.escape(id)}`)
+      : document.getElementById(id);
   }
 
   _removeToggleListener(groupId: string): void {
@@ -510,11 +503,8 @@ export class LogEntryManager {
   }
 
   _getById(id: string): HTMLElement | null {
-    if (this.root && this.root !== document) {
-      if (this.root instanceof Element) {
-        return this.root.querySelector(`#${CSS.escape(id)}`);
-      }
-    }
-    return document.getElementById(id);
+    return this.root instanceof Element
+      ? this.root.querySelector(`#${CSS.escape(id)}`)
+      : document.getElementById(id);
   }
 }

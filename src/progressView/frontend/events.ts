@@ -50,8 +50,9 @@ export interface PromptActionDetail {
 // Event Creators - use these to dispatch typed events
 // =============================================================================
 
-function createEvent<T>(name: string, detail: T): CustomEvent<T> {
-  return new CustomEvent(name, { detail, bubbles: true, composed: true });
+/** Create a bubbling composed custom event with typed detail. */
+function createEvent<T>(type: string, detail: T): CustomEvent<T> {
+  return new CustomEvent(type, { detail, bubbles: true, composed: true });
 }
 
 export const ProgressEvents = {

@@ -293,7 +293,7 @@ followup-section {
   color: var(--color-text-secondary);
 }
 
-.usage-summary-footer .run-summary {
+.usage-summary-footer .context-state {
   margin-left: auto;
 }
 

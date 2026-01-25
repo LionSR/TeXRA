@@ -138,11 +138,8 @@ export class FollowUpInput extends LitElement {
     `;
   }
 
-  focus(options?: FocusOptions): void {
+  override focus(_options?: FocusOptions): void {
     this.focusInput();
-    if (options) {
-      // Keep signature compatible with HTMLElement focus().
-    }
   }
 
   focusInput(options: { scrollIntoView?: boolean } = {}): void {

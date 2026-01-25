@@ -152,21 +152,25 @@ const toStringOrEmpty = (value: unknown): string =>
 
 /** Get display path from a location object. */
 const describeLocation = (location: Record<string, unknown> | null): string => {
-  if (!location) return '';
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return typeof location.relativePath === 'string'
-      ? location.relativePath
-      : '';
+  if (
+    location &&
+    (location.kind === 'workspace' || location.kind === 'runStorage') &&
+    typeof location.relativePath === 'string'
+  ) {
+    return location.relativePath;
   }
   return '';
 };
 
-/** Get status icon class for latexdiff entry. */
-const getLatexdiffStatusIcon = (status: string): string => {
-  if (status === 'success') return 'codicon-check';
-  if (status === 'error') return 'codicon-error';
-  return 'codicon-question';
+/** Status icon class lookup for latexdiff entries. */
+const LATEXDIFF_STATUS_ICONS: Record<string, string> = {
+  success: 'codicon-check',
+  error: 'codicon-error',
 };
+
+/** Get status icon class for latexdiff entry. */
+const getLatexdiffStatusIcon = (status: string): string =>
+  LATEXDIFF_STATUS_ICONS[status] ?? 'codicon-question';
 
 /** Extract display data from new DiffResult format. */
 const extractNewFormat = (entry: DiffResultEntry) => {

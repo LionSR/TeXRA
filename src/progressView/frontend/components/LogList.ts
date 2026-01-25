@@ -110,14 +110,11 @@ export class LogList extends LitElement {
     const container = this.getContainer();
     if (!container) return;
 
-    const isStreamSwitch = streamId && streamId !== this.lastRenderedStream;
-    const shouldClear = action === 'clear' || isStreamSwitch;
-
-    if (shouldClear) {
-      container.innerHTML = '';
-      this.groupManager.clear();
-      this.logManager.clear();
-    }
+    // Always clear before full render to prevent duplicate content.
+    // The 'render' action replaces content; 'clear' clears without re-rendering.
+    container.innerHTML = '';
+    this.groupManager.clear();
+    this.logManager.clear();
 
     if (action === 'clear') {
       this.lastRenderedStream = streamId || '';
@@ -267,6 +264,8 @@ export class LogList extends LitElement {
     this.groupManager.clear();
     this.logManager.clear();
     this.lastRenderedStream = '';
+    // Show placeholder when cleared (no active stream)
+    this.showPlaceholderIfEmpty([], []);
   }
 
   private getContainer(): HTMLElement | null {
