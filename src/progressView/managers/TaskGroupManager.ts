@@ -1,11 +1,18 @@
-// Local imports - identifiers and logging
-import type { StreamTabId } from '@shared/schemas';
+// Local imports - shared schemas
+import {
+  STREAM_STATUS,
+  type StreamTabId,
+  type TaskGroup,
+  type UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
-// Internal imports
+// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { STREAM_STATUS } from '@shared/schemas';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskGroup } from '@shared/schemas';
+
+// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,
@@ -14,7 +21,6 @@ import {
   mapToRecord,
   recordToMap,
 } from '@progressView/persistence/serializationUtils';
-import type { UpdateTaskGroupPayload } from '@shared/schemas';
 
 /**
  * Manages task groups collection with persistence.

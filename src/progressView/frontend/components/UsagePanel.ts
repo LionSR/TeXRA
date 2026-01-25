@@ -1,7 +1,11 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
+
+// Local imports - shared styles
+import { designTokens } from '@shared/styles/litStyles';
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
 import type { TokenUsageStats } from '@shared/schemas';
@@ -15,12 +19,75 @@ import type { ContextState } from '../store';
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
+  static styles = [
+    designTokens,
+    codiconStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      .usage-summary-footer {
+        border-top: var(--border-thin) solid var(--color-border);
+        background-color: var(--vscode-sideBarSectionHeader-background);
+        padding: var(--spacing-small) var(--spacing-medium);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+      }
+
+      .run-summary {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        opacity: 0.9;
+        margin-left: auto;
+      }
+
+      .run-summary .codicon {
+        font-size: var(--font-size-icon-sm);
+        opacity: 0.75;
+      }
+
+      .run-summary__label {
+        font-weight: 500;
+        color: var(--color-text-secondary);
+      }
+
+      .run-summary__value {
+        color: var(--vscode-foreground);
+      }
+
+      .context-state {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        opacity: 0.9;
+      }
+
+      .context-state .codicon {
+        font-size: var(--font-size-icon-sm);
+        opacity: 0.75;
+      }
+
+      .context-state__value {
+        color: var(--vscode-foreground);
+      }
+    `,
+  ];
+
   @property({ type: Object }) usage: TokenUsageStats | null = null;
   @property({ type: Object }) contextState: ContextState | null = null;
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
 
   render(): TemplateResult | typeof nothing {
     const hasUsage =

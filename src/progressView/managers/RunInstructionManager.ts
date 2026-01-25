@@ -1,11 +1,14 @@
-// Local imports - identifiers and logging
-import type { StorageKey, StreamTabId } from '@shared/schemas';
+// Local imports - shared schemas
+import type {
+  InstructionUpdate,
+  StorageKey,
+  StreamTabId,
+} from '@shared/schemas';
 
-// Internal imports
+// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
-// Local imports - types
-import type { InstructionUpdate } from '@shared/schemas';
+// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

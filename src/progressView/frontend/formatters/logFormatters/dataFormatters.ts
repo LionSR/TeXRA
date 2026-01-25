@@ -267,13 +267,13 @@ export function formatStatistics(
   if (!parseResult.success) return null;
 
   const stats = parseResult.data;
-  const items = STAT_FIELDS.filter(
-    ([key]) => stats[key] !== undefined,
-  ).map(([key, icon, label, formatter]) => ({
-    icon,
-    label,
-    value: formatter(stats[key]!),
-  }));
+  const items = STAT_FIELDS.filter(([key]) => stats[key] !== undefined).map(
+    ([key, icon, label, formatter]) => ({
+      icon,
+      label,
+      value: formatter(stats[key]!),
+    }),
+  );
 
   return renderToElement(html`
     <details class="banner-details statistics-details">

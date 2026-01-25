@@ -14,6 +14,7 @@ import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { prependInstructionForToolUse } from '../stateUtils';
 import { appendFormatted } from '../utils';
 
 // Local imports - progress view managers
@@ -50,7 +51,6 @@ export class LogList extends LitElement {
   private groupManager: TaskGroupDomManager;
   private logManager: LogEntryManager;
   private lastRenderedStream: string;
-  private activeAgentCategory: string;
 
   constructor() {
     super();
@@ -63,7 +63,6 @@ export class LogList extends LitElement {
     this.groupManager = new TaskGroupDomManager(this.toggleStates, this);
     this.logManager = new LogEntryManager(this);
     this.lastRenderedStream = '';
-    this.activeAgentCategory = 'workflow';
   }
 
   protected createRenderRoot(): HTMLElement {
@@ -97,11 +96,6 @@ export class LogList extends LitElement {
     ></vscode-scrollable>`;
   }
 
-  setAgentCategory(category: string): void {
-    this.activeAgentCategory = category ?? 'workflow';
-    this.groupManager.setActiveAgentCategory(this.activeAgentCategory);
-  }
-
   renderLogs({
     streamId,
     messages = [],
@@ -109,6 +103,7 @@ export class LogList extends LitElement {
     action = 'render',
     activeRunId = null,
     runInstructions = null,
+    isToolUse = false,
   }: {
     streamId?: string | null;
     messages?: LogMessageData[];
@@ -116,6 +111,7 @@ export class LogList extends LitElement {
     action?: 'render' | 'clear';
     activeRunId?: string | null;
     runInstructions?: Record<string, InstructionUpdate> | null;
+    isToolUse?: boolean;
   }): void {
     const container = this.getContainer();
     if (!container) return;
@@ -138,27 +134,15 @@ export class LogList extends LitElement {
       return timeA - timeB;
     });
 
-    const isToolUse = this.activeAgentCategory === 'toolUse';
-    if (isToolUse && sortedMessages.length > 0) {
-      const firstMsg = sortedMessages[0];
-      const hasUserMessageFirst = firstMsg.messageType === 'userMessage';
-      if (!hasUserMessageFirst && runInstructions) {
-        const instruction = Object.values(runInstructions)[0];
-        if (instruction?.text) {
-          const timestamp =
-            instruction.timestamp ?? (firstMsg.timestamp ?? Date.now()) - 1;
-          sortedMessages.unshift({
-            id: `compat-instruction-${streamId}`,
-            messageType: 'userMessage',
-            text: instruction.text,
-            timestamp,
-            level: 'info',
-          });
-        }
-      }
+    // Tool-use agents: inject instruction as userMessage if not already present
+    if (isToolUse) {
+      prependInstructionForToolUse(sortedMessages, runInstructions, streamId);
     }
 
-    this.groupManager.showRun(groups.length > 0 ? activeRunId : null);
+    this.groupManager.showRun(
+      groups.length > 0 ? activeRunId : null,
+      isToolUse,
+    );
     if (groups.length > 0) {
       this.groupManager.renderInitial(groups, container);
     }
@@ -260,8 +244,8 @@ export class LogList extends LitElement {
     this.groupManager.updateGroup(update);
   }
 
-  showRun(runId: string | null): void {
-    this.groupManager.showRun(runId);
+  showRun(runId: string | null, isToolUse = false): void {
+    this.groupManager.showRun(runId, isToolUse);
   }
 
   clear(): void {
