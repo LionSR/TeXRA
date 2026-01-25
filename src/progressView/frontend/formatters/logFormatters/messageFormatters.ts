@@ -105,9 +105,7 @@ export function formatError(message: LogMessageData): HTMLElement | null {
   );
 
   const structured =
-    data && typeof data === 'object'
-      ? (data as Record<string, unknown>)
-      : {};
+    data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
   const isRelayError = structured.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)

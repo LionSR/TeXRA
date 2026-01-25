@@ -209,7 +209,7 @@ export const FILTER_BUTTONS = [
   },
   {
     id: ELEMENT_IDS.FILTER_TOOL_BTN,
-    label: 'Tool Use',
+    label: 'Chat',
     filter: 'toolUse',
   },
 ];

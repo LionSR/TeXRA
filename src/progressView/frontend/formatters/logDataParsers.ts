@@ -2,67 +2,21 @@
  * Data parsing utilities for progress view formatters.
  * Uses Zod schemas as the source of truth for data validation.
  *
- * Provides normalization logic for types that need transformation beyond
- * simple validation (toolUse, fileList). Simpler types like missingOutputs
- * and webSearch use Schema.safeParse(data) directly in formatters.
+ * Provides normalization logic for complex types that need transformation
+ * beyond simple validation (toolUse). Simpler types use Schema.safeParse(data)
+ * directly in formatters or compute display fields inline in renderers.
  */
 
 // Third-party imports
-import { z } from 'zod';
 import yaml from 'yaml';
 
-// Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
-
 // Local imports - shared schemas
-import { FileListEntrySchema, ToolUseLogSchema } from '@shared/schemas';
-import type { NormalizedToolUse, NormalizedFileEntry } from '@shared/schemas';
+import { ToolUseLogSchema } from '@shared/schemas';
+import type { NormalizedToolUse } from '@shared/schemas';
 
 /** Check if value is a non-array object. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/** Return value if it's a string, otherwise return fallback. */
-function stringOr(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-/**
- * Normalize file list data into a structured format for rendering.
- * Validates the input array using FileListEntrySchema and transforms
- * entries to include display fields (fileName, filePath).
- *
- * @param data - Raw structured data from the log message
- * @returns Array of normalized file entries, or null if parsing fails
- */
-export function normalizeFileListData(
-  data: unknown,
-): NormalizedFileEntry[] | null {
-  // Validate the array structure
-  const parseResult = z.array(FileListEntrySchema).safeParse(data);
-  if (!parseResult.success) {
-    return null;
-  }
-
-  // Transform to display format
-  return parseResult.data.map((file) => {
-    const filePath = file.path;
-    const source = file.source ?? 'unknown';
-
-    return {
-      // Original fields
-      path: filePath,
-      ok: file.ok,
-      source,
-      // Display fields
-      filePath,
-      fileName: getBasename(filePath),
-      sourceDisplay: stringOr(file.sourceDisplay, source),
-      internal: file.internal ?? false,
-      varName: stringOr(file.varName, ''),
-    };
-  });
 }
 
 /** Return trimmed string if non-empty, null otherwise. */

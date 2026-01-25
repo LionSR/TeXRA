@@ -81,11 +81,19 @@ export class LogEntryFormatter {
     return {
       // Collapsible content banners (use text directly)
       thinking: safe(
-        (m) => formatBannerContent(m.text, 'Thinking', m.id, m.groupId, m.timestamp),
+        (m) =>
+          formatBannerContent(m.text, 'Thinking', m.id, m.groupId, m.timestamp),
         'thinking',
       ),
       scratchpad: safe(
-        (m) => formatBannerContent(m.text, 'Scratchpad', m.id, m.groupId, m.timestamp),
+        (m) =>
+          formatBannerContent(
+            m.text,
+            'Scratchpad',
+            m.id,
+            m.groupId,
+            m.timestamp,
+          ),
         'scratchpad',
       ),
 
