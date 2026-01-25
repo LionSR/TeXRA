@@ -4,18 +4,20 @@
 
 // Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
-import { encodeHtml } from '@common/modules/htmlEncoding.js';
+
+// Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
 
 // Local imports - formatter helpers
 import { setElementDataset, wrapInPre } from '../htmlBuilders';
-import { stringifyWithLanguage } from '../normalizers';
+import { stringifyWithLanguage } from '../parseUtils';
 import { formatTimestamp } from '../timestampUtils';
 import { createBannerEntry } from '../baseLogFormatter';
 import { EMOJI_BY_LEVEL } from '../constants';
 
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
-import type { NormalizedPayload } from '../normalizers';
+import type { NormalizedPayload } from '../parseUtils';
 
 type LogMessageWithPayload = LogMessageData & {
   normalizedPayload?: NormalizedPayload;
@@ -42,7 +44,7 @@ export function formatUserMessage(
 
   const contentElem = element.querySelector('.user-message-content');
   if (contentElem instanceof HTMLElement) {
-    contentElem.textContent = normalizedPayload?.decodedText || '';
+    contentElem.textContent = normalizedPayload?.decodedText ?? '';
     if (logId) contentElem.dataset.logId = logId;
   }
 
@@ -63,7 +65,7 @@ export function formatProgressStatus(
   );
 
   const summaryText =
-    (normalizedPayload.decodedText || message.text || '').trim() ||
+    (normalizedPayload.decodedText ?? message.text ?? '').trim() ||
     'Status update';
   const detailText = stringifyWithLanguage(normalizedPayload.structured).text;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
@@ -93,7 +95,7 @@ export function formatProgressStatus(
 }
 
 // Error detail fields in display order (matches ProviderError schema)
-const ERROR_DETAIL_FIELDS = [
+const ERROR_DETAIL_FIELDS: readonly string[] = [
   'message',
   'operation',
   'model',
@@ -105,7 +107,7 @@ const ERROR_DETAIL_FIELDS = [
   'requestId',
   'rawMessage',
   'rawErrorBody',
-];
+] as const;
 
 /** Format error message as a foldable banner. */
 export function formatError(
@@ -129,7 +131,7 @@ export function formatError(
 
   // Build summary text (used for display and duplicate detection)
   const originalSummaryText =
-    (normalizedPayload.decodedText || message.text || '').trim() ||
+    (normalizedPayload.decodedText ?? message.text ?? '').trim() ||
     'Error occurred';
   const summaryText = isRelayError
     ? `[Relay] ${originalSummaryText}`

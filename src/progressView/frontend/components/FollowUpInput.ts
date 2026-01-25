@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared webview
@@ -28,6 +28,15 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) yoloActive = false;
   @property({ type: Array }) queuedMessages: string[] = [];
 
+  @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
+  private declare textAreaEl: HTMLElement | null;
+
+  @query('#polishFollowUpProgressContainer')
+  private declare progressContainer: HTMLElement | null;
+
+  @query(`#${ELEMENT_IDS.YOLO_TOGGLE_BTN}`)
+  private declare yoloButton: HTMLElement | null;
+
   private focusTimer: ReturnType<typeof setTimeout> | null = null;
 
   private recordingManager = new RecordingButtonManager(vscode, {
@@ -50,13 +59,10 @@ export class FollowUpInput extends LitElement {
   }
 
   firstUpdated(): void {
-    const textArea = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOW_UP_INPUT}`,
-    ) as HTMLElement | null;
-    if (!textArea) return;
+    if (!this.textAreaEl) return;
 
-    awaitTextareaUpgrade(textArea, () => {
-      const { textarea } = resolveTextareaTarget(textArea);
+    awaitTextareaUpgrade(this.textAreaEl, () => {
+      const { textarea } = resolveTextareaTarget(this.textAreaEl!);
       if (!textarea) return;
 
       textarea.addEventListener('keydown', (event) => {
@@ -153,12 +159,9 @@ export class FollowUpInput extends LitElement {
     this.focusTimer = setTimeout(() => {
       this.focusTimer = null;
 
-      const textArea = this.querySelector(
-        `#${ELEMENT_IDS.FOLLOW_UP_INPUT}`,
-      ) as HTMLElement | null;
-      if (!textArea || !this.visible) return;
+      if (!this.textAreaEl || !this.visible) return;
 
-      const { textarea } = resolveTextareaTarget(textArea);
+      const { textarea } = resolveTextareaTarget(this.textAreaEl);
       if (!textarea) return;
 
       textarea.focus();
@@ -176,23 +179,17 @@ export class FollowUpInput extends LitElement {
   }
 
   applyPolishedText(text: string): void {
-    const progressContainer = this.querySelector(
-      '#polishFollowUpProgressContainer',
-    ) as HTMLElement | null;
-    if (progressContainer) {
-      progressContainer.style.display = 'none';
+    if (this.progressContainer) {
+      this.progressContainer.style.display = 'none';
     }
     this.updateValue(text);
     this.focusInput({ scrollIntoView: true });
   }
 
   insertTranscription(text: string): void {
-    const textArea = this.querySelector(
-      `#${ELEMENT_IDS.FOLLOW_UP_INPUT}`,
-    ) as HTMLElement | null;
-    if (!textArea) return;
+    if (!this.textAreaEl) return;
 
-    const { textarea } = resolveTextareaTarget(textArea);
+    const { textarea } = resolveTextareaTarget(this.textAreaEl);
     if (!textarea) return;
 
     insertTextAtCursor(textarea, text);
@@ -215,11 +212,8 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
-    const progressContainer = this.querySelector(
-      '#polishFollowUpProgressContainer',
-    ) as HTMLElement | null;
-    if (progressContainer) {
-      progressContainer.style.display = 'block';
+    if (this.progressContainer) {
+      this.progressContainer.style.display = 'block';
     }
 
     this.dispatchEvent(ProgressEvents.followupPolish());
@@ -234,23 +228,20 @@ export class FollowUpInput extends LitElement {
   }
 
   private syncYoloButton(): void {
-    const button = this.querySelector(
-      `#${ELEMENT_IDS.YOLO_TOGGLE_BTN}`,
-    ) as HTMLElement | null;
-    if (!button) return;
+    if (!this.yoloButton) return;
 
-    button.classList.toggle('is-active', this.yoloActive);
+    this.yoloButton.classList.toggle('is-active', this.yoloActive);
     if (this.yoloActive) {
-      button.setAttribute('icon', 'flame');
-      button.setAttribute('label', 'YOLO mode ON');
-      button.setAttribute(
+      this.yoloButton.setAttribute('icon', 'flame');
+      this.yoloButton.setAttribute('label', 'YOLO mode ON');
+      this.yoloButton.setAttribute(
         'title',
         'YOLO mode active - click to disable (resume approval prompts)',
       );
     } else {
-      button.setAttribute('icon', 'shield');
-      button.setAttribute('label', 'Enable YOLO');
-      button.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
+      this.yoloButton.setAttribute('icon', 'shield');
+      this.yoloButton.setAttribute('label', 'Enable YOLO');
+      this.yoloButton.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
     }
   }
 

@@ -4,7 +4,10 @@
 
 // Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
-import { encodeHtml } from '@common/modules/htmlEncoding.js';
+
+// Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
+
 // Local imports - formatter helpers
 import {
   setElementDataset,
@@ -16,12 +19,9 @@ import {
   buildEditDiffSection,
   buildCodeBlock,
 } from '../htmlBuilders';
-import {
-  normalizeToolUseLog,
-  stringifyWithLanguage,
-  extractCodeOnlyInput,
-  type NormalizedPayload,
-} from '../normalizers';
+import { normalizeToolUseData } from '../logDataParsers';
+import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
+import type { NormalizedPayload } from '../parseUtils';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
@@ -149,7 +149,7 @@ export function formatToolUse(
   timestamp: number,
 ): HTMLElement | null {
   const { structured } = normalizedPayload ?? {};
-  const normalizedToolLog = normalizeToolUseLog(structured);
+  const normalizedToolLog = normalizeToolUseData(structured);
 
   if (!normalizedToolLog) {
     return null;
@@ -181,17 +181,21 @@ export function formatToolUse(
   // Build title based on state
   // For normal tool use, just show the tool name (no "Tool Use:" prefix)
   // Keep prefixes for special states: "Tool Error:" and "User Feedback:"
-  const isNormalToolUse = !isUserFeedback && !showAsError;
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
-  const titleBase =
-    toolName && isNormalToolUse
-      ? toolName
-      : toolName
-        ? `${titlePrefix}: ${toolName}`
-        : titlePrefix;
+  const isNormalToolUse = !isUserFeedback && !showAsError;
+  let titleBase: string;
+  if (toolName && isNormalToolUse) {
+    titleBase = toolName;
+  } else if (toolName) {
+    titleBase = `${titlePrefix}: ${toolName}`;
+  } else {
+    titleBase = titlePrefix;
+  }
 
   const headerSummary = normalizedToolLog.headerSummary ?? '';
-  const titleText = headerSummary ? `${titleBase} — ${headerSummary}` : titleBase;
+  const titleText = headerSummary
+    ? `${titleBase} — ${headerSummary}`
+    : titleBase;
 
   if (headerLabel) {
     headerLabel.textContent = titleText;

@@ -4,21 +4,23 @@
 
 // Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
-import { encodeHtml } from '@common/modules/htmlEncoding.js';
-import { getBasename } from '@common/modules/pathUtils.js';
+
+// Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
+import { getBasename } from '@shared/utils/path';
+
+// Local imports - shared schemas
+import { MissingOutputsPayloadSchema } from '@shared/schemas';
+
 // Local imports - formatter helpers
 import {
   buildFileListRender,
   initToggleIcon,
   buildFileLink,
 } from '../htmlBuilders';
-import {
-  normalizeFileListEntries,
-  normalizeMissingOutputsPayload,
-  ensureLatexdiffArray,
-  type NormalizedPayload,
-} from '../normalizers';
+import { normalizeFileListData } from '../logDataParsers';
 import { formatTokens } from '../timestampUtils';
+import type { NormalizedPayload } from '../parseUtils';
 
 type DiffResultEntry = Record<string, unknown>;
 
@@ -34,17 +36,8 @@ export function formatFileList(
   const summaryElem = element.querySelector('.summary-text');
   initToggleIcon(element, false);
 
-  // Try structured data first, then fall back to parsing decodedText
-  let parsed = normalizeFileListEntries(normalizedPayload?.structured);
-  if (!parsed && normalizedPayload?.decodedText) {
-    try {
-      parsed = normalizeFileListEntries(
-        JSON.parse(normalizedPayload.decodedText),
-      );
-    } catch {
-      // Fall through to raw display
-    }
-  }
+  // Parse and normalize file list data using Zod schema
+  const parsed = normalizeFileListData(normalizedPayload?.structured);
 
   // Raw fallback when parsing fails
   if (!parsed) {
@@ -98,13 +91,16 @@ export function formatMissingOutputs(
   normalizedPayload: NormalizedPayload,
   logId: string,
 ): HTMLElement | null {
-  const parsed = normalizeMissingOutputsPayload(normalizedPayload?.structured);
-  if (!parsed) {
+  // Parse with Zod schema
+  const parseResult = MissingOutputsPayloadSchema.safeParse(
+    normalizedPayload?.structured,
+  );
+  if (!parseResult.success) {
     console.warn('Missing structured data for missing outputs log entry');
     return null;
   }
 
-  const { missing, xmlFile, documentTag } = parsed;
+  const { missing, xmlFile, documentTag } = parseResult.data;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
@@ -145,10 +141,6 @@ export function formatMissingOutputs(
 // =============================================================================
 // Latexdiff Helpers
 // =============================================================================
-
-/** Convert value to string if non-empty, otherwise return empty string. */
-const toStringOrEmpty = (value: unknown): string =>
-  typeof value === 'string' && value.length > 0 ? value : '';
 
 /** Get display path from a location object. */
 const describeLocation = (location: Record<string, unknown> | null): string => {
@@ -210,7 +202,7 @@ const extractNewFormat = (entry: DiffResultEntry) => {
         : '',
     displayName:
       originalRelative || originalAbsolute
-        ? getBasename(originalRelative || originalAbsolute)
+        ? getBasename(originalRelative ?? originalAbsolute)
         : describeLocation(baseLocation ?? null) ||
           getBasename(
             typeof baseLocation?.absolutePath === 'string'
@@ -294,12 +286,12 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
   if (!entry) return '';
 
   // Extract fields based on format - new format has revised object, legacy has locations
-  let data = null;
-  if (entry.revised && typeof entry.revised === 'object') {
-    data = extractNewFormat(entry);
-  } else if (entry.locations) {
-    data = extractLegacyFormat(entry);
-  }
+  const data =
+    entry.revised && typeof entry.revised === 'object'
+      ? extractNewFormat(entry)
+      : entry.locations
+        ? extractLegacyFormat(entry)
+        : null;
 
   if (!data) return '';
 
@@ -316,11 +308,12 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
   } = data;
 
   const icon = getLatexdiffStatusIcon(status);
-  const msg = toStringOrEmpty(message);
+  const msg = typeof message === 'string' ? message : '';
   const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr = runId
-    ? ` data-run-id="${encodeHtml(toStringOrEmpty(runId))}"`
-    : '';
+  const runAttr =
+    typeof runId === 'string' && runId
+      ? ` data-run-id="${encodeHtml(runId)}"`
+      : '';
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
   const baseLabel =
@@ -343,8 +336,9 @@ export function formatLatexdiff(
   normalizedPayload: NormalizedPayload,
   logId: string,
 ): HTMLElement | null {
-  const entries = ensureLatexdiffArray(normalizedPayload?.structured);
-  if (!entries || entries.length === 0) return null;
+  const structured = normalizedPayload?.structured;
+  if (!Array.isArray(structured) || structured.length === 0) return null;
+  const entries = structured as DiffResultEntry[];
 
   const element = createFromTemplate('latexdiffDetailsTemplate');
   if (!element) return null;
@@ -354,9 +348,9 @@ export function formatLatexdiff(
   // Build HTML for all entries and collect first runId
   let aggregatedRunId = '';
   const items = entries.map((entry) => {
-    const runId = toStringOrEmpty(entry?.runId);
-    if (runId && !aggregatedRunId) {
-      aggregatedRunId = runId;
+    const entryRunId = entry?.runId;
+    if (typeof entryRunId === 'string' && entryRunId && !aggregatedRunId) {
+      aggregatedRunId = entryRunId;
     }
     return buildLatexdiffEntryHtml(entry);
   });

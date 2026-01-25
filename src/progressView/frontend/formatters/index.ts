@@ -8,7 +8,7 @@ export { formatTokens } from './timestampUtils';
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter';
 
 // Local imports - formatter helpers
-import { normalizeStructuredContent } from './normalizers';
+import { normalizeStructuredContent } from './parseUtils';
 import {
   applyOpenState,
   safeFormat,
@@ -36,7 +36,7 @@ import {
 
 // Local imports - shared schemas
 import type { LogMessageData, MessageType } from '@shared/schemas';
-import type { NormalizedPayload } from './normalizers';
+import type { NormalizedPayload } from './parseUtils';
 
 type LogFormatOptions = {
   preservedOpen?: boolean;

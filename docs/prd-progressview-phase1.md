@@ -287,9 +287,142 @@ This milestone rewrites the ProgressView frontend from imperative DOM manipulati
 | Core        | 5 files      | ~800        | ✅ Removed |
 | **Total**   | **40 files** | **~10,000** | ✅ Removed |
 
-##### CSS Files (26 files - preserved, no changes needed)
+##### CSS Files (with Lit-Specific Fixes)
 
-External CSS in `styles/` directory works with light DOM rendering.
+External CSS in `styles/` directory works with light DOM rendering, with critical fixes for custom element flex layout.
+
+**CSS Fixes Applied (2026-01-25):**
+
+| File       | Fix                                                    | Issue Resolved                         |
+| ---------- | ------------------------------------------------------ | -------------------------------------- |
+| `logs.css` | Added `display: flex` + flex props for custom elements | Scrollbar not working on log container |
+| `tabs.css` | Added `display: flex` for `stream-tabs`                | Tab panel overflow not scrolling       |
+
+**Root cause:** Custom elements (`<log-list>`, `<task-group-list>`, `<stream-tabs>`) default to `display: inline` and don't participate in flex layout. Must explicitly set `display: flex` and flex properties.
+
+```css
+/* Example fix from logs.css */
+task-group-list,
+log-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+```
+
+##### Regression Fixes and Stabilization (2026-01-25)
+
+Fixes applied after initial Lit migration to address known regressions:
+
+| Bug                                     | Root Cause                                             | Fix Location         | Status           |
+| --------------------------------------- | ------------------------------------------------------ | -------------------- | ---------------- |
+| Duplicate content on stream tab click   | `renderLogs()` appended without clearing first         | `LogList.ts:115`     | ✅ Fixed         |
+| Leftover content when switching filters | `handleUpdateStreams()` didn't clear on stream change  | `messageHandlers.ts` | ✅ Fixed         |
+| "No runs yet" placeholder not showing   | `clear()` didn't call `showPlaceholderIfEmpty()`       | `LogList.ts:266`     | ✅ Fixed         |
+| Updates arriving before log exists      | Race condition between UPDATE_LOG and APPEND_LOG       | `messageHandlers.ts` | ✅ Fixed         |
+| Radio group no default selection        | Property set but attribute not synced for vscode-radio | `StreamTabs.ts`      | ✅ Fixed         |
+| Other UI regressions                    | Unknown - requires real-world testing                  | TBD                  | 🟡 Investigating |
+
+**Key insight:** These bugs stemmed from data flow issues, not Lit-specific problems. The root causes were:
+
+1. **Missing clearing** - Always clear container before full re-render
+2. **Missing state transitions** - Clear content when switching streams or to empty categories
+3. **Message ordering** - Handle UPDATE_LOG arriving before APPEND_LOG via pending updates Map
+
+**Status:** UI parity testing is ongoing. The fixes above address known issues, but additional regressions may exist that require real-world usage to surface.
+
+##### Message Handler Patterns Established
+
+The following patterns were established to handle edge cases properly:
+
+**1. Pending Log Updates Pattern**
+
+Handles race condition where UPDATE_LOG arrives before APPEND_LOG:
+
+```typescript
+// messageHandlers.ts
+const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
+
+export function handleUpdateLog(
+  raw: unknown,
+  ctx: MessageHandlerContext,
+): void {
+  const logId = result.data.logMessage.id;
+  const logExists = streamState.logs.some((entry) => entry.id === logId);
+
+  if (!logExists) {
+    // Store update for when APPEND_LOG arrives
+    pendingLogUpdates.set(logId, {
+      ...existingUpdate,
+      ...result.data.logMessage,
+    });
+    return;
+  }
+  // Normal update path...
+}
+
+export function handleAppendLog(
+  raw: unknown,
+  ctx: MessageHandlerContext,
+): void {
+  const pendingUpdate = logId ? pendingLogUpdates.get(logId) : null;
+  const mergedLogMessage = pendingUpdate
+    ? { ...result.data.logMessage, ...pendingUpdate }
+    : result.data.logMessage;
+
+  if (logId && pendingUpdate) {
+    pendingLogUpdates.delete(logId);
+  }
+  // Append merged message...
+}
+```
+
+**2. Stream Switch Clearing Pattern**
+
+Clear content when switching streams or filtering to empty category:
+
+```typescript
+// messageHandlers.ts - handleUpdateStreams
+const isStreamSwitch = activeStream !== previousStreamId;
+if (!activeStream || isStreamSwitch) {
+  const logList = ctx.getLogListRef();
+  logList?.clear(); // Triggers placeholder display
+}
+```
+
+**3. Auto-Expand Pattern for Specific Message Types**
+
+```typescript
+const AUTO_EXPAND_MESSAGE_TYPES = new Set(['thinking', 'scratchpad']);
+
+// In handleAppendLog:
+const shouldAutoExpand = AUTO_EXPAND_MESSAGE_TYPES.has(
+  mergedLogMessage.messageType ?? '',
+);
+ctx
+  .getLogListRef()
+  ?.appendLog(mergedLogMessage, { defaultOpen: shouldAutoExpand });
+```
+
+**4. Stream-Scoped Prompt Filtering**
+
+Prompts only shown for tool-use agents, filtered by active stream:
+
+```typescript
+// ProgressApp.ts
+private getFilteredPrompts(activeStreamId: string | null, isToolUse: boolean): PromptState[] {
+  if (!isToolUse) return [];
+  if (!activeStreamId) return [];
+
+  return this.prompts.filter((prompt) => {
+    const promptStreamId = prompt.data.streamId;
+    if (!promptStreamId) return true;  // Global prompts
+    return promptStreamId === activeStreamId;
+  });
+}
+```
 
 ---
 

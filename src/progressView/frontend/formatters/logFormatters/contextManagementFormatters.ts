@@ -10,7 +10,7 @@ import { createFromTemplate } from '@common/modules/templateUtils.js';
 // Local imports - formatter helpers
 import { initToggleIcon } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
-import type { NormalizedPayload } from '../normalizers';
+import type { NormalizedPayload } from '../parseUtils';
 
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
