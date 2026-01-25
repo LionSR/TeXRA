@@ -199,3 +199,60 @@ export function scrollToBottom(element: HTMLElement | null): void {
     element.scrollTop = element.scrollHeight;
   }
 }
+
+/**
+ * Determine if element is a VS Code select-like component.
+ */
+export function isSelectLikeElement(
+  element: Element | null,
+): element is HTMLElement & { value?: string } {
+  if (!element) return false;
+  const tagName = element.tagName.toLowerCase();
+  return tagName === 'vscode-single-select' || tagName === 'vscode-dropdown';
+}
+
+/**
+ * Get vscode-option elements from a select-like component.
+ */
+export function getSelectOptionElements(
+  element: Element | null,
+): HTMLElement[] {
+  if (!isSelectLikeElement(element)) {
+    return [];
+  }
+  return [...element.querySelectorAll('vscode-option')];
+}
+
+/**
+ * Get the currently selected option element for a select-like component.
+ */
+export function getSelectedOptionElement(
+  element: Element | null,
+): HTMLElement | null {
+  if (!isSelectLikeElement(element)) {
+    return null;
+  }
+
+  const options = getSelectOptionElements(element);
+  if (options.length === 0) {
+    return null;
+  }
+
+  const currentValue = (element as HTMLElement & { value?: string }).value;
+  if (currentValue !== null && currentValue !== undefined) {
+    const matchingOption = options.find(
+      (option) => option.getAttribute('value') === currentValue,
+    );
+    if (matchingOption) {
+      return matchingOption;
+    }
+  }
+
+  return (
+    options.find(
+      (option) =>
+        option.hasAttribute('selected') ||
+        (option as HTMLOptionElement).selected,
+    ) ?? options[0]
+  );
+}

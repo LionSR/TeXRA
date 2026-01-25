@@ -6,4 +6,6 @@
 
 export { codiconStyles, codiconIconClasses } from './codiconStyles';
 
+export { commonViewStyles } from './commonViewStyles';
+
 export { designTokens, utilityStyles, animationStyles } from './litStyles';

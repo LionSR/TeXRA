@@ -4,15 +4,9 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
-// Local imports - shared webview
-import { vscode } from '@shared/vscode';
-
-// Local imports - common helpers
-import {
-  insertTextAtCursor,
-  resolveTextareaTarget,
-} from '@common/modules/textareaUtils.js';
-import { RecordingButtonManager } from '@common/modules/RecordingButtonManager.js';
+// Local imports - shared utilities
+import { insertTextAtCursor, resolveTextareaTarget } from '@shared/utils';
+import { RecordingButtonController } from '@shared/controllers/RecordingButtonController';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -99,22 +93,19 @@ export class FollowUpInput extends LitElement {
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
 
-  private recordingManager = new RecordingButtonManager(vscode, {
-    buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
+  private recordingController = new RecordingButtonController(this, {
     startCommand: COMMANDS.START_RECORDING,
     stopCommand: COMMANDS.STOP_RECORDING,
     startTitle: 'Record follow-up with microphone',
     stopTitle: 'Stop recording',
-    root: this,
   });
 
-  override disconnectedCallback(): void {
-    this.recordingManager.dispose();
-    super.disconnectedCallback();
-  }
-
-  firstUpdated(): void {
-    this.recordingManager.setup();
+  updated(): void {
+    this.recordingController.attach(
+      this.renderRoot.querySelector(
+        `#${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}`,
+      ) as HTMLElement | null,
+    );
   }
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
@@ -228,7 +219,7 @@ export class FollowUpInput extends LitElement {
   }
 
   setRecording(recording: boolean): void {
-    this.recordingManager.setRecording(recording);
+    this.recordingController.setRecording(recording);
   }
 
   private handleInput(event: InputEvent): void {
