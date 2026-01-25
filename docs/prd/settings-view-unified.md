@@ -11,7 +11,9 @@
 
 Create a unified Settings View that consolidates model configuration, agent configuration, execution history, and profile/account management into a single tabbed interface. This replaces the scattered entry points with a cohesive settings experience.
 
-**Architecture**: This implementation follows the **Lit + TypeScript + Zod** architecture established in the ProgressView Modernization PRD. Settings View will be implemented as part of Phase 3 webview migrations.
+**Architecture**: This implementation follows the **Lit + TypeScript + Zod** architecture established in the ProgressView Modernization PRD.
+
+**Key Insight (2026-01-25):** With Phase 4 complete, MemoryView, HistoryView, and ProfileView are **already Lit components**. Settings View can **compose these existing components** rather than rewriting them, significantly reducing scope and risk.
 
 ---
 
@@ -884,7 +886,7 @@ SecretManager.setApiKey('anthropic', 'sk-...');
 
 ## Implementation Phases
 
-Settings View is implemented as part of **Phase 4** of the ProgressView modernization, consolidating three existing webviews (HistoryView, ProfileView, MemoryView) into a unified interface.
+Settings View is a **future consolidation** (Phase 6) that combines the NOW-EXISTING Lit-migrated views (MemoryView, HistoryView, ProfileView) into a unified tabbed interface. This is a UX enhancement, not a migration.
 
 ### ProgressView Modernization Status
 
@@ -893,19 +895,32 @@ Settings View is implemented as part of **Phase 4** of the ProgressView moderniz
 | **Phase 1** | Schema relocation to `src/shared/schemas/`   | ✅ Complete    |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    |
 | **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress |
-| **Phase 4** | Migrate other webviews (including Settings)  | ⬜ Not Started |
+| **Phase 4** | Migrate other webviews                       | ✅ Complete*   |
+| **Phase 5** | MainView refactoring + message contracts     | ⬜ Not Started |
+| **Phase 6** | **Settings View unification (this PRD)**     | ⬜ Future      |
 
-### Phase 3 Sub-Status (Prerequisites for Settings View)
+\*Phase 4 complete: MemoryView, HistoryView, ProfileView all migrated to Lit.
 
-| Sub-Phase | Scope                      | Status                         |
-| --------- | -------------------------- | ------------------------------ |
-| 3a        | JS → TS shared utilities   | ✅ Complete                    |
-| 3b-1      | UI parity/stabilization    | ✅ Complete                    |
-| 3b-1.5/6  | CSS Shadow DOM migration   | ✅ Complete (11/13 components) |
-| 3b-2      | Utility conversion         | ⬜ Not Started                 |
-| 3b-3      | Formatter → TemplateResult | ⬜ Not Started                 |
+### Phase 4 Completed Migrations (Available for Reuse)
 
-**Settings View can begin once Phase 3b-1 is complete** (current status: ready).
+| Webview         | Lit Components Created                                          | Zod Validation |
+| --------------- | --------------------------------------------------------------- | -------------- |
+| **MemoryView**  | `MemoryApp.ts`, `MemoryItem.ts`, `MemoryList.ts`, `MemoryToggle.ts`, `MemoryToolbar.ts` | ✅ Complete |
+| **HistoryView** | `HistoryApp.ts`, `HistoryItem.ts`, `HistoryList.ts`, `SearchBar.ts` | ✅ Complete |
+| **ProfileView** | `ProfileApp.ts`, `AgentsTable.ts`, `ApiAccessSection.ts`, `ProfileInfo.ts`, `SignInPrompt.ts` | ✅ Complete |
+
+### Phase 5 Prerequisite Issues (May Affect Settings View)
+
+Before Settings View consolidation, Phase 5 regressions should be addressed:
+
+| ID  | View        | Issue                         | Impact on Settings View |
+| --- | ----------- | ----------------------------- | ----------------------- |
+| H1  | HistoryView | Mark highlight colors SWAPPED | Must fix before embedding |
+| P3  | ProfileView | Missing error state guidance  | UX issue to resolve     |
+| J2  | MemoryView  | vscode-checkbox timing        | May affect Memory tab   |
+| J4  | HistoryView | Filter state persistence      | Should fix for History tab |
+
+**Settings View can begin after Phase 5 critical issues are resolved** — or can proceed in parallel if embedding views rather than rewriting.
 
 ### Anti-Patterns to Avoid
 
@@ -941,28 +956,56 @@ AFTER (2 layers):
 
 ### Settings View Implementation Steps
 
+> **Key Change:** Since MemoryView, HistoryView, and ProfileView are NOW Lit components, Settings View **composes existing components** rather than rewriting them.
+
 #### Step 1: Schema Setup
 - Add settings-specific schemas to `src/shared/schemas/settings.ts`
-- Add commands to `src/shared/schemas/commands.ts`
-- No duplicate definitions - leverage existing 60+ Zod schemas
+- Add `SETTINGS_VIEW_COMMANDS` to `src/shared/schemas/commands.ts`
+- Reuse existing commands from Memory/History/Profile views
+- Add new commands only for Models tab and LaTeX tab
 
 #### Step 2: Backend Handlers
-- Create `SettingsViewMessageHandler.ts` with domain-specific handler classes
-- Use registry pattern (`Record<string, Handler>`) instead of switch statements
-- Validate all messages with Zod schemas using `safeParse()`
+- Create `SettingsViewMessageHandler.ts` as orchestrator
+- **Delegate** to existing handlers:
+  - `MemoryViewMessageHandler` for Memory tab operations
+  - `HistoryViewMessageHandler` for History tab operations
+  - `ProfileViewMessageHandler` for Profile/Account operations
+- Add new handlers for Models tab and LaTeX tab
 
-#### Step 3: Lit Frontend
-- Create `src/settingsView/frontend/` with Lit components
-- Follow native Lit patterns (Shadow DOM, static styles array, arrow handlers)
-- Implement reactive store with `@lit-labs/preact-signals`
-- Build all 5 tab components
+#### Step 3: Lit Frontend (Composition Approach)
 
-#### Step 4: Delete Legacy Views
-- Remove `src/profileView/` (636 lines JS)
-- Remove `src/historyView/` (610 lines JS)
-- Remove `src/memoryView/` (305 lines JS)
-- Update command redirects to Settings View
-- Delete legacy `constants.js` files (102 lines total)
+**Option A: Embed Existing Apps** (Recommended for faster delivery)
+```typescript
+// SettingsApp.ts - embeds existing apps
+render() {
+  return html`
+    <texra-tabs .activeTab=${this.activeTab}>
+      <models-tab slot="models"></models-tab>     <!-- NEW -->
+      <agents-tab slot="agents"></agents-tab>     <!-- NEW -->
+      <latex-tab slot="latex"></latex-tab>        <!-- NEW -->
+      <memory-app slot="memory"></memory-app>     <!-- EXISTING -->
+      <history-app slot="history"></history-app>  <!-- EXISTING -->
+    </texra-tabs>
+  `;
+}
+```
+
+**Option B: Extract & Recompose** (Better UX, more work)
+- Extract `MemoryList`, `HistoryList` from their apps
+- Create new tab components that compose these
+- Add unified toolbar and search
+
+#### Step 4: Routing & Entry Points
+- Add Settings View provider and register in extension
+- Update MainView to show ⚙️ Settings button
+- **Keep existing views working** during transition (backwards compatible)
+- After stabilization: deprecate standalone Memory/History/Profile commands
+
+#### Step 5: Deprecate Standalone Views (Future)
+- Remove standalone `memory.openView`, `history.openView`, `profile.openView` commands
+- Redirect to Settings View with appropriate tab pre-selected
+- Delete provider classes for individual views
+- Keep Lit components in `src/shared/components/` for reuse
 
 ---
 
@@ -2383,7 +2426,8 @@ Before merging Settings View implementation, verify:
 - **Phase 1 (Schema relocation):** `docs/prd-progressview-phase1.md`
 - **Phase 2 (Shared infrastructure):** `docs/prd-progressview-phase2.md` — includes anti-patterns analysis
 - **Phase 3 (Native Lit patterns):** `docs/prd-progressview-phase3.md`
-- **Phase 4 (Other webviews):** `docs/prd-progressview-phase4.md` — includes migration order and patterns checklist
+- **Phase 4 (Other webviews):** `docs/prd-progressview-phase4.md` — Memory/History/Profile migration complete
+- **Phase 5 (MainView refactoring):** `docs/prd-progressview-phase5.md` — regressions and bug fixes
 
 ### External Documentation
 - **Lit Documentation:** https://lit.dev/
