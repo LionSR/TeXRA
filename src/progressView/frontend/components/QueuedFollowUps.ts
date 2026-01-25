@@ -17,10 +17,7 @@ export class QueuedFollowUps extends LitElement {
   }
 
   private get collapsibleTitle(): string {
-    const count = this.messages.length;
-    if (count === 0) return 'Queued follow-ups';
-    if (count === 1) return 'Queued follow-up (1 pending)';
-    return `Queued follow-ups (${count} pending)`;
+    return 'Queued Messages';
   }
 
   private truncateMessage(message: string): {
