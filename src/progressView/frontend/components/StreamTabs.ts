@@ -1,5 +1,10 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type TemplateResult,
+  type PropertyValues,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -10,7 +15,10 @@ import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@common/modules/iconConstants.js';
-import { getRadioChangeValue } from '@common/modules/domUtils.js';
+import {
+  getRadioChangeValue,
+  setRadioGroupValue,
+} from '@common/modules/domUtils.js';
 
 // Local imports - progress view constants
 import {
@@ -33,6 +41,25 @@ export class StreamTabs extends LitElement {
 
   protected createRenderRoot(): HTMLElement {
     return this;
+  }
+
+  firstUpdated(): void {
+    this.syncFilterRadioGroup();
+  }
+
+  updated(changedProps: PropertyValues): void {
+    if (changedProps.has('filter')) {
+      this.syncFilterRadioGroup();
+    }
+  }
+
+  private syncFilterRadioGroup(): void {
+    const group = this.querySelector(
+      `#${ELEMENT_IDS.AGENT_FILTER_CONTAINER}`,
+    ) as HTMLElement | null;
+    if (group) {
+      setRadioGroupValue(group, this.filter);
+    }
   }
 
   render(): TemplateResult {

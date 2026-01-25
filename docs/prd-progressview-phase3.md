@@ -2,9 +2,145 @@
 
 > **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
 
-## Phase 3: Migrate Other Webviews
+## Phase 1 & 2 Completed
 
-**Prerequisite:** Phase 1 (ProgressView) and Phase 2 (shared infrastructure extraction) must be complete.
+### What Was Done
+
+- **Schema consolidation**: All types in `src/shared/schemas/` using Zod v4 patterns
+- **Lit component architecture**: `ProgressApp`, `FileList`, `FollowUpInput`, `StreamTabs`, etc.
+- **State management**: Using Lit's native `@state()` decorator (deleted unused `createStore.ts`)
+- **Message validation**: All handlers validate with Zod schemas before processing
+- **Nested record helper**: `updateNestedRounds<T>()` centralizes `Record<runId, Record<round, T[]>>` updates
+- **Component boundaries**: Child components emit complete payloads (e.g., `FollowupSection.getFormData()`)
+
+### Patterns Established
+
+1. **State ownership**: Components own their form state; parents receive via events
+2. **No DOM querying across boundaries**: Use refs within component, events across components
+3. **Single `setStreamState` call**: All state updates in one place, no sequential band-aids
+4. **Helper functions for complex updates**: Extract reusable logic (e.g., `updateNestedRounds`)
+
+### Technical Debt Remaining
+
+| Priority | Issue                    | Location                                                  | Notes                                                                        |
+| -------- | ------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| High     | `@ts-nocheck` directives | `formatters/*.ts`, `LogList.ts`, `TaskGroupDomManager.ts` | Incrementally enable type checking                                           |
+| High     | `LogList` bypasses Lit   | `components/LogList.ts`                                   | Uses `innerHTML` and manual DOM; convert to proper Lit or plain class        |
+| Medium   | `htmlBuilders.ts` SRP    | `formatters/htmlBuilders.ts` (~336 lines)                 | Split into `syntaxHighlighting.ts`, `diffRendering.ts`, `fileListBuilder.ts` |
+| Low      | Duplicate DOM queries    | `FollowUpInput.ts`                                        | Extract to `getTextarea()` helper                                            |
+| Low      | TodoList repeat key      | `TodoList.ts`                                             | Use unique ID instead of `content-status`                                    |
+
+---
+
+## Phase 3a: Migrate JS Utilities to Shared TypeScript
+
+**Problem**: ProgressView TypeScript imports from `@common/modules/*.js` files. This creates a mixed JS/TS codebase with no type safety at boundaries.
+
+### Current State (JS utilities imported by TS)
+
+```
+src/common/modules/*.js          → Used by ProgressView TS via @common/modules/*.js
+src/common/constants/*.js        → Used by ProgressView TS
+src/common/webview/*.js          → Used by ProgressView TS
+```
+
+### Target State
+
+```
+src/shared/
+├── schemas/                     # ✓ Already TypeScript
+├── utils/
+│   ├── html.ts                  # encodeHtml, decodeHtml (from htmlEncoding.js)
+│   ├── dom.ts                   # DOM helpers (from domUtils.js)
+│   ├── path.ts                  # getBasename (from pathUtils.js)
+│   ├── string.ts                # formatRelativeTime (from stringUtils.js)
+│   ├── clipboard.ts             # copyWithFeedback (from clipboardUtils.js)
+│   ├── template.ts              # createFromTemplate (from templateUtils.js)
+│   ├── dropdown.ts              # applyAgentOptions (from dropdownUtils.js)
+│   └── textarea.ts              # textarea helpers (from textareaUtils.js)
+├── constants/
+│   ├── icons.ts                 # Icon class constants (from iconConstants.js)
+│   ├── streamStatus.ts          # Stream status (from streamStatus.js)
+│   └── agentTypes.ts            # Agent types (from agentTypes.js)
+├── state/
+│   ├── ToggleStateStore.ts      # Toggle state (from ToggleStateStore.js)
+│   └── WebviewStateManager.ts   # Webview state (from webviewState.js)
+├── webview/
+│   ├── themeHandlers.ts         # Theme handling (from themeHandlers.js)
+│   └── commands.ts              # Command constants (from commands.js)
+├── components/
+│   └── RecordingButton.ts       # Recording button (from RecordingButtonManager.js)
+├── BaseWebviewApp.ts            # ✓ Already TypeScript
+├── vscode.ts                    # ✓ Already TypeScript
+└── index.ts                     # Re-exports
+```
+
+### Migration Steps
+
+1. **Create TypeScript versions** in `src/shared/utils/`, `src/shared/constants/`, etc.
+2. **Add proper types** - no `any`, proper function signatures
+3. **Update imports** in ProgressView to use `@shared/utils/*`
+4. **Delete JS originals** from `src/common/modules/`
+5. **Update path aliases** in `tsconfig.json` if needed
+
+### Priority Order
+
+| Priority | File                       | Lines | Complexity | Notes                      |
+| -------- | -------------------------- | ----- | ---------- | -------------------------- |
+| 1        | `htmlEncoding.js`          | 30    | Low        | Pure functions, easy win   |
+| 2        | `iconConstants.js`         | ~50   | Low        | Just constants             |
+| 3        | `pathUtils.js`             | ~30   | Low        | Pure functions             |
+| 4        | `stringUtils.js`           | ~50   | Low        | Pure functions             |
+| 5        | `clipboardUtils.js`        | ~30   | Low        | Simple async               |
+| 6        | `domUtils.js`              | 443   | Medium     | Many functions, DOM types  |
+| 7        | `templateUtils.js`         | 97    | Medium     | DOM manipulation           |
+| 8        | `dropdownUtils.js`         | ~100  | Medium     | VS Code component types    |
+| 9        | `textareaUtils.js`         | ~80   | Medium     | Textarea handling          |
+| 10       | `ToggleStateStore.js`      | ~50   | Medium     | Class with state           |
+| 11       | `webviewState.js`          | ~100  | Medium     | State management           |
+| 12       | `themeHandlers.js`         | ~50   | Low        | Theme utilities            |
+| 13       | `RecordingButtonManager.js`| ~150  | High       | Complex component          |
+
+### Type Definitions Needed
+
+```typescript
+// src/shared/utils/html.ts
+export function encodeHtml(value: unknown): string;
+export function decodeHtml(value: unknown): string;
+export function encodeListForHtml(values: unknown[], separator?: string): string;
+
+// src/shared/utils/dom.ts
+export function getRadioChangeValue(event: Event, radioGroup: HTMLElement | null): string;
+export function setRadioGroupValue(radioGroup: HTMLElement, value: string, selector?: string): void;
+export function setElementDisabled(element: Element, disabled: boolean): void;
+export function waitForElement(selector: string, options?: { timeout?: number }): {
+  promise: Promise<Element | null>;
+  dispose: () => void;
+};
+
+// src/shared/state/ToggleStateStore.ts
+export class ToggleStateStore {
+  constructor(storageKey: string);
+  get(id: string): boolean;
+  set(id: string, value: boolean): void;
+  toggle(id: string): boolean;
+}
+```
+
+### What NOT to Migrate
+
+View-specific JS modules will be **replaced** (not migrated) by Lit components:
+
+- `src/webview/modules/*.js` → Replaced by MainView Lit components
+- `src/historyView/modules/*.js` → Replaced by HistoryView Lit components
+- `src/memoryView/modules/*.js` → Replaced by MemoryView Lit components
+- `src/profileView/modules/*.js` → Replaced by ProfileView Lit components
+
+---
+
+## Phase 3b: Migrate Other Webviews
+
+**Prerequisite:** Phase 3a (shared utilities) should be complete or in progress.
 
 ### Migration Order
 
@@ -182,9 +318,21 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 ## Phase 3 Success Metrics
 
+### Phase 3a (JS → TS Migration)
+
+| Metric                              | Before    | After   |
+| ----------------------------------- | --------- | ------- |
+| JS files in `src/common/modules/`   | 25+       | 0       |
+| JS files in `src/common/constants/` | 4         | 0       |
+| TS files in `src/shared/utils/`     | 0         | 8+      |
+| TS files in `src/shared/constants/` | 0         | 3+      |
+| Mixed JS/TS imports in ProgressView | 27        | 0       |
+
+### Phase 3b (Webview Migration)
+
 | Metric                       | Before Phase 3 | After Phase 3 |
 | ---------------------------- | -------------- | ------------- |
-| Total webview JS files       | ~100+          | ~40           |
+| Total webview JS files       | ~100+          | 0             |
 | Type coverage (all webviews) | ~50%           | 100%          |
 | Lit components (total)       | ~15            | ~50           |
 | Webviews using Lit           | 1              | 5             |
@@ -199,11 +347,30 @@ Each webview migration may deviate from established patterns.
 
 **Mitigation**: Use Phase 2 shared infrastructure. Code review against ProgressView patterns.
 
+### Medium: Nested Record Complexity
+
+The `Record<string, Record<string, T[]>>` pattern for run/round data is error-prone.
+
+**Mitigation**: Use `updateNestedRounds` helper. Consider flattening to `Map<CompositeKey, T[]>` if pattern keeps causing issues.
+
 ### Low: Diminishing Returns
 
 Smaller webviews may not benefit as much from Lit migration.
 
 **Mitigation**: Keep migrations simple for small webviews. Don't over-engineer.
+
+---
+
+## Anti-Patterns to Avoid
+
+These were fixed in Phase 1 & 2; don't reintroduce them:
+
+1. **DOM queries for cross-component state** - Parent should not `document.getElementById()` into child
+2. **Multiple sequential `setStreamState` calls** - Consolidate into single call with helper functions
+3. **`@ts-nocheck` on new files** - Use proper types or `@ts-expect-error` with comments
+4. **Manual DOM manipulation in Lit components** - Either use Lit properly or don't extend `LitElement`
+5. **Unused abstractions** - Don't add `createStore.ts`-style helpers unless actually used
+6. **Importing JS from TS** - After Phase 3a, all shared utilities must be TypeScript; no `from '*.js'` imports
 
 ---
 
