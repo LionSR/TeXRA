@@ -3,8 +3,8 @@ import {
   addEventListenerSafely,
   safeGetElementById,
   getTagName,
-} from '@common/domUtils.js';
-import { createCodicon } from '@common/templateUtils.js';
+} from './domUtils.js';
+import { createCodicon } from './templateUtils.js';
 
 /**
  * Manages a recording toggle button shared across webviews.

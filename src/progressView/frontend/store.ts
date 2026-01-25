@@ -13,6 +13,7 @@ import type {
 
 export type StreamFilter = 'all' | 'workflow' | 'toolUse';
 export type StreamSort = 'time' | 'agent' | 'inputFile';
+export type FollowupMode = 'chat' | 'workflow' | 'merge';
 
 export interface ContextState {
   inputTokens: number;
@@ -24,17 +25,19 @@ export interface StreamState {
   info?: StreamTabInfo;
   status?: StreamStatus;
   logs: LogMessageData[];
-  taskGroups: Map<string, TaskGroup>;
+  taskGroups: TaskGroup[];
   todos: TodoItem[];
   queuedFollowUps: string[];
-  runInstructions: Map<string, InstructionUpdate>;
-  runUsage: Map<string, TokenUsageStats>;
-  runFiles: Map<string, Map<number, OutputFileInfo[]>>;
-  runMissingOutputs: Map<string, Map<number, string[]>>;
+  runInstructions: Record<string, InstructionUpdate>;
+  runUsage: Record<string, TokenUsageStats>;
+  runFiles: Record<string, Record<string, OutputFileInfo[]>>;
+  runMissingOutputs: Record<string, Record<string, string[]>>;
   activeRunId: string | null;
   selectedRunId: string | null;
   contextState?: ContextState;
   toolEditBypass?: boolean;
+  followUpText?: string;
+  followupMode?: FollowupMode;
 }
 
 export interface ProgressState {
@@ -43,20 +46,28 @@ export interface ProgressState {
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   streamStates: Map<StreamTabId, StreamState>;
+  followupOptions: {
+    workflowAgentsHtml: string;
+    toolUseAgentsHtml: string;
+    modelOptionsHtml: string;
+    defaultMergeModel?: string;
+  } | null;
 }
 
 export function createEmptyStreamState(): StreamState {
   return {
     logs: [],
-    taskGroups: new Map(),
+    taskGroups: [],
     todos: [],
     queuedFollowUps: [],
-    runInstructions: new Map(),
-    runUsage: new Map(),
-    runFiles: new Map(),
-    runMissingOutputs: new Map(),
+    runInstructions: {},
+    runUsage: {},
+    runFiles: {},
+    runMissingOutputs: {},
     activeRunId: null,
     selectedRunId: null,
+    followUpText: '',
+    followupMode: 'chat',
   };
 }
 
@@ -67,6 +78,7 @@ export function createInitialState(): ProgressState {
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),
+    followupOptions: null,
   };
 }
 
