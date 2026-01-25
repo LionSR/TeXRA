@@ -132,7 +132,9 @@ const webviewConfigs = [
         // is handled via optimization.usedExports instead.
       },
       {
+        // Handle CSS imports with or without ?inline suffix (for Vite compatibility)
         test: /\.css$/,
+        resourceQuery: { or: [/inline/, ''] },
         use: [path.resolve(__dirname, 'scripts/inlineCssLoader.js')],
       },
     ],
