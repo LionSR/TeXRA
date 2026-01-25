@@ -16,12 +16,15 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ### Critical Issues (Fix Immediately)
 
-| ID      | View     | Issue                            | Status         |
-| ------- | -------- | -------------------------------- | -------------- |
-| R1      | MainView | Missing `SET_SELECTED_AGENT`     | ⬜ Not Started |
-| CODICON | All      | 403 Forbidden font loading error | ⬜ Not Started |
-| H1      | History  | Mark highlight colors SWAPPED    | ⬜ Not Started |
-| TOKENS  | All      | CSS spacing 2-4px larger         | ⬜ Not Started |
+| ID      | View        | Issue                            | Status         |
+| ------- | ----------- | -------------------------------- | -------------- |
+| R1      | MainView    | Missing `SET_SELECTED_AGENT`     | ⬜ Not Started |
+| CODICON | All         | 403 Forbidden font loading error | ⬜ Not Started |
+| H1      | History     | Mark highlight colors SWAPPED    | ⬜ Not Started |
+| TOKENS  | All         | CSS spacing 2-4px larger         | ⬜ Not Started |
+| **R12** | ProgressView| FollowUp section never visible   | ⬜ Not Started |
+| **R13** | MainView    | Dropdowns invisible (clickable)  | ⬜ Not Started |
+| **R14** | MainView    | Run button shows text not icon   | ⬜ Not Started |
 
 ### Migration Regressions (High Priority)
 
@@ -86,7 +89,7 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 | renderLogs incremental updates      | ⬜ Not Started | Performance for large logs       |
 | Create commonViewMessages.ts        | ⬜ Not Started | Zod schemas for cross-view cmds  |
 | themeHandlers.ts Zod migration      | ⬜ Not Started | Type-safe theme/debug handling   |
-| Eliminate normalization layers      | ⬜ Not Started | -200 lines, cleaner data flow    |
+| Eliminate normalization layers      | ✅ Complete    | -160 lines (done in Phase 3)     |
 | Cross-webview command unification   | ⬜ Not Started | Consistent message handling      |
 
 ---
@@ -644,6 +647,136 @@ Missing inline-flex layout, alignment, gap, codicon font size.
 ### MemoryView Regressions
 
 **None found** - Full functional parity achieved.
+
+---
+
+### ProgressView Regressions (NEW - 2026-01-25)
+
+#### R12. FollowUp Section Never Visible (CRITICAL)
+
+**Location:** `src/progressView/frontend/components/FollowupSection.ts:207-215`
+
+**Symptom:** FollowUp section never appears even for completed workflow streams with output files.
+
+**Root Cause:** Status check fails due to semantic mismatch:
+
+```typescript
+// FollowupSection.ts visibility logic
+const isTerminal = this.status === 'stopped' || this.status === 'ready';
+const visible = this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
+```
+
+**But in StreamStatusService.ts:**
+```typescript
+if (status === STREAM_STATUS.READY) {
+  statusMemory.delete(stream);  // ← READY streams are DELETED, not stored
+}
+```
+
+When `streamInfo.status` is looked up for READY streams, it returns `undefined`, not `'ready'`.
+The check `undefined === 'ready'` is always **false**.
+
+**Fix:**
+```typescript
+// Option 1: Handle undefined as ready
+const isTerminal = this.status === 'stopped' || this.status === 'ready' || this.status === undefined;
+
+// Option 2: Fix at source - streamInfoUtils.ts line 94
+status: statuses?.get(id) ?? 'ready',  // Default to 'ready' if not in map
+```
+
+---
+
+### MainView Regressions (NEW - 2026-01-25)
+
+#### R13. Dropdowns Invisible But Clickable (CRITICAL)
+
+**Location:** `src/webview/frontend/MainApp.ts:2076-2197`, `src/webview/frontend/styles.ts`
+
+**Symptom:** Auto-extract and tool config dropdown menus are clickable but completely invisible.
+
+**Affected menus:**
+- `id="autoExtractOptions"` - Auto-extract figures, TikZ, PDF
+- `id="toolConfigOptions"` - TeXCount, diagnostics attachments
+
+**Root Cause:** Missing CSS for `vscode-context-menu` element:
+
+```css
+/* styles.ts - MISSING PROPERTIES */
+.dropdown-container .dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-tiny));
+  right: 0;
+  z-index: 100;
+  /* MISSING: display, background-color, color, border */
+}
+```
+
+**Fix:** Add complete styling:
+```css
+.dropdown-container .dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-tiny));
+  right: 0;
+  z-index: 100;
+  display: block;
+  background-color: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  border: 1px solid var(--vscode-menu-border);
+  border-radius: 4px;
+  min-width: 160px;
+}
+
+/* Handle .show property binding */
+.dropdown-container .dropdown-menu:not([show]) {
+  display: none;
+}
+```
+
+#### R14. Run Button Shows Text Instead of Icon (HIGH)
+
+**Location:** `src/webview/frontend/MainApp.ts:2058-2064`
+
+**Symptom:** Run button displays "Run" text instead of play icon.
+
+**Legacy HTML:**
+```html
+<vscode-button id="executeButton" title="Execute" icon="play"></vscode-button>
+```
+
+**Current Lit (REGRESSION):**
+```html
+<vscode-button id="executeButton" appearance="primary" @click=${this.executeAgent}>
+  Run
+</vscode-button>
+```
+
+**What was lost:**
+- `icon="play"` attribute
+- `title="Execute"` tooltip
+
+**Fix:**
+```typescript
+// Option 1: Icon only (matches legacy)
+<vscode-button
+  id="executeButton"
+  icon="play"
+  title="Execute"
+  appearance="primary"
+  @click=${this.executeAgent}
+></vscode-button>
+
+// Option 2: Icon + text
+<vscode-button
+  id="executeButton"
+  title="Execute"
+  appearance="primary"
+  @click=${this.executeAgent}
+>
+  <span slot="start" class="codicon codicon-play"></span>
+  Run
+</vscode-button>
+```
 
 ---
 
@@ -1343,60 +1476,21 @@ export abstract class BaseWebviewApp extends LitElement {
 
 ## 5.13 Normalization Layer Elimination
 
-**Problem:** Shared contracts eliminate the need for frontend normalization functions.
+**Status:** ✅ **Already Complete** (Phase 3 work)
 
-### Current (Redundant)
+The following normalizers were eliminated during ProgressView migration:
 
-```typescript
-// Frontend normalizes because it doesn't trust backend shape
-function normalizeFileListData(raw: unknown): NormalizedFileEntry[] {
-  // 50 lines of defensive parsing
-}
+| Normalizer | Status | Replacement |
+|------------|--------|-------------|
+| `normalizeFileListData()` | ✅ Deleted | `FileListSchema.safeParse()` |
+| `normalizeToolUseLog()` | ✅ Deleted | `ToolUseLogSchema` |
+| `normalizeMissingOutputsPayload()` | ✅ Deleted | `MissingOutputsSchema` |
+| `normalizeStructuredContent()` | ✅ Deleted | Direct `.data` access |
+| `tryParseJson()` | ✅ Deleted | Dead code removed |
 
-function normalizeToolUseLog(raw: unknown): NormalizedToolUseLog {
-  // 30 lines of field extraction
-}
-```
+**~160 lines removed** as part of Phase 3 Zod-first architecture.
 
-### Target (Schema is Contract)
-
-```typescript
-// Backend sends validated data matching schema
-const message: UpdateFilesMessage = {
-  command: MAIN_VIEW_COMMANDS.UPDATE_FILES,
-  files: files.map(f => ({
-    path: f.path,
-    name: path.basename(f.path),
-    type: f.type,
-  })),
-};
-
-// Frontend trusts schema, no normalization needed
-const result = UpdateFilesSchema.safeParse(event.data);
-if (result.success) {
-  this.files = result.data.files;  // Direct use, no normalization
-}
-```
-
-### Normalizers to Delete (After Schema Migration)
-
-| Normalizer | Location | Lines | Replacement |
-|------------|----------|-------|-------------|
-| `normalizeFileListData()` | MainApp.ts | ~50 | `FileListSchema.safeParse()` |
-| `normalizeToolUseLog()` | formatters | ~30 | `ToolUseLogSchema` |
-| `normalizeMissingOutputsPayload()` | formatters | ~25 | `MissingOutputsSchema` |
-| `normalizeStructuredContent()` | formatters | ~40 | Direct `.data` access |
-| `tryParseJson()` | utils | ~15 | Dead code (backend sends `.data`) |
-
-**Estimated lines removed:** ~160
-
-### Migration Approach
-
-1. **Define schema in `src/shared/schemas/`** with all required fields
-2. **Update backend** to send data matching schema exactly
-3. **Update frontend** to use `safeParse()` + direct access
-4. **Delete normalizer** function
-5. **Repeat** for each normalizer
+**Principle applied:** Schema is the contract - frontend trusts validated data, no defensive normalization needed.
 
 ---
 
