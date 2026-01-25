@@ -4,10 +4,13 @@
  */
 
 // Local imports - Lit template utilities
-import { html, classMap, ifDefined, renderToElement } from '../litTemplates';
-
-// Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
+import {
+  html,
+  classMap,
+  ifDefined,
+  renderToElement,
+  type TemplateResult,
+} from '../litTemplates';
 
 // Local imports - shared schemas
 import type { WebSearchPayload } from '@shared/schemas';
@@ -20,6 +23,7 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildCodeBlock,
+  initToggleIcon,
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
@@ -31,6 +35,16 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '../constants';
+
+/** Join template sections with horizontal rule separators. */
+function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
+  return html`${sections.map(
+    (section, i) =>
+      html`${section}${i < sections.length - 1
+        ? html`<hr class="tool-use-separator" />`
+        : ''}`,
+  )}`;
+}
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {
@@ -57,21 +71,18 @@ type ToolSectionOptions = {
 };
 
 /**
- * Build a tool section with appropriate code highlighting based on tool type and content.
- * Uses explicit language from tool config or content metadata - never auto-detects.
+ * Build a tool section with appropriate code highlighting based on tool type.
  */
 function buildToolSection(
   label: string,
   text: string,
   options: ToolSectionOptions = {},
-): string {
+): TemplateResult {
   const { toolName = '', language: contentLanguage, extraClass = '' } = options;
 
   // Determine language: tool config > content metadata > plaintext
   const toolLanguage = TOOL_OUTPUT_LANGUAGES.get(toolName);
   const language = toolLanguage || contentLanguage || 'plaintext';
-
-  // Only use highlighting for known languages, show badge for non-plaintext
   const shouldHighlight = language && language !== 'plaintext';
 
   const content = shouldHighlight
@@ -93,50 +104,6 @@ function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   return 'Tool Use';
 }
 
-type ToolElementResult = {
-  element: HTMLElement;
-  headerLabel: HTMLElement | null;
-  iconElem: HTMLElement | null;
-  contentElem: HTMLElement | null;
-};
-
-/** Create and initialize a tool-style element using Lit template. */
-function createToolElement(
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-  iconClass: string,
-): ToolElementResult | null {
-  const fullTimestamp = new Date(timestamp).toISOString();
-
-  const element = renderToElement(html`
-    <details class="banner-details tool-use-details">
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class=${`codicon ${iconClass}`}></i>
-        <span class="tool-use-title">Tool Use</span>
-      </summary>
-      <div
-        class="banner-content log-entry-content"
-        data-log-id=${ifDefined(logId || undefined)}
-        data-group-id=${ifDefined(groupId)}
-        data-timestamp=${ifDefined(fullTimestamp)}
-      ></div>
-    </details>
-  `);
-
-  if (!element) return null;
-
-  return {
-    element,
-    headerLabel: element.querySelector('.tool-use-title') as HTMLElement | null,
-    iconElem: element.querySelector(
-      '.details-summary > .codicon',
-    ) as HTMLElement | null,
-    contentElem: element.querySelector('.banner-content') as HTMLElement | null,
-  };
-}
-
 /** Format tool use log entry. */
 export function formatToolUse(
   data: unknown,
@@ -145,10 +112,7 @@ export function formatToolUse(
   timestamp: number,
 ): HTMLElement | null {
   const normalizedToolLog = normalizeToolUseData(data);
-
-  if (!normalizedToolLog) {
-    return null;
-  }
+  if (!normalizedToolLog) return null;
 
   const {
     parsed,
@@ -160,22 +124,13 @@ export function formatToolUse(
     isUserFeedback,
   } = normalizedToolLog;
 
-  // Determine display state: user feedback takes precedence over error styling
+  // Determine display state
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
-
-  // Use appropriate icon: comment for user feedback, otherwise tool-specific
   const iconClass = isUserFeedback
     ? 'codicon-comment'
     : getToolIconClass(toolName, showAsError);
 
-  const toolElement = createToolElement(logId, groupId, timestamp, iconClass);
-  if (!toolElement) return null;
-
-  const { element, headerLabel, contentElem } = toolElement;
-
-  // Build title based on state
-  // For normal tool use, just show the tool name (no "Tool Use:" prefix)
-  // Keep prefixes for special states: "Tool Error:" and "User Feedback:"
+  // Build title
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const isNormalToolUse = !isUserFeedback && !showAsError;
   let titleBase: string;
@@ -192,19 +147,8 @@ export function formatToolUse(
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
 
-  if (headerLabel) {
-    headerLabel.textContent = titleText;
-  }
-
-  // Apply appropriate styling class
-  element.classList.toggle('tool-use-error', showAsError);
-  element.classList.toggle('tool-use-user-feedback', isUserFeedback);
-
-  if (!contentElem) {
-    return element;
-  }
-
-  const sections: string[] = [];
+  // Build content sections
+  const sections: TemplateResult[] = [];
 
   // Get file path from input for specialized formatting
   const filePath =
@@ -212,9 +156,7 @@ export function formatToolUse(
       ? String((input as { path?: string }).path ?? '')
       : '';
 
-  // Handle edit tools with diff display for input
-  // Note: edit_file uses old_str/new_str field names
-  // old_str must be non-empty, but new_str can be empty (deletion operation)
+  // Handle edit tools with diff display
   if (
     TOOLS_WITH_DIFF_INPUT.has(toolName) &&
     typeof input === 'object' &&
@@ -239,7 +181,7 @@ export function formatToolUse(
       ),
     );
   }
-  // Handle read tools with file link instead of full content
+  // Handle read tools with file link
   else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
     const range =
       typeof input === 'object' && input !== null && 'range' in input
@@ -255,7 +197,7 @@ export function formatToolUse(
       ),
     );
   }
-  // Handle write tools with file link + syntax-highlighted content
+  // Handle write tools with file link + content
   else if (
     TOOLS_WITH_FILE_CONTENT.has(toolName) &&
     filePath &&
@@ -279,19 +221,14 @@ export function formatToolUse(
   }
   // Default handling for other tools
   else if (input !== undefined && input !== null) {
-    // Check tool language first (cheap Map lookup) before extracting code
     const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
     const { isCodeOnly, code } = codeLanguage
       ? extractCodeOnlyInput(input)
       : { isCodeOnly: false, code: '' };
 
     if (isCodeOnly) {
-      // Show code with appropriate syntax highlighting instead of YAML
       sections.push(
-        buildToolSection('Input:', code, {
-          toolName,
-          language: codeLanguage,
-        }),
+        buildToolSection('Input:', code, { toolName, language: codeLanguage }),
       );
     } else {
       const { text: inputValue, language: inputLanguage } =
@@ -307,10 +244,7 @@ export function formatToolUse(
     }
   }
 
-  // Show output if present (primary result from tool)
-  // Skip for read tools (already shown as file link)
-  // Skip trivial "written" for write tools, but show if user adjusted content
-  // (WriteTool outputs "written\n\n<diff>" when user modifies proposed content)
+  // Show output if present
   const isWriteTool = TOOLS_WITH_FILE_CONTENT.has(toolName);
   const isTrivialWriteOutput = isWriteTool && outputText.trim() === 'written';
   if (
@@ -326,14 +260,14 @@ export function formatToolUse(
     );
   }
 
-  // Show error if present and not superseded by user feedback
+  // Show error if present
   if (errorText && !isUserFeedback) {
     sections.push(
       buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),
     );
   }
 
-  // Show user instruction as supplementary note/warning if present
+  // Show user instruction if present
   if (isUserFeedback && userInstructionText) {
     sections.push(
       buildToolUseSection(
@@ -343,48 +277,56 @@ export function formatToolUse(
     );
   }
 
-  // Only compute fallback YAML when needed (avoid wasted yaml.stringify)
-  if (sections.length === 0) {
-    const { text: fallbackYaml, language: fallbackLanguage } =
-      stringifyWithLanguage(parsed);
-    contentElem.innerHTML = buildCodeBlock(fallbackYaml ?? '', {
-      language: fallbackLanguage,
-      showLanguage: fallbackLanguage !== 'plaintext',
-      showCopy: true,
-    });
-    return element;
-  }
+  // Fallback: show raw YAML
+  const contentTemplate =
+    sections.length === 0
+      ? buildCodeBlock(stringifyWithLanguage(parsed).text ?? '', {
+          language: 'yaml',
+          showLanguage: true,
+          showCopy: true,
+        })
+      : joinWithSeparator(sections);
 
-  contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
+  const fullTimestamp = new Date(timestamp).toISOString();
 
+  const template = html`
+    <details
+      class=${classMap({
+        'banner-details': true,
+        'tool-use-details': true,
+        'tool-use-error': showAsError,
+        'tool-use-user-feedback': isUserFeedback,
+      })}
+    >
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class=${`codicon ${iconClass}`}></i>
+        <span class="tool-use-title">${titleText}</span>
+      </summary>
+      <div
+        class="banner-content log-entry-content"
+        data-log-id=${ifDefined(logId)}
+        data-group-id=${ifDefined(groupId)}
+        data-timestamp=${ifDefined(fullTimestamp)}
+      >
+        ${contentTemplate}
+      </div>
+    </details>
+  `;
+
+  const element = renderToElement(template);
+  if (element) initToggleIcon(element, false);
   return element;
 }
 
-/** Format web search results from native provider tools (Anthropic, OpenAI). */
+/** Format web search results from native provider tools. */
 export function formatWebSearch(
   data: unknown,
   logId: string,
   groupId: string | undefined,
   timestamp: number,
 ): HTMLElement | null {
-  // Validate data before creating DOM elements
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-
-  const toolElement = createToolElement(
-    logId,
-    groupId,
-    timestamp,
-    'codicon-globe',
-  );
-  if (!toolElement) return null;
-
-  const { element, headerLabel, iconElem, contentElem } = toolElement;
-
-  if (!contentElem) {
-    return element;
-  }
+  if (!data || typeof data !== 'object') return null;
 
   const { query, results, provider, status } = data as WebSearchPayload;
   const resultCount = Array.isArray(results) ? results.length : 0;
@@ -393,60 +335,84 @@ export function formatWebSearch(
 
   const providerLabel = PROVIDER_LABELS[providerKey] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
+  const iconClass = STATUS_ICONS[statusKey] ?? 'codicon codicon-globe';
 
   let titleText = `${providerLabel} Search`;
-  if (query) {
-    titleText += `: "${query}"`;
-  }
+  if (query) titleText += `: "${query}"`;
   titleText += statusSuffix;
 
-  if (headerLabel) headerLabel.textContent = titleText;
-  if (iconElem) {
-    iconElem.className = STATUS_ICONS[statusKey] ?? 'codicon codicon-globe';
-  }
-  element.classList.toggle('tool-use-error', statusKey === 'failed');
-
   // Build content sections
-  const sections: string[] = [];
+  const sections: TemplateResult[] = [];
 
   if (query) {
     sections.push(buildToolUseSection('Query:', wrapInPre(query)));
   }
 
   if (resultCount > 0) {
-    const resultItems = (results ?? []).map((r) => {
-      const url = r.url ?? '';
-      const title = encodeHtml(r.title ?? r.domain ?? url);
-      const domainSuffix = r.domain
-        ? ` <span class="file-source">(${encodeHtml(r.domain)})</span>`
-        : '';
-      const encodedUrl = encodeHtml(url);
-      return (
-        `<li class="detail-item">` +
-        `<i class="codicon codicon-link"></i> ` +
-        `<a href="${encodedUrl}" class="web-search-link" ` +
-        `target="_blank" rel="noopener noreferrer">${title}</a>` +
-        `${domainSuffix}</li>`
-      );
-    });
-
-    const resultsHtml =
-      `<span class="file-list-summary">Results (${resultCount})</span>` +
-      `<ul class="detail-list">${resultItems.join('')}</ul>`;
-    sections.push(buildToolUseSection('Sources:', resultsHtml));
+    const resultsTemplate = html`
+      <span class="file-list-summary">Results (${resultCount})</span>
+      <ul class="detail-list">
+        ${(results ?? []).map(
+          (r) => html`
+            <li class="detail-item">
+              <i class="codicon codicon-link"></i>
+              <a
+                href=${r.url ?? ''}
+                class="web-search-link"
+                target="_blank"
+                rel="noopener noreferrer"
+                >${r.title ?? r.domain ?? r.url}</a
+              >
+              ${r.domain
+                ? html`<span class="file-source">(${r.domain})</span>`
+                : ''}
+            </li>
+          `,
+        )}
+      </ul>
+    `;
+    sections.push(buildToolUseSection('Sources:', resultsTemplate));
   } else if (statusKey === 'completed') {
     sections.push(
       buildToolUseSection(
         'Sources:',
-        '<span class="file-list-summary">No results found</span>',
+        html`<span class="file-list-summary">No results found</span>`,
       ),
     );
   }
 
-  contentElem.innerHTML =
+  const contentTemplate =
     sections.length === 0
-      ? '<pre>Web search executed</pre>'
-      : sections.join('<hr class="tool-use-separator">');
+      ? html`<pre>Web search executed</pre>`
+      : joinWithSeparator(sections);
 
+  const fullTimestamp = new Date(timestamp).toISOString();
+
+  const template = html`
+    <details
+      class=${classMap({
+        'banner-details': true,
+        'tool-use-details': true,
+        'tool-use-error': statusKey === 'failed',
+      })}
+    >
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class=${iconClass}></i>
+        <span class="tool-use-title">${titleText}</span>
+      </summary>
+      <div
+        class="banner-content log-entry-content"
+        data-log-id=${ifDefined(logId)}
+        data-group-id=${ifDefined(groupId)}
+        data-timestamp=${ifDefined(fullTimestamp)}
+      >
+        ${contentTemplate}
+      </div>
+    </details>
+  `;
+
+  const element = renderToElement(template);
+  if (element) initToggleIcon(element, false);
   return element;
 }

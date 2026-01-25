@@ -79,20 +79,20 @@ export class TaskGroupHeaderFormatter {
     return group.parentGroupId ? TaskGroupLevel.NESTED : TaskGroupLevel.ROOT;
   }
 
-  _getHeaderClass(group: TaskGroup, level: TaskGroupLevelConfig): string {
-    const classes = ['log-group-header', `is-${group.status}`];
-    if (level.cssClass) {
-      classes.push(level.cssClass);
-    }
-    return classes.join(' ');
-  }
-
+  /** Get status icon HTML string for DOM updates */
   _getStatusIcon(status: string): string {
     const iconClass = STATUS_ICONS[status] ?? 'circle-outline';
     return `<i class="codicon codicon-${iconClass}"></i>`;
   }
 
-  /** Format duration in milliseconds to human-readable string. Exposed as instance method for external callers. */
+  /** Get header class string for DOM updates */
+  _getHeaderClass(group: TaskGroup, level: TaskGroupLevelConfig): string {
+    const classes = ['log-group-header', `is-${group.status}`];
+    if (level.cssClass) classes.push(level.cssClass);
+    return classes.join(' ');
+  }
+
+  /** Format duration for DOM updates */
   _formatDuration(durationMs: number): string {
     return formatDuration(durationMs);
   }

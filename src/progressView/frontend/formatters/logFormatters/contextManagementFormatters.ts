@@ -158,7 +158,7 @@ export function formatContextManagement(
       </summary>
       <div
         class="context-management-content"
-        data-log-id=${ifDefined(logId || undefined)}
+        data-log-id=${ifDefined(logId)}
       >
         ${items.map(
           (item) => html`

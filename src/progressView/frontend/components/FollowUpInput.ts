@@ -71,7 +71,10 @@ export class FollowUpInput extends LitElement {
     }
 
     return html`
-      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container is-visible">
+      <div
+        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
+        class="follow-up-container is-visible"
+      >
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
 
         <div class="follow-up-input-row">

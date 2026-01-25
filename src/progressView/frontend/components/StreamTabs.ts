@@ -25,6 +25,9 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
+// Local imports - progress view utils
+import { getRadioValue } from '../utils';
+
 /** Format status string for display (capitalize first letter) */
 function formatStatusLabel(status: string): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
@@ -189,15 +192,8 @@ export class StreamTabs extends LitElement {
   }
 
   private handleFilterChange(event: Event) {
-    // Get value from the clicked radio element, not the group
-    // vscode-radio-group may not update .value synchronously on change
-    const target = event.target as Element | null;
-    const radio = target?.closest('vscode-radio');
-    const filter = (radio?.getAttribute('value') ||
-      (event.currentTarget as HTMLElement & { value?: string })
-        ?.value) as StreamFilter;
+    const filter = getRadioValue<StreamFilter>(event);
     if (!filter) return;
-
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));
   }
 
