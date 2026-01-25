@@ -123,7 +123,9 @@ export class FollowUpInput extends LitElement {
             <vscode-progress-ring
               id="polishFollowUpProgressContainer"
               class=${classMap({ 'is-visible': this.polishing })}
-              style="display: ${this.polishing ? 'inline-block' : 'none'}; width: 16px; height: 16px"
+              style="display: ${this.polishing
+                ? 'inline-block'
+                : 'none'}; width: 16px; height: 16px"
             ></vscode-progress-ring>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
@@ -147,7 +149,6 @@ export class FollowUpInput extends LitElement {
             ></vscode-toolbar-button>
           </div>
         </div>
-
       </div>
     `;
   }

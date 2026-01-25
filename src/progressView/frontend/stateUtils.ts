@@ -78,10 +78,11 @@ export function sortStreams(
 
 /**
  * Extract run groups from task groups for the run selector.
+ * Returns root groups (runs) with their metadata.
  */
 export function getRunGroups(
   groups: TaskGroup[],
-): { id: string; name: string; startTime?: number | string }[] {
+): { id: string; name: string; startTime: number }[] {
   return groups
     .filter((group) => !group.parentGroupId)
     .map((group) => ({
@@ -93,62 +94,31 @@ export function getRunGroups(
 
 /**
  * Resolve the best run ID when none is explicitly selected.
- * Used to find the active run from available candidates.
  *
  * Resolution priority:
- * 1. If a selectedRunId is set, use it
- * 2. If an activeRunId is set, use it
- * 3. If there's exactly one root task group, use its ID
- * 4. If there are multiple root task groups, use the one with the latest startTime
- * 5. Fall back to the latest run from runInstructions, runUsage, or runFiles maps
- * 6. Return null if no candidates found
+ * 1. Explicit selection (selectedRunId or activeRunId from backend)
+ * 2. Latest root task group by startTime (guaranteed number per TaskGroupSchema)
+ *
+ * Note: No fallback to run-scoped maps needed - task groups are the source of
+ * truth for runs, and the backend provides activeRunId when known.
  */
 export function resolveActiveRunId(streamState: StreamState): string | null {
-  // 1. Check explicit selections first
+  // Check explicit selections first (from user or backend)
   if (streamState.selectedRunId) return streamState.selectedRunId;
   if (streamState.activeRunId) return streamState.activeRunId;
 
-  // 2. Collect candidates from root task groups
+  // Find latest root task group - startTime is guaranteed to be a number
   const rootGroups = streamState.taskGroups.filter(
     (group) => !group.parentGroupId,
   );
 
-  if (rootGroups.length === 1) {
-    return rootGroups[0]!.id;
-  }
+  if (rootGroups.length === 0) return null;
+  if (rootGroups.length === 1) return rootGroups[0]!.id;
 
-  if (rootGroups.length > 1) {
-    // Find the group with the latest start time
-    const getTime = (g: TaskGroup): number =>
-      typeof g.startTime === 'number' ? g.startTime : 0;
-    const sorted = [...rootGroups].sort((a, b) => getTime(b) - getTime(a));
-    return sorted[0]?.id ?? null;
-  }
-
-  // 3. Fall back to run-scoped maps
-  const candidates = new Set<string>();
-
-  for (const runId of Object.keys(streamState.runInstructions ?? {})) {
-    if (runId && runId !== 'default') candidates.add(runId);
-  }
-  for (const runId of Object.keys(streamState.runUsage ?? {})) {
-    if (runId && runId !== 'default') candidates.add(runId);
-  }
-  for (const runId of Object.keys(streamState.runFiles ?? {})) {
-    if (runId && runId !== 'default') candidates.add(runId);
-  }
-
-  if (candidates.size === 1) {
-    return [...candidates][0]!;
-  }
-
-  // Multiple candidates - can't determine best one without timestamps
-  // Return the first one as a fallback
-  if (candidates.size > 0) {
-    return [...candidates][0]!;
-  }
-
-  return null;
+  // Multiple runs: return the one with the latest startTime
+  return (
+    [...rootGroups].sort((a, b) => b.startTime - a.startTime)[0]?.id ?? null
+  );
 }
 
 /**

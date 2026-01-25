@@ -25,7 +25,7 @@ export class StreamHeader extends LitElement {
   @property({ type: Array }) runs: Array<{
     id: string;
     name: string;
-    startTime?: number | string;
+    startTime: number;
   }> = [];
 
   protected createRenderRoot(): HTMLElement {
