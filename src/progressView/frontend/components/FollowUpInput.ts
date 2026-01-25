@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -9,7 +9,6 @@ import { vscode } from '@shared/vscode';
 
 // Local imports - common helpers
 import {
-  awaitTextareaUpgrade,
   insertTextAtCursor,
   resolveTextareaTarget,
 } from '@common/modules/textareaUtils.js';
@@ -55,33 +54,24 @@ export class FollowUpInput extends LitElement {
   }
 
   firstUpdated(): void {
-    if (!this.textAreaEl) return;
-
-    awaitTextareaUpgrade(this.textAreaEl, () => {
-      const { textarea } = resolveTextareaTarget(this.textAreaEl!);
-      if (!textarea) return;
-
-      textarea.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          this.emitSend();
-        }
-      });
-    });
-
     this.recordingManager.setup();
   }
 
-  render(): TemplateResult {
+  /** Handle keyboard events on the textarea - Lit-native pattern */
+  private handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.emitSend();
+    }
+  };
+
+  render(): TemplateResult | typeof nothing {
+    if (!this.visible) {
+      return nothing;
+    }
+
     return html`
-      <div
-        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
-        class=${classMap({
-          'follow-up-container': true,
-          'is-visible': this.visible,
-        })}
-        aria-hidden=${this.visible ? 'false' : 'true'}
-      >
+      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container is-visible">
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
 
         <div class="follow-up-input-row">
@@ -92,6 +82,7 @@ export class FollowUpInput extends LitElement {
             resize="vertical"
             .value=${live(this.value)}
             @input=${this.handleInput}
+            @keydown=${this.handleKeydown}
           ></vscode-textarea>
 
           <div class="follow-up-actions">

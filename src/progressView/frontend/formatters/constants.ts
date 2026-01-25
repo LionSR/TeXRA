@@ -2,10 +2,13 @@
  * Constants and configuration for progress view formatters.
  */
 
+// Local imports - shared schemas
+import type { LogLevel } from '@shared/schemas';
+
 // Re-export icon constants for single import source
 export { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
 
-export const EMOJI_BY_LEVEL: Record<string, string> = {
+export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   error: '🔴',
   warn: '🟡',
   info: '🟢',

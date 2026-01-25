@@ -101,7 +101,7 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   icon: 'folder-opened',
   command: COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open the workspace storage folder for this run',
-  className: 'storage-button toolbar-button--hidden',
+  className: 'storage-button',
   disabled: true,
 });
 
@@ -120,7 +120,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'debug-continue',
     command: COMMANDS.RESUME,
     title: 'Resume from saved outputs (continues where it left off)',
-    className: 'run-button resume-button toolbar-button--hidden',
+    className: 'run-button resume-button',
     disabled: true,
   },
   RESTORE_STATE_BUTTON,

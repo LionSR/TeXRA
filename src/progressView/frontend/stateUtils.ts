@@ -58,43 +58,68 @@ export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
   return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
+// Comparator functions for stream sorting - avoid creating functions on each sort call
+const streamComparators: Record<
+  StreamSort,
+  (a: StreamTabInfo, b: StreamTabInfo) => number
+> = {
+  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
+  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
+  time: (a, b) => {
+    const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
+    const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
+    return bTime - aTime;
+  },
+};
+
 /**
  * Sort streams by the specified criteria.
+ * Returns sorted copy without mutating original.
  */
 function sortStreams(
   streams: StreamTabInfo[],
   sort: StreamSort,
 ): StreamTabInfo[] {
-  return [...streams].sort((a, b) => {
-    switch (sort) {
-      case 'agent':
-        return (a.agent ?? '').localeCompare(b.agent ?? '');
-      case 'inputFile':
-        return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
-      case 'time':
-      default: {
-        const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
-        const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
-        return bTime - aTime;
-      }
-    }
-  });
+  return [...streams].sort(streamComparators[sort] ?? streamComparators.time);
 }
 
 /**
  * Extract run groups from task groups for the run selector.
  * Returns root groups (runs) with their metadata.
+ * Uses a single pass to avoid extra array allocations from filter().map().
  */
 export function getRunGroups(
   groups: TaskGroup[],
 ): { id: string; name: string; startTime: number }[] {
-  return groups
-    .filter((group) => !group.parentGroupId)
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      startTime: group.startTime,
-    }));
+  const result: { id: string; name: string; startTime: number }[] = [];
+  for (const group of groups) {
+    if (!group.parentGroupId) {
+      result.push({
+        id: group.id,
+        name: group.name,
+        startTime: group.startTime,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if any output files exist in the run files record.
+ * Returns true as soon as a non-empty array is found.
+ * More efficient than Object.values().flat().length > 0 which allocates arrays.
+ */
+export function hasOutputFiles(
+  runFiles: Record<string, OutputFileInfo[]> | undefined,
+): boolean {
+  if (!runFiles) return false;
+  for (const key in runFiles) {
+    if (Object.prototype.hasOwnProperty.call(runFiles, key)) {
+      const files = runFiles[key];
+      if (files && files.length > 0) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -112,16 +137,16 @@ export function resolveActiveRunId(streamState: StreamState): string | null {
   if (streamState.selectedRunId) return streamState.selectedRunId;
   if (streamState.activeRunId) return streamState.activeRunId;
 
-  // Find latest root task group - startTime is guaranteed to be a number
-  const rootGroups = streamState.taskGroups.filter(
-    (group) => !group.parentGroupId,
-  );
+  // Find latest root task group - use reduce to avoid extra array allocations
+  let latestId: string | null = null;
+  let latestTime = -1;
 
-  if (rootGroups.length === 0) return null;
-  if (rootGroups.length === 1) return rootGroups[0]!.id;
+  for (const group of streamState.taskGroups) {
+    if (!group.parentGroupId && group.startTime > latestTime) {
+      latestId = group.id;
+      latestTime = group.startTime;
+    }
+  }
 
-  // Multiple runs: return the one with the latest startTime
-  return (
-    [...rootGroups].sort((a, b) => b.startTime - a.startTime)[0]?.id ?? null
-  );
+  return latestId;
 }

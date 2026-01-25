@@ -2,6 +2,7 @@
 import {
   LitElement,
   html,
+  nothing,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
@@ -89,19 +90,21 @@ export class FollowupSection extends LitElement {
     }
   }
 
-  render(): TemplateResult {
+  render(): TemplateResult | typeof nothing {
     // Visibility computed from declarative props
     const isTerminal = this.status === 'stopped' || this.status === 'ready';
     const visible =
       this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
+
+    if (!visible) {
+      return nothing;
+    }
 
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.FOLLOWUP_COLLAPSIBLE}
         class="followup-collapsible progress-collapsible"
         title="Followup"
-        ?hidden=${!visible}
-        aria-hidden=${visible ? 'false' : 'true'}
         @vsc-collapsible-toggle=${this.handleToggle}
       >
         <div class="followup-section" data-mode=${this.mode}>

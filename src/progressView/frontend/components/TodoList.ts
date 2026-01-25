@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -24,16 +24,17 @@ export class TodoList extends LitElement {
     return this;
   }
 
-  render(): TemplateResult {
-    const visible = this.todos.length > 0;
+  render(): TemplateResult | typeof nothing {
+    if (this.todos.length === 0) {
+      return nothing;
+    }
+
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible progress-collapsible"
         title="Task Progress"
-        ?open=${visible}
-        ?hidden=${!visible}
-        aria-hidden=${visible ? 'false' : 'true'}
+        open
       >
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
