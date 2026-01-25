@@ -141,7 +141,7 @@ const webviewConfigs = [
     // Enable Lit production mode (removes dev warnings and assertions)
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': JSON.stringify(
-        process.env.NODE_ENV || 'production'
+        process.env.NODE_ENV || 'production',
       ),
     }),
   ],
