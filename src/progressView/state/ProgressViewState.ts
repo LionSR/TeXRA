@@ -1,22 +1,31 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent metadata
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { isAgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-// Type imports
+// Local imports - shared schemas
 import {
   StorageKeySchema,
-  type StreamTabId,
+  TodoItemSchema,
   type ExecutionId,
+  type InstructionUpdate,
+  type OutputFileInfo,
   type StorageKey,
+  type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
-import type { OutputFileInfo } from '@shared/schemas';
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-// Internal imports
+
+// Local imports - agent
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import {
+  isAgentCategoryFilter,
+  type AgentCategoryFilter,
+} from '@agent/types/AgentStreamTypes';
+
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+
+// Local imports - logger
 import {
   AgentLogger,
   ContextStateDataSchema,
@@ -27,18 +36,20 @@ import {
   TaskStateSchema,
   isToolUseTaskState,
 } from '@logger/TaskState';
+
+// Local imports - utils
+import { getConfig } from '@utils/config';
+
+// Local imports - progress view
 import {
+  OutputFilesManager,
+  RunInstructionManager,
   StreamTabsManager,
   TaskGroupManager,
-  OutputFilesManager,
   UsageStatsManager,
-  RunInstructionManager,
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import type { InstructionUpdate } from '@shared/schemas';
-import { getConfig } from '@utils/config';
-import { TodoItemSchema, type TodoItem } from '@shared/schemas';
 
 /**
  * Schema for ephemeral stream metadata hints.

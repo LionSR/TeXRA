@@ -16,9 +16,13 @@
  * This design supports concurrent subagents - each run receives updates independently,
  * and the frontend can display multiple runs simultaneously in the future.
  */
-import type { StreamTabId } from '@shared/schemas';
+
+// Local imports - progress view
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+
+// Local imports - shared schemas
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Context passed to domain event handlers.

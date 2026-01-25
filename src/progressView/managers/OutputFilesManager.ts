@@ -2,17 +2,23 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - progress view
-import type { StorageKey, StreamTabId } from '@shared/schemas';
-// Internal imports
+// Local imports - shared schemas
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
   type OutputFileInfo,
+  type StorageKey,
+  type StreamTabId,
 } from '@shared/schemas';
+
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

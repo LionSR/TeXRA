@@ -9,6 +9,7 @@ import {
 // Local imports - shared schemas
 import type {
   InstructionUpdate,
+  LogMessageData,
   OutputFileInfo,
   StreamTabInfo,
   TaskGroup,
@@ -149,4 +150,42 @@ export function resolveActiveRunId(streamState: StreamState): string | null {
   }
 
   return latestId;
+}
+
+/**
+ * Prepend instruction as a userMessage for tool-use agents if not already present.
+ * Tool-use agents may not have their initial instruction in the message stream,
+ * so we inject it as a synthetic userMessage for display consistency.
+ *
+ * @param messages - The log messages to potentially prepend to (will be mutated if needed)
+ * @param runInstructions - The run instructions record
+ * @param streamId - The stream ID for generating a unique message ID
+ * @returns The same messages array (possibly with instruction prepended)
+ */
+export function prependInstructionForToolUse(
+  messages: LogMessageData[],
+  runInstructions: Record<string, InstructionUpdate> | null | undefined,
+  streamId: string | null | undefined,
+): LogMessageData[] {
+  if (messages.length === 0) return messages;
+
+  const firstMsg = messages[0];
+  const hasUserMessageFirst = firstMsg.messageType === 'userMessage';
+  if (hasUserMessageFirst || !runInstructions) return messages;
+
+  const instruction = Object.values(runInstructions)[0];
+  if (!instruction?.text) return messages;
+
+  const timestamp =
+    instruction.timestamp ?? (firstMsg.timestamp ?? Date.now()) - 1;
+
+  messages.unshift({
+    id: `compat-instruction-${streamId ?? 'unknown'}`,
+    messageType: 'userMessage',
+    text: instruction.text,
+    timestamp,
+    level: 'info',
+  });
+
+  return messages;
 }

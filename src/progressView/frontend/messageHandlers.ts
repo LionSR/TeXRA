@@ -208,9 +208,9 @@ export function handleUpdateLogs(
   const state = ctx.getState();
   if (state.activeStreamId === stream) {
     const streamState = getStreamState(state, stream);
-    logList?.setAgentCategory(
-      streamState.info?.agentCategory ?? AGENT_CATEGORY.WORKFLOW,
-    );
+    const isToolUse =
+      (streamState.info?.agentCategory ?? AGENT_CATEGORY.WORKFLOW) ===
+      AGENT_CATEGORY.TOOL_USE;
     logList?.renderLogs({
       streamId: stream,
       messages: streamState.logs,
@@ -218,6 +218,7 @@ export function handleUpdateLogs(
       action: action ?? 'render',
       activeRunId: getEffectiveRunId(streamState),
       runInstructions: streamState.runInstructions,
+      isToolUse,
     });
   }
 }

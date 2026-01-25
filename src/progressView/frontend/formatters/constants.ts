@@ -8,9 +8,6 @@ import type { LogLevel } from '@shared/schemas';
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
 
-// Re-export icon constants for single import source
-export { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
-
 export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   error: '🔴',
   warn: '🟡',

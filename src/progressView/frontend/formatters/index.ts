@@ -1,10 +1,9 @@
 /**
  * Main entry point for progress view formatters.
- * Provides the LogEntryFormatter class and minimal re-exports for external use.
+ * Provides the LogEntryFormatter class and re-exports for TaskGroupDomManager.
  */
 
-// Re-exports for external modules (only what's actually imported externally)
-export { formatTokens } from './timestampUtils';
+// Re-export for TaskGroupDomManager (only external consumer of this barrel)
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter';
 
 // Local imports - formatter helpers
