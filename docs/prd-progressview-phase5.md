@@ -14,21 +14,56 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## Status Summary
 
-### Migration Regressions (Fix First)
+### Critical Issues (Fix Immediately)
+
+| ID      | View     | Issue                            | Status         |
+| ------- | -------- | -------------------------------- | -------------- |
+| R1      | MainView | Missing `SET_SELECTED_AGENT`     | ⬜ Not Started |
+| CODICON | All      | 403 Forbidden font loading error | ⬜ Not Started |
+| H1      | History  | Mark highlight colors SWAPPED    | ⬜ Not Started |
+| TOKENS  | All      | CSS spacing 2-4px larger         | ⬜ Not Started |
+
+### Migration Regressions (High Priority)
 
 | ID  | View        | Severity | Issue                              | Status         |
 | --- | ----------- | -------- | ---------------------------------- | -------------- |
-| R1  | MainView    | CRITICAL | Missing `SET_SELECTED_AGENT`       | ⬜ Not Started |
 | R2  | MainView    | HIGH     | Missing Merge button               | ⬜ Not Started |
 | R3  | MainView    | MEDIUM   | Missing Refresh Edited File button | ⬜ Not Started |
 | R4  | MainView    | MEDIUM   | Missing Refresh Commit icon        | ⬜ Not Started |
-| R5  | HistoryView | MEDIUM   | Mark highlight colors swapped      | ⬜ Not Started |
-| R6  | HistoryView | LOW      | Missing agent-category-badge class | ⬜ Not Started |
-| R7  | HistoryView | LOW      | Different category badge colors    | ⬜ Not Started |
-| R8  | HistoryView | LOW      | Missing config section background  | ⬜ Not Started |
-| R9  | HistoryView | LOW      | Missing config key styling         | ⬜ Not Started |
-| R10 | ProfileView | MEDIUM   | Missing error state for model info | ⬜ Not Started |
-| R11 | ProfileView | LOW      | Unused signOut event               | ⬜ Not Started |
+| J1  | MainView    | HIGH     | Missing debounce on instruction    | ⬜ Not Started |
+| M1  | MainView    | MEDIUM   | Missing CSS variables (5)          | ⬜ Not Started |
+
+### HistoryView Regressions (15 Items)
+
+| ID    | Severity | Issue                            | Status         |
+| ----- | -------- | -------------------------------- | -------------- |
+| H1    | CRITICAL | Mark highlight colors swapped    | ⬜ Not Started |
+| H2    | MEDIUM   | Missing agent-category-badge     | ⬜ Not Started |
+| H3    | MEDIUM   | Different category badge colors  | ⬜ Not Started |
+| H4    | LOW      | Missing config section bg        | ⬜ Not Started |
+| H5    | LOW      | Missing config key styling       | ⬜ Not Started |
+| H6    | LOW      | Missing hover/selected states    | ⬜ Not Started |
+| H7    | LOW      | Missing config-value styling     | ⬜ Not Started |
+| H8    | LOW      | Missing badge base styling       | ⬜ Not Started |
+| H9-15 | LOW      | Various element styles           | ⬜ Not Started |
+
+### ProfileView Regressions
+
+| ID  | Severity | Issue                          | Status         |
+| --- | -------- | ------------------------------ | -------------- |
+| P1  | MEDIUM   | Missing model-access-summary   | ⬜ Not Started |
+| P2  | LOW      | Missing models-list-container  | ⬜ Not Started |
+| P3  | LOW      | Missing error state guidance   | ⬜ Not Started |
+| R11 | LOW      | Unused signOut event           | ⬜ Not Started |
+
+### JavaScript Behavioral Regressions
+
+| ID  | View        | Severity | Issue                       | Status         |
+| --- | ----------- | -------- | --------------------------- | -------------- |
+| J1  | MainView    | HIGH     | Missing debounce            | ⬜ Not Started |
+| J2  | MemoryView  | MEDIUM   | vscode-checkbox timing      | ⬜ Not Started |
+| J3  | ProfileView | LOW      | Local state not persisted   | ⬜ Not Started |
+| J4  | HistoryView | LOW      | Filter state persistence    | ⬜ Not Started |
 
 ### Refactoring Tasks
 
@@ -599,6 +634,422 @@ Missing inline-flex layout, alignment, gap, codicon font size.
 ### MemoryView Regressions
 
 **None found** - Full functional parity achieved.
+
+---
+
+## Comprehensive Regression Analysis (2026-01-25)
+
+This section documents ALL regressions discovered through systematic comparison of legacy files with Lit implementations across CSS, JavaScript, and HTML.
+
+### CSS Token Value Differences (CRITICAL - Affects All Views)
+
+**Problem:** All spacing tokens in Lit (`litStyles.ts`) are **2-4px larger** than legacy (`tokens.css`), affecting the entire UI layout.
+
+| Token             | Legacy (tokens.css) | Lit (litStyles.ts) | Difference |
+| ----------------- | ------------------- | ------------------ | ---------- |
+| `--spacing-tiny`  | 2px                 | 4px                | +2px       |
+| `--spacing-small` | 4px                 | 8px                | +4px       |
+| `--spacing-medium`| 8px                 | 12px               | +4px       |
+| `--spacing-large` | 12px                | 16px               | +4px       |
+| `--spacing-xlarge`| 20px                | 24px               | +4px       |
+
+**Impact:** UI elements appear more spaced out. Buttons, panels, and containers have different visual proportions.
+
+**Fix:** Align `litStyles.ts` token values with legacy `tokens.css` or document as intentional design change.
+
+---
+
+### HistoryView CSS Regressions (15+ Items)
+
+#### H1. Mark Highlight Colors Swapped (R5 - CRITICAL)
+
+**Legacy CSS:**
+```css
+mark {
+  background-color: var(--vscode-editor-findMatchHighlightBackground);
+  color: var(--vscode-editor-findMatchHighlightForeground, inherit);
+  border-radius: 2px;
+}
+mark.current-match {
+  background-color: var(--vscode-editor-findMatchBackground);
+  color: var(--vscode-editor-findMatchForeground, inherit);
+  outline: 1px solid var(--vscode-editor-findMatchBorder, transparent);
+}
+```
+
+**Lit CSS (SWAPPED - BUG):**
+```css
+mark {
+  background: var(--vscode-editor-findMatchBackground);  /* ❌ Wrong */
+  color: inherit;
+}
+mark.current-match {
+  background: var(--vscode-editor-findMatchHighlightBackground);  /* ❌ Wrong */
+}
+```
+
+**Missing:** Fallback colors, `border-radius: 2px`, `outline` on current-match.
+
+#### H2. Missing `.agent-category-badge` Class (R6)
+
+**Legacy:**
+```css
+.agent-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+}
+.agent-category-badge .codicon {
+  font-size: 12px;
+}
+```
+
+**Lit:** Class not present. Badge uses only generic `.badge` class.
+
+#### H3. Different Category Badge Colors (R7)
+
+**Legacy (semantic editor colors):**
+```css
+.badge.workflow { background-color: var(--vscode-editorInfo-background); }
+.badge.tool-use { background-color: var(--vscode-editorWarning-background); }
+```
+
+**Lit (chart colors - different appearance):**
+```css
+.badge.workflow { background-color: var(--vscode-charts-blue); }
+.badge.tool-use { background-color: var(--vscode-charts-orange); }
+```
+
+#### H4. Missing Config Section Background (R8)
+
+**Legacy:**
+```css
+.config-section {
+  background-color: var(--vscode-editor-background);
+  padding: var(--spacing-small);
+  border-radius: 4px;
+  margin-top: var(--spacing-small);
+}
+```
+
+**Lit:** Only `display: flex` and `flex-direction: column`. No visual distinction.
+
+#### H5. Missing Config Key Styling (R9)
+
+**Legacy:**
+```css
+.config-key {
+  color: var(--vscode-editorInfo-foreground);
+  min-width: 80px;  /* Alignment for key-value pairs */
+}
+```
+
+**Lit:** Only `font-weight: 600`. No color, no min-width alignment.
+
+#### H6. Missing `.history-item` Hover/Selected States
+
+**Legacy:**
+```css
+.history-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+.history-item.selected {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+```
+
+**Lit:** States may be missing or incomplete.
+
+#### H7. Missing `.config-value` Styling
+
+**Legacy:**
+```css
+.config-value {
+  color: var(--vscode-descriptionForeground);
+  word-break: break-word;
+}
+```
+
+**Lit:** Not found in component styles.
+
+#### H8. Missing `.badge` Base Styling
+
+**Legacy:**
+```css
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+```
+
+**Lit:** May have different padding/border-radius values.
+
+#### H9-H15. Additional Missing Styles
+
+| Element | Legacy Property | Lit Status |
+|---------|----------------|------------|
+| `.search-input` | `width: 100%` | May differ |
+| `.search-container` | Border, padding | May differ |
+| `.filter-dropdown` | Consistent with VS Code | May differ |
+| `.timestamp` | Subtle foreground color | May differ |
+| `.agent-name` | Font weight, ellipsis | May differ |
+| `.instruction-preview` | Line clamp, ellipsis | May differ |
+| `.empty-state` | Centered, muted color | May differ |
+
+---
+
+### ProfileView CSS Regressions
+
+#### P1. Missing `.model-access-summary` Styling (9 Properties)
+
+**Legacy:**
+```css
+.model-access-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-small);
+  padding: var(--spacing-small);
+  background-color: var(--vscode-editor-background);
+  border-radius: 4px;
+  margin-bottom: var(--spacing-medium);
+  border: 1px solid var(--vscode-panel-border);
+  font-size: 12px;
+}
+```
+
+**Lit:** Class not found in component styles.
+
+#### P2. Missing `.models-list-container` Styling
+
+**Legacy:**
+```css
+.models-list-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+```
+
+**Lit:** Not found.
+
+#### P3. Missing Error State Styling
+
+**Legacy:** Shows "unable to load" with tooltip guidance when `enabledProviders.length === 0`.
+
+**Lit:** Shows "none" with no recovery guidance or visual distinction.
+
+---
+
+### MainView CSS Regressions
+
+#### M1. Missing CSS Variables
+
+The following CSS variables used in legacy MainView are not defined in Lit:
+
+| Variable | Legacy Value | Used For |
+|----------|--------------|----------|
+| `--height-small` | 24px | Input heights |
+| `--height-button` | 28px | Button heights |
+| `--border-radius` | 4px | Container corners |
+| `--width-button-min` | 80px | Button minimum width |
+| `--opacity-normal` | 1 | Normal state opacity |
+
+**Fix:** Add to `litStyles.ts` or replace with VS Code theme variables.
+
+#### M2. File List Item Styling Differences
+
+**Legacy:** More compact with specific icon alignment.
+
+**Lit:** May have different spacing due to token differences.
+
+---
+
+### Codicon Font 403 Forbidden Error (CRITICAL)
+
+**Error Message:**
+```
+Failed to load resource: the server responded with a status of 403 (Forbidden)
+codicon.ttf:1
+```
+
+**Root Cause:** The `codicon.css` file contains a relative URL `./codicon.ttf` which doesn't resolve correctly within the webview's Content Security Policy (CSP). Webviews require absolute URIs generated via `webview.asWebviewUri()`.
+
+**Fix:** Add a document-level `@font-face` declaration BEFORE the codicon.css link in each `index.html`:
+
+```html
+<!-- In getHtmlContent() method -->
+<style nonce="${nonce}">
+  @font-face {
+    font-family: 'codicon';
+    font-display: block;
+    src: url('${codiconsFontUri}') format('truetype');
+  }
+</style>
+<link rel="stylesheet" href="${codiconUri}" id="vscode-codicon-stylesheet" />
+```
+
+Where `codiconsFontUri` is generated as:
+```typescript
+const codiconsFontUri = webview.asWebviewUri(
+  vscode.Uri.joinPath(extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.ttf')
+);
+```
+
+**Affected Files:**
+- `src/webview/index.html` (MainView)
+- `src/progressView/index.html` (ProgressView)
+- `src/historyView/index.html` (HistoryView)
+- `src/profileView/index.html` (ProfileView)
+- `src/memoryView/index.html` (MemoryView)
+
+---
+
+### HTML Structure Differences
+
+#### 40+ Missing Element IDs (Expected)
+
+Lit components use Shadow DOM and don't require global IDs for element selection. The following legacy IDs are intentionally not present in Lit:
+
+**MainView (Legacy IDs removed):**
+- `#agentSelector`, `#modelSelector`, `#instructionInput`
+- `#runButton`, `#polishButton`, `#mergeButton`
+- `#inputFilesList`, `#outputFilesList`
+- `#apiKeyBanner`, `#agentConfigBanner`
+- All `#latexdiff*` IDs
+
+**HistoryView (Legacy IDs removed):**
+- `#searchInput`, `#filterDropdown`, `#historyList`
+- `#emptyState`, `#loadingIndicator`
+
+**ProfileView (Legacy IDs removed):**
+- `#signOutButton`, `#providersList`, `#modelAccessList`
+
+**This is expected and correct.** Lit components use `@query` decorators for internal element references.
+
+#### Missing CSS Classes on Buttons
+
+**HistoryItem.ts buttons:**
+
+**Legacy:**
+```html
+<button class="action-button restore-button" title="Restore">
+<button class="action-button delete-button" title="Delete">
+```
+
+**Lit:**
+```html
+<button class="action-button" @click=${...}>  <!-- Missing restore-button/delete-button -->
+```
+
+**Impact:** Any CSS targeting `.restore-button` or `.delete-button` specifically won't apply.
+
+#### Icon Changes in MainView
+
+Some button icons may have changed during migration. Audit needed for:
+- File action buttons (open, preview, remove)
+- LaTeXDiffs section buttons
+- Recording button states
+
+---
+
+### JavaScript Behavioral Differences
+
+#### J1. Missing Debounce on MainView Instruction Input (HIGH)
+
+**Legacy behavior:** Instruction input likely had debounced save to prevent excessive state persistence on every keystroke.
+
+**Lit behavior:** `@input` handler calls `saveState()` directly, potentially causing performance issues with rapid typing.
+
+**Fix:**
+```typescript
+import { debounce } from 'lodash-es';
+
+// In MainApp.ts
+private debouncedSaveState = debounce(() => this.saveState(), 300);
+
+private handleInstructionInput(e: Event): void {
+  const input = e.target as HTMLTextAreaElement;
+  this.instruction = input.value;
+  this.debouncedSaveState();  // ✅ Debounced
+}
+```
+
+#### J2. vscode-checkbox Upgrade Timing in MemoryView (MEDIUM)
+
+**Issue:** Custom elements may not be upgraded when initial render occurs, causing `checked` property to not reflect correctly.
+
+**Legacy:** Used `setTimeout` or waited for `customElements.whenDefined()`.
+
+**Lit Fix:**
+```typescript
+async firstUpdated() {
+  await customElements.whenDefined('vscode-checkbox');
+  this.requestUpdate();
+}
+```
+
+#### J3. ProfileView Local State Not Persisted (LOW)
+
+**Legacy:** ProfileView saved collapsed/expanded state of sections.
+
+**Lit:** Uses `WebviewStateManager` but may not persist all UI states.
+
+**Verify:** Check if section collapse states survive webview hide/show cycles.
+
+#### J4. HistoryView Filter State Persistence
+
+**Legacy:** Filter dropdown selection was persisted.
+
+**Lit:** Verify filter state is saved via `WebviewStateManager`.
+
+---
+
+### Button Style Audit Results
+
+**Finding:** All buttons are consistent across views. No issues found.
+
+All Lit views use the same button patterns:
+- `vscode-button` for primary actions
+- `vscode-toolbar-button` for toolbar actions
+- `<button class="action-button">` for inline actions
+
+Icon usage is consistent with VS Code codicon classes.
+
+---
+
+## Regression Fix Priority
+
+### Immediate (Before Release)
+
+| ID | Issue | Effort |
+|----|-------|--------|
+| R1 | Missing SET_SELECTED_AGENT handler | 30 min |
+| Codicon | 403 Forbidden font error | 1 hour |
+| H1 | Mark highlight colors swapped | 15 min |
+| J1 | Missing debounce on instruction input | 30 min |
+
+### High Priority (Next Sprint)
+
+| ID | Issue | Effort |
+|----|-------|--------|
+| R2 | Missing Merge button | 30 min |
+| CSS Tokens | All spacing 2-4px larger | 2 hours |
+| H2-H5 | HistoryView styling regressions | 2 hours |
+| P1-P2 | ProfileView missing styles | 1 hour |
+
+### Medium Priority (Backlog)
+
+| ID | Issue | Effort |
+|----|-------|--------|
+| R3-R4 | Missing LaTeXDiffs buttons | 1 hour |
+| M1 | MainView missing CSS variables | 1 hour |
+| J2-J4 | Minor JS behavioral differences | 2 hours |
+| H6-H15 | Remaining HistoryView styles | 2 hours |
 
 ---
 
