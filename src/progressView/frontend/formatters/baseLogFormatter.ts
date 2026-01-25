@@ -58,7 +58,7 @@ export function createBannerEntry({
   const element = createFromTemplate(templateId);
   if (!element) return null;
 
-  applyOpenState(element, Boolean(open));
+  applyOpenState(element, open);
   setElementDataset(element, { logId, groupId, timestamp });
 
   const iconElem = element.querySelector('.icon');

@@ -20,13 +20,13 @@ import {
 } from '../htmlBuilders';
 import { normalizeFileListData } from '../logDataParsers';
 import { formatTokens } from '../timestampUtils';
-import type { NormalizedPayload } from '../parseUtils';
 
 type DiffResultEntry = Record<string, unknown>;
 
 /** Format file list entry. */
 export function formatFileList(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
+  text: string,
   logId: string,
 ): HTMLElement | null {
   const element = createFromTemplate('fileListDetailsTemplate');
@@ -37,7 +37,7 @@ export function formatFileList(
   initToggleIcon(element, false);
 
   // Parse and normalize file list data using Zod schema
-  const parsed = normalizeFileListData(normalizedPayload?.structured);
+  const parsed = normalizeFileListData(data);
 
   // Raw fallback when parsing fails
   if (!parsed) {
@@ -45,7 +45,7 @@ export function formatFileList(
       summaryElem.textContent = 'Files (raw)';
     }
     if (contentElem instanceof HTMLElement) {
-      contentElem.innerHTML = `<pre>${encodeHtml(normalizedPayload?.decodedText ?? '')}</pre>`;
+      contentElem.innerHTML = `<pre>${encodeHtml(text ?? '')}</pre>`;
       if (logId) contentElem.dataset.logId = logId;
     }
     return element;
@@ -88,13 +88,11 @@ function createXmlLinkElement(
 
 /** Format missing outputs entry. */
 export function formatMissingOutputs(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
 ): HTMLElement | null {
   // Parse with Zod schema
-  const parseResult = MissingOutputsPayloadSchema.safeParse(
-    normalizedPayload?.structured,
-  );
+  const parseResult = MissingOutputsPayloadSchema.safeParse(data);
   if (!parseResult.success) {
     console.warn('Missing structured data for missing outputs log entry');
     return null;
@@ -333,12 +331,11 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
 
 /** Format latexdiff entry. */
 export function formatLatexdiff(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
 ): HTMLElement | null {
-  const structured = normalizedPayload?.structured;
-  if (!Array.isArray(structured) || structured.length === 0) return null;
-  const entries = structured as DiffResultEntry[];
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const entries = data as DiffResultEntry[];
 
   const element = createFromTemplate('latexdiffDetailsTemplate');
   if (!element) return null;
@@ -374,48 +371,44 @@ export function formatLatexdiff(
 }
 
 // Statistics field configuration: [key, icon, label, formatter]
-const STAT_FIELDS: Array<[string, string, string, (value: number) => string]> =
+const STAT_FIELDS: [string, string, string, (value: number) => string][] = [
+  ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
+  ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
+  ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
+  ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
   [
-    ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
-    ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
-    ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
-    ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
-    [
-      'percentageCached',
-      'codicon-graph-line',
-      'Cached %',
-      (v) => `${v.toFixed(2)}%`,
-    ],
-    [
-      'reasoningTokens',
-      'codicon-comment-discussion',
-      'Reasoning tokens',
-      formatTokens,
-    ],
-    ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
-    ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
-    ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
-  ];
+    'percentageCached',
+    'codicon-graph-line',
+    'Cached %',
+    (v) => `${v.toFixed(2)}%`,
+  ],
+  [
+    'reasoningTokens',
+    'codicon-comment-discussion',
+    'Reasoning tokens',
+    formatTokens,
+  ],
+  ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
+  ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
+  ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+];
 
 /** Format statistics entry. */
 export function formatStatistics(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
 ): HTMLElement | null {
-  const parsed = normalizedPayload?.structured;
-  if (!parsed || typeof parsed !== 'object') return null;
+  if (!data || typeof data !== 'object') return null;
 
   const element = createFromTemplate('statisticsDetailsTemplate');
   if (!element) return null;
 
   initToggleIcon(element, false);
 
-  const typedParsed = parsed as Record<string, number>;
-  const items = STAT_FIELDS.filter(
-    ([key]) => typedParsed[key] !== undefined,
-  ).map(
+  const typedData = data as Record<string, number>;
+  const items = STAT_FIELDS.filter(([key]) => typedData[key] !== undefined).map(
     ([key, icon, label, formatter]) =>
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(typedParsed[key])}</span>`,
+      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(typedData[key])}</span>`,
   );
 
   const contentElem = element.querySelector('.statistics-content');
