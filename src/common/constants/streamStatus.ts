@@ -40,9 +40,13 @@ export { EXECUTION_STATUS, STREAM_STATUS };
  * Using string literal return type to avoid circular import with messageTypes.
  *
  * Transformation rules:
- * - `completed` → `stopped`
- * - `interrupted` → `error` (shows red in UI)
- * - `error` → `error`
+ * - `completed` → `stopped` (green/neutral in UI)
+ * - `interrupted` → `error` (red in UI)
+ * - `error` → `error` (red in UI)
+ *
+ * UX note: User-initiated interruption shows as error (red) to make it visually
+ * distinct from successful completion. This is intentional - interrupted runs
+ * did not produce complete results, so a warning color is appropriate.
  */
 export function executionToEndStatus(
   status: ExecutionStatus,
@@ -57,6 +61,14 @@ export function executionToEndStatus(
 /**
  * Terminal statuses - stream execution has ended and won't resume automatically.
  * Used by status bar to determine running vs idle state.
+ *
+ * Includes:
+ * - STOPPED: Flow completed successfully
+ * - ERROR: Flow failed due to error
+ * - WAITING: Flow paused awaiting user input (follow-up, retry decision).
+ *   Classified as terminal because the current execution cycle has ended -
+ *   resumption requires explicit user action, not automatic continuation.
+ * - READY: Initial state, no execution started
  *
  * Note: INITIALIZING is intentionally excluded - it's a brief transitional state
  * during workflow launch that will quickly become RUNNING or fail. It's neither

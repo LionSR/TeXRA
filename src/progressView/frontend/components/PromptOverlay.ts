@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
 import type {
@@ -107,19 +108,56 @@ export class PromptOverlay extends LitElement {
     .file-link:hover {
       text-decoration: underline;
     }
+
+    .feedback-section {
+      margin-top: 12px;
+    }
+
+    .feedback-section textarea {
+      width: 100%;
+      min-height: 60px;
+      padding: 8px;
+      border: 1px solid var(--vscode-input-border);
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+    }
+
+    .feedback-section textarea:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+    }
+
+    .feedback-label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+    }
   `;
 
   @property({ type: Object }) prompt: PromptState | null = null;
+  @state() private showFeedback = false;
+  @query('.feedback-input') private feedbackInput?: HTMLTextAreaElement;
 
-  render(): TemplateResult {
+  // Reset feedback state when prompt changes
+  protected willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('prompt')) {
+      this.showFeedback = false;
+    }
+  }
+
+  render(): TemplateResult | typeof nothing {
     if (!this.prompt) {
-      return html``;
+      return nothing;
     }
 
     return html`<div class="prompt-card">${this.renderPrompt()}</div>`;
   }
 
-  private renderPrompt(): TemplateResult {
+  private renderPrompt(): TemplateResult | typeof nothing {
     switch (this.prompt?.kind) {
       case 'toolEdit':
         return this.renderToolEdit(this.prompt.data);
@@ -130,7 +168,7 @@ export class PromptOverlay extends LitElement {
       case 'proposal':
         return this.renderProposal(this.prompt.data);
       default:
-        return html``;
+        return nothing;
     }
   }
 
@@ -189,9 +227,10 @@ export class PromptOverlay extends LitElement {
       <div class="prompt-header">Retry request</div>
       <div class="prompt-body">
         <p><strong>Operation:</strong> ${prompt.operation}</p>
-        ${prompt.errorMessage
-          ? html`<p><strong>Error:</strong> ${prompt.errorMessage}</p>`
-          : html``}
+        ${when(
+          prompt.errorMessage,
+          () => html`<p><strong>Error:</strong> ${prompt.errorMessage}</p>`,
+        )}
       </div>
       <div class="prompt-actions">
         <button class="secondary" @click=${() => this.emitAction('cancel')}>
@@ -213,10 +252,24 @@ export class PromptOverlay extends LitElement {
         <p><strong>Model:</strong> ${prompt.model}</p>
         <p><strong>Instruction:</strong> ${prompt.instruction}</p>
         ${isWorkflow ? this.renderWorkflowFiles(prompt) : nothing}
+        ${when(
+          this.showFeedback,
+          () => html`
+            <div class="feedback-section">
+              <label class="feedback-label"
+                >Rejection feedback (optional):</label
+              >
+              <textarea
+                class="feedback-input"
+                placeholder="Why are you rejecting this proposal?"
+              ></textarea>
+            </div>
+          `,
+        )}
       </div>
       <div class="prompt-actions">
-        <button class="secondary" @click=${() => this.emitAction('reject')}>
-          Reject
+        <button class="secondary" @click=${this.handleRejectClick}>
+          ${this.showFeedback ? 'Submit' : 'Reject'}
         </button>
         <button class="secondary" @click=${() => this.emitAction('setup')}>
           Setup
@@ -224,6 +277,28 @@ export class PromptOverlay extends LitElement {
         <button @click=${() => this.emitAction('approve')}>Approve</button>
       </div>
     `;
+  }
+
+  private handleRejectClick(): void {
+    if (this.prompt?.kind !== 'proposal') {
+      this.emitAction('reject');
+      return;
+    }
+
+    if (!this.showFeedback) {
+      // First click: show feedback form
+      this.showFeedback = true;
+      // Focus textarea after render
+      this.updateComplete.then(() => {
+        this.feedbackInput?.focus();
+      });
+      return;
+    }
+
+    // Second click: submit with feedback
+    const feedback = this.feedbackInput?.value?.trim() || undefined;
+    this.emitAction('reject', feedback);
+    this.showFeedback = false;
   }
 
   private renderWorkflowFiles(
@@ -273,10 +348,10 @@ export class PromptOverlay extends LitElement {
     postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
   }
 
-  private emitAction(action: string) {
+  private emitAction(action: string, feedback?: string) {
     if (!this.prompt) return;
     this.dispatchEvent(
-      ProgressEvents.promptAction({ prompt: this.prompt, action }),
+      ProgressEvents.promptAction({ prompt: this.prompt, action, feedback }),
     );
   }
 }

@@ -392,3 +392,6 @@ export type ShowRetryRequestMessage = z.infer<
 export type ShowAgentProposalMessage = z.infer<
   typeof ShowAgentProposalMessageSchema
 >;
+export type SetFollowupOptionsMessage = z.infer<
+  typeof SetFollowupOptionsMessageSchema
+>;

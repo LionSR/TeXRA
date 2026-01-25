@@ -5,7 +5,12 @@ import { postMessage } from '@shared/vscode';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
-import { getStreamState, type StreamState } from './store';
+import {
+  getStreamState,
+  type StreamFilter,
+  type StreamSort,
+  type StreamState,
+} from './store';
 import type {
   FilterEventDetail,
   FollowUpChangeDetail,
@@ -27,9 +32,13 @@ import type { LogList } from './components/LogList';
 import type { ProgressState } from './store';
 
 /**
- * Context passed to event handlers providing access to state and refs.
+ * Context passed to frontend event handlers providing access to state and refs.
+ *
+ * Note: Named "FrontendEventHandlerContext" to distinguish from the backend
+ * EventHandlerContext in src/progressView/events/EventHandlerContext.ts which
+ * has different shape (state manager + webview updater vs getters/setters).
  */
-export interface EventHandlerContext {
+export interface FrontendEventHandlerContext {
   getState(): ProgressState;
   setState(updater: (prev: ProgressState) => ProgressState): void;
   setStreamState(
@@ -38,6 +47,10 @@ export interface EventHandlerContext {
   ): void;
   getLogListRef(): LogList | undefined;
   getFollowUpRef(): FollowUpInput | undefined;
+  /** Persist filter/sort preferences to webview state. */
+  savePrefs?(
+    prefs: Partial<{ streamFilter: StreamFilter; streamSort: StreamSort }>,
+  ): void;
 }
 
 export function handleStreamSwitch(
@@ -56,7 +69,7 @@ export function handleStreamDelete(
 
 export function handleFilterChange(
   event: CustomEvent<FilterEventDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { filter } = event.detail;
   const state = ctx.getState();
@@ -80,15 +93,17 @@ export function handleFilterChange(
   }
 
   ctx.setState((prev) => ({ ...prev, streamFilter: filter }));
+  ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
 }
 
 export function handleSortChange(
   event: CustomEvent<SortEventDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { sort } = event.detail;
   ctx.setState((prev) => ({ ...prev, streamSort: sort }));
+  ctx.savePrefs?.({ streamSort: sort });
   postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, { sortBy: sort });
 }
 
@@ -98,7 +113,7 @@ export function handleDeleteAll(): void {
 
 export function handleToolbarCommand(
   event: CustomEvent<ToolbarCommandDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { command } = event.detail;
   const streamId = ctx.getState().activeStreamId;
@@ -108,7 +123,7 @@ export function handleToolbarCommand(
 
 export function handleRunSelected(
   event: CustomEvent<RunSelectedDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { runId } = event.detail;
   const state = ctx.getState();
@@ -133,7 +148,7 @@ export function handleFileAction(
 
 export function handleFollowUpChange(
   event: CustomEvent<FollowUpChangeDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { value } = event.detail;
   const streamId = ctx.getState().activeStreamId;
@@ -141,7 +156,7 @@ export function handleFollowUpChange(
   ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: value }));
 }
 
-export function handleFollowUpSend(ctx: EventHandlerContext): void {
+export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   const state = ctx.getState();
   const streamId = state.activeStreamId;
   if (!streamId) return;
@@ -157,7 +172,7 @@ export function handleFollowUpSend(ctx: EventHandlerContext): void {
   ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
 }
 
-export function handleFollowUpPolish(ctx: EventHandlerContext): void {
+export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
   const state = ctx.getState();
   const streamId = state.activeStreamId;
   if (!streamId) return;
@@ -172,13 +187,15 @@ export function handleFollowUpPolish(ctx: EventHandlerContext): void {
   });
 }
 
-export function handleFollowUpClear(ctx: EventHandlerContext): void {
+export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
 }
 
-export function handleFollowUpToggleBypass(ctx: EventHandlerContext): void {
+export function handleFollowUpToggleBypass(
+  ctx: FrontendEventHandlerContext,
+): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS, {
@@ -186,7 +203,9 @@ export function handleFollowUpToggleBypass(ctx: EventHandlerContext): void {
   });
 }
 
-export function handleFollowupRequestOptions(ctx: EventHandlerContext): void {
+export function handleFollowupRequestOptions(
+  ctx: FrontendEventHandlerContext,
+): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, {
@@ -196,7 +215,7 @@ export function handleFollowupRequestOptions(ctx: EventHandlerContext): void {
 
 export function handleFollowupModeChange(
   event: CustomEvent<FollowupModeDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const { mode } = event.detail;
   const streamId = ctx.getState().activeStreamId;
@@ -206,14 +225,14 @@ export function handleFollowupModeChange(
 
 export function handleFollowupSetup(
   event: CustomEvent<FollowupCommandDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   sendFollowupCommand(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP, event, ctx);
 }
 
 export function handleFollowupRun(
   event: CustomEvent<FollowupCommandDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   sendFollowupCommand(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP, event, ctx);
 }
@@ -221,7 +240,7 @@ export function handleFollowupRun(
 function sendFollowupCommand(
   command: string,
   event: CustomEvent<FollowupCommandDetail>,
-  ctx: EventHandlerContext,
+  ctx: FrontendEventHandlerContext,
 ): void {
   const stream = ctx.getState().activeStreamId;
   if (!stream) return;
@@ -249,7 +268,7 @@ function sendFollowupCommand(
 export function handlePromptAction(
   event: CustomEvent<PromptActionDetail>,
 ): void {
-  const { prompt, action } = event.detail;
+  const { prompt, action, feedback } = event.detail;
 
   switch (prompt.kind) {
     case 'toolEdit':
@@ -279,6 +298,7 @@ export function handlePromptAction(
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
         proposalId: prompt.data.proposalId,
         action,
+        feedback,
       });
       break;
   }

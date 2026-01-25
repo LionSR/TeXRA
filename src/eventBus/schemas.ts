@@ -75,13 +75,12 @@ export type SetActiveStreamPayload = z.infer<
  *
  * TaskStateSchema uses looseObject for validation efficiency (only validates
  * discriminator fields), while the full TaskState type has all AgentConfig fields.
- * We use pipe() to validate structure then cast to the full type, preserving
- * error messages from the underlying schema.
+ * We use transform() to validate structure then cast to the full type.
  */
 export const SetTaskStatePayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   executionId: ExecutionIdSchema.optional(),
   // Validate with TaskStateSchema, then cast output to full TaskState type
-  taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),
+  taskState: TaskStateSchema.transform((v): TaskState => v as TaskState),
 });
 export type SetTaskStatePayload = z.infer<typeof SetTaskStatePayloadSchema>;

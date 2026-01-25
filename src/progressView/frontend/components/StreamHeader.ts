@@ -103,15 +103,13 @@ export class StreamHeader extends LitElement {
   }
 
   private renderRunSelector(): TemplateResult | typeof nothing {
-    if (!this.stream) {
-      return nothing;
-    }
-
-    const isWorkflow = this.stream.agentCategory === 'workflow';
-    const hasRuns = this.runs.length > 0;
+    // Note: this.stream is guaranteed to exist when this method is called
+    // since render() only calls it when stream is truthy
+    const isWorkflow = this.stream!.agentCategory === 'workflow';
     if (!isWorkflow) {
       return nothing;
     }
+    const hasRuns = this.runs.length > 0;
 
     return html`
       <div
