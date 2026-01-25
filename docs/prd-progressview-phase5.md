@@ -25,6 +25,8 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 | **R12** | ProgressView| FollowUp section never visible   | ✅ Fixed       |
 | **R13** | MainView    | Dropdowns invisible (clickable)  | ⬜ Not Started |
 | **R14** | MainView    | Run button shows text not icon   | ⬜ Not Started |
+| **R15** | ProgressView| User message shows plain text    | ⬜ Not Started |
+| **R16** | ProgressView| FollowUp not fixed at bottom     | ⬜ Not Started |
 
 ### Migration Regressions (High Priority)
 
@@ -54,8 +56,8 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 | ID  | Severity | Issue                          | Status         |
 | --- | -------- | ------------------------------ | -------------- |
-| P1  | MEDIUM   | Missing model-access-summary   | ⬜ Not Started |
-| P2  | LOW      | Missing models-list-container  | ⬜ Not Started |
+| P1  | MEDIUM   | Missing model-access-summary   | ✅ Fixed       |
+| P2  | LOW      | Missing models-list-container  | ✅ Fixed       |
 | P3  | LOW      | Missing error state guidance   | ⬜ Not Started |
 | R11 | LOW      | Unused signOut event           | ⬜ Not Started |
 
@@ -676,14 +678,81 @@ if (status === STREAM_STATUS.READY) {
 When `streamInfo.status` is looked up for READY streams, it returns `undefined`, not `'ready'`.
 The check `undefined === 'ready'` is always **false**.
 
-**Fix:**
+**Fix:** ✅ **Applied** - Option 1 implemented in `FollowupSection.ts:209`:
 ```typescript
-// Option 1: Handle undefined as ready
-const isTerminal = this.status === 'stopped' || this.status === 'ready' || this.status === undefined;
-
-// Option 2: Fix at source - streamInfoUtils.ts line 94
-status: statuses?.get(id) ?? 'ready',  // Default to 'ready' if not in map
+const isTerminal =
+  this.status === 'stopped' ||
+  this.status === 'ready' ||
+  this.status === undefined;
 ```
+
+#### R15. User Message Shows Plain Text (HIGH)
+
+**Location:** `src/progressView/frontend/formatters/logFormatters/messageFormatters.ts:39-48`
+
+**Symptom:** User messages in ProgressView appear as plain text without the styled bubble/container.
+
+**Expected behavior:** User messages should display with:
+- Right-aligned container
+- Background color with left border accent
+- Icon and timestamp header
+- Styled content area
+
+**Current HTML generated:**
+```html
+<div class="user-message-container">
+  <div class="user-message">
+    <div class="user-message-header">
+      <i class="codicon codicon-comment user-message-icon"></i>
+      <span class="user-message-timestamp">...</span>
+    </div>
+    <div class="user-message-content">...</div>
+  </div>
+</div>
+```
+
+**Root Cause:** CSS styles defined in `user-message.css` are imported into `index.css`, but since `LogList.ts` uses Light DOM, styles should apply. Investigation needed to determine if:
+1. CSS import chain is broken
+2. CSS variables are missing in litStyles.ts tokens
+3. Class names don't match between formatter and CSS
+
+**Investigation Required:**
+- Verify `user-message.css` is loaded in webview
+- Check CSS variable values (`--spacing-small`, `--color-text-link`, etc.)
+- Inspect DOM to see if classes are applied but styles aren't
+
+#### R16. FollowUp Section Not Fixed at Bottom (MEDIUM)
+
+**Location:** `src/progressView/frontend/components/WorkflowStreamContent.ts:137-144`
+
+**Symptom:** FollowUp section position moves based on log message history length instead of staying fixed at the viewport bottom.
+
+**Expected behavior:** FollowUp section should be pinned to the bottom of the stream panel, independent of log content height.
+
+**Current layout:**
+```
+┌─────────────────────┐
+│ Log messages...     │
+│ (variable height)   │
+├─────────────────────┤  ← FollowUp moves with content
+│ Followup Section    │
+└─────────────────────┘
+```
+
+**Target layout:**
+```
+┌─────────────────────┐
+│ Log messages...     │
+│ (scrollable)        │
+├─────────────────────┤  ← FollowUp fixed at bottom
+│ Followup Section    │
+└─────────────────────┘
+```
+
+**Fix approaches:**
+1. CSS `position: sticky; bottom: 0;` on followup-section
+2. Flex layout with `flex-grow: 1` on log area and fixed height followup
+3. CSS Grid with `grid-template-rows: 1fr auto`
 
 ---
 
