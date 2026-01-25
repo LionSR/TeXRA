@@ -82,6 +82,10 @@ export class ProfileApp extends BaseWebviewApp {
     postMessage(PROFILE_VIEW_COMMANDS.SIGN_IN);
   };
 
+  private handleSignOut = (): void => {
+    postMessage(PROFILE_VIEW_COMMANDS.SIGN_OUT);
+  };
+
   private handleSelectAgent = (
     event: CustomEvent<{ agentName: string }>,
   ): void => {
@@ -112,6 +116,8 @@ export class ProfileApp extends BaseWebviewApp {
                 .userId=${this.userId}
                 .tier=${this.tier}
                 .accessExpiresAt=${this.accessExpiresAt}
+                .showSignOut=${true}
+                @profile-sign-out=${this.handleSignOut}
               ></profile-info>
 
               <api-access-section
