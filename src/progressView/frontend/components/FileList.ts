@@ -205,9 +205,7 @@ export class FileList extends LitElement {
       .sort((a, b) => a[0] - b[0]);
   }
 
-  private getDisplayPath(
-    loc: OutputFileInfo['location'],
-  ): string {
+  private getDisplayPath(loc: OutputFileInfo['location']): string {
     if (!loc) return '';
     return loc.kind === 'workspace' || loc.kind === 'runStorage'
       ? loc.relativePath

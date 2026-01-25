@@ -6,8 +6,8 @@
 // Third-party imports
 import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 
-// Local imports - common helpers
-import { encodeHtml } from '@common/modules/htmlEncoding.js';
+// Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
 
 /** Generate inline diff HTML showing changes between old and new text. Uses diff-match-patch for reliable diffing. */
 export function generateInlineDiff(oldText: string, newText: string): string {

@@ -18,6 +18,10 @@
   </head>
   <body>
     <progress-app></progress-app>
+    <script nonce="${nonce}">
+      // Expose codicon font URI for Lit shadow DOM components
+      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
+    </script>
     <script
       type="module"
       nonce="${nonce}"
