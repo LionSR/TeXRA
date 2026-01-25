@@ -248,8 +248,8 @@ export class StreamTabs extends LitElement {
   }
 
   private normalizeStatus(status?: string): string {
-    if (!status) return STREAM_STATUS.STOPPED;
-    if (status === STREAM_STATUS.READY) return STREAM_STATUS.STOPPED;
-    return status;
+    return !status || status === STREAM_STATUS.READY
+      ? STREAM_STATUS.STOPPED
+      : status;
   }
 }

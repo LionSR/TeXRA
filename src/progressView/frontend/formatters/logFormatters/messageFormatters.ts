@@ -214,9 +214,8 @@ export function formatDefaultLogMessage(
     new Date(timestamp),
   );
 
-  const dataAttrs = groupId
-    ? `data-log-id="${id}" data-group-id="${groupId}"`
-    : `data-log-id="${id}"`;
+  const groupIdAttr = groupId ? ` data-group-id="${groupId}"` : '';
+  const dataAttrs = `data-log-id="${id}"${groupIdAttr}`;
 
   const timestampContent = verbose ? `${emoji} [${timeDisplay}]` : emoji;
   const levelMarkup = verbose

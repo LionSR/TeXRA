@@ -384,17 +384,12 @@ export class ProgressApp extends BaseWebviewApp {
     activeStreamId: string | null,
     isToolUse: boolean,
   ): PromptState[] {
-    // Only show prompts for tool-use agents
-    if (!isToolUse) return [];
-    if (!activeStreamId) return [];
+    if (!isToolUse || !activeStreamId) return [];
 
-    return this.prompts.filter((prompt) => {
-      const promptStreamId = prompt.data.streamId;
-      // Show prompts with empty streamId for all streams (global prompts)
-      if (!promptStreamId) return true;
-      // Show prompts matching the active stream
-      return promptStreamId === activeStreamId;
-    });
+    return this.prompts.filter(
+      (prompt) =>
+        !prompt.data.streamId || prompt.data.streamId === activeStreamId,
+    );
   }
 
   private setStreamState(

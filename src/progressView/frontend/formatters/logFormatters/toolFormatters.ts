@@ -98,12 +98,12 @@ function buildToolSection(
   return buildToolUseSection(label, content);
 }
 
-/** Determine the title prefix based on tool state. */
-function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
-  if (isUserFeedback) return 'User Feedback';
-  if (isError) return 'Tool Error';
-  return 'Tool Use';
-}
+/** Title prefix lookup based on tool state. */
+const getToolTitlePrefix = (
+  isUserFeedback: boolean,
+  isError: boolean,
+): string =>
+  isUserFeedback ? 'User Feedback' : isError ? 'Tool Error' : 'Tool Use';
 
 /** Create and initialize a tool-style element from template. */
 function createToolElement(

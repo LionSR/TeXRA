@@ -188,9 +188,8 @@ const LANGUAGE_LABELS: Record<string, string> = {
 };
 
 /** Get display label for a language. */
-function getLanguageLabel(language: string): string {
-  return LANGUAGE_LABELS[language] || language || 'Text';
-}
+const getLanguageLabel = (language: string): string =>
+  LANGUAGE_LABELS[language] ?? (language || 'Text');
 
 /** Build a code block with optional syntax highlighting, language badge, and copy button. Does NOT use auto-detection - requires explicit language or defaults to plaintext. */
 export function buildCodeBlock(

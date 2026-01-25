@@ -10,69 +10,52 @@ let TIME_FORMATTER: Intl.DateTimeFormat | null = null;
 let DATE_TIME_FORMATTER: Intl.DateTimeFormat | null = null;
 
 /** Get the time-only formatter. */
-export const getTimeFormatter = (): Intl.DateTimeFormat => {
-  if (!TIME_FORMATTER) {
-    TIME_FORMATTER = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
-  }
+export function getTimeFormatter(): Intl.DateTimeFormat {
+  TIME_FORMATTER ??= new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
   return TIME_FORMATTER;
-};
+}
 
 /** Get the date-time formatter. */
-export const getDateTimeFormatter = (): Intl.DateTimeFormat => {
-  if (!DATE_TIME_FORMATTER) {
-    DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
-      undefined,
-      DATETIME_FORMAT_OPTIONS,
-    );
-  }
+export function getDateTimeFormatter(): Intl.DateTimeFormat {
+  DATE_TIME_FORMATTER ??= new Intl.DateTimeFormat(
+    undefined,
+    DATETIME_FORMAT_OPTIONS,
+  );
   return DATE_TIME_FORMATTER;
-};
+}
 
 /** Format a timestamp for display. */
-export const formatTimestamp = (
-  date: Date,
-): { fullTimestamp: string; timeDisplay: string; tooltipTimestamp: string } => {
-  const isoTimestamp = date.toISOString();
-
+export function formatTimestamp(date: Date): {
+  fullTimestamp: string;
+  timeDisplay: string;
+  tooltipTimestamp: string;
+} {
   return {
-    fullTimestamp: isoTimestamp,
+    fullTimestamp: date.toISOString(),
     timeDisplay: getTimeFormatter().format(date),
     tooltipTimestamp: getDateTimeFormatter().format(date),
   };
-};
+}
 
 /** Format token counts for display. Values >= 100k display as "M", > 4096 as "k", otherwise raw. */
-export const formatTokens = (tokens: number): string => {
-  if (tokens >= 100_000) {
-    return `${(tokens / 1_000_000).toFixed(1)}M`;
-  }
-  if (tokens > 4096) {
-    return `${Math.round(tokens / 1000)}k`;
-  }
+export function formatTokens(tokens: number): string {
+  if (tokens >= 100_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens > 4096) return `${Math.round(tokens / 1000)}k`;
   return `${tokens}`;
-};
+}
 
 /** Format duration in milliseconds to human-readable string. */
-export const formatDuration = (durationMs: number): string => {
-  // Handle edge cases
+export function formatDuration(durationMs: number): string {
   if (durationMs < 0) return '0s';
-
-  // For very short durations, show under a second
-  if (durationMs < 1000) {
-    return '<1s';
-  }
+  if (durationMs < 1000) return '<1s';
 
   const seconds = Math.floor(durationMs / 1000) % 60;
   const minutes = Math.floor(durationMs / (1000 * 60));
 
-  if (minutes === 0) {
-    return `${seconds}sec`;
-  } else if (seconds === 0) {
-    return `${minutes}min`;
-  } else {
-    return `${minutes}min, ${seconds}sec`;
-  }
-};
+  if (minutes === 0) return `${seconds}sec`;
+  if (seconds === 0) return `${minutes}min`;
+  return `${minutes}min, ${seconds}sec`;
+}
 
 /**
  * Extracts timestamps from HTML messages.

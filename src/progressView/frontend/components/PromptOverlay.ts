@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
@@ -83,15 +83,15 @@ export class PromptOverlay extends LitElement {
 
   @property({ type: Object }) prompt: PromptState | null = null;
 
-  render() {
+  render(): TemplateResult {
     if (!this.prompt) {
       return html``;
     }
 
-    return html` <div class="prompt-card">${this.renderPrompt()}</div> `;
+    return html`<div class="prompt-card">${this.renderPrompt()}</div>`;
   }
 
-  private renderPrompt() {
+  private renderPrompt(): TemplateResult {
     switch (this.prompt?.kind) {
       case 'toolEdit':
         return this.renderToolEdit(this.prompt.data);
@@ -106,7 +106,7 @@ export class PromptOverlay extends LitElement {
     }
   }
 
-  private renderToolEdit(prompt: ToolEditApprovalPrompt) {
+  private renderToolEdit(prompt: ToolEditApprovalPrompt): TemplateResult {
     return html`
       <div class="prompt-header">Tool edit approval</div>
       <div class="prompt-body">
@@ -141,7 +141,7 @@ export class PromptOverlay extends LitElement {
     `;
   }
 
-  private renderBash(prompt: BashApprovalPrompt) {
+  private renderBash(prompt: BashApprovalPrompt): TemplateResult {
     return html`
       <div class="prompt-header">Command approval</div>
       <div class="prompt-body">
@@ -156,7 +156,7 @@ export class PromptOverlay extends LitElement {
     `;
   }
 
-  private renderRetry(prompt: RetryRequestPrompt) {
+  private renderRetry(prompt: RetryRequestPrompt): TemplateResult {
     return html`
       <div class="prompt-header">Retry request</div>
       <div class="prompt-body">
@@ -174,7 +174,7 @@ export class PromptOverlay extends LitElement {
     `;
   }
 
-  private renderProposal(prompt: AgentProposalPrompt) {
+  private renderProposal(prompt: AgentProposalPrompt): TemplateResult {
     return html`
       <div class="prompt-header">Agent proposal</div>
       <div class="prompt-body">
