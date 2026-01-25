@@ -74,8 +74,7 @@ export class InstructionPanel extends LitElement {
     if (!this.copyButton) return;
 
     await copyWithFeedback(this.copyButton, text, {
-      defaultTitle:
-        this.copyButton.getAttribute('title') || 'Copy instruction',
+      defaultTitle: this.copyButton.getAttribute('title') || 'Copy instruction',
       successTitle: 'Copied!',
     });
   };

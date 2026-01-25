@@ -1,8 +1,12 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
+
+// Local imports - shared styles
+import { designTokens, animationStyles } from '@shared/styles/litStyles';
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
 import { TODO_STATUS, type TodoItem } from '@shared/schemas';
@@ -18,11 +22,96 @@ const STATUS_ICONS: Record<string, string> = {
 
 @customElement('todo-list')
 export class TodoList extends LitElement {
-  @property({ type: Array }) todos: TodoItem[] = [];
+  static styles = [
+    designTokens,
+    codiconStyles,
+    animationStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
+      :host([hidden]) {
+        display: none;
+      }
+
+      .todo-collapsible {
+        margin: var(--spacing-small) 0;
+        border-top: var(--border-thin) solid var(--color-border);
+        border-bottom: var(--border-thin) solid var(--color-border);
+      }
+
+      .todo-collapsible::part(header) {
+        padding: var(--spacing-small) var(--spacing-medium);
+        background-color: var(
+          --vscode-sideBarSectionHeader-background,
+          transparent
+        );
+        color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+      }
+
+      .todo-collapsible::part(body) {
+        padding: 0 var(--spacing-medium) var(--spacing-small);
+      }
+
+      .todo-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
+
+      .todo-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) 0;
+        font-size: var(--font-size);
+        line-height: 1.4;
+      }
+
+      .todo-item__icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-icon-sm);
+        line-height: 1.4;
+        margin-top: var(--border-thin);
+      }
+
+      .todo-item__content {
+        flex: 1;
+        word-break: break-word;
+      }
+
+      .todo-item--pending {
+        opacity: 0.7;
+      }
+
+      .todo-item--pending .todo-item__icon {
+        color: var(--color-text-secondary);
+      }
+
+      .todo-item--in-progress {
+        font-weight: 500;
+      }
+
+      .todo-item--in-progress .todo-item__icon {
+        color: var(--vscode-progressBar-background);
+      }
+
+      .todo-item--completed {
+        opacity: 0.6;
+      }
+
+      .todo-item--completed .todo-item__icon {
+        color: var(--color-success);
+      }
+
+      .todo-item--completed .todo-item__content {
+        text-decoration: line-through var(--color-text-secondary);
+      }
+    `,
+  ];
+
+  @property({ type: Array }) todos: TodoItem[] = [];
 
   render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {

@@ -24,7 +24,7 @@ import type {
 } from './events';
 
 // Local imports - shared schemas (types)
-import type { StreamTabId } from '@shared/schemas';
+import { AGENT_CATEGORY, type StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
@@ -135,7 +135,9 @@ export function handleRunSelected(
     selectedRunId: runId,
   }));
 
-  ctx.getLogListRef()?.showRun(runId ?? null);
+  const streamState = getStreamState(state, streamId);
+  const isToolUse = streamState.info?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+  ctx.getLogListRef()?.showRun(runId ?? null, isToolUse);
 }
 
 export function handleFileAction(
