@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, queryAll, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -26,7 +26,16 @@ export class HistoryList extends LitElement {
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
 
-  private term = '';
+  @state() private term = '';
+  @state() private hasSearchMatches = false;
+
+  @queryAll('history-item')
+  private historyItemElements!: Array<
+    HTMLElement & {
+      applySearch: (term: string) => Promise<number>;
+      getMarks: () => HTMLElement[];
+    }
+  >;
 
   protected updated(changedProps: Map<string, unknown>): void {
     if (changedProps.has('items') && this.term) {
@@ -36,6 +45,7 @@ export class HistoryList extends LitElement {
 
   clearSearch(): void {
     this.term = '';
+    this.hasSearchMatches = false;
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
     this.clearItemMarks();
@@ -45,6 +55,7 @@ export class HistoryList extends LitElement {
   search(term: string): void {
     this.term = term;
     if (!term) {
+      this.hasSearchMatches = false;
       this.state?.setSearchIndex(-1);
       this.state?.setTotalMatches(0);
       this.clearItemMarks();
@@ -52,6 +63,7 @@ export class HistoryList extends LitElement {
       return;
     }
 
+    this.hasSearchMatches = true;
     void this.applySearchToItems(term);
   }
 
@@ -96,6 +108,7 @@ export class HistoryList extends LitElement {
       items.map((item) => item.applySearch?.(term) ?? Promise.resolve(0)),
     );
     const total = counts.reduce((sum, count) => sum + count, 0);
+    this.hasSearchMatches = total > 0;
     this.state?.setTotalMatches(total);
     if (total > 0) {
       this.state?.setSearchIndex(0);
@@ -119,12 +132,7 @@ export class HistoryList extends LitElement {
       getMarks: () => HTMLElement[];
     }
   > {
-    return [...this.renderRoot.querySelectorAll('history-item')] as Array<
-      HTMLElement & {
-        applySearch: (term: string) => Promise<number>;
-        getMarks: () => HTMLElement[];
-      }
-    >;
+    return this.historyItemElements ?? [];
   }
 
   private getAllMarks(): HTMLElement[] {
@@ -163,7 +171,7 @@ export class HistoryList extends LitElement {
           (item) => html`
             <history-item
               .item=${item}
-              .open=${this.term
+              .open=${this.term && this.hasSearchMatches
                 ? true
                 : Boolean(this.state?.toggleStates.get(item.id))}
               @history-toggle=${this.handleToggle}

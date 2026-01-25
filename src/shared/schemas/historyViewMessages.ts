@@ -19,14 +19,14 @@ const AgentConfigSummarySchema = z.object({
   agentCategory: z.enum(['workflow', 'toolUse']).optional(),
   inputFile: z.string().optional(),
   inputFiles: z.array(z.string()).optional(),
-  mediaFile: z.string().optional(),
+  mediaFile: z.string().nullish(),
   mediaFiles: z.array(z.string()).optional(),
-  referenceFile: z.string().optional(),
+  referenceFile: z.string().nullish(),
   referenceFiles: z.array(z.string()).optional(),
-  auxiliaryFile: z.string().optional(),
+  auxiliaryFile: z.string().nullish(),
   auxiliaryFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
-  toolConfig: z.record(z.string(), z.unknown()).optional(),
+  toolConfig: z.record(z.string(), z.unknown()).nullish(),
 });
 
 export const HistoryItemSchema = z.object({
