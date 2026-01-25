@@ -132,10 +132,17 @@ const webviewConfigs = [
         // is handled via optimization.usedExports instead.
       },
       {
-        // Handle CSS imports with or without ?inline suffix (for Vite compatibility)
+        // CSS as string with ?inline suffix (Vite compatibility)
+        // Uses Webpack 5 built-in asset/source (replaces raw-loader)
         test: /\.css$/,
-        resourceQuery: { or: [/inline/, ''] },
-        use: [path.resolve(__dirname, 'scripts/inlineCssLoader.js')],
+        resourceQuery: /inline/,
+        type: 'asset/source',
+      },
+      {
+        // Standard CSS imports (no ?inline) - also return as string for consistency
+        test: /\.css$/,
+        resourceQuery: { not: [/inline/] },
+        type: 'asset/source',
       },
     ],
   },
