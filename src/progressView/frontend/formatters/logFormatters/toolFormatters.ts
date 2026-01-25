@@ -99,11 +99,11 @@ function buildToolSection(
 }
 
 /** Title prefix lookup based on tool state. */
-const getToolTitlePrefix = (
-  isUserFeedback: boolean,
-  isError: boolean,
-): string =>
-  isUserFeedback ? 'User Feedback' : isError ? 'Tool Error' : 'Tool Use';
+function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
+  if (isUserFeedback) return 'User Feedback';
+  if (isError) return 'Tool Error';
+  return 'Tool Use';
+}
 
 /** Create and initialize a tool-style element from template. */
 function createToolElement(
@@ -181,19 +181,17 @@ export function formatToolUse(
   // Build title based on state
   // For normal tool use, just show the tool name (no "Tool Use:" prefix)
   // Keep prefixes for special states: "Tool Error:" and "User Feedback:"
-  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const isNormalToolUse = !isUserFeedback && !showAsError;
-  const titleBase = toolName
-    ? isNormalToolUse
+  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
+  const titleBase =
+    toolName && isNormalToolUse
       ? toolName
-      : `${titlePrefix}: ${toolName}`
-    : titlePrefix;
+      : toolName
+        ? `${titlePrefix}: ${toolName}`
+        : titlePrefix;
 
   const headerSummary = normalizedToolLog.headerSummary ?? '';
-
-  const titleText = headerSummary
-    ? `${titleBase} — ${headerSummary}`
-    : titleBase;
+  const titleText = headerSummary ? `${titleBase} — ${headerSummary}` : titleBase;
 
   if (headerLabel) {
     headerLabel.textContent = titleText;
@@ -350,14 +348,15 @@ export function formatToolUse(
   if (sections.length === 0) {
     const { text: fallbackYaml, language: fallbackLanguage } =
       stringifyWithLanguage(parsed);
-    contentElem.innerHTML = buildCodeBlock(fallbackYaml || '', {
+    contentElem.innerHTML = buildCodeBlock(fallbackYaml ?? '', {
       language: fallbackLanguage,
       showLanguage: fallbackLanguage !== 'plaintext',
       showCopy: true,
     });
-  } else {
-    contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
+    return element;
   }
+
+  contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
 
   return element;
 }
@@ -421,8 +420,8 @@ export function formatWebSearch(
 
   if (resultCount > 0) {
     const resultItems = (results ?? []).map((r) => {
-      const url = r.url || '';
-      const title = encodeHtml(r.title || r.domain || url);
+      const url = r.url ?? '';
+      const title = encodeHtml(r.title ?? r.domain ?? url);
       const domainSuffix = r.domain
         ? ` <span class="file-source">(${encodeHtml(r.domain)})</span>`
         : '';
