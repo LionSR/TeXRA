@@ -93,6 +93,7 @@ const webviewConfigs = [
   'memoryView',
   'historyView',
   'profileView',
+  'webview',
 ].map((name) => ({
   name,
   target: 'web',
