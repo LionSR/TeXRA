@@ -186,11 +186,21 @@ export class TaskGroupDomManager {
 
     const group = this.taskGroups.get(id);
     if (!group) return;
+
+    const wasRunning = group.status === STREAM_STATUS.RUNNING;
+    const isNowComplete =
+      status === STREAM_STATUS.READY || status === STREAM_STATUS.STOPPED;
+
     if (status) group.status = status;
     if (endTime !== null && endTime !== undefined) {
       group.endTime = endTime;
     }
     this.taskGroups.set(id, group);
+
+    // Play sound when a run group completes (name matches r1, r2, etc.)
+    if (wasRunning && isNowComplete && /^r\d+$/.test(group.name)) {
+      this.playSystemSound();
+    }
 
     const header = this._getById(`${GROUP_DOM_IDS.HEADER_PREFIX}${id}`);
     if (!header) return;
@@ -216,6 +226,32 @@ export class TaskGroupDomManager {
       } else {
         durationElem.textContent = '';
       }
+    }
+  }
+
+  /**
+   * Plays a short system beep to notify the user that a run has completed.
+   */
+  playSystemSound(): void {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioCtx) return;
+
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      osc.connect(ctx.destination);
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        ctx.close();
+      }, 150);
+    } catch {
+      // Ignore errors (e.g., autoplay restrictions)
     }
   }
 

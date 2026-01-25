@@ -3,36 +3,32 @@ import * as vscode from 'vscode';
 
 // Type imports
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-import type {
-  InstructionUpdate,
-  LogMessageData,
-  OutputFileInfo,
-  StreamStatus,
-  StreamTabId,
-  StreamTabInfo,
-  TaskGroup,
-  TokenUsageStats,
-} from '@shared/schemas';
 import type { TaskState } from '@logger/TaskState';
 
-/** Message payload sent to webview */
-interface WebviewMessage {
-  command: string;
-  [key: string]: unknown;
-}
+// Shared schemas - message types for type-safe webview communication
+import {
+  type AgentProposalPrompt,
+  type BashApprovalPrompt,
+  type ContextState,
+  type InstructionUpdate,
+  type LogMessageData,
+  type OutputFileInfo,
+  type ProgressViewOutboundMessage,
+  type RetryRequestPrompt,
+  type StreamStatus,
+  type StreamTabId,
+  type StreamTabInfo,
+  type TaskGroup,
+  type TodoItem,
+  type TokenUsageStats,
+  type ToolEditApprovalPrompt,
+  type UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  TodoItem,
-  UpdateTaskGroupPayload,
-} from '@shared/schemas';
 
 /**
  * Extra content to include with log updates.
@@ -54,11 +50,7 @@ export interface LogContentExtras {
   /** Missing outputs by run ID and round (batched with initial render) */
   runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
-  contextState?: {
-    inputTokens: number;
-    contextWindow: number;
-    utilizationPercent: number;
-  };
+  contextState?: ContextState;
 }
 
 /**
@@ -70,8 +62,11 @@ export interface LogContentExtras {
 export class WebviewUpdater {
   constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
 
-  /** Helper to send messages to all registered webviews */
-  private sendMessage(message: WebviewMessage): void {
+  /**
+   * Helper to send typed messages to all registered webviews.
+   * Uses ProgressViewOutboundMessage union type for compile-time safety.
+   */
+  private sendMessage(message: ProgressViewOutboundMessage): void {
     for (const webview of this.getWebviews()) {
       if (webview) {
         webview.postMessage(message);
