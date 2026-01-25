@@ -30,19 +30,10 @@ export function parseTimestamp(timestampStr: string | null | undefined): Date {
 
 export function appendFormatted(
   container: HTMLElement | DocumentFragment,
-  formatted: HTMLElement | string | null,
+  formatted: HTMLElement | null,
 ): void {
-  if (!formatted) return;
-
-  if (formatted instanceof HTMLElement) {
+  if (formatted) {
     container.appendChild(formatted);
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = formatted;
-  if (wrapper.firstElementChild) {
-    container.appendChild(wrapper.firstElementChild);
   }
 }
 
