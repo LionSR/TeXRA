@@ -6,7 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -16,7 +16,7 @@ const MAX_MESSAGE_LENGTH = 200;
 @customElement('queued-follow-ups')
 export class QueuedFollowUps extends LitElement {
   static styles = [
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: block;

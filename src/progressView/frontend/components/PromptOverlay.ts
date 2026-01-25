@@ -8,7 +8,7 @@ import { AGENT_CATEGORY } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -143,7 +143,7 @@ const SECONDARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
 export class PromptOverlay extends LitElement {
   static styles = [
     designTokens,
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: block;
