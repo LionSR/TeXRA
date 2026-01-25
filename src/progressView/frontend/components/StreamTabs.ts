@@ -1,18 +1,11 @@
 // Third-party imports
-import {
-  LitElement,
-  html,
-  nothing,
-  type TemplateResult,
-  type PropertyValues,
-} from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { LitElement, html, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared utilities
-import { getRadioChangeValue } from '@shared/utils/dom';
 import { formatRelativeTime } from '@shared/utils/string';
 import {
   AGENT_DECORATORS,
@@ -39,29 +32,8 @@ export class StreamTabs extends LitElement {
   @property({ type: String }) filter: StreamFilter = 'all';
   @property({ type: String }) sort: StreamSort = 'time';
 
-  @query(`#${ELEMENT_IDS.AGENT_FILTER_CONTAINER}`)
-  declare private filterGroup: HTMLElement | null;
-
   protected createRenderRoot(): HTMLElement {
     return this;
-  }
-
-  firstUpdated(): void {
-    this.syncFilterRadioGroup();
-  }
-
-  updated(changedProps: PropertyValues): void {
-    if (changedProps.has('filter')) {
-      // Use requestAnimationFrame to ensure VS Code elements have settled
-      requestAnimationFrame(() => this.syncFilterRadioGroup());
-    }
-  }
-
-  private syncFilterRadioGroup(): void {
-    const group = this.filterGroup as HTMLElement & { value?: string } | null;
-    if (group) {
-      group.value = this.filter;
-    }
   }
 
   render(): TemplateResult {
@@ -96,7 +68,10 @@ export class StreamTabs extends LitElement {
             )}
           </vscode-radio-group>
 
-          <vscode-toolbar-container id="sortButtons" @click=${this.handleSortClick}>
+          <vscode-toolbar-container
+            id="sortButtons"
+            @click=${this.handleSortClick}
+          >
             ${SORT_BUTTONS.map(
               (btn) => html`
                 <vscode-toolbar-button
@@ -211,8 +186,8 @@ export class StreamTabs extends LitElement {
   }
 
   private handleFilterChange(event: Event) {
-    const group = event.currentTarget as HTMLElement | null;
-    const filter = getRadioChangeValue(event, group) as StreamFilter;
+    const group = event.currentTarget as HTMLElement & { value?: string } | null;
+    const filter = group?.value as StreamFilter;
     if (!filter) return;
 
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));
