@@ -193,16 +193,6 @@ export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
 }
 
-export function handleFollowUpToggleBypass(
-  ctx: FrontendEventHandlerContext,
-): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
-  postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS, {
-    stream: streamId,
-  });
-}
-
 export function handleFollowupRequestOptions(
   ctx: FrontendEventHandlerContext,
 ): void {

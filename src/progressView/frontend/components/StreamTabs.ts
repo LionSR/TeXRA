@@ -25,6 +25,11 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
+/** Format status string for display (capitalize first letter) */
+function formatStatusLabel(status: string): string {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
+}
+
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
   @property({ type: Array }) streams: StreamTabInfo[] = [];
@@ -101,9 +106,7 @@ export class StreamTabs extends LitElement {
     const isActive = stream.name === this.activeStreamId;
     const tooltip = this.buildTooltip(stream);
     const status = this.normalizeStatus(stream.status);
-    const statusLabel = status
-      ? status.charAt(0).toUpperCase() + status.slice(1)
-      : '';
+    const statusLabel = formatStatusLabel(status);
     const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
 
     return html`

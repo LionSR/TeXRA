@@ -88,8 +88,6 @@ export const ProgressEvents = {
 
   followupClear: () => createEvent('followup-clear', {}),
 
-  followupToggleBypass: () => createEvent('followup-toggle-bypass', {}),
-
   followupRequestOptions: () => createEvent('followup-request-options', {}),
 
   followupModeChange: (detail: FollowupModeDetail) =>
