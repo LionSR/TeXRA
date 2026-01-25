@@ -15,11 +15,11 @@ npm install
 # Development build with watch mode
 npm run watch
 
-# Production build
-npm run package
+# Production build (requires increased memory for Lit compilation)
+NODE_OPTIONS=--max-old-space-size=8192 npm run package
 
 # Build VSIX extension file
-npm run build
+NODE_OPTIONS=--max-old-space-size=8192 npm run build
 # Creates: releases/texra-{version}.vsix
 
 # Run linting only
@@ -30,6 +30,20 @@ npm run format
 
 # NOTE: Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 ```
+
+### Build Memory Requirements
+
+Due to Lit + TypeScript + Zod compilation across 5 webview entry points, increased memory allocation is required:
+
+```bash
+# Set for all builds
+export NODE_OPTIONS=--max-old-space-size=8192
+
+# Or prefix individual commands
+NODE_OPTIONS=--max-old-space-size=8192 npm run compile
+```
+
+Without this, webpack may fail with "JavaScript heap out of memory" errors during production builds.
 
 ## Architecture Overview
 

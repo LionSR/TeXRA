@@ -14,12 +14,33 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 
 ## Status Summary
 
-| Webview         | JS Lines | Components | Complexity  | Status         |
-| --------------- | -------- | ---------- | ----------- | -------------- |
-| **MemoryView**  | ~305     | 4          | Low         | ✅ Complete    |
-| **HistoryView** | ~610     | 3          | Medium      | ✅ Complete    |
-| **ProfileView** | ~636     | 4          | Medium-High | ✅ Complete    |
-| **MainView**    | ~2,259   | 8+         | High        | ⬜ Not Started |
+| Webview         | JS Lines | Components | Complexity  | Lit Migration | Zod Validation | Status      |
+| --------------- | -------- | ---------- | ----------- | ------------- | -------------- | ----------- |
+| **MemoryView**  | ~305     | 5          | Low         | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **HistoryView** | ~610     | 4          | Medium      | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **ProfileView** | ~636     | 5          | Medium-High | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **MainView**    | ~2,259   | 1 (mono)   | High        | ✅ Complete   | ❌ **Missing** | 🟡 Phase 5  |
+
+### Lit Native Compliance (Deep-Dive Analysis 2026-01-25)
+
+| Webview         | Compliance | Notes                                                                         |
+| --------------- | ---------- | ----------------------------------------------------------------------------- |
+| **MemoryView**  | **100%**   | Shadow DOM, static styles, Zod validation, registry pattern                   |
+| **HistoryView** | **100%**   | Shadow DOM, static styles, Zod validation, mark.js integration                |
+| **ProfileView** | **100%**   | Shadow DOM, static styles, Zod validation, auth state handling                |
+| **MainView**    | **75%**    | Shadow DOM, static styles, but **no Zod**, **monolithic**, **58-case switch** |
+
+### Message Handling Pattern Consistency
+
+| Webview          | Pattern           | Validation | Compliant |
+| ---------------- | ----------------- | ---------- | --------- |
+| **ProgressView** | ✅ Registry       | ✅ Zod     | ✅        |
+| **MemoryView**   | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **HistoryView**  | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **ProfileView**  | ✅ Single handler | ✅ Zod     | ✅        |
+| **MainView**     | ❌ 58-case switch | ❌ None    | ❌        |
+
+**Target:** All webviews should use registry pattern with Zod validation (like ProgressView).
 
 ### Completed Migrations (2026-01-25)
 
@@ -426,63 +447,38 @@ src/profileView/
 
 **Complexity:** High (file selection, recording, multiple managers)
 
-### Current Structure
+**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **[Phase 5 refactoring](./prd-progressview-phase5.md)**
 
-- `MainViewMessageHandler.ts`: 461 lines (TypeScript - keep as-is)
-- `modules/`: ~20 JS files, ~2,259 lines
-- `managers/`: 5 TypeScript files (keep and integrate)
+### Current Structure (Post-Migration)
+
+- `MainViewMessageHandler.ts`: 461 lines (TypeScript - backend)
+- `frontend/MainApp.ts`: **~2,737 lines** ⚠️ MONOLITHIC
+- `managers/`: 5 TypeScript files (integrated)
   - `InstructionManager.ts`
   - `FileManager.ts`
   - `ExecutionManager.ts`
   - `DiffManager.ts`
   - `BaseWebviewManager.ts`
+- Legacy `modules/`: ✅ Deleted
 
-### Key Challenges
+### Key Challenges (Addressed)
 
-- Complex file selection UI with drag-and-drop
-- Recording functionality (audio capture, transcription)
-- Multiple manager classes with cross-dependencies
-- Complex form state (file list, instruction, agent, model options)
-- Diff/merge functionality integration
-- Latexdiff configuration panel
+- ✅ Complex file selection UI with drag-and-drop
+- ✅ Recording functionality (audio capture, transcription)
+- ✅ Multiple manager classes with cross-dependencies
+- ✅ Complex form state (file list, instruction, agent, model options)
+- ✅ Diff/merge functionality integration
+- ✅ Latexdiff configuration panel
 
-### Target Structure
+### Phase 5 Required (Post-Migration Refactoring)
 
-```
-src/webview/
-├── frontend/
-│   ├── index.ts
-│   ├── MainApp.ts                  # Root: message routing, orchestration
-│   ├── store.ts                    # Form state types
-│   └── components/
-│       ├── FileSelector/
-│       │   ├── FileSelector.ts     # Container with drag-drop
-│       │   ├── FileList.ts         # Categorized file lists
-│       │   └── FileItem.ts         # Single file with remove button
-│       ├── InstructionPanel/
-│       │   ├── InstructionPanel.ts # Instruction input + recording
-│       │   └── RecordingButton.ts  # Audio recording UI
-│       ├── AgentSelector.ts        # Agent + model dropdowns
-│       ├── ActionButtons.ts        # Run, Polish, etc.
-│       └── LatexdiffPanel.ts       # Diff configuration
-├── managers/                       # Keep existing TypeScript
-│   ├── InstructionManager.ts
-│   ├── FileManager.ts
-│   ├── ExecutionManager.ts
-│   └── DiffManager.ts
-├── styles/                         # Keep existing CSS
-├── MainViewMessageHandler.ts       # Keep existing
-└── MainViewContentProvider.ts      # Update to load Lit bundle
-```
+MainView migration is functionally complete but requires Phase 5 refactoring for maintainability:
 
-### Migration Approach (Incremental)
+- **Monolithic component:** 2,737 lines needs extraction into 6+ components
+- **Missing validation:** 58 message types lack Zod validation (security risk)
+- **Known bugs:** 6 bugs identified during code review (see Phase 5)
 
-1. **Week 1:** Create `MainApp.ts` shell, integrate with existing managers
-2. **Week 1:** Create `AgentSelector.ts` and `ActionButtons.ts` (simpler components)
-3. **Week 2:** Create `FileSelector/` components (most complex)
-4. **Week 2:** Create `InstructionPanel/` with recording integration
-5. **Week 3:** Create `LatexdiffPanel.ts`, final integration testing
-6. Delete `modules/` directory and `script.js`
+**See [prd-progressview-phase5.md](./prd-progressview-phase5.md) for full details.**
 
 ---
 
