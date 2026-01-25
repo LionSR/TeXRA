@@ -44,6 +44,7 @@ export type FollowupCommandDetail = FollowupFormData & { mode: string };
 export interface PromptActionDetail {
   prompt: PromptState;
   action: string;
+  feedback?: string;
 }
 
 // =============================================================================

@@ -1,9 +1,11 @@
 // Local imports
 import type {
+  AgentCategoryFilter,
   ContextState,
   InstructionUpdate,
   LogMessageData,
   OutputFileInfo,
+  SetFollowupOptionsMessage,
   StreamStatus,
   StreamTabInfo,
   StreamTabId,
@@ -12,7 +14,8 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 
-export type StreamFilter = 'all' | 'workflow' | 'toolUse';
+/** Re-export schema type for components (single source of truth) */
+export type StreamFilter = AgentCategoryFilter;
 export type StreamSort = 'time' | 'agent' | 'inputFile';
 export type FollowupMode = 'chat' | 'workflow' | 'merge';
 
@@ -37,18 +40,16 @@ export interface StreamState {
   followupMode?: FollowupMode;
 }
 
+/** Followup options derived from schema (minus command field) */
+type FollowupOptionsState = Omit<SetFollowupOptionsMessage, 'command'>;
+
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
   streams: StreamTabInfo[];
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   streamStates: Map<StreamTabId, StreamState>;
-  followupOptions: {
-    workflowAgentsHtml: string;
-    toolUseAgentsHtml: string;
-    modelOptionsHtml: string;
-    defaultMergeModel?: string;
-  } | null;
+  followupOptions: FollowupOptionsState | null;
 }
 
 export function createEmptyStreamState(): StreamState {

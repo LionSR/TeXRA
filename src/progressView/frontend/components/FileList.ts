@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -90,15 +91,16 @@ export class FileList extends LitElement {
       <div
         class="file-item"
         data-file=${location.absolutePath}
-        data-original=${file.lineage?.original?.absolutePath || ''}
-        data-base=${file.lineage?.diffBase?.absolutePath || ''}
-        data-workspace=${location.kind === 'workspace'
-          ? location.absolutePath
-          : ''}
-        data-relative=${location.kind === 'workspace' ||
-        location.kind === 'runStorage'
-          ? location.relativePath
-          : ''}
+        data-original=${ifDefined(file.lineage?.original?.absolutePath)}
+        data-base=${ifDefined(file.lineage?.diffBase?.absolutePath)}
+        data-workspace=${ifDefined(
+          location.kind === 'workspace' ? location.absolutePath : undefined,
+        )}
+        data-relative=${ifDefined(
+          location.kind === 'workspace' || location.kind === 'runStorage'
+            ? location.relativePath
+            : undefined,
+        )}
       >
         <span class="file-name">
           <span

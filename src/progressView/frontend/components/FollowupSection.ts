@@ -5,9 +5,8 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
-
-// Note: Using native Lit patterns instead of DOM utilities for radio groups
+import { customElement, property, query, state } from 'lit/decorators.js';
+import { live } from 'lit/directives/live.js';
 
 // Local imports - common helpers
 import {
@@ -18,20 +17,21 @@ import {
   MODEL_PLACEHOLDER,
 } from '@common/modules/dropdownUtils.js';
 
+// Local imports - shared schemas
+import type { SetFollowupOptionsMessage } from '@shared/schemas';
+
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import type { FollowupMode } from '../store';
 
-export interface FollowupStreamData {
-  agentCategory: string;
-  status?: string;
-  hasOutputFiles?: boolean;
-  agentName?: string;
-  instructionPreview?: string | null;
-  fileCount?: number;
-}
+/** Agent name used for merge mode (fixed, not user-selectable) */
+const MERGE_AGENT_NAME = 'merge';
 
+/**
+ * Form data collected from the followup section inputs.
+ * Component-local type for getFormData() return value.
+ */
 export interface FollowupFormData {
   agent: string;
   model: string;
@@ -40,36 +40,35 @@ export interface FollowupFormData {
   initialQuestion: string;
 }
 
-export interface FollowupOptions {
-  workflowAgentsHtml: string;
-  toolUseAgentsHtml: string;
-  modelOptionsHtml: string;
-  defaultMergeModel?: string;
-}
+/**
+ * Followup options received from backend.
+ * Derived from SetFollowupOptionsMessage schema (minus command field).
+ */
+export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
 
 @customElement('followup-section')
 export class FollowupSection extends LitElement {
-  @property({ type: Object }) streamData: FollowupStreamData | null = null;
+  // Declarative visibility props - parent computes, component renders
+  @property({ type: String }) agentCategory: string = '';
+  @property({ type: String }) status: string = '';
+  @property({ type: Boolean }) hasOutputFiles: boolean = false;
+
+  // Configuration props
   @property({ type: Object }) options: FollowupOptions | null = null;
   @property({ type: String }) mode: FollowupMode = 'chat';
   @property({ type: String }) streamModel: string | null = null;
 
+  // Reactive form state (Lit-native pattern)
+  @state() private includeInstruction = true;
+  @state() private attachOutputs = false;
+  @state() private initialQuestion = '';
+
+  // Agent/model selects still use @query due to dropdownUtils HTML injection
   @query(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`)
   declare private agentSelect: (HTMLElement & { value?: string }) | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`)
   declare private modelSelect: (HTMLElement & { value?: string }) | null;
-
-  @query(`#${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}`)
-  declare private includeCheckbox: (HTMLElement & { checked?: boolean }) | null;
-
-  @query(`#${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}`)
-  declare private attachCheckbox: (HTMLElement & { checked?: boolean }) | null;
-
-  @query(`#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`)
-  declare private questionInput: (HTMLElement & { value?: string }) | null;
-
-  // modeGroup query removed - Lit's .value binding handles radio sync automatically
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -85,12 +84,10 @@ export class FollowupSection extends LitElement {
   }
 
   render(): TemplateResult {
-    const status = this.streamData?.status;
-    const isTerminal = status === 'stopped' || status === 'ready';
+    // Visibility computed from declarative props
+    const isTerminal = this.status === 'stopped' || this.status === 'ready';
     const visible =
-      this.streamData?.agentCategory === 'workflow' &&
-      isTerminal &&
-      Boolean(this.streamData?.hasOutputFiles);
+      this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
 
     return html`
       <vscode-collapsible
@@ -109,25 +106,16 @@ export class FollowupSection extends LitElement {
               .value=${this.mode}
               @change=${this.handleModeChange}
             >
-              <vscode-radio
-                id=${ELEMENT_IDS.FOLLOWUP_MODE_CHAT}
-                value="chat"
-                ?checked=${this.mode === 'chat'}
-              >
+              <vscode-radio id=${ELEMENT_IDS.FOLLOWUP_MODE_CHAT} value="chat">
                 Chat
               </vscode-radio>
               <vscode-radio
                 id=${ELEMENT_IDS.FOLLOWUP_MODE_WORKFLOW}
                 value="workflow"
-                ?checked=${this.mode === 'workflow'}
               >
                 Workflow
               </vscode-radio>
-              <vscode-radio
-                id=${ELEMENT_IDS.FOLLOWUP_MODE_MERGE}
-                value="merge"
-                ?checked=${this.mode === 'merge'}
-              >
+              <vscode-radio id=${ELEMENT_IDS.FOLLOWUP_MODE_MERGE} value="merge">
                 Merge
               </vscode-radio>
             </vscode-radio-group>
@@ -157,16 +145,22 @@ export class FollowupSection extends LitElement {
               id=${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}
               placeholder="What would you like to discuss about the results?"
               rows="2"
+              .value=${live(this.initialQuestion)}
+              @input=${this.handleQuestionInput}
             ></vscode-textarea>
           </div>
 
           <div class="followup-options">
             <vscode-checkbox
               id=${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}
-              checked
+              ?checked=${this.includeInstruction}
+              @change=${this.handleIncludeChange}
               >Include previous instruction</vscode-checkbox
             >
-            <vscode-checkbox id=${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}
+            <vscode-checkbox
+              id=${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}
+              ?checked=${this.attachOutputs}
+              @change=${this.handleAttachChange}
               >Modify originals (attach outputs as reference)</vscode-checkbox
             >
           </div>
@@ -195,11 +189,13 @@ export class FollowupSection extends LitElement {
   }
 
   private handleModeChange(event: Event): void {
-    // Native Lit pattern: get value directly from radio-group
-    const group = event.currentTarget as
-      | (HTMLElement & { value?: string })
-      | null;
-    const nextMode = group?.value as FollowupMode;
+    // Get value from the clicked radio element for reliability
+    // vscode-radio-group may not update .value synchronously on change
+    const target = event.target as Element | null;
+    const radio = target?.closest('vscode-radio');
+    const nextMode = (radio?.getAttribute('value') ||
+      (event.currentTarget as HTMLElement & { value?: string })
+        ?.value) as FollowupMode;
     if (!nextMode) return;
 
     this.dispatchEvent(ProgressEvents.followupModeChange({ mode: nextMode }));
@@ -212,16 +208,18 @@ export class FollowupSection extends LitElement {
   }
 
   private getFormData(): FollowupFormData | null {
-    const agent = this.mode === 'merge' ? 'merge' : this.agentSelect?.value;
+    // Agent/model still from DOM (dropdownUtils), rest from reactive state
+    const agent =
+      this.mode === 'merge' ? MERGE_AGENT_NAME : this.agentSelect?.value;
     const model = this.modelSelect?.value;
     if (!agent || !model) return null;
 
     return {
       agent,
       model,
-      includeInstruction: this.includeCheckbox?.checked ?? false,
-      attachOutputs: this.attachCheckbox?.checked ?? false,
-      initialQuestion: this.questionInput?.value?.trim() ?? '',
+      includeInstruction: this.includeInstruction,
+      attachOutputs: this.attachOutputs,
+      initialQuestion: this.initialQuestion.trim(),
     };
   }
 
@@ -241,7 +239,21 @@ export class FollowupSection extends LitElement {
     );
   }
 
-  // syncRadioGroup removed - Lit's .value binding handles this automatically
+  // Form input handlers (Lit-native pattern)
+  private handleQuestionInput(event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null;
+    this.initialQuestion = target?.value ?? '';
+  }
+
+  private handleIncludeChange(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.includeInstruction = target?.checked ?? false;
+  }
+
+  private handleAttachChange(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.attachOutputs = target?.checked ?? false;
+  }
 
   private applyOptions(): void {
     if (!this.options) return;
@@ -249,22 +261,23 @@ export class FollowupSection extends LitElement {
     if (this.agentSelect) {
       const agentsHtml =
         this.mode === 'chat'
-          ? this.options.toolUseAgentsHtml
-          : this.options.workflowAgentsHtml;
+          ? (this.options.toolUseAgentsHtml ?? '')
+          : (this.options.workflowAgentsHtml ?? '');
       applyAgentOptions(
         this.agentSelect,
         withPlaceholder(agentsHtml, AGENT_PLACEHOLDER),
       );
     }
 
-    if (this.modelSelect && this.options.modelOptionsHtml) {
+    const modelHtml = this.options.modelOptionsHtml ?? '';
+    if (this.modelSelect && modelHtml) {
       const preferredModel =
         this.mode === 'merge'
           ? this.options.defaultMergeModel
           : this.streamModel || this.modelSelect.value;
       applyModelOptions(
         this.modelSelect,
-        withPlaceholder(this.options.modelOptionsHtml, MODEL_PLACEHOLDER),
+        withPlaceholder(modelHtml, MODEL_PLACEHOLDER),
         { preserveValue: preferredModel },
       );
     }

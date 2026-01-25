@@ -2,6 +2,7 @@
 import { html, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -19,29 +20,21 @@ import {
   getEffectiveRunId,
   getStreamState,
   type ProgressState,
+  type StreamFilter,
+  type StreamSort,
   type StreamState,
 } from './store';
 
+// Local imports - shared state
+import { WebviewStateManager } from '@shared/state';
+
+/** Persisted preferences for the progress view. */
+interface ProgressViewPreferences extends Record<string, unknown> {
+  streamFilter: StreamFilter;
+  streamSort: StreamSort;
+}
+
 // Local imports - shared schemas (types)
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
-
-// Local imports - progress view components
-import './components/StreamTabs';
-import './components/StreamHeader';
-import './components/RunSelector';
-import './components/InstructionPanel';
-import './components/TodoList';
-import './components/FileList';
-import './components/UsagePanel';
-import './components/FollowUpInput';
-import './components/FollowupSection';
-import './components/TaskGroupList';
-import './components/PromptOverlay';
-
-// Local imports - progress view modules
-import type { FollowUpInput } from './components/FollowUpInput';
-import type { LogList } from './components/LogList';
-import type { PromptState } from './components/PromptOverlay';
 import {
   handleDeleteAll,
   handleFileAction,
@@ -61,7 +54,7 @@ import {
   handleStreamDelete,
   handleStreamSwitch,
   handleToolbarCommand,
-  type EventHandlerContext,
+  type FrontendEventHandlerContext,
 } from './eventHandlers';
 import {
   handleAddTaskGroup,
@@ -99,11 +92,26 @@ import {
   handleUpdateUsage,
   type MessageHandlerContext,
 } from './messageHandlers';
-import {
-  buildFollowupData,
-  getFilteredStreams,
-  getRunGroups,
-} from './stateUtils';
+import { getFilteredStreams, getRunGroups } from './stateUtils';
+import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+
+// Local imports - progress view components
+import './components/StreamTabs';
+import './components/StreamHeader';
+import './components/RunSelector';
+import './components/InstructionPanel';
+import './components/TodoList';
+import './components/FileList';
+import './components/UsagePanel';
+import './components/FollowUpInput';
+import './components/FollowupSection';
+import './components/TaskGroupList';
+import './components/PromptOverlay';
+
+// Local imports - progress view modules
+import type { FollowUpInput } from './components/FollowUpInput';
+import type { LogList } from './components/LogList';
+import type { PromptState } from './components/PromptOverlay';
 
 /**
  * Updates the highlight.js theme stylesheet based on VS Code theme.
@@ -118,11 +126,26 @@ function updateHighlightTheme(theme: string): void {
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
-  @state() private appState: ProgressState = createInitialState();
+  @state() private appState: ProgressState;
   @state() private prompts: PromptState[] = [];
 
   private logListRef = createRef<LogList>();
   private followUpRef = createRef<FollowUpInput>();
+  private prefsManager = new WebviewStateManager<ProgressViewPreferences>({
+    streamFilter: 'all',
+    streamSort: 'time',
+  });
+
+  constructor() {
+    super();
+    // Restore persisted preferences
+    const prefs = this.prefsManager.getState();
+    this.appState = {
+      ...createInitialState(),
+      streamFilter: prefs.streamFilter,
+      streamSort: prefs.streamSort,
+    };
+  }
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -167,13 +190,12 @@ export class ProgressApp extends BaseWebviewApp {
                       : null}
                   ></instruction-panel>
 
-                  ${isToolUse
-                    ? html`
-                        <todo-list
-                          .todos=${streamState?.todos ?? []}
-                        ></todo-list>
-                      `
-                    : null}
+                  ${when(
+                    isToolUse,
+                    () => html`
+                      <todo-list .todos=${streamState?.todos ?? []}></todo-list>
+                    `,
+                  )}
 
                   <task-group-list ${ref(this.logListRef)}></task-group-list>
 
@@ -206,7 +228,11 @@ export class ProgressApp extends BaseWebviewApp {
                   ></follow-up-input>
 
                   <followup-section
-                    .streamData=${buildFollowupData(activeStream, streamState)}
+                    .agentCategory=${activeStream.agentCategory}
+                    .status=${streamState?.status ?? activeStream.status ?? ''}
+                    .hasOutputFiles=${Object.values(
+                      runId ? (streamState?.runFiles?.[runId] ?? {}) : {},
+                    ).flat().length > 0}
                     .options=${this.appState.followupOptions}
                     .mode=${streamState?.followupMode ?? 'chat'}
                     .streamModel=${activeStream.model ?? null}
@@ -368,8 +394,11 @@ export class ProgressApp extends BaseWebviewApp {
 
   private getActiveStreamInfo(): StreamTabInfo | null {
     if (!this.appState.activeStreamId) return null;
+    // Search in filtered streams to respect current filter
+    // This ensures we don't show content for streams hidden by filter
+    const filteredStreams = getFilteredStreams(this.appState);
     return (
-      this.appState.streams.find(
+      filteredStreams.find(
         (stream) => stream.name === this.appState.activeStreamId,
       ) ?? null
     );
@@ -402,7 +431,7 @@ export class ProgressApp extends BaseWebviewApp {
     this.appState = { ...this.appState, streamStates: nextStates };
   }
 
-  private createEventHandlerContext(): EventHandlerContext {
+  private createEventHandlerContext(): FrontendEventHandlerContext {
     return {
       getState: () => this.appState,
       setState: (updater) => {
@@ -412,6 +441,7 @@ export class ProgressApp extends BaseWebviewApp {
         this.setStreamState(streamId, updater),
       getLogListRef: () => this.logListRef.value,
       getFollowUpRef: () => this.followUpRef.value,
+      savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
   }
 
