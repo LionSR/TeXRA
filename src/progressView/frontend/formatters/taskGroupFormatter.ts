@@ -24,11 +24,7 @@ import type { TaskGroupLevelConfig } from './taskGroupLevel';
  * Formats task group headers.
  */
 export class TaskGroupHeaderFormatter {
-  /**
-   * Create a group header element
-   * @param {Object} group - Task group data
-   * @returns {HTMLElement|null} Header element or null if template creation fails
-   */
+  /** Create a group header element. */
   create(group: TaskGroup): HTMLElement | null {
     const startDate = new Date(group.startTime);
     const level = this._getGroupLevel(group);
@@ -102,12 +98,7 @@ export class TaskGroupHeaderFormatter {
     }
   }
 
-  /**
-   * Format duration in milliseconds to human-readable string.
-   * Exposed as instance method for external callers (e.g., taskManagers.js).
-   * @param {number} durationMs - Duration in milliseconds
-   * @returns {string} Formatted duration string
-   */
+  /** Format duration in milliseconds to human-readable string. Exposed as instance method for external callers. */
   _formatDuration(durationMs: number): string {
     return formatDuration(durationMs);
   }

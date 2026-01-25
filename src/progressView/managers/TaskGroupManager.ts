@@ -39,11 +39,12 @@ export class TaskGroupManager extends PersistentMapManager<
     groupId: string,
     group: TaskGroup,
   ): Promise<void> {
-    if (!this.has(stream)) {
-      this.items.set(stream, new Map());
+    let streamGroups = this.get(stream);
+    if (!streamGroups) {
+      streamGroups = new Map();
+      this.items.set(stream, streamGroups);
     }
 
-    const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
     await this.save();
   }

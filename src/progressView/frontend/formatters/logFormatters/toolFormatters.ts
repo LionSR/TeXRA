@@ -71,14 +71,6 @@ type WebSearchPayload = {
 /**
  * Build a tool section with appropriate code highlighting based on tool type and content.
  * Uses explicit language from tool config or content metadata - never auto-detects.
- *
- * @param {string} label - Section label (e.g., 'Input:', 'Output:')
- * @param {string} text - Content text to display
- * @param {object} options - Display options
- * @param {string} options.toolName - Name of the tool
- * @param {string} [options.language] - Explicit language override (from stringifyWithLanguage)
- * @param {string} [options.extraClass] - Additional CSS class for the content
- * @returns {string} HTML for the section
  */
 function buildToolSection(
   label: string,
@@ -106,26 +98,14 @@ function buildToolSection(
   return buildToolUseSection(label, content);
 }
 
-/**
- * Determine the title prefix based on tool state.
- * @param {boolean} isUserFeedback - Whether this is user feedback
- * @param {boolean} isError - Whether this is an error state
- * @returns {string} The title prefix
- */
+/** Determine the title prefix based on tool state. */
 function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   if (isUserFeedback) return 'User Feedback';
   if (isError) return 'Tool Error';
   return 'Tool Use';
 }
 
-/**
- * Create and initialize a tool-style element from template
- * @param {string} logId - Log entry ID
- * @param {string} groupId - Group ID
- * @param {string} timestamp - Timestamp
- * @param {string} iconClass - Initial icon class (e.g., 'codicon-wrench')
- * @returns {{element: HTMLElement, headerLabel: HTMLElement|null, iconElem: HTMLElement|null, contentElem: HTMLElement|null}|null}
- */
+/** Create and initialize a tool-style element from template. */
 function createToolElement(
   logId: string,
   groupId: string | undefined,
@@ -161,14 +141,7 @@ function createToolElement(
   };
 }
 
-/**
- * Format tool use log entry
- * @param {object} normalizedPayload - Normalized payload with structured data
- * @param {string} logId - Log entry ID
- * @param {string} groupId - Group ID
- * @param {string} timestamp - Timestamp
- * @returns {HTMLElement|null} Tool use element or null
- */
+/** Format tool use log entry. */
 export function formatToolUse(
   normalizedPayload: NormalizedPayload,
   logId: string,
@@ -389,14 +362,7 @@ export function formatToolUse(
   return element;
 }
 
-/**
- * Format web search results from native provider tools (Anthropic, OpenAI)
- * @param {object} normalizedPayload - Payload containing structured WebSearchResult
- * @param {string} logId - Log entry ID
- * @param {string} groupId - Group ID
- * @param {string} timestamp - Timestamp
- * @returns {HTMLElement|null} Web search element or null
- */
+/** Format web search results from native provider tools (Anthropic, OpenAI). */
 export function formatWebSearch(
   normalizedPayload: NormalizedPayload,
   logId: string,
