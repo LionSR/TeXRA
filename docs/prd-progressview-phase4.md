@@ -16,10 +16,30 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 
 | Webview         | JS Lines | Components | Complexity  | Status         |
 | --------------- | -------- | ---------- | ----------- | -------------- |
-| **MemoryView**  | ~305     | 5          | Low         | ⬜ Not Started |
-| **HistoryView** | ~610     | 4          | Medium      | ⬜ Not Started |
-| **ProfileView** | ~636     | 5          | Medium-High | ⬜ Not Started |
+| **MemoryView**  | ~305     | 4          | Low         | ✅ Complete    |
+| **HistoryView** | ~610     | 3          | Medium      | ✅ Complete    |
+| **ProfileView** | ~636     | 4          | Medium-High | ✅ Complete    |
 | **MainView**    | ~2,259   | 8+         | High        | ⬜ Not Started |
+
+### Completed Migrations (2026-01-25)
+
+**Commits:**
+- `111e289a` - feat: migrate memory history profile webviews
+- `0e1d13e0` - fix: align lit history behaviors
+
+**MemoryView** - 4 Lit components created:
+- `MemoryApp.ts` (root), `MemoryItem.ts`, `MemoryList.ts`, `MemoryToggle.ts`, `MemoryToolbar.ts`
+- All legacy `modules/` deleted (constants.js, domHandlers.js, memoryViewState.js, messageHandlers.js, uiManagers/*, script.js)
+
+**HistoryView** - 3 Lit components created:
+- `HistoryApp.ts` (root), `HistoryItem.ts`, `HistoryList.ts`, `SearchBar.ts` (with mark.js integration)
+- All legacy `modules/` deleted
+
+**ProfileView** - 4 Lit components created:
+- `ProfileApp.ts` (root), `AgentsTable.ts`, `ApiAccessSection.ts`, `ProfileInfo.ts`, `SignInPrompt.ts`
+- All legacy `modules/` deleted
+
+**Remaining:** MainView migration not yet started. See migration approach below.
 
 ---
 
@@ -47,13 +67,13 @@ Before migrating individual webviews, these shared JS utilities in `src/common/m
 
 ### Duplicate Constant Files to Delete
 
-| File                               | Lines | Delete When                       |
+| File                               | Lines | Status                            |
 | ---------------------------------- | ----- | --------------------------------- |
-| `common/webview/commands.js`       | 298   | **Immediate** - TS version exists |
-| `historyView/modules/constants.js` | 37    | HistoryView migration             |
-| `profileView/modules/constants.js` | 41    | ProfileView migration             |
-| `memoryView/modules/constants.js`  | 24    | MemoryView migration              |
-| `webview/modules/constants.js`     | 162   | MainView migration                |
+| `common/webview/commands.js`       | 298   | ⏳ **DELETE NOW** - TS version exists |
+| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete)   |
+| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete)   |
+| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete)   |
+| `webview/modules/constants.js`     | 162   | ⬜ Delete with MainView migration |
 
 ---
 
@@ -545,8 +565,14 @@ The `vscode-checkbox` web component must be defined before setting `checked` pro
 
 ### JS Files to Delete
 
-After all webviews are migrated, delete these legacy files:
+**Already deleted (2026-01-25):**
+```
+src/memoryView/modules/     ✅ All deleted
+src/historyView/modules/    ✅ All deleted
+src/profileView/modules/    ✅ All deleted
+```
 
+**Remaining after MainView migration:**
 ```
 src/common/modules/
 ├── htmlEncoding.js
@@ -562,9 +588,11 @@ src/common/modules/
 ├── textareaUtils.js
 └── RecordingButtonManager.js
 
-src/common/webview/commands.js
+src/common/webview/commands.js  ← DELETE NOW (TS version exists)
 
-src/{viewName}/modules/ (all directories)
+src/webview/modules/ (MainView - last remaining)
 ```
 
-**Total estimated cleanup:** ~612 duplicate constant lines + ~1,872 shared utility lines + ~3,810 view-specific JS lines
+**Cleanup summary:**
+- Deleted: ~1,551 lines (memoryView + historyView + profileView modules)
+- Remaining: ~612 duplicate constant lines + ~1,872 shared utility lines + ~2,259 MainView JS lines

@@ -49,7 +49,7 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 | **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
 | **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
-| **Phase 4** | Migrate other webviews (History/Profile/etc) | ⬜ Not Started | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | 🟡 In Progress | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
 
 ### Phase 3 Status Detail
 
@@ -58,8 +58,8 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 | 3a        | JS → TS shared utilities   | ✅ Complete                    |
 | 3b-1      | UI parity/stabilization    | ✅ Complete                    |
 | 3b-1.5/6  | CSS Shadow DOM migration   | ✅ Complete (11/13 components) |
-| 3b-2      | Utility conversion         | ⬜ Not Started                 |
-| 3b-3      | Formatter → TemplateResult | ⬜ Not Started                 |
+| 3b-2      | Utility conversion         | 🟡 In Progress (1 JS left)     |
+| 3b-3      | Formatter → TemplateResult | 🔶 Bridge pattern in use       |
 
 ---
 
