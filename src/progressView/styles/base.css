@@ -10,6 +10,13 @@ body {
   background-color: var(--background-color);
 }
 
+progress-app {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
 .main-container {
   display: flex;
   flex: 1;

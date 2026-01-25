@@ -8,12 +8,11 @@ import {
 import { insertChronologically } from '../utils';
 
 // Local imports - common helpers
-import { safeGetElementById } from '@common/modules/domUtils.js';
 import { createFromTemplate } from '@common/modules/templateUtils.js';
 import { ToggleStateStore } from '@common/modules/ToggleStateStore.js';
 
 export class TaskGroupDomManager {
-  constructor(toggleStates) {
+  constructor(toggleStates, root) {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
@@ -23,6 +22,7 @@ export class TaskGroupDomManager {
     this.currentGroupId = null;
     this.activeAgentCategory = 'workflow';
     this.toggleStates = toggleStates ?? new ToggleStateStore();
+    this.root = root ?? document;
   }
 
   setActiveAgentCategory(category) {
@@ -161,9 +161,7 @@ export class TaskGroupDomManager {
     if (endTime != null) group.endTime = endTime;
     this.taskGroups.set(id, group);
 
-    const header = document.getElementById(
-      `${GROUP_DOM_IDS.HEADER_PREFIX}${id}`,
-    );
+    const header = this._getById(`${GROUP_DOM_IDS.HEADER_PREFIX}${id}`);
     if (!header) return;
 
     const statusIconElem = header.querySelector('.group-status-icon');
@@ -273,7 +271,7 @@ export class TaskGroupDomManager {
 
   getGroupContainer(groupId) {
     const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${groupId}`;
-    return safeGetElementById(groupContentId);
+    return this._getById(groupContentId);
   }
 
   _createGroupElement(group) {
@@ -331,10 +329,19 @@ export class TaskGroupDomManager {
 
   _resolveGroupContent(parentGroupId) {
     if (!parentGroupId) {
-      return safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
+      return this._getById(ELEMENT_IDS.LOG_CONTENT);
     }
     const parentDetails = this.groupElements.get(parentGroupId);
     return parentDetails?.querySelector('.log-group-content') ?? null;
+  }
+
+  _getById(id) {
+    if (this.root && this.root !== document) {
+      if (this.root instanceof Element) {
+        return this.root.querySelector(`#${CSS.escape(id)}`);
+      }
+    }
+    return document.getElementById(id);
   }
 
   _removeToggleListener(groupId) {
@@ -356,15 +363,16 @@ export class TaskGroupDomManager {
 }
 
 export class LogEntryManager {
-  constructor() {
+  constructor(root) {
     this.entryFormatter = getSharedLogEntryFormatter();
     this.logElements = new Map();
+    this.root = root ?? document;
   }
 
   append(logMessage, options = {}) {
     if (logMessage.groupId) {
       const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${logMessage.groupId}`;
-      const groupContent = safeGetElementById(groupContentId);
+      const groupContent = this._getById(groupContentId);
       if (groupContent) {
         const logLineElement = this.entryFormatter.format(logMessage, options);
         if (!logLineElement) {
@@ -391,7 +399,10 @@ export class LogEntryManager {
   update(logMessage) {
     let existing = this.logElements.get(logMessage.id);
     if (!existing) {
-      existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
+      existing =
+        this.root instanceof Element
+          ? this.root.querySelector(`[data-log-id="${logMessage.id}"]`)
+          : document.querySelector(`[data-log-id="${logMessage.id}"]`);
       if (existing) {
         this.logElements.set(logMessage.id, existing);
       }
@@ -417,5 +428,14 @@ export class LogEntryManager {
 
   clear() {
     this.logElements.clear();
+  }
+
+  _getById(id) {
+    if (this.root && this.root !== document) {
+      if (this.root instanceof Element) {
+        return this.root.querySelector(`#${CSS.escape(id)}`);
+      }
+    }
+    return document.getElementById(id);
   }
 }

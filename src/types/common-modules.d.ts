@@ -82,6 +82,7 @@ declare module '@common/modules/RecordingButtonManager.js' {
       vscode: { postMessage(message: unknown): void },
       config: {
         buttonId: string;
+        root?: HTMLElement;
         startCommand: string;
         stopCommand: string;
         startTitle?: string;
