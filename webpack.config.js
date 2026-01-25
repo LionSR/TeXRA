@@ -113,6 +113,10 @@ const progressViewConfig = {
           },
         ],
       },
+      {
+        test: /\.css$/,
+        use: [path.resolve(__dirname, 'scripts/inlineCssLoader.js')],
+      },
     ],
   },
   devtool: 'nosources-source-map',

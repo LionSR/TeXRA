@@ -226,6 +226,15 @@ export abstract class BaseViewContentProvider {
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
         this.getNodeModulesUri,
       ),
+      tokensStyleUri: webview.asWebviewUri(
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'shared',
+          'styles',
+          'tokens.css',
+        ),
+      ),
     };
   }
 }
