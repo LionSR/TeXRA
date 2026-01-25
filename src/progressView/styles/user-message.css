@@ -5,7 +5,7 @@
 .user-message-container {
   display: flex;
   justify-content: flex-end;
-  margin: var(--spacing-small) 0;
+  margin: var(--spacing-tiny) 0;
   padding-right: var(--spacing-tiny);
 }
 
