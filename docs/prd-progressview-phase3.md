@@ -329,51 +329,51 @@ ProgressView currently has Lit components that bypass reactive rendering. These 
 
 These components use pure Lit templates with no `innerHTML` or formatter HTMLElement dependencies:
 
-| Component | CSS File | Can Migrate | Blocker |
-|-----------|----------|-------------|---------|
-| `PromptOverlay.ts` | (inline) | ✅ Already done | - |
-| `TodoList.ts` | `todo-list.css` | ✅ Yes | None |
-| `FileList.ts` | `file-list.css` | ✅ Yes | None |
-| `StreamTabs.ts` | `tabs.css` | ✅ Yes | None |
-| `QueuedFollowUps.ts` | `queued-follow-ups.css` | ✅ Yes | None |
-| `FollowupSection.ts` | `followup-section.css` | ✅ Yes | None |
-| `InstructionPanel.ts` | `instruction-panel.css` | ✅ Yes | None |
-| `FollowUpInput.ts` | `follow-up-input.css` | ✅ Yes | None |
-| `UsagePanel.ts` | (minimal) | ✅ Yes | None |
-| `RunSelector.ts` | (minimal) | ✅ Yes | None |
-| `StreamHeader.ts` | (in tabs.css) | ✅ Yes | None |
+| Component             | CSS File                | Can Migrate     | Blocker |
+| --------------------- | ----------------------- | --------------- | ------- |
+| `PromptOverlay.ts`    | (inline)                | ✅ Already done | -       |
+| `TodoList.ts`         | `todo-list.css`         | ✅ Yes          | None    |
+| `FileList.ts`         | `file-list.css`         | ✅ Yes          | None    |
+| `StreamTabs.ts`       | `tabs.css`              | ✅ Yes          | None    |
+| `QueuedFollowUps.ts`  | `queued-follow-ups.css` | ✅ Yes          | None    |
+| `FollowupSection.ts`  | `followup-section.css`  | ✅ Yes          | None    |
+| `InstructionPanel.ts` | `instruction-panel.css` | ✅ Yes          | None    |
+| `FollowUpInput.ts`    | `follow-up-input.css`   | ✅ Yes          | None    |
+| `UsagePanel.ts`       | (minimal)               | ✅ Yes          | None    |
+| `RunSelector.ts`      | (minimal)               | ✅ Yes          | None    |
+| `StreamHeader.ts`     | (in tabs.css)           | ✅ Yes          | None    |
 
 #### Components That Must Wait (Phase 3b-3)
 
-| Component | Blocker |
-|-----------|---------|
-| `LogList.ts` | Uses `innerHTML`, formatters return HTMLElement |
-| `TaskGroupList.ts` | Depends on `TaskGroupDomManager` manual DOM |
+| Component          | Blocker                                         |
+| ------------------ | ----------------------------------------------- |
+| `LogList.ts`       | Uses `innerHTML`, formatters return HTMLElement |
+| `TaskGroupList.ts` | Depends on `TaskGroupDomManager` manual DOM     |
 
 #### CSS Files That Must Remain Global
 
 These files style dynamically generated HTML from formatters or are shared across contexts:
 
-| CSS File | Reason |
-|----------|--------|
-| `base.css` | Page-level layout (body, progress-app, main-container) |
-| `utilities.css` | Shared utility classes |
-| `buttons.css` | Shared button styles across components |
-| `markdown.css` | Styles dynamic markdown content from formatters |
-| `code-block.css` | Styles dynamic code blocks from htmlBuilders.js |
-| `scratchpad.css` | Styles tool-use banners from formatters |
-| `approval-requests.css` | Styles dynamic approval UI |
-| `retry-requests.css` | Styles dynamic retry UI |
-| `workflow-proposals.css` | Styles dynamic proposal UI |
-| `requests-shared.css` | Base styles for all request types |
-| `groups.css` | Shared log group styling |
-| `logs.css` | Mixed: some rules for LogList, some global |
-| `context-management.css` | Styles formatter output |
-| `statistics.css` | Styles formatter output |
-| `latexdiff.css` | Styles formatter output |
-| `native-status.css` | Styles dynamic status lines |
-| `user-message.css` | Styles user message rendering |
-| `placeholder.css` | Shared placeholder styling |
+| CSS File                 | Reason                                                 |
+| ------------------------ | ------------------------------------------------------ |
+| `base.css`               | Page-level layout (body, progress-app, main-container) |
+| `utilities.css`          | Shared utility classes                                 |
+| `buttons.css`            | Shared button styles across components                 |
+| `markdown.css`           | Styles dynamic markdown content from formatters        |
+| `code-block.css`         | Styles dynamic code blocks from htmlBuilders.js        |
+| `scratchpad.css`         | Styles tool-use banners from formatters                |
+| `approval-requests.css`  | Styles dynamic approval UI                             |
+| `retry-requests.css`     | Styles dynamic retry UI                                |
+| `workflow-proposals.css` | Styles dynamic proposal UI                             |
+| `requests-shared.css`    | Base styles for all request types                      |
+| `groups.css`             | Shared log group styling                               |
+| `logs.css`               | Mixed: some rules for LogList, some global             |
+| `context-management.css` | Styles formatter output                                |
+| `statistics.css`         | Styles formatter output                                |
+| `latexdiff.css`          | Styles formatter output                                |
+| `native-status.css`      | Styles dynamic status lines                            |
+| `user-message.css`       | Styles user message rendering                          |
+| `placeholder.css`        | Shared placeholder styling                             |
 
 #### Migration Pattern
 
@@ -382,7 +382,7 @@ These files style dynamically generated HTML from formatters or are shared acros
 @customElement('todo-list')
 export class TodoList extends LitElement {
   protected createRenderRoot(): HTMLElement {
-    return this;  // Light DOM
+    return this; // Light DOM
   }
 }
 
@@ -398,7 +398,7 @@ export class TodoList extends LitElement {
     css`
       /* Paste todo-list.css content here */
       .todo-collapsible { ... }
-    `
+    `,
   ];
   // No createRenderRoot override = Shadow DOM (Lit default)
 }
@@ -407,17 +407,20 @@ export class TodoList extends LitElement {
 #### Phased CSS Migration
 
 **Phase 3b-1.5: Pilot Migration (1 component)**
+
 - Migrate `TodoList.ts` to Shadow DOM + native CSS
 - Verify VS Code elements (`vscode-collapsible`) work in Shadow DOM
 - Verify design tokens inherit correctly
 - If successful, proceed to batch migration
 
 **Phase 3b-1.6: Batch Migration (9 components)**
+
 - Migrate remaining components: FileList, StreamTabs, QueuedFollowUps, FollowupSection, InstructionPanel, FollowUpInput, UsagePanel, RunSelector, StreamHeader
 - Delete migrated CSS files from `styles/` directory
 - Update `index.css` to remove deleted imports
 
 **Phase 3b-3: LogList Migration (after formatters converted)**
+
 - Convert formatters to return `TemplateResult`
 - Migrate LogList to Shadow DOM
 - Migrate remaining shared CSS or keep global
@@ -541,25 +544,25 @@ export function formatBannerContent(
 
 **Phase 3b-1.5: CSS Pilot Migration**
 
-| Item                                          | Status         |
-| --------------------------------------------- | -------------- |
-| Migrate `TodoList.ts` to Shadow DOM           | ⬜ Not Started |
-| Verify VS Code elements work in Shadow DOM    | ⬜ Not Started |
-| Verify design tokens inherit correctly        | ⬜ Not Started |
-| Delete `todo-list.css` after migration        | ⬜ Not Started |
+| Item                                       | Status         |
+| ------------------------------------------ | -------------- |
+| Migrate `TodoList.ts` to Shadow DOM        | ⬜ Not Started |
+| Verify VS Code elements work in Shadow DOM | ⬜ Not Started |
+| Verify design tokens inherit correctly     | ⬜ Not Started |
+| Delete `todo-list.css` after migration     | ⬜ Not Started |
 
 **Phase 3b-1.6: CSS Batch Migration (after pilot succeeds)**
 
-| Item                                          | Status         |
-| --------------------------------------------- | -------------- |
-| Migrate `FileList.ts` + delete `file-list.css`           | ⬜ Not Started |
-| Migrate `StreamTabs.ts` + delete `tabs.css`              | ⬜ Not Started |
-| Migrate `QueuedFollowUps.ts` + delete `queued-follow-ups.css` | ⬜ Not Started |
-| Migrate `FollowupSection.ts` + delete `followup-section.css` | ⬜ Not Started |
+| Item                                                           | Status         |
+| -------------------------------------------------------------- | -------------- |
+| Migrate `FileList.ts` + delete `file-list.css`                 | ⬜ Not Started |
+| Migrate `StreamTabs.ts` + delete `tabs.css`                    | ⬜ Not Started |
+| Migrate `QueuedFollowUps.ts` + delete `queued-follow-ups.css`  | ⬜ Not Started |
+| Migrate `FollowupSection.ts` + delete `followup-section.css`   | ⬜ Not Started |
 | Migrate `InstructionPanel.ts` + delete `instruction-panel.css` | ⬜ Not Started |
-| Migrate `FollowUpInput.ts` + delete `follow-up-input.css` | ⬜ Not Started |
-| Migrate `UsagePanel.ts`, `RunSelector.ts`, `StreamHeader.ts` | ⬜ Not Started |
-| Update `index.css` to remove deleted imports  | ⬜ Not Started |
+| Migrate `FollowUpInput.ts` + delete `follow-up-input.css`      | ⬜ Not Started |
+| Migrate `UsagePanel.ts`, `RunSelector.ts`, `StreamHeader.ts`   | ⬜ Not Started |
+| Update `index.css` to remove deleted imports                   | ⬜ Not Started |
 
 **Phase 3b-2: Utility Conversion (after 3a)**
 
@@ -571,17 +574,17 @@ export function formatBannerContent(
 
 **Phase 3b-3: Formatter Conversion (after 3c)**
 
-| Item                                    | Status         |
-| --------------------------------------- | -------------- |
-| Banner formatters → TemplateResult      | ⬜ Not Started |
-| Tool formatters → TemplateResult        | ⬜ Not Started |
-| Message formatters → TemplateResult     | ⬜ Not Started |
-| Data formatters → TemplateResult        | ⬜ Not Started |
-| `LogList` uses Lit rendering            | ⬜ Not Started |
-| `TaskGroupDomManager` integrated to Lit | ⬜ Not Started |
-| Delete `templates.ts`                   | ⬜ Not Started |
-| Delete string-based `htmlBuilders.ts`   | ⬜ Not Started |
-| Migrate `LogList.ts` to Shadow DOM      | ⬜ Not Started |
+| Item                                                   | Status         |
+| ------------------------------------------------------ | -------------- |
+| Banner formatters → TemplateResult                     | ⬜ Not Started |
+| Tool formatters → TemplateResult                       | ⬜ Not Started |
+| Message formatters → TemplateResult                    | ⬜ Not Started |
+| Data formatters → TemplateResult                       | ⬜ Not Started |
+| `LogList` uses Lit rendering                           | ⬜ Not Started |
+| `TaskGroupDomManager` integrated to Lit                | ⬜ Not Started |
+| Delete `templates.ts`                                  | ⬜ Not Started |
+| Delete string-based `htmlBuilders.ts`                  | ⬜ Not Started |
+| Migrate `LogList.ts` to Shadow DOM                     | ⬜ Not Started |
 | Consolidate remaining CSS (logs.css, groups.css, etc.) | ⬜ Not Started |
 
 ---
@@ -1020,12 +1023,12 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 **3b-1.5/1.6: CSS Migration to Native Lit**
 
-| Metric                                  | Before | After |
-| --------------------------------------- | ------ | ----- |
-| Components using Shadow DOM             | 1      | 11    |
-| External CSS files                      | 26     | 18    |
-| CSS files deleted (component-specific)  | 0      | 8     |
-| Components with `static styles`         | 1      | 11    |
+| Metric                                 | Before | After |
+| -------------------------------------- | ------ | ----- |
+| Components using Shadow DOM            | 1      | 11    |
+| External CSS files                     | 26     | 18    |
+| CSS files deleted (component-specific) | 0      | 8     |
+| Components with `static styles`        | 1      | 11    |
 
 **3b-2: Utility Conversion**
 
