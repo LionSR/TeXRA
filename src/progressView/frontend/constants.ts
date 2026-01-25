@@ -75,20 +75,7 @@ export const GROUP_DOM_IDS = Object.freeze({
   CONTENT_PREFIX: 'group-content-',
 });
 
-export const MAX_HEIGHT = 400;
-
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
-
-export const AGENT_PROPOSAL_ACTIONS = Object.freeze([
-  'approve',
-  'reject',
-  'setup',
-]);
-
-export const AGENT_PROPOSAL_CATEGORIES = Object.freeze({
-  WORKFLOW: 'workflow',
-  TOOL_USE: 'toolUse',
-});
 
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,
@@ -164,8 +151,20 @@ const WORKFLOW_TOOLBAR = [
   },
 ];
 
+const YOLO_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
+  icon: 'shield',
+  iconActive: 'flame',
+  command: COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+  title: 'Enable YOLO mode (skip approval prompts)',
+  titleActive: 'YOLO mode active - click to disable (resume approval prompts)',
+  className: 'yolo-toggle-button',
+  isToggle: true,
+});
+
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
+  YOLO_TOGGLE_BUTTON,
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
