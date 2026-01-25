@@ -19,6 +19,32 @@
 - **Regression fixes**: Duplicate content on tab click, leftover content on filter switch, placeholder display
 - **Message handler edge cases**: Pending log updates Map, auto-expand thinking/scratchpad, stream-scoped prompt filtering
 
+### Directory Architecture: `common/` vs `shared/`
+
+During the migration, two utility directories coexist:
+
+| Directory             | Context               | Language   | Used By               | Purpose                                                         |
+| --------------------- | --------------------- | ---------- | --------------------- | --------------------------------------------------------------- |
+| `src/common/modules/` | Webview (browser)     | JavaScript | Legacy JS webviews    | Original utilities (`domUtils.js`, `ToggleStateStore.js`, etc.) |
+| `src/common/webview/` | Extension host (Node) | TypeScript | All webview providers | Backend base classes, commands                                  |
+| `src/shared/utils/`   | Both                  | TypeScript | Lit webviews          | Modern TS versions of browser utilities                         |
+| `src/shared/state/`   | Both                  | TypeScript | Lit webviews          | State management classes                                        |
+| `src/shared/schemas/` | Both                  | TypeScript | All code              | Zod schemas, shared types                                       |
+
+**Why duplication exists:**
+
+- `shared/utils/dom.ts` duplicates `common/modules/domUtils.js`
+- `shared/state/ToggleStateStore.ts` duplicates `common/modules/ToggleStateStore.js`
+
+This is intentional during migration. ProgressView imports from `@shared/`, while HistoryView/MemoryView/ProfileView/MainView still import from `@common/modules/*.js`.
+
+**Cleanup plan:**
+
+- Phase 3c: When each legacy webview migrates to Lit, switch its imports to `@shared/`
+- After all webviews migrated: Delete `common/modules/*.js` files
+
+**Rule:** New webview code should only import from `@shared/`, never from `@common/modules/`.
+
 ### Patterns Established
 
 1. **State ownership**: Components own their form state; parents receive via events
@@ -28,6 +54,7 @@
 5. **Always clear before render**: Full re-renders must clear container first to prevent duplicates
 6. **Stream switch = clear**: Changing active stream or filtering to empty category must clear log content
 7. **Pending updates for race conditions**: Handle UPDATE_LOG arriving before APPEND_LOG via Map storage
+8. **VS Code radio groups**: Use `.value` binding on `vscode-radio-group`, not `.checked` on individual radios; read `group.value` in change handler
 
 ### Technical Debt Remaining
 
@@ -118,21 +145,21 @@ Phase 3a enables type-safe imports; Phase 3c rewrites UI.
 
 **Utilities migrated to `src/shared/utils/`:**
 
-| JS Original          | TS Replacement              | Status  |
-| -------------------- | --------------------------- | ------- |
-| `htmlEncoding.js`    | `@shared/utils/html.ts`     | ✅ Done |
-| `iconConstants.js`   | `@shared/utils/icons.ts`    | ✅ Done |
-| `pathUtils.js`       | `@shared/utils/path.ts`     | ✅ Done |
-| `stringUtils.js`     | `@shared/utils/string.ts`   | ✅ Done |
-| `clipboardUtils.js`  | `@shared/utils/clipboard.ts`| ✅ Done |
-| `domUtils.js` (partial) | `@shared/utils/dom.ts`   | ✅ Done |
+| JS Original             | TS Replacement               | Status  |
+| ----------------------- | ---------------------------- | ------- |
+| `htmlEncoding.js`       | `@shared/utils/html.ts`      | ✅ Done |
+| `iconConstants.js`      | `@shared/utils/icons.ts`     | ✅ Done |
+| `pathUtils.js`          | `@shared/utils/path.ts`      | ✅ Done |
+| `stringUtils.js`        | `@shared/utils/string.ts`    | ✅ Done |
+| `clipboardUtils.js`     | `@shared/utils/clipboard.ts` | ✅ Done |
+| `domUtils.js` (partial) | `@shared/utils/dom.ts`       | ✅ Done |
 
 **State managers migrated to `src/shared/state/`:**
 
-| JS Original          | TS Replacement                       | Status  |
-| -------------------- | ------------------------------------ | ------- |
-| `ToggleStateStore.js`| `@shared/state/ToggleStateStore.ts`  | ✅ Done |
-| `webviewState.js`    | `@shared/state/WebviewStateManager.ts`| ✅ Done |
+| JS Original           | TS Replacement                         | Status  |
+| --------------------- | -------------------------------------- | ------- |
+| `ToggleStateStore.js` | `@shared/state/ToggleStateStore.ts`    | ✅ Done |
+| `webviewState.js`     | `@shared/state/WebviewStateManager.ts` | ✅ Done |
 
 **Migration stats:** JS imports reduced from 18 → 10 (44% reduction)
 
@@ -140,39 +167,44 @@ Phase 3a enables type-safe imports; Phase 3c rewrites UI.
 
 **Key Finding**: All remaining JS utilities are **only imported by ProgressView**. They cannot be simply converted to TypeScript - they require Lit pattern replacement.
 
-| JS File                     | Usages | Resolution                                                |
-| --------------------------- | ------ | --------------------------------------------------------- |
-| `templateUtils.js`          | 7      | Replace `createFromTemplate()` with Lit `html` (Phase 3b-3) |
+| JS File                     | Usages | Resolution                                                       |
+| --------------------------- | ------ | ---------------------------------------------------------------- |
+| `templateUtils.js`          | 7      | Replace `createFromTemplate()` with Lit `html` (Phase 3b-3)      |
 | `dropdownUtils.js`          | 1      | Keep as local util; refactor when FollowupSection uses Lit fully |
-| `textareaUtils.js`          | 1      | Keep as local util; VS Code textarea upgrade helper |
-| `RecordingButtonManager.js` | 1      | Convert to Lit reactive controller (Phase 3b-2) |
+| `textareaUtils.js`          | 1      | Keep as local util; VS Code textarea upgrade helper              |
+| `RecordingButtonManager.js` | 1      | Convert to Lit reactive controller (Phase 3b-2)                  |
 
 ### Review Checklist (Verify Nothing Missed)
 
 Before considering Phase 3a complete, verify:
 
-- [ ] **No JS imports in Lit components** (except the 4 deferred above)
-- [ ] **All shared utilities have proper types** (no `any`, proper function signatures)
-- [ ] **Index files updated** (`src/shared/utils/index.ts`, `src/shared/state/index.ts`)
-- [ ] **Build compiles without errors** (`npm run compile`)
-- [ ] **Original JS files can be deleted** (after all consumers migrated)
+- [x] **No JS imports in Lit components** (except the 4 deferred above) ✅ Verified 2026-01-25
+- [x] **All shared utilities have proper types** (no `any`, proper function signatures) ✅ Verified 2026-01-25
+- [x] **Index files updated** (`src/shared/utils/index.ts`, `src/shared/state/index.ts`) ✅ Verified 2026-01-25
+- [x] **Build compiles without errors** (`npm run compile`) ✅ Verified 2026-01-25
+- [ ] **Original JS files deleted** (Phase 3c - after other webviews migrate)
 
-**Files to eventually delete from `src/common/modules/`:**
+**Status of JS files in `src/common/modules/`:**
 
 ```
-htmlEncoding.js      # ✅ Can delete - fully migrated
-iconConstants.js     # ✅ Can delete - fully migrated
-pathUtils.js         # ✅ Can delete - fully migrated
-stringUtils.js       # ✅ Can delete - fully migrated
-clipboardUtils.js    # ✅ Can delete - fully migrated
-ToggleStateStore.js  # ✅ Can delete - fully migrated
-webviewState.js      # ✅ Can delete - fully migrated
-domUtils.js          # ⏳ Keep - still has unused functions that other views may need
-templateUtils.js     # ⏳ Keep - used by formatters until Phase 3b-3
-dropdownUtils.js     # ⏳ Keep - used by FollowupSection
-textareaUtils.js     # ⏳ Keep - used by FollowUpInput
-RecordingButtonManager.js  # ⏳ Keep - used by FollowUpInput
+# ProgressView migrated to TS versions in src/shared/
+# BUT original JS files still needed by other webviews until Phase 3c
+
+htmlEncoding.js      # ⏳ Delete in Phase 3c - used by HistoryView, MemoryView, ProfileView
+iconConstants.js     # ⏳ Delete in Phase 3c - used by HistoryView, MainView, domUtils.js
+pathUtils.js         # ⏳ Delete in Phase 3c - has test file, referenced in BaseViewContentProvider
+stringUtils.js       # ⏳ Delete in Phase 3c - used by MemoryView, MainView
+clipboardUtils.js    # ⏳ Delete in Phase 3c - referenced in BaseViewContentProvider
+ToggleStateStore.js  # ⏳ Delete in Phase 3c - used by HistoryView
+webviewState.js      # ⏳ Delete in Phase 3c - used by HistoryView, MemoryView, ProfileView, MainView
+domUtils.js          # ⏳ Delete in Phase 3c - used by other views
+templateUtils.js     # ⏳ Delete in Phase 3b-3 - used by ProgressView formatters only
+dropdownUtils.js     # ⏳ Delete in Phase 3c - used by FollowupSection, MainView
+textareaUtils.js     # ⏳ Delete in Phase 3b-2 - used by FollowUpInput only
+RecordingButtonManager.js  # ⏳ Delete in Phase 3b-2 - used by FollowUpInput only
 ```
+
+**Key insight:** Phase 3a created **parallel TypeScript implementations** in `src/shared/`. The original JS files in `src/common/modules/` remain for legacy webviews. ProgressView now imports from `@shared/utils/*` and `@shared/state/*`; other webviews still import from `@common/modules/*.js`.
 
 ### Migration Strategy
 
@@ -254,14 +286,14 @@ View-specific JS modules will be **replaced** (not migrated) by Lit components:
 
 ### Known Issue Categories
 
-| Category            | Examples                             | Approach                             |
-| ------------------- | ------------------------------------ | ------------------------------------ |
-| Layout/Sizing       | Scrollbar, overflow, flex layout     | CSS fixes for custom elements        |
-| State Transitions   | Stream switching, filter changes     | Clear-before-render patterns         |
-| Data Ordering       | Updates arriving before creates      | Pending updates Map                  |
-| Component Lifecycle | Event listeners not cleaned up       | `disconnectedCallback()` cleanup     |
-| vscode-elements     | Radio buttons, dropdowns not syncing | Attribute + property sync            |
-| Visual Regressions  | Colors, spacing, icons different     | CSS specificity, class name matching |
+| Category            | Examples                             | Approach                                             |
+| ------------------- | ------------------------------------ | ---------------------------------------------------- |
+| Layout/Sizing       | Scrollbar, overflow, flex layout     | CSS fixes for custom elements                        |
+| State Transitions   | Stream switching, filter changes     | Clear-before-render patterns                         |
+| Data Ordering       | Updates arriving before creates      | Pending updates Map                                  |
+| Component Lifecycle | Event listeners not cleaned up       | `disconnectedCallback()` cleanup                     |
+| vscode-elements     | Radio buttons, dropdowns not syncing | Use `.value` binding on group, not individual radios |
+| Visual Regressions  | Colors, spacing, icons different     | CSS specificity, class name matching                 |
 
 ### Mixed State Patterns to Convert
 
@@ -816,14 +848,15 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 ### Phase 3a (JS → TS Migration)
 
-| Metric                            | Before | Current | Target |
-| --------------------------------- | ------ | ------- | ------ |
-| TS files in `src/shared/utils/`   | 0      | 5       | 8+     |
-| JS imports in ProgressView        | 12     | 8       | 0      |
-| Pure-function utils migrated      | 0      | 4       | 4      |
-| ProgressView-only utils remaining | -      | 8       | 0\*    |
+| Metric                          | Before | Current | Target |
+| ------------------------------- | ------ | ------- | ------ |
+| TS files in `src/shared/utils/` | 0      | 6       | 6 ✅   |
+| TS files in `src/shared/state/` | 0      | 2       | 2 ✅   |
+| JS imports in ProgressView      | 18     | 10      | 4\*    |
+| Pure-function utils migrated    | 0      | 6       | 6 ✅   |
+| State managers migrated         | 0      | 2       | 2 ✅   |
 
-\*ProgressView-only utilities will be migrated to Lit patterns or local TS in Phase 3b.
+\*The 10 remaining JS imports are from 4 deferred utilities that require Lit pattern replacement in Phase 3b.
 
 ### Phase 3b (ProgressView Stabilization & Native Conversion)
 
