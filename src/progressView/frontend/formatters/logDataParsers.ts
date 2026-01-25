@@ -14,10 +14,8 @@ import yaml from 'yaml';
 import { ToolUseLogSchema } from '@shared/schemas';
 import type { NormalizedToolUse } from '@shared/schemas';
 
-/** Check if value is a non-array object. */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
+// Local imports - shared utilities
+import { isPlainObject } from '@shared/utils/string';
 
 /** Return trimmed string if non-empty, null otherwise. */
 function trimmedOrNull(value: unknown): string | null {

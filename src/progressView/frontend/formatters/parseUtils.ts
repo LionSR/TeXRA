@@ -10,6 +10,9 @@
 // Third-party imports
 import yaml from 'yaml';
 
+// Local imports - shared utilities
+import { isPlainObject } from '@shared/utils/string';
+
 /**
  * Result of stringifying a value with language metadata.
  */
@@ -17,11 +20,6 @@ export type StringifyResult = {
   text: string;
   language: 'yaml' | 'json' | 'plaintext';
 };
-
-/** Check if value is a non-array object. */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 /**
  * Convert a value to a display-friendly string with language metadata.
