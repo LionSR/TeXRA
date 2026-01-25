@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { html, ifDefined, unsafeHTML, renderToElement } from '../litTemplates';
 
 // Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
 import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
@@ -169,8 +170,8 @@ const buildLatexdiffEntryHtml = (entry: DiffResultDisplay): string => {
   } = entry;
 
   const icon = getLatexdiffStatusIcon(status);
-  const titleAttr = message ? ` title="${message}"` : '';
-  const runAttr = runId ? ` data-run-id="${runId}"` : '';
+  const titleAttr = message ? ` title="${encodeHtml(message)}"` : '';
+  const runAttr = runId ? ` data-run-id="${encodeHtml(runId)}"` : '';
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
   const baseLabel =
@@ -233,8 +234,16 @@ export function formatLatexdiff(
 // Statistics Formatter
 // =============================================================================
 
-// Statistics field configuration: [key, icon, label, formatter]
-const STAT_FIELDS: [string, string, string, (value: number) => string][] = [
+/** Configuration for a statistics field: [key, icon, label, formatter]. */
+type StatFieldConfig = readonly [
+  key: string,
+  icon: string,
+  label: string,
+  formatter: (value: number) => string,
+];
+
+// Statistics field configuration
+const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
   ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
   ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
@@ -263,14 +272,14 @@ export function formatStatistics(
 ): HTMLElement | null {
   if (!data || typeof data !== 'object') return null;
 
-  const typedData = data as Record<string, number>;
-  const items = STAT_FIELDS.filter(([key]) => typedData[key] !== undefined).map(
-    ([key, icon, label, formatter]) => ({
-      icon,
-      label,
-      value: formatter(typedData[key]),
-    }),
-  );
+  const record = data as Record<string, unknown>;
+  const items = STAT_FIELDS.filter(
+    ([key]) => typeof record[key] === 'number',
+  ).map(([key, icon, label, formatter]) => ({
+    icon,
+    label,
+    value: formatter(record[key] as number),
+  }));
 
   return renderToElement(html`
     <details class="banner-details statistics-details">

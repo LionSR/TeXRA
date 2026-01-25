@@ -12,6 +12,24 @@ import { ProgressEvents } from '../events';
 // Local imports - shared schemas
 import type { OutputFileInfo } from '@shared/schemas';
 
+/** Parsed path components for display */
+interface ParsedPath {
+  dir: string;
+  basename: string;
+  normalized: string;
+}
+
+/** Parse a path into directory and basename components */
+function parsePath(path: string): ParsedPath {
+  const normalized = path.replaceAll('\\', '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return {
+    dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
+    basename: lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized,
+    normalized,
+  };
+}
+
 @customElement('file-list')
 export class FileList extends LitElement {
   @property({ type: Object }) filesByRound: Record<string, OutputFileInfo[]> =
@@ -22,20 +40,24 @@ export class FileList extends LitElement {
     return this;
   }
 
-  render(): TemplateResult {
+  render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();
-    const hasFiles = rounds.length > 0;
+    if (rounds.length === 0) {
+      return nothing;
+    }
 
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
         class="files-collapsible progress-collapsible"
         title="Generated Files"
-        ?open=${hasFiles}
-        ?hidden=${!hasFiles}
-        aria-hidden=${hasFiles ? 'false' : 'true'}
+        open
       >
-        <div id=${ELEMENT_IDS.GENERATED_FILES} class="files-container">
+        <div
+          id=${ELEMENT_IDS.GENERATED_FILES}
+          class="files-container"
+          @click=${this.handleFileClick}
+        >
           ${repeat(
             rounds,
             ([round]) => round,
@@ -70,16 +92,11 @@ export class FileList extends LitElement {
     if (!file?.location) return nothing;
 
     const location = file.location;
-    const relativePath = this.getDisplayPath(location);
-    const originalRelativePath = file.lineage?.original
-      ? this.getDisplayPath(file.lineage.original)
-      : undefined;
-    const displayPath = originalRelativePath ?? relativePath;
-    const normalizedPath = displayPath.replaceAll('\\', '/');
-    const lastSlash = normalizedPath.lastIndexOf('/');
-    const basename =
-      lastSlash >= 0 ? normalizedPath.slice(lastSlash + 1) : normalizedPath;
-    const dir = lastSlash >= 0 ? normalizedPath.slice(0, lastSlash + 1) : '';
+    const displayPath =
+      (file.lineage?.original
+        ? this.getDisplayPath(file.lineage.original)
+        : null) ?? this.getDisplayPath(location);
+    const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
     const effectiveBase =
       file.lineage?.diffBase?.absolutePath ??
@@ -87,29 +104,19 @@ export class FileList extends LitElement {
       '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
+    // Store paths in data attributes for event delegation
     return html`
       <div
         class="file-item"
         data-file=${location.absolutePath}
-        data-original=${ifDefined(file.lineage?.original?.absolutePath)}
-        data-base=${ifDefined(file.lineage?.diffBase?.absolutePath)}
-        data-workspace=${ifDefined(
-          location.kind === 'workspace' ? location.absolutePath : undefined,
-        )}
-        data-relative=${ifDefined(
-          location.kind === 'workspace' || location.kind === 'runStorage'
-            ? location.relativePath
-            : undefined,
-        )}
+        data-base=${ifDefined(effectiveBase || undefined)}
+        data-prev=${ifDefined(diffBase)}
       >
         <span class="file-name">
           <span
             class="file-path clickable-link"
             title=${tooltipPath}
-            @click=${() =>
-              this.emitFileAction(COMMANDS.OPEN_FILE, {
-                file: location.absolutePath,
-              })}
+            data-command=${COMMANDS.OPEN_FILE}
           >
             <span class="file-dir">${dir}</span>
             <span class="file-basename">${basename}</span>
@@ -136,44 +143,28 @@ export class FileList extends LitElement {
                 icon="diff"
                 label="Compare with base"
                 title="Compare with base"
-                @click=${() =>
-                  this.emitFileAction(COMMANDS.COMPARE_ORIGINAL, {
-                    file: location.absolutePath,
-                    base: effectiveBase,
-                  })}
+                data-command=${COMMANDS.COMPARE_ORIGINAL}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="accept-btn"
                 icon="check"
                 label="Accept edits"
                 title="Accept edits"
-                @click=${() =>
-                  this.emitFileAction(COMMANDS.ACCEPT_FILE, {
-                    file: location.absolutePath,
-                    base: effectiveBase,
-                  })}
+                data-command=${COMMANDS.ACCEPT_FILE}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="merge-btn"
                 icon="git-merge"
                 label="Merge edits"
                 title="Merge edits"
-                @click=${() =>
-                  this.emitFileAction(COMMANDS.MERGE_FILE, {
-                    file: location.absolutePath,
-                    base: effectiveBase,
-                  })}
+                data-command=${COMMANDS.MERGE_FILE}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="diff-btn"
                 icon="diff-single"
                 label="LaTeXdiff"
                 title="LaTeXdiff"
-                @click=${() =>
-                  this.emitFileAction(COMMANDS.LATEXDIFF_FILE, {
-                    file: location.absolutePath,
-                    base: effectiveBase,
-                  })}
+                data-command=${COMMANDS.LATEXDIFF_FILE}
               ></vscode-toolbar-button>
             `,
           )}
@@ -185,12 +176,7 @@ export class FileList extends LitElement {
                 icon="diff-added"
                 label="Compare with previous round"
                 title="Compare with previous round"
-                @click=${() =>
-                  this.emitFileAction(COMMANDS.COMPARE_PREVIOUS, {
-                    file: location.absolutePath,
-                    prev: diffBase!,
-                    ...(effectiveBase ? { base: effectiveBase } : {}),
-                  })}
+                data-command=${COMMANDS.COMPARE_PREVIOUS}
               ></vscode-toolbar-button>
             `,
           )}
@@ -199,12 +185,48 @@ export class FileList extends LitElement {
     `;
   }
 
-  private emitFileAction(
-    command: string,
-    payload: Record<string, string>,
-  ): void {
+  /**
+   * Event delegation handler for file actions.
+   * Uses data-command on clickable elements and data-file/data-base/data-prev on file-item.
+   */
+  private handleFileClick = (event: MouseEvent): void => {
+    const target = event.target as Element | null;
+    if (!target) return;
+
+    // Find element with data-command
+    const actionEl = target.closest('[data-command]') as HTMLElement | null;
+    if (!actionEl) return;
+
+    const command = actionEl.dataset.command;
+    if (!command) return;
+
+    // Find parent file-item for file paths
+    const fileItem = target.closest('.file-item') as HTMLElement | null;
+    if (!fileItem) return;
+
+    const file = fileItem.dataset.file;
+    if (!file) return;
+
+    // Build payload based on command
+    const payload: Record<string, string> = { file };
+
+    if (command === COMMANDS.COMPARE_PREVIOUS) {
+      const prev = fileItem.dataset.prev;
+      if (prev) payload.prev = prev;
+      const base = fileItem.dataset.base;
+      if (base) payload.base = base;
+    } else if (
+      command === COMMANDS.COMPARE_ORIGINAL ||
+      command === COMMANDS.ACCEPT_FILE ||
+      command === COMMANDS.MERGE_FILE ||
+      command === COMMANDS.LATEXDIFF_FILE
+    ) {
+      const base = fileItem.dataset.base;
+      if (base) payload.base = base;
+    }
+
     this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
-  }
+  };
 
   private getSortedRounds(): [number, OutputFileInfo[]][] {
     return Object.entries(this.filesByRound)
