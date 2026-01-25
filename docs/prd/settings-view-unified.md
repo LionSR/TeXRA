@@ -1155,6 +1155,1079 @@ class MemoryItem extends LitElement {
 
 ---
 
+## Detailed Component Specifications
+
+This section provides comprehensive Lit component specifications for each part of the Settings View. Components are organized hierarchically with clear props, state, events, and patterns derived from existing views.
+
+### Component Hierarchy Overview
+
+```
+<settings-app>                          # Root orchestrator
+├── <header-bar>                        # Account status + actions
+├── <texra-tabs>                        # Shared tab container
+│   ├── <models-tab>
+│   │   ├── <routing-options>           # Direct/OpenRouter/Proxy radio
+│   │   ├── <recommended-section>       # Curated model list
+│   │   └── <provider-accordion>*       # Per-provider collapsible
+│   │       ├── <provider-header>       # Status badge + Configure
+│   │       └── <model-checkbox>*       # Individual model toggle
+│   │
+│   ├── <agents-tab>
+│   │   ├── <agent-list section="builtIn">
+│   │   ├── <agent-list section="toolUse">
+│   │   ├── <agent-list section="custom">
+│   │   ├── <agent-settings-group title="Workflow">
+│   │   └── <agent-settings-group title="Tool-Use">
+│   │
+│   ├── <latex-tab>
+│   │   ├── <settings-group title="Formatter">
+│   │   ├── <settings-group title="LaTeXdiff">
+│   │   ├── <settings-group title="TikZ Figures">
+│   │   └── <settings-group title="Replacements">
+│   │
+│   ├── <memory-tab>
+│   │   ├── <memory-toolbar>            # Search + Clear All
+│   │   └── <memory-tree>               # Recursive file tree
+│   │       └── <memory-item>*          # Individual file/folder
+│   │
+│   └── <history-tab>
+│       ├── <history-toolbar>           # Search + Clear All
+│       └── <history-list>
+│           └── <history-item>*         # Individual execution
+│
+└── <confirm-dialog>                    # Modal overlay
+```
+
+### Shared Components (from `src/shared/components/`)
+
+These components are reusable across all webviews, extracted during Phase 2 of ProgressView modernization.
+
+#### `<texra-tabs>`
+
+Tab container with VS Code styling.
+
+```typescript
+@customElement('texra-tabs')
+export class TexraTabs extends LitElement {
+  @property({ type: Array }) tabs: string[] = [];
+  @property() activeTab: string = '';
+
+  // Events
+  @event() 'tab-change': CustomEvent<{ tab: string }>;
+
+  render() {
+    return html`
+      <div class="tab-bar" role="tablist">
+        ${this.tabs.map(tab => html`
+          <button
+            role="tab"
+            class=${classMap({ active: tab === this.activeTab })}
+            @click=${() => this._selectTab(tab)}
+          >
+            ${this._formatTabLabel(tab)}
+          </button>
+        `)}
+      </div>
+      <div class="tab-content">
+        <slot name=${this.activeTab}></slot>
+      </div>
+    `;
+  }
+}
+```
+
+#### `<texra-collapsible>`
+
+Accordion section with header and expandable content.
+
+```typescript
+@customElement('texra-collapsible')
+export class TexraCollapsible extends LitElement {
+  @property() title: string = '';
+  @property({ type: Boolean }) open: boolean = false;
+
+  render() {
+    return html`
+      <div class="collapsible ${this.open ? 'open' : ''}">
+        <button class="header" @click=${this._toggle}>
+          <span class="chevron">${this.open ? '▼' : '▶'}</span>
+          <span class="title">${this.title}</span>
+          <slot name="header-extra"></slot>
+        </button>
+        ${this.open ? html`<div class="content"><slot></slot></div>` : ''}
+      </div>
+    `;
+  }
+}
+```
+
+#### `<texra-confirm-dialog>`
+
+Modal confirmation dialog.
+
+```typescript
+@customElement('texra-confirm-dialog')
+export class TexraConfirmDialog extends LitElement {
+  @property({ type: Boolean }) open: boolean = false;
+  @property() title: string = '';
+  @property() message: string = '';
+  @property() confirmLabel: string = 'Confirm';
+  @property() cancelLabel: string = 'Cancel';
+  @property({ type: Boolean }) destructive: boolean = false;
+
+  // Events
+  @event() 'confirm': CustomEvent<void>;
+  @event() 'cancel': CustomEvent<void>;
+}
+```
+
+### `<header-bar>` Component
+
+Account status and actions, migrated from Profile View.
+
+```typescript
+// src/settingsView/frontend/components/HeaderBar.ts
+@customElement('header-bar')
+export class HeaderBar extends LitElement {
+  static styles = css`
+    :host {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-sideBar-background);
+    }
+
+    .account-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tier-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+  `;
+
+  // Props from parent
+  @property({ type: Boolean }) authenticated = false;
+  @property() email?: string;
+  @property() tier?: 'free' | 'Max' | 'Ultra';
+  @property({ type: Boolean }) useIncludedAccess = false;
+
+  render() {
+    if (!this.authenticated) {
+      return html`
+        <div class="account-info">
+          <span>Not signed in</span>
+        </div>
+        <div class="actions">
+          <vscode-button @click=${this._signIn}>Sign In</vscode-button>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="account-info">
+        <span class="codicon codicon-account"></span>
+        <span>${this.email}</span>
+        ${this.tier ? html`<span class="tier-badge">${this.tier}</span>` : ''}
+      </div>
+      <div class="actions">
+        ${this._renderAccessToggle()}
+        <vscode-button appearance="secondary" @click=${this._manage}>
+          Manage
+        </vscode-button>
+        <vscode-button appearance="secondary" @click=${this._signOut}>
+          Sign Out
+        </vscode-button>
+      </div>
+    `;
+  }
+
+  private _renderAccessToggle() {
+    // Only show for paid tiers
+    if (this.tier === 'free') return '';
+
+    return html`
+      <label class="access-toggle">
+        <input
+          type="checkbox"
+          ?checked=${this.useIncludedAccess}
+          @change=${this._toggleAccess}
+        />
+        Use included API access
+      </label>
+    `;
+  }
+
+  private _signIn() {
+    vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_IN });
+  }
+
+  private _signOut() {
+    vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT });
+  }
+
+  private _manage() {
+    vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.OPEN_ACCOUNT_PORTAL });
+  }
+
+  private _toggleAccess(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked;
+    vscode.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      useIncludedAccess: checked,
+    });
+  }
+}
+```
+
+### `<models-tab>` Component
+
+Model selection and provider configuration.
+
+**Data Flow:**
+```
+MODEL_CONFIGS (backend)          →  InitialData.models
+SecretManager.hasKey(provider)   →  InitialData.providers[id].hasKey
+getModelMetadata(provider)       →  InitialData.providerMeta[id]
+globalState.enabledModels        →  InitialData.enabledModels
+```
+
+```typescript
+// src/settingsView/frontend/components/ModelsTab.ts
+@customElement('models-tab')
+export class ModelsTab extends LitElement {
+  @property({ type: Object }) state!: SettingsState;
+
+  // Derived state - computed when state changes
+  private get _modelsByProvider(): Map<ProviderId, ModelData[]> {
+    const map = new Map<ProviderId, ModelData[]>();
+    for (const model of this.state.models) {
+      const list = map.get(model.provider) || [];
+      list.push(model);
+      map.set(model.provider, list);
+    }
+    return map;
+  }
+
+  render() {
+    return html`
+      <section class="routing-section">
+        <h3>API Routing</h3>
+        <routing-options
+          .mode=${this.state.routingMode}
+          @mode-change=${this._onRoutingChange}
+        ></routing-options>
+      </section>
+
+      <section class="recommended-section">
+        <h3>Recommended Models</h3>
+        <p class="hint">These models are known to work well with TeXRA.</p>
+        ${this._renderModelList(this.state.recommendedModels)}
+      </section>
+
+      <section class="all-providers">
+        <h3>All Providers</h3>
+        ${Array.from(this._modelsByProvider.entries()).map(
+          ([providerId, models]) => html`
+            <provider-accordion
+              .providerId=${providerId}
+              .models=${models}
+              .meta=${this.state.providerMeta[providerId]}
+              .status=${this.state.providers[providerId]}
+              .enabledModels=${this.state.enabledModels}
+              @model-toggle=${this._onModelToggle}
+              @configure=${this._onConfigureProvider}
+            ></provider-accordion>
+          `
+        )}
+      </section>
+    `;
+  }
+
+  private _onModelToggle(e: CustomEvent<{ modelId: string; enabled: boolean }>) {
+    const { modelId, enabled } = e.detail;
+    const newEnabled = enabled
+      ? [...this.state.enabledModels, modelId]
+      : this.state.enabledModels.filter(id => id !== modelId);
+
+    // Optimistic update
+    this.state.enabledModels = newEnabled;
+
+    // Persist
+    vscode.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SAVE_ENABLED_MODELS,
+      models: newEnabled,
+    });
+  }
+
+  private _onConfigureProvider(e: CustomEvent<{ providerId: ProviderId }>) {
+    const { providerId } = e.detail;
+    const meta = this.state.providerMeta[providerId];
+
+    // Show API key input dialog
+    showApiKeyDialog({
+      provider: providerId,
+      providerName: meta.name,
+      keyUrl: meta.keyUrl,
+      envVar: meta.envVar,
+      onSubmit: (key) => {
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.SET_API_KEY,
+          provider: providerId,
+          key,
+        });
+      },
+    });
+  }
+}
+```
+
+### `<agents-tab>` Component
+
+Agent management and settings, consolidating agent dropdown and settings.
+
+**Data Flow:**
+```
+agentRegistry.getAllAgents()     →  InitialData.agents
+workspaceState.enabledAgents     →  (filter which are enabled)
+Custom YAML files                →  source: 'custom'
+```
+
+```typescript
+// src/settingsView/frontend/components/AgentsTab.ts
+@customElement('agents-tab')
+export class AgentsTab extends LitElement {
+  @property({ type: Object }) state!: SettingsState;
+
+  // Group agents by source
+  private get _builtInAgents() {
+    return this.state.agents.filter(a => a.source === 'builtIn');
+  }
+
+  private get _toolUseAgents() {
+    return this.state.agents.filter(a => a.source === 'builtInToolUse');
+  }
+
+  private get _customAgents() {
+    return this.state.agents.filter(a => a.source === 'custom');
+  }
+
+  render() {
+    return html`
+      <section class="agent-section">
+        <h3>Built-in Agents</h3>
+        <p class="hint">Standard agents for common tasks.</p>
+        <agent-list
+          .agents=${this._builtInAgents}
+          @toggle=${this._onAgentToggle}
+          @view-source=${this._onViewSource}
+        ></agent-list>
+      </section>
+
+      <section class="agent-section">
+        <h3>Tool-Use Agents</h3>
+        <p class="hint">Agents with autonomous tool execution.</p>
+        <agent-list
+          .agents=${this._toolUseAgents}
+          @toggle=${this._onAgentToggle}
+          @view-source=${this._onViewSource}
+        ></agent-list>
+      </section>
+
+      <section class="agent-section">
+        <h3>Custom Agents</h3>
+        <p class="hint">User-defined agents from YAML files.</p>
+        <div class="custom-actions">
+          <vscode-button @click=${this._browseAgentsDir}>
+            Browse Directory
+          </vscode-button>
+          <vscode-button appearance="secondary" @click=${this._openAgentsDir}>
+            Open in Explorer
+          </vscode-button>
+        </div>
+        <agent-list
+          .agents=${this._customAgents}
+          ?showDelete=${true}
+          @toggle=${this._onAgentToggle}
+          @view-source=${this._onViewSource}
+          @delete=${this._onDeleteAgent}
+        ></agent-list>
+      </section>
+
+      <texra-collapsible title="Workflow Settings">
+        <settings-group
+          .settings=${WORKFLOW_SETTINGS}
+          .values=${this.state.latexSettings}
+          @change=${this._onSettingChange}
+        ></settings-group>
+      </texra-collapsible>
+
+      <texra-collapsible title="Tool-Use Settings">
+        <settings-group
+          .settings=${TOOL_USE_SETTINGS}
+          .values=${this.state.latexSettings}
+          @change=${this._onSettingChange}
+        ></settings-group>
+      </texra-collapsible>
+    `;
+  }
+
+  private _onDeleteAgent(e: CustomEvent<{ agent: AgentData }>) {
+    const { agent } = e.detail;
+    showConfirmDialog({
+      title: 'Delete Agent',
+      message: `Delete custom agent "${agent.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+          name: agent.name,
+        });
+      },
+    });
+  }
+}
+```
+
+### `<memory-tab>` Component
+
+Memory file browser, migrated from Memory View.
+
+**Data Flow:**
+```
+memoryStorage.getFiles()         →  InitialData.memoryFiles (tree structure)
+globalState.memoryEnabled        →  InitialData.memoryEnabled
+```
+
+**Key Pattern:** Lazy-load file previews on expand.
+
+```typescript
+// src/settingsView/frontend/components/MemoryTab.ts
+@customElement('memory-tab')
+export class MemoryTab extends LitElement {
+  @property({ type: Object }) state!: SettingsState;
+  @state() private _searchQuery = '';
+  @state() private _expandedPaths = new Set<string>();
+  @state() private _loadedPreviews = new Map<string, string>();
+
+  render() {
+    return html`
+      <div class="toolbar">
+        <vscode-text-field
+          placeholder="Search memory files..."
+          .value=${this._searchQuery}
+          @input=${this._onSearchInput}
+        >
+          <span slot="start" class="codicon codicon-search"></span>
+        </vscode-text-field>
+
+        <vscode-button
+          appearance="secondary"
+          ?disabled=${this.state.memoryFiles.length === 0}
+          @click=${this._clearAll}
+        >
+          Clear All
+        </vscode-button>
+      </div>
+
+      ${this.state.memoryFiles.length === 0
+        ? html`<div class="empty-state">No memory files yet.</div>`
+        : html`
+            <div class="memory-tree">
+              ${this._renderTree(this._filteredFiles)}
+            </div>
+          `}
+    `;
+  }
+
+  private get _filteredFiles(): MemoryFile[] {
+    if (!this._searchQuery) return this.state.memoryFiles;
+    const query = this._searchQuery.toLowerCase();
+    return this._filterTree(this.state.memoryFiles, query);
+  }
+
+  private _renderTree(files: MemoryFile[]): TemplateResult {
+    return html`
+      ${repeat(
+        files,
+        (f) => f.path,
+        (file) => html`
+          <memory-item
+            .file=${file}
+            .expanded=${this._expandedPaths.has(file.path)}
+            .preview=${this._loadedPreviews.get(file.path)}
+            @expand=${() => this._expand(file)}
+            @collapse=${() => this._collapse(file)}
+            @open=${() => this._openFile(file)}
+            @delete=${() => this._deleteFile(file)}
+          >
+            ${file.children && this._expandedPaths.has(file.path)
+              ? this._renderTree(file.children)
+              : ''}
+          </memory-item>
+        `
+      )}
+    `;
+  }
+
+  private async _expand(file: MemoryFile) {
+    this._expandedPaths = new Set([...this._expandedPaths, file.path]);
+
+    // Lazy load preview if not already loaded
+    if (!file.isDirectory && !this._loadedPreviews.has(file.path)) {
+      vscode.postMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+        path: file.path,
+      });
+    }
+  }
+
+  private _clearAll() {
+    showConfirmDialog({
+      title: 'Clear All Memory Files',
+      message: 'This will delete all memory files. This action cannot be undone.',
+      confirmLabel: 'Delete All',
+      destructive: true,
+      onConfirm: () => {
+        vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.CLEAR_ALL_MEMORY });
+      },
+    });
+  }
+}
+```
+
+### `<history-tab>` Component
+
+Execution history browser, migrated from History View.
+
+**Data Flow:**
+```
+stateTracker.getHistory()        →  InitialData.historyItems
+```
+
+**Key Patterns:**
+- Search with highlighting
+- Collapsible details per item
+- Actions: Rerun, Restore, Delete
+
+```typescript
+// src/settingsView/frontend/components/HistoryTab.ts
+@customElement('history-tab')
+export class HistoryTab extends LitElement {
+  @property({ type: Object }) state!: SettingsState;
+  @state() private _searchQuery = '';
+  @state() private _expandedIds = new Set<string>();
+
+  render() {
+    return html`
+      <div class="toolbar">
+        <vscode-text-field
+          placeholder="Search history..."
+          .value=${this._searchQuery}
+          @input=${(e: Event) => {
+            this._searchQuery = (e.target as HTMLInputElement).value;
+          }}
+        >
+          <span slot="start" class="codicon codicon-search"></span>
+        </vscode-text-field>
+
+        <vscode-button
+          appearance="secondary"
+          ?disabled=${this.state.historyItems.length === 0}
+          @click=${this._clearAll}
+        >
+          Clear All
+        </vscode-button>
+      </div>
+
+      ${this.state.historyItems.length === 0
+        ? html`<div class="empty-state">No execution history yet.</div>`
+        : html`
+            <div class="history-list">
+              ${repeat(
+                this._filteredItems,
+                (item: any) => item.id,
+                (item) => this._renderItem(item)
+              )}
+            </div>
+          `}
+    `;
+  }
+
+  private _renderItem(item: HistoryItem) {
+    const expanded = this._expandedIds.has(item.id);
+
+    return html`
+      <div class="history-item ${expanded ? 'expanded' : ''}">
+        <div class="item-header" @click=${() => this._toggleExpand(item.id)}>
+          <span class="chevron">${expanded ? '▼' : '▶'}</span>
+          <span class="agent-name">${item.agentName}</span>
+          <span class="timestamp">${this._formatTime(item.timestamp)}</span>
+          <span class="model">${item.modelId}</span>
+        </div>
+
+        ${expanded ? html`
+          <div class="item-details">
+            <div class="input-preview">
+              <strong>Input:</strong>
+              ${this._highlightSearch(item.inputPreview)}
+            </div>
+            <div class="output-preview">
+              <strong>Output:</strong>
+              ${this._highlightSearch(item.outputPreview)}
+            </div>
+            <div class="actions">
+              <vscode-button @click=${() => this._rerun(item)}>
+                <span class="codicon codicon-debug-restart"></span> Rerun
+              </vscode-button>
+              <vscode-button @click=${() => this._restore(item)}>
+                <span class="codicon codicon-history"></span> Restore
+              </vscode-button>
+              <vscode-button appearance="secondary" @click=${() => this._delete(item)}>
+                <span class="codicon codicon-trash"></span>
+              </vscode-button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  private _highlightSearch(text: string): TemplateResult {
+    if (!this._searchQuery) return html`${text}`;
+
+    const parts = text.split(new RegExp(`(${this._escapeRegex(this._searchQuery)})`, 'gi'));
+    return html`${parts.map(part =>
+      part.toLowerCase() === this._searchQuery.toLowerCase()
+        ? html`<mark>${part}</mark>`
+        : part
+    )}`;
+  }
+
+  private _clearAll() {
+    showConfirmDialog({
+      title: 'Clear All History',
+      message: 'This will delete all execution history. This action cannot be undone.',
+      confirmLabel: 'Clear History',
+      destructive: true,
+      onConfirm: () => {
+        vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY });
+      },
+    });
+  }
+}
+```
+
+### `<latex-tab>` Component
+
+LaTeX settings organized in collapsible groups.
+
+**Data Flow:**
+```
+vscode.workspace.getConfiguration('texra.latex')     →  InitialData.latexSettings
+generateDropdownOptions()                            →  InitialData.selectOptions
+```
+
+```typescript
+// src/settingsView/frontend/components/LatexTab.ts
+
+// Setting definitions - single source of truth for UI
+const FORMATTER_SETTINGS: SettingDef[] = [
+  {
+    key: 'texra.latex.formatter',
+    label: 'Formatter',
+    type: 'select',
+    options: 'formatter',  // References selectOptions.formatter
+    description: 'LaTeX code formatter to use',
+  },
+  {
+    key: 'texra.latex.latexindentConfig',
+    label: 'latexindent Config',
+    type: 'file',
+    filter: { yaml: ['yml', 'yaml'] },
+    description: 'Custom latexindent configuration file',
+  },
+  // ... more settings
+];
+
+const LATEXDIFF_SETTINGS: SettingDef[] = [
+  {
+    key: 'texra.latexdiff.mathMarkup',
+    label: 'Math Markup',
+    type: 'select',
+    options: 'mathMarkup',
+    default: 'coarse',
+  },
+  {
+    key: 'texra.latexdiff.timeoutMs',
+    label: 'Timeout (ms)',
+    type: 'number',
+    min: 1000,
+    max: 60000,
+    default: 10000,
+  },
+  // ... more settings
+];
+
+@customElement('latex-tab')
+export class LatexTab extends LitElement {
+  @property({ type: Object }) state!: SettingsState;
+
+  render() {
+    return html`
+      <texra-collapsible title="Formatter" open>
+        <settings-group
+          .settings=${FORMATTER_SETTINGS}
+          .values=${this.state.latexSettings}
+          .selectOptions=${this.state.selectOptions}
+          @change=${this._onSettingChange}
+          @browse=${this._onBrowseFile}
+        ></settings-group>
+      </texra-collapsible>
+
+      <texra-collapsible title="LaTeXdiff">
+        <settings-group
+          .settings=${LATEXDIFF_SETTINGS}
+          .values=${this.state.latexSettings}
+          .selectOptions=${this.state.selectOptions}
+          @change=${this._onSettingChange}
+        ></settings-group>
+      </texra-collapsible>
+
+      <texra-collapsible title="TikZ Figures">
+        <settings-group
+          .settings=${TIKZ_SETTINGS}
+          .values=${this.state.latexSettings}
+          .selectOptions=${this.state.selectOptions}
+          @change=${this._onSettingChange}
+          @browse=${this._onBrowseFile}
+        ></settings-group>
+      </texra-collapsible>
+
+      <texra-collapsible title="Replacements (Advanced)">
+        <settings-group
+          .settings=${REPLACEMENT_SETTINGS}
+          .values=${this.state.latexSettings}
+          .selectOptions=${this.state.selectOptions}
+          @change=${this._onSettingChange}
+        ></settings-group>
+      </texra-collapsible>
+    `;
+  }
+
+  private _onSettingChange(e: CustomEvent<{ key: string; value: unknown }>) {
+    const { key, value } = e.detail;
+
+    // Optimistic update
+    this.state.latexSettings = {
+      ...this.state.latexSettings,
+      [key]: value,
+    };
+
+    // Persist
+    vscode.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SAVE_SETTING,
+      key,
+      value,
+    });
+  }
+
+  private _onBrowseFile(e: CustomEvent<{ key: string; filter: object }>) {
+    const { key, filter } = e.detail;
+    vscode.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.BROWSE_FILE,
+      settingKey: key,
+      filter,
+    });
+  }
+}
+```
+
+### `<settings-group>` Reusable Component
+
+Generic settings renderer that handles different input types.
+
+```typescript
+// src/settingsView/frontend/components/SettingsGroup.ts
+interface SettingDef {
+  key: string;
+  label: string;
+  type: 'select' | 'checkbox' | 'text' | 'number' | 'file';
+  options?: string;  // Key in selectOptions
+  default?: unknown;
+  description?: string;
+  min?: number;
+  max?: number;
+  filter?: Record<string, string[]>;
+}
+
+@customElement('settings-group')
+export class SettingsGroup extends LitElement {
+  @property({ type: Array }) settings: SettingDef[] = [];
+  @property({ type: Object }) values: Record<string, unknown> = {};
+  @property({ type: Object }) selectOptions: Record<string, SelectOption[]> = {};
+
+  render() {
+    return html`
+      <div class="settings-list">
+        ${this.settings.map(setting => this._renderSetting(setting))}
+      </div>
+    `;
+  }
+
+  private _renderSetting(setting: SettingDef) {
+    const value = this.values[setting.key] ?? setting.default;
+
+    return html`
+      <div class="setting-row">
+        <label for=${setting.key}>${setting.label}</label>
+        ${setting.description
+          ? html`<p class="description">${setting.description}</p>`
+          : ''}
+        ${this._renderInput(setting, value)}
+      </div>
+    `;
+  }
+
+  private _renderInput(setting: SettingDef, value: unknown) {
+    switch (setting.type) {
+      case 'select':
+        const options = this.selectOptions[setting.options!] || [];
+        return html`
+          <vscode-dropdown
+            id=${setting.key}
+            .value=${String(value ?? '')}
+            @change=${(e: Event) => this._onChange(setting.key, (e.target as any).value)}
+          >
+            ${options.map(opt => html`
+              <vscode-option value=${opt.value}>${opt.label}</vscode-option>
+            `)}
+          </vscode-dropdown>
+        `;
+
+      case 'checkbox':
+        return html`
+          <vscode-checkbox
+            id=${setting.key}
+            ?checked=${Boolean(value)}
+            @change=${(e: Event) => this._onChange(setting.key, (e.target as any).checked)}
+          ></vscode-checkbox>
+        `;
+
+      case 'number':
+        return html`
+          <vscode-text-field
+            id=${setting.key}
+            type="number"
+            .value=${String(value ?? '')}
+            min=${setting.min}
+            max=${setting.max}
+            @change=${(e: Event) => this._onChange(setting.key, Number((e.target as any).value))}
+          ></vscode-text-field>
+        `;
+
+      case 'file':
+        return html`
+          <div class="file-input">
+            <vscode-text-field
+              id=${setting.key}
+              .value=${String(value ?? '')}
+              readonly
+            ></vscode-text-field>
+            <vscode-button @click=${() => this._onBrowse(setting)}>
+              Browse
+            </vscode-button>
+          </div>
+        `;
+
+      default:
+        return html`
+          <vscode-text-field
+            id=${setting.key}
+            .value=${String(value ?? '')}
+            @change=${(e: Event) => this._onChange(setting.key, (e.target as any).value)}
+          ></vscode-text-field>
+        `;
+    }
+  }
+
+  private _onChange(key: string, value: unknown) {
+    this.dispatchEvent(new CustomEvent('change', {
+      detail: { key, value },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  private _onBrowse(setting: SettingDef) {
+    this.dispatchEvent(new CustomEvent('browse', {
+      detail: { key: setting.key, filter: setting.filter },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+}
+```
+
+---
+
+## How Lit + Zod + TypeScript Simplifies Development
+
+This section explains concrete benefits of the Lit architecture for Settings View.
+
+### 1. Type-Safe Message Passing
+
+**Problem with vanilla JS:** Runtime errors when message shapes don't match.
+
+**Lit + Zod solution:**
+
+```typescript
+// Shared schema (both sides import)
+export const SaveSettingMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SAVE_SETTING),
+  key: AllowedSettingKeySchema,  // Whitelist
+  value: z.unknown(),
+});
+
+// Backend handler with validation
+this.withValidatedMessage(SaveSettingMessageSchema, message, async (data) => {
+  // data.key is typed as AllowedSettingKey
+  await vscode.workspace.getConfiguration().update(data.key, data.value);
+});
+
+// Frontend - TypeScript ensures shape matches
+vscode.postMessage({
+  command: SETTINGS_VIEW_COMMANDS.SAVE_SETTING,  // TS error if wrong command
+  key: 'texra.latex.formatter',  // TS error if not in whitelist
+  value: 'latexindent',
+});
+```
+
+### 2. Automatic XSS Protection
+
+**Problem with vanilla JS:** Must manually escape all user data.
+
+**Lit solution:** Auto-escaping by default.
+
+```typescript
+// ✅ SAFE - Lit escapes automatically
+render() {
+  return html`
+    <span class="filename">${this.file.name}</span>
+    <pre class="preview">${this.preview}</pre>
+  `;
+}
+
+// Only use unsafeHTML for trusted content (markdown rendering)
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+render() {
+  return html`${unsafeHTML(this.trustedMarkdownHtml)}`;
+}
+```
+
+### 3. Reactive Updates Without Manual DOM
+
+**Problem with vanilla JS:** Manual `querySelector`, `innerHTML`, event rebinding.
+
+**Lit solution:** Declarative templates with automatic updates.
+
+```typescript
+@customElement('model-item')
+class ModelItem extends LitElement {
+  @property({ type: Boolean }) enabled = false;
+  @property() name = '';
+
+  // Template re-renders automatically when props change
+  render() {
+    return html`
+      <input
+        type="checkbox"
+        ?checked=${this.enabled}
+        @change=${this._toggle}
+      />
+      <span>${this.name}</span>
+    `;
+  }
+
+  private _toggle() {
+    // Dispatch event - parent handles state
+    this.dispatchEvent(new CustomEvent('toggle', {
+      detail: { enabled: !this.enabled },
+    }));
+  }
+}
+```
+
+### 4. Single Source of Truth for Data
+
+**Problem with vanilla JS:** State scattered across DOM, JS variables, backend.
+
+**Lit + signals solution:** Centralized reactive store.
+
+```typescript
+// store.ts - single source of truth
+export const state = reactive<SettingsState>({
+  models: [],
+  enabledModels: [],
+  // ...
+});
+
+// Any component can access
+@customElement('models-count')
+class ModelsCount extends LitElement {
+  render() {
+    return html`${state.enabledModels.length} models enabled`;
+  }
+}
+
+// Updates propagate automatically
+state.enabledModels = [...state.enabledModels, 'new-model'];
+// All components using state.enabledModels re-render
+```
+
+### 5. Component Composition
+
+**Problem with vanilla JS:** Copy-paste HTML strings, inconsistent behavior.
+
+**Lit solution:** Reusable components with typed props.
+
+```typescript
+// Define once
+@customElement('texra-collapsible')
+class Collapsible extends LitElement {
+  @property() title = '';
+  @property({ type: Boolean }) open = false;
+  // ...
+}
+
+// Use everywhere with consistent behavior
+html`
+  <texra-collapsible title="Formatter" open>
+    ${formatterContent}
+  </texra-collapsible>
+
+  <texra-collapsible title="LaTeXdiff">
+    ${latexdiffContent}
+  </texra-collapsible>
+`;
+```
+
+---
+
 ## Implementation Checklist
 
 Before merging Settings View implementation, verify:
