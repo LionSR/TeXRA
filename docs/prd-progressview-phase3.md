@@ -734,16 +734,16 @@ This section documents findings from a comprehensive 8-dimension analysis of Lit
 
 ### Compliance Summary
 
-| Category | Score | Blockers |
-|----------|-------|----------|
-| **Event Handling** | 85% | 42 inline arrows, weak types |
-| **Reactive Properties** | 95% | Minor caching opportunities |
-| **Rendering** | 70% | LogList/TaskGroupDomManager DOM manipulation |
-| **Lifecycle** | 98% | None (excellent cleanup) |
-| **CSS/Styling** | 90% | 4 undefined tokens, global CSS imports |
-| **State Management** | 85% | pendingLogUpdates, no TTL |
-| **Message Handling** | 75% | MainApp unvalidated, inconsistent patterns |
-| **Type Safety** | 80% | Event types, Record<string, unknown> |
+| Category                | Score | Blockers                                     |
+| ----------------------- | ----- | -------------------------------------------- |
+| **Event Handling**      | 85%   | 42 inline arrows, weak types                 |
+| **Reactive Properties** | 95%   | Minor caching opportunities                  |
+| **Rendering**           | 70%   | LogList/TaskGroupDomManager DOM manipulation |
+| **Lifecycle**           | 98%   | None (excellent cleanup)                     |
+| **CSS/Styling**         | 90%   | 4 undefined tokens, global CSS imports       |
+| **State Management**    | 85%   | pendingLogUpdates, no TTL                    |
+| **Message Handling**    | 75%   | MainApp unvalidated, inconsistent patterns   |
+| **Type Safety**         | 80%   | Event types, Record<string, unknown>         |
 
 **Overall: ~85% Lit Native**
 
@@ -753,19 +753,21 @@ This section documents findings from a comprehensive 8-dimension analysis of Lit
 
 **42 inline arrow functions** create new function instances on every render cycle, causing unnecessary re-renders when passed as props.
 
-| File | Count | Severity |
-|------|-------|----------|
-| `webview/frontend/MainApp.ts` | 37 | HIGH (in lists) |
-| `historyView/frontend/components/HistoryItem.ts` | 3 | HIGH (in repeat) |
-| `profileView/frontend/components/AgentsTable.ts` | 1 | HIGH (in repeat) |
-| `progressView/frontend/components/PromptOverlay.ts` | 1 | MEDIUM |
+| File                                                | Count | Severity         |
+| --------------------------------------------------- | ----- | ---------------- |
+| `webview/frontend/MainApp.ts`                       | 37    | HIGH (in lists)  |
+| `historyView/frontend/components/HistoryItem.ts`    | 3     | HIGH (in repeat) |
+| `profileView/frontend/components/AgentsTable.ts`    | 1     | HIGH (in repeat) |
+| `progressView/frontend/components/PromptOverlay.ts` | 1     | MEDIUM           |
 
 **Anti-pattern:**
+
 ```typescript
 @click=${() => this.handleRemoveFile(listId, file)}  // ❌ New function each render
 ```
 
 **Fix:**
+
 ```typescript
 // Define as class method with stable reference
 private handleRemoveFileClick = (e: Event) => {
@@ -783,22 +785,22 @@ data-file=${file}
 
 #### 2. Direct DOM Manipulation (Core Anti-Pattern)
 
-| File | Lines | Operations |
-|------|-------|------------|
-| `progressView/frontend/components/LogList.ts` | 121, 185-202, 254 | `innerHTML`, `appendChild`, `prepend` |
-| `progressView/frontend/managers/TaskGroupDomManager.ts` | 74-165 | `createDocumentFragment`, `appendChild`, `insertBefore` |
-| `progressView/frontend/formatters/litTemplates.ts` | 29, 45-49 | `document.createElement`, `appendChild` loop |
-| `shared/controllers/RecordingButtonController.ts` | 89-92 | `innerHTML`, `appendChild` |
+| File                                                    | Lines             | Operations                                              |
+| ------------------------------------------------------- | ----------------- | ------------------------------------------------------- |
+| `progressView/frontend/components/LogList.ts`           | 121, 185-202, 254 | `innerHTML`, `appendChild`, `prepend`                   |
+| `progressView/frontend/managers/TaskGroupDomManager.ts` | 74-165            | `createDocumentFragment`, `appendChild`, `insertBefore` |
+| `progressView/frontend/formatters/litTemplates.ts`      | 29, 45-49         | `document.createElement`, `appendChild` loop            |
+| `shared/controllers/RecordingButtonController.ts`       | 89-92             | `innerHTML`, `appendChild`                              |
 
 **Note:** This is necessary for streaming log architecture but violates Lit declarative principles.
 
 #### 3. Light DOM Usage (Style Encapsulation Broken)
 
-| Component | File:Line | Impact |
-|-----------|-----------|--------|
-| `ProgressApp` | `progressView/frontend/ProgressApp.ts:108-110` | Root component |
-| `LogList` | `progressView/frontend/components/LogList.ts:68-70` | High-volume rendering |
-| `TaskGroupList` | Inherits from LogList | Inherits anti-pattern |
+| Component       | File:Line                                           | Impact                |
+| --------------- | --------------------------------------------------- | --------------------- |
+| `ProgressApp`   | `progressView/frontend/ProgressApp.ts:108-110`      | Root component        |
+| `LogList`       | `progressView/frontend/components/LogList.ts:68-70` | High-volume rendering |
+| `TaskGroupList` | Inherits from LogList                               | Inherits anti-pattern |
 
 ```typescript
 // Anti-pattern
@@ -809,26 +811,28 @@ override createRenderRoot(): HTMLElement {
 
 #### 4. Undefined CSS Design Tokens
 
-| Token | Used In | Missing From |
-|-------|---------|--------------|
-| `--color-added` | `PromptOverlay.ts:269` | `litStyles.ts` |
-| `--color-removed` | `PromptOverlay.ts:273` | `litStyles.ts` |
+| Token             | Used In                  | Missing From   |
+| ----------------- | ------------------------ | -------------- |
+| `--color-added`   | `PromptOverlay.ts:269`   | `litStyles.ts` |
+| `--color-removed` | `PromptOverlay.ts:273`   | `litStyles.ts` |
 | `--height-medium` | `commonViewStyles.ts:47` | `litStyles.ts` |
-| `--height-max` | `commonViewStyles.ts:53` | `litStyles.ts` |
+| `--height-max`    | `commonViewStyles.ts:53` | `litStyles.ts` |
 
 #### 5. Global Mutable State (Memory/Lifecycle Risk)
 
-| Variable | File:Line | Risk |
-|----------|-----------|------|
-| `pendingLogUpdates` Map | `messageHandlers.ts:68` | No TTL, orphaned entries |
-| `markdownCache` Map | `markdownRenderer.ts:18` | Bounded but persists |
+| Variable                | File:Line                | Risk                     |
+| ----------------------- | ------------------------ | ------------------------ |
+| `pendingLogUpdates` Map | `messageHandlers.ts:68`  | No TTL, orphaned entries |
+| `markdownCache` Map     | `markdownRenderer.ts:18` | Bounded but persists     |
 
 **Issue with pendingLogUpdates:**
+
 - Buffers UPDATE_LOG messages arriving before APPEND_LOG
 - No timeout/TTL mechanism for orphaned entries
 - Not persisted across webview reloads
 
 **Recommended fix:**
+
 ```typescript
 // Add TTL to prevent memory leaks
 const PENDING_LOG_TTL_MS = 30_000;
@@ -853,14 +857,15 @@ function cleanupStalePendingLogs(): void {
 
 #### 6. Weak Event Handler Types
 
-| File | Issue |
-|------|-------|
-| `LogList.ts:300, 321` | Uses `Event` instead of specific type |
-| `SearchBar.ts:28` | Uses `Event` instead of `InputEvent` |
-| `RunSelector.ts:59` | Uses `Event` instead of `ChangeEvent` |
-| `FollowupSection.ts:320` | `CustomEvent` without type parameter |
+| File                     | Issue                                 |
+| ------------------------ | ------------------------------------- |
+| `LogList.ts:300, 321`    | Uses `Event` instead of specific type |
+| `SearchBar.ts:28`        | Uses `Event` instead of `InputEvent`  |
+| `RunSelector.ts:59`      | Uses `Event` instead of `ChangeEvent` |
+| `FollowupSection.ts:320` | `CustomEvent` without type parameter  |
 
 **Fix:**
+
 ```typescript
 // Anti-pattern
 private handleChange = (event: Event): void => { ... }
@@ -871,36 +876,40 @@ private handleChange = (event: Event & { target: HTMLInputElement }): void => { 
 
 #### 7. Global CSS Imports (Potential Leak)
 
-| File | Import | Risk |
-|------|--------|------|
+| File                               | Import                     | Risk         |
+| ---------------------------------- | -------------------------- | ------------ |
 | `progressView/frontend/index.ts:2` | `katex/dist/katex.min.css` | Global scope |
-| `progressView/frontend/index.ts:5` | `../styles/index.css` | Global scope |
+| `progressView/frontend/index.ts:5` | `../styles/index.css`      | Global scope |
 
 Components may depend on global styles bleeding through instead of encapsulated styles.
 
 #### 8. querySelector for State Reading
 
-| File:Line | Usage |
-|-----------|-------|
-| `LogList.ts:268` | `querySelector('#group-content-${groupId}')` |
-| `TaskGroupDomManager.ts:201-212` | Multiple querySelector calls |
-| `MainApp.ts:623-641` | querySelector for Sortable init |
+| File:Line                        | Usage                                        |
+| -------------------------------- | -------------------------------------------- |
+| `LogList.ts:268`                 | `querySelector('#group-content-${groupId}')` |
+| `TaskGroupDomManager.ts:201-212` | Multiple querySelector calls                 |
+| `MainApp.ts:623-641`             | querySelector for Sortable init              |
 
 **Should use `@query` decorator** with `updateComplete` awaited.
 
 ### Low Priority Issues
 
 #### 9. Duplicate Animation Definitions
+
 - `StreamHeader.ts:261-271` duplicates `pulse-scale` from shared `animationStyles`
 
 #### 10. Hardcoded CSS Values
-| File | Value | Should Be |
-|------|-------|-----------|
-| `InstructionPanel.ts:79` | `max-height: 12rem` | Token |
-| `FollowUpInput.ts:60, 66` | `min-height: 106px` | Token |
+
+| File                      | Value               | Should Be |
+| ------------------------- | ------------------- | --------- |
+| `InstructionPanel.ts:79`  | `max-height: 12rem` | Token     |
+| `FollowUpInput.ts:60, 66` | `min-height: 106px` | Token     |
 
 #### 11. Record<string, unknown> Overuse
+
 State interfaces extend `Record<string, unknown>` which is too permissive:
+
 ```typescript
 // Anti-pattern
 interface ProgressViewPreferences extends Record<string, unknown> { ... }
@@ -914,35 +923,38 @@ interface ProgressViewPreferences {
 
 ### Well-Implemented Patterns (No Action Needed)
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| **Lifecycle cleanup** | ✅ Excellent | All listeners removed in `disconnectedCallback()` |
-| **Custom event factories** | ✅ Consistent | `bubbles: true, composed: true` everywhere |
-| **@property/@state usage** | ✅ Correct | Proper separation of concerns |
-| **Computed property caching** | ✅ Excellent | `willUpdate()` with reference tracking |
-| **Lit directives** | ✅ Good | `repeat()`, `classMap()`, `when()`, `nothing` used |
-| **Zod schema validation** | ✅ (except MainApp) | All validated views use `safeParse()` |
-| **ReactiveController** | ✅ Proper | `RecordingButtonController` correctly implemented |
-| **WebviewStateManager** | ✅ Consistent | Used across all views for persistence |
-| **Immutable state updates** | ✅ Correct | Proper spread patterns throughout |
+| Aspect                        | Status              | Notes                                              |
+| ----------------------------- | ------------------- | -------------------------------------------------- |
+| **Lifecycle cleanup**         | ✅ Excellent        | All listeners removed in `disconnectedCallback()`  |
+| **Custom event factories**    | ✅ Consistent       | `bubbles: true, composed: true` everywhere         |
+| **@property/@state usage**    | ✅ Correct          | Proper separation of concerns                      |
+| **Computed property caching** | ✅ Excellent        | `willUpdate()` with reference tracking             |
+| **Lit directives**            | ✅ Good             | `repeat()`, `classMap()`, `when()`, `nothing` used |
+| **Zod schema validation**     | ✅ (except MainApp) | All validated views use `safeParse()`              |
+| **ReactiveController**        | ✅ Proper           | `RecordingButtonController` correctly implemented  |
+| **WebviewStateManager**       | ✅ Consistent       | Used across all views for persistence              |
+| **Immutable state updates**   | ✅ Correct          | Proper spread patterns throughout                  |
 
 ---
 
 ## Recommended Fix Order
 
 ### Week 1: Quick Wins
+
 1. **Define missing CSS tokens** in `litStyles.ts` (~15 min)
 2. **Convert `themeHandlers.js`** → TypeScript (~15 min)
 3. **Add TTL to `pendingLogUpdates`** Map (~30 min)
 4. **Delete duplicate `pulse-scale`** animation (~5 min)
 
 ### Week 2: Event Handler Refactoring
+
 1. **Extract inline arrows** to class methods in MainApp.ts (37 functions)
 2. **Add proper event types** (Event → InputEvent, ChangeEvent, etc.)
 3. **Replace querySelector** with @query decorators where possible
 
 ### Week 3: Architectural Improvements
-1. **Add request/response correlation** for GET_* commands
+
+1. **Add request/response correlation** for GET\_\* commands
 2. **Refactor LogList/TaskGroupDomManager** streaming architecture
 3. **Migrate ProgressApp/LogList** to Shadow DOM (blocked by formatters)
 

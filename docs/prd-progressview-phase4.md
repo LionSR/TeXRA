@@ -14,31 +14,31 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 
 ## Status Summary
 
-| Webview         | JS Lines | Components | Complexity  | Lit Migration | Zod Validation | Status         |
-| --------------- | -------- | ---------- | ----------- | ------------- | -------------- | -------------- |
-| **MemoryView**  | ~305     | 5          | Low         | ✅ Complete   | ✅ Complete    | ✅ Complete    |
-| **HistoryView** | ~610     | 4          | Medium      | ✅ Complete   | ✅ Complete    | ✅ Complete    |
-| **ProfileView** | ~636     | 5          | Medium-High | ✅ Complete   | ✅ Complete    | ✅ Complete    |
-| **MainView**    | ~2,259   | 1 (mono)   | High        | ✅ Complete   | ❌ **Missing** | 🟡 Phase 5     |
+| Webview         | JS Lines | Components | Complexity  | Lit Migration | Zod Validation | Status      |
+| --------------- | -------- | ---------- | ----------- | ------------- | -------------- | ----------- |
+| **MemoryView**  | ~305     | 5          | Low         | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **HistoryView** | ~610     | 4          | Medium      | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **ProfileView** | ~636     | 5          | Medium-High | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **MainView**    | ~2,259   | 1 (mono)   | High        | ✅ Complete   | ❌ **Missing** | 🟡 Phase 5  |
 
 ### Lit Native Compliance (Deep-Dive Analysis 2026-01-25)
 
-| Webview | Compliance | Notes |
-|---------|------------|-------|
-| **MemoryView** | **100%** | Shadow DOM, static styles, Zod validation, registry pattern |
-| **HistoryView** | **100%** | Shadow DOM, static styles, Zod validation, mark.js integration |
-| **ProfileView** | **100%** | Shadow DOM, static styles, Zod validation, auth state handling |
-| **MainView** | **75%** | Shadow DOM, static styles, but **no Zod**, **monolithic**, **58-case switch** |
+| Webview         | Compliance | Notes                                                                         |
+| --------------- | ---------- | ----------------------------------------------------------------------------- |
+| **MemoryView**  | **100%**   | Shadow DOM, static styles, Zod validation, registry pattern                   |
+| **HistoryView** | **100%**   | Shadow DOM, static styles, Zod validation, mark.js integration                |
+| **ProfileView** | **100%**   | Shadow DOM, static styles, Zod validation, auth state handling                |
+| **MainView**    | **75%**    | Shadow DOM, static styles, but **no Zod**, **monolithic**, **58-case switch** |
 
 ### Message Handling Pattern Consistency
 
-| Webview | Pattern | Validation | Compliant |
-|---------|---------|------------|-----------|
-| **ProgressView** | ✅ Registry | ✅ Zod | ✅ |
-| **MemoryView** | ⚠️ if/else chain | ✅ Zod | 🟡 |
-| **HistoryView** | ⚠️ if/else chain | ✅ Zod | 🟡 |
-| **ProfileView** | ✅ Single handler | ✅ Zod | ✅ |
-| **MainView** | ❌ 58-case switch | ❌ None | ❌ |
+| Webview          | Pattern           | Validation | Compliant |
+| ---------------- | ----------------- | ---------- | --------- |
+| **ProgressView** | ✅ Registry       | ✅ Zod     | ✅        |
+| **MemoryView**   | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **HistoryView**  | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **ProfileView**  | ✅ Single handler | ✅ Zod     | ✅        |
+| **MainView**     | ❌ 58-case switch | ❌ None    | ❌        |
 
 **Target:** All webviews should use registry pattern with Zod validation (like ProgressView).
 
@@ -447,7 +447,7 @@ src/profileView/
 
 **Complexity:** High (file selection, recording, multiple managers)
 
-**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **Phase 5 refactoring** (see below)
+**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **[Phase 5 refactoring](./prd-progressview-phase5.md)**
 
 ### Current Structure (Post-Migration)
 
@@ -470,367 +470,15 @@ src/profileView/
 - ✅ Diff/merge functionality integration
 - ✅ Latexdiff configuration panel
 
----
+### Phase 5 Required (Post-Migration Refactoring)
 
-## Phase 5: MainView Refactoring (Post-Migration Critical Work)
+MainView migration is functionally complete but requires Phase 5 refactoring for maintainability:
 
-> **This section documents technical debt accumulated during the MainView Lit migration that must be addressed for long-term maintainability.**
+- **Monolithic component:** 2,737 lines needs extraction into 6+ components
+- **Missing validation:** 58 message types lack Zod validation (security risk)
+- **Known bugs:** 6 bugs identified during code review (see Phase 5)
 
-### 5.1 Monolithic Component (Critical)
-
-**Problem:** `MainApp.ts` is **~2,737 lines** — far exceeding maintainable component size (~500 lines recommended).
-
-**Analysis by section:**
-
-| Section | Lines | Description |
-|---------|-------|-------------|
-| File selection rendering | 1700-2345 | Repetitive file list templates |
-| Banner components | 2347-2508 | API key, agent config, etc. |
-| LaTeXDiffs section | 2547-2736 | Diff configuration panel |
-| Message handler switch | 297-400+ | 58-case switch statement |
-| Event handlers | 450-700 | Click, input, form handlers |
-| State management | 100-296 | @state properties |
-
-**Target Structure:**
-
-```
-src/webview/frontend/
-├── MainApp.ts                    # Root: message routing, orchestration (~500 lines)
-├── store.ts                      # State types, schemas
-├── constants.ts                  # Commands, element IDs
-├── events.ts                     # Typed event factories
-├── handlers/
-│   └── messageHandlers.ts        # Registry-based message handling with Zod validation
-└── components/
-    ├── FileSelector/
-    │   ├── FileSelector.ts       # Container with drag-drop
-    │   ├── FileSelectGroup.ts    # Categorized file lists
-    │   └── FileItem.ts           # Single file with remove button
-    ├── BannerGroup/
-    │   ├── ApiKeyBanner.ts       # API key missing warning
-    │   ├── AgentConfigBanner.ts  # Agent configuration notice
-    │   └── WarningBanner.ts      # Generic warning component
-    ├── InstructionPanel/
-    │   ├── InstructionPanel.ts   # Instruction input + recording
-    │   └── RecordingButton.ts    # Audio recording UI
-    ├── AgentSelector.ts          # Agent + model dropdowns
-    ├── ActionButtons.ts          # Run, Polish, etc.
-    └── LatexDiffsSection.ts      # Diff configuration panel
-```
-
-**Extraction priority:**
-
-1. **FileSelectGroup.ts** (~300 lines) - Most repetitive, used 5x in template
-2. **BannerGroup.ts** (~150 lines) - Simple extraction, clear boundaries
-3. **LatexDiffsSection.ts** (~200 lines) - Self-contained feature
-4. **messageHandlers.ts** (~200 lines) - Registry pattern with Zod
-
-### 5.2 Missing Message Validation (Security Risk)
-
-**Problem:** MainApp handles 58+ message types with **NO Zod validation** — direct type casting only.
-
-**Current (unsafe):**
-```typescript
-// MainApp.ts:297
-private handleMessage(event: MessageEvent): void {
-  const message = event.data as { command: string; [key: string]: unknown };
-  switch (message.command) {
-    case MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS:
-      this.modelOptions = message.options as string;  // ❌ No validation
-      break;
-    // ... 57 more cases
-  }
-}
-```
-
-**Target (type-safe with shared contracts):**
-```typescript
-// handlers/messageHandlers.ts
-import { z } from 'zod';
-
-// Shared schema (also used by backend MainViewMessageHandler.ts)
-export const SetModelOptionsSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
-  options: z.string(),
-});
-
-export const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
-  [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (raw, ctx) => {
-    const result = SetModelOptionsSchema.safeParse(raw);
-    if (!result.success) return;  // Silent fail, logged in dev
-    ctx.setState((s) => ({ ...s, modelOptions: result.data.options }));
-  },
-  // ... other handlers
-};
-
-// MainApp.ts - clean dispatch
-private handleMessage(event: MessageEvent): void {
-  const message = event.data;
-  const handler = MESSAGE_HANDLERS[message?.command];
-  if (handler) handler(message, this.createContext());
-}
-```
-
-### 5.3 Shared Message Contracts (Frontend ↔ Backend)
-
-**Problem:** Message types are implicitly defined in both frontend and backend with no shared contract.
-
-**Current state:**
-```
-MainViewMessageHandler.ts (backend)  → sends { command: 'SET_MODEL_OPTIONS', options: string }
-MainApp.ts (frontend)                → expects { command: string, options?: unknown }
-```
-
-**Target architecture:**
-
-```
-src/shared/schemas/mainViewMessages.ts   # Single source of truth
-├── SetModelOptionsSchema
-├── UpdateFilesSchema
-├── SetAgentConfigSchema
-├── ... (58 message schemas)
-└── MainViewMessageSchema (union of all)
-
-src/webview/MainViewMessageHandler.ts    # Backend imports schemas
-src/webview/frontend/handlers/           # Frontend imports schemas
-```
-
-**Migration approach:**
-
-1. Create `src/shared/schemas/mainViewMessages.ts` with all 58 message schemas
-2. Update `MainViewMessageHandler.ts` to use schemas when sending
-3. Update `MainApp.ts` to validate with `safeParse()` when receiving
-4. Add compile-time assertion: backend send types = frontend receive types
-
-### 5.4 Duplicate Debug Mode Handling
-
-**Problem:** MainApp adds a redundant listener for `DEBUG_MODE_SET`:
-
-```typescript
-// MainApp.ts:268-289
-private handleDebugModeMessage = (event: MessageEvent): void => {
-  const message = event.data as { command?: string; debugMode?: boolean };
-  if (message?.command === COMMON_COMMANDS.DEBUG_MODE_SET) {
-    this.debugMode = Boolean(message.debugMode);
-  }
-};
-```
-
-**But `BaseWebviewApp` already handles this!** See `BaseWebviewApp.ts:18-25`:
-
-```typescript
-// BaseWebviewApp.ts
-protected handleMessage(event: MessageEvent): void {
-  const message = event.data;
-  if (message?.command === COMMON_COMMANDS.DEBUG_MODE_SET) {
-    this.debugMode = Boolean(message.debugMode);
-  }
-  // ...
-}
-```
-
-**Fix:** Delete the redundant `handleDebugModeMessage` method and listener registration in `connectedCallback()`.
-
-### 5.5 Missing SortableJS Type Definitions
-
-**Problem:** `types/sortablejs.d.ts` is incomplete — only declares minimal options.
-
-**Current (incomplete):**
-```typescript
-// types/sortablejs.d.ts
-declare module 'sortablejs' {
-  interface Options {
-    group?: string | { name: string; pull?: boolean; put?: boolean };
-    sort?: boolean;
-    // ... minimal subset
-  }
-}
-```
-
-**Fix options:**
-
-1. **Preferred:** Install `@types/sortablejs` from DefinitelyTyped
-   ```bash
-   npm install -D @types/sortablejs
-   ```
-
-2. **Alternative:** Expand local definition to include full `Sortable.Event` type:
-   ```typescript
-   interface SortableEvent extends Event {
-     oldIndex?: number;
-     newIndex?: number;
-     oldDraggableIndex?: number;
-     newDraggableIndex?: number;
-     item: HTMLElement;
-     clone: HTMLElement;
-     from: HTMLElement;
-     to: HTMLElement;
-     // ...
-   }
-   ```
-
-### 5.6 `any` Types in themeHandlers.ts
-
-**Problem:** Lines 21 and 30 use `any`:
-
-```typescript
-// themeHandlers.js (should be .ts)
-[commands.THEME_SET]: (message: any) => { ... }
-[commands.DEBUG_MODE_SET]: (message: any) => { ... }
-```
-
-**Fix:** Convert to TypeScript with proper types:
-
-```typescript
-// themeHandlers.ts
-interface ThemeSetMessage {
-  theme?: string;
-}
-
-interface DebugModeSetMessage {
-  debugMode?: boolean;
-}
-
-export const THEME_HANDLERS: Record<string, (message: unknown) => void> = {
-  [COMMANDS.THEME_SET]: (message) => {
-    const { theme } = message as ThemeSetMessage;
-    if (theme) document.body.dataset.vscodeThemeKind = theme;
-  },
-  [COMMANDS.DEBUG_MODE_SET]: (message) => {
-    const { debugMode } = message as DebugModeSetMessage;
-    document.body.classList.toggle('debug-mode', Boolean(debugMode));
-  },
-};
-```
-
-### 5.7 Inline Arrow Functions (37 instances)
-
-**Problem:** MainApp.ts contains **37 inline arrow functions** in templates, creating new function instances on every render.
-
-**Examples (lines 1700-2345):**
-```typescript
-// ❌ Anti-pattern - repeated in file selection loops
-@click=${() => this.handleRemoveFile(listId, file)}
-@click=${() => this.handleOpenFile(file)}
-@click=${() => this.handlePreviewFile(file)}
-```
-
-**Fix:** Extract to class methods with data attributes:
-
-```typescript
-// ✓ Stable reference
-private handleFileAction = (e: Event) => {
-  const target = e.currentTarget as HTMLElement;
-  const action = target.dataset.action;
-  const listId = target.dataset.listId;
-  const filePath = target.dataset.filePath;
-
-  switch (action) {
-    case 'remove': this.handleRemoveFile(listId!, filePath!); break;
-    case 'open': this.handleOpenFile(filePath!); break;
-    case 'preview': this.handlePreviewFile(filePath!); break;
-  }
-};
-
-// In template
-<button
-  @click=${this.handleFileAction}
-  data-action="remove"
-  data-list-id=${listId}
-  data-file-path=${file.path}
->
-```
-
-### 5.8 Suggested Computed Getters
-
-Some derived state is computed repeatedly. Use Lit's reactive getters:
-
-**Current:**
-```typescript
-// Computed in render() multiple times
-const isToolUse = this.agentConfig?.category === 'toolUse';
-```
-
-**Preferred:**
-```typescript
-@state() private agentConfig: AgentConfig | null = null;
-
-private get isToolUse(): boolean {
-  return this.agentConfig?.category === 'toolUse';
-}
-```
-
----
-
-## Phase 5 Implementation Plan
-
-### Step 1: Message Validation (Week 1)
-1. Create `src/shared/schemas/mainViewMessages.ts` with all 58 schemas
-2. Create `src/webview/frontend/handlers/messageHandlers.ts` with registry pattern
-3. Update MainApp to use registry + Zod validation
-4. Delete redundant debug mode handler
-
-### Step 2: Component Extraction (Week 2)
-1. Extract `FileSelectGroup.ts` component
-2. Extract `BannerGroup.ts` components
-3. Extract `LatexDiffsSection.ts` component
-4. Update MainApp imports
-
-### Step 3: Type Safety (Week 3)
-1. Install `@types/sortablejs` or expand local types
-2. Convert `themeHandlers.js` → `themeHandlers.ts`
-3. Extract 37 inline arrows to class methods
-4. Add computed getters for derived state
-
-### Phase 5 Success Metrics
-
-| Metric | Before | After |
-|--------|--------|-------|
-| MainApp.ts lines | 2,737 | ~500 |
-| Extracted components | 0 | 6+ |
-| Message schemas | 0 | 58 |
-| Zod-validated messages | 0% | 100% |
-| Inline arrow functions | 37 | 0 |
-| `any` types | 2 | 0 |
-| Duplicate handlers | 1 | 0 |
-
-### Target Structure
-
-```
-src/webview/
-├── frontend/
-│   ├── index.ts
-│   ├── MainApp.ts                  # Root: message routing, orchestration
-│   ├── store.ts                    # Form state types
-│   └── components/
-│       ├── FileSelector/
-│       │   ├── FileSelector.ts     # Container with drag-drop
-│       │   ├── FileList.ts         # Categorized file lists
-│       │   └── FileItem.ts         # Single file with remove button
-│       ├── InstructionPanel/
-│       │   ├── InstructionPanel.ts # Instruction input + recording
-│       │   └── RecordingButton.ts  # Audio recording UI
-│       ├── AgentSelector.ts        # Agent + model dropdowns
-│       ├── ActionButtons.ts        # Run, Polish, etc.
-│       └── LatexdiffPanel.ts       # Diff configuration
-├── managers/                       # Keep existing TypeScript
-│   ├── InstructionManager.ts
-│   ├── FileManager.ts
-│   ├── ExecutionManager.ts
-│   └── DiffManager.ts
-├── styles/                         # Keep existing CSS
-├── MainViewMessageHandler.ts       # Keep existing
-└── MainViewContentProvider.ts      # Update to load Lit bundle
-```
-
-### Migration Approach (Incremental)
-
-1. **Week 1:** Create `MainApp.ts` shell, integrate with existing managers
-2. **Week 1:** Create `AgentSelector.ts` and `ActionButtons.ts` (simpler components)
-3. **Week 2:** Create `FileSelector/` components (most complex)
-4. **Week 2:** Create `InstructionPanel/` with recording integration
-5. **Week 3:** Create `LatexdiffPanel.ts`, final integration testing
-6. Delete `modules/` directory and `script.js`
+**See [prd-progressview-phase5.md](./prd-progressview-phase5.md) for full details.**
 
 ---
 
