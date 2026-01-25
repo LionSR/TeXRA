@@ -1,16 +1,24 @@
-// @ts-nocheck
 /**
  * Task group header formatter for progress view.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
+
+// Local imports - progress view constants
 import { STREAM_STATUS, GROUP_DOM_IDS } from '../constants';
+
+// Local imports - formatter helpers
 import { TaskGroupLevel } from './taskGroupLevel';
 import {
   getDateTimeFormatter,
   getTimeFormatter,
   formatDuration,
 } from './timestampUtils';
+
+// Local imports - shared schemas
+import type { TaskGroup } from '@shared/schemas';
+import type { TaskGroupLevelConfig } from './taskGroupLevel';
 
 /**
  * Formats task group headers.
@@ -21,7 +29,7 @@ export class TaskGroupHeaderFormatter {
    * @param {Object} group - Task group data
    * @returns {HTMLElement|null} Header element or null if template creation fails
    */
-  create(group) {
+  create(group: TaskGroup): HTMLElement | null {
     const startDate = new Date(group.startTime);
     const level = this._getGroupLevel(group);
     const formatter =
@@ -37,12 +45,12 @@ export class TaskGroupHeaderFormatter {
     header.className = this._getHeaderClass(group, level);
 
     const statusIconElem = header.querySelector('.group-status-icon');
-    if (statusIconElem) {
+    if (statusIconElem instanceof HTMLElement) {
       statusIconElem.innerHTML = this._getStatusIcon(group.status);
     }
 
     const titleElem = header.querySelector('.group-title');
-    if (titleElem) {
+    if (titleElem instanceof HTMLElement) {
       if (level.showTitle) {
         titleElem.textContent = group.name;
       } else {
@@ -51,13 +59,13 @@ export class TaskGroupHeaderFormatter {
     }
 
     const startTimeElem = header.querySelector('.group-start-time');
-    if (startTimeElem) {
+    if (startTimeElem instanceof HTMLElement) {
       startTimeElem.dataset.start = String(group.startTime);
       startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
     }
 
     const durationElem = header.querySelector('.group-duration');
-    if (durationElem) {
+    if (durationElem instanceof HTMLElement) {
       if (group.endTime) {
         const durationMs = group.endTime - group.startTime;
         durationElem.textContent = formatDuration(durationMs);
@@ -69,11 +77,11 @@ export class TaskGroupHeaderFormatter {
     return header;
   }
 
-  _getGroupLevel(group) {
+  _getGroupLevel(group: TaskGroup): TaskGroupLevelConfig {
     return group.parentGroupId ? TaskGroupLevel.NESTED : TaskGroupLevel.ROOT;
   }
 
-  _getHeaderClass(group, level) {
+  _getHeaderClass(group: TaskGroup, level: TaskGroupLevelConfig): string {
     const classes = ['log-group-header', `is-${group.status}`];
     if (level.cssClass) {
       classes.push(level.cssClass);
@@ -81,7 +89,7 @@ export class TaskGroupHeaderFormatter {
     return classes.join(' ');
   }
 
-  _getStatusIcon(status) {
+  _getStatusIcon(status: string): string {
     switch (status) {
       case STREAM_STATUS.RUNNING:
         return '<i class="codicon codicon-sync spin"></i>';
@@ -100,7 +108,7 @@ export class TaskGroupHeaderFormatter {
    * @param {number} durationMs - Duration in milliseconds
    * @returns {string} Formatted duration string
    */
-  _formatDuration(durationMs) {
+  _formatDuration(durationMs: number): string {
     return formatDuration(durationMs);
   }
 }
