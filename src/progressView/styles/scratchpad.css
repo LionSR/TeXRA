@@ -3,11 +3,11 @@
  */
 
 .banner-details {
-  margin: 1px 0;
+  margin: var(--spacing-small) 0;
 }
 
 .tool-use-section {
-  margin: var(--spacing-tiny) 0;
+  margin: var(--spacing-small) 0;
 }
 
 .tool-use-title {

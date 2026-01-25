@@ -59,7 +59,7 @@ followup-section:empty {
 }
 
 .log-entry-content {
-  padding: 0 0 var(--spacing-tiny) var(--spacing-medium);
+  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
   overflow: visible;
 }
 
