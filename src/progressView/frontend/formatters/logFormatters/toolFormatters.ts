@@ -33,6 +33,7 @@ import {
   TOOLS_WITH_FILE_CONTENT,
   TOOL_OUTPUT_LANGUAGES,
   TOOL_CODE_LANGUAGES,
+  TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
 
@@ -246,7 +247,8 @@ export function formatToolUse(
 
   // Show output if present
   const isWriteTool = TOOLS_WITH_FILE_CONTENT.has(toolName);
-  const isTrivialWriteOutput = isWriteTool && outputText.trim() === 'written';
+  const isTrivialWriteOutput =
+    isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   if (
     outputText &&
     !TOOLS_WITH_FILE_LINK.has(toolName) &&

@@ -5,6 +5,9 @@
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
 
+// Local imports - shared utilities
+import { getBasename } from '@shared/utils/path';
+
 // Re-export icon constants for single import source
 export { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
 
@@ -107,7 +110,7 @@ export function getLanguageFromPath(filePath: string): string {
     return 'plaintext';
   }
 
-  const fileName = filePath.split('/').pop() || filePath;
+  const fileName = getBasename(filePath) || filePath;
   const lowerFileName = fileName.toLowerCase();
 
   // Handle special filenames
@@ -128,6 +131,9 @@ export function getLanguageFromPath(filePath: string): string {
 // Threshold constants for diff detection heuristics
 export const DIFF_DETECTION_LINE_LIMIT = 20;
 export const DIFF_MARKER_THRESHOLD = 2;
+
+// Tool output patterns for filtering trivial responses
+export const TRIVIAL_WRITE_OUTPUT = 'written';
 
 /**
  * Tool icon mapping for different tool types.
