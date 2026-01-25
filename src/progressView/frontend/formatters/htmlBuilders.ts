@@ -1,13 +1,21 @@
 /**
- * HTML generation utilities for progress view formatters.
- * These functions create HTML fragments from normalized data.
+ * Lit template utilities for progress view formatters.
+ * These functions create reusable Lit templates from normalized data.
  */
 
 // Third-party imports
 import hljs from 'highlight.js';
 
+// Local imports - Lit utilities
+import {
+  html,
+  unsafeHTML,
+  classMap,
+  ifDefined,
+  type TemplateResult,
+} from './litTemplates';
+
 // Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
 import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
 import { getBasename } from '@shared/utils/path';
 
@@ -22,28 +30,29 @@ import {
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
 
-/** Build a tool-use section HTML block. */
-export function buildToolUseSection(label: string, content: string): string {
-  return `
-  <div class="tool-use-section">
-    <div class="tool-use-subsection">
-      <span class="tool-use-sublabel">${label}</span>
-      ${content}
+/** Build a tool-use section template. */
+export function buildToolUseSection(
+  label: string,
+  content: TemplateResult,
+): TemplateResult {
+  return html`
+    <div class="tool-use-section">
+      <div class="tool-use-subsection">
+        <span class="tool-use-sublabel">${label}</span>
+        ${content}
+      </div>
     </div>
-  </div>
-`;
+  `;
 }
 
-// Diff line prefix patterns
-// IMPORTANT: Longer prefixes (+++, ---) must appear before shorter ones (+, -)
-// to ensure correct matching priority in getDiffLineClass
+// Diff line prefix patterns (longer prefixes first for correct matching)
 const DIFF_LINE_PATTERNS = [
   { prefix: '@@', className: 'diff-hunk' },
-  { prefix: '+++', className: null }, // Header, not highlighted
-  { prefix: '---', className: null }, // Header, not highlighted
+  { prefix: '+++', className: null },
+  { prefix: '---', className: null },
   { prefix: '+', className: 'diff-add' },
   { prefix: '-', className: 'diff-remove' },
-];
+] as const;
 
 /** Get diff line class based on line content. */
 function getDiffLineClass(line: string): string | null {
@@ -53,7 +62,7 @@ function getDiffLineClass(line: string): string | null {
   return null;
 }
 
-/** Check if text appears to be diff output. Examines first N lines for diff markers. */
+/** Check if text appears to be diff output. */
 function isDiffContent(text: string): boolean {
   const lines = text.split('\n').slice(0, DIFF_DETECTION_LINE_LIMIT);
   const diffMarkers = lines.filter(
@@ -64,21 +73,22 @@ function isDiffContent(text: string): boolean {
 }
 
 /** Wrap text in a pre element with optional class and diff highlighting. */
-export function wrapInPre(text: string, className = ''): string {
-  const classAttr = className ? ` class="${className}"` : '';
-
-  // Apply diff highlighting if content looks like a diff
+export function wrapInPre(text: string, className = ''): TemplateResult {
   if (!isDiffContent(text)) {
-    return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
+    return html`<pre class=${ifDefined(className || undefined)}>${text}</pre>`;
   }
 
-  const highlightedLines = text.split('\n').map((line) => {
-    const diffClass = getDiffLineClass(line);
-    const encoded = encodeHtml(line);
-    return diffClass ? `<span class="${diffClass}">${encoded}</span>` : encoded;
-  });
-
-  return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
+  // Apply diff highlighting
+  const lines = text.split('\n');
+  return html`<pre class=${ifDefined(className || undefined)}>
+${lines.map((line, i) => {
+      const diffClass = getDiffLineClass(line);
+      const suffix = i < lines.length - 1 ? '\n' : '';
+      return diffClass
+        ? html`<span class=${diffClass}>${line}</span>${suffix}`
+        : html`${line}${suffix}`;
+    })}</pre
+  >`;
 }
 
 /** Set common dataset attributes on an element. */
@@ -105,38 +115,40 @@ export function initToggleIcon(element: HTMLElement, expanded = false): void {
   }
 }
 
-/** Build rendered HTML for file list. Computes display fields inline. */
-export function buildFileListRender(
-  files: FileListEntry[],
-): { items: string; summary: string } | null {
+/** Build rendered templates for file list. */
+export function buildFileListRender(files: FileListEntry[]): {
+  items: TemplateResult;
+  summary: string;
+} | null {
   if (!Array.isArray(files)) return null;
 
-  const items = files
-    .map((file) => {
-      const icon = file.ok ? 'codicon-check' : 'codicon-warning';
-      const filePath = file.path;
-      const escaped = encodeHtml(filePath);
-      const fileName = getBasename(filePath);
-      const fileNameEscaped = encodeHtml(fileName);
+  const items = html`${files.map((file) => {
+    const icon = file.ok ? 'codicon-check' : 'codicon-warning';
+    const filePath = file.path;
+    const fileName = getBasename(filePath);
 
-      const metaParts = [];
-      if (file.varName) {
-        metaParts.push(
-          `<span class="file-var">[${encodeHtml(file.varName)}]</span>`,
-        );
-      }
-      const source = file.source ?? 'unknown';
-      if (source !== 'unknown') {
-        const sourceDisplay = encodeHtml(file.sourceDisplay ?? source);
-        const sourceText = file.internal
-          ? `${sourceDisplay}, internal`
-          : sourceDisplay;
-        metaParts.push(`<span class="file-source">(${sourceText})</span>`);
-      }
+    const source = file.source ?? 'unknown';
+    const showSource = source !== 'unknown';
+    const sourceDisplay = file.sourceDisplay ?? source;
+    const sourceText = file.internal
+      ? `${sourceDisplay}, internal`
+      : sourceDisplay;
 
-      return `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metaParts.join(' ')}</li>`;
-    })
-    .join('');
+    return html`
+      <li class="detail-item" title=${filePath}>
+        <i class=${`codicon ${icon}`}></i>
+        <span class="file-link clickable-link" data-file=${filePath}
+          >${fileName}</span
+        >
+        ${file.varName
+          ? html`<span class="file-var">[${file.varName}]</span>`
+          : ''}
+        ${showSource
+          ? html`<span class="file-source">(${sourceText})</span>`
+          : ''}
+      </li>
+    `;
+  })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
   const failedFiles = files.length - loadedFiles;
@@ -146,12 +158,17 @@ export function buildFileListRender(
   return { items, summary };
 }
 
-/** Build file link HTML element. */
-export function buildFileLink(filePath: string, displayName: string): string {
+/** Build file link template. */
+export function buildFileLink(
+  filePath: string,
+  displayName: string,
+): TemplateResult {
   if (!filePath) {
-    return `<span>${encodeHtml(displayName)}</span>`;
+    return html`<span>${displayName}</span>`;
   }
-  return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}">${encodeHtml(displayName)}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath}
+    >${displayName}</span
+  >`;
 }
 
 /** Get appropriate icon class for a tool. */
@@ -179,20 +196,22 @@ const LANGUAGE_LABELS: Record<string, string> = {
 const getLanguageLabel = (language: string): string =>
   LANGUAGE_LABELS[language] ?? (language || 'Text');
 
-/** Apply syntax highlighting to code if language is supported. */
+/** Apply syntax highlighting to code if language is supported. Returns HTML string for unsafeHTML. */
 function highlightCode(text: string, language: string): string {
   const isHighlightable = language && language !== 'plaintext';
   if (!isHighlightable || !hljs.getLanguage(language)) {
-    return encodeHtml(text);
+    // Return plain text - will be escaped by Lit
+    return text;
   }
   try {
+    // Returns HTML with syntax highlighting spans
     return hljs.highlight(text, { language, ignoreIllegals: true }).value;
   } catch {
-    return encodeHtml(text);
+    return text;
   }
 }
 
-/** Build a code block with optional syntax highlighting, language badge, and copy button. Does NOT use auto-detection - requires explicit language or defaults to plaintext. */
+/** Build a code block with optional syntax highlighting, language badge, and copy button. */
 export function buildCodeBlock(
   text: string,
   options: {
@@ -201,7 +220,7 @@ export function buildCodeBlock(
     showLanguage?: boolean;
     showCopy?: boolean;
   } = {},
-): string {
+): TemplateResult {
   const {
     language = 'plaintext',
     className = '',
@@ -209,31 +228,35 @@ export function buildCodeBlock(
     showCopy = false,
   } = options;
 
-  const preClasses = ['hljs', className].filter(Boolean).join(' ');
+  const preClasses = { hljs: true, [className]: Boolean(className) };
+  const highlighted = highlightCode(text, language);
+  const isHighlighted = highlighted !== text;
 
-  // Build code content with or without highlighting
-  const codeContent = highlightCode(text, language);
-
-  // Build header with optional badge and copy button
-  const headerParts: string[] = [];
-  if (showLanguage) {
-    const label = getLanguageLabel(language);
-    headerParts.push(
-      `<span class="code-block-language">${encodeHtml(label)}</span>`,
-    );
-  }
-  if (showCopy) {
-    headerParts.push(
-      `<button class="code-block-copy" title="Copy to clipboard"><i class="codicon codicon-copy"></i></button>`,
-    );
-  }
-
-  const header =
-    headerParts.length > 0
-      ? `<div class="code-block-header">${headerParts.join('')}</div>`
-      : '';
-
-  return `<div class="code-block" data-language="${encodeHtml(language)}">${header}<pre class="${preClasses}"><code>${codeContent}</code></pre></div>`;
+  return html`
+    <div class="code-block" data-language=${language}>
+      ${showLanguage || showCopy
+        ? html`
+            <div class="code-block-header">
+              ${showLanguage
+                ? html`<span class="code-block-language"
+                    >${getLanguageLabel(language)}</span
+                  >`
+                : ''}
+              ${showCopy
+                ? html`<button
+                    class="code-block-copy"
+                    title="Copy to clipboard"
+                  >
+                    <i class="codicon codicon-copy"></i>
+                  </button>`
+                : ''}
+            </div>
+          `
+        : ''}
+      <pre class=${classMap(preClasses)}>
+<code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>
+    </div>
+  `;
 }
 
 // ============================================================================
@@ -244,13 +267,13 @@ export function buildCodeBlock(
 export function buildFileLinkWithLines(
   filePath: string,
   options: { startLine?: number; endLine?: number } = {},
-): string {
-  if (!filePath) return '';
+): TemplateResult {
+  if (!filePath) return html``;
 
   const { startLine, endLine } = options;
   const fileName = filePath.split('/').pop() || filePath;
 
-  // Build line info string (only if range explicitly provided)
+  // Build line info string
   let lineInfo = '';
   if (startLine && endLine && startLine !== endLine) {
     lineInfo = `:${startLine}-${endLine}`;
@@ -259,20 +282,30 @@ export function buildFileLinkWithLines(
   }
 
   const displayText = fileName + lineInfo;
-  const lineAttr = startLine ? ` data-file-line="${startLine}"` : '';
 
-  return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}"${lineAttr}><i class="codicon codicon-file"></i> ${encodeHtml(displayText)}</span>`;
+  return html`
+    <span
+      class="file-link clickable-link"
+      data-file=${filePath}
+      data-file-line=${ifDefined(startLine)}
+    >
+      <i class="codicon codicon-file"></i> ${displayText}
+    </span>
+  `;
 }
 
 // ============================================================================
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
-/** Build edit diff section showing old_string to new_string with inline highlighting. Deleted text shown with red strikethrough, added text shown with green highlight. */
+/** Build edit diff section showing old_string to new_string with inline highlighting. */
 export function buildEditDiffSection(
   oldString: string,
   newString: string,
-): string {
-  const diffHtml = generateInlineDiff(oldString, newString);
-  return `<div class="edit-diff-container"><pre class="diff-inline-view">${diffHtml}</pre></div>`;
+): TemplateResult {
+  return html`
+    <div class="edit-diff-container">
+      <pre class="diff-inline-view">${generateInlineDiff(oldString, newString)}</pre>
+    </div>
+  `;
 }

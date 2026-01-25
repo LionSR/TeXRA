@@ -7,10 +7,14 @@
 import { z } from 'zod';
 
 // Local imports - Lit template utilities
-import { html, ifDefined, unsafeHTML, renderToElement } from '../litTemplates';
+import {
+  html,
+  ifDefined,
+  renderToElement,
+  type TemplateResult,
+} from '../litTemplates';
 
 // Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
 import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
@@ -23,7 +27,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - formatter helpers
-import { buildFileLink, buildFileListRender } from '../htmlBuilders';
+import { buildFileLink, buildFileListRender, initToggleIcon } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
 /** Format file list entry. */
@@ -46,7 +50,7 @@ export function formatFileList(
         </summary>
         <ul
           class="file-list-content"
-          data-log-id=${ifDefined(logId || undefined)}
+          data-log-id=${ifDefined(logId)}
         >
           <pre>${text ?? ''}</pre>
         </ul>
@@ -65,9 +69,9 @@ export function formatFileList(
       </summary>
       <ul
         class="file-list-content"
-        data-log-id=${ifDefined(logId || undefined)}
+        data-log-id=${ifDefined(logId)}
       >
-        ${unsafeHTML(renderData?.items ?? '')}
+        ${renderData?.items ?? ''}
       </ul>
     </details>
   `);
@@ -119,7 +123,7 @@ export function formatMissingOutputs(
       </summary>
       <ul
         class="file-list-content"
-        data-log-id=${ifDefined(logId || undefined)}
+        data-log-id=${ifDefined(logId)}
       >
         ${missing.map((f) => {
           const filePath = String(f);
@@ -149,14 +153,8 @@ const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
   error: 'codicon-error',
 };
 
-/** Get status icon class for latexdiff entry. */
-const getLatexdiffStatusIcon = (status: DiffStatus): string =>
-  LATEXDIFF_STATUS_ICONS[status];
-
-/**
- * Build HTML for a latexdiff entry from validated display data.
- */
-const buildLatexdiffEntryHtml = (entry: DiffResultDisplay): string => {
+/** Build Lit template for a latexdiff entry. */
+function buildLatexdiffEntry(entry: DiffResultDisplay): TemplateResult {
   const {
     baseFile,
     revisedFile,
@@ -169,26 +167,25 @@ const buildLatexdiffEntryHtml = (entry: DiffResultDisplay): string => {
     runId,
   } = entry;
 
-  const icon = getLatexdiffStatusIcon(status);
-  const titleAttr = message ? ` title="${encodeHtml(message)}"` : '';
-  const runAttr = runId ? ` data-run-id="${encodeHtml(runId)}"` : '';
-
-  // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
+  const icon = LATEXDIFF_STATUS_ICONS[status];
   const baseLabel =
     baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
   const revisedLabel = `[r${revisedRound}]`;
 
-  const baseLink = buildFileLink(baseFile, baseLabel);
-  const revisedLink = buildFileLink(revisedFile, revisedLabel);
-  const diffLink = buildFileLink(diffFile, 'diff');
-
-  return (
-    `<li class="detail-item"${runAttr}>` +
-    `<i class="codicon ${icon}"${titleAttr}></i> ` +
-    `${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})` +
-    `</li>`
-  );
-};
+  return html`
+    <li
+      class="detail-item"
+      data-run-id=${ifDefined(runId)}
+      title=${ifDefined(message)}
+    >
+      <i class=${`codicon ${icon}`}></i>
+      ${buildFileLink(baseFile, baseLabel)}
+      <span class="arrow">→</span>
+      ${buildFileLink(revisedFile, revisedLabel)}
+      (${buildFileLink(diffFile, 'diff')})
+    </li>
+  `;
+}
 
 // =============================================================================
 // Latexdiff Formatter
@@ -199,20 +196,16 @@ export function formatLatexdiff(
   data: unknown,
   logId: string,
 ): HTMLElement | null {
-  // Parse and validate with Zod - handles both new and legacy formats
   const entries = parseDiffResultEntries(data);
   if (entries.length === 0) return null;
 
-  // Build HTML and collect first runId
   const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
-  const items = entries.map(buildLatexdiffEntryHtml);
-
   const summaryText =
     entries.length === 1
       ? 'Latexdiff result'
       : `Latexdiff results (${entries.length})`;
 
-  return renderToElement(html`
+  const element = renderToElement(html`
     <details class="banner-details latexdiff-details" open>
       <summary class="details-summary">
         <i class="toggle-icon"></i>
@@ -221,13 +214,15 @@ export function formatLatexdiff(
       </summary>
       <ul
         class="latexdiff-content"
-        data-log-id=${ifDefined(logId || undefined)}
-        data-run-id=${ifDefined(aggregatedRunId || undefined)}
+        data-log-id=${ifDefined(logId)}
+        data-run-id=${ifDefined(aggregatedRunId)}
       >
-        ${unsafeHTML(items.join(''))}
+        ${entries.map(buildLatexdiffEntry)}
       </ul>
     </details>
   `);
+  if (element) initToggleIcon(element, true);
+  return element;
 }
 
 // =============================================================================
@@ -290,7 +285,7 @@ export function formatStatistics(
       </summary>
       <div
         class="statistics-content"
-        data-log-id=${ifDefined(logId || undefined)}
+        data-log-id=${ifDefined(logId)}
       >
         ${items.map(
           (item) => html`

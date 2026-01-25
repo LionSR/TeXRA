@@ -25,15 +25,10 @@ import type { SetFollowupOptionsMessage } from '@shared/schemas';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import type { FollowupMode } from '../store';
+import { getRadioValue, type VSCodeValueElement } from '../utils';
 
 /** Agent name used for merge mode (fixed, not user-selectable) */
 const MERGE_AGENT_NAME = 'merge';
-
-/**
- * Type for VSCode web components that expose a value property.
- * Used for vscode-radio-group, vscode-single-select, etc.
- */
-type VSCodeValueElement = HTMLElement & { value?: string };
 
 /**
  * Form data collected from the followup section inputs.
@@ -198,15 +193,8 @@ export class FollowupSection extends LitElement {
   }
 
   private handleModeChange(event: Event): void {
-    // Get value from the clicked radio element for reliability
-    // vscode-radio-group may not update .value synchronously on change
-    const target = event.target as Element | null;
-    const radio = target?.closest('vscode-radio');
-    const radioGroup = event.currentTarget as VSCodeValueElement | null;
-    const nextMode = (radio?.getAttribute('value') ||
-      radioGroup?.value) as FollowupMode;
+    const nextMode = getRadioValue<FollowupMode>(event);
     if (!nextMode) return;
-
     this.dispatchEvent(ProgressEvents.followupModeChange({ mode: nextMode }));
   }
 
