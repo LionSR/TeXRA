@@ -19,15 +19,21 @@ import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
 import {
+  ExtendedTokenUsageStatsSchema,
   FileListEntrySchema,
   MissingOutputsPayloadSchema,
   parseDiffResultEntries,
   type DiffResultDisplay,
   type DiffStatus,
+  type ExtendedTokenUsageStats,
 } from '@shared/schemas';
 
 // Local imports - formatter helpers
-import { buildFileLink, buildFileListRender, initToggleIcon } from '../htmlBuilders';
+import {
+  buildFileLink,
+  buildFileListRender,
+  initToggleIcon,
+} from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
 /** Format file list entry. */
@@ -48,10 +54,7 @@ export function formatFileList(
           <i class="codicon codicon-file"></i>
           <span class="summary-text">Files (raw)</span>
         </summary>
-        <ul
-          class="file-list-content"
-          data-log-id=${ifDefined(logId)}
-        >
+        <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
           <pre>${text ?? ''}</pre>
         </ul>
       </details>
@@ -67,10 +70,7 @@ export function formatFileList(
         <i class="codicon codicon-file"></i>
         <span class="summary-text">${renderData?.summary ?? 'Files'}</span>
       </summary>
-      <ul
-        class="file-list-content"
-        data-log-id=${ifDefined(logId)}
-      >
+      <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
         ${renderData?.items ?? ''}
       </ul>
     </details>
@@ -121,10 +121,7 @@ export function formatMissingOutputs(
         <i class="codicon codicon-warning"></i>
         <span class="summary-text">Missing outputs (${missing.length})</span>
       </summary>
-      <ul
-        class="file-list-content"
-        data-log-id=${ifDefined(logId)}
-      >
+      <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
         ${missing.map((f) => {
           const filePath = String(f);
           const basename = getBasename(filePath);
@@ -231,7 +228,7 @@ export function formatLatexdiff(
 
 /** Configuration for a statistics field: [key, icon, label, formatter]. */
 type StatFieldConfig = readonly [
-  key: string,
+  key: keyof ExtendedTokenUsageStats,
   icon: string,
   label: string,
   formatter: (value: number) => string,
@@ -260,20 +257,22 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
 ];
 
-/** Format statistics entry. */
+/** Format statistics entry using schema validation. */
 export function formatStatistics(
   data: unknown,
   logId: string,
 ): HTMLElement | null {
-  if (!data || typeof data !== 'object') return null;
+  // Use partial schema to allow missing optional fields
+  const parseResult = ExtendedTokenUsageStatsSchema.partial().safeParse(data);
+  if (!parseResult.success) return null;
 
-  const record = data as Record<string, unknown>;
+  const stats = parseResult.data;
   const items = STAT_FIELDS.filter(
-    ([key]) => typeof record[key] === 'number',
+    ([key]) => stats[key] !== undefined,
   ).map(([key, icon, label, formatter]) => ({
     icon,
     label,
-    value: formatter(record[key] as number),
+    value: formatter(stats[key]!),
   }));
 
   return renderToElement(html`
@@ -283,10 +282,7 @@ export function formatStatistics(
         <i class="codicon codicon-graph"></i>
         <span class="summary-text">Statistics</span>
       </summary>
-      <div
-        class="statistics-content"
-        data-log-id=${ifDefined(logId)}
-      >
+      <div class="statistics-content" data-log-id=${ifDefined(logId)}>
         ${items.map(
           (item) => html`
             <span class="stat-item detail-item" title=${item.label}>

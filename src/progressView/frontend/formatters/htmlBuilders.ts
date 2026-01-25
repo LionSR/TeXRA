@@ -271,7 +271,7 @@ export function buildFileLinkWithLines(
   if (!filePath) return html``;
 
   const { startLine, endLine } = options;
-  const fileName = filePath.split('/').pop() || filePath;
+  const fileName = getBasename(filePath) || filePath;
 
   // Build line info string
   let lineInfo = '';
@@ -305,7 +305,9 @@ export function buildEditDiffSection(
 ): TemplateResult {
   return html`
     <div class="edit-diff-container">
-      <pre class="diff-inline-view">${generateInlineDiff(oldString, newString)}</pre>
+      <pre class="diff-inline-view">
+${generateInlineDiff(oldString, newString)}</pre
+      >
     </div>
   `;
 }

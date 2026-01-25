@@ -156,10 +156,7 @@ export function formatContextManagement(
           >${config.label}</span
         >
       </summary>
-      <div
-        class="context-management-content"
-        data-log-id=${ifDefined(logId)}
-      >
+      <div class="context-management-content" data-log-id=${ifDefined(logId)}>
         ${items.map(
           (item) => html`
             <span class="stat-item detail-item" title=${item.label}>

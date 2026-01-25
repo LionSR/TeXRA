@@ -1,10 +1,5 @@
 // Local imports - Lit template utilities
-import {
-  html,
-  render,
-  unsafeHTML,
-  renderToElement,
-} from '../formatters/litTemplates';
+import { html, render, renderToElement } from '../formatters/litTemplates';
 
 // Local imports - shared state
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
@@ -40,7 +35,6 @@ export class TaskGroupDomManager {
   private toggleListeners: Map<string, ToggleListener>;
   private taskGroups: Map<string, TaskGroup>;
   private currentGroupId: string | null;
-  private activeAgentCategory: string;
   private toggleStates: ToggleStateStore;
   private root: RootElement;
 
@@ -52,13 +46,8 @@ export class TaskGroupDomManager {
     this.toggleListeners = new Map();
     this.taskGroups = new Map();
     this.currentGroupId = null;
-    this.activeAgentCategory = 'workflow';
     this.toggleStates = toggleStates ?? new ToggleStateStore();
     this.root = root ?? document;
-  }
-
-  setActiveAgentCategory(category: string): void {
-    this.activeAgentCategory = category || 'workflow';
   }
 
   renderInitial(groups: TaskGroup[], container: HTMLElement | null): void {
@@ -208,11 +197,10 @@ export class TaskGroupDomManager {
     const header = this._getById(`${GROUP_DOM_IDS.HEADER_PREFIX}${id}`);
     if (!header) return;
 
-    // Update status icon using Lit render with unsafeHTML for the HTML string
+    // Update status icon using Lit render
     const statusIconElem = header.querySelector('.group-status-icon');
     if (statusIconElem instanceof HTMLElement) {
-      const iconHtml = this.headerFormatter._getStatusIcon(group.status);
-      render(html`${unsafeHTML(iconHtml)}`, statusIconElem);
+      render(this.headerFormatter._getStatusIcon(group.status), statusIconElem);
     }
 
     header.className = this.headerFormatter._getHeaderClass(
@@ -256,11 +244,13 @@ export class TaskGroupDomManager {
     }
   }
 
-  showRun(groupId: string | null): void {
-    const showAll =
-      this.activeAgentCategory === 'toolUse' ||
-      !groupId ||
-      !this._rootGroupIds.has(groupId);
+  /**
+   * Show/hide run groups based on selection.
+   * @param groupId - The run group to show, or null to show all
+   * @param isToolUse - If true, always show all runs (tool-use agents don't filter by run)
+   */
+  showRun(groupId: string | null, isToolUse = false): void {
+    const showAll = isToolUse || !groupId || !this._rootGroupIds.has(groupId);
 
     for (const id of this._rootGroupIds) {
       const element = this.groupElements.get(id);
