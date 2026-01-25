@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 // Local imports - shared schemas (data types)
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   AgentCategorySchema,
   AgentProposalPromptSchema,
@@ -31,7 +32,6 @@ import {
 } from './index';
 
 // Local imports - command constants
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // ============================================================================
 // Shared Field Schemas
@@ -63,6 +63,8 @@ export const UpdateStreamsMessageSchema = z.object({
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
+  /** Full stream states keyed by stream ID - backend is source of truth */
+  streamStates: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const UpdateStreamStatusMessageSchema = z.object({

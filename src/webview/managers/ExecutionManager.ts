@@ -9,13 +9,13 @@ import {
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from '@agent/core/ToolConfig';
-import type { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import { capitalize } from '@utils/text/stringUtils';
 import {
   isPastedImage,
   getPastedImageFullPath,
 } from '@utils/files/pastedImageUtils';
+import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);

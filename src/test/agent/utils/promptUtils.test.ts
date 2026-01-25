@@ -3,11 +3,11 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - prompt utilities
-import type { ExecutionId } from '@shared/schemas';
 import { writePromptToXml } from '@utils/prompt';
 // Local imports - storage
 // Internal imports
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
+import type { ExecutionId } from '@shared/schemas';
 
 describe('promptUtils.writePromptToXml', () => {
   type StorageFsMutable = {

@@ -40,7 +40,7 @@ function getCodiconFontUri(): string {
  * We provide our own with the correct webview URI.
  */
 function stripFontFace(cssText: string): string {
-  return cssText.replace(/@font-face\s*\{[^}]+\}/g, '');
+  return cssText.replaceAll(/@font-face\s*\{[^}]+\}/g, '');
 }
 
 /**

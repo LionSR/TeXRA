@@ -28,6 +28,7 @@
 import { z } from 'zod';
 
 import { RoundOutputSchema } from '@shared/schemas';
+import { AgentFileLocationSchema } from '@shared/schemas';
 import {
   AgentRunStateSnapshotSchema,
   ConversationRoundState,
@@ -44,7 +45,6 @@ import {
   CycleFieldsSchema,
   type CycleTransientFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { AgentFileLocationSchema } from '@shared/schemas';
 
 // ============================================================================
 // Schemas (Single Source of Truth)

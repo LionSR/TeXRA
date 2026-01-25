@@ -3,10 +3,10 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
 
 // Local imports - logger
+import { END_GROUP_STATUS } from '@shared/schemas';
 import { registry } from './LogChannelRegistry';
 
 // Local imports - constants
-import { END_GROUP_STATUS } from '@shared/schemas';
 
 // Type imports
 import type { EndGroupStatus } from '@shared/schemas';

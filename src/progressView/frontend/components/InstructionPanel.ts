@@ -1,6 +1,10 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
+
+// Local imports - shared styles
+// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
@@ -13,13 +17,88 @@ import type { InstructionUpdate } from '@shared/schemas';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
+  static styles = [
+    codiconStyles,
+    css`
+      :host {
+        display: none;
+        border-top: var(--border-thin) solid var(--color-border);
+        border-bottom: var(--border-thin) solid var(--color-border);
+        background-color: transparent;
+      }
+
+      :host([visible]) {
+        display: block;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      .instruction-panel__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-small) var(--spacing-medium);
+        gap: var(--spacing-small);
+      }
+
+      .instruction-panel__title {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        font-weight: 500;
+        color: var(--color-text-secondary);
+      }
+
+      .instruction-panel__title .codicon {
+        font-size: var(--font-size-icon);
+        line-height: 1;
+      }
+
+      .instruction-panel__actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
+
+      .instruction-panel__copy {
+        opacity: 0.65;
+      }
+
+      :host(:hover) .instruction-panel__copy {
+        opacity: 1;
+      }
+
+      .instruction-panel__body {
+        padding: 0 var(--spacing-medium) var(--spacing-medium);
+      }
+
+      .instruction-panel__text {
+        width: 100%;
+        max-height: 12rem;
+        font-family: var(--vscode-editor-font-family);
+        font-size: var(--vscode-editor-font-size);
+        line-height: 1.45;
+      }
+
+      .instruction-panel__text::part(control) {
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        border: 1px solid var(--vscode-input-border);
+        padding: var(--spacing-small);
+      }
+    `,
+  ];
+
   @property({ type: Object }) instruction: InstructionUpdate | null = null;
+  @property({ type: Boolean, reflect: true }) visible = false;
 
   @query(`#${ELEMENT_IDS.INSTRUCTION_COPY_BTN}`)
   declare private copyButton: HTMLElement | null;
 
-  protected createRenderRoot(): HTMLElement {
-    return this;
+  override willUpdate(): void {
+    this.visible = Boolean(this.instruction?.text?.trim());
   }
 
   render(): TemplateResult | typeof nothing {
@@ -29,10 +108,7 @@ export class InstructionPanel extends LitElement {
     }
 
     return html`
-      <div
-        id=${ELEMENT_IDS.INSTRUCTION_CONTAINER}
-        class="instruction-panel is-visible"
-      >
+      <div id=${ELEMENT_IDS.INSTRUCTION_CONTAINER} class="instruction-panel">
         <div class="instruction-panel__header">
           <span class="instruction-panel__title">
             <i class="codicon codicon-notebook"></i>

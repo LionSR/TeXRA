@@ -3,14 +3,10 @@ import { z } from 'zod';
 
 // Local imports - shared schemas
 import {
+  createStreamState,
   StorageKeySchema,
   TodoItemSchema,
-  type ExecutionId,
-  type InstructionUpdate,
-  type OutputFileInfo,
-  type StorageKey,
-  type StreamTabId,
-  type TodoItem,
+  type StreamState,
 } from '@shared/schemas';
 
 // Local imports - agent
@@ -37,9 +33,6 @@ import {
   isToolUseTaskState,
 } from '@logger/TaskState';
 
-// Local imports - utils
-import { getConfig } from '@utils/config';
-
 // Local imports - progress view
 import {
   OutputFilesManager,
@@ -50,6 +43,19 @@ import {
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
+
+// Local imports - utils
+import { getConfig } from '@utils/config';
+
+// Type imports
+import type {
+  ExecutionId,
+  InstructionUpdate,
+  OutputFileInfo,
+  StorageKey,
+  StreamTabId,
+  TodoItem,
+} from '@shared/schemas';
 
 /**
  * Schema for ephemeral stream metadata hints.
@@ -120,6 +126,12 @@ export class ProgressViewState {
     PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+
+  /**
+   * Frontend-ready stream states with discriminated types.
+   * Backend is single source of truth - frontend just stores what we send.
+   */
+  private _streamStates = new Map<StreamTabId, StreamState>();
 
   /**
    * Consolidated session state per stream.
@@ -344,6 +356,64 @@ export class ProgressViewState {
   }
 
   // ============================================================================
+  // Frontend Stream State Management
+  // ============================================================================
+
+  /**
+   * Get frontend-ready stream state for a stream.
+   * Returns undefined if stream doesn't exist.
+   */
+  getStreamState(stream: StreamTabId): StreamState | undefined {
+    return this._streamStates.get(stream);
+  }
+
+  /**
+   * Get or create frontend stream state for a stream.
+   * Creates with correct discriminated type based on agent category.
+   */
+  getOrCreateStreamState(
+    stream: StreamTabId,
+    agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
+  ): StreamState {
+    let state = this._streamStates.get(stream);
+    if (!state) {
+      state = createStreamState(agentCategory);
+      this._streamStates.set(stream, state);
+    }
+    return state;
+  }
+
+  /**
+   * Update frontend stream state for a stream.
+   * The updater receives the current state and returns the updated state.
+   * Type-safe: updater must return same discriminated type as input.
+   */
+  updateStreamState(
+    stream: StreamTabId,
+    updater: (prev: StreamState) => StreamState,
+  ): void {
+    const current = this._streamStates.get(stream);
+    if (current) {
+      this._streamStates.set(stream, updater(current));
+    }
+  }
+
+  /**
+   * Get all frontend stream states as a record for sending to frontend.
+   * This is the source of truth - frontend just stores what we send.
+   */
+  getAllStreamStates(): Record<StreamTabId, StreamState> {
+    return Object.fromEntries(this._streamStates.entries());
+  }
+
+  /**
+   * Clear frontend stream state for a stream.
+   */
+  clearStreamState(stream: StreamTabId): void {
+    this._streamStates.delete(stream);
+  }
+
+  // ============================================================================
   // Run Instruction Management (delegation to internal manager)
   // ============================================================================
 
@@ -407,6 +477,13 @@ export class ProgressViewState {
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
+
+    // Create frontend stream state with correct discriminated type
+    const agentCategory = taskState.agentConfig.agentCategory;
+    if (!this._streamStates.has(streamTabId)) {
+      this._streamStates.set(streamTabId, createStreamState(agentCategory));
+    }
+
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
@@ -467,6 +544,7 @@ export class ProgressViewState {
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
     this._sessionState.delete(stream);
+    this._streamStates.delete(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -495,6 +573,7 @@ export class ProgressViewState {
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionState.clear();
+    this._streamStates.clear();
     this._activeStream = PROGRESS_VIEW_DEFAULTS.activeStream;
     this.saveActiveStream();
     this.saveTaskStates();

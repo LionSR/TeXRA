@@ -17,14 +17,18 @@
   overflow: visible;
 }
 
-.markdown-content > :first-child {
+/* Consolidated first/last child margin resets */
+:is(.markdown-content, .banner-content, [class^='banner-content--'])
+  > :first-child {
   margin-top: 0;
 }
 
-.markdown-content > :last-child {
+:is(.markdown-content, .banner-content, [class^='banner-content--'])
+  > :last-child {
   margin-bottom: 0;
 }
 
+/* Model response content */
 .banner-content--model {
   padding: 0;
   white-space: normal;
@@ -32,6 +36,19 @@
 
 .banner-content--model pre {
   white-space: pre-wrap;
+}
+
+/* Tighten paragraph spacing in banner content */
+:is(.banner-content, .banner-content--model) p {
+  margin: 0.3em 0;
+}
+
+:is(.banner-content, .banner-content--model) p:first-child {
+  margin-top: 0;
+}
+
+:is(.banner-content, .banner-content--model) p:last-child {
+  margin-bottom: 0;
 }
 
 .markdown-content :is(h1, h2, h3, h4) {

@@ -10,14 +10,14 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent
+import { STREAM_STATUS } from '@shared/schemas';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { STREAM_STATUS } from '@shared/schemas';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import { getToolUsePersistenceEnabled } from '@utils/config';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Type imports
 

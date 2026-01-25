@@ -1,23 +1,33 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - progress view
+// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { getDateTimeFormatter } from '../formatters/timestampUtils';
 import { ProgressEvents } from '../events';
 
 @customElement('run-selector')
 export class RunSelector extends LitElement {
+  static styles = css`
+    :host {
+      display: block;
+      min-width: 180px;
+      max-width: 260px;
+      flex-shrink: 0;
+    }
+
+    :host([hidden]) {
+      display: none;
+    }
+  `;
+
   @property({ type: Array }) runs: Array<{
     id: string;
     name?: string;
     startTime?: number | string | Date;
   }> = [];
   @property({ type: String }) activeRunId: string | null = null;
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
 
   render(): TemplateResult {
     const sortedRuns = [...this.runs].sort((a, b) => {
@@ -29,7 +39,6 @@ export class RunSelector extends LitElement {
     return html`
       <vscode-single-select
         id="runSelector"
-        class="run-selector"
         aria-label="Select session"
         .value=${this.activeRunId ?? ''}
         @change=${this.handleChange}

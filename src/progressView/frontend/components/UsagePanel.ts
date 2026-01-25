@@ -4,23 +4,22 @@ import { customElement, property } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles/litStyles';
+// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
-import type { TokenUsageStats } from '@shared/schemas';
 
 // Local imports - progress view formatters
 import { formatTokens } from '../formatters/timestampUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
+import type { TokenUsageStats } from '@shared/schemas';
 import type { ContextState } from '../store';
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
   static styles = [
-    designTokens,
     codiconStyles,
     css`
       :host {

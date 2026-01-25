@@ -2,10 +2,6 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-import type { TaskState } from '@logger/TaskState';
-
-// Shared schemas - message types for type-safe webview communication
 import {
   type AgentProposalPrompt,
   type BashApprovalPrompt,
@@ -15,6 +11,7 @@ import {
   type OutputFileInfo,
   type ProgressViewOutboundMessage,
   type RetryRequestPrompt,
+  type StreamState,
   type StreamStatus,
   type StreamTabId,
   type StreamTabInfo,
@@ -24,10 +21,14 @@ import {
   type ToolEditApprovalPrompt,
   type UpdateTaskGroupPayload,
 } from '@shared/schemas';
+import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import type { TaskState } from '@logger/TaskState';
+
+// Shared schemas - message types for type-safe webview communication
 
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 /**
@@ -93,18 +94,21 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update stream tabs in the webview
+   * Update stream tabs in the webview.
+   * Optionally includes full stream states - backend is source of truth.
    */
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
     agentFilter: AgentCategoryFilter,
+    streamStates?: Record<StreamTabId, StreamState>,
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
       agentFilter,
+      streamStates,
     });
   }
 
@@ -430,7 +434,15 @@ export class WebviewUpdater {
       this.updateTheme(theme);
     }
 
-    this.updateStreams(streams, activeStream, state.agentCategoryFilter);
+    // Send stream states - backend is the source of truth
+    const streamStates = state.getAllStreamStates();
+
+    this.updateStreams(
+      streams,
+      activeStream,
+      state.agentCategoryFilter,
+      streamStates,
+    );
 
     return activeStream;
   }

@@ -5,7 +5,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import type { OutputFileInfo } from '@shared/schemas';
 
 // Internal imports
 import {
@@ -39,6 +38,7 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import type { OutputFileInfo } from '@shared/schemas';
 
 // Local imports - agent types
 
