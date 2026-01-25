@@ -1,9 +1,10 @@
 /**
  * Tool-style formatters for tool use and web search messages.
+ * Uses Lit templates for declarative DOM construction.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import { html, classMap, ifDefined, renderToElement } from '../litTemplates';
 
 // Local imports - shared utilities
 import { encodeHtml } from '@shared/utils/html';
@@ -13,8 +14,6 @@ import type { WebSearchPayload } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
-  setElementDataset,
-  initToggleIcon,
   buildToolUseSection,
   wrapInPre,
   getToolIconClass,
@@ -34,19 +33,19 @@ import {
 } from '../constants';
 
 // Web search provider display names
-const PROVIDER_LABELS = {
+const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
 };
 
 // Web search status suffixes for title
-const STATUS_SUFFIXES = {
+const STATUS_SUFFIXES: Record<string, string> = {
   in_progress: ' (searching...)',
   failed: ' (failed)',
 };
 
 // Web search status-based icon classes
-const STATUS_ICONS = {
+const STATUS_ICONS: Record<string, string> = {
   failed: 'codicon codicon-error',
   in_progress: 'codicon codicon-sync spin',
 };
@@ -94,39 +93,47 @@ function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   return 'Tool Use';
 }
 
-/** Create and initialize a tool-style element from template. */
+type ToolElementResult = {
+  element: HTMLElement;
+  headerLabel: HTMLElement | null;
+  iconElem: HTMLElement | null;
+  contentElem: HTMLElement | null;
+};
+
+/** Create and initialize a tool-style element using Lit template. */
 function createToolElement(
   logId: string,
   groupId: string | undefined,
   timestamp: number,
   iconClass: string,
-): {
-  element: HTMLElement;
-  headerLabel: HTMLElement | null;
-  iconElem: Element | null;
-  contentElem: HTMLElement | null;
-} | null {
-  const element = createFromTemplate('toolUseTemplate');
-  if (!element) return null;
-
+): ToolElementResult | null {
   const fullTimestamp = new Date(timestamp).toISOString();
-  setElementDataset(element, { logId, groupId, timestamp: fullTimestamp });
-  initToggleIcon(element, false);
 
-  const headerLabel = element.querySelector('.tool-use-title');
-  const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
-  const contentElem = element.querySelector('.banner-content');
+  const element = renderToElement(html`
+    <details class="banner-details tool-use-details">
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class=${`codicon ${iconClass}`}></i>
+        <span class="tool-use-title">Tool Use</span>
+      </summary>
+      <div
+        class="banner-content log-entry-content"
+        data-log-id=${ifDefined(logId || undefined)}
+        data-group-id=${ifDefined(groupId)}
+        data-timestamp=${ifDefined(fullTimestamp)}
+      ></div>
+    </details>
+  `);
 
-  if (iconElem instanceof HTMLElement) {
-    iconElem.className = `codicon ${iconClass}`;
-  }
-  element.classList.remove('tool-use-error');
+  if (!element) return null;
 
   return {
     element,
-    headerLabel: headerLabel instanceof HTMLElement ? headerLabel : null,
-    iconElem: iconElem instanceof HTMLElement ? iconElem : null,
-    contentElem: contentElem instanceof HTMLElement ? contentElem : null,
+    headerLabel: element.querySelector('.tool-use-title') as HTMLElement | null,
+    iconElem: element.querySelector(
+      '.details-summary > .codicon',
+    ) as HTMLElement | null,
+    contentElem: element.querySelector('.banner-content') as HTMLElement | null,
   };
 }
 
@@ -360,6 +367,11 @@ export function formatWebSearch(
   groupId: string | undefined,
   timestamp: number,
 ): HTMLElement | null {
+  // Validate data before creating DOM elements
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
   const toolElement = createToolElement(
     logId,
     groupId,
@@ -374,19 +386,13 @@ export function formatWebSearch(
     return element;
   }
 
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-
   const { query, results, provider, status } = data as WebSearchPayload;
   const resultCount = Array.isArray(results) ? results.length : 0;
   const providerKey = typeof provider === 'string' ? provider : 'web';
   const statusKey = typeof status === 'string' ? status : '';
 
-  const providerLabel =
-    PROVIDER_LABELS[providerKey as keyof typeof PROVIDER_LABELS] ?? 'Web';
-  const statusSuffix =
-    STATUS_SUFFIXES[statusKey as keyof typeof STATUS_SUFFIXES] ?? '';
+  const providerLabel = PROVIDER_LABELS[providerKey] ?? 'Web';
+  const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
 
   let titleText = `${providerLabel} Search`;
   if (query) {
@@ -396,9 +402,7 @@ export function formatWebSearch(
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
-    iconElem.className =
-      STATUS_ICONS[statusKey as keyof typeof STATUS_ICONS] ??
-      'codicon codicon-globe';
+    iconElem.className = STATUS_ICONS[statusKey] ?? 'codicon codicon-globe';
   }
   element.classList.toggle('tool-use-error', statusKey === 'failed');
 

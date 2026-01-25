@@ -136,7 +136,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: handleDeleteAllMessage,
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: handleUpdateUsage,
 };
-import { getFilteredStreams, getRunGroups } from './stateUtils';
+import { getFilteredStreams, getRunGroups, hasOutputFiles } from './stateUtils';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - progress view components
@@ -273,9 +273,9 @@ export class ProgressApp extends BaseWebviewApp {
                   <followup-section
                     .agentCategory=${activeStream.agentCategory}
                     .status=${streamState?.status ?? activeStream.status ?? ''}
-                    .hasOutputFiles=${Object.values(
-                      runId ? (streamState?.runFiles?.[runId] ?? {}) : {},
-                    ).flat().length > 0}
+                    .hasOutputFiles=${hasOutputFiles(
+                      runId ? streamState?.runFiles?.[runId] : undefined,
+                    )}
                     .options=${this.appState.followupOptions}
                     .mode=${streamState?.followupMode ?? 'chat'}
                     .streamModel=${activeStream.model ?? null}
