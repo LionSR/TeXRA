@@ -6,18 +6,23 @@
 
 **After ProgressView is stable**, extract patterns for other webviews.
 
-### Implementation Status (2026-01-24)
+### Implementation Status (2026-01-25)
 
-| Item                           | Status      | Notes                                                                 |
-| ------------------------------ | ----------- | --------------------------------------------------------------------- |
-| Base Lit app class             | ✅ Done     | `src/shared/BaseWebviewApp.ts` extracted and ProgressView now extends |
-| VS Code webview wrapper        | ✅ Done     | `src/shared/vscode.ts` + ProgressView import updated                  |
-| Reactive store helper          | ✅ Done     | `src/shared/createStore.ts` added for reuse                           |
-| Design tokens extraction       | ✅ Done     | `src/shared/styles/tokens.css` + common.css imports it                |
-| Shared resource roots          | ✅ Done     | `src/common/webview/resourceRoots.ts` includes shared styles          |
-| CSS bundling                   | ✅ Done     | ProgressView bundle now inlines CSS via custom webpack loader         |
-| Shared components              | ⏸️ Deferred | No components shared by 2+ webviews yet (rule preserved)              |
-| Legacy ProgressView JS cleanup | ✅ Done     | Removed legacy JS modules and script after Lit parity                 |
+| Item                           | Status         | Notes                                                                 |
+| ------------------------------ | -------------- | --------------------------------------------------------------------- |
+| Base Lit app class             | ✅ Done        | `src/shared/BaseWebviewApp.ts` extracted and ProgressView now extends |
+| VS Code webview wrapper        | ✅ Done        | `src/shared/vscode.ts` + ProgressView import updated                  |
+| Reactive store helper          | ✅ Done        | `src/shared/createStore.ts` added for reuse                           |
+| Design tokens extraction       | ✅ Done        | `src/shared/styles/tokens.css` + common.css imports it                |
+| Shared resource roots          | ✅ Done        | `src/common/webview/resourceRoots.ts` includes shared styles          |
+| CSS bundling                   | ✅ Done        | ProgressView bundle now inlines CSS via custom webpack loader         |
+| Shared components              | ⏸️ Deferred    | No components shared by 2+ webviews yet (rule preserved)              |
+| Legacy ProgressView JS cleanup | ✅ Done        | Removed legacy JS modules and script after Lit parity                 |
+| UI regression fixes            | 🟡 In Progress | Fixed some; may have remaining visual/behavior regressions            |
+| Custom element CSS fixes       | ✅ Done        | Added flex layout for `log-list`, `task-group-list`, `stream-tabs`    |
+| Message handler edge cases     | ✅ Done        | Pending log updates, auto-expand, stream-scoped filtering             |
+
+**Note:** UI parity testing is ongoing. Additional regressions may be discovered during real-world usage.
 
 ---
 

@@ -117,7 +117,7 @@ export class LogList extends LitElement {
     this.logManager.clear();
 
     if (action === 'clear') {
-      this.lastRenderedStream = streamId || '';
+      this.lastRenderedStream = streamId ?? '';
       this.showPlaceholderIfEmpty([], []);
       return;
     }
@@ -148,11 +148,9 @@ export class LogList extends LitElement {
       }
     }
 
+    this.groupManager.showRun(groups.length > 0 ? activeRunId : null);
     if (groups.length > 0) {
       this.groupManager.renderInitial(groups, container);
-      this.groupManager.showRun(activeRunId);
-    } else {
-      this.groupManager.showRun(null);
     }
 
     const ungroupedFragment = document.createDocumentFragment();
@@ -211,7 +209,7 @@ export class LogList extends LitElement {
     }
 
     scrollToBottom(container);
-    this.lastRenderedStream = streamId || '';
+    this.lastRenderedStream = streamId ?? '';
     this.showPlaceholderIfEmpty(sortedMessages, groups);
   }
 
