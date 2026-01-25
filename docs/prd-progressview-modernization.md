@@ -42,6 +42,22 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ---
 
+## Build Requirements
+
+> **Important:** Due to growing codebase size and Lit component compilation, increased memory allocation is required.
+
+```bash
+# Required for compilation (prevents heap out of memory errors)
+NODE_OPTIONS=--max-old-space-size=8192 npm run compile
+
+# Or set in package.json scripts (recommended)
+"compile": "NODE_OPTIONS=--max-old-space-size=8192 webpack --mode production"
+```
+
+**Why:** Lit + TypeScript + Zod schema compilation creates significant memory pressure during webpack bundling, especially with 5 webview entry points.
+
+---
+
 ## Goals & Phases
 
 | Phase       | Scope                                        | Status         | Doc                                                        |
@@ -49,7 +65,10 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 | **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
 | **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
-| **Phase 4** | Migrate other webviews (History/Profile/etc) | 🟡 In Progress | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete*   | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 5** | MainView refactoring + message contracts     | ⬜ Not Started | [prd-progressview-phase4.md](./prd-progressview-phase4.md#phase-5-mainview-refactoring-post-migration-critical-work) |
+
+*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
 
 ### Phase 3 Status Detail
 
@@ -60,6 +79,32 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 | 3b-1.5/6  | CSS Shadow DOM migration   | ✅ Complete (11/13 components) |
 | 3b-2      | Utility conversion         | 🟡 In Progress (1 JS left)     |
 | 3b-3      | Formatter → TemplateResult | 🔶 Bridge pattern in use       |
+
+### Phase 4 Status Detail (2026-01-25)
+
+| Webview | Status | Shadow DOM | Zod Validation | Legacy JS |
+|---------|--------|------------|----------------|-----------|
+| **MemoryView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
+| **HistoryView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
+| **ProfileView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
+| **MainView** | ✅ Migrated | ✅ | ❌ **Missing** | ✅ Deleted |
+
+**Note:** MainView requires Phase 5 work:
+- 2,737-line monolithic component needs extraction
+- 58 message types lack Zod validation
+- No shared message contract with backend
+
+### Phase 5: MainView Refactoring (New)
+
+| Task | Status | Impact |
+|------|--------|--------|
+| Extract FileSelectGroup component | ⬜ | -300 lines from MainApp |
+| Extract BannerGroup components | ⬜ | -150 lines from MainApp |
+| Extract LatexDiffsSection | ⬜ | -200 lines from MainApp |
+| Create shared message schemas | ⬜ | Type-safe frontend ↔ backend |
+| Add Zod validation to MainApp | ⬜ | Security + type safety |
+| Convert 37 inline arrows | ⬜ | Performance |
+| Delete duplicate debug handler | ⬜ | Code cleanup |
 
 ---
 
@@ -134,6 +179,117 @@ AFTER (2 layers):
 - Formatters receive validated, typed data - no intermediate types needed
 
 This is a fundamental architectural advantage that will compound as more webviews migrate.
+
+---
+
+## Shared Message Contracts (Frontend ↔ Backend)
+
+A critical architectural principle: **frontend and backend must share message type definitions**.
+
+### Current Problem
+
+Message types are implicitly defined in both places:
+
+```
+Backend (MainViewMessageHandler.ts)  → sends { command: 'SET_MODEL_OPTIONS', options: string }
+Frontend (MainApp.ts)                → expects { command: string, options?: unknown }
+                                       ↑ No validation, type casting only
+```
+
+This leads to:
+- Runtime errors when message shapes change
+- No compile-time guarantees
+- Duplicate type definitions
+- Security vulnerabilities (untrusted data from webview)
+
+### Target Architecture
+
+```
+src/shared/schemas/
+├── commands.ts                    # Command constants (single source)
+├── progressViewMessages.ts        # ProgressView message schemas ✅
+├── mainViewMessages.ts            # MainView message schemas (Phase 5)
+├── historyViewMessages.ts         # HistoryView message schemas ✅
+├── profileViewMessages.ts         # ProfileView message schemas ✅
+└── memoryViewMessages.ts          # MemoryView message schemas ✅
+```
+
+### Message Contract Pattern
+
+```typescript
+// src/shared/schemas/mainViewMessages.ts
+import { z } from 'zod';
+
+// 1. Define schema (single source of truth)
+export const SetModelOptionsSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
+  options: z.string(),
+});
+
+// 2. Derive types
+export type SetModelOptionsMessage = z.infer<typeof SetModelOptionsSchema>;
+
+// 3. Union of all messages
+export const MainViewMessageSchema = z.discriminatedUnion('command', [
+  SetModelOptionsSchema,
+  UpdateFilesSchema,
+  SetAgentConfigSchema,
+  // ... all 58 message types
+]);
+
+export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
+```
+
+**Backend usage:**
+```typescript
+// MainViewMessageHandler.ts
+import { SetModelOptionsMessage } from '@shared/schemas/mainViewMessages';
+
+private sendModelOptions(options: string): void {
+  const message: SetModelOptionsMessage = {
+    command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+    options,
+  };
+  this.postMessage(message);  // Type-checked at compile time
+}
+```
+
+**Frontend usage:**
+```typescript
+// MainApp.ts handlers
+import { MainViewMessageSchema } from '@shared/schemas/mainViewMessages';
+
+private handleMessage(event: MessageEvent): void {
+  const result = MainViewMessageSchema.safeParse(event.data);
+  if (!result.success) {
+    console.warn('Invalid message:', result.error);
+    return;
+  }
+  // result.data is now fully typed MainViewMessage
+  const handler = MESSAGE_HANDLERS[result.data.command];
+  if (handler) handler(result.data, this.context);
+}
+```
+
+### Benefits
+
+1. **Compile-time safety**: Backend send types must match frontend receive types
+2. **Runtime validation**: Zod catches malformed messages early
+3. **Single source of truth**: No duplicate type definitions
+4. **Documentation**: Schemas serve as API documentation
+5. **Refactoring confidence**: Change schema, see all affected code
+
+### Migration Status
+
+| Webview | Shared Schemas | Backend Uses | Frontend Validates |
+|---------|----------------|--------------|-------------------|
+| ProgressView | ✅ | ✅ | ✅ |
+| MemoryView | ✅ | ✅ | ✅ |
+| HistoryView | ✅ | ✅ | ✅ |
+| ProfileView | ✅ | ✅ | ✅ |
+| **MainView** | ❌ | ❌ | ❌ |
+
+**MainView is the only remaining webview without shared message contracts.**
 
 ---
 
