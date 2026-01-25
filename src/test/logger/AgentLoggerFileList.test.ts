@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';
 
 describe('AgentLogger.logFileCategory', () => {

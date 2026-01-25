@@ -21,6 +21,9 @@ import { ZodError } from 'zod';
 // Local imports - flows (primary execution path)
 
 // Local imports - agent components (types only - no agent class instantiation)
+import { STREAM_STATUS } from '@shared/schemas';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import { MODEL_CONFIGS } from 'llm-zoo';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { resolveAgent, isRemoteAgent, getAgent } from '@agent/index';
 import type { ResolvedAgent } from '@agent/index';
@@ -54,8 +57,6 @@ import {
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
-import { STREAM_STATUS } from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -65,8 +66,6 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -76,6 +75,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { createInterruptManager } from './InterruptManager';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);

@@ -20,6 +20,7 @@ import {
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { resolveToolDefinitions } from '@tools/registry';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
@@ -30,8 +31,6 @@ import {
   type RemoteAgentListItem,
   type RemoteAgentConfig,
 } from './types';
-
-import { resolveToolDefinitions } from '@tools/registry';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);

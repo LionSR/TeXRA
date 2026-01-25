@@ -7,6 +7,8 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - progress view
 import {
   getStreamState,
+  isToolUseState,
+  isWorkflowState,
   type StreamFilter,
   type StreamSort,
   type StreamState,
@@ -24,7 +26,7 @@ import type {
 } from './events';
 
 // Local imports - shared schemas (types)
-import { AGENT_CATEGORY, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
@@ -130,13 +132,13 @@ export function handleRunSelected(
   const streamId = state.activeStreamId;
   if (!streamId) return;
 
-  ctx.setStreamState(streamId, (prev) => ({
-    ...prev,
-    selectedRunId: runId,
-  }));
+  ctx.setStreamState(streamId, (prev) => {
+    if (!isWorkflowState(prev)) return prev;
+    return { ...prev, selectedRunId: runId };
+  });
 
   const streamState = getStreamState(state, streamId);
-  const isToolUse = streamState.info?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+  const isToolUse = isToolUseState(streamState);
   ctx.getLogListRef()?.showRun(runId ?? null, isToolUse);
 }
 
@@ -155,7 +157,10 @@ export function handleFollowUpChange(
   const { value } = event.detail;
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: value }));
+  ctx.setStreamState(streamId, (prev) => {
+    if (!isToolUseState(prev)) return prev;
+    return { ...prev, followUpText: value };
+  });
 }
 
 export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
@@ -164,6 +169,8 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   if (!streamId) return;
 
   const streamState = getStreamState(state, streamId);
+  if (!isToolUseState(streamState)) return;
+
   const text = streamState.followUpText?.trim() ?? '';
   if (!text) return;
 
@@ -171,7 +178,10 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
     stream: streamId,
     text,
   });
-  ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
+  ctx.setStreamState(streamId, (prev) => {
+    if (!isToolUseState(prev)) return prev;
+    return { ...prev, followUpText: '' };
+  });
 }
 
 export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
@@ -180,6 +190,8 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
   if (!streamId) return;
 
   const streamState = getStreamState(state, streamId);
+  if (!isToolUseState(streamState)) return;
+
   const text = streamState.followUpText?.trim() ?? '';
   if (!text) return;
 
@@ -192,7 +204,10 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
 export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => ({ ...prev, followUpText: '' }));
+  ctx.setStreamState(streamId, (prev) => {
+    if (!isToolUseState(prev)) return prev;
+    return { ...prev, followUpText: '' };
+  });
 }
 
 export function handleFollowupRequestOptions(
@@ -212,7 +227,10 @@ export function handleFollowupModeChange(
   const { mode } = event.detail;
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  ctx.setStreamState(streamId, (prev) => ({ ...prev, followupMode: mode }));
+  ctx.setStreamState(streamId, (prev) => {
+    if (!isWorkflowState(prev)) return prev;
+    return { ...prev, followupMode: mode };
+  });
 }
 
 export function handleFollowupSetup(
@@ -267,18 +285,21 @@ export function handlePromptAction(
       postMessage(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
         requestId: prompt.data.requestId,
         action,
+        feedback,
       });
       break;
     case 'bash':
       postMessage(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
         requestId: prompt.data.requestId,
         action,
+        feedback,
       });
       break;
     case 'retry':
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
           stream: prompt.data.streamId,
+          feedback,
         });
       } else {
         postMessage(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST, {

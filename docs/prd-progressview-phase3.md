@@ -26,6 +26,9 @@
 - **DiffResult schemas**: Added Zod schemas for latexdiff operations in `@shared/schemas`
 - **Component refactoring**: Moved `yoloActive` prop from FollowUpInput to StreamHeader
 - **Formatter simplification**: Cleaner rendering patterns in log formatters
+- **Discriminated union StreamState**: `ToolUseStreamState | WorkflowStreamState` with type guards (`isToolUseState()`, `isWorkflowState()`) in `src/shared/schemas/streamState.ts`
+- **DRY helper functions**: `buildCopyButton()` and `buildDetailsSummary()` in `htmlBuilders.ts` reduce code duplication across formatters
+- **CSS migration progress**: 11 components migrated to Shadow DOM with native Lit `static styles` (only LogList/TaskGroupList remain on Light DOM pending Phase 3b-3)
 
 ### Directory Architecture: `common/` vs `shared/`
 
@@ -64,6 +67,8 @@ This is intentional during migration. ProgressView imports from `@shared/`, whil
 7. **Pending updates for race conditions**: Handle UPDATE_LOG arriving before APPEND_LOG via Map storage
 8. **VS Code radio groups**: Use `.value` binding on `vscode-radio-group`, not `.checked` on individual radios; read `group.value` in change handler
 9. **Handler registry pattern**: Use `Record<string, MessageHandler>` instead of switch statements for message routing; enables type inference and easier testing
+10. **Discriminated union for mode-specific state**: Use `kind` discriminator with type guards (`isToolUseState()`, `isWorkflowState()`) to enable type-safe mode-specific state access
+11. **DRY template helpers**: Extract repeated Lit template patterns into reusable functions with options objects (e.g., `buildCopyButton()`, `buildDetailsSummary()`)
 
 ### Technical Debt Remaining
 
@@ -329,19 +334,21 @@ ProgressView currently has Lit components that bypass reactive rendering. These 
 
 These components use pure Lit templates with no `innerHTML` or formatter HTMLElement dependencies:
 
-| Component             | CSS File                | Can Migrate     | Blocker |
-| --------------------- | ----------------------- | --------------- | ------- |
-| `PromptOverlay.ts`    | (inline)                | ✅ Already done | -       |
-| `TodoList.ts`         | `todo-list.css`         | ✅ Yes          | None    |
-| `FileList.ts`         | `file-list.css`         | ✅ Yes          | None    |
-| `StreamTabs.ts`       | `tabs.css`              | ✅ Yes          | None    |
-| `QueuedFollowUps.ts`  | `queued-follow-ups.css` | ✅ Yes          | None    |
-| `FollowupSection.ts`  | `followup-section.css`  | ✅ Yes          | None    |
-| `InstructionPanel.ts` | `instruction-panel.css` | ✅ Yes          | None    |
-| `FollowUpInput.ts`    | `follow-up-input.css`   | ✅ Yes          | None    |
-| `UsagePanel.ts`       | (minimal)               | ✅ Yes          | None    |
-| `RunSelector.ts`      | (minimal)               | ✅ Yes          | None    |
-| `StreamHeader.ts`     | (in tabs.css)           | ✅ Yes          | None    |
+| Component             | CSS File                | Status  | Notes                                 |
+| --------------------- | ----------------------- | ------- | ------------------------------------- |
+| `PromptOverlay.ts`    | (inline)                | ✅ Done | Already used Shadow DOM               |
+| `TodoList.ts`         | `todo-list.css`         | ✅ Done | Pilot migration                       |
+| `FileList.ts`         | `file-list.css`         | ✅ Done | Uses `vscode-collapsible`             |
+| `StreamTabs.ts`       | `tabs.css`              | ✅ Done | Tab animations, status indicators     |
+| `QueuedFollowUps.ts`  | `queued-follow-ups.css` | ✅ Done | Uses `vscode-collapsible`             |
+| `FollowupSection.ts`  | `followup-section.css`  | ✅ Done | VS Code form components               |
+| `InstructionPanel.ts` | `instruction-panel.css` | ✅ Done | VS Code toolbar, textarea             |
+| `FollowUpInput.ts`    | `follow-up-input.css`   | ✅ Done | Recording manager works in Shadow DOM |
+| `UsagePanel.ts`       | (minimal)               | ✅ Done | First non-pilot migration             |
+| `RunSelector.ts`      | (minimal)               | ✅ Done | Uses `vscode-single-select`           |
+| `StreamHeader.ts`     | (in logs.css)           | ✅ Done | Status indicator, toolbar             |
+
+**Key pattern:** Design tokens from `tokens.css` inherit into Shadow DOM via `:root` CSS variables - no need to import `designTokens`. Components only need `codiconStyles` + component-specific CSS.
 
 #### Components That Must Wait (Phase 3b-3)
 
@@ -544,25 +551,28 @@ export function formatBannerContent(
 
 **Phase 3b-1.5: CSS Pilot Migration**
 
-| Item                                       | Status         |
-| ------------------------------------------ | -------------- |
-| Migrate `TodoList.ts` to Shadow DOM        | ⬜ Not Started |
-| Verify VS Code elements work in Shadow DOM | ⬜ Not Started |
-| Verify design tokens inherit correctly     | ⬜ Not Started |
-| Delete `todo-list.css` after migration     | ⬜ Not Started |
+| Item                                       | Status  |
+| ------------------------------------------ | ------- |
+| Migrate `TodoList.ts` to Shadow DOM        | ✅ Done |
+| Verify VS Code elements work in Shadow DOM | ✅ Done |
+| Verify design tokens inherit correctly     | ✅ Done |
+| Delete `todo-list.css` after migration     | ✅ Done |
 
 **Phase 3b-1.6: CSS Batch Migration (after pilot succeeds)**
 
 | Item                                                           | Status         |
 | -------------------------------------------------------------- | -------------- |
-| Migrate `FileList.ts` + delete `file-list.css`                 | ⬜ Not Started |
-| Migrate `StreamTabs.ts` + delete `tabs.css`                    | ⬜ Not Started |
-| Migrate `QueuedFollowUps.ts` + delete `queued-follow-ups.css`  | ⬜ Not Started |
-| Migrate `FollowupSection.ts` + delete `followup-section.css`   | ⬜ Not Started |
-| Migrate `InstructionPanel.ts` + delete `instruction-panel.css` | ⬜ Not Started |
-| Migrate `FollowUpInput.ts` + delete `follow-up-input.css`      | ⬜ Not Started |
-| Migrate `UsagePanel.ts`, `RunSelector.ts`, `StreamHeader.ts`   | ⬜ Not Started |
-| Update `index.css` to remove deleted imports                   | ⬜ Not Started |
+| Migrate `FileList.ts` to Shadow DOM                            | ✅ Done        |
+| Migrate `StreamHeader.ts` to Shadow DOM                        | ✅ Done        |
+| Migrate `QueuedFollowUps.ts` + delete `queued-follow-ups.css`  | ✅ Done        |
+| Migrate `FollowUpInput.ts` + delete `follow-up-input.css`      | ✅ Done        |
+| Migrate `InstructionPanel.ts` + delete `instruction-panel.css` | ✅ Done        |
+| Migrate `StreamTabs.ts` + delete `tabs.css`                    | ✅ Done        |
+| Migrate `FollowupSection.ts` + delete `followup-section.css`   | ✅ Done        |
+| Migrate `UsagePanel.ts`, `RunSelector.ts`                      | ✅ Done        |
+| Update `index.css` to remove deleted imports                   | 🟡 In Progress |
+
+**Note:** `LogList.ts` and `TaskGroupList.ts` remain on Light DOM - blocked by Phase 3b-3 (formatter conversion). These components use document-level event listeners and external DOM managers that generate content with external CSS classes.
 
 **Phase 3b-2: Utility Conversion (after 3a)**
 
@@ -1023,12 +1033,14 @@ module.exports = [extensionConfig, ...webviewConfigs];
 
 **3b-1.5/1.6: CSS Migration to Native Lit**
 
-| Metric                                 | Before | After |
-| -------------------------------------- | ------ | ----- |
-| Components using Shadow DOM            | 1      | 11    |
-| External CSS files                     | 26     | 18    |
-| CSS files deleted (component-specific) | 0      | 8     |
-| Components with `static styles`        | 1      | 11    |
+| Metric                                 | Before | Current | Target |
+| -------------------------------------- | ------ | ------- | ------ |
+| Components using Shadow DOM            | 1      | 11      | 13\*   |
+| External CSS files                     | 26     | 18      | 16\*   |
+| CSS files deleted (component-specific) | 0      | 8       | 10\*   |
+| Components with `static styles`        | 1      | 11      | 13\*   |
+
+\*Target 13 includes LogList and TaskGroupList which are blocked until Phase 3b-3 (formatter conversion).
 
 **3b-2: Utility Conversion**
 

@@ -7,12 +7,6 @@
 import { z } from 'zod';
 
 // Local imports - Lit template utilities
-import {
-  html,
-  ifDefined,
-  renderToElement,
-  type TemplateResult,
-} from '../litTemplates';
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
@@ -27,11 +21,18 @@ import {
   type DiffStatus,
   type ExtendedTokenUsageStats,
 } from '@shared/schemas';
+import {
+  html,
+  ifDefined,
+  renderToElement,
+  type TemplateResult,
+} from '../litTemplates';
 
 // Local imports - formatter helpers
 import {
   buildFileLink,
   buildFileListRender,
+  buildDetailsSummary,
   initToggleIcon,
 } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
@@ -49,11 +50,12 @@ export function formatFileList(
   if (!parseResult.success) {
     return renderToElement(html`
       <details class="banner-details file-list-details">
-        <summary class="details-summary">
-          <i class="toggle-icon"></i>
-          <i class="codicon codicon-file"></i>
-          <span class="summary-text">Files (raw)</span>
-        </summary>
+        ${buildDetailsSummary({
+          iconClass: 'codicon-file',
+          label: 'Files (raw)',
+          labelClass: 'summary-text',
+          includeIconClass: false,
+        })}
         <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
           <pre>${text ?? ''}</pre>
         </ul>
@@ -65,11 +67,12 @@ export function formatFileList(
 
   return renderToElement(html`
     <details class="banner-details file-list-details">
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon codicon-file"></i>
-        <span class="summary-text">${renderData?.summary ?? 'Files'}</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: 'codicon-file',
+        label: renderData?.summary ?? 'Files',
+        labelClass: 'summary-text',
+        includeIconClass: false,
+      })}
       <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
         ${renderData?.items ?? ''}
       </ul>
@@ -116,11 +119,12 @@ export function formatMissingOutputs(
 
   return renderToElement(html`
     <details class="banner-details file-list-details">
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon codicon-warning"></i>
-        <span class="summary-text">Missing outputs (${missing.length})</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: 'codicon-warning',
+        label: `Missing outputs (${missing.length})`,
+        labelClass: 'summary-text',
+        includeIconClass: false,
+      })}
       <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
         ${missing.map((f) => {
           const filePath = String(f);
@@ -204,11 +208,12 @@ export function formatLatexdiff(
 
   const element = renderToElement(html`
     <details class="banner-details latexdiff-details" open>
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon codicon-diff"></i>
-        <span class="summary-text">${summaryText}</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: 'codicon-diff',
+        label: summaryText,
+        labelClass: 'summary-text',
+        includeIconClass: false,
+      })}
       <ul
         class="latexdiff-content"
         data-log-id=${ifDefined(logId)}
@@ -277,11 +282,12 @@ export function formatStatistics(
 
   return renderToElement(html`
     <details class="banner-details statistics-details">
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon codicon-graph"></i>
-        <span class="summary-text">Statistics</span>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: 'codicon-graph',
+        label: 'Statistics',
+        labelClass: 'summary-text',
+        includeIconClass: false,
+      })}
       <div class="statistics-content" data-log-id=${ifDefined(logId)}>
         ${items.map(
           (item) => html`

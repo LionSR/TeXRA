@@ -4,12 +4,12 @@
  * Provides follow-up queue management and stream status updates.
  */
 
-import type { StreamTabId } from '@shared/schemas';
-
+import { STREAM_STATUS } from '@shared/schemas';
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Interface for tool-use session lifecycle operations.

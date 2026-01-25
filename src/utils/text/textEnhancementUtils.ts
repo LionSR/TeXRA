@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent runtime
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { getSdkErrorMessage } from '@common/errors';
@@ -12,7 +13,6 @@ import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 

@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -32,13 +32,145 @@ function parsePath(path: string): ParsedPath {
 
 @customElement('file-list')
 export class FileList extends LitElement {
+  static styles = css`
+    :host {
+      display: block;
+    }
+
+    :host([hidden]) {
+      display: none;
+    }
+
+    .files-collapsible {
+      margin: 0;
+      border-top: var(--border-thin) solid var(--color-border);
+    }
+
+    .files-collapsible::part(header) {
+      padding: var(--spacing-tiny) var(--spacing-medium);
+      background-color: var(
+        --vscode-sideBarSectionHeader-background,
+        transparent
+      );
+      color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+    }
+
+    .files-collapsible::part(body) {
+      padding: 0 var(--spacing-small) var(--spacing-tiny);
+    }
+
+    .files-container {
+      padding: 0;
+      font-size: var(--vscode-editor-font-size);
+      overflow-y: auto;
+      max-height: var(--height-large);
+      flex-shrink: 0;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-tiny);
+      padding: 1px 0;
+      margin-bottom: 0;
+    }
+
+    .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .file-path {
+      cursor: pointer;
+    }
+
+    .file-path:hover {
+      text-decoration: underline;
+    }
+
+    .file-dir {
+      opacity: var(--opacity-subtle);
+    }
+
+    .file-basename {
+      font-weight: 500;
+    }
+
+    .file-stats {
+      white-space: nowrap;
+      text-decoration: none;
+      flex-shrink: 0;
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .file-stats span:first-child {
+      margin-left: 0;
+    }
+
+    .added {
+      color: var(--color-success);
+      margin-left: var(--spacing-small);
+    }
+
+    .removed {
+      color: var(--color-error);
+      margin-left: var(--spacing-tiny);
+    }
+
+    .file-actions {
+      display: flex;
+      gap: var(--spacing-tiny);
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+    }
+
+    .file-actions :is(vscode-button, vscode-toolbar-button) {
+      margin-right: 0;
+      margin-left: var(--spacing-tiny);
+    }
+
+    .round-collapsible {
+      border-top: var(--border-thin) solid var(--color-border);
+    }
+
+    .round-collapsible:first-child {
+      border-top: none;
+    }
+
+    .round-collapsible::part(header) {
+      padding: var(--spacing-tiny) 0;
+      font-size: var(--font-size-sm);
+    }
+
+    .round-collapsible::part(body) {
+      padding: 0;
+    }
+
+    @media (max-width: 500px) {
+      .file-item {
+        flex-wrap: wrap;
+        gap: var(--spacing-small);
+        align-items: center;
+      }
+
+      .file-name {
+        width: 100%;
+        flex-basis: 100%;
+      }
+
+      .file-actions {
+        margin-left: auto;
+      }
+    }
+  `;
+
   @property({ type: Object }) filesByRound: Record<string, OutputFileInfo[]> =
     {};
   @property({ type: Boolean }) showRoundHeaders = true;
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
 
   render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();

@@ -1,10 +1,10 @@
 // Type imports
-import type { StreamTabId, StreamStatus } from '@shared/schemas';
 
 // Internal imports
 import { STREAM_STATUS } from '@shared/schemas';
 import { isActiveStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
+import type { StreamTabId, StreamStatus } from '@shared/schemas';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
 

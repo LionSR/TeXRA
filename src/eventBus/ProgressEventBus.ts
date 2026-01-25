@@ -2,11 +2,11 @@
 import { EventEmitter } from 'events';
 
 // Type imports
+import type { ContextStateData } from '@logger/AgentLogger';
 import type { OutputFileInfo } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import type { TokenUsageStats } from '@shared/schemas';
 import type { StreamStatus } from '@shared/schemas';
-import type { ContextStateData } from '@logger/AgentLogger';
 import type { LogMessageData, LogMessageUpdate } from '@shared/schemas';
 import type {
   AddTaskGroupPayload,

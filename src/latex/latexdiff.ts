@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - log
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 

@@ -2,15 +2,11 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { StreamTabId, StorageKey } from '@shared/schemas';
-import type { TokenUsageStats } from '@shared/schemas';
 
 // Internal imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { StreamStatus } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
-import type { TaskGroup } from '@shared/schemas';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import {
@@ -33,6 +29,10 @@ import { registerTodoEventHandlers } from './TodoEventHandlers';
 import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { withEventErrorHandling } from './errorHandling';
+import type { StreamStatus } from '@shared/schemas';
+import type { TaskGroup } from '@shared/schemas';
+import type { TokenUsageStats } from '@shared/schemas';
+import type { StreamTabId, StorageKey } from '@shared/schemas';
 
 // Re-export for consumers
 export type { UICallbacks };
