@@ -1022,6 +1022,68 @@ Icon usage is consistent with VS Code codicon classes.
 
 ---
 
+## Architectural Debt (ProgressView)
+
+These concerns were identified during code review and affect ProgressView's long-term maintainability.
+
+### A1. TaskGroupDomManager Coupling (HIGH)
+
+**Location:** `src/progressView/frontend/managers/TaskGroupDomManager.ts`
+
+**Problem:** TaskGroupDomManager mixes several unrelated concerns:
+
+| Concern | Lines | Coupling Issue |
+|---------|-------|----------------|
+| DOM element management | 74-165 | Core responsibility |
+| Toggle state persistence | 45-72 | Should be in state manager |
+| Audio notifications | `playSystemSound()` | Should be dedicated service |
+| Traversal/hierarchy logic | 180-220 | Could be separate utility |
+
+**Recommendation:** Extract concerns into focused modules:
+
+```
+managers/
+├── TaskGroupDomManager.ts    # DOM operations only
+├── TaskGroupStateManager.ts  # Toggle persistence
+├── AudioNotificationService.ts # System sounds
+└── utils/taskGroupTraversal.ts # Hierarchy navigation
+```
+
+### A2. renderLogs() Full DOM Rebuild (MEDIUM)
+
+**Location:** `src/progressView/frontend/components/LogList.ts:131-207`
+
+**Problem:** Every render clears and rebuilds the entire DOM:
+
+```typescript
+container.innerHTML = '';
+this.groupManager.clear();
+this.logManager.clear();
+// ... rebuild everything
+```
+
+**Impact:** For large log lists (100+ entries), this causes visible jank during updates.
+
+**Potential Solutions:**
+
+1. **Incremental append** - Only add new logs, don't rebuild existing
+2. **Virtual scrolling** - Only render visible viewport + buffer
+3. **Keyed updates** - Use `repeat()` with stable keys for Lit diffing
+
+**Note:** This is marked as a Non-Goal for Phase 5 (see modernization PRD), but should be addressed if performance issues are reported.
+
+### A3. Light DOM in ProgressView (MEDIUM)
+
+**Location:** `ProgressApp.ts`, `LogList.ts`, `TaskGroupList.ts`
+
+**Problem:** These components use Light DOM (`createRenderRoot() { return this; }`), breaking style encapsulation.
+
+**Why it exists:** Streaming log architecture requires direct DOM manipulation that conflicts with Shadow DOM boundaries.
+
+**Future fix:** Refactor formatters to return `TemplateResult` instead of HTML strings, enabling Shadow DOM throughout.
+
+---
+
 ## Regression Fix Priority
 
 ### Immediate (Before Release)
