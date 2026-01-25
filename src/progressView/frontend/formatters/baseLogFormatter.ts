@@ -1,12 +1,13 @@
 /**
  * Base log formatter with shared utilities for creating banner entries.
+ * Uses Lit templates for declarative DOM construction.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import { html, classMap, ifDefined, renderToElement } from './litTemplates';
 
 // Local imports - formatter helpers
-import { setElementDataset, initToggleIcon } from './htmlBuilders';
+import { initToggleIcon } from './htmlBuilders';
 
 type BannerEntry = {
   element: HTMLElement;
@@ -24,7 +25,6 @@ type BannerEntryOptions = {
   copyTitle?: string;
   contentClass?: string;
   open?: boolean;
-  templateId?: string;
 };
 
 type FormatOptions = {
@@ -43,7 +43,7 @@ export function applyOpenState(
   }
 }
 
-/** Create a banner entry from template. */
+/** Create a banner entry using Lit template. */
 export function createBannerEntry({
   logId,
   groupId,
@@ -53,52 +53,57 @@ export function createBannerEntry({
   copyTitle,
   contentClass,
   open = false,
-  templateId = 'bannerDetailsTemplate',
 }: BannerEntryOptions): BannerEntry | null {
-  const element = createFromTemplate(templateId);
+  const defaultTitle =
+    copyTitle ||
+    (labelText ? `Copy ${labelText.toLowerCase()}` : 'Copy content');
+
+  const element = renderToElement(html`
+    <details class="banner-details" ?open=${open}>
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i
+          class=${classMap({
+            codicon: true,
+            icon: true,
+            [iconClass ?? '']: Boolean(iconClass),
+          })}
+          ?hidden=${!iconClass}
+        ></i>
+        <span class="label">${labelText ?? ''}</span>
+        <vscode-toolbar-button
+          class="banner-content-copy"
+          icon="copy"
+          title=${defaultTitle}
+          aria-label=${defaultTitle}
+          data-default-title=${defaultTitle}
+          data-success-title="Copied!"
+        ></vscode-toolbar-button>
+      </summary>
+      <div
+        class=${classMap({
+          'banner-content': true,
+          'log-entry-content': true,
+          [contentClass ?? '']: Boolean(contentClass),
+        })}
+        data-log-id=${ifDefined(logId)}
+        data-group-id=${ifDefined(groupId)}
+        data-timestamp=${ifDefined(timestamp)}
+      ></div>
+    </details>
+  `);
+
   if (!element) return null;
 
-  applyOpenState(element, open);
-  setElementDataset(element, { logId, groupId, timestamp });
-
-  const iconElem = element.querySelector('.icon');
-  if (iconElem instanceof HTMLElement) {
-    iconElem.className = 'codicon icon';
-    if (iconClass) {
-      iconElem.classList.add(iconClass);
-      iconElem.hidden = false;
-    } else {
-      iconElem.hidden = true;
-    }
-  }
-
-  const labelElem = element.querySelector('.label');
-  if (labelElem instanceof HTMLElement) {
-    labelElem.textContent = labelText ?? '';
-  }
-
-  const copyButton = element.querySelector('.banner-content-copy');
-  if (copyButton) {
-    const defaultTitle =
-      copyTitle ||
-      (labelText ? `Copy ${labelText.toLowerCase()}` : 'Copy content');
-    if (copyButton instanceof HTMLElement) {
-      copyButton.dataset.defaultTitle = defaultTitle;
-      copyButton.dataset.successTitle = 'Copied!';
-      copyButton.setAttribute('title', defaultTitle);
-      copyButton.setAttribute('aria-label', defaultTitle);
-    }
-  }
-
-  const contentElem = element.querySelector('.banner-content');
-  if (contentElem instanceof HTMLElement && contentClass) {
-    contentElem.classList.add(contentClass);
-  }
+  // Initialize toggle icon state
+  initToggleIcon(element, open);
 
   return {
     element,
-    contentElem: contentElem instanceof HTMLElement ? contentElem : null,
-    copyButton: copyButton instanceof HTMLElement ? copyButton : null,
+    contentElem: element.querySelector('.banner-content') as HTMLElement | null,
+    copyButton: element.querySelector(
+      '.banner-content-copy',
+    ) as HTMLElement | null,
     summaryElem: element.querySelector(
       '.details-summary',
     ) as HTMLElement | null,

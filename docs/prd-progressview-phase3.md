@@ -405,15 +405,15 @@ export function formatBannerContent(
 
 ### Recent Fixes (2026-01-25)
 
-| Issue | Root Cause | Fix |
-|-------|------------|-----|
-| Radio button not immediately selecting | Using `?checked` attribute binding + manual sync | Use `.value` binding on `vscode-radio-group`, read `group.value` in handler |
-| Clear all button style changed | Was `vscode-button`, should be toolbar button | Changed to `vscode-toolbar-button` with `icon="close-all"` |
-| Leftover content on empty filter | Log list not cleared when switching to filter with no streams | Added clear logic in `handleFilterChange` |
-| KaTeX showing both rendered + MathML | `.katex-mathml` not hidden due to CSS selector | Added `markdown-content` class to banner content |
-| KaTeX only showing MathML | `katex.min.css` not loaded | Added `import 'katex/dist/katex.min.css'` to index.ts |
-| Context % position wrong | Order swapped in UsagePanel | Fixed element order in template |
-| `LogListState` type error | Interface didn't satisfy `Record<string, unknown>` constraint | Changed to type with explicit index signature |
+| Issue                                  | Root Cause                                                    | Fix                                                                         |
+| -------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Radio button not immediately selecting | Using `?checked` attribute binding + manual sync              | Use `.value` binding on `vscode-radio-group`, read `group.value` in handler |
+| Clear all button style changed         | Was `vscode-button`, should be toolbar button                 | Changed to `vscode-toolbar-button` with `icon="close-all"`                  |
+| Leftover content on empty filter       | Log list not cleared when switching to filter with no streams | Added clear logic in `handleFilterChange`                                   |
+| KaTeX showing both rendered + MathML   | `.katex-mathml` not hidden due to CSS selector                | Added `markdown-content` class to banner content                            |
+| KaTeX only showing MathML              | `katex.min.css` not loaded                                    | Added `import 'katex/dist/katex.min.css'` to index.ts                       |
+| Context % position wrong               | Order swapped in UsagePanel                                   | Fixed element order in template                                             |
+| `LogListState` type error              | Interface didn't satisfy `Record<string, unknown>` constraint | Changed to type with explicit index signature                               |
 
 ### Stabilization Deliverables
 

@@ -12,3 +12,4 @@ export * from './errors';
 export * from './progressViewMessages';
 export * from './progressViewData';
 export * from './contextManagement';
+export * from './diffResult';

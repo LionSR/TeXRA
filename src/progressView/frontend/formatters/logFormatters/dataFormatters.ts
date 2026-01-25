@@ -1,32 +1,29 @@
 /**
  * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
+ * Uses Lit templates for declarative DOM construction.
  */
 
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import { html, ifDefined, unsafeHTML, renderToElement } from '../litTemplates';
 
 // Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
 import { getBasename } from '@shared/utils/path';
 
 // Local imports - shared schemas
 import {
   FileListEntrySchema,
   MissingOutputsPayloadSchema,
+  parseDiffResultEntries,
+  type DiffResultDisplay,
+  type DiffStatus,
 } from '@shared/schemas';
 
 // Local imports - formatter helpers
-import {
-  buildFileLink,
-  buildFileListRender,
-  initToggleIcon,
-} from '../htmlBuilders';
+import { buildFileLink, buildFileListRender } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
-
-type DiffResultEntry = Record<string, unknown>;
 
 /** Format file list entry. */
 export function formatFileList(
@@ -34,61 +31,64 @@ export function formatFileList(
   text: string,
   logId: string,
 ): HTMLElement | null {
-  const element = createFromTemplate('fileListDetailsTemplate');
-  if (!element) return null;
-
-  const contentElem = element.querySelector('.file-list-content');
-  const summaryElem = element.querySelector('.summary-text');
-  initToggleIcon(element, false);
-
   // Validate with Zod schema - renderer handles display field computation
   const parseResult = z.array(FileListEntrySchema).safeParse(data);
 
   // Raw fallback when parsing fails
   if (!parseResult.success) {
-    if (summaryElem instanceof HTMLElement) {
-      summaryElem.textContent = 'Files (raw)';
-    }
-    if (contentElem instanceof HTMLElement) {
-      contentElem.innerHTML = `<pre>${encodeHtml(text ?? '')}</pre>`;
-      if (logId) contentElem.dataset.logId = logId;
-    }
-    return element;
+    return renderToElement(html`
+      <details class="banner-details file-list-details">
+        <summary class="details-summary">
+          <i class="toggle-icon"></i>
+          <i class="codicon codicon-file"></i>
+          <span class="summary-text">Files (raw)</span>
+        </summary>
+        <ul
+          class="file-list-content"
+          data-log-id=${ifDefined(logId || undefined)}
+        >
+          <pre>${text ?? ''}</pre>
+        </ul>
+      </details>
+    `);
   }
 
   const renderData = buildFileListRender(parseResult.data);
-  if (summaryElem instanceof HTMLElement) {
-    summaryElem.textContent = renderData?.summary ?? 'Files';
-  }
-  if (contentElem instanceof HTMLElement) {
-    contentElem.innerHTML = renderData?.items ?? '';
-    if (logId) contentElem.dataset.logId = logId;
-  }
 
-  return element;
+  return renderToElement(html`
+    <details class="banner-details file-list-details">
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon codicon-file"></i>
+        <span class="summary-text">${renderData?.summary ?? 'Files'}</span>
+      </summary>
+      <ul
+        class="file-list-content"
+        data-log-id=${ifDefined(logId || undefined)}
+      >
+        ${unsafeHTML(renderData?.items ?? '')}
+      </ul>
+    </details>
+  `);
 }
 
-/** Create XML link element from file info. */
-function createXmlLinkElement(
-  xmlFile: string,
-  documentTag: string | null,
-): HTMLElement | null {
-  const xmlEscaped = encodeHtml(xmlFile);
-  const xmlFileName = encodeHtml(getBasename(xmlFile));
-  const tagInfo = documentTag
-    ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
-    : '';
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `<div class="xml-link-container">
-    <i class="codicon codicon-file-code"></i>
-    <span>Open XML to check tag consistency:</span>
-    <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileName}</span>
-    ${tagInfo}
-  </div>`;
-  return wrapper.firstElementChild instanceof HTMLElement
-    ? wrapper.firstElementChild
-    : null;
+/** Render XML link template. */
+function renderXmlLink(xmlFile: string, documentTag: string | null) {
+  const xmlFileName = getBasename(xmlFile);
+  return html`
+    <div class="xml-link-container">
+      <i class="codicon codicon-file-code"></i>
+      <span>Open XML to check tag consistency:</span>
+      <span class="file-link clickable-link" data-file=${xmlFile}
+        >${xmlFileName}</span
+      >
+      ${documentTag
+        ? html`<span class="document-tag"
+            >(Expected &lt;${documentTag}&gt; block)</span
+          >`
+        : ''}
+    </div>
+  `;
 }
 
 /** Format missing outputs entry. */
@@ -106,212 +106,56 @@ export function formatMissingOutputs(
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
-    return createXmlLinkElement(xmlFile, documentTag);
+    return renderToElement(renderXmlLink(xmlFile, documentTag));
   }
 
-  const element = createFromTemplate('missingOutputsDetailsTemplate');
-  if (!element) return null;
-
-  initToggleIcon(element, false);
-
-  const summaryElem = element.querySelector('.summary-text');
-  if (summaryElem instanceof HTMLElement) {
-    summaryElem.textContent = `Missing outputs (${missing.length})`;
-  }
-
-  const contentElem = element.querySelector('.file-list-content');
-  if (contentElem instanceof HTMLElement) {
-    contentElem.innerHTML = missing
-      .map((f) => {
-        const filePath = String(f);
-        const escaped = encodeHtml(filePath);
-        const basename = encodeHtml(getBasename(filePath));
-        return (
-          `<li class="detail-item" title="${escaped}">` +
-          `<i class="codicon codicon-warning"></i> ` +
-          `<span class="file-link clickable-link" data-file="${escaped}">${basename}</span>` +
-          `</li>`
-        );
-      })
-      .join('');
-    if (logId) contentElem.dataset.logId = logId;
-  }
-
-  // Append XML link if present
-  if (xmlFile) {
-    const xmlElement = createXmlLinkElement(xmlFile, documentTag);
-    if (xmlElement) element.appendChild(xmlElement);
-  }
-
-  return element;
+  return renderToElement(html`
+    <details class="banner-details file-list-details">
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon codicon-warning"></i>
+        <span class="summary-text">Missing outputs (${missing.length})</span>
+      </summary>
+      <ul
+        class="file-list-content"
+        data-log-id=${ifDefined(logId || undefined)}
+      >
+        ${missing.map((f) => {
+          const filePath = String(f);
+          const basename = getBasename(filePath);
+          return html`
+            <li class="detail-item" title=${filePath}>
+              <i class="codicon codicon-warning"></i>
+              <span class="file-link clickable-link" data-file=${filePath}
+                >${basename}</span
+              >
+            </li>
+          `;
+        })}
+      </ul>
+      ${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}
+    </details>
+  `);
 }
 
 // =============================================================================
 // Latexdiff Helpers
 // =============================================================================
 
-/** Get display path from a location object. */
-const describeLocation = (location: Record<string, unknown> | null): string => {
-  if (
-    location &&
-    (location.kind === 'workspace' || location.kind === 'runStorage') &&
-    typeof location.relativePath === 'string'
-  ) {
-    return location.relativePath;
-  }
-  return '';
-};
-
 /** Status icon class lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<string, string> = {
+const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
   success: 'codicon-check',
   error: 'codicon-error',
 };
 
 /** Get status icon class for latexdiff entry. */
-const getLatexdiffStatusIcon = (status: string): string =>
-  LATEXDIFF_STATUS_ICONS[status] ?? 'codicon-question';
-
-/** Safely extract a string property from an object. */
-function getString(
-  obj: Record<string, unknown> | undefined,
-  key: string,
-): string {
-  const value = obj?.[key];
-  return typeof value === 'string' ? value : '';
-}
-
-/** Extract display data from new DiffResult format. */
-const extractNewFormat = (entry: DiffResultEntry) => {
-  const baseLocation = entry.baseLocation as
-    | Record<string, unknown>
-    | undefined;
-  const revised = entry.revised as Record<string, unknown> | undefined;
-  const diffLocation = entry.diffLocation as
-    | Record<string, unknown>
-    | undefined;
-  const revisedLocation = revised?.location as
-    | Record<string, unknown>
-    | undefined;
-  const lineage = revised?.lineage as Record<string, unknown> | undefined;
-  const originalCandidate = lineage?.original as
-    | Record<string, unknown>
-    | undefined;
-
-  const originalRelative = getString(originalCandidate, 'relativePath');
-  const originalAbsolute = getString(originalCandidate, 'absolutePath');
-  const baseAbsolutePath = getString(baseLocation, 'absolutePath');
-
-  // Determine display name: prefer original path, then base location description, then basename
-  let displayName = '';
-  if (originalRelative || originalAbsolute) {
-    displayName = getBasename(originalRelative || originalAbsolute);
-  }
-  if (!displayName) {
-    displayName = describeLocation(baseLocation ?? null);
-  }
-  if (!displayName) {
-    displayName = getBasename(baseAbsolutePath) || 'unknown';
-  }
-
-  return {
-    baseFile: baseAbsolutePath,
-    revisedFile: getString(revisedLocation, 'absolutePath'),
-    diffFile: getString(diffLocation, 'absolutePath'),
-    displayName,
-    baseRound: typeof entry.baseRound === 'number' ? entry.baseRound : null,
-    revisedRound: typeof revised?.round === 'number' ? revised.round : 0,
-    status: typeof entry.status === 'string' ? entry.status : 'error',
-    message: entry.message,
-    runId: entry.runId,
-  };
-};
-
-/** Extract round number from a label like "[r1]" or "file.tex [r2]". */
-const parseRoundFromLabel = (label: string | undefined): number | null => {
-  if (typeof label !== 'string') return null;
-  const match = label.match(/\[r(\d+)\]/);
-  return match ? parseInt(match[1], 10) : null;
-};
-
-/** Extract absolute path from a location object if available. */
-function getAbsolutePath(
-  location: Record<string, unknown> | undefined,
-  fallback: unknown,
-): string {
-  const locationPath = (location as Record<string, unknown> | undefined)
-    ?.absolutePath;
-  if (typeof locationPath === 'string') return locationPath;
-  if (typeof fallback === 'string') return fallback;
-  return '';
-}
-
-/** Extract display data from legacy format (locations + labels). */
-const extractLegacyFormat = (entry: DiffResultEntry) => {
-  const locations = entry.locations as Record<string, unknown> | undefined;
-  const baseLocation = locations?.base as Record<string, unknown> | undefined;
-  const revisedLocation = locations?.revised as
-    | Record<string, unknown>
-    | undefined;
-  const diffLocation = locations?.diff as Record<string, unknown> | undefined;
-
-  const baseFile = getAbsolutePath(baseLocation, entry.basePath);
-  const revisedFile = getAbsolutePath(revisedLocation, entry.revisedPath);
-  const diffFile = getAbsolutePath(diffLocation, entry.diffPath);
-
-  // Try to get round info from entry fields first, then parse from labels
-  const baseRound =
-    (typeof entry.baseRound === 'number' ? entry.baseRound : null) ??
-    parseRoundFromLabel(entry.baseLabel as string | undefined) ??
-    null;
-  const revisedRound =
-    (typeof entry.revisedRound === 'number' ? entry.revisedRound : null) ??
-    parseRoundFromLabel(entry.revisedLabel as string | undefined) ??
-    0;
-
-  // Determine display name: prefer originalFileName, then stripped label, then basename
-  let displayName = '';
-  if (typeof entry.originalFileName === 'string') {
-    displayName = entry.originalFileName;
-  }
-  if (!displayName) {
-    const baseLabel = entry.baseLabel as string | undefined;
-    displayName = baseLabel?.replace(/\s*\[r\d+\]/, '') ?? '';
-  }
-  if (!displayName) {
-    displayName = getBasename(baseFile) || 'unknown';
-  }
-
-  return {
-    baseFile,
-    revisedFile,
-    diffFile,
-    displayName,
-    baseRound,
-    revisedRound,
-    status: typeof entry.status === 'string' ? entry.status : 'error',
-    message: entry.message,
-    runId: entry.runId,
-  };
-};
+const getLatexdiffStatusIcon = (status: DiffStatus): string =>
+  LATEXDIFF_STATUS_ICONS[status];
 
 /**
- * Build HTML for a latexdiff entry.
- * Handles both new format (DiffResult) and legacy format (locations + labels).
+ * Build HTML for a latexdiff entry from validated display data.
  */
-const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
-  if (!entry) return '';
-
-  // Extract fields based on format - new format has revised object, legacy has locations
-  const data =
-    entry.revised && typeof entry.revised === 'object'
-      ? extractNewFormat(entry)
-      : entry.locations
-        ? extractLegacyFormat(entry)
-        : null;
-
-  if (!data) return '';
-
+const buildLatexdiffEntryHtml = (entry: DiffResultDisplay): string => {
   const {
     baseFile,
     revisedFile,
@@ -322,15 +166,11 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
     status,
     message,
     runId,
-  } = data;
+  } = entry;
 
   const icon = getLatexdiffStatusIcon(status);
-  const msg = typeof message === 'string' ? message : '';
-  const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-  const runAttr =
-    typeof runId === 'string' && runId
-      ? ` data-run-id="${encodeHtml(runId)}"`
-      : '';
+  const titleAttr = message ? ` title="${message}"` : '';
+  const runAttr = runId ? ` data-run-id="${runId}"` : '';
 
   // Build display: "essay.tex → [r0] (diff)" or "essay.tex [r0] → [r1] (diff)"
   const baseLabel =
@@ -353,46 +193,45 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
 // Latexdiff Formatter
 // =============================================================================
 
-/** Format latexdiff entry. */
+/** Format latexdiff entry using Zod schema validation. */
 export function formatLatexdiff(
   data: unknown,
   logId: string,
 ): HTMLElement | null {
-  if (!Array.isArray(data) || data.length === 0) return null;
-  const entries = data as DiffResultEntry[];
+  // Parse and validate with Zod - handles both new and legacy formats
+  const entries = parseDiffResultEntries(data);
+  if (entries.length === 0) return null;
 
-  const element = createFromTemplate('latexdiffDetailsTemplate');
-  if (!element) return null;
+  // Build HTML and collect first runId
+  const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
+  const items = entries.map(buildLatexdiffEntryHtml);
 
-  initToggleIcon(element, true);
+  const summaryText =
+    entries.length === 1
+      ? 'Latexdiff result'
+      : `Latexdiff results (${entries.length})`;
 
-  // Build HTML for all entries and collect first runId
-  let aggregatedRunId = '';
-  const items = entries.map((entry) => {
-    const entryRunId = entry?.runId;
-    if (typeof entryRunId === 'string' && entryRunId && !aggregatedRunId) {
-      aggregatedRunId = entryRunId;
-    }
-    return buildLatexdiffEntryHtml(entry);
-  });
-
-  const summaryElem = element.querySelector('.summary-text');
-  if (summaryElem instanceof HTMLElement) {
-    summaryElem.textContent =
-      entries.length === 1
-        ? 'Latexdiff result'
-        : `Latexdiff results (${entries.length})`;
-  }
-
-  const contentElem = element.querySelector('.latexdiff-content');
-  if (contentElem instanceof HTMLElement) {
-    contentElem.innerHTML = items.join('');
-    if (logId) contentElem.dataset.logId = logId;
-    if (aggregatedRunId) contentElem.dataset.runId = aggregatedRunId;
-  }
-
-  return element;
+  return renderToElement(html`
+    <details class="banner-details latexdiff-details" open>
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon codicon-diff"></i>
+        <span class="summary-text">${summaryText}</span>
+      </summary>
+      <ul
+        class="latexdiff-content"
+        data-log-id=${ifDefined(logId || undefined)}
+        data-run-id=${ifDefined(aggregatedRunId || undefined)}
+      >
+        ${unsafeHTML(items.join(''))}
+      </ul>
+    </details>
+  `);
 }
+
+// =============================================================================
+// Statistics Formatter
+// =============================================================================
 
 // Statistics field configuration: [key, icon, label, formatter]
 const STAT_FIELDS: [string, string, string, (value: number) => string][] = [
@@ -424,28 +263,34 @@ export function formatStatistics(
 ): HTMLElement | null {
   if (!data || typeof data !== 'object') return null;
 
-  const element = createFromTemplate('statisticsDetailsTemplate');
-  if (!element) return null;
-
-  initToggleIcon(element, false);
-
   const typedData = data as Record<string, number>;
   const items = STAT_FIELDS.filter(([key]) => typedData[key] !== undefined).map(
-    ([key, icon, label, formatter]) => {
-      const value = formatter(typedData[key]);
-      return (
-        `<span class="stat-item detail-item" title="${label}">` +
-        `<i class="codicon ${icon}"></i> ${value}` +
-        `</span>`
-      );
-    },
+    ([key, icon, label, formatter]) => ({
+      icon,
+      label,
+      value: formatter(typedData[key]),
+    }),
   );
 
-  const contentElem = element.querySelector('.statistics-content');
-  if (contentElem instanceof HTMLElement) {
-    contentElem.innerHTML = items.join('');
-    if (logId) contentElem.dataset.logId = logId;
-  }
-
-  return element;
+  return renderToElement(html`
+    <details class="banner-details statistics-details">
+      <summary class="details-summary">
+        <i class="toggle-icon"></i>
+        <i class="codicon codicon-graph"></i>
+        <span class="summary-text">Statistics</span>
+      </summary>
+      <div
+        class="statistics-content"
+        data-log-id=${ifDefined(logId || undefined)}
+      >
+        ${items.map(
+          (item) => html`
+            <span class="stat-item detail-item" title=${item.label}>
+              <i class=${`codicon ${item.icon}`}></i> ${item.value}
+            </span>
+          `,
+        )}
+      </div>
+    </details>
+  `);
 }
