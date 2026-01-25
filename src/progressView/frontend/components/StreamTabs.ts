@@ -186,7 +186,9 @@ export class StreamTabs extends LitElement {
   }
 
   private handleFilterChange(event: Event) {
-    const group = event.currentTarget as HTMLElement & { value?: string } | null;
+    const group = event.currentTarget as
+      | (HTMLElement & { value?: string })
+      | null;
     const filter = group?.value as StreamFilter;
     if (!filter) return;
 
