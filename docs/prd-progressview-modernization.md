@@ -65,10 +65,10 @@ NODE_OPTIONS=--max-old-space-size=8192 npm run compile
 | **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
 | **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
-| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete*   | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
-| **Phase 5** | MainView refactoring + message contracts     | ⬜ Not Started | [prd-progressview-phase4.md](./prd-progressview-phase4.md#phase-5-mainview-refactoring-post-migration-critical-work) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete\*  | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 5** | MainView refactoring + message contracts     | ⬜ Not Started | [prd-progressview-phase5.md](./prd-progressview-phase5.md) |
 
-*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
+\*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
 
 ### Phase 3 Status Detail
 
@@ -82,29 +82,30 @@ NODE_OPTIONS=--max-old-space-size=8192 npm run compile
 
 ### Phase 4 Status Detail (2026-01-25)
 
-| Webview | Status | Shadow DOM | Zod Validation | Legacy JS |
-|---------|--------|------------|----------------|-----------|
-| **MemoryView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
-| **HistoryView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
-| **ProfileView** | ✅ Complete | ✅ | ✅ | ✅ Deleted |
-| **MainView** | ✅ Migrated | ✅ | ❌ **Missing** | ✅ Deleted |
+| Webview         | Status      | Shadow DOM | Zod Validation | Legacy JS  |
+| --------------- | ----------- | ---------- | -------------- | ---------- |
+| **MemoryView**  | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **HistoryView** | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **ProfileView** | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **MainView**    | ✅ Migrated | ✅         | ❌ **Missing** | ✅ Deleted |
 
 **Note:** MainView requires Phase 5 work:
+
 - 2,737-line monolithic component needs extraction
 - 58 message types lack Zod validation
 - No shared message contract with backend
 
 ### Phase 5: MainView Refactoring (New)
 
-| Task | Status | Impact |
-|------|--------|--------|
-| Extract FileSelectGroup component | ⬜ | -300 lines from MainApp |
-| Extract BannerGroup components | ⬜ | -150 lines from MainApp |
-| Extract LatexDiffsSection | ⬜ | -200 lines from MainApp |
-| Create shared message schemas | ⬜ | Type-safe frontend ↔ backend |
-| Add Zod validation to MainApp | ⬜ | Security + type safety |
-| Convert 37 inline arrows | ⬜ | Performance |
-| Delete duplicate debug handler | ⬜ | Code cleanup |
+| Task                              | Status | Impact                       |
+| --------------------------------- | ------ | ---------------------------- |
+| Extract FileSelectGroup component | ⬜     | -300 lines from MainApp      |
+| Extract BannerGroup components    | ⬜     | -150 lines from MainApp      |
+| Extract LatexDiffsSection         | ⬜     | -200 lines from MainApp      |
+| Create shared message schemas     | ⬜     | Type-safe frontend ↔ backend |
+| Add Zod validation to MainApp     | ⬜     | Security + type safety       |
+| Convert 37 inline arrows          | ⬜     | Performance                  |
+| Delete duplicate debug handler    | ⬜     | Code cleanup                 |
 
 ---
 
@@ -197,6 +198,7 @@ Frontend (MainApp.ts)                → expects { command: string, options?: un
 ```
 
 This leads to:
+
 - Runtime errors when message shapes change
 - No compile-time guarantees
 - Duplicate type definitions
@@ -241,6 +243,7 @@ export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
 ```
 
 **Backend usage:**
+
 ```typescript
 // MainViewMessageHandler.ts
 import { SetModelOptionsMessage } from '@shared/schemas/mainViewMessages';
@@ -255,6 +258,7 @@ private sendModelOptions(options: string): void {
 ```
 
 **Frontend usage:**
+
 ```typescript
 // MainApp.ts handlers
 import { MainViewMessageSchema } from '@shared/schemas/mainViewMessages';
@@ -281,13 +285,13 @@ private handleMessage(event: MessageEvent): void {
 
 ### Migration Status
 
-| Webview | Shared Schemas | Backend Uses | Frontend Validates |
-|---------|----------------|--------------|-------------------|
-| ProgressView | ✅ | ✅ | ✅ |
-| MemoryView | ✅ | ✅ | ✅ |
-| HistoryView | ✅ | ✅ | ✅ |
-| ProfileView | ✅ | ✅ | ✅ |
-| **MainView** | ❌ | ❌ | ❌ |
+| Webview      | Shared Schemas | Backend Uses | Frontend Validates |
+| ------------ | -------------- | ------------ | ------------------ |
+| ProgressView | ✅             | ✅           | ✅                 |
+| MemoryView   | ✅             | ✅           | ✅                 |
+| HistoryView  | ✅             | ✅           | ✅                 |
+| ProfileView  | ✅             | ✅           | ✅                 |
+| **MainView** | ❌             | ❌           | ❌                 |
 
 **MainView is the only remaining webview without shared message contracts.**
 
