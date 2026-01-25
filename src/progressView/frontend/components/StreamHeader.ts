@@ -29,6 +29,73 @@ interface ToolbarButton {
   isToggle?: boolean;
 }
 
+/** Status display labels - extracted as constant to avoid recreation on each render */
+const STATUS_LABELS: Record<string, string> = {
+  [STREAM_STATUS.RUNNING]: 'Running',
+  [STREAM_STATUS.ERROR]: 'Error',
+  [STREAM_STATUS.STOPPED]: 'Stopped',
+  [STREAM_STATUS.READY]: 'Ready',
+  [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
+  [STREAM_STATUS.RESUMING]: 'Resuming',
+};
+
+/**
+ * Buttons enabled per status - extracted as constant to avoid recreation.
+ * Maps status to array of button IDs that should be enabled.
+ */
+const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
+  [STREAM_STATUS.RUNNING]: [
+    ELEMENT_IDS.STOP_STREAM_BTN,
+    ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+  [STREAM_STATUS.ERROR]: [
+    ELEMENT_IDS.RUN_NEW_BTN,
+    ELEMENT_IDS.RESUME_BTN,
+    ELEMENT_IDS.PACK_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.DIFF_STREAM_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+  [STREAM_STATUS.STOPPED]: [
+    ELEMENT_IDS.RUN_NEW_BTN,
+    ELEMENT_IDS.RESUME_BTN,
+    ELEMENT_IDS.PACK_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.DIFF_STREAM_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+  [STREAM_STATUS.READY]: [
+    ELEMENT_IDS.RUN_NEW_BTN,
+    ELEMENT_IDS.PACK_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.DIFF_STREAM_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+  [STREAM_STATUS.WAITING]: [
+    ELEMENT_IDS.STOP_STREAM_BTN,
+    ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+  [STREAM_STATUS.RESUMING]: [
+    ELEMENT_IDS.STOP_STREAM_BTN,
+    ELEMENT_IDS.YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.RESTORE_STATE_BTN,
+    ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ],
+};
+
+/** Buttons that depend on having an executionId */
+const EXECUTION_DEPENDENT_BUTTONS = new Set([
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.RESUME_BTN,
+]);
+
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   @property({ type: Object }) stream: StreamTabInfo | null = null;
@@ -157,15 +224,7 @@ export class StreamHeader extends LitElement {
   }
 
   private getStatusLabel(status: string): string {
-    const labelMap: Record<string, string> = {
-      [STREAM_STATUS.RUNNING]: 'Running',
-      [STREAM_STATUS.ERROR]: 'Error',
-      [STREAM_STATUS.STOPPED]: 'Stopped',
-      [STREAM_STATUS.READY]: 'Ready',
-      [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
-      [STREAM_STATUS.RESUMING]: 'Resuming',
-    };
-    return labelMap[status] ?? status;
+    return STATUS_LABELS[status] ?? status;
   }
 
   private resolveButtonState(
@@ -173,62 +232,9 @@ export class StreamHeader extends LitElement {
     status: string,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {
-    const executionDependent = new Set([
-      ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ELEMENT_IDS.RESUME_BTN,
-    ]);
-
-    const statusMap: Record<string, string[]> = {
-      [STREAM_STATUS.RUNNING]: [
-        ELEMENT_IDS.STOP_STREAM_BTN,
-        ELEMENT_IDS.YOLO_TOGGLE_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-      [STREAM_STATUS.ERROR]: [
-        ELEMENT_IDS.RUN_NEW_BTN,
-        ELEMENT_IDS.RESUME_BTN,
-        ELEMENT_IDS.PACK_STREAM_BTN,
-        ELEMENT_IDS.CLEAN_STREAM_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.DIFF_STREAM_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-      [STREAM_STATUS.STOPPED]: [
-        ELEMENT_IDS.RUN_NEW_BTN,
-        ELEMENT_IDS.RESUME_BTN,
-        ELEMENT_IDS.PACK_STREAM_BTN,
-        ELEMENT_IDS.CLEAN_STREAM_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.DIFF_STREAM_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-      [STREAM_STATUS.READY]: [
-        ELEMENT_IDS.RUN_NEW_BTN,
-        ELEMENT_IDS.PACK_STREAM_BTN,
-        ELEMENT_IDS.CLEAN_STREAM_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.DIFF_STREAM_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-      [STREAM_STATUS.WAITING]: [
-        ELEMENT_IDS.STOP_STREAM_BTN,
-        ELEMENT_IDS.YOLO_TOGGLE_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-      [STREAM_STATUS.RESUMING]: [
-        ELEMENT_IDS.STOP_STREAM_BTN,
-        ELEMENT_IDS.YOLO_TOGGLE_BTN,
-        ELEMENT_IDS.RESTORE_STATE_BTN,
-        ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-      ],
-    };
-
-    const enabledButtons = new Set(statusMap[status] ?? []);
-    const hidden = executionDependent.has(buttonId) && !hasExecutionId;
+    const enabledButtons = new Set(ENABLED_BUTTONS_BY_STATUS[status] ?? []);
+    const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons.has(buttonId);
-
     return { disabled, hidden };
   }
 

@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { postMessage } from '@shared/vscode';
@@ -41,14 +41,15 @@ type LogListState = {
 
 @customElement('log-list')
 export class LogList extends LitElement {
+  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
+  declare private containerEl: HTMLElement | null;
+
   private stateManager: WebviewStateManager<LogListState>;
   private toggleStates: ToggleStateStore;
   private groupManager: TaskGroupDomManager;
   private logManager: LogEntryManager;
   private lastRenderedStream: string;
   private activeAgentCategory: string;
-  private boundToggleHandler: (event: Event) => void;
-  private boundClickHandler: (event: MouseEvent) => void;
 
   constructor() {
     super();
@@ -62,8 +63,6 @@ export class LogList extends LitElement {
     this.logManager = new LogEntryManager(this);
     this.lastRenderedStream = '';
     this.activeAgentCategory = 'workflow';
-    this.boundToggleHandler = this.handleToggleEvent.bind(this);
-    this.boundClickHandler = this.handleClickEvent.bind(this);
   }
 
   protected createRenderRoot(): HTMLElement {
@@ -72,13 +71,13 @@ export class LogList extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('toggle', this.boundToggleHandler, true);
-    document.addEventListener('click', this.boundClickHandler, true);
+    document.addEventListener('toggle', this.handleToggleEvent, { capture: true });
+    document.addEventListener('click', this.handleClickEvent, { capture: true });
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('toggle', this.boundToggleHandler, true);
-    document.removeEventListener('click', this.boundClickHandler, true);
+    document.removeEventListener('toggle', this.handleToggleEvent, { capture: true });
+    document.removeEventListener('click', this.handleClickEvent, { capture: true });
     super.disconnectedCallback();
   }
 
@@ -269,7 +268,7 @@ export class LogList extends LitElement {
   }
 
   private getContainer(): HTMLElement | null {
-    return this.querySelector(`#${ELEMENT_IDS.LOG_CONTENT}`);
+    return this.containerEl;
   }
 
   private getGroupContainer(groupId: string): HTMLElement | null {
@@ -304,7 +303,8 @@ export class LogList extends LitElement {
     }
   }
 
-  private handleToggleEvent(event: Event): void {
+  /** Handle details toggle events for chevron icon rotation */
+  private handleToggleEvent = (event: Event): void => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
     const hasToggleClass = [
@@ -322,9 +322,10 @@ export class LogList extends LitElement {
     ) {
       setChevronIconHorizontal(toggleIcon, target.open);
     }
-  }
+  };
 
-  private async handleClickEvent(event: MouseEvent): Promise<void> {
+  /** Handle click events for file links, copy buttons, etc. */
+  private handleClickEvent = async (event: MouseEvent): Promise<void> => {
     const target = event.target as Element | null;
     if (!target) return;
 

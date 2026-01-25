@@ -29,7 +29,10 @@ export class InstructionPanel extends LitElement {
     }
 
     return html`
-      <div id=${ELEMENT_IDS.INSTRUCTION_CONTAINER} class="instruction-panel is-visible">
+      <div
+        id=${ELEMENT_IDS.INSTRUCTION_CONTAINER}
+        class="instruction-panel is-visible"
+      >
         <div class="instruction-panel__header">
           <span class="instruction-panel__title">
             <i class="codicon codicon-notebook"></i>

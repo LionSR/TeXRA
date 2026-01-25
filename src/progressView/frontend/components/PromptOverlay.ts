@@ -183,26 +183,12 @@ export class PromptOverlay extends LitElement {
         </p>
         <p><strong>Tool:</strong> ${prompt.sourceTool}</p>
       </div>
-      <div class="prompt-actions">
-        <button class="secondary" @click=${() => this.emitAction('openDiff')}>
-          Open diff
-        </button>
-        <button
-          class="secondary"
-          @click=${() => this.emitAction('previewProposed')}
-        >
-          Preview
-        </button>
-        <button
-          class="secondary"
-          @click=${() => this.emitAction('showLatexdiff')}
-        >
-          LaTeXdiff
-        </button>
-        <button class="secondary" @click=${() => this.emitAction('reject')}>
-          Reject
-        </button>
-        <button @click=${() => this.emitAction('approve')}>Approve</button>
+      <div class="prompt-actions" @click=${this.handleActionClick}>
+        <button class="secondary" data-action="openDiff">Open diff</button>
+        <button class="secondary" data-action="previewProposed">Preview</button>
+        <button class="secondary" data-action="showLatexdiff">LaTeXdiff</button>
+        <button class="secondary" data-action="reject">Reject</button>
+        <button data-action="approve">Approve</button>
       </div>
     `;
   }
@@ -213,11 +199,9 @@ export class PromptOverlay extends LitElement {
       <div class="prompt-body">
         <p><strong>Command:</strong> ${prompt.command}</p>
       </div>
-      <div class="prompt-actions">
-        <button class="secondary" @click=${() => this.emitAction('reject')}>
-          Reject
-        </button>
-        <button @click=${() => this.emitAction('approve')}>Approve</button>
+      <div class="prompt-actions" @click=${this.handleActionClick}>
+        <button class="secondary" data-action="reject">Reject</button>
+        <button data-action="approve">Approve</button>
       </div>
     `;
   }
@@ -232,11 +216,9 @@ export class PromptOverlay extends LitElement {
           () => html`<p><strong>Error:</strong> ${prompt.errorMessage}</p>`,
         )}
       </div>
-      <div class="prompt-actions">
-        <button class="secondary" @click=${() => this.emitAction('cancel')}>
-          Cancel
-        </button>
-        <button @click=${() => this.emitAction('retry')}>Retry</button>
+      <div class="prompt-actions" @click=${this.handleActionClick}>
+        <button class="secondary" data-action="cancel">Cancel</button>
+        <button data-action="retry">Retry</button>
       </div>
     `;
   }
@@ -267,17 +249,33 @@ export class PromptOverlay extends LitElement {
           `,
         )}
       </div>
-      <div class="prompt-actions">
-        <button class="secondary" @click=${this.handleRejectClick}>
+      <div class="prompt-actions" @click=${this.handleActionClick}>
+        <button class="secondary" data-action="reject">
           ${this.showFeedback ? 'Submit' : 'Reject'}
         </button>
-        <button class="secondary" @click=${() => this.emitAction('setup')}>
-          Setup
-        </button>
-        <button @click=${() => this.emitAction('approve')}>Approve</button>
+        <button class="secondary" data-action="setup">Setup</button>
+        <button data-action="approve">Approve</button>
       </div>
     `;
   }
+
+  /** Event delegation handler for action buttons */
+  private handleActionClick = (event: MouseEvent): void => {
+    const target = event.target as Element | null;
+    const button = target?.closest('[data-action]') as HTMLElement | null;
+    if (!button) return;
+
+    const action = button.dataset.action;
+    if (!action) return;
+
+    // Special handling for reject action on proposals (feedback flow)
+    if (action === 'reject' && this.prompt?.kind === 'proposal') {
+      this.handleRejectClick();
+      return;
+    }
+
+    this.emitAction(action);
+  };
 
   private handleRejectClick(): void {
     if (this.prompt?.kind !== 'proposal') {
