@@ -10,7 +10,6 @@ import { createFromTemplate } from '@common/modules/templateUtils.js';
 // Local imports - formatter helpers
 import { initToggleIcon } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
-import type { NormalizedPayload } from '../parseUtils';
 
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
@@ -53,11 +52,10 @@ const ACTION_CONFIG: Record<
 
 /** Format context management event for display. */
 export function formatContextManagement(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
 ): HTMLElement | null {
-  const parsed = normalizedPayload?.structured;
-  if (!parsed || typeof parsed !== 'object') {
+  if (!data || typeof data !== 'object') {
     return null;
   }
 
@@ -77,7 +75,7 @@ export function formatContextManagement(
     originalMaxTokens,
     reducedMaxTokens,
     details,
-  } = parsed as Record<string, unknown>;
+  } = data as Record<string, unknown>;
 
   const actionValue = typeof action === 'string' ? action : '';
   const config = ACTION_CONFIG[actionValue] || {

@@ -2,20 +2,17 @@
 import {
   LitElement,
   html,
+  nothing,
   type TemplateResult,
   type PropertyValues,
 } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
-import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
-
-// Local imports - common helpers
-import {
-  getRadioChangeValue,
-  setRadioGroupValue,
-} from '@common/modules/domUtils.js';
+import { repeat } from 'lit/directives/repeat.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - shared utilities
+import { getRadioChangeValue, setRadioGroupValue } from '@shared/utils/dom';
 import { formatRelativeTime } from '@shared/utils/string';
 import {
   AGENT_DECORATORS,
@@ -43,7 +40,7 @@ export class StreamTabs extends LitElement {
   @property({ type: String }) sort: StreamSort = 'time';
 
   @query(`#${ELEMENT_IDS.AGENT_FILTER_CONTAINER}`)
-  private declare filterGroup: HTMLElement | null;
+  declare private filterGroup: HTMLElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -55,7 +52,8 @@ export class StreamTabs extends LitElement {
 
   updated(changedProps: PropertyValues): void {
     if (changedProps.has('filter')) {
-      this.syncFilterRadioGroup();
+      // Use requestAnimationFrame to ensure VS Code elements have settled
+      requestAnimationFrame(() => this.syncFilterRadioGroup());
     }
   }
 
@@ -76,9 +74,10 @@ export class StreamTabs extends LitElement {
               (stream) => this.renderTab(stream),
             )}
           </div>
-          ${this.streams.length === 0
-            ? html`<div class="log-placeholder">No streams yet.</div>`
-            : null}
+          ${when(
+            this.streams.length === 0,
+            () => html`<div class="log-placeholder">No streams yet.</div>`,
+          )}
         </div>
         <div class="clear-all-container">
           <vscode-radio-group
@@ -91,7 +90,7 @@ export class StreamTabs extends LitElement {
                 <vscode-radio
                   id=${btn.id}
                   value=${btn.filter}
-                  ?checked=${this.filter === btn.filter}
+                  .checked=${this.filter === btn.filter}
                 >
                   ${btn.label}
                 </vscode-radio>
@@ -113,13 +112,12 @@ export class StreamTabs extends LitElement {
             )}
           </div>
 
-          <vscode-button
+          <vscode-toolbar-button
             id=${ELEMENT_IDS.DELETE_ALL_BTN}
-            appearance="secondary"
+            icon="close-all"
+            label="Clear all"
             @click=${this.handleDeleteAll}
-          >
-            Clear all
-          </vscode-button>
+          ></vscode-toolbar-button>
         </div>
       </div>
     `;
@@ -162,22 +160,24 @@ export class StreamTabs extends LitElement {
               class=${`codicon codicon-${agentDecorator.icon} agent-category`}
               title=${`Category: ${agentDecorator.label}`}
             ></i>
-            ${stream.isRemote
-              ? html`
-                  <i
-                    class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
-                    title=${AGENT_DECORATORS.properties.remote.hint}
-                  ></i>
-                `
-              : null}
-            ${stream.hasMultipleOutputs
-              ? html`
-                  <i
-                    class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
-                    title=${AGENT_DECORATORS.properties.multipleOutputs.hint}
-                  ></i>
-                `
-              : null}
+            ${when(
+              stream.isRemote,
+              () => html`
+                <i
+                  class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
+                  title=${AGENT_DECORATORS.properties.remote.hint}
+                ></i>
+              `,
+            )}
+            ${when(
+              stream.hasMultipleOutputs,
+              () => html`
+                <i
+                  class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
+                  title=${AGENT_DECORATORS.properties.multipleOutputs.hint}
+                ></i>
+              `,
+            )}
           </div>
         </button>
         <vscode-toolbar-button
