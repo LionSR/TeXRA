@@ -33,6 +33,14 @@ export interface FollowupStreamData {
   fileCount?: number;
 }
 
+export interface FollowupFormData {
+  agent: string;
+  model: string;
+  includeInstruction: boolean;
+  attachOutputs: boolean;
+  initialQuestion: string;
+}
+
 export interface FollowupOptions {
   workflowAgentsHtml: string;
   toolUseAgentsHtml: string;
@@ -188,15 +196,57 @@ export class FollowupSection extends LitElement {
     this.syncRadioGroup();
   }
 
+  private getFormData(): FollowupFormData | null {
+    const agentSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`) as
+      | (HTMLElement & { value?: string })
+      | null;
+    const modelSelect = this.querySelector(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`) as
+      | (HTMLElement & { value?: string })
+      | null;
+    const includeCheckbox = this.querySelector(
+      `#${ELEMENT_IDS.FOLLOWUP_INCLUDE_INSTRUCTION}`,
+    ) as (HTMLElement & { checked?: boolean }) | null;
+    const attachCheckbox = this.querySelector(
+      `#${ELEMENT_IDS.FOLLOWUP_ATTACH_OUTPUTS}`,
+    ) as (HTMLElement & { checked?: boolean }) | null;
+    const questionInput = this.querySelector(
+      `#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`,
+    ) as (HTMLElement & { value?: string }) | null;
+
+    const agent = this.mode === 'merge' ? 'merge' : agentSelect?.value;
+    const model = modelSelect?.value;
+    if (!agent || !model) return null;
+
+    return {
+      agent,
+      model,
+      includeInstruction: includeCheckbox?.checked ?? false,
+      attachOutputs: attachCheckbox?.checked ?? false,
+      initialQuestion: questionInput?.value?.trim() ?? '',
+    };
+  }
+
   private emitSetup(): void {
+    const formData = this.getFormData();
+    if (!formData) return;
     this.dispatchEvent(
-      new CustomEvent('followup-setup', { bubbles: true, composed: true }),
+      new CustomEvent('followup-setup', {
+        detail: { mode: this.mode, ...formData },
+        bubbles: true,
+        composed: true,
+      }),
     );
   }
 
   private emitRun(): void {
+    const formData = this.getFormData();
+    if (!formData) return;
     this.dispatchEvent(
-      new CustomEvent('followup-run', { bubbles: true, composed: true }),
+      new CustomEvent('followup-run', {
+        detail: { mode: this.mode, ...formData },
+        bubbles: true,
+        composed: true,
+      }),
     );
   }
 
