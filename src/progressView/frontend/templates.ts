@@ -91,41 +91,6 @@ const TEMPLATES: { id: string; html: string }[] = [
       </details>
     `,
   },
-  {
-    id: 'userMessageTemplate',
-    html: `
-      <div class="user-message-container">
-        <div class="user-message">
-          <div class="user-message-header">
-            <i class="codicon codicon-comment user-message-icon"></i>
-            <span class="user-message-timestamp"></span>
-          </div>
-          <div class="user-message-content"></div>
-        </div>
-      </div>
-    `,
-  },
-  {
-    id: 'groupDetailsTemplate',
-    html: `
-      <div class="log-group">
-        <div class="log-group-content"></div>
-      </div>
-    `,
-  },
-  {
-    id: 'groupHeaderTemplate',
-    html: `
-      <summary class="log-group-header">
-        <span class="group-status-icon"></span>
-        <span class="group-title"></span>
-        <span class="group-time">
-          <span class="group-start-time"></span>
-          <span class="group-duration"></span>
-        </span>
-      </summary>
-    `,
-  },
 ];
 
 export function registerProgressViewTemplates(): void {

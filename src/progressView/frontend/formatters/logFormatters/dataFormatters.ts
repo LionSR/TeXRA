@@ -2,11 +2,11 @@
  * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
-
 // Third-party imports
 import { z } from 'zod';
+
+// Local imports - common helpers
+import { createFromTemplate } from '@common/modules/templateUtils.js';
 
 // Local imports - shared utilities
 import { encodeHtml } from '@shared/utils/html';
@@ -20,9 +20,9 @@ import {
 
 // Local imports - formatter helpers
 import {
+  buildFileLink,
   buildFileListRender,
   initToggleIcon,
-  buildFileLink,
 } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
@@ -99,7 +99,6 @@ export function formatMissingOutputs(
   // Parse with Zod schema
   const parseResult = MissingOutputsPayloadSchema.safeParse(data);
   if (!parseResult.success) {
-    console.warn('Missing structured data for missing outputs log entry');
     return null;
   }
 
@@ -126,7 +125,13 @@ export function formatMissingOutputs(
       .map((f) => {
         const filePath = String(f);
         const escaped = encodeHtml(filePath);
-        return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${encodeHtml(getBasename(filePath))}</span></li>`;
+        const basename = encodeHtml(getBasename(filePath));
+        return (
+          `<li class="detail-item" title="${escaped}">` +
+          `<i class="codicon codicon-warning"></i> ` +
+          `<span class="file-link clickable-link" data-file="${escaped}">${basename}</span>` +
+          `</li>`
+        );
       })
       .join('');
     if (logId) contentElem.dataset.logId = logId;
@@ -167,6 +172,15 @@ const LATEXDIFF_STATUS_ICONS: Record<string, string> = {
 const getLatexdiffStatusIcon = (status: string): string =>
   LATEXDIFF_STATUS_ICONS[status] ?? 'codicon-question';
 
+/** Safely extract a string property from an object. */
+function getString(
+  obj: Record<string, unknown> | undefined,
+  key: string,
+): string {
+  const value = obj?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
 /** Extract display data from new DiffResult format. */
 const extractNewFormat = (entry: DiffResultEntry) => {
   const baseLocation = entry.baseLocation as
@@ -176,43 +190,35 @@ const extractNewFormat = (entry: DiffResultEntry) => {
   const diffLocation = entry.diffLocation as
     | Record<string, unknown>
     | undefined;
-  const originalCandidate = (
-    revised?.lineage as Record<string, unknown> | undefined
-  )?.original as Record<string, unknown> | undefined;
-  const originalRelative =
-    typeof originalCandidate?.relativePath === 'string'
-      ? originalCandidate.relativePath
-      : '';
-  const originalAbsolute =
-    typeof originalCandidate?.absolutePath === 'string'
-      ? originalCandidate.absolutePath
-      : '';
+  const revisedLocation = revised?.location as
+    | Record<string, unknown>
+    | undefined;
+  const lineage = revised?.lineage as Record<string, unknown> | undefined;
+  const originalCandidate = lineage?.original as
+    | Record<string, unknown>
+    | undefined;
+
+  const originalRelative = getString(originalCandidate, 'relativePath');
+  const originalAbsolute = getString(originalCandidate, 'absolutePath');
+  const baseAbsolutePath = getString(baseLocation, 'absolutePath');
+
+  // Determine display name: prefer original path, then base location description, then basename
+  let displayName = '';
+  if (originalRelative || originalAbsolute) {
+    displayName = getBasename(originalRelative || originalAbsolute);
+  }
+  if (!displayName) {
+    displayName = describeLocation(baseLocation ?? null);
+  }
+  if (!displayName) {
+    displayName = getBasename(baseAbsolutePath) || 'unknown';
+  }
 
   return {
-    baseFile:
-      typeof baseLocation?.absolutePath === 'string'
-        ? baseLocation.absolutePath
-        : '',
-    revisedFile:
-      typeof (revised?.location as Record<string, unknown>)?.absolutePath ===
-      'string'
-        ? ((revised?.location as Record<string, unknown>)
-            .absolutePath as string)
-        : '',
-    diffFile:
-      typeof diffLocation?.absolutePath === 'string'
-        ? diffLocation.absolutePath
-        : '',
-    displayName:
-      originalRelative || originalAbsolute
-        ? getBasename(originalRelative ?? originalAbsolute)
-        : describeLocation(baseLocation ?? null) ||
-          getBasename(
-            typeof baseLocation?.absolutePath === 'string'
-              ? baseLocation.absolutePath
-              : '',
-          ) ||
-          'unknown',
+    baseFile: baseAbsolutePath,
+    revisedFile: getString(revisedLocation, 'absolutePath'),
+    diffFile: getString(diffLocation, 'absolutePath'),
+    displayName,
     baseRound: typeof entry.baseRound === 'number' ? entry.baseRound : null,
     revisedRound: typeof revised?.round === 'number' ? revised.round : 0,
     status: typeof entry.status === 'string' ? entry.status : 'error',
@@ -228,16 +234,30 @@ const parseRoundFromLabel = (label: string | undefined): number | null => {
   return match ? parseInt(match[1], 10) : null;
 };
 
+/** Extract absolute path from a location object if available. */
+function getAbsolutePath(
+  location: Record<string, unknown> | undefined,
+  fallback: unknown,
+): string {
+  const locationPath = (location as Record<string, unknown> | undefined)
+    ?.absolutePath;
+  if (typeof locationPath === 'string') return locationPath;
+  if (typeof fallback === 'string') return fallback;
+  return '';
+}
+
 /** Extract display data from legacy format (locations + labels). */
 const extractLegacyFormat = (entry: DiffResultEntry) => {
   const locations = entry.locations as Record<string, unknown> | undefined;
-  const baseFile =
-    typeof (locations?.base as Record<string, unknown>)?.absolutePath ===
-    'string'
-      ? ((locations?.base as Record<string, unknown>)?.absolutePath as string)
-      : typeof entry.basePath === 'string'
-        ? entry.basePath
-        : '';
+  const baseLocation = locations?.base as Record<string, unknown> | undefined;
+  const revisedLocation = locations?.revised as
+    | Record<string, unknown>
+    | undefined;
+  const diffLocation = locations?.diff as Record<string, unknown> | undefined;
+
+  const baseFile = getAbsolutePath(baseLocation, entry.basePath);
+  const revisedFile = getAbsolutePath(revisedLocation, entry.revisedPath);
+  const diffFile = getAbsolutePath(diffLocation, entry.diffPath);
 
   // Try to get round info from entry fields first, then parse from labels
   const baseRound =
@@ -249,30 +269,24 @@ const extractLegacyFormat = (entry: DiffResultEntry) => {
     parseRoundFromLabel(entry.revisedLabel as string | undefined) ??
     0;
 
+  // Determine display name: prefer originalFileName, then stripped label, then basename
+  let displayName = '';
+  if (typeof entry.originalFileName === 'string') {
+    displayName = entry.originalFileName;
+  }
+  if (!displayName) {
+    const baseLabel = entry.baseLabel as string | undefined;
+    displayName = baseLabel?.replace(/\s*\[r\d+\]/, '') ?? '';
+  }
+  if (!displayName) {
+    displayName = getBasename(baseFile) || 'unknown';
+  }
+
   return {
     baseFile,
-    revisedFile:
-      typeof (locations?.revised as Record<string, unknown>)?.absolutePath ===
-      'string'
-        ? ((locations?.revised as Record<string, unknown>)
-            ?.absolutePath as string)
-        : typeof entry.revisedPath === 'string'
-          ? entry.revisedPath
-          : '',
-    diffFile:
-      typeof (locations?.diff as Record<string, unknown>)?.absolutePath ===
-      'string'
-        ? ((locations?.diff as Record<string, unknown>)?.absolutePath as string)
-        : typeof entry.diffPath === 'string'
-          ? entry.diffPath
-          : '',
-    displayName:
-      (typeof entry.originalFileName === 'string'
-        ? entry.originalFileName
-        : '') ||
-      (entry.baseLabel as string | undefined)?.replace(/\s*\[r\d+\]/, '') || // Strip round from label
-      getBasename(baseFile) ||
-      'unknown',
+    revisedFile,
+    diffFile,
+    displayName,
     baseRound,
     revisedRound,
     status: typeof entry.status === 'string' ? entry.status : 'error',
@@ -327,7 +341,12 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
   const revisedLink = buildFileLink(revisedFile, revisedLabel);
   const diffLink = buildFileLink(diffFile, 'diff');
 
-  return `<li class="detail-item"${runAttr}><i class="codicon ${icon}"${titleAttr}></i> ${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})</li>`;
+  return (
+    `<li class="detail-item"${runAttr}>` +
+    `<i class="codicon ${icon}"${titleAttr}></i> ` +
+    `${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})` +
+    `</li>`
+  );
 };
 
 // =============================================================================
@@ -412,8 +431,14 @@ export function formatStatistics(
 
   const typedData = data as Record<string, number>;
   const items = STAT_FIELDS.filter(([key]) => typedData[key] !== undefined).map(
-    ([key, icon, label, formatter]) =>
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(typedData[key])}</span>`,
+    ([key, icon, label, formatter]) => {
+      const value = formatter(typedData[key]);
+      return (
+        `<span class="stat-item detail-item" title="${label}">` +
+        `<i class="codicon ${icon}"></i> ${value}` +
+        `</span>`
+      );
+    },
   );
 
   const contentElem = element.querySelector('.statistics-content');

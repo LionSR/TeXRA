@@ -1,11 +1,5 @@
 // Local imports
-import type { FollowupStreamData } from './components/FollowupSection';
-import {
-  getEffectiveRunId,
-  type ProgressState,
-  type StreamSort,
-  type StreamState,
-} from './store';
+import { type ProgressState, type StreamSort, type StreamState } from './store';
 
 // Local imports - shared schemas
 import type { StreamTabInfo, TaskGroup } from '@shared/schemas';
@@ -119,33 +113,4 @@ export function resolveActiveRunId(streamState: StreamState): string | null {
   return (
     [...rootGroups].sort((a, b) => b.startTime - a.startTime)[0]?.id ?? null
   );
-}
-
-/**
- * Build data for the followup section component.
- */
-export function buildFollowupData(
-  stream: StreamTabInfo,
-  streamState: StreamState | null,
-): FollowupStreamData | null {
-  if (!stream || !streamState) return null;
-
-  const runId = getEffectiveRunId(streamState);
-  const runFiles = runId ? (streamState.runFiles?.[runId] ?? {}) : {};
-  const fileCount = Object.values(runFiles).flat().length;
-
-  const instruction = runId ? streamState.runInstructions?.[runId] : null;
-  const instructionPreview = instruction?.text
-    ? instruction.text.slice(0, 100) +
-      (instruction.text.length > 100 ? '...' : '')
-    : null;
-
-  return {
-    agentCategory: stream.agentCategory,
-    status: streamState.status ?? stream.status,
-    hasOutputFiles: fileCount > 0,
-    agentName: stream.name.split('@')[0] || stream.name,
-    instructionPreview,
-    fileCount,
-  };
 }
