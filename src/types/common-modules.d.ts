@@ -133,15 +133,6 @@ declare module '@common/modules/pathUtils.js' {
   export function getBasename(path: string): string;
 }
 
-declare module '@common/webview/themeHandlers.js' {
-  export function createThemeHandlers(params?: {
-    commands: { THEME_SET: string; DEBUG_MODE_SET: string };
-    postHandle?: () => void;
-    onThemeChange?: (theme: string) => void;
-    onDebugModeChange?: (debugMode: boolean) => void;
-  }): Record<string, (message: unknown) => void>;
-}
-
 declare module '@common/constants/todoStatus' {
   export const TODO_STATUS: {
     PENDING: string;
