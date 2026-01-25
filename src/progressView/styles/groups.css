@@ -3,8 +3,8 @@
  */
 
 .log-group-header {
-  padding: 1px var(--spacing-medium);
-  margin: 1px 0;
+  padding: var(--spacing-tiny) var(--spacing-medium);
+  margin: var(--spacing-tiny) 0;
   border-radius: var(--border-radius-small);
   cursor: pointer;
   display: flex;
