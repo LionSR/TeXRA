@@ -83,10 +83,10 @@ export class LogList extends LitElement {
   }
 
   render(): TemplateResult {
-    return html`<div
+    return html`<vscode-scrollable
       id=${ELEMENT_IDS.LOG_CONTENT}
       class="log-container"
-    ></div>`;
+    ></vscode-scrollable>`;
   }
 
   setAgentCategory(category: string): void {

@@ -12,11 +12,11 @@ import { z } from 'zod';
  */
 export const MissingOutputsPayloadSchema = z.object({
   /** List of missing file paths */
-  missing: z.array(z.string()).default([]),
+  missing: z.array(z.string()).prefault([]),
   /** Path to the XML file to check for tag consistency */
-  xmlFile: z.string().nullable().default(null),
+  xmlFile: z.string().nullable().prefault(null),
   /** Expected document tag in the XML file */
-  documentTag: z.string().nullable().default(null),
+  documentTag: z.string().nullable().prefault(null),
 });
 
 export type MissingOutputsPayload = z.infer<typeof MissingOutputsPayloadSchema>;
@@ -72,31 +72,6 @@ export const NormalizedToolUseSchema = z.object({
 });
 
 export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
-
-/**
- * Schema for normalized file list entries (ready for rendering).
- * This is the display format consumed by htmlBuilders.buildFileListRender().
- */
-export const NormalizedFileEntrySchema = z.object({
-  /** Original file path (for FileListEntrySchema compatibility) */
-  path: z.string(),
-  /** Whether the file was successfully loaded/found */
-  ok: z.boolean(),
-  /** Category source identifier */
-  source: z.string(),
-  /** File path for display */
-  filePath: z.string(),
-  /** Basename of the file for display */
-  fileName: z.string(),
-  /** Display label for the source */
-  sourceDisplay: z.string(),
-  /** Whether this is an internal/bundled file */
-  internal: z.boolean(),
-  /** Variable name if loaded for prompt variable substitution */
-  varName: z.string(),
-});
-
-export type NormalizedFileEntry = z.infer<typeof NormalizedFileEntrySchema>;
 
 /**
  * Schema for web search result entries.

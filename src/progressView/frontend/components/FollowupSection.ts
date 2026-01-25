@@ -7,6 +7,8 @@ import {
 } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
+// Note: Using native Lit patterns instead of DOM utilities for radio groups
+
 // Local imports - common helpers
 import {
   applyAgentOptions,
@@ -15,9 +17,6 @@ import {
   AGENT_PLACEHOLDER,
   MODEL_PLACEHOLDER,
 } from '@common/modules/dropdownUtils.js';
-
-// Local imports - shared utilities
-import { getRadioChangeValue, setRadioGroupValue } from '@shared/utils/dom';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -70,22 +69,19 @@ export class FollowupSection extends LitElement {
   @query(`#${ELEMENT_IDS.FOLLOWUP_INITIAL_QUESTION}`)
   declare private questionInput: (HTMLElement & { value?: string }) | null;
 
-  @query('#followupModeGroup')
-  declare private modeGroup: HTMLElement | null;
+  // modeGroup query removed - Lit's .value binding handles radio sync automatically
 
   protected createRenderRoot(): HTMLElement {
     return this;
   }
 
-  firstUpdated(): void {
-    this.syncRadioGroup();
-  }
+  // firstUpdated removed - Lit's .value binding handles initial radio state
 
   updated(changedProps: PropertyValues): void {
-    if (changedProps.has('mode')) {
-      this.syncRadioGroup();
+    // Radio group sync handled by .value binding, only need to apply options
+    if (changedProps.has('mode') || changedProps.has('options')) {
+      this.applyOptions();
     }
-    this.applyOptions();
   }
 
   render(): TemplateResult {
@@ -199,8 +195,11 @@ export class FollowupSection extends LitElement {
   }
 
   private handleModeChange(event: Event): void {
-    const group = event.currentTarget as HTMLElement | null;
-    const nextMode = getRadioChangeValue(event, group) as FollowupMode;
+    // Native Lit pattern: get value directly from radio-group
+    const group = event.currentTarget as
+      | (HTMLElement & { value?: string })
+      | null;
+    const nextMode = group?.value as FollowupMode;
     if (!nextMode) return;
 
     this.dispatchEvent(ProgressEvents.followupModeChange({ mode: nextMode }));
@@ -209,7 +208,7 @@ export class FollowupSection extends LitElement {
   private handleToggle(event: CustomEvent): void {
     if (!event.detail?.open) return;
     this.dispatchEvent(ProgressEvents.followupRequestOptions());
-    this.syncRadioGroup();
+    // Radio group sync handled automatically by Lit's .value binding
   }
 
   private getFormData(): FollowupFormData | null {
@@ -242,11 +241,7 @@ export class FollowupSection extends LitElement {
     );
   }
 
-  private syncRadioGroup(): void {
-    if (this.modeGroup) {
-      setRadioGroupValue(this.modeGroup, this.mode);
-    }
-  }
+  // syncRadioGroup removed - Lit's .value binding handles this automatically
 
   private applyOptions(): void {
     if (!this.options) return;
