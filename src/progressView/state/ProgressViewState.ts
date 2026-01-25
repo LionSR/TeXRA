@@ -523,12 +523,10 @@ export class ProgressViewState {
       PROGRESS_VIEW_DEFAULTS.activeStream,
     );
 
-    if (savedActiveStream && this._streamTabs.has(savedActiveStream)) {
-      this._activeStream = savedActiveStream;
-    } else {
-      this._activeStream =
-        this._streamTabs.keys()[0] || PROGRESS_VIEW_DEFAULTS.activeStream;
-    }
+    this._activeStream =
+      savedActiveStream && this._streamTabs.has(savedActiveStream)
+        ? savedActiveStream
+        : (this._streamTabs.keys()[0] ?? PROGRESS_VIEW_DEFAULTS.activeStream);
   }
 
   /**
@@ -600,11 +598,9 @@ export class ProgressViewState {
         typeof entry[1] === 'string' && entry[1].length > 0,
     );
 
+    this._executionIds = entries.length > 0 ? new Map(entries) : new Map();
     if (entries.length > 0) {
-      this._executionIds = new Map(entries);
       this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
-    } else {
-      this._executionIds.clear();
     }
   }
 
