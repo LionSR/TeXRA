@@ -49,8 +49,8 @@ export class LogList extends LitElement {
     if (Array.isArray(previous?.groupToggleStates)) {
       this.toggleStates.load(previous.groupToggleStates);
     }
-    this.groupManager = new TaskGroupDomManager(this.toggleStates);
-    this.logManager = new LogEntryManager();
+    this.groupManager = new TaskGroupDomManager(this.toggleStates, this);
+    this.logManager = new LogEntryManager(this);
     this.lastRenderedStream = '';
     this.activeAgentCategory = 'workflow';
     this.boundToggleHandler = this.handleToggleEvent.bind(this);

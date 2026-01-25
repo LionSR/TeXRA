@@ -13,6 +13,7 @@ export class RecordingButtonManager {
   constructor(vscode, config) {
     this.vscode = vscode;
     this.buttonId = config.buttonId;
+    this.root = config.root || null;
     this.startCommand = config.startCommand;
     this.stopCommand = config.stopCommand;
     this.startTitle = config.startTitle || 'Record with microphone';
@@ -25,7 +26,9 @@ export class RecordingButtonManager {
   }
 
   setup() {
-    const button = safeGetElementById(this.buttonId);
+    const button = this.root
+      ? this.root.querySelector(`#${this.buttonId}`)
+      : safeGetElementById(this.buttonId);
     if (!button) {
       return;
     }
