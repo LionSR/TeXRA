@@ -3,7 +3,7 @@
 **Status:** Draft
 **Author:** Claude
 **Date:** 2026-01-25
-**Related:** Model dropdown, Agent dropdown, Profile View, History View
+**Related:** Model dropdown, Agent dropdown, Profile View, History View, ProgressView Modernization PRD
 
 ---
 
@@ -11,18 +11,19 @@
 
 Create a unified Settings View that consolidates model configuration, agent configuration, execution history, and profile/account management into a single tabbed interface. This replaces the scattered entry points with a cohesive settings experience.
 
+**Architecture**: This implementation follows the **Lit + TypeScript + Zod** architecture established in the ProgressView Modernization PRD. Settings View will be implemented as part of Phase 3 webview migrations.
+
 ---
 
 ## Goals
 
 1. **Single source of truth** - All configuration in one place
-2. **Easy navigation** - vscode-tabs with logical groupings, vscode-collapsible for subsections
+2. **Easy navigation** - Lit tabs with logical groupings
 3. **No auth required** - Most tabs work without login (except account features in header)
-4. **VS Code native** - Use VS Code Elements web components (`@vscode-elements/elements`)
-5. **Proper state management** - Global vs workspace state separation
+4. **Type-safe IPC** - Zod schemas for all messages, validated at boundary
+5. **Proper state management** - Reactive Lit store, global vs workspace state separation
 6. **Backwards compatible** - Extend getConfig rather than replacing it; graceful migration
-7. **Minimal custom CSS** - Only header bar needs custom styling, everything else native
-8. **Consistent patterns** - Follow existing webview architecture (vanilla JS, Zod validation)
+7. **Consistent with ProgressView** - Same patterns, shared components, shared schemas
 
 ---
 
@@ -51,11 +52,10 @@ The Settings View prioritizes simplicity and user-friendliness, inspired by Noti
 
 ### Implementation Guidelines
 
-- Use `<vscode-form-group>` for all form layouts (native VS Code styling)
-- Use `<vscode-collapsible>` for advanced/optional sections
+- Use Lit components with VS Code theme CSS variables
+- Use shared components from `src/shared/components/`
 - Keep actions visible (no hover-to-reveal complexity)
-- Use standard VS Code color variables
-- Follow existing webview patterns in the codebase
+- Follow patterns established in ProgressView modernization
 
 ---
 
@@ -76,47 +76,16 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 
 ### Header Bar + Tabs Layout
 
-Use native `vscode-tabs` for navigation with an account header bar at the top. This provides
-VS Code-native styling without custom CSS complexity.
-
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  👤 user@example.com • Pro Plan                    [Manage] [Sign Out] [×]  │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  [Models]  Agents  LaTeX  Memory  History  Advanced                         │
+│  [Models]  Agents  LaTeX  Memory  History                                   │
 │  ═══════                                                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Tab content with vscode-collapsible for subsections                        │
+│  Tab content rendered by Lit components                                     │
 │                                                                             │
-│  ▼ Recommended Models                                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ ☑ Claude Sonnet 4.5 T    Anthropic   $3/$15    200K  🧠👁           │    │
-│  │ ☑ GPT-5.2                OpenAI      $2/$10    256K  🧠👁           │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ▼ Anthropic                                       ✓ API Key  [Configure]   │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ ☑ Claude Sonnet 4.5 T     200K   $3/$15    🧠👁📄                   │    │
-│  │ ☑ Claude Opus 4.5 T       200K   $15/$75   🧠👁📄🎧                 │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ▶ OpenAI (28)                                     ✓ API Key  [Configure]   │
-│  ▶ Google (6)                                      ✗ No Key   [Configure]   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Not Logged In State:**
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Use TeXRA with your own API keys                         [Sign In]    [×]  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  [Models]  Agents  LaTeX  Memory  History  Advanced                         │
-│  ═══════                                                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ...                                                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -125,7 +94,7 @@ VS Code-native styling without custom CSS complexity.
 ```
 Tab 1: Models
 ├── Routing options (radio: direct/openrouter/proxy)
-├── ▼ Recommended Models (collapsible)
+├── Recommended Models section
 └── Provider accordions (collapsible per provider)
     └── Model checkboxes + [Configure] for API key
 
@@ -133,16 +102,14 @@ Tab 2: Agents
 ├── Built-in agents list
 ├── Custom agents list
 ├── Remote agents (if logged in)
-├── ▼ Workflow Settings (collapsible subsection)
-│   └── Output storage mode
-└── ▼ Tool-Use Settings (collapsible subsection)
-    └── Edit approval, persistence, compaction, retry behavior
+├── Workflow Settings collapsible
+└── Tool-Use Settings collapsible
 
 Tab 3: LaTeX
-├── ▼ Formatter (collapsible)
-├── ▼ LaTeXdiff (collapsible)
-├── ▼ TikZ Figures (collapsible)
-└── ▼ Replacements (collapsible, advanced)
+├── Formatter collapsible
+├── LaTeXdiff collapsible
+├── TikZ Figures collapsible
+└── Replacements collapsible (advanced)
 
 Tab 4: Memory
 └── Memory file browser with expandable content preview
@@ -151,36 +118,24 @@ Tab 5: History
 └── Execution history browser (search, restore, rerun)
 ```
 
-**Deferred to Future Release:**
-
-```
-Tab 6: Advanced
-├── ▼ Multi-Agent (collapsible) - merge model, future ensemble
-├── ▼ UI Preferences (collapsible) - reminders, image dimension, sort
-├── ▼ Git Integration (collapsible)
-├── ▼ System Paths (collapsible)
-└── ▼ Debug (collapsible)
-```
-
 ---
 
 ## Architecture
 
 ### Technology Stack
 
-The Settings View follows the established webview patterns in this codebase:
+Settings View follows the **Lit + TypeScript + Zod** architecture:
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| **UI Components** | VS Code Elements (`@vscode-elements/elements`) | Native VS Code styling |
-| **Frontend JS** | Vanilla ES6 modules | No framework (no Lit, no React) |
-| **State Management** | WebviewStateManager + VS Code API | `vscode.getState()`/`setState()` |
-| **Validation** | Zod schemas | Type-safe message validation |
-| **Styling** | CSS with VS Code theme variables | Codicons for icons |
+| **UI Framework** | Lit 3.x | Reactive components with decorators |
+| **Language** | TypeScript | Full type safety, no JS modules |
+| **State** | `@lit-labs/preact-signals` | Reactive store pattern |
+| **Validation** | Zod | Schemas in `src/shared/schemas/` |
+| **Styling** | Lit CSS + VS Code variables | Scoped styles per component |
+| **Build** | Webpack | Bundled `bundle.js` per webview |
 
 ### Three-Layer Architecture
-
-The webview architecture follows a three-layer pattern with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -189,12 +144,12 @@ The webview architecture follows a three-layer pattern with clear separation of 
 │                                                                     │
 │  SettingsViewProvider (extends BaseWebviewProvider)                 │
 │  ├── Lifecycle: resolveWebviewView(), createOrShowPanel()           │
-│  ├── HTML assignment and message routing                            │
+│  ├── Loads bundled Lit app from dist/settingsView/bundle.js         │
 │  └── Disposable management                                          │
 │                                                                     │
 │  SettingsViewContentProvider (extends BaseViewContentProvider)      │
-│  ├── HTML generation with module bundling                           │
-│  ├── URI mapping for JS/CSS modules                                 │
+│  ├── HTML shell with <settings-app> custom element                  │
+│  ├── Script tag loading bundle.js                                   │
 │  └── CSP nonce generation                                           │
 │                                                                     │
 │  SettingsViewMessageHandler (extends BaseViewMessageHandler)        │
@@ -203,26 +158,23 @@ The webview architecture follows a three-layer pattern with clear separation of 
 │  └── Backend service calls                                          │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│                        Webview (JavaScript)                          │
+│                        Webview (Lit + TypeScript)                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  settingsViewState.js (extends WebviewStateManager pattern)         │
-│  ├── State persistence via VS Code API                              │
-│  └── Getter/setter with auto-save                                   │
+│  store.ts (Reactive state with @lit-labs/preact-signals)            │
+│  ├── Single source of truth for UI state                            │
+│  ├── Typed state interface                                          │
+│  └── Derived state helpers                                          │
 │                                                                     │
-│  SettingsViewMessageHandler.js (extends BaseWebviewMessageHandler)  │
-│  ├── Message listener registration                                  │
-│  └── Command → handler routing                                      │
+│  SettingsApp.ts (Root Lit component)                                │
+│  ├── Message handler setup                                          │
+│  ├── Dispatches to child components                                 │
+│  └── Prompt overlay for confirmations                               │
 │                                                                     │
-│  SettingsViewDomHandler.js (extends BaseDomHandler)                 │
-│  ├── Composes UI managers as properties                             │
-│  ├── Listener tracking for cleanup                                  │
-│  └── Cascading dispose()                                            │
-│                                                                     │
-│  Tab UI Managers (ES6 classes)                                      │
-│  ├── ModelsTab.js, AgentsTab.js, LatexTab.js, etc.                  │
-│  ├── Template-based rendering                                       │
-│  └── Event listener management                                      │
+│  Tab Components (Lit custom elements)                               │
+│  ├── <models-tab>, <agents-tab>, <latex-tab>, etc.                  │
+│  ├── Reactive @property decorators                                  │
+│  └── Declarative event handlers                                     │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -231,214 +183,94 @@ The webview architecture follows a three-layer pattern with clear separation of 
 
 ```
 src/
-├── settingsView/                    # NEW - Unified settings view
+├── shared/                          # From ProgressView modernization
+│   ├── schemas/                     # SINGLE SOURCE OF TRUTH
+│   │   ├── index.ts                 # Barrel export
+│   │   ├── identifiers.ts           # StreamTabId, ExecutionId
+│   │   ├── settings.ts              # Settings-specific schemas (NEW)
+│   │   ├── commands.ts              # All command constants
+│   │   └── ...                      # Other shared schemas
+│   ├── components/                  # Shared Lit components
+│   │   ├── Button.ts
+│   │   ├── Tabs.ts
+│   │   ├── Collapsible.ts
+│   │   └── index.ts
+│   ├── BaseWebviewApp.ts            # Base class for Lit apps
+│   └── vscode.ts                    # VS Code API wrapper
+│
+├── settingsView/
 │   ├── SettingsViewProvider.ts      # Extends BaseWebviewProvider
 │   ├── SettingsViewMessageHandler.ts # Extends BaseViewMessageHandler
-│   ├── SettingsViewContentProvider.ts # Extends BaseViewContentProvider
-│   ├── schemas.ts                   # Zod schemas for messages
-│   ├── index.html                   # Header bar + vscode-tabs layout
-│   ├── styles/
-│   │   └── index.css                # Minimal CSS (header bar only)
-│   └── modules/
-│       ├── script.js                # Entry point, initialization
-│       ├── settingsViewState.js     # WebviewStateManager wrapper
-│       ├── messageHandlers.js       # BaseWebviewMessageHandler extension
-│       ├── domHandlers.js           # BaseDomHandler composition
-│       ├── constants.js             # Element IDs, class names
-│       ├── tabs/                    # Tab content modules (v1)
-│       │   ├── ModelsTab.js         # Models + providers + routing
-│       │   ├── AgentsTab.js         # Agents + collapsible settings
-│       │   ├── LatexTab.js          # LaTeX settings (collapsibles)
-│       │   ├── MemoryTab.js         # Memory files browser
-│       │   └── HistoryTab.js        # History (migrated)
-│       │   # AdvancedTab.js - deferred to future release
-│       └── uiManagers/
-│           ├── HeaderBar.js         # Account header bar
-│           ├── ModelListRenderer.js
-│           ├── ProviderRenderer.js
-│           ├── AgentListRenderer.js
-│           └── HistoryRenderer.js   # From historyView
-│
-├── common/
-│   ├── webview/                     # Base classes (TypeScript)
-│   │   ├── BaseWebviewProvider.ts   # Webview lifecycle
-│   │   ├── BaseViewContentProvider.ts # HTML generation
-│   │   ├── BaseViewMessageHandler.ts # Message routing + Zod validation
-│   │   ├── commands.ts              # Centralized command constants
-│   │   └── resourceRoots.ts         # Security resource roots
-│   ├── modules/                     # Shared frontend utilities (JavaScript)
-│   │   ├── BaseDomHandler.js        # Listener tracking, dispose pattern
-│   │   ├── BaseWebviewMessageHandler.js # Message handler base
-│   │   ├── webviewState.js          # WebviewStateManager
-│   │   ├── webviewContext.js        # registerMessageHandlers()
-│   │   ├── domUtils.js              # Safe DOM utilities
-│   │   └── ToggleStateStore.js      # Boolean state management
-│   └── styles/
-│       └── common.css               # Shared styles
+│   ├── SettingsViewContentProvider.ts # HTML shell generator
+│   ├── schemas.ts                   # Re-export shared + settings-specific
+│   ├── handlers/                    # Extracted domain handlers
+│   │   ├── ModelHandlers.ts
+│   │   ├── AgentHandlers.ts
+│   │   ├── LatexHandlers.ts
+│   │   ├── HistoryHandlers.ts
+│   │   └── MemoryHandlers.ts
+│   └── frontend/                    # Lit components (bundled)
+│       ├── index.ts                 # Entry point, registers components
+│       ├── store.ts                 # Reactive state
+│       ├── SettingsApp.ts           # Root <settings-app> component
+│       └── components/
+│           ├── HeaderBar.ts
+│           ├── ModelsTab.ts
+│           ├── AgentsTab.ts
+│           ├── LatexTab.ts
+│           ├── MemoryTab.ts
+│           ├── HistoryTab.ts
+│           └── ConfirmDialog.ts
 │
 ├── profileView/                     # DEPRECATED - merge into settingsView
 ├── historyView/                     # DEPRECATED - merge into settingsView
 ├── memoryView/                      # DEPRECATED - merge into settingsView
 ```
 
-### Base Class Hierarchy
+### Webpack Configuration
 
-#### Extension Host (TypeScript)
-
-**BaseWebviewProvider** (`src/common/webview/BaseWebviewProvider.ts`):
-- Orchestrates webview lifecycle
-- Handles HTML assignment via content provider
-- Routes messages via message handler
-- Manages disposables (extension-lifetime and view-lifetime)
-
-```typescript
-export abstract class BaseWebviewProvider {
-  protected _view?: vscode.WebviewView;
-  protected abstract contentProvider: BaseViewContentProvider;
-  protected abstract messageHandler: BaseViewMessageHandler;
-
-  // Called by VS Code when view becomes visible
-  resolveWebviewView(webviewView: vscode.WebviewView): void;
-
-  // For panel-based views (History, Settings)
-  createOrShowPanel(options: PanelOptions): boolean;
-}
-```
-
-**BaseViewContentProvider** (`src/common/webview/BaseViewContentProvider.ts`):
-- Generates complete HTML with module bundling
-- Maps module paths to webview URIs
-- Handles CSP nonce generation
-
-```typescript
-export abstract class BaseViewContentProvider {
-  // Module descriptor pattern for declaring dependencies
-  protected viewModules: ModuleDescriptor[];
-
-  // Returns complete HTML string
-  getHtmlContent(webview: vscode.Webview): string;
-
-  // Override for view-specific template variables
-  protected getTemplateVariables(): Record<string, string>;
-}
-```
-
-**BaseViewMessageHandler** (`src/common/webview/BaseViewMessageHandler.ts`):
-- Routes messages by command name
-- Provides Zod validation helper
-- Error handling and logging
-
-```typescript
-export abstract class BaseViewMessageHandler {
-  // Subclasses define their command handlers
-  protected abstract createHandlers(): Record<string, MessageHandler>;
-
-  // Validates message with Zod schema before handling
-  protected async withValidatedMessage<S extends z.ZodType>(
-    schema: S,
-    message: unknown,
-    messageName: string,
-    handler: (data: z.infer<S>) => Promise<void>
-  ): Promise<void>;
-}
-```
-
-#### Webview Frontend (JavaScript)
-
-**BaseDomHandler** (`src/common/modules/BaseDomHandler.js`):
-- Tracks event listeners for automatic cleanup
-- Composes child managers as properties
-- Cascading dispose pattern
+Add to `webpack.config.js`:
 
 ```javascript
-class BaseDomHandler {
-  constructor(managers = {}) {
-    this._listeners = [];      // Track all listeners
-    this._managers = managers; // Nested managers
-    Object.assign(this, managers); // Expose as properties
-  }
+const settingsViewConfig = {
+  name: 'settingsView',
+  entry: './src/settingsView/frontend/index.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist/settingsView'),
+    filename: 'bundle.js',
+  },
+  target: 'web',
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: {
+      '@shared': path.resolve(__dirname, 'src/shared'),
+      '@settingsView': path.resolve(__dirname, 'src/settingsView'),
+      // ... other aliases
+    },
+  },
+  module: {
+    rules: [
+      { test: /\.ts$/, use: 'ts-loader', exclude: /node_modules/ },
+    ],
+  },
+};
 
-  addListener(elementOrId, event, handler) {
-    // Tracks listener for later cleanup
-  }
-
-  dispose() {
-    // Cleans up all listeners AND nested managers
-  }
-}
+module.exports = [extensionConfig, progressViewConfig, settingsViewConfig];
 ```
-
-**BaseWebviewMessageHandler** (`src/common/modules/BaseWebviewMessageHandler.js`):
-- Registers message listeners with webview context
-- Routes messages by command name
-- Cleanup on dispose
-
-```javascript
-class BaseWebviewMessageHandler {
-  constructor() {
-    this._disposeFn = null;
-    this._handlers = {};  // Command → handler map
-  }
-
-  setup() {
-    this._disposeFn = registerMessageHandlers(this._handlers);
-  }
-
-  dispose() {
-    this._disposeFn?.();
-  }
-}
-```
-
-**WebviewStateManager** (`src/common/modules/webviewState.js`):
-- Wraps VS Code's `getState()`/`setState()` APIs
-- Immutable state copies with spread operators
-- Methods: `getState()`, `setState()`, `update()`
 
 ---
 
-## Message Protocol (Zod-native)
+## Schemas (Single Source of Truth)
 
-### Schema Patterns
+### Location: `src/shared/schemas/settings.ts`
 
-Use Zod schemas as single source of truth. Follow existing patterns from `src/webview/types/messages.ts`.
-
-**File:** `src/settingsView/schemas.ts`
+All settings-related schemas in ONE file. No duplicates.
 
 ```typescript
 import { z } from 'zod';
 
 // =============================================================================
-// Command Constants
-// =============================================================================
-
-export const SETTINGS_VIEW_COMMANDS = {
-  // Extension → Webview
-  SET_MODELS_DATA: 'SET_MODELS_DATA',
-  SET_AGENTS_DATA: 'SET_AGENTS_DATA',
-  SET_LATEX_DATA: 'SET_LATEX_DATA',
-  SELECT_TAB: 'SELECT_TAB',
-  // Webview → Extension
-  GET_INITIAL_DATA: 'GET_INITIAL_DATA',
-  TAB_CHANGED: 'TAB_CHANGED',
-  SAVE_ENABLED_MODELS: 'SAVE_ENABLED_MODELS',
-  SAVE_ENABLED_AGENTS: 'SAVE_ENABLED_AGENTS',
-  SAVE_SETTING: 'SAVE_SETTING',
-  SET_API_KEY: 'SET_API_KEY',
-  SIGN_IN: 'SIGN_IN',
-  SIGN_OUT: 'SIGN_OUT',
-} as const;
-
-// =============================================================================
-// Shared Base Schemas (composition pattern)
-// =============================================================================
-
-const BaseMessageSchema = z.object({
-  command: z.string(),
-});
-
-// =============================================================================
-// Tab and Settings Schemas
+// Settings Tab Types
 // =============================================================================
 
 export const SettingsTabSchema = z.enum([
@@ -451,331 +283,525 @@ export const SettingsTabSchema = z.enum([
 export type SettingsTab = z.infer<typeof SettingsTabSchema>;
 
 // =============================================================================
-// Extension → Webview Messages
+// Provider Configuration
 // =============================================================================
 
-export const SetModelsDataSchema = z.object({
-  command: z.literal('SET_MODELS_DATA'),
-  models: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    provider: z.string(),
-    contextWindow: z.number(),
-    inputCost: z.number(),
-    outputCost: z.number(),
-    capabilities: z.array(z.string()),
-  })),
-  enabled: z.array(z.string()),
-  providerStatus: z.record(z.object({
-    hasKey: z.boolean(),
-    keySource: z.enum(['secret', 'env', 'none']),
-  })),
-});
-
-export const SetAgentsDataSchema = z.object({
-  command: z.literal('SET_AGENTS_DATA'),
-  agents: z.array(z.object({
-    name: z.string(),
-    source: z.enum(['builtIn', 'builtInToolUse', 'custom', 'remote']),
-    category: z.enum(['workflow', 'toolUse']),
-    agentType: z.enum(['CoT', 'direct', 'toolUse']),
-    description: z.string().optional(),
-    enabled: z.boolean(),
-  })),
-});
-
-export const SelectTabSchema = z.object({
-  command: z.literal('SELECT_TAB'),
-  tab: SettingsTabSchema,
-});
-
-// Discriminated union for type-safe message handling
-export const SettingsMessageSchema = z.discriminatedUnion('command', [
-  SetModelsDataSchema,
-  SetAgentsDataSchema,
-  SelectTabSchema,
+export const ProviderIdSchema = z.enum([
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',  // ✅ Consistent lowercase
+  'deepseek',
+  'xai',
+  'moonshot',
+  'dashscope',
 ]);
+export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
-export type SettingsMessage = z.infer<typeof SettingsMessageSchema>;
+export const ProviderStatusSchema = z.object({
+  hasKey: z.boolean(),
+  keySource: z.enum(['secret', 'env', 'none']),
+});
+
+export const ProviderMetaSchema = z.object({
+  name: z.string(),
+  keyUrl: z.string().url(),
+  envVar: z.string(),
+  defaultEndpoint: z.string().url().optional(),
+});
 
 // =============================================================================
-// Webview → Extension Actions
+// Model Data
 // =============================================================================
 
-export const SaveEnabledModelsSchema = z.object({
-  command: z.literal('SAVE_ENABLED_MODELS'),
-  models: z.array(z.string()),
+export const ModelDataSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: ProviderIdSchema,
+  contextWindow: z.number(),
+  inputCost: z.number(),
+  outputCost: z.number(),
+  capabilities: z.array(z.string()),
+  enabled: z.boolean(),
 });
+export type ModelData = z.infer<typeof ModelDataSchema>;
 
-export const SaveEnabledAgentsSchema = z.object({
-  command: z.literal('SAVE_ENABLED_AGENTS'),
-  agents: z.array(z.string()),
+// =============================================================================
+// Agent Data
+// =============================================================================
+
+export const AgentSourceSchema = z.enum(['builtIn', 'builtInToolUse', 'custom', 'remote']);
+export const AgentCategorySchema = z.enum(['workflow', 'toolUse']);
+export const AgentTypeSchema = z.enum(['CoT', 'direct', 'toolUse', 'merge', 'reflect']);
+
+export const AgentDataSchema = z.object({
+  name: z.string(),
+  source: AgentSourceSchema,
+  category: AgentCategorySchema,
+  agentType: AgentTypeSchema,
+  description: z.string().optional(),
+  enabled: z.boolean(),
 });
+export type AgentData = z.infer<typeof AgentDataSchema>;
 
-export const SaveSettingSchema = z.object({
-  command: z.literal('SAVE_SETTING'),
-  key: z.string(),
-  value: z.unknown(),
-  scope: z.enum(['global', 'workspace']).optional(),
+// =============================================================================
+// Memory File (Recursive)
+// =============================================================================
+
+export interface MemoryFile {
+  name: string;
+  path: string;
+  size: number;
+  modified: string;
+  preview?: string;
+  lineCount?: number;
+  isDirectory?: boolean;
+  children?: MemoryFile[];
+}
+
+export const MemoryFileSchema: z.ZodType<MemoryFile> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    path: z.string(),
+    size: z.number(),
+    modified: z.string(),
+    preview: z.string().optional(),
+    lineCount: z.number().optional(),
+    isDirectory: z.boolean().optional(),
+    children: z.array(MemoryFileSchema).optional(),
+  })
+);
+
+// =============================================================================
+// Initial Data Payload
+// =============================================================================
+
+export const SettingsInitialDataSchema = z.object({
+  selectedTab: SettingsTabSchema.optional(),
+  account: z.object({
+    authenticated: z.boolean(),
+    email: z.string().optional(),
+    userId: z.string().optional(),
+    tier: z.enum(['free', 'Max', 'Ultra']).optional(),
+    useIncludedAccess: z.boolean().optional(),
+  }),
+  models: z.array(ModelDataSchema),
+  enabledModels: z.array(z.string()),
+  providers: z.record(ProviderIdSchema, ProviderStatusSchema),
+  providerMeta: z.record(ProviderIdSchema, ProviderMetaSchema),  // ✅ Sent from backend
+  agents: z.array(AgentDataSchema),
+  latexSettings: z.record(z.string(), z.unknown()),
+  selectOptions: z.record(z.string(), z.array(z.object({
+    value: z.string(),
+    label: z.string(),
+  }))),
+  historyItems: z.array(z.unknown()),  // Uses HistoryItemSchema from shared
+  memoryFiles: z.array(MemoryFileSchema),
+  memoryEnabled: z.boolean(),
 });
-
-export const SetApiKeySchema = z.object({
-  command: z.literal('SET_API_KEY'),
-  provider: z.string(),
-  key: z.string(),
-});
-
-export const SettingsActionSchema = z.discriminatedUnion('command', [
-  z.object({ command: z.literal('GET_INITIAL_DATA') }),
-  z.object({ command: z.literal('TAB_CHANGED'), tab: SettingsTabSchema }),
-  SaveEnabledModelsSchema,
-  SaveEnabledAgentsSchema,
-  SaveSettingSchema,
-  SetApiKeySchema,
-  z.object({ command: z.literal('SIGN_IN') }),
-  z.object({ command: z.literal('SIGN_OUT') }),
-]);
-
-export type SettingsAction = z.infer<typeof SettingsActionSchema>;
+export type SettingsInitialData = z.infer<typeof SettingsInitialDataSchema>;
 ```
 
-### Zod Patterns Summary
+### Location: `src/shared/schemas/commands.ts`
 
-Follow these patterns from the existing codebase:
+Command constants - SINGLE definition, no duplicates:
 
-| Pattern | Usage | Example |
-|---------|-------|---------|
-| **Schema Composition** | Reusable base schemas | `BaseMessageSchema.extend({ ... })` |
-| **`.extend()` + `.shape`** | Add fields while extending | `BaseSchema.extend(WithFilePath.shape)` |
-| **`.pick()`** | Select subset of fields | `FullSchema.pick({ field1: true })` |
-| **Type Inference** | `z.infer<typeof Schema>` | Single source of truth for types |
-| **Transform + Pipe** | Data transformation | `z.string().transform(s => s.trim()).pipe(z.string().min(1))` |
-| **Discriminated Unions** | Type-safe message routing | `z.discriminatedUnion('command', [...])` |
-| **`.prefault()`** | Defaults during parsing | `z.enum([...]).prefault('default')` |
-| **Safe Parsing** | Non-throwing validation | `schema.safeParse(data)` + callback |
+```typescript
+// =============================================================================
+// Settings View Commands - SINGLE SOURCE OF TRUTH
+// =============================================================================
+
+export const SETTINGS_VIEW_COMMANDS = {
+  // Extension → Webview
+  SET_INITIAL_DATA: 'SET_INITIAL_DATA',
+  SET_MODELS_DATA: 'SET_MODELS_DATA',
+  SET_AGENTS_DATA: 'SET_AGENTS_DATA',
+  SET_LATEX_DATA: 'SET_LATEX_DATA',
+  SET_HISTORY_DATA: 'SET_HISTORY_DATA',
+  SET_MEMORY_DATA: 'SET_MEMORY_DATA',
+  SELECT_TAB: 'SELECT_TAB',
+
+  // Webview → Extension
+  GET_INITIAL_DATA: 'GET_INITIAL_DATA',
+  TAB_CHANGED: 'TAB_CHANGED',
+  SAVE_ENABLED_MODELS: 'SAVE_ENABLED_MODELS',
+  SAVE_ENABLED_AGENTS: 'SAVE_ENABLED_AGENTS',
+  SAVE_SETTING: 'SAVE_SETTING',
+  SET_API_KEY: 'SET_API_KEY',
+  DELETE_API_KEY: 'DELETE_API_KEY',
+  SET_API_ACCESS_MODE: 'SET_API_ACCESS_MODE',
+  SIGN_IN: 'SIGN_IN',
+  SIGN_OUT: 'SIGN_OUT',
+
+  // Agent operations
+  OPEN_AGENT_SOURCE: 'OPEN_AGENT_SOURCE',
+  DELETE_AGENT: 'DELETE_AGENT',
+  BROWSE_AGENTS_DIRECTORY: 'BROWSE_AGENTS_DIRECTORY',
+  OPEN_AGENTS_DIRECTORY: 'OPEN_AGENTS_DIRECTORY',
+
+  // History operations
+  RERUN_HISTORY: 'RERUN_HISTORY',
+  RESTORE_HISTORY: 'RESTORE_HISTORY',
+  DELETE_HISTORY: 'DELETE_HISTORY',
+  CLEAR_HISTORY: 'CLEAR_HISTORY',
+
+  // Memory operations
+  OPEN_MEMORY_FILE: 'OPEN_MEMORY_FILE',
+  DELETE_MEMORY_FILE: 'DELETE_MEMORY_FILE',
+  CLEAR_ALL_MEMORY: 'CLEAR_ALL_MEMORY',
+  GET_MEMORY_PREVIEW: 'GET_MEMORY_PREVIEW',
+
+  // File browsing
+  BROWSE_FILE: 'BROWSE_FILE',
+} as const;
+
+export type SettingsViewCommand = typeof SETTINGS_VIEW_COMMANDS[keyof typeof SETTINGS_VIEW_COMMANDS];
+```
 
 ---
 
-## Frontend Implementation Patterns
+## Lit Component Patterns
 
-### ES6 Class + Singleton Pattern
+### Root Component
 
-All frontend modules use ES6 classes with singleton exports:
+```typescript
+// src/settingsView/frontend/SettingsApp.ts
+import { LitElement, html, css } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import { state as appState } from './store';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/schemas/commands';
 
-```javascript
-// settingsViewState.js
-import { WebviewStateManager } from '@common/modules/webviewState.js';
+// Import tab components
+import './components/HeaderBar';
+import './components/ModelsTab';
+import './components/AgentsTab';
+import './components/LatexTab';
+import './components/MemoryTab';
+import './components/HistoryTab';
+import './components/ConfirmDialog';
 
-class SettingsViewState {
-  constructor() {
-    this.stateManager = new WebviewStateManager();
-    this._activeTab = 'models';
-    this._enabledModels = [];
-  }
-
-  initialize() {
-    const saved = this.stateManager.getState();
-    this._activeTab = saved.activeTab ?? 'models';
-    this._enabledModels = saved.enabledModels ?? [];
-  }
-
-  get activeTab() { return this._activeTab; }
-  set activeTab(value) {
-    this._activeTab = value;
-    this.save();
-  }
-
-  save() {
-    this.stateManager.update({
-      activeTab: this._activeTab,
-      enabledModels: this._enabledModels,
-    });
-  }
-}
-
-export const settingsViewState = new SettingsViewState();
-```
-
-### DOM Handler Composition
-
-Use BaseDomHandler for listener tracking and manager composition:
-
-```javascript
-// domHandlers.js
-import { BaseDomHandler } from '@common/modules/BaseDomHandler.js';
-import { HeaderBar } from './uiManagers/HeaderBar.js';
-import { ModelsTab } from './tabs/ModelsTab.js';
-import { AgentsTab } from './tabs/AgentsTab.js';
-import { settingsViewState } from './settingsViewState.js';
-
-class SettingsViewDomHandler extends BaseDomHandler {
-  constructor() {
-    const headerBar = new HeaderBar();
-    const modelsTab = new ModelsTab(settingsViewState);
-    const agentsTab = new AgentsTab(settingsViewState);
-
-    super({
-      headerBar,
-      modelsTab,
-      agentsTab,
-      // More tabs...
-    });
-  }
-
-  initializeUI() {
-    this.headerBar.render();
-    this.showTab(settingsViewState.activeTab);
-  }
-
-  showTab(tabName) {
-    // Hide all tabs, show selected
-    Object.values(this._managers).forEach(mgr => {
-      if (mgr.hide) mgr.hide();
-    });
-    this[tabName + 'Tab']?.show();
-  }
-}
-
-export const settingsViewDomHandler = new SettingsViewDomHandler();
-```
-
-### Tab Manager Pattern
-
-Each tab extends BaseDomHandler for listener cleanup:
-
-```javascript
-// tabs/ModelsTab.js
-import { BaseDomHandler } from '@common/modules/BaseDomHandler.js';
-import { safeGetElementById } from '@common/modules/domUtils.js';
-import { ELEMENT_IDS } from '../constants.js';
-
-export class ModelsTab extends BaseDomHandler {
-  constructor(state) {
-    super();
-    this.state = state;
-    this._container = null;
-  }
-
-  get container() {
-    if (!this._container) {
-      this._container = safeGetElementById(ELEMENT_IDS.MODELS_TAB);
+@customElement('settings-app')
+export class SettingsApp extends LitElement {
+  static styles = css`
+    :host {
+      display: block;
+      height: 100vh;
+      background: var(--vscode-editor-background);
+      color: var(--vscode-foreground);
     }
-    return this._container;
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: var(--spacing-large, 16px);
+    }
+  `;
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('message', this._handleMessage);
+    // Request initial data
+    vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.GET_INITIAL_DATA });
   }
 
-  render(data) {
-    this.container.innerHTML = `
-      <vscode-collapsible title="Recommended Models" open>
-        ${this.renderModelList(data.recommended)}
-      </vscode-collapsible>
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('message', this._handleMessage);
+  }
 
-      ${data.providers.map(provider => `
-        <vscode-collapsible title="${provider.name} (${provider.models.length})">
-          <div class="provider-header">
-            ${this.renderProviderStatus(provider)}
-            <vscode-button appearance="secondary">Configure</vscode-button>
-          </div>
-          ${this.renderModelList(provider.models)}
-        </vscode-collapsible>
-      `).join('')}
+  private _handleMessage = (event: MessageEvent) => {
+    const message = event.data;
+    switch (message.command) {
+      case SETTINGS_VIEW_COMMANDS.SET_INITIAL_DATA:
+        appState.updateFromInitialData(message);
+        break;
+      // ... other handlers
+    }
+  };
+
+  render() {
+    return html`
+      <div class="container">
+        <header-bar
+          .authenticated=${appState.account.authenticated}
+          .email=${appState.account.email}
+          .tier=${appState.account.tier}
+        ></header-bar>
+
+        <texra-tabs
+          .tabs=${['models', 'agents', 'latex', 'memory', 'history']}
+          .activeTab=${appState.activeTab}
+          @tab-change=${this._onTabChange}
+        >
+          <models-tab slot="models" .state=${appState}></models-tab>
+          <agents-tab slot="agents" .state=${appState}></agents-tab>
+          <latex-tab slot="latex" .state=${appState}></latex-tab>
+          <memory-tab slot="memory" .state=${appState}></memory-tab>
+          <history-tab slot="history" .state=${appState}></history-tab>
+        </texra-tabs>
+
+        <confirm-dialog
+          ?open=${appState.confirmDialog !== null}
+          .config=${appState.confirmDialog}
+          @confirm=${this._onConfirm}
+          @cancel=${this._onCancel}
+        ></confirm-dialog>
+      </div>
     `;
-    this.attachEventListeners();
   }
 
-  renderModelList(models) {
-    return models.map(m => `
-      <vscode-checkbox id="model-${m.id}" ${m.enabled ? 'checked' : ''}>
-        ${m.name}
-        <span class="model-meta">${m.contextWindow}K • $${m.inputCost}/$${m.outputCost}</span>
-      </vscode-checkbox>
-    `).join('');
-  }
-
-  attachEventListeners() {
-    this.container.querySelectorAll('vscode-checkbox').forEach(cb => {
-      this.addListener(cb, 'change', () => this.handleModelToggle(cb));
-    });
-  }
-
-  handleModelToggle(checkbox) {
-    const modelId = checkbox.id.replace('model-', '');
+  private _onTabChange(e: CustomEvent<{ tab: string }>) {
+    appState.activeTab = e.detail.tab;
     vscode.postMessage({
-      command: 'SAVE_ENABLED_MODELS',
-      models: this.getEnabledModels(),
+      command: SETTINGS_VIEW_COMMANDS.TAB_CHANGED,
+      tab: e.detail.tab,
     });
   }
-
-  show() { this.container.style.display = 'block'; }
-  hide() { this.container.style.display = 'none'; }
 }
 ```
 
-### Message Handler Pattern
+### Tab Component Example
 
-Frontend message handler extends base class:
+```typescript
+// src/settingsView/frontend/components/ModelsTab.ts
+import { LitElement, html, css } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
+import { classMap } from 'lit/directives/class-map.js';
+import type { SettingsState } from '../store';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/schemas/commands';
 
-```javascript
-// messageHandlers.js
-import { BaseWebviewMessageHandler } from '@common/modules/BaseWebviewMessageHandler.js';
-import { SETTINGS_VIEW_COMMANDS } from './constants.js';
-import { settingsViewState } from './settingsViewState.js';
-import { settingsViewDomHandler } from './domHandlers.js';
+@customElement('models-tab')
+export class ModelsTab extends LitElement {
+  static styles = css`
+    :host {
+      display: block;
+    }
 
-class SettingsViewMessageHandler extends BaseWebviewMessageHandler {
-  constructor() {
-    super();
-    this._handlers = {
-      [SETTINGS_VIEW_COMMANDS.SET_MODELS_DATA]: (m) => this.handleSetModelsData(m),
-      [SETTINGS_VIEW_COMMANDS.SET_AGENTS_DATA]: (m) => this.handleSetAgentsData(m),
-      [SETTINGS_VIEW_COMMANDS.SELECT_TAB]: (m) => this.handleSelectTab(m),
-    };
+    .provider-section {
+      margin-bottom: 16px;
+    }
+
+    .provider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-badge.has-key {
+      background: var(--vscode-testing-iconPassed);
+    }
+
+    .status-badge.no-key {
+      background: var(--vscode-testing-iconFailed);
+    }
+
+    .model-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+  `;
+
+  @property({ type: Object }) state!: SettingsState;
+
+  render() {
+    const providers = this._groupModelsByProvider();
+
+    return html`
+      <section class="recommended-section">
+        <h3>Recommended Models</h3>
+        ${this._renderModelList(this.state.recommendedModels)}
+      </section>
+
+      ${repeat(
+        Object.entries(providers),
+        ([id]) => id,
+        ([providerId, models]) => this._renderProviderSection(providerId, models)
+      )}
+    `;
   }
 
-  handleSetModelsData(message) {
-    settingsViewState.updateModels(message);
-    settingsViewDomHandler.modelsTab.render(message);
+  private _renderProviderSection(providerId: string, models: ModelData[]) {
+    const meta = this.state.providerMeta[providerId];
+    const status = this.state.providers[providerId];
+
+    return html`
+      <texra-collapsible title="${meta?.name ?? providerId} (${models.length})">
+        <div class="provider-header" slot="header-extra">
+          <span class=${classMap({
+            'status-badge': true,
+            'has-key': status?.hasKey ?? false,
+            'no-key': !status?.hasKey,
+          })}>
+            ${status?.hasKey ? '✓ API Key' : '✗ No Key'}
+          </span>
+          <button @click=${() => this._configureProvider(providerId)}>
+            Configure
+          </button>
+        </div>
+        ${this._renderModelList(models)}
+      </texra-collapsible>
+    `;
   }
 
-  handleSetAgentsData(message) {
-    settingsViewState.updateAgents(message);
-    settingsViewDomHandler.agentsTab.render(message);
+  private _renderModelList(models: ModelData[]) {
+    return html`
+      ${repeat(
+        models,
+        (m) => m.id,
+        (model) => html`
+          <div class="model-item">
+            <input
+              type="checkbox"
+              id="model-${model.id}"
+              ?checked=${model.enabled}
+              @change=${() => this._toggleModel(model.id)}
+            />
+            <label for="model-${model.id}">
+              ${model.name}
+              <span class="model-meta">
+                ${model.contextWindow}K • $${model.inputCost}/$${model.outputCost}
+              </span>
+            </label>
+          </div>
+        `
+      )}
+    `;
   }
 
-  handleSelectTab(message) {
-    settingsViewState.activeTab = message.tab;
-    settingsViewDomHandler.showTab(message.tab);
+  private _toggleModel(modelId: string) {
+    // Update local state optimistically
+    const enabled = this.state.enabledModels.includes(modelId);
+    if (enabled) {
+      this.state.enabledModels = this.state.enabledModels.filter(id => id !== modelId);
+    } else {
+      this.state.enabledModels = [...this.state.enabledModels, modelId];
+    }
+
+    // Send to backend (debounced in store)
+    vscode.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SAVE_ENABLED_MODELS,
+      models: this.state.enabledModels,
+    });
   }
 }
-
-export const messageHandler = new SettingsViewMessageHandler();
 ```
 
-### Initialization Flow
+### Reactive Store
 
-```javascript
-// script.js
-import { settingsViewState } from './modules/settingsViewState.js';
-import { settingsViewDomHandler } from './modules/domHandlers.js';
-import { messageHandler } from './modules/messageHandlers.js';
-import { SETTINGS_VIEW_COMMANDS } from './modules/constants.js';
+```typescript
+// src/settingsView/frontend/store.ts
+import { reactive } from '@lit-labs/preact-signals';
+import type {
+  SettingsTab,
+  ModelData,
+  AgentData,
+  MemoryFile,
+  ProviderMeta,
+  ProviderStatus,
+} from '@shared/schemas/settings';
 
-// 1. Initialize state from VS Code's memory
-settingsViewState.initialize();
+export interface ConfirmDialogConfig {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+}
 
-// 2. Register message handlers early
-messageHandler.setup();
+export interface SettingsState {
+  // Tab state
+  activeTab: SettingsTab;
 
-// 3. When DOM is ready, initialize UI and request data
-document.addEventListener('DOMContentLoaded', () => {
-  settingsViewDomHandler.initializeUI();
-  vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.GET_INITIAL_DATA });
+  // Account
+  account: {
+    authenticated: boolean;
+    email?: string;
+    userId?: string;
+    tier?: 'free' | 'Max' | 'Ultra';
+    useIncludedAccess?: boolean;
+  };
+
+  // Models
+  models: ModelData[];
+  enabledModels: string[];
+  recommendedModels: ModelData[];
+  providers: Record<string, ProviderStatus>;
+  providerMeta: Record<string, ProviderMeta>;  // ✅ From backend, not hardcoded
+
+  // Agents
+  agents: AgentData[];
+
+  // LaTeX
+  latexSettings: Record<string, unknown>;
+  selectOptions: Record<string, Array<{ value: string; label: string }>>;
+
+  // Memory
+  memoryFiles: MemoryFile[];
+  memoryEnabled: boolean;
+
+  // History
+  historyItems: unknown[];
+
+  // UI
+  confirmDialog: ConfirmDialogConfig | null;
+}
+
+export const state = reactive<SettingsState>({
+  activeTab: 'models',
+  account: { authenticated: false },
+  models: [],
+  enabledModels: [],
+  recommendedModels: [],
+  providers: {},
+  providerMeta: {},
+  agents: [],
+  latexSettings: {},
+  selectOptions: {},
+  memoryFiles: [],
+  memoryEnabled: true,
+  historyItems: [],
+  confirmDialog: null,
 });
 
-// 4. Clean up on navigation
-window.addEventListener('beforeunload', () => {
-  settingsViewDomHandler.dispose();
-  messageHandler.dispose();
-});
+// Update from initial data
+export function updateFromInitialData(data: SettingsInitialData) {
+  if (data.selectedTab) {
+    state.activeTab = data.selectedTab;
+  }
+  state.account = data.account;
+  state.models = data.models;
+  state.enabledModels = data.enabledModels;
+  state.providers = data.providers;
+  state.providerMeta = data.providerMeta;  // ✅ From backend
+  state.agents = data.agents;
+  state.latexSettings = data.latexSettings;
+  state.selectOptions = data.selectOptions;
+  state.historyItems = data.historyItems;  // ✅ Don't forget
+  state.memoryFiles = data.memoryFiles;    // ✅ Don't forget
+  state.memoryEnabled = data.memoryEnabled;
+
+  // Derive recommended models
+  state.recommendedModels = state.models.filter(m =>
+    RECOMMENDED_MODEL_IDS.includes(m.id)
+  );
+}
+
+// Show confirmation dialog
+export function showConfirmDialog(config: ConfirmDialogConfig) {
+  state.confirmDialog = config;
+}
+
+export function hideConfirmDialog() {
+  state.confirmDialog = null;
+}
 ```
 
 ---
@@ -786,84 +812,13 @@ window.addEventListener('beforeunload', () => {
 
 **Purpose:** Combined model selection and API provider configuration.
 
-**Layout:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Models & Providers                                             │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  ROUTING                                                        │
-│  ● Direct to providers (recommended)                            │
-│  ○ Route all through OpenRouter                                 │
-│  ○ Use connection proxy                                         │
-│                                                                 │
-│  ⭐ RECOMMENDED MODELS                                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ Claude Sonnet 4.5 T    Anthropic   $3/$15    200K  🧠👁 │  │
-│  │ ☑ GPT-5.2                OpenAI      $2/$10    256K  🧠👁 │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  PROVIDERS                                                      │
-│  ▼ Anthropic                         ✓ API Key    [Configure]  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ Claude Sonnet 4.5 T     200K   $3/$15    🧠👁📄         │  │
-│  │ ☑ Claude Opus 4.5 T       200K   $15/$75   🧠👁📄🎧       │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▶ OpenAI (28)                       ✓ API Key    [Configure]  │
-│  ▶ Google (6)                        ✗ No Key     [Configure]  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 **Storage:** `globalState.enabledModels: string[]`, `globalState.providerConfig`
-
----
 
 ### Agents Tab
 
 **Purpose:** View and enable/disable agents, plus agent-specific settings.
 
-**Layout:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  BUILT-IN AGENTS                                               │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ chat      Interactive conversation  $(tools) toolUse    │  │
-│  │ ☑ correct   Fix typos & LaTeX errors  $(lightbulb) CoT    │  │
-│  │ ☑ polish    Improve writing quality   $(lightbulb) CoT    │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  CUSTOM AGENTS                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ my-reviewer   Reviews papers       [Source Code] [Delete]│  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  REMOTE AGENTS                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ team-reviewer   Team's paper reviewer                   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▼ Workflow Settings                                           │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Storage mode: [Folder ▼]                                  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▼ Tool-Use Settings                                           │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ Require approval before file edits                      │  │
-│  │ ☑ Persist sessions across VS Code restarts                │  │
-│  │ Compaction threshold: [85 %]                              │  │
-│  │ Max retry attempts: [3 ▼]                                 │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 **Storage:** `workspaceState.enabledAgents: string[]`, VS Code configuration
-
----
 
 ### LaTeX Tab
 
@@ -878,26 +833,22 @@ window.addEventListener('beforeunload', () => {
 | **TikZ Figures** | `texra.latex.tikzInputDirectory`, `includeWorkspaceInTexinputs`, `tikzTemplate` |
 | **Replacements** | `texra.latex.wrapCritiqueInAlign`, `enabledReplacements`, `enabledReplacementsRegex` |
 
----
-
 ### Memory Tab
 
 **Purpose:** Browse and manage memory files created by tool-use agents.
 
 **Features:**
-- Memory file browser with expandable content preview
-- Click to expand and show content (first ~20 lines)
+- Memory file browser with lazy-loaded content preview
+- Click to expand and show content (fetched on demand)
 - [View Full] opens file in editor
-- [Delete] removes file
-
----
+- [Delete] removes file with confirmation
 
 ### History Tab
 
 **Purpose:** Browse and restore previous agent executions.
 
 **Features:**
-- Search with highlighting (mark.js)
+- Search with highlighting
 - Delete, Restore, Rerun actions
 - Collapsible details per item
 
@@ -929,106 +880,67 @@ SecretManager.getApiKey('anthropic');
 SecretManager.setApiKey('anthropic', 'sk-...');
 ```
 
-### Webview State
-
-UI state persisted via VS Code API:
-
-```javascript
-// Frontend
-const state = vscode.getState();  // Restore on reopen
-vscode.setState({ activeTab: 'models' });  // Persist
-```
-
 ---
 
 ## Implementation Phases
 
-### v1 Release (5 Tabs)
+Settings View is implemented as part of **Phase 3** of the ProgressView modernization.
 
-#### Phase 1: Core Structure
-- Create settingsView with vscode-tabs + header bar
-- Implement base classes (Provider, ContentProvider, MessageHandler)
-- Add main webview entry point (gear icon)
+### Prerequisites (From ProgressView PRD)
 
-#### Phase 2: Models Tab
-- Provider collapsibles with API status
-- Model checkboxes with capabilities
-- Provider configuration modal
+- Phase 1 complete: Shared schemas in `src/shared/schemas/`
+- Phase 2 complete: Shared components in `src/shared/components/`
+- Webpack configuration for webview bundling
 
-#### Phase 3: Agents Tab
-- Agent list with category badges
-- Workflow Settings collapsible
-- Tool-Use Settings collapsible
+### Settings View Implementation
 
-#### Phase 4: LaTeX Tab
-- Formatter, latexdiff, TikZ collapsibles
-- Wire up to VS Code configuration
+#### Step 1: Schema Setup
+- Add settings-specific schemas to `src/shared/schemas/settings.ts`
+- Add commands to `src/shared/schemas/commands.ts`
+- No duplicate definitions
 
-#### Phase 5: Memory Tab
-- Migrate memoryView
-- Expandable content preview
+#### Step 2: Backend Handlers
+- Create `SettingsViewMessageHandler.ts` with domain-specific handler classes
+- Implement all command handlers
+- Validate all messages with Zod schemas
 
-#### Phase 6: History Tab + Cleanup
-- Move history rendering
-- Delete deprecated views
+#### Step 3: Lit Frontend
+- Create `src/settingsView/frontend/` with Lit components
+- Implement reactive store
+- Build all 5 tab components
 
-### Future Release
-
-- **Advanced Tab** - Multi-Agent, UI preferences, debug
-- **Agent Creation Wizard** - Form-based agent creation
+#### Step 4: Delete Legacy
+- Remove `src/profileView/`
+- Remove `src/historyView/`
+- Remove `src/memoryView/`
+- Update command redirects
 
 ---
 
 ## Lessons Learned (PR #2206 Review)
 
-Based on code review feedback from the initial implementation attempt, the following issues must be addressed:
+Based on code review feedback from the initial vanilla JS implementation attempt, the following issues were identified. **The Lit+TypeScript architecture solves many of these automatically.**
 
 ### Critical: Single Source of Truth Violations
 
 #### Command Constants Duplication
 
-**Problem:** `SETTINGS_VIEW_COMMANDS` was defined in THREE places:
-- `src/settingsView/schemas.ts` (TypeScript)
-- `src/settingsView/modules/constants.js` (JavaScript)
-- `src/common/webview/commands.ts` (shared)
+**Problem:** Commands defined in multiple files (schemas.ts, constants.js, commands.ts).
 
-**Impact:** Commands can drift out of sync, causing silent message routing failures.
-
-**Solution:** Define commands ONLY in `src/common/webview/commands.ts`:
-```typescript
-// src/common/webview/commands.ts - SINGLE SOURCE OF TRUTH
-export const SETTINGS_VIEW_COMMANDS = {
-  // Extension → Webview
-  SET_INITIAL_DATA: 'SET_INITIAL_DATA',
-  SET_MODELS_DATA: 'SET_MODELS_DATA',
-  // ... all commands
-} as const;
-
-// src/settingsView/schemas.ts - IMPORT, don't redefine
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
-export { SETTINGS_VIEW_COMMANDS };
-
-// src/settingsView/modules/constants.js - IMPORT from shared
-// Use import map to access common/webview/commands.js
-```
+**Lit Architecture Solution:**
+- Commands defined ONCE in `src/shared/schemas/commands.ts`
+- TypeScript imports everywhere - no JavaScript constants.js needed
+- Webpack bundles ensure single definition
 
 #### Provider Metadata Duplication
 
-**Problem:** `PROVIDER_META` defined in both:
-- `SettingsViewMessageHandler.ts` (TypeScript backend)
-- `constants.js` (JavaScript frontend)
+**Problem:** `PROVIDER_META` defined in both TypeScript and JavaScript.
 
-**Solution:** Define provider metadata ONCE in backend and send to frontend via `InitialData`:
-```typescript
-// Backend: Include in collectInitialData()
-const initialData = {
-  // ... other data
-  providerMeta: PROVIDER_META,  // Send to frontend
-};
-
-// Frontend: Access from state, don't hardcode
-const provider = settingsViewState.providerMeta[providerId];
-```
+**Lit Architecture Solution:**
+- Define ONCE in backend (`SettingsViewMessageHandler.ts`)
+- Send to frontend via `InitialData.providerMeta`
+- Store in reactive state: `state.providerMeta`
+- Components access from state, not hardcoded constants
 
 ---
 
@@ -1036,79 +948,48 @@ const provider = settingsViewState.providerMeta[providerId];
 
 #### XSS Vulnerability in HTML Rendering
 
-**Problem:** Template literals directly interpolate user data without escaping:
-```javascript
-// ❌ VULNERABLE - file.path could contain malicious HTML
-<div class="memory-file" data-path="${file.path}">
-  ${file.name}
-</div>
+**Problem:** Template literals directly interpolate user data.
 
-// ❌ VULNERABLE - agent names from user YAML files
-<span class="agent-name">${agent.name}</span>
-```
+**Lit Architecture Solution:**
+- Lit automatically escapes interpolated values in templates
+- `html\`<span>${userInput}</span>\`` is safe by default
+- No manual `escapeHtml()` needed for standard cases
 
-**Solution:** Always escape user-controlled data:
-```javascript
-import { escapeHtml } from '@common/modules/htmlEncoding.js';
-
-// ✅ SAFE - escape all user data
-<div class="memory-file" data-path="${escapeHtml(file.path)}">
-  ${escapeHtml(file.name)}
-</div>
-
-// ✅ SAFE - use textContent via DOM API
-const nameEl = row.querySelector('.agent-name');
-nameEl.textContent = agent.name;  // Automatically escaped
-```
-
-**Files requiring escaping:**
-- `HistoryTab.js` - `item.agentName`, `item.modelName`, `item.inputFile`, `item.id`
-- `MemoryTab.js` - `file.name`, `file.path`
-- `AgentListRenderer.js` - `agent.name`, `agent.description`
-- `ModelListRenderer.js` - `model.name`, `provider.name`
-
-#### Path Traversal in Memory Operations
-
-**Problem:** File paths from webview used directly without validation:
 ```typescript
-// ❌ VULNERABLE - path could be "../../../etc/passwd"
-async ({ path: storagePath }) => {
-  const absolutePath = StorageFS.fullPath(storagePath);
-  await vscode.window.showTextDocument(uri);
+// ✅ SAFE in Lit - automatic escaping
+render() {
+  return html`<span class="file-name">${this.file.name}</span>`;
 }
 ```
 
-**Solution:** Validate paths are within expected directory:
+#### Path Traversal in Memory Operations
+
+**Problem:** File paths from webview used directly without validation.
+
+**Solution (still required):** Validate paths in backend handlers:
 ```typescript
-import { resolveMemoryStoragePath, MEMORY_STORAGE_ROOT } from '@tools/memory/memoryStorage';
+import { resolveMemoryStoragePath } from '@tools/memory/memoryStorage';
 
 async ({ path: storagePath }) => {
-  // ✅ SAFE - validate path is within memory storage
   const resolvedPath = resolveMemoryStoragePath(storagePath);
   if (!resolvedPath) {
     this.logger.warn('Invalid memory path attempted:', storagePath);
     return;
   }
-  const uri = vscode.Uri.file(resolvedPath);
-  await vscode.window.showTextDocument(uri);
+  // Proceed with validated path
 }
 ```
 
 #### Unvalidated Setting Keys
 
-**Problem:** `settingKey` parameter accepted any string:
-```typescript
-// ❌ Could modify arbitrary VS Code settings
-await config.update(settingKey, value);
-```
+**Problem:** `settingKey` parameter accepted any string.
 
-**Solution:** Whitelist allowed configuration keys in schema:
+**Solution:** Whitelist allowed keys in Zod schema:
 ```typescript
-export const SaveSettingSchema = z.object({
-  command: z.literal('SAVE_SETTING'),
+export const SaveSettingActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SAVE_SETTING),
   key: z.enum([
     'texra.latex.formatter',
-    'texra.latex.latexindentConfig',
     'texra.latexdiff.mathMarkup',
     // ... explicit whitelist
   ]),
@@ -1122,112 +1003,48 @@ export const SaveSettingSchema = z.object({
 
 #### Missing Command Handlers
 
-**Problem:** Commands defined in frontend but handlers missing in backend:
-- `BROWSE_AGENTS_DIRECTORY` - Browse button in Agents tab
-- `OPEN_AGENTS_DIRECTORY` - Open button in Agents tab
+**Problem:** Commands defined but handlers not implemented.
 
-**Solution:** Ensure every command in `constants.js` has a corresponding handler in `createHandlers()`.
-
-**Checklist pattern:**
+**Lit Architecture Solution:**
+- TypeScript ensures type safety
+- Create handler interface that requires all commands:
 ```typescript
-// In MessageHandler, verify all commands have handlers
-protected createHandlers(): Record<string, MessageHandler> {
-  const handlers = {
-    // Verify EVERY command from SETTINGS_VIEW_COMMANDS is here
-    [SETTINGS_VIEW_COMMANDS.GET_INITIAL_DATA]: this.handleGetInitialData.bind(this),
-    [SETTINGS_VIEW_COMMANDS.BROWSE_AGENTS_DIRECTORY]: this.handleBrowseAgentsDir.bind(this),
-    [SETTINGS_VIEW_COMMANDS.OPEN_AGENTS_DIRECTORY]: this.handleOpenAgentsDir.bind(this),
-    // ...
-  };
+type SettingsHandlers = {
+  [K in SettingsViewCommand]: MessageHandler;
+};
 
-  // Optional: Runtime check that all commands have handlers
-  for (const cmd of Object.values(SETTINGS_VIEW_COMMANDS)) {
-    if (!handlers[cmd]) {
-      console.warn(`Missing handler for command: ${cmd}`);
-    }
-  }
-  return handlers;
-}
+// TypeScript error if any command missing
+const handlers: SettingsHandlers = {
+  [SETTINGS_VIEW_COMMANDS.GET_INITIAL_DATA]: this.handleGetInitialData,
+  [SETTINGS_VIEW_COMMANDS.BROWSE_AGENTS_DIRECTORY]: this.handleBrowseAgentsDir,
+  // ... must implement ALL commands
+};
 ```
 
 #### Memory/History Data Not in Initial Load
 
-**Problem:** `collectInitialData()` didn't include memory files or history items, causing tabs to be empty on first load.
+**Problem:** Tabs empty on first load because data wasn't included.
 
-**Solution:** Include ALL tab data in initial payload:
+**Solution:** Schema enforces required fields:
 ```typescript
-async collectInitialData(): Promise<InitialData> {
-  const [account, models, providers, agents, latex, history, memory] =
-    await Promise.all([
-      this.collectAccountData(),
-      this.collectModelsData(),
-      this.collectProvidersData(),
-      this.collectAgentsData(),
-      this.collectLatexSettings(),
-      this.collectHistoryData(),    // ✅ Include history
-      this.collectMemoryData(),     // ✅ Include memory
-    ]);
-
-  return {
-    account, models, providers, agents, latexSettings: latex,
-    historyItems: history,  // ✅ Must be in payload
-    memoryFiles: memory,    // ✅ Must be in payload
-    memoryEnabled: true,
-  };
-}
-```
-
-Also update `updateFromInitialData()` in state manager:
-```javascript
-updateFromInitialData(data) {
-  this.updateAccount(data.account);
-  this.updateModels(data.models);
-  this.updateAgents(data.agents);
-  this.updateLatexSettings(data.latexSettings);
-  this.updateHistoryItems(data.historyItems);  // ✅ Don't forget
-  this.updateMemoryFiles(data.memoryFiles);    // ✅ Don't forget
-}
+export const SettingsInitialDataSchema = z.object({
+  // ...
+  historyItems: z.array(z.unknown()),  // Required, not optional
+  memoryFiles: z.array(MemoryFileSchema),  // Required, not optional
+});
 ```
 
 #### Tab Selection Not Applied
 
-**Problem:** When opening Settings View to a specific tab (e.g., via `texra.showAgentHistory`), the requested tab was ignored.
+**Problem:** Requested tab ignored when opening Settings View.
 
-**Solution:** Apply tab selection in frontend message handler:
-```javascript
-handleSetInitialData(message) {
-  settingsViewState.updateFromInitialData(message);
-
-  // ✅ Apply selected tab from initial data
-  if (message.selectedTab) {
-    settingsViewState.selectedTab = message.selectedTab;
-    tabManager.selectTab(message.selectedTab);  // Actually switch tab
-  }
-
-  this.renderAllTabs();
-}
-```
-
-#### API Access Mode Toggle Missing
-
-**Problem:** Paid subscribers lost the ability to toggle between "included access" (TeXRA's API keys) and "personal keys" (their own API keys).
-
-**Solution:** Add API access mode to Models tab or header bar:
+**Solution:** Handle in `updateFromInitialData()`:
 ```typescript
-// In SettingsViewMessageHandler
-[SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: this.handleSetApiAccessMode.bind(this),
-
-private async handleSetApiAccessMode(message: unknown): Promise<void> {
-  await this.withValidatedMessage(
-    SetApiAccessModeSchema,
-    message,
-    'setApiAccessMode',
-    async ({ mode }) => {
-      const useIncluded = mode === 'included';
-      await getServerSideKeyService().setUseIncludedModelAccess(useIncluded);
-      // Refresh UI
-    }
-  );
+export function updateFromInitialData(data: SettingsInitialData) {
+  if (data.selectedTab) {
+    state.activeTab = data.selectedTab;  // ✅ Apply tab
+  }
+  // ... rest of state updates
 }
 ```
 
@@ -1237,34 +1054,25 @@ private async handleSetApiAccessMode(message: unknown): Promise<void> {
 
 #### Missing Confirmation Dialogs
 
-**Problem:** Destructive actions executed immediately without user confirmation:
-- `clearAllMemory()` deletes all files
-- `handleClearHistory()` deletes all history
+**Problem:** Destructive actions executed without user confirmation.
 
-**Solution:** Add confirmation dialogs:
+**Lit Architecture Solution:** Centralized confirm dialog component:
 ```typescript
-// Backend handler
-private async handleClearAllMemory(): Promise<void> {
-  const confirmed = await vscode.window.showWarningMessage(
-    'Delete all memory files? This cannot be undone.',
-    { modal: true },
-    'Delete All'
-  );
-
-  if (confirmed !== 'Delete All') return;
-
-  // Proceed with deletion
+// In store
+export function showConfirmDialog(config: ConfirmDialogConfig) {
+  state.confirmDialog = config;
 }
-```
 
-Or in frontend with VS Code-style:
-```javascript
-async clearAllMemory() {
-  // Send confirmation request to backend
-  vscode.postMessage({
-    command: SETTINGS_VIEW_COMMANDS.CONFIRM_CLEAR_ALL_MEMORY,
+// In component
+private _clearAllMemory() {
+  showConfirmDialog({
+    title: 'Delete All Memory Files',
+    message: 'This cannot be undone. Are you sure?',
+    confirmLabel: 'Delete All',
+    onConfirm: () => {
+      vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.CLEAR_ALL_MEMORY });
+    },
   });
-  // Backend shows dialog and proceeds if confirmed
 }
 ```
 
@@ -1274,180 +1082,75 @@ async clearAllMemory() {
 
 #### Inconsistent Default Values
 
-**Problem:** Default values differed between Settings View and execution code:
-```typescript
-// Settings View used 'fine'
-latexdiffMathMarkup: getConfig('texra.latexdiff.mathMarkup', 'fine'),
+**Problem:** Defaults differed between UI and execution code.
 
-// Execution code used 'coarse'
-const mathMarkup = getConfig('texra.latexdiff.mathMarkup', 'coarse');
-```
-
-**Solution:** Define defaults in ONE place (settingsSchema.ts):
+**Solution:** Define defaults in schemas using `.default()`:
 ```typescript
-// settingsSchema.ts - SINGLE SOURCE OF TRUTH
+// src/shared/schemas/settings.ts
 export const MathMarkupSchema = z.enum(['off', 'whole', 'coarse', 'fine']).default('coarse');
 
-// Everywhere else - use schema default
-const mathMarkup = MathMarkupSchema.parse(getConfig('texra.latexdiff.mathMarkup'));
+// Usage everywhere
+const mathMarkup = MathMarkupSchema.parse(rawValue);  // Gets default if undefined
 ```
 
 #### Provider ID Case Mismatch
 
-**Problem:** Provider IDs inconsistently cased:
-```typescript
-// Schema used camelCase
-ProviderIdSchema = z.enum(['anthropic', 'openai', 'openRouter', ...]);
+**Problem:** `openRouter` vs `openrouter` causing lookup failures.
 
-// Model configs used lowercase
-MODEL_CONFIGS[model].provider.toLowerCase() === 'openrouter'  // ❌ Mismatch!
-```
-
-**Solution:** Use consistent lowercase for all provider IDs:
+**Solution:** Zod schema enforces consistent casing:
 ```typescript
 export const ProviderIdSchema = z.enum([
   'anthropic',
   'openai',
-  'google',
-  'openrouter',  // ✅ Lowercase
-  'deepseek',
-  'xai',
-  'moonshot',
-  'dashscope',
+  'openrouter',  // ✅ Lowercase only
+  // ...
 ]);
-```
-
-#### Settings Migration Missing
-
-**Problem:** When moving settings from VS Code config to workspace storage, existing user values were lost.
-
-**Solution:** Add migration on activation:
-```typescript
-// In extension.ts or settings initialization
-async function migrateSettings() {
-  const config = vscode.workspace.getConfiguration('texra');
-  const storage = context.workspaceState;
-
-  const settingsToMigrate = [
-    { old: 'latex.formatter', new: WorkspaceStateKey.FORMATTER },
-    { old: 'latexdiff.mathMarkup', new: WorkspaceStateKey.MATH_MARKUP },
-  ];
-
-  for (const { old, new: newKey } of settingsToMigrate) {
-    const existing = storage.get(newKey);
-    if (existing === undefined) {
-      const value = config.get(old);
-      if (value !== undefined) {
-        await storage.update(newKey, value);
-      }
-    }
-  }
-}
 ```
 
 ---
 
-### Architecture Recommendations
+### Architecture Improvements
 
 #### Large MessageHandler Class
 
-**Problem:** `SettingsViewMessageHandler.ts` grew to 1000+ lines.
+**Problem:** 1000+ line handler file.
 
 **Solution:** Extract domain-specific handler classes:
 ```
 src/settingsView/
-├── SettingsViewMessageHandler.ts      # Orchestrates, ~200 lines
+├── SettingsViewMessageHandler.ts  # ~200 lines, orchestrates
 ├── handlers/
-│   ├── ModelHandlers.ts               # Model/provider operations
-│   ├── AgentHandlers.ts               # Agent CRUD operations
-│   ├── LatexHandlers.ts               # LaTeX settings
-│   ├── HistoryHandlers.ts             # History operations
-│   └── MemoryHandlers.ts              # Memory file operations
+│   ├── ModelHandlers.ts           # Model/provider operations
+│   ├── AgentHandlers.ts           # Agent CRUD
+│   ├── LatexHandlers.ts           # LaTeX settings
+│   ├── HistoryHandlers.ts         # History operations
+│   └── MemoryHandlers.ts          # Memory file operations
 ```
 
-Usage:
-```typescript
-export class SettingsViewMessageHandler extends BaseViewMessageHandler {
-  private modelHandlers: ModelHandlers;
-  private agentHandlers: AgentHandlers;
-  // ...
+#### Performance: Lazy Loading
 
-  protected createHandlers(): Record<string, MessageHandler> {
-    return {
-      ...this.modelHandlers.getHandlers(),
-      ...this.agentHandlers.getHandlers(),
-      // ...
-    };
+**Problem:** Loading all memory file previews could be slow.
+
+**Solution:** Lazy load on expand:
+```typescript
+// Initial load: metadata only (no preview)
+// On expand: fetch preview via GET_MEMORY_PREVIEW command
+@customElement('memory-item')
+class MemoryItem extends LitElement {
+  @property() file!: MemoryFile;
+  @state() private _expanded = false;
+  @state() private _preview?: string;
+
+  private async _expand() {
+    this._expanded = true;
+    if (!this._preview) {
+      vscode.postMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+        path: this.file.path,
+      });
+    }
   }
 }
-```
-
-#### Performance: Lazy Loading for Large Data
-
-**Problem:** Loading all memory files with content previews could be slow.
-
-**Solution:** Lazy load previews on expand:
-```javascript
-// Initial load: metadata only
-const memoryFiles = files.map(f => ({
-  name: f.name,
-  path: f.path,
-  size: f.size,
-  // preview: NOT included initially
-}));
-
-// On expand: fetch preview
-async expandFile(filePath) {
-  vscode.postMessage({
-    command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
-    path: filePath,
-  });
-}
-```
-
----
-
-### Test Coverage Requirements
-
-No tests were included in the initial implementation. Required test coverage:
-
-| Area | Test Type | Priority |
-|------|-----------|----------|
-| **Zod Schemas** | Unit tests for validation edge cases | High |
-| **Message Handlers** | Unit tests for each handler | High |
-| **State Management** | Tests for settingsViewState.js | Medium |
-| **Data Collection** | Tests for collectModelsData, etc. | Medium |
-| **Tab Switching** | Integration tests | Medium |
-| **API Key Flow** | Integration tests | High |
-| **Legacy Redirects** | Verify old commands work | Medium |
-
-Example test structure:
-```typescript
-// tests/settingsView/schemas.test.ts
-describe('SettingsView Schemas', () => {
-  describe('SaveSettingSchema', () => {
-    it('rejects unknown setting keys', () => {
-      const result = SaveSettingSchema.safeParse({
-        command: 'SAVE_SETTING',
-        key: 'texra.unknown.setting',  // Not in whitelist
-        value: 'test',
-      });
-      expect(result.success).toBe(false);
-    });
-  });
-});
-
-// tests/settingsView/messageHandler.test.ts
-describe('SettingsViewMessageHandler', () => {
-  it('handles all defined commands', () => {
-    const handler = new SettingsViewMessageHandler(mockContext);
-    const handlers = handler['createHandlers']();
-
-    for (const cmd of Object.values(SETTINGS_VIEW_COMMANDS)) {
-      expect(handlers[cmd]).toBeDefined(`Missing handler for ${cmd}`);
-    }
-  });
-});
 ```
 
 ---
@@ -1457,41 +1160,37 @@ describe('SettingsViewMessageHandler', () => {
 Before merging Settings View implementation, verify:
 
 ### Single Source of Truth
-- [ ] Commands defined in ONE file only (`commands.ts`)
-- [ ] Provider metadata defined in ONE file, sent via InitialData
-- [ ] Default values defined in `settingsSchema.ts`
-- [ ] Provider IDs use consistent casing (lowercase)
+- [ ] Commands defined ONLY in `src/shared/schemas/commands.ts`
+- [ ] Provider metadata sent from backend via InitialData
+- [ ] Default values defined in Zod schemas with `.default()`
+- [ ] Provider IDs use consistent lowercase
 
 ### Security
-- [ ] All user data escaped before HTML interpolation
 - [ ] Memory file paths validated against storage root
-- [ ] Setting keys whitelisted in schema
+- [ ] Setting keys whitelisted in Zod schema
 - [ ] API keys use SecretManager (never in state/config)
+- [ ] Lit handles XSS automatically (verify no `unsafeHTML` misuse)
 
 ### Completeness
-- [ ] Every frontend command has a backend handler
+- [ ] Every command in schema has a handler
 - [ ] All tabs receive data in InitialData
-- [ ] Tab selection from parameters actually applied
+- [ ] Tab selection from parameters applied
 - [ ] API access mode toggle included (for paid users)
+- [ ] All handlers call `withValidatedMessage()` with schema
 
 ### UX Safety
-- [ ] Destructive actions have confirmation dialogs
+- [ ] Destructive actions use confirm dialog
 - [ ] Error messages shown for failed operations
 - [ ] Loading states for async operations
-
-### Testing
-- [ ] Schema validation tests
-- [ ] Handler routing tests
-- [ ] State management tests
-- [ ] Legacy command redirect tests
 
 ---
 
 ## References
 
-- **VS Code Elements:** `@vscode-elements/elements` (v2.4.0)
+- **ProgressView Modernization PRD:** `docs/prd-progressview-modernization.md`
+- **Lit Documentation:** https://lit.dev/
+- **Zod Documentation:** https://zod.dev/
+- **Shared Schemas:** `src/shared/schemas/`
+- **Shared Components:** `src/shared/components/`
 - **Base Classes:** `src/common/webview/Base*.ts`
-- **Shared Modules:** `src/common/modules/*.js`
-- **Shared Styles:** `src/common/styles/common.css`
-- **Existing Views:** `src/profileView/`, `src/historyView/`, `src/progressView/`
 - **PR Review:** #2206 - Initial implementation attempt with review feedback
