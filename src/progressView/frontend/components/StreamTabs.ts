@@ -186,10 +186,13 @@ export class StreamTabs extends LitElement {
   }
 
   private handleFilterChange(event: Event) {
-    const group = event.currentTarget as
-      | (HTMLElement & { value?: string })
-      | null;
-    const filter = group?.value as StreamFilter;
+    // Get value from the clicked radio element, not the group
+    // vscode-radio-group may not update .value synchronously on change
+    const target = event.target as Element | null;
+    const radio = target?.closest('vscode-radio');
+    const filter = (radio?.getAttribute('value') ||
+      (event.currentTarget as HTMLElement & { value?: string })
+        ?.value) as StreamFilter;
     if (!filter) return;
 
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));

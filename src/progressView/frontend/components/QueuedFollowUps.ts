@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - progress view constants
@@ -14,10 +15,6 @@ export class QueuedFollowUps extends LitElement {
 
   protected createRenderRoot(): HTMLElement {
     return this;
-  }
-
-  private get collapsibleTitle(): string {
-    return 'Queued Messages';
   }
 
   private truncateMessage(message: string): {
@@ -39,7 +36,7 @@ export class QueuedFollowUps extends LitElement {
       <vscode-collapsible
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
         class="queued-follow-ups-collapsible progress-collapsible"
-        title=${this.collapsibleTitle}
+        title="Queued Messages"
         ?open=${visible}
         ?hidden=${!visible}
         aria-hidden=${visible ? 'false' : 'true'}
@@ -54,7 +51,10 @@ export class QueuedFollowUps extends LitElement {
             (message) => {
               const { display, full } = this.truncateMessage(message);
               return html`
-                <div class="queued-follow-up-item" title=${full ?? ''}>
+                <div
+                  class="queued-follow-up-item"
+                  title=${ifDefined(full ?? undefined)}
+                >
                   <i class="codicon codicon-comment queued-follow-up-icon"></i>
                   <span class="queued-follow-up-text">${display}</span>
                 </div>

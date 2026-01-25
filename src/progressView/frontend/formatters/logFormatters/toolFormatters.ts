@@ -8,6 +8,9 @@ import { createFromTemplate } from '@common/modules/templateUtils.js';
 // Local imports - shared utilities
 import { encodeHtml } from '@shared/utils/html';
 
+// Local imports - shared schemas
+import type { WebSearchPayload } from '@shared/schemas';
+
 // Local imports - formatter helpers
 import {
   setElementDataset,
@@ -52,19 +55,6 @@ type ToolSectionOptions = {
   toolName?: string;
   language?: string;
   extraClass?: string;
-};
-
-type WebSearchResult = {
-  url?: string;
-  title?: string;
-  domain?: string;
-};
-
-type WebSearchPayload = {
-  query?: string;
-  results?: WebSearchResult[];
-  provider?: string;
-  status?: string;
 };
 
 /**
@@ -426,15 +416,20 @@ export function formatWebSearch(
       const domainSuffix = r.domain
         ? ` <span class="file-source">(${encodeHtml(r.domain)})</span>`
         : '';
-      return `<li class="detail-item"><i class="codicon codicon-link"></i> <a href="${encodeHtml(url)}" class="web-search-link" target="_blank" rel="noopener noreferrer">${title}</a>${domainSuffix}</li>`;
+      const encodedUrl = encodeHtml(url);
+      return (
+        `<li class="detail-item">` +
+        `<i class="codicon codicon-link"></i> ` +
+        `<a href="${encodedUrl}" class="web-search-link" ` +
+        `target="_blank" rel="noopener noreferrer">${title}</a>` +
+        `${domainSuffix}</li>`
+      );
     });
 
-    sections.push(
-      buildToolUseSection(
-        'Sources:',
-        `<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems.join('')}</ul>`,
-      ),
-    );
+    const resultsHtml =
+      `<span class="file-list-summary">Results (${resultCount})</span>` +
+      `<ul class="detail-list">${resultItems.join('')}</ul>`;
+    sections.push(buildToolUseSection('Sources:', resultsHtml));
   } else if (statusKey === 'completed') {
     sections.push(
       buildToolUseSection(
