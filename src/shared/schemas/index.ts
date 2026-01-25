@@ -1,15 +1,23 @@
+// Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './agent';
-export * from './stream';
-export * from './taskGroup';
+export * from './errors';
+
+// Data schemas (may depend on base types)
 export * from './log';
 export * from './usage';
 export * from './output';
+export * from './taskGroup';
+export * from './todo';
 export * from './prompts';
 export * from './proposalFields';
-export * from './todo';
-export * from './errors';
-export * from './progressViewMessages';
-export * from './progressViewData';
+export * from './stream';
 export * from './contextManagement';
 export * from './diffResult';
+
+// Message schemas (depend on data schemas) - must come before streamState
+export * from './progressViewMessages';
+export * from './progressViewData';
+
+// Composite schemas (depend on message schemas)
+export * from './streamState';

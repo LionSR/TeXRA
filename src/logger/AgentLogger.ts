@@ -2,18 +2,18 @@
 import { randomUUID } from 'crypto';
 
 // Local imports - events
+import { type ErrorContext } from '@shared/schemas';
+import { END_GROUP_STATUS, MESSAGE_TYPES } from '@shared/schemas';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
-import { type ErrorContext } from '@shared/schemas';
 import { delay } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
-import { END_GROUP_STATUS, MESSAGE_TYPES } from '@shared/schemas';
 import { getEmitFilter } from './filterUtils';
 
 // Type imports

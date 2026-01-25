@@ -15,7 +15,7 @@ import {
 // Local imports - formatter helpers
 import { formatTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
-import { initToggleIcon } from '../htmlBuilders';
+import { initToggleIcon, buildDetailsSummary } from '../htmlBuilders';
 
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
@@ -66,19 +66,11 @@ export function formatBannerContent(
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
     >
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon icon ${config.iconClass}"></i>
-        <span class="label">${config.labelText}</span>
-        <vscode-toolbar-button
-          class="banner-content-copy"
-          icon="copy"
-          title=${config.copyTitle}
-          aria-label=${config.copyTitle}
-          data-default-title=${config.copyTitle}
-          data-success-title="Copied!"
-        ></vscode-toolbar-button>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: config.iconClass,
+        label: config.labelText,
+        copyButton: { title: config.copyTitle },
+      })}
       <div
         class="banner-content log-entry-content ${config.contentClass}"
         data-raw-content=${trimmedContent}
@@ -116,7 +108,6 @@ export function formatModelResponse({
     new Date(timestamp),
   );
   const markdownHtml = processMarkdownContent(trimmedContent);
-  const timestampText = verbose ? `[${timeDisplay}]` : '';
 
   const template = html`
     <details
@@ -126,22 +117,14 @@ export function formatModelResponse({
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
     >
-      <summary class="details-summary">
-        <i class="toggle-icon"></i>
-        <i class="codicon icon codicon-sparkle"></i>
-        <span class="label">Assistant</span>
-        <span class="timestamp" title=${tooltipTimestamp}
-          >${timestampText}</span
-        >
-        <vscode-toolbar-button
-          class="banner-content-copy"
-          icon="copy"
-          title="Copy model output"
-          aria-label="Copy model output"
-          data-default-title="Copy model output"
-          data-success-title="Copied!"
-        ></vscode-toolbar-button>
-      </summary>
+      ${buildDetailsSummary({
+        iconClass: 'codicon-sparkle',
+        label: 'Assistant',
+        timestamp: verbose
+          ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
+          : undefined,
+        copyButton: { title: 'Copy model output' },
+      })}
       <div
         class=${classMap({
           'banner-content': true,

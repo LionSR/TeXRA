@@ -13,11 +13,11 @@
 
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
+import type { AgentProposal } from '@shared/schemas';
 
 // ============================================================================
 // Types

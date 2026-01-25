@@ -6,8 +6,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamTabIdSchema } from '@shared/schemas';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   TOOL_EDIT_APPROVAL_ACTIONS,
   BASH_APPROVAL_ACTIONS,

@@ -1,10 +1,3 @@
-// Local imports - shared schemas
-import type {
-  InstructionUpdate,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
-
 // Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
@@ -17,6 +10,13 @@ import {
   mapToRecord,
   recordToMap,
 } from '@progressView/persistence/serializationUtils';
+
+// Type imports
+import type {
+  InstructionUpdate,
+  StorageKey,
+  StreamTabId,
+} from '@shared/schemas';
 
 type InstructionMap = Map<string, InstructionUpdate>;
 

@@ -7,6 +7,7 @@
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - replacement
+import type { AgentLogger } from '@logger/AgentLogger';
 import { cleanFileContent } from '@replacement/engine';
 
 // Local imports - files
@@ -16,7 +17,6 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - logger
-import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Result of preparing file content for a model handler.

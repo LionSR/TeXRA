@@ -1,8 +1,8 @@
 // Local imports - Lit template utilities
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { html, render, renderToElement } from '../formatters/litTemplates';
 
 // Local imports - shared state
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS, STREAM_STATUS } from '../constants';

@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
 
 // Local imports - agent runtime
+import { ANTHROPIC_MODELS } from 'llm-zoo';
 import { getBaseName, getMultipleName } from '@agent/index';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
@@ -10,7 +11,6 @@ import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
 import { promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
-import { ANTHROPIC_MODELS } from 'llm-zoo';
 import { AbsoluteFS } from '@utils/files';
 
 // Type imports

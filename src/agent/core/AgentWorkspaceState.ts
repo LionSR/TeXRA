@@ -1,9 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+import { FileLocationSchema, type FileLocation } from '@shared/schemas';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import { FlattenedEditRecordSchema } from '@tools/result';
-import { FileLocationSchema, type FileLocation } from '@shared/schemas';
 import { pathToLocation } from '@utils/files';
 
 /** Schema for ThinkingBlock */

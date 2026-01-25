@@ -12,10 +12,10 @@ import yaml from 'yaml';
 
 // Local imports - shared schemas
 import { ToolUseLogSchema } from '@shared/schemas';
+import { isPlainObject } from '@shared/utils/string';
 import type { NormalizedToolUse } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { isPlainObject } from '@shared/utils/string';
 
 /** Return trimmed string if non-empty, null otherwise. */
 function trimmedOrNull(value: unknown): string | null {

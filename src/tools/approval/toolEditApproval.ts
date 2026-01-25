@@ -12,7 +12,6 @@ import * as vscode from 'vscode';
 import * as difflib from 'difflib';
 
 // Local imports - agent types
-import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
@@ -21,8 +20,8 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type ToolResult, type LineChanges } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { countLines } from '@utils/text/stringUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import {
@@ -31,6 +30,7 @@ import {
   runLatexdiff,
 } from './latexPreview';
 import { rejectPendingEntries } from './bashApproval';
+import type { StreamTabId } from '@shared/schemas';
 
 export interface ToolEditApprovalRequest {
   path: string;

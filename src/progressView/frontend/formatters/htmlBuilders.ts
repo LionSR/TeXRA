@@ -7,6 +7,10 @@
 import hljs from 'highlight.js';
 
 // Local imports - Lit utilities
+
+// Local imports - shared utilities
+import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
+import { getBasename } from '@shared/utils/path';
 import {
   html,
   unsafeHTML,
@@ -15,12 +19,7 @@ import {
   type TemplateResult,
 } from './litTemplates';
 
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
-import { getBasename } from '@shared/utils/path';
-
 // Local imports - shared schemas
-import type { FileListEntry } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -29,6 +28,7 @@ import {
   DIFF_MARKER_THRESHOLD,
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
+import type { FileListEntry } from '@shared/schemas';
 
 /** Build a tool-use section template. */
 export function buildToolUseSection(
@@ -113,6 +113,61 @@ export function initToggleIcon(element: HTMLElement, expanded = false): void {
       expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
     } toggle-icon`;
   }
+}
+
+/** Build a copy button for banner content. */
+export function buildCopyButton(title: string, hidden = false): TemplateResult {
+  return html`
+    <vscode-toolbar-button
+      class="banner-content-copy"
+      icon="copy"
+      title=${title}
+      aria-label=${title}
+      data-default-title=${title}
+      data-success-title="Copied!"
+      ?hidden=${hidden}
+    ></vscode-toolbar-button>
+  `;
+}
+
+/** Options for building a details summary header. */
+export interface DetailsSummaryOptions {
+  iconClass: string;
+  label: string;
+  labelClass?: string;
+  includeIconClass?: boolean;
+  timestamp?: { display: string; tooltip: string };
+  copyButton?: { title: string; hidden?: boolean };
+}
+
+/** Build a details summary element with icon, label, and optional extras. */
+export function buildDetailsSummary(
+  options: DetailsSummaryOptions,
+): TemplateResult {
+  const {
+    iconClass,
+    label,
+    labelClass = 'label',
+    includeIconClass = true,
+    timestamp,
+    copyButton,
+  } = options;
+  const iconClasses = includeIconClass
+    ? `codicon icon ${iconClass}`
+    : `codicon ${iconClass}`;
+  return html`
+    <summary class="details-summary">
+      <i class="toggle-icon"></i>
+      <i class=${iconClasses}></i>
+      <span class=${labelClass}>${label}</span>
+      ${timestamp
+        ? html`<span class="timestamp" title=${timestamp.tooltip}
+            >${timestamp.display}</span
+          >`
+        : ''}
+      ${copyButton ? buildCopyButton(copyButton.title, copyButton.hidden) : ''}
+    </summary>
+  `;
 }
 
 /** Build rendered templates for file list. */

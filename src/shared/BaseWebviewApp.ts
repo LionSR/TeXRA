@@ -2,10 +2,10 @@
 import { LitElement } from 'lit';
 
 // Local imports - webview commands
+import { postMessage } from '@shared/vscode';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 
 // Local imports - shared webview
-import { postMessage } from '@shared/vscode';
 
 /**
  * Base class for Lit-powered webview apps.

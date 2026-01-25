@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -23,7 +23,74 @@ import './QueuedFollowUps';
 
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
-  @property({ type: Boolean }) visible = false;
+  static styles = css`
+    :host {
+      display: none;
+    }
+
+    :host([visible]) {
+      display: block;
+    }
+
+    :host([hidden]) {
+      display: none;
+    }
+
+    .follow-up-container {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: var(--spacing-medium);
+      border-top: var(--border-thin) solid var(--color-border);
+      gap: var(--spacing-small);
+    }
+
+    .follow-up-container > queued-follow-ups {
+      display: block;
+      grid-column: 1 / -1;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    .follow-up-input-row {
+      display: flex;
+      align-items: flex-end;
+      gap: var(--spacing-small);
+      grid-column: 1 / -1;
+    }
+
+    #followUpInput {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+      min-height: 106px;
+      max-height: var(--height-xlarge);
+      height: auto;
+    }
+
+    #followUpInput::part(control) {
+      min-height: 106px;
+      max-height: var(--height-xlarge);
+      overflow-y: auto;
+    }
+
+    .follow-up-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-small);
+    }
+
+    .polish-progress {
+      display: none;
+    }
+
+    .polish-progress.is-visible {
+      display: block;
+    }
+  `;
+
+  @property({ type: Boolean, reflect: true }) visible = false;
   @property({ type: String }) value = '';
   @property({ type: Array }) queuedMessages: string[] = [];
 
@@ -40,10 +107,6 @@ export class FollowUpInput extends LitElement {
     stopTitle: 'Stop recording',
     root: this,
   });
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
 
   override disconnectedCallback(): void {
     this.recordingManager.dispose();
@@ -68,10 +131,7 @@ export class FollowUpInput extends LitElement {
     }
 
     return html`
-      <div
-        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
-        class="follow-up-container is-visible"
-      >
+      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
 
         <div class="follow-up-input-row">

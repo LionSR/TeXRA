@@ -1,19 +1,23 @@
 // Local imports
 import {
-  getEffectiveRunId,
+  isToolUseState,
+  isWorkflowState,
   type ProgressState,
   type StreamSort,
   type StreamState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
 } from './store';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 
 // Local imports - shared schemas
 import type {
   InstructionUpdate,
   LogMessageData,
   OutputFileInfo,
+  StreamTabId,
   StreamTabInfo,
   TaskGroup,
-  TokenUsageStats,
 } from '@shared/schemas';
 
 /**
@@ -125,6 +129,7 @@ export function hasOutputFiles(
 
 /**
  * Resolve the best run ID when none is explicitly selected.
+ * Only meaningful for workflow streams.
  *
  * Resolution priority:
  * 1. Explicit selection (selectedRunId or activeRunId from backend)
@@ -133,10 +138,14 @@ export function hasOutputFiles(
  * Note: No fallback to run-scoped maps needed - task groups are the source of
  * truth for runs, and the backend provides activeRunId when known.
  */
-export function resolveActiveRunId(streamState: StreamState): string | null {
-  // Check explicit selections first (from user or backend)
-  if (streamState.selectedRunId) return streamState.selectedRunId;
-  if (streamState.activeRunId) return streamState.activeRunId;
+export function resolveActiveRunId(
+  streamState: StreamState | WorkflowStreamState,
+): string | null {
+  // Only workflow streams have selectedRunId/activeRunId
+  if (isWorkflowState(streamState)) {
+    if (streamState.selectedRunId) return streamState.selectedRunId;
+    if (streamState.activeRunId) return streamState.activeRunId;
+  }
 
   // Find latest root task group - use reduce to avoid extra array allocations
   let latestId: string | null = null;
@@ -188,4 +197,38 @@ export function prependInstructionForToolUse(
   });
 
   return messages;
+}
+
+// =============================================================================
+// Typed State Updaters
+// =============================================================================
+
+/**
+ * Update tool-use stream state with type narrowing.
+ * If the stream is not a tool-use stream, returns previous state unchanged.
+ */
+export function updateToolUseState(
+  ctx: FrontendEventHandlerContext,
+  stream: StreamTabId,
+  updater: (prev: ToolUseStreamState) => ToolUseStreamState,
+): void {
+  ctx.setStreamState(stream, (prev) => {
+    if (!isToolUseState(prev)) return prev;
+    return updater(prev);
+  });
+}
+
+/**
+ * Update workflow stream state with type narrowing.
+ * If the stream is not a workflow stream, returns previous state unchanged.
+ */
+export function updateWorkflowState(
+  ctx: FrontendEventHandlerContext,
+  stream: StreamTabId,
+  updater: (prev: WorkflowStreamState) => WorkflowStreamState,
+): void {
+  ctx.setStreamState(stream, (prev) => {
+    if (!isWorkflowState(prev)) return prev;
+    return updater(prev);
+  });
 }

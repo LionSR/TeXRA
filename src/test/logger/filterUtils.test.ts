@@ -3,8 +3,8 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports
-import { getEmitFilter } from '@logger/filterUtils';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { getEmitFilter } from '@logger/filterUtils';
 
 describe('getEmitFilter', () => {
   let originalConfig: any;

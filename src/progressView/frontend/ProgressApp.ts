@@ -2,15 +2,12 @@
 import { html, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
-import { when } from 'lit/directives/when.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 
-// Local imports - shared schemas
-import { AGENT_CATEGORY } from '@shared/schemas';
-
 // Local imports - webview commands
+import { WebviewStateManager } from '@shared/state';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { createThemeHandlers } from '@common/webview/themeHandlers.js';
 
@@ -19,6 +16,7 @@ import {
   createInitialState,
   getEffectiveRunId,
   getStreamState,
+  isToolUseState,
   type ProgressState,
   type StreamFilter,
   type StreamSort,
@@ -26,7 +24,6 @@ import {
 } from './store';
 
 // Local imports - shared state
-import { WebviewStateManager } from '@shared/state';
 
 /** Persisted preferences for the progress view. */
 interface ProgressViewPreferences extends Record<string, unknown> {
@@ -92,6 +89,20 @@ import {
   type MessageHandler,
   type MessageHandlerContext,
 } from './messageHandlers';
+import { getFilteredStreams } from './stateUtils';
+import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+
+// Local imports - progress view components
+import './components/StreamTabs';
+import './components/ToolUseStreamContent';
+import './components/WorkflowStreamContent';
+
+// Local imports - progress view modules
+import type { FollowUpInput } from './components/FollowUpInput';
+import type { LogList } from './components/LogList';
+import type { PromptState } from './components/PromptOverlay';
+import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
+import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
 /**
  * Registry mapping commands to their message handlers.
@@ -136,26 +147,6 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: handleDeleteAllMessage,
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: handleUpdateUsage,
 };
-import { getFilteredStreams, getRunGroups, hasOutputFiles } from './stateUtils';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
-
-// Local imports - progress view components
-import './components/StreamTabs';
-import './components/StreamHeader';
-import './components/RunSelector';
-import './components/InstructionPanel';
-import './components/TodoList';
-import './components/FileList';
-import './components/UsagePanel';
-import './components/FollowUpInput';
-import './components/FollowupSection';
-import './components/TaskGroupList';
-import './components/PromptOverlay';
-
-// Local imports - progress view modules
-import type { FollowUpInput } from './components/FollowUpInput';
-import type { LogList } from './components/LogList';
-import type { PromptState } from './components/PromptOverlay';
 
 /**
  * Updates the highlight.js theme stylesheet based on VS Code theme.
@@ -173,8 +164,12 @@ export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
   @state() private prompts: PromptState[] = [];
 
-  private logListRef = createRef<LogList>();
-  private followUpRef = createRef<FollowUpInput>();
+  // Container refs for accessing child component methods (LogList, FollowUpInput)
+  private toolUseContentRef = createRef<ToolUseStreamContent>();
+  private workflowContentRef = createRef<WorkflowStreamContent>();
+  // Fallback ref for when no stream is active (empty task-group-list)
+  private fallbackLogListRef = createRef<LogList>();
+
   private prefsManager = new WebviewStateManager<ProgressViewPreferences>({
     streamFilter: 'all',
     streamSort: 'time',
@@ -200,94 +195,11 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   render(): TemplateResult {
-    const activeStream = this.getActiveStreamInfo();
-    const streamState = activeStream
-      ? getStreamState(this.appState, activeStream.name)
-      : null;
-    const runId = streamState ? getEffectiveRunId(streamState) : null;
-    const isToolUse =
-      activeStream?.agentCategory === AGENT_CATEGORY.TOOL_USE || false;
-    const filteredPrompts = this.getFilteredPrompts(
-      activeStream?.name ?? null,
-      isToolUse,
-    );
-
     return html`
       <div class="main-container">
         <vscode-split-layout initial-handle-position="80%">
           <div slot="start" class="content-area">
-            ${activeStream
-              ? html`
-                  <stream-header
-                    .stream=${activeStream}
-                    .streamState=${streamState}
-                    .runId=${runId}
-                    .runs=${getRunGroups(streamState?.taskGroups ?? [])}
-                    .yoloActive=${Boolean(streamState?.toolEditBypass)}
-                    @toolbar-command=${this.onToolbarCommand}
-                    @run-selected=${this.onRunSelected}
-                  ></stream-header>
-
-                  <instruction-panel
-                    .instruction=${!isToolUse
-                      ? (streamState?.runInstructions?.[runId ?? 'default'] ??
-                        null)
-                      : null}
-                  ></instruction-panel>
-
-                  ${when(
-                    isToolUse,
-                    () => html`
-                      <todo-list .todos=${streamState?.todos ?? []}></todo-list>
-                    `,
-                  )}
-
-                  <task-group-list ${ref(this.logListRef)}></task-group-list>
-
-                  <usage-panel
-                    .usage=${runId
-                      ? (streamState?.runUsage?.[runId] ?? null)
-                      : null}
-                    .contextState=${streamState?.contextState ?? null}
-                  ></usage-panel>
-
-                  <file-list
-                    .filesByRound=${runId
-                      ? (streamState?.runFiles?.[runId] ?? {})
-                      : {}}
-                    .showRoundHeaders=${!isToolUse}
-                    @file-action=${this.onFileAction}
-                  ></file-list>
-
-                  <follow-up-input
-                    ${ref(this.followUpRef)}
-                    .visible=${isToolUse}
-                    .value=${streamState?.followUpText ?? ''}
-                    .queuedMessages=${streamState?.queuedFollowUps ?? []}
-                    @followup-change=${this.onFollowUpChange}
-                    @followup-send=${this.onFollowUpSend}
-                    @followup-polish=${this.onFollowUpPolish}
-                    @followup-clear=${this.onFollowUpClear}
-                  ></follow-up-input>
-
-                  <followup-section
-                    .agentCategory=${activeStream.agentCategory}
-                    .status=${streamState?.status ?? activeStream.status ?? ''}
-                    .hasOutputFiles=${hasOutputFiles(
-                      runId ? streamState?.runFiles?.[runId] : undefined,
-                    )}
-                    .options=${this.appState.followupOptions}
-                    .mode=${streamState?.followupMode ?? 'chat'}
-                    .streamModel=${activeStream.model ?? null}
-                    @followup-request-options=${this.onFollowupRequestOptions}
-                    @followup-mode-change=${this.onFollowupModeChange}
-                    @followup-setup=${this.onFollowupSetup}
-                    @followup-run=${this.onFollowupRun}
-                  ></followup-section>
-                `
-              : html`
-                  <task-group-list ${ref(this.logListRef)}></task-group-list>
-                `}
+            ${this.renderStreamContent()}
           </div>
 
           <stream-tabs
@@ -304,12 +216,59 @@ export class ProgressApp extends BaseWebviewApp {
           ></stream-tabs>
         </vscode-split-layout>
       </div>
+    `;
+  }
 
-      <prompt-overlay
-        ?hidden=${filteredPrompts.length === 0}
-        .prompt=${filteredPrompts.at(0) ?? null}
-        @prompt-action=${this.onPromptAction}
-      ></prompt-overlay>
+  /**
+   * Render stream content based on stream type.
+   * Single branch point - delegates to typed container components.
+   */
+  private renderStreamContent(): TemplateResult {
+    const activeStream = this.getActiveStreamInfo();
+    if (!activeStream) {
+      // No active stream - show empty task-group-list for global logs
+      return html`<task-group-list
+        ${ref(this.fallbackLogListRef)}
+      ></task-group-list>`;
+    }
+
+    const streamState = getStreamState(this.appState, activeStream.name);
+
+    // Single branch point: delegate to typed container component
+    if (isToolUseState(streamState)) {
+      return html`
+        <tool-use-stream-content
+          ${ref(this.toolUseContentRef)}
+          .state=${streamState}
+          .streamInfo=${activeStream}
+          .prompts=${this.prompts}
+          @toolbar-command=${this.onToolbarCommand}
+          @prompt-action=${this.onPromptAction}
+          @followup-change=${this.onFollowUpChange}
+          @followup-send=${this.onFollowUpSend}
+          @followup-polish=${this.onFollowUpPolish}
+          @followup-clear=${this.onFollowUpClear}
+        ></tool-use-stream-content>
+      `;
+    }
+
+    // Workflow stream (default for non-tool-use)
+    const runId = getEffectiveRunId(streamState);
+    return html`
+      <workflow-stream-content
+        ${ref(this.workflowContentRef)}
+        .state=${streamState}
+        .streamInfo=${activeStream}
+        .runId=${runId}
+        .followupOptions=${this.appState.followupOptions}
+        @toolbar-command=${this.onToolbarCommand}
+        @run-selected=${this.onRunSelected}
+        @file-action=${this.onFileAction}
+        @followup-request-options=${this.onFollowupRequestOptions}
+        @followup-mode-change=${this.onFollowupModeChange}
+        @followup-setup=${this.onFollowupSetup}
+        @followup-run=${this.onFollowupRun}
+      ></workflow-stream-content>
     `;
   }
 
@@ -348,23 +307,6 @@ export class ProgressApp extends BaseWebviewApp {
     );
   }
 
-  /**
-   * Filter prompts to only show those matching the active stream.
-   * Prompts are only shown for tool-use agents (legacy behavior).
-   * Prompts with empty streamId are shown for all streams.
-   */
-  private getFilteredPrompts(
-    activeStreamId: string | null,
-    isToolUse: boolean,
-  ): PromptState[] {
-    if (!isToolUse || !activeStreamId) return [];
-
-    return this.prompts.filter(
-      (prompt) =>
-        !prompt.data.streamId || prompt.data.streamId === activeStreamId,
-    );
-  }
-
   private setStreamState(
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
@@ -383,10 +325,30 @@ export class ProgressApp extends BaseWebviewApp {
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
-      getLogListRef: () => this.logListRef.value,
-      getFollowUpRef: () => this.followUpRef.value,
+      getLogListRef: () => this.getLogListRef(),
+      getFollowUpRef: () => this.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
+  }
+
+  /**
+   * Get LogList ref from the active container component.
+   * Falls back to fallback ref when no stream is active.
+   */
+  private getLogListRef(): LogList | undefined {
+    return (
+      this.toolUseContentRef.value?.getLogListRef() ??
+      this.workflowContentRef.value?.getLogListRef() ??
+      this.fallbackLogListRef.value
+    );
+  }
+
+  /**
+   * Get FollowUpInput ref from the tool-use container.
+   * Returns undefined for workflow streams (they don't have follow-up input).
+   */
+  private getFollowUpRef(): FollowUpInput | undefined {
+    return this.toolUseContentRef.value?.getFollowUpRef();
   }
 
   private createMessageHandlerContext(): MessageHandlerContext {
