@@ -24,6 +24,16 @@ followup-section {
   flex-shrink: 0;
 }
 
+/* Hide empty custom elements (when component returns nothing) */
+instruction-panel:empty,
+todo-list:empty,
+usage-panel:empty,
+file-list:empty,
+follow-up-input:empty,
+followup-section:empty {
+  display: none;
+}
+
 .log-container {
   flex: 1 1 auto;
   padding: var(--spacing-tiny) var(--spacing-medium);
