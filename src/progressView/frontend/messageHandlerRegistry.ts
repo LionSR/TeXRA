@@ -78,12 +78,15 @@ export const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
 
   // Tool-use specific
   [PROGRESS_VIEW_COMMANDS.UPDATE_TODOS]: handleUpdateTodos,
-  [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: handleUpdateQueuedFollowUps,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
+    handleUpdateQueuedFollowUps,
 
   // Approval requests
   [PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: handleShowToolEditApproval,
-  [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: handleResolveToolEditApproval,
-  [PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: handleUpdateToolEditApprovalState,
+  [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]:
+    handleResolveToolEditApproval,
+  [PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]:
+    handleUpdateToolEditApprovalState,
   [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: handleShowBashApproval,
   [PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL]: handleResolveBashApproval,
   [PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST]: handleShowRetryRequest,
@@ -93,7 +96,8 @@ export const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
 
   // Follow-up and recording
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: handleFollowUpTextPolished,
-  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: handleFollowUpTextTranscribed,
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]:
+    handleFollowUpTextTranscribed,
   [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: handleRecordingStarted,
   [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: handleRecordingStopped,
   [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: handleRecordingError,

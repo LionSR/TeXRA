@@ -19,7 +19,13 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
@@ -75,7 +81,10 @@ export class ToolUseStreamContent extends LitElement {
       changedProperties.has('streamInfo')
     ) {
       const streamId = this.streamInfo?.name;
-      if (this._prevPrompts !== this.prompts || this._prevStreamId !== streamId) {
+      if (
+        this._prevPrompts !== this.prompts ||
+        this._prevStreamId !== streamId
+      ) {
         this._cachedFilteredPrompts = this.computeFilteredPrompts();
         this._prevPrompts = this.prompts;
         this._prevStreamId = streamId ?? null;

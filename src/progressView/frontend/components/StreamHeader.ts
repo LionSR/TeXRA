@@ -6,7 +6,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import {
@@ -103,7 +103,7 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   static styles = [
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: block;
