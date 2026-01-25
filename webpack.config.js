@@ -94,7 +94,8 @@ const extensionConfig = {
  *
  * Lit-specific optimizations:
  * - DefinePlugin removes development-only code in production
- * - Tree shaking via usedExports + sideEffects
+ * - Tree shaking via optimization.usedExports (NOT sideEffects: false,
+ *   which would break @customElement decorator registrations)
  * - Terser configured to preserve template literal structure
  */
 const webviewConfigs = [
@@ -126,8 +127,9 @@ const webviewConfigs = [
             loader: 'ts-loader',
           },
         ],
-        // Enable tree shaking for Lit components
-        sideEffects: false,
+        // Note: sideEffects must NOT be set to false here - @customElement
+        // decorators have side effects (element registration). Tree shaking
+        // is handled via optimization.usedExports instead.
       },
       {
         test: /\.css$/,
