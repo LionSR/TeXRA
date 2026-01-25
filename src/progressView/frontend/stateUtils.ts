@@ -81,7 +81,7 @@ export function sortStreams(
  */
 export function getRunGroups(
   groups: TaskGroup[],
-): Array<{ id: string; name: string; startTime?: number | string }> {
+): { id: string; name: string; startTime?: number | string }[] {
   return groups
     .filter((group) => !group.parentGroupId)
     .map((group) => ({

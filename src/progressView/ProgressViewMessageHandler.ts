@@ -1455,7 +1455,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     model: string,
   ): Promise<void> {
     // Build file pairs for merge
-    const filePairs: Array<{ baseFile: string; editedFile: string }> = [];
+    const filePairs: { baseFile: string; editedFile: string }[] = [];
     for (const inputFile of originalInputs) {
       const outputFile = fileMapping.get(inputFile);
       if (outputFile) {

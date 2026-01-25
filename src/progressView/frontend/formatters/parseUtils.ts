@@ -1,6 +1,6 @@
 /**
  * Display utilities for progress view formatters.
- * Provides text formatting and JSON parsing helpers.
+ * Provides text formatting helpers for rendering.
  *
  * For data validation and normalization, see:
  * - logDataParsers.ts - Complex normalization (toolUse, fileList)
@@ -9,15 +9,6 @@
 
 // Third-party imports
 import yaml from 'yaml';
-
-/**
- * Normalized payload from a log message.
- * Contains either structured data or decoded text.
- */
-export type NormalizedPayload = {
-  decodedText: string;
-  structured: unknown;
-};
 
 /**
  * Result of stringifying a value with language metadata.
@@ -71,35 +62,4 @@ export function extractCodeOnlyInput(value: unknown): {
     return { isCodeOnly: true, code: codeValue };
   }
   return { isCodeOnly: false, code: '' };
-}
-
-/**
- * Try to parse a string as JSON.
- */
-export function tryParseJson(text: string): Record<string, unknown> | null {
-  if (!text || typeof text !== 'string') {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Normalize structured content from text and data.
- * Extracts structured data from the data field, or parses text as JSON.
- */
-export function normalizeStructuredContent(
-  text: string,
-  data: unknown,
-): NormalizedPayload {
-  if (data !== undefined) {
-    return { decodedText: '', structured: data };
-  }
-
-  const rawText = typeof text === 'string' ? text : '';
-  return { decodedText: rawText, structured: tryParseJson(rawText) };
 }

@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared webview
@@ -28,14 +29,10 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) yoloActive = false;
   @property({ type: Array }) queuedMessages: string[] = [];
 
+  @state() private polishing = false;
+
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
-  private declare textAreaEl: HTMLElement | null;
-
-  @query('#polishFollowUpProgressContainer')
-  private declare progressContainer: HTMLElement | null;
-
-  @query(`#${ELEMENT_IDS.YOLO_TOGGLE_BTN}`)
-  private declare yoloButton: HTMLElement | null;
+  declare private textAreaEl: HTMLElement | null;
 
   private focusTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -74,18 +71,22 @@ export class FollowUpInput extends LitElement {
     });
 
     this.recordingManager.setup();
-    this.syncYoloButton();
-  }
-
-  updated(): void {
-    this.syncYoloButton();
   }
 
   render(): TemplateResult {
+    const yoloIcon = this.yoloActive ? 'flame' : 'shield';
+    const yoloLabel = this.yoloActive ? 'YOLO mode ON' : 'Enable YOLO';
+    const yoloTitle = this.yoloActive
+      ? 'YOLO mode active - click to disable (resume approval prompts)'
+      : 'Enable YOLO mode (skip approval prompts)';
+
     return html`
       <div
         id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
-        class="follow-up-container ${this.visible ? 'is-visible' : ''}"
+        class=${classMap({
+          'follow-up-container': true,
+          'is-visible': this.visible,
+        })}
         aria-hidden=${this.visible ? 'false' : 'true'}
       >
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
@@ -107,10 +108,13 @@ export class FollowUpInput extends LitElement {
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.YOLO_TOGGLE_BTN}
-              class="yolo-toggle-button"
-              icon="shield"
-              label="Enable YOLO"
-              title="Enable YOLO mode (skip approval prompts)"
+              class=${classMap({
+                'yolo-toggle-button': true,
+                'is-active': this.yoloActive,
+              })}
+              icon=${yoloIcon}
+              label=${yoloLabel}
+              title=${yoloTitle}
               @click=${this.emitToggleBypass}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
@@ -137,7 +141,11 @@ export class FollowUpInput extends LitElement {
           </vscode-toolbar-container>
         </div>
 
-        <div id="polishFollowUpProgressContainer" style="display: none;">
+        <div
+          id="polishFollowUpProgressContainer"
+          class=${classMap({ 'is-visible': this.polishing })}
+          ?hidden=${!this.polishing}
+        >
           Polishing follow-up...
         </div>
       </div>
@@ -179,9 +187,7 @@ export class FollowUpInput extends LitElement {
   }
 
   applyPolishedText(text: string): void {
-    if (this.progressContainer) {
-      this.progressContainer.style.display = 'none';
-    }
+    this.polishing = false;
     this.updateValue(text);
     this.focusInput({ scrollIntoView: true });
   }
@@ -212,10 +218,7 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
-    if (this.progressContainer) {
-      this.progressContainer.style.display = 'block';
-    }
-
+    this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
   }
 
@@ -225,24 +228,6 @@ export class FollowUpInput extends LitElement {
 
   private emitToggleBypass(): void {
     this.dispatchEvent(ProgressEvents.followupToggleBypass());
-  }
-
-  private syncYoloButton(): void {
-    if (!this.yoloButton) return;
-
-    this.yoloButton.classList.toggle('is-active', this.yoloActive);
-    if (this.yoloActive) {
-      this.yoloButton.setAttribute('icon', 'flame');
-      this.yoloButton.setAttribute('label', 'YOLO mode ON');
-      this.yoloButton.setAttribute(
-        'title',
-        'YOLO mode active - click to disable (resume approval prompts)',
-      );
-    } else {
-      this.yoloButton.setAttribute('icon', 'shield');
-      this.yoloButton.setAttribute('label', 'Enable YOLO');
-      this.yoloButton.setAttribute('title', 'Enable YOLO mode (skip approval prompts)');
-    }
   }
 
   private updateValue(value: string): void {

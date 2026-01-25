@@ -59,6 +59,26 @@ export function handleFilterChange(
   ctx: EventHandlerContext,
 ): void {
   const { filter } = event.detail;
+  const state = ctx.getState();
+
+  // Check if filtered streams will be empty
+  const filteredStreams =
+    filter === 'all'
+      ? state.streams
+      : state.streams.filter((s) => s.agentCategory === filter);
+
+  // Clear log list if no streams match the filter
+  if (filteredStreams.length === 0) {
+    ctx.getLogListRef()?.renderLogs({
+      streamId: '',
+      messages: [],
+      groups: [],
+      action: 'clear',
+      activeRunId: null,
+      runInstructions: null,
+    });
+  }
+
   ctx.setState((prev) => ({ ...prev, streamFilter: filter }));
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
 }

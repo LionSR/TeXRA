@@ -1,5 +1,6 @@
 /**
  * Message-style formatters for user messages, errors, and progress status.
+ * These formatters use logMessage.text and logMessage.data directly.
  */
 
 // Local imports - common helpers
@@ -17,15 +18,10 @@ import { EMOJI_BY_LEVEL } from '../constants';
 
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
-import type { NormalizedPayload } from '../parseUtils';
-
-type LogMessageWithPayload = LogMessageData & {
-  normalizedPayload?: NormalizedPayload;
-};
 
 /** Format user message entry. */
 export function formatUserMessage(
-  normalizedPayload: NormalizedPayload,
+  text: string,
   logId: string,
   timestamp: number,
 ): HTMLElement | null {
@@ -44,7 +40,7 @@ export function formatUserMessage(
 
   const contentElem = element.querySelector('.user-message-content');
   if (contentElem instanceof HTMLElement) {
-    contentElem.textContent = normalizedPayload?.decodedText ?? '';
+    contentElem.textContent = text ?? '';
     if (logId) contentElem.dataset.logId = logId;
   }
 
@@ -52,22 +48,14 @@ export function formatUserMessage(
 }
 
 /** Format progress status entry. */
-export function formatProgressStatus(
-  message: LogMessageWithPayload,
-): HTMLElement {
-  const { level = 'info', id, groupId, timestamp } = message;
-  const normalizedPayload = message.normalizedPayload ?? {
-    decodedText: '',
-    structured: undefined,
-  };
+export function formatProgressStatus(message: LogMessageData): HTMLElement {
+  const { level = 'info', id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
-  const summaryText =
-    (normalizedPayload.decodedText ?? message.text ?? '').trim() ||
-    'Status update';
-  const detailText = stringifyWithLanguage(normalizedPayload.structured).text;
+  const summaryText = (text ?? '').trim() || 'Status update';
+  const detailText = stringifyWithLanguage(data).text;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
 
   const container = document.createElement('div');
@@ -110,29 +98,20 @@ const ERROR_DETAIL_FIELDS: readonly string[] = [
 ] as const;
 
 /** Format error message as a foldable banner. */
-export function formatError(
-  message: LogMessageWithPayload,
-): HTMLElement | null {
-  const { id, groupId, timestamp } = message;
-  const normalizedPayload = message.normalizedPayload ?? {
-    decodedText: '',
-    structured: undefined,
-  };
+export function formatError(message: LogMessageData): HTMLElement | null {
+  const { id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
   const structured =
-    normalizedPayload.structured &&
-    typeof normalizedPayload.structured === 'object'
-      ? (normalizedPayload.structured as Record<string, unknown>)
+    data && typeof data === 'object'
+      ? (data as Record<string, unknown>)
       : {};
   const isRelayError = structured.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)
-  const originalSummaryText =
-    (normalizedPayload.decodedText ?? message.text ?? '').trim() ||
-    'Error occurred';
+  const originalSummaryText = (text ?? '').trim() || 'Error occurred';
   const summaryText = isRelayError
     ? `[Relay] ${originalSummaryText}`
     : originalSummaryText;
@@ -208,7 +187,7 @@ export function formatError(
 
 /** Format default log message. */
 export function formatDefaultLogMessage(
-  logMessage: LogMessageWithPayload,
+  logMessage: LogMessageData,
 ): HTMLElement | null {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';

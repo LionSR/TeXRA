@@ -1,12 +1,12 @@
 /**
  * Banner-style formatters for thinking, scratchpad, and model response messages.
+ * These formatters use logMessage.text directly - no NormalizedPayload indirection.
  */
 
 // Local imports - formatter helpers
 import { createBannerEntry } from '../baseLogFormatter';
 import { formatTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
-import type { NormalizedPayload } from '../parseUtils';
 
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
@@ -37,14 +37,13 @@ const BANNER_CONFIG: Record<
 
 /** Format thinking or scratchpad banner content. */
 export function formatBannerContent(
-  normalizedPayload: NormalizedPayload,
+  text: string,
   contentType: string,
   logId: string,
   groupId: string | undefined,
   timestamp: number,
 ): HTMLElement | null {
-  // Use decodedText directly (backend sends text in message.text field)
-  const trimmedContent = (normalizedPayload?.decodedText ?? '').trim();
+  const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[contentType] ?? BANNER_CONFIG.Thinking;
@@ -74,17 +73,17 @@ export function formatModelResponse({
   groupId,
   timestamp,
   verbose,
-  content,
+  text,
   level,
 }: {
   id: string;
   groupId?: string;
   timestamp: number;
   verbose?: boolean;
-  content: NormalizedPayload;
+  text: string;
   level: LogLevel;
 }): HTMLElement | null {
-  const trimmedContent = (content?.decodedText ?? '').trim();
+  const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(

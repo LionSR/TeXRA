@@ -1,4 +1,4 @@
-const TEMPLATES: Array<{ id: string; html: string }> = [
+const TEMPLATES: { id: string; html: string }[] = [
   {
     id: 'bannerDetailsTemplate',
     html: `
