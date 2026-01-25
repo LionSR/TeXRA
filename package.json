@@ -1635,9 +1635,22 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "build": "npm run compile && vsce package --out releases/texra-$npm_package_version.vsix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "esbuild:ext": "node esbuild.config.mjs",
+    "esbuild:ext:watch": "node esbuild.config.mjs --watch",
+    "esbuild:ext:prod": "node esbuild.config.mjs --production",
+    "vite:webviews": "vite build",
+    "vite:webviews:dev": "vite build --mode development",
+    "vite:webviews:watch": "vite build --watch --mode development",
+    "compile:fast": "npm run esbuild:ext && npm run vite:webviews:dev",
+    "watch:fast": "concurrently \"npm run esbuild:ext:watch\" \"npm run vite:webviews:watch\"",
+    "package:fast": "npm run esbuild:ext:prod && npm run vite:webviews",
+    "build:fast": "npm run package:fast && vsce package --out releases/texra-$npm_package_version.vsix"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.25.4",
+    "vite": "^6.3.5",
     "@stylistic/eslint-plugin": "^5.7.1",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
