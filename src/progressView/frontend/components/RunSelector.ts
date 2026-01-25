@@ -2,8 +2,9 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - progress view formatters
+// Local imports - progress view
 import { getDateTimeFormatter } from '../formatters/timestampUtils';
+import { ProgressEvents } from '../events';
 
 @customElement('run-selector')
 export class RunSelector extends LitElement {
@@ -45,13 +46,7 @@ export class RunSelector extends LitElement {
   private handleChange(event: Event) {
     const target = event.target as HTMLSelectElement | null;
     const runId = target?.value ?? '';
-    this.dispatchEvent(
-      new CustomEvent('run-selected', {
-        detail: { runId: runId || null },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.runSelected({ runId: runId || null }));
   }
 
   private formatRunLabel(run: {

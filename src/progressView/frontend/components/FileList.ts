@@ -5,6 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { ProgressEvents } from '../events';
 
 // Local imports - shared schemas
 import type { OutputFileInfo } from '@shared/schemas';
@@ -199,13 +200,7 @@ export class FileList extends LitElement {
     command: string,
     payload: Record<string, string>,
   ): void {
-    this.dispatchEvent(
-      new CustomEvent('file-action', {
-        detail: { command, ...payload },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
   }
 
   private getSortedRounds(): Array<[number, OutputFileInfo[]]> {

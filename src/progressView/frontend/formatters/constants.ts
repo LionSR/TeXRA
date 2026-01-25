@@ -105,12 +105,7 @@ const EXTENSION_ALIASES = new Map<string, string>([
   ['sh', 'bash'],
 ]);
 
-/**
- * Get highlight.js language from file path based on extension.
- * Uses alias map for non-standard extensions, otherwise tries the extension directly.
- * @param {string} filePath - File path to extract extension from
- * @returns {string} Language identifier (highlight.js validates it later)
- */
+/** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
 export function getLanguageFromPath(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') {
     return 'plaintext';

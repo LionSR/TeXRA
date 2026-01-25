@@ -32,11 +32,7 @@ type FormatOptions = {
   defaultOpen?: boolean;
 };
 
-/**
- * Apply open/closed state to a details element
- * @param {HTMLElement} element - Details element
- * @param {boolean} [shouldOpen] - Whether element should be open
- */
+/** Apply open/closed state to a details element. */
 export function applyOpenState(
   element: HTMLElement,
   shouldOpen?: boolean,
@@ -49,20 +45,7 @@ export function applyOpenState(
   initToggleIcon(element, shouldOpen);
 }
 
-/**
- * Create a banner entry from template
- * @param {object} options - Banner configuration
- * @param {string} options.logId - Log entry ID
- * @param {string} [options.groupId] - Group ID
- * @param {string} [options.timestamp] - ISO timestamp
- * @param {string} [options.iconClass] - Codicon class for icon
- * @param {string} [options.labelText] - Banner label text
- * @param {string} [options.copyTitle] - Copy button title
- * @param {string} [options.contentClass] - CSS class for content element
- * @param {boolean} [options.open=false] - Whether banner should be open
- * @param {string} [options.templateId='bannerDetailsTemplate'] - Template ID
- * @returns {{element: HTMLElement, contentElem: HTMLElement|null, copyButton: HTMLElement|null, summaryElem: HTMLElement|null}|null}
- */
+/** Create a banner entry from template. */
 export function createBannerEntry({
   logId,
   groupId,
@@ -124,12 +107,7 @@ export function createBannerEntry({
   };
 }
 
-/**
- * Safely execute a formatting function with error handling
- * @param {Function} formatter - The formatting function to execute
- * @param {string} errorContext - Context for error message
- * @returns {*} Result of formatter or null if error
- */
+/** Safely execute a formatting function with error handling. */
 export function safeFormat<T>(
   formatter: () => T,
   errorContext: string,
@@ -142,13 +120,7 @@ export function safeFormat<T>(
   }
 }
 
-/**
- * Resolve whether a details element should be open
- * @param {string} messageType - Type of message
- * @param {object} [options] - Options with preservedOpen or defaultOpen
- * @param {Set<string>} autoExpandedTypes - Set of types that auto-expand
- * @returns {boolean|undefined}
- */
+/** Resolve whether a details element should be open. */
 export function resolveOpenState(
   messageType: string,
   options: FormatOptions | undefined,

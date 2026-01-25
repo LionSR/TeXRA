@@ -16,6 +16,7 @@ import { RecordingButtonManager } from '@common/modules/RecordingButtonManager.j
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { ProgressEvents } from '../events';
 
 // Local imports - progress view components
 import './QueuedFollowUps';
@@ -40,6 +41,12 @@ export class FollowUpInput extends LitElement {
 
   protected createRenderRoot(): HTMLElement {
     return this;
+  }
+
+  override disconnectedCallback(): void {
+    this.clearPendingFocus();
+    this.recordingManager.dispose();
+    super.disconnectedCallback();
   }
 
   firstUpdated(): void {
@@ -203,22 +210,11 @@ export class FollowUpInput extends LitElement {
   private handleInput(event: InputEvent): void {
     const target = event.target as HTMLTextAreaElement | null;
     const value = target?.value ?? '';
-    this.dispatchEvent(
-      new CustomEvent('followup-change', {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupChange({ value }));
   }
 
   private emitSend(): void {
-    this.dispatchEvent(
-      new CustomEvent('followup-send', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupSend());
   }
 
   private emitPolish(): void {
@@ -229,30 +225,15 @@ export class FollowUpInput extends LitElement {
       progressContainer.style.display = 'block';
     }
 
-    this.dispatchEvent(
-      new CustomEvent('followup-polish', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupPolish());
   }
 
   private emitClear(): void {
-    this.dispatchEvent(
-      new CustomEvent('followup-clear', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupClear());
   }
 
   private emitToggleBypass(): void {
-    this.dispatchEvent(
-      new CustomEvent('followup-toggle-bypass', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupToggleBypass());
   }
 
   private syncYoloButton(): void {
@@ -277,12 +258,6 @@ export class FollowUpInput extends LitElement {
   }
 
   private updateValue(value: string): void {
-    this.dispatchEvent(
-      new CustomEvent('followup-change', {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupChange({ value }));
   }
 }

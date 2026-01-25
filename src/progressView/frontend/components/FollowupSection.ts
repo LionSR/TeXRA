@@ -22,6 +22,7 @@ import {
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
+import { ProgressEvents } from '../events';
 import type { FollowupMode } from '../store';
 
 export interface FollowupStreamData {
@@ -176,23 +177,12 @@ export class FollowupSection extends LitElement {
     const nextMode = getRadioChangeValue(event, group) as FollowupMode;
     if (!nextMode) return;
 
-    this.dispatchEvent(
-      new CustomEvent('followup-mode-change', {
-        detail: { mode: nextMode },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupModeChange({ mode: nextMode }));
   }
 
   private handleToggle(event: CustomEvent): void {
     if (!event.detail?.open) return;
-    this.dispatchEvent(
-      new CustomEvent('followup-request-options', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupRequestOptions());
     this.syncRadioGroup();
   }
 
@@ -230,11 +220,7 @@ export class FollowupSection extends LitElement {
     const formData = this.getFormData();
     if (!formData) return;
     this.dispatchEvent(
-      new CustomEvent('followup-setup', {
-        detail: { mode: this.mode, ...formData },
-        bubbles: true,
-        composed: true,
-      }),
+      ProgressEvents.followupSetup({ mode: this.mode, ...formData }),
     );
   }
 
@@ -242,11 +228,7 @@ export class FollowupSection extends LitElement {
     const formData = this.getFormData();
     if (!formData) return;
     this.dispatchEvent(
-      new CustomEvent('followup-run', {
-        detail: { mode: this.mode, ...formData },
-        bubbles: true,
-        composed: true,
-      }),
+      ProgressEvents.followupRun({ mode: this.mode, ...formData }),
     );
   }
 

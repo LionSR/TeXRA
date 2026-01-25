@@ -21,13 +21,7 @@ type LogMessageWithPayload = LogMessageData & {
   normalizedPayload?: NormalizedPayload;
 };
 
-/**
- * Format user message entry
- * @param {object} normalizedPayload - Normalized payload
- * @param {string} logId - Log entry ID
- * @param {string} timestamp - Timestamp
- * @returns {HTMLElement|null} User message element or null
- */
+/** Format user message entry. */
 export function formatUserMessage(
   normalizedPayload: NormalizedPayload,
   logId: string,
@@ -55,11 +49,7 @@ export function formatUserMessage(
   return element;
 }
 
-/**
- * Format progress status entry
- * @param {object} message - The message object
- * @returns {HTMLElement} Progress status element
- */
+/** Format progress status entry. */
 export function formatProgressStatus(
   message: LogMessageWithPayload,
 ): HTMLElement {
@@ -76,7 +66,7 @@ export function formatProgressStatus(
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Status update';
   const detailText = stringifyWithLanguage(normalizedPayload.structured).text;
-  const emoji = EMOJI_BY_LEVEL[level] || '•';
+  const emoji = EMOJI_BY_LEVEL[level] ?? '•';
 
   const container = document.createElement('div');
   setElementDataset(container, {
@@ -117,11 +107,7 @@ const ERROR_DETAIL_FIELDS = [
   'rawErrorBody',
 ];
 
-/**
- * Format error message as a foldable banner
- * @param {object} message - The message object
- * @returns {HTMLElement|null} Error banner element or null
- */
+/** Format error message as a foldable banner. */
 export function formatError(
   message: LogMessageWithPayload,
 ): HTMLElement | null {
@@ -218,16 +204,12 @@ export function formatError(
   return bannerEntry.element;
 }
 
-/**
- * Format default log message
- * @param {object} logMessage - The log message
- * @returns {HTMLElement|null} Default log line element or null if creation fails
- */
+/** Format default log message. */
 export function formatDefaultLogMessage(
   logMessage: LogMessageWithPayload,
 ): HTMLElement | null {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
-  const emoji = EMOJI_BY_LEVEL[level] || '•';
+  const emoji = EMOJI_BY_LEVEL[level] ?? '•';
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
