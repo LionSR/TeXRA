@@ -68,14 +68,26 @@ export class MemoryApp extends BaseWebviewApp {
     const command = (raw as { command: string }).command;
     if (command === MEMORY_VIEW_COMMANDS.UPDATE_MEMORY) {
       const result = UpdateMemoryMessageSchema.safeParse(raw);
-      if (!result.success) return;
+      if (!result.success) {
+        this.logSchemaError(
+          '[MemoryApp] Update memory message validation failed.',
+          result.error,
+        );
+        return;
+      }
       this.items = result.data.items ?? [];
       return;
     }
 
     if (command === MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED) {
       const result = UpdateMemoryEnabledMessageSchema.safeParse(raw);
-      if (!result.success) return;
+      if (!result.success) {
+        this.logSchemaError(
+          '[MemoryApp] Update memory enabled message validation failed.',
+          result.error,
+        );
+        return;
+      }
       this.enabled = result.data.enabled;
       this.toggleDisabled = false;
     }

@@ -62,7 +62,13 @@ export class HistoryApp extends BaseWebviewApp {
     const command = (raw as { command: string }).command;
     if (command === HISTORY_VIEW_COMMANDS.UPDATE_HISTORY) {
       const result = UpdateHistoryMessageSchema.safeParse(raw);
-      if (!result.success) return;
+      if (!result.success) {
+        this.logSchemaError(
+          '[HistoryApp] Update history message validation failed.',
+          result.error,
+        );
+        return;
+      }
       this.items = [...result.data.historyItems].sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -72,7 +78,13 @@ export class HistoryApp extends BaseWebviewApp {
 
     if (command === HISTORY_VIEW_COMMANDS.HISTORY_CLEARED) {
       const result = HistoryClearedMessageSchema.safeParse(raw);
-      if (!result.success) return;
+      if (!result.success) {
+        this.logSchemaError(
+          '[HistoryApp] History cleared message validation failed.',
+          result.error,
+        );
+        return;
+      }
       this.items = [];
       this.historyList?.clearSearch();
     }
