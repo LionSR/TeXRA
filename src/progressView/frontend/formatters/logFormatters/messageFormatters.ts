@@ -1,15 +1,25 @@
-// @ts-nocheck
 /**
  * Message-style formatters for user messages, errors, and progress status.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
+
+// Local imports - formatter helpers
 import { setElementDataset, wrapInPre } from '../htmlBuilders';
 import { stringifyWithLanguage } from '../normalizers';
 import { formatTimestamp } from '../timestampUtils';
 import { createBannerEntry } from '../baseLogFormatter';
 import { EMOJI_BY_LEVEL } from '../constants';
+
+// Local imports - shared schemas
+import type { LogMessageData } from '@shared/schemas';
+import type { NormalizedPayload } from '../normalizers';
+
+type LogMessageWithPayload = LogMessageData & {
+  normalizedPayload?: NormalizedPayload;
+};
 
 /**
  * Format user message entry
@@ -18,7 +28,11 @@ import { EMOJI_BY_LEVEL } from '../constants';
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} User message element or null
  */
-export function formatUserMessage(normalizedPayload, logId, timestamp) {
+export function formatUserMessage(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+  timestamp: number,
+): HTMLElement | null {
   const element = createFromTemplate('userMessageTemplate');
   if (!element) return null;
 
@@ -27,13 +41,13 @@ export function formatUserMessage(normalizedPayload, logId, timestamp) {
   );
 
   const timestampElem = element.querySelector('.user-message-timestamp');
-  if (timestampElem) {
+  if (timestampElem instanceof HTMLElement) {
     timestampElem.textContent = timeDisplay;
     timestampElem.title = tooltipTimestamp;
   }
 
   const contentElem = element.querySelector('.user-message-content');
-  if (contentElem) {
+  if (contentElem instanceof HTMLElement) {
     contentElem.textContent = normalizedPayload?.decodedText || '';
     if (logId) contentElem.dataset.logId = logId;
   }
@@ -46,14 +60,14 @@ export function formatUserMessage(normalizedPayload, logId, timestamp) {
  * @param {object} message - The message object
  * @returns {HTMLElement} Progress status element
  */
-export function formatProgressStatus(message) {
-  const {
-    normalizedPayload = {},
-    level = 'info',
-    id,
-    groupId,
-    timestamp,
-  } = message;
+export function formatProgressStatus(
+  message: LogMessageWithPayload,
+): HTMLElement {
+  const { level = 'info', id, groupId, timestamp } = message;
+  const normalizedPayload = message.normalizedPayload ?? {
+    decodedText: '',
+    structured: undefined,
+  };
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
@@ -108,13 +122,23 @@ const ERROR_DETAIL_FIELDS = [
  * @param {object} message - The message object
  * @returns {HTMLElement|null} Error banner element or null
  */
-export function formatError(message) {
-  const { normalizedPayload = {}, id, groupId, timestamp } = message;
+export function formatError(
+  message: LogMessageWithPayload,
+): HTMLElement | null {
+  const { id, groupId, timestamp } = message;
+  const normalizedPayload = message.normalizedPayload ?? {
+    decodedText: '',
+    structured: undefined,
+  };
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
-  const structured = normalizedPayload.structured ?? {};
+  const structured =
+    normalizedPayload.structured &&
+    typeof normalizedPayload.structured === 'object'
+      ? (normalizedPayload.structured as Record<string, unknown>)
+      : {};
   const isRelayError = structured.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)
@@ -130,7 +154,9 @@ export function formatError(message) {
     const value = structured[key];
     // Skip null/undefined values and message if it duplicates the original summary
     return (
-      value != null && !(key === 'message' && value === originalSummaryText)
+      value !== null &&
+      value !== undefined &&
+      !(key === 'message' && value === originalSummaryText)
     );
   }).map((key) => {
     const value = structured[key];
@@ -170,9 +196,10 @@ export function formatError(message) {
   // If there are no details, hide the copy button and make it non-expandable
   if (!detailText) {
     bannerEntry.copyButton?.style.setProperty('display', 'none');
-    bannerEntry.element
-      .querySelector('.toggle-icon')
-      ?.style.setProperty('visibility', 'hidden');
+    const toggleIcon = bannerEntry.element.querySelector('.toggle-icon');
+    if (toggleIcon instanceof HTMLElement) {
+      toggleIcon.style.setProperty('visibility', 'hidden');
+    }
   }
 
   if (bannerEntry.contentElem) {
@@ -184,7 +211,7 @@ export function formatError(message) {
 
   // Add timestamp tooltip to the label
   const labelElem = bannerEntry.element.querySelector('.label');
-  if (labelElem) {
+  if (labelElem instanceof HTMLElement) {
     labelElem.title = tooltipTimestamp;
   }
 
@@ -196,7 +223,9 @@ export function formatError(message) {
  * @param {object} logMessage - The log message
  * @returns {HTMLElement|null} Default log line element or null if creation fails
  */
-export function formatDefaultLogMessage(logMessage) {
+export function formatDefaultLogMessage(
+  logMessage: LogMessageWithPayload,
+): HTMLElement | null {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
   const emoji = EMOJI_BY_LEVEL[level] || '•';
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
@@ -221,5 +250,7 @@ export function formatDefaultLogMessage(logMessage) {
 
   const wrapper = document.createElement('div');
   wrapper.innerHTML = htmlMessage;
-  return wrapper.firstElementChild;
+  return wrapper.firstElementChild instanceof HTMLElement
+    ? wrapper.firstElementChild
+    : null;
 }

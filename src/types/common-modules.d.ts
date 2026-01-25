@@ -99,6 +99,9 @@ declare module '@common/modules/RecordingButtonManager.js' {
 }
 
 declare module '@common/modules/iconConstants.js' {
+  export const CHEVRON_UP_CLASS: string;
+  export const CHEVRON_DOWN_CLASS: string;
+  export const CHEVRON_RIGHT_CLASS: string;
   export const AGENT_DECORATORS: {
     properties: {
       remote: { icon: string; hint: string };

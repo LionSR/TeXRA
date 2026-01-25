@@ -1,25 +1,27 @@
-// @ts-nocheck
 /**
  * Markdown rendering utilities with LaTeX reference support.
  */
 
+// Third-party imports
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
+
+// Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
 
-let markdownRenderer;
+let markdownRenderer: MarkdownIt | null = null;
 
 // LRU cache for rendered markdown (content hash → HTML)
 const CACHE_MAX_SIZE = 500;
-const markdownCache = new Map();
+const markdownCache = new Map<string, string>();
 
 /**
  * Get the shared markdown renderer instance
  * @returns {MarkdownIt} Configured markdown renderer
  */
-export const getMarkdownRenderer = () => {
+export const getMarkdownRenderer = (): MarkdownIt => {
   if (!markdownRenderer) {
     markdownRenderer = new MarkdownIt({
       breaks: false,
@@ -47,7 +49,10 @@ export const getMarkdownRenderer = () => {
  * @param {string} label - The label value
  * @returns {string} HTML for the clickable reference
  */
-export const createLatexReferenceHtml = (refType, label) => {
+export const createLatexReferenceHtml = (
+  refType: string,
+  label: string,
+): string => {
   return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
 };
 
@@ -56,10 +61,10 @@ export const createLatexReferenceHtml = (refType, label) => {
  * @param {string} content - Content with LaTeX references
  * @returns {string} Content with placeholder references
  */
-export const protectLatexReferences = (content) => {
-  content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-  content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-  content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+export const protectLatexReferences = (content: string): string => {
+  content = content.replaceAll(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+  content = content.replaceAll(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+  content = content.replaceAll(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
   return content;
 };
 
@@ -68,15 +73,15 @@ export const protectLatexReferences = (content) => {
  * @param {string} content - Content with placeholder references
  * @returns {string} Content with clickable LaTeX references
  */
-export const restoreLatexReferences = (content) => {
+export const restoreLatexReferences = (content: string): string => {
   return content
-    .replace(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
+    .replaceAll(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
       createLatexReferenceHtml('ref', label),
     )
-    .replace(/@@LATEX-CREF:([^@]+)@@/g, (_, label) =>
+    .replaceAll(/@@LATEX-CREF:([^@]+)@@/g, (_, label) =>
       createLatexReferenceHtml('cref', label),
     )
-    .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
+    .replaceAll(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
       createLatexReferenceHtml('eqref', label),
     );
 };
@@ -86,7 +91,7 @@ export const restoreLatexReferences = (content) => {
  * @param {string} str - String to hash
  * @returns {string} Hash string
  */
-const hashContent = (str) => {
+const hashContent = (str: string): string => {
   let hash = 2166136261;
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);
@@ -101,14 +106,20 @@ const hashContent = (str) => {
  * @param {MarkdownIt} [renderer] - Optional custom renderer
  * @returns {string} Processed markdown HTML
  */
-export const processMarkdownContent = (content, renderer) => {
+export const processMarkdownContent = (
+  content: string,
+  renderer?: MarkdownIt,
+): string => {
   // Check cache first (only for default renderer)
   const useCache = !renderer;
   const cacheKey = useCache ? hashContent(content) : null;
 
-  if (useCache && markdownCache.has(cacheKey)) {
+  if (useCache && cacheKey && markdownCache.has(cacheKey)) {
     // Move to end for LRU behavior
     const cached = markdownCache.get(cacheKey);
+    if (!cached) {
+      return '';
+    }
     markdownCache.delete(cacheKey);
     markdownCache.set(cacheKey, cached);
     return cached;
@@ -120,22 +131,27 @@ export const processMarkdownContent = (content, renderer) => {
 
   // Add line break before bold text starting a new sentence (capital letter after period)
   // This fixes OpenAI reasoning summary output which omits line breaks before bold headers
-  const formattedContent = protectedContent.replace(/\.(\*\*[A-Z])/g, '.\n$1');
+  const formattedContent = protectedContent.replaceAll(
+    /\.(\*\*[A-Z])/g,
+    '.\n$1',
+  );
 
   const md = renderer || getMarkdownRenderer();
 
   // Process content as markdown
-  let parsedMarkdown = md.render(formattedContent);
+  const parsedMarkdown = md.render(formattedContent);
 
   // Post-process to restore and style LaTeX references
   const result = restoreLatexReferences(parsedMarkdown);
 
   // Store in cache with LRU eviction
-  if (useCache) {
+  if (useCache && cacheKey) {
     if (markdownCache.size >= CACHE_MAX_SIZE) {
       // Delete oldest entry (first key)
       const firstKey = markdownCache.keys().next().value;
-      markdownCache.delete(firstKey);
+      if (firstKey) {
+        markdownCache.delete(firstKey);
+      }
     }
     markdownCache.set(cacheKey, result);
   }
@@ -147,6 +163,6 @@ export const processMarkdownContent = (content, renderer) => {
  * Clear the markdown rendering cache.
  * Call when switching streams or clearing content.
  */
-export const clearMarkdownCache = () => {
+export const clearMarkdownCache = (): void => {
   markdownCache.clear();
 };
