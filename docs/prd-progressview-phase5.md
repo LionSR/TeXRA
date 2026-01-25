@@ -76,8 +76,18 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 | Add Zod validation to MainApp  | ⬜ Not Started | Security + type safety       |
 | Convert 37 inline arrows       | ⬜ Not Started | Performance                  |
 | Delete duplicate debug handler | ⬜ Not Started | Code cleanup                 |
-| Convert themeHandlers.js → TS  | ⬜ Not Started | Eliminate `any` types        |
-| Install @types/sortablejs      | ⬜ Not Started | Complete type definitions    |
+| Install @types/sortablejs      | ✅ Complete    | Complete type definitions    |
+
+### Architectural Tasks (NEW - Phase 5 Scope)
+
+| Task                                | Status         | Impact                           |
+| ----------------------------------- | -------------- | -------------------------------- |
+| Formatters → TemplateResult         | ⬜ Not Started | Shadow DOM throughout            |
+| renderLogs incremental updates      | ⬜ Not Started | Performance for large logs       |
+| Create commonViewMessages.ts        | ⬜ Not Started | Zod schemas for cross-view cmds  |
+| themeHandlers.ts Zod migration      | ⬜ Not Started | Type-safe theme/debug handling   |
+| Eliminate normalization layers      | ⬜ Not Started | -200 lines, cleaner data flow    |
+| Cross-webview command unification   | ⬜ Not Started | Consistent message handling      |
 
 ---
 
@@ -1049,7 +1059,7 @@ managers/
 └── utils/taskGroupTraversal.ts # Hierarchy navigation
 ```
 
-### A2. renderLogs() Full DOM Rebuild (MEDIUM)
+### A2. renderLogs() Full DOM Rebuild (HIGH) → Phase 5 Scope
 
 **Location:** `src/progressView/frontend/components/LogList.ts:131-207`
 
@@ -1064,15 +1074,9 @@ this.logManager.clear();
 
 **Impact:** For large log lists (100+ entries), this causes visible jank during updates.
 
-**Potential Solutions:**
+**Phase 5 Solution:** Implement incremental append pattern. See [5.11 renderLogs Incremental Updates](#511-renderlogs-incremental-updates-phase-5-scope) for detailed implementation plan.
 
-1. **Incremental append** - Only add new logs, don't rebuild existing
-2. **Virtual scrolling** - Only render visible viewport + buffer
-3. **Keyed updates** - Use `repeat()` with stable keys for Lit diffing
-
-**Note:** This is marked as a Non-Goal for Phase 5 (see modernization PRD), but should be addressed if performance issues are reported.
-
-### A3. Light DOM in ProgressView (MEDIUM)
+### A3. Light DOM in ProgressView (MEDIUM) → Phase 5 Scope
 
 **Location:** `ProgressApp.ts`, `LogList.ts`, `TaskGroupList.ts`
 
@@ -1080,7 +1084,319 @@ this.logManager.clear();
 
 **Why it exists:** Streaming log architecture requires direct DOM manipulation that conflicts with Shadow DOM boundaries.
 
-**Future fix:** Refactor formatters to return `TemplateResult` instead of HTML strings, enabling Shadow DOM throughout.
+**Phase 5 Fix:** Refactor formatters to return `TemplateResult` instead of HTML strings, enabling Shadow DOM throughout. See [5.10 Formatter → TemplateResult Migration](#510-formatter--templateresult-migration).
+
+---
+
+## 5.10 Formatter → TemplateResult Migration (Phase 5 Scope)
+
+**Problem:** Formatters in `src/progressView/frontend/formatters/` return HTML strings, forcing Light DOM usage.
+
+**Current pattern:**
+
+```typescript
+// formatters/taskLog.ts - returns string
+export function formatTaskLog(log: LogEntry): string {
+  return `<div class="task-log">${escapeHtml(log.text)}</div>`;
+}
+
+// Used in LogList.ts via innerHTML
+container.innerHTML = formatTaskLog(log);
+```
+
+**Target pattern:**
+
+```typescript
+// formatters/taskLog.ts - returns TemplateResult
+import { html, TemplateResult } from 'lit';
+
+export function formatTaskLog(log: LogEntry): TemplateResult {
+  return html`<div class="task-log">${log.text}</div>`;
+}
+
+// Used in LogList.ts via render()
+render(formatTaskLog(log), container);
+```
+
+**Migration scope:**
+
+| Formatter File | Functions | Effort |
+|----------------|-----------|--------|
+| `taskLog.ts` | 3 | 30 min |
+| `toolUseLog.ts` | 5 | 1 hour |
+| `streamHeader.ts` | 2 | 30 min |
+| `agentLog.ts` | 4 | 1 hour |
+| `litTemplates.ts` | 8 | 2 hours |
+| Others (10 files) | ~20 | 4 hours |
+
+**Total estimated effort:** ~9 hours
+
+**Benefits:**
+- Shadow DOM encapsulation possible
+- No manual HTML escaping needed (Lit auto-escapes)
+- Better performance via Lit's diffing
+- Type-safe template composition
+
+---
+
+## 5.11 renderLogs Incremental Updates (Phase 5 Scope)
+
+**Problem:** `LogList.ts:131-207` clears and rebuilds entire DOM on every update.
+
+**Current (O(n) rebuild):**
+
+```typescript
+renderLogs(logs: LogEntry[]): void {
+  container.innerHTML = '';  // ❌ Clear everything
+  this.groupManager.clear();
+  this.logManager.clear();
+
+  for (const log of logs) {
+    // Rebuild from scratch
+  }
+}
+```
+
+**Target (O(1) append for new logs):**
+
+```typescript
+renderLogs(logs: LogEntry[]): void {
+  const existingCount = this.logManager.size;
+  const newLogs = logs.slice(existingCount);  // Only new logs
+
+  for (const log of newLogs) {
+    this.appendLog(log);  // Incremental append
+  }
+}
+
+// Full rebuild only when switching streams
+switchStream(streamId: string): void {
+  this.clearAll();
+  this.renderLogs(this.getLogsForStream(streamId));
+}
+```
+
+**Performance impact:**
+
+| Scenario | Current | After |
+|----------|---------|-------|
+| Append 1 log to 100 logs | Rebuild 101 | Append 1 |
+| Append 10 logs to 1000 logs | Rebuild 1010 | Append 10 |
+| Switch streams | Rebuild N | Rebuild N (same) |
+
+**Implementation steps:**
+
+1. Track rendered log count per stream
+2. Implement `appendLog()` for single log insertion
+3. Implement `updateLog()` for in-place updates
+4. Keep full rebuild for stream switches only
+
+---
+
+## 5.12 Cross-Webview Commands Architecture
+
+**Problem:** 5 common commands are handled inconsistently across webviews with no Zod validation.
+
+### Current State
+
+| Command | Pattern | Zod Schema | Type Safety |
+|---------|---------|------------|-------------|
+| `THEME_SET` | `createThemeHandlers()` | ❌ None | ❌ `any` |
+| `DEBUG_MODE_SET` | `BaseWebviewApp` | ❌ None | ❌ `any` |
+| `STATE_RESTORE` | Manual | ❌ None | ❌ `any` |
+| `WEBVIEW_READY` | Auto-sent | ❌ None | ❌ |
+| `ERROR` | Generic | ❌ None | ❌ `any` |
+
+### Target Architecture
+
+**1. Create `src/shared/schemas/commonViewMessages.ts`:**
+
+```typescript
+import { z } from 'zod';
+import { COMMON_COMMANDS } from '@common/webview/commands';
+
+// Schema definitions
+export const SetThemeMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.THEME_SET),
+  theme: z.enum(['vscode-dark', 'vscode-light', 'vscode-high-contrast']),
+});
+
+export const SetDebugModeMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.DEBUG_MODE_SET),
+  debugMode: z.boolean(),
+});
+
+export const StateRestoreMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.STATE_RESTORE),
+  state: z.record(z.string(), z.unknown()),
+});
+
+export const WebviewReadyMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
+});
+
+export const ErrorMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.ERROR),
+  message: z.string(),
+  details: z.unknown().optional(),
+});
+
+// Discriminated union for routing
+export const CommonViewMessageSchema = z.discriminatedUnion('command', [
+  SetThemeMessageSchema,
+  SetDebugModeMessageSchema,
+  StateRestoreMessageSchema,
+  WebviewReadyMessageSchema,
+  ErrorMessageSchema,
+]);
+
+export type CommonViewMessage = z.infer<typeof CommonViewMessageSchema>;
+export type SetThemeMessage = z.infer<typeof SetThemeMessageSchema>;
+export type SetDebugModeMessage = z.infer<typeof SetDebugModeMessageSchema>;
+```
+
+**2. Refactor `themeHandlers.ts` → `commonMessageHandlers.ts`:**
+
+```typescript
+// src/shared/handlers/commonMessageHandlers.ts
+import { CommonViewMessageSchema, COMMON_COMMANDS } from '@shared/schemas/commonViewMessages';
+
+export interface CommonMessageContext {
+  setTheme: (theme: string) => void;
+  setDebugMode: (enabled: boolean) => void;
+  restoreState: (state: Record<string, unknown>) => void;
+  onError: (message: string, details?: unknown) => void;
+}
+
+export function handleCommonMessage(
+  raw: unknown,
+  context: CommonMessageContext
+): boolean {
+  const result = CommonViewMessageSchema.safeParse(raw);
+  if (!result.success) return false;
+
+  const message = result.data;
+  switch (message.command) {
+    case COMMON_COMMANDS.THEME_SET:
+      context.setTheme(message.theme);
+      return true;
+    case COMMON_COMMANDS.DEBUG_MODE_SET:
+      context.setDebugMode(message.debugMode);
+      return true;
+    case COMMON_COMMANDS.STATE_RESTORE:
+      context.restoreState(message.state);
+      return true;
+    case COMMON_COMMANDS.ERROR:
+      context.onError(message.message, message.details);
+      return true;
+    default:
+      return false;
+  }
+}
+```
+
+**3. Update `BaseWebviewApp.ts`:**
+
+```typescript
+export abstract class BaseWebviewApp extends LitElement {
+  @state() protected debugMode = false;
+
+  protected handleMessage(event: MessageEvent): void {
+    const handled = handleCommonMessage(event.data, {
+      setTheme: (theme) => this.onThemeChange(theme),
+      setDebugMode: (enabled) => { this.debugMode = enabled; },
+      restoreState: (state) => this.onStateRestore(state),
+      onError: (msg, details) => console.error(msg, details),
+    });
+
+    if (!handled) {
+      this.handleViewSpecificMessage(event.data);
+    }
+  }
+
+  protected onThemeChange(theme: string): void {
+    document.body.dataset.vscodeThemeKind = theme;
+  }
+
+  protected onStateRestore(state: Record<string, unknown>): void {
+    // Override in subclasses
+  }
+
+  protected abstract handleViewSpecificMessage(raw: unknown): void;
+}
+```
+
+**4. Delete `themeHandlers.ts`** after migration.
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/shared/schemas/commonViewMessages.ts` | CREATE |
+| `src/shared/handlers/commonMessageHandlers.ts` | CREATE |
+| `src/shared/BaseWebviewApp.ts` | UPDATE |
+| `src/common/webview/themeHandlers.ts` | DELETE |
+| `src/progressView/frontend/ProgressApp.ts` | UPDATE (remove themeHandlers import) |
+| All other webview apps | UPDATE (extend refactored BaseWebviewApp) |
+
+---
+
+## 5.13 Normalization Layer Elimination
+
+**Problem:** Shared contracts eliminate the need for frontend normalization functions.
+
+### Current (Redundant)
+
+```typescript
+// Frontend normalizes because it doesn't trust backend shape
+function normalizeFileListData(raw: unknown): NormalizedFileEntry[] {
+  // 50 lines of defensive parsing
+}
+
+function normalizeToolUseLog(raw: unknown): NormalizedToolUseLog {
+  // 30 lines of field extraction
+}
+```
+
+### Target (Schema is Contract)
+
+```typescript
+// Backend sends validated data matching schema
+const message: UpdateFilesMessage = {
+  command: MAIN_VIEW_COMMANDS.UPDATE_FILES,
+  files: files.map(f => ({
+    path: f.path,
+    name: path.basename(f.path),
+    type: f.type,
+  })),
+};
+
+// Frontend trusts schema, no normalization needed
+const result = UpdateFilesSchema.safeParse(event.data);
+if (result.success) {
+  this.files = result.data.files;  // Direct use, no normalization
+}
+```
+
+### Normalizers to Delete (After Schema Migration)
+
+| Normalizer | Location | Lines | Replacement |
+|------------|----------|-------|-------------|
+| `normalizeFileListData()` | MainApp.ts | ~50 | `FileListSchema.safeParse()` |
+| `normalizeToolUseLog()` | formatters | ~30 | `ToolUseLogSchema` |
+| `normalizeMissingOutputsPayload()` | formatters | ~25 | `MissingOutputsSchema` |
+| `normalizeStructuredContent()` | formatters | ~40 | Direct `.data` access |
+| `tryParseJson()` | utils | ~15 | Dead code (backend sends `.data`) |
+
+**Estimated lines removed:** ~160
+
+### Migration Approach
+
+1. **Define schema in `src/shared/schemas/`** with all required fields
+2. **Update backend** to send data matching schema exactly
+3. **Update frontend** to use `safeParse()` + direct access
+4. **Delete normalizer** function
+5. **Repeat** for each normalizer
 
 ---
 
