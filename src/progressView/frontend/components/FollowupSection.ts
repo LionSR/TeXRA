@@ -14,14 +14,14 @@ import { live } from 'lit/directives/live.js';
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - common helpers
+// Local imports - shared helpers
 import {
   applyAgentOptions,
   applyModelOptions,
   withPlaceholder,
   AGENT_PLACEHOLDER,
   MODEL_PLACEHOLDER,
-} from '@common/modules/dropdownUtils.js';
+} from '@shared/utils/dropdown';
 
 // Local imports - shared schemas
 

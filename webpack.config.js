@@ -88,14 +88,18 @@ const extensionConfig = {
   },
 };
 
-/** @type WebpackConfig */
-const progressViewConfig = {
-  name: 'progressView',
+const webviewConfigs = [
+  'progressView',
+  'memoryView',
+  'historyView',
+  'profileView',
+].map((name) => ({
+  name,
   target: 'web',
   mode: 'none',
-  entry: './src/progressView/frontend/index.ts',
+  entry: `./src/${name}/frontend/index.ts`,
   output: {
-    path: path.resolve(__dirname, 'dist/progressView'),
+    path: path.resolve(__dirname, `dist/${name}`),
     filename: 'bundle.js',
   },
   resolve: {
@@ -127,6 +131,6 @@ const progressViewConfig = {
     minimize: true,
     minimizer: [new TerserPlugin()],
   },
-};
+}));
 
-module.exports = [extensionConfig, progressViewConfig];
+module.exports = [extensionConfig, ...webviewConfigs];

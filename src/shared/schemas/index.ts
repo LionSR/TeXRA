@@ -18,6 +18,9 @@ export * from './diffResult';
 // Message schemas (depend on data schemas) - must come before streamState
 export * from './progressViewMessages';
 export * from './progressViewData';
+export * from './memoryViewMessages';
+export * from './historyViewMessages';
+export * from './profileViewMessages';
 
 // Composite schemas (depend on message schemas)
 export * from './streamState';
