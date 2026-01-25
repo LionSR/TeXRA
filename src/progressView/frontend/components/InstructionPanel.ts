@@ -1,7 +1,6 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
@@ -23,19 +22,14 @@ export class InstructionPanel extends LitElement {
     return this;
   }
 
-  render(): TemplateResult {
+  render(): TemplateResult | typeof nothing {
     const text = this.instruction?.text ?? '';
-    const isVisible = Boolean(text.trim());
+    if (!text.trim()) {
+      return nothing;
+    }
 
     return html`
-      <div
-        id=${ELEMENT_IDS.INSTRUCTION_CONTAINER}
-        class=${classMap({
-          'instruction-panel': true,
-          'is-visible': isVisible,
-        })}
-        aria-hidden=${isVisible ? 'false' : 'true'}
-      >
+      <div id=${ELEMENT_IDS.INSTRUCTION_CONTAINER} class="instruction-panel is-visible">
         <div class="instruction-panel__header">
           <span class="instruction-panel__title">
             <i class="codicon codicon-notebook"></i>
@@ -50,7 +44,6 @@ export class InstructionPanel extends LitElement {
               title="Copy instruction"
               data-default-title="Copy instruction"
               data-success-title="Copied!"
-              ?disabled=${!isVisible}
               @click=${this.handleCopy}
             ></vscode-toolbar-button>
           </vscode-toolbar-container>

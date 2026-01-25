@@ -85,7 +85,7 @@ export function formatProgressStatus(
 }
 
 // Error detail fields in display order (matches ProviderError schema)
-const ERROR_DETAIL_FIELDS: readonly string[] = [
+const ERROR_DETAIL_FIELDS = [
   'message',
   'operation',
   'model',
