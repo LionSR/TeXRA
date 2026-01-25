@@ -20,6 +20,12 @@ export const profileViewStyles: CSSResult = css`
     margin-bottom: var(--spacing-xlarge);
   }
 
+  .profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--spacing-medium);
+  }
+
   .info-row {
     margin: var(--spacing-medium) 0;
     display: flex;
@@ -216,6 +222,16 @@ export const profileViewStyles: CSSResult = css`
 
   .model-access-info {
     margin-top: var(--spacing-medium);
+  }
+
+  .model-access-error {
+    margin-top: var(--spacing-medium);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground);
+    border: var(--border-thin) solid var(--vscode-inputValidation-errorBorder);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
   }
 
   .model-access-summary {
