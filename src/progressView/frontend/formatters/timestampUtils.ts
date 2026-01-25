@@ -1,19 +1,19 @@
-// @ts-nocheck
 /**
  * Timestamp formatting utilities for progress view formatters.
  */
 
+// Local imports - formatter helpers
 import { DATETIME_FORMAT_OPTIONS, TIME_FORMAT_OPTIONS } from './constants';
 
 // Shared formatters (lazily initialized for browser environments)
-let TIME_FORMATTER;
-let DATE_TIME_FORMATTER;
+let TIME_FORMATTER: Intl.DateTimeFormat | null = null;
+let DATE_TIME_FORMATTER: Intl.DateTimeFormat | null = null;
 
 /**
  * Get the time-only formatter
  * @returns {Intl.DateTimeFormat} Time formatter
  */
-export const getTimeFormatter = () => {
+export const getTimeFormatter = (): Intl.DateTimeFormat => {
   if (!TIME_FORMATTER) {
     TIME_FORMATTER = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
   }
@@ -24,7 +24,7 @@ export const getTimeFormatter = () => {
  * Get the date-time formatter
  * @returns {Intl.DateTimeFormat} Date-time formatter
  */
-export const getDateTimeFormatter = () => {
+export const getDateTimeFormatter = (): Intl.DateTimeFormat => {
   if (!DATE_TIME_FORMATTER) {
     DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
       undefined,
@@ -39,7 +39,9 @@ export const getDateTimeFormatter = () => {
  * @param {Date} date - Date object to format
  * @returns {{fullTimestamp: string, timeDisplay: string, tooltipTimestamp: string}} Formatted timestamps
  */
-export const formatTimestamp = (date) => {
+export const formatTimestamp = (
+  date: Date,
+): { fullTimestamp: string; timeDisplay: string; tooltipTimestamp: string } => {
   const isoTimestamp = date.toISOString();
 
   return {
@@ -57,7 +59,7 @@ export const formatTimestamp = (date) => {
  * @param {number} tokens - Raw token count
  * @returns {string} Formatted token count
  */
-export const formatTokens = (tokens) => {
+export const formatTokens = (tokens: number): string => {
   if (tokens >= 100_000) {
     return `${(tokens / 1_000_000).toFixed(1)}M`;
   }
@@ -72,7 +74,7 @@ export const formatTokens = (tokens) => {
  * @param {number} durationMs - Duration in milliseconds
  * @returns {string} Formatted duration string
  */
-export const formatDuration = (durationMs) => {
+export const formatDuration = (durationMs: number): string => {
   // Handle edge cases
   if (durationMs < 0) return '0s';
 
@@ -102,11 +104,11 @@ export class MessageTimestampExtractor {
    * @param {HTMLElement} element - Log line element
    * @returns {string} Extracted timestamp
    */
-  extract(element) {
+  extract(element: HTMLElement): string {
     const logLine = element.classList.contains('log-line')
       ? element
       : element.querySelector('.log-line');
-    if (logLine && logLine.dataset.fullTimestamp) {
+    if (logLine instanceof HTMLElement && logLine.dataset.fullTimestamp) {
       return logLine.dataset.fullTimestamp;
     }
 

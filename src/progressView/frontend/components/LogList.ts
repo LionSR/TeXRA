@@ -1,7 +1,18 @@
-// @ts-nocheck
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
+
+// Local imports - shared webview
+import { postMessage } from '@shared/vscode';
+
+// Local imports - common helpers
+import {
+  scrollToBottom,
+  setChevronIconHorizontal,
+} from '@common/modules/domUtils.js';
+import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
+import { WebviewStateManager } from '@common/modules/webviewState.js';
+import { ToggleStateStore } from '@common/modules/ToggleStateStore.js';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -13,25 +24,12 @@ import {
   LogEntryManager,
 } from '../managers/TaskGroupDomManager';
 
-// Local imports - common helpers
-import {
-  scrollToBottom,
-  setChevronIconHorizontal,
-} from '@common/modules/domUtils.js';
-import { copyWithFeedback } from '@common/modules/clipboardUtils.js';
-import { WebviewStateManager } from '@common/modules/webviewState.js';
-import { ToggleStateStore } from '@common/modules/ToggleStateStore.js';
-
-// Local imports - shared webview
-import { postMessage } from '@shared/vscode';
-
 // Local imports - shared schemas
 import type {
   InstructionUpdate,
   LogMessageData,
   TaskGroup,
 } from '@shared/schemas';
-
 const PLACEHOLDER_HTML =
   'No runs yet—use TeXRA commands to start. Try ' +
   '<a href="command:texra.openGettingStarted">open the getting started walkthrough</a>, ' +
@@ -41,6 +39,15 @@ const PLACEHOLDER_HTML =
 
 @customElement('log-list')
 export class LogList extends LitElement {
+  private stateManager: WebviewStateManager;
+  private toggleStates: ToggleStateStore;
+  private groupManager: TaskGroupDomManager;
+  private logManager: LogEntryManager;
+  private lastRenderedStream: string;
+  private activeAgentCategory: string;
+  private boundToggleHandler: (event: Event) => void;
+  private boundClickHandler: (event: MouseEvent) => void;
+
   constructor() {
     super();
     this.stateManager = new WebviewStateManager();
@@ -155,16 +162,14 @@ export class LogList extends LitElement {
     const userMessageFragment = isToolUse
       ? document.createDocumentFragment()
       : null;
-    const groupedFragments = new Map();
+    const groupedFragments = new Map<string, DocumentFragment>();
 
     for (const msg of sortedMessages) {
       const formatted = this.logManager.entryFormatter.format(msg);
       if (!formatted) continue;
 
       if (msg.groupId) {
-        const groupContainer = document.getElementById(
-          `group-content-${msg.groupId}`,
-        );
+        const groupContainer = this.getGroupContainer(msg.groupId);
         if (groupContainer) {
           let frag = groupedFragments.get(msg.groupId);
           if (!frag) {
@@ -175,7 +180,11 @@ export class LogList extends LitElement {
         } else {
           appendFormatted(ungroupedFragment, formatted);
         }
-      } else if (isToolUse && msg.messageType === 'userMessage') {
+      } else if (
+        isToolUse &&
+        msg.messageType === 'userMessage' &&
+        userMessageFragment
+      ) {
         appendFormatted(userMessageFragment, formatted);
       } else {
         appendFormatted(ungroupedFragment, formatted);
@@ -192,9 +201,7 @@ export class LogList extends LitElement {
     }
 
     for (const [groupId, frag] of groupedFragments) {
-      const groupContainer = document.getElementById(
-        `group-content-${groupId}`,
-      );
+      const groupContainer = this.getGroupContainer(groupId);
       if (groupContainer) {
         groupContainer.appendChild(frag);
       } else {
@@ -260,6 +267,10 @@ export class LogList extends LitElement {
     return this.querySelector(`#${ELEMENT_IDS.LOG_CONTENT}`);
   }
 
+  private getGroupContainer(groupId: string): HTMLElement | null {
+    return this.querySelector(`#group-content-${groupId}`);
+  }
+
   private showPlaceholderIfEmpty(
     messages: LogMessageData[],
     groups: TaskGroup[],
@@ -300,7 +311,10 @@ export class LogList extends LitElement {
     if (!hasToggleClass) return;
 
     const toggleIcon = target.querySelector('.toggle-icon');
-    if (toggleIcon) {
+    if (
+      toggleIcon instanceof HTMLElement &&
+      target instanceof HTMLDetailsElement
+    ) {
       setChevronIconHorizontal(toggleIcon, target.open);
     }
   }

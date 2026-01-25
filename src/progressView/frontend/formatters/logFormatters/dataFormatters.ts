@@ -1,11 +1,12 @@
-// @ts-nocheck
 /**
  * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
  */
 
+// Local imports - common helpers
 import { createFromTemplate } from '@common/modules/templateUtils.js';
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
 import { getBasename } from '@common/modules/pathUtils.js';
+// Local imports - formatter helpers
 import {
   buildFileListRender,
   initToggleIcon,
@@ -15,8 +16,11 @@ import {
   normalizeFileListEntries,
   normalizeMissingOutputsPayload,
   ensureLatexdiffArray,
+  type NormalizedPayload,
 } from '../normalizers';
 import { formatTokens } from '../timestampUtils';
+
+type DiffResultEntry = Record<string, unknown>;
 
 /**
  * Format file list entry
@@ -24,7 +28,10 @@ import { formatTokens } from '../timestampUtils';
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} File list element or null
  */
-export function formatFileList(normalizedPayload, logId) {
+export function formatFileList(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+): HTMLElement | null {
   const element = createFromTemplate('fileListDetailsTemplate');
   if (!element) return null;
 
@@ -46,8 +53,10 @@ export function formatFileList(normalizedPayload, logId) {
 
   // Raw fallback when parsing fails
   if (!parsed) {
-    if (summaryElem) summaryElem.textContent = 'Files (raw)';
-    if (contentElem) {
+    if (summaryElem instanceof HTMLElement) {
+      summaryElem.textContent = 'Files (raw)';
+    }
+    if (contentElem instanceof HTMLElement) {
       contentElem.innerHTML = `<pre>${encodeHtml(normalizedPayload?.decodedText ?? '')}</pre>`;
       if (logId) contentElem.dataset.logId = logId;
     }
@@ -55,8 +64,10 @@ export function formatFileList(normalizedPayload, logId) {
   }
 
   const renderData = buildFileListRender(parsed);
-  if (summaryElem) summaryElem.textContent = renderData?.summary ?? 'Files';
-  if (contentElem) {
+  if (summaryElem instanceof HTMLElement) {
+    summaryElem.textContent = renderData?.summary ?? 'Files';
+  }
+  if (contentElem instanceof HTMLElement) {
     contentElem.innerHTML = renderData?.items ?? '';
     if (logId) contentElem.dataset.logId = logId;
   }
@@ -70,7 +81,10 @@ export function formatFileList(normalizedPayload, logId) {
  * @param {string} documentTag - Expected document tag
  * @returns {HTMLElement|null} XML link element or null
  */
-function createXmlLinkElement(xmlFile, documentTag) {
+function createXmlLinkElement(
+  xmlFile: string,
+  documentTag: string | null,
+): HTMLElement | null {
   const xmlEscaped = encodeHtml(xmlFile);
   const xmlFileName = encodeHtml(getBasename(xmlFile));
   const tagInfo = documentTag
@@ -84,7 +98,9 @@ function createXmlLinkElement(xmlFile, documentTag) {
     <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileName}</span>
     ${tagInfo}
   </div>`;
-  return wrapper.firstElementChild;
+  return wrapper.firstElementChild instanceof HTMLElement
+    ? wrapper.firstElementChild
+    : null;
 }
 
 /**
@@ -93,7 +109,10 @@ function createXmlLinkElement(xmlFile, documentTag) {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Missing outputs element or null
  */
-export function formatMissingOutputs(normalizedPayload, logId) {
+export function formatMissingOutputs(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+): HTMLElement | null {
   const parsed = normalizeMissingOutputsPayload(normalizedPayload?.structured);
   if (!parsed) {
     console.warn('Missing structured data for missing outputs log entry');
@@ -113,12 +132,12 @@ export function formatMissingOutputs(normalizedPayload, logId) {
   initToggleIcon(element, false);
 
   const summaryElem = element.querySelector('.summary-text');
-  if (summaryElem) {
+  if (summaryElem instanceof HTMLElement) {
     summaryElem.textContent = `Missing outputs (${missing.length})`;
   }
 
   const contentElem = element.querySelector('.file-list-content');
-  if (contentElem) {
+  if (contentElem instanceof HTMLElement) {
     contentElem.innerHTML = missing
       .map((f) => {
         const filePath = String(f);
@@ -147,7 +166,7 @@ export function formatMissingOutputs(normalizedPayload, logId) {
  * @param {*} value - Value to convert
  * @returns {string} String value or empty string
  */
-const toStringOrEmpty = (value) =>
+const toStringOrEmpty = (value: unknown): string =>
   typeof value === 'string' && value.length > 0 ? value : '';
 
 /**
@@ -155,10 +174,12 @@ const toStringOrEmpty = (value) =>
  * @param {object|null} location - Location object with kind and relativePath
  * @returns {string} Relative path or empty string
  */
-const describeLocation = (location) => {
+const describeLocation = (location: Record<string, unknown> | null): string => {
   if (!location) return '';
   if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return location.relativePath || '';
+    return typeof location.relativePath === 'string'
+      ? location.relativePath
+      : '';
   }
   return '';
 };
@@ -168,7 +189,7 @@ const describeLocation = (location) => {
  * @param {string} status - Entry status ('success', 'error', or other)
  * @returns {string} Codicon class
  */
-const getLatexdiffStatusIcon = (status) => {
+const getLatexdiffStatusIcon = (status: string): string => {
   if (status === 'success') return 'codicon-check';
   if (status === 'error') return 'codicon-error';
   return 'codicon-question';
@@ -179,24 +200,54 @@ const getLatexdiffStatusIcon = (status) => {
  * @param {object} entry - DiffResult entry
  * @returns {object} Extracted fields for rendering
  */
-const extractNewFormat = (entry) => {
-  const { baseLocation, revised, diffLocation } = entry;
-  const originalPath =
-    revised.lineage?.original?.relativePath ||
-    revised.lineage?.original?.absolutePath;
+const extractNewFormat = (entry: DiffResultEntry) => {
+  const baseLocation = entry.baseLocation as
+    | Record<string, unknown>
+    | undefined;
+  const revised = entry.revised as Record<string, unknown> | undefined;
+  const diffLocation = entry.diffLocation as
+    | Record<string, unknown>
+    | undefined;
+  const originalCandidate = (
+    revised?.lineage as Record<string, unknown> | undefined
+  )?.original as Record<string, unknown> | undefined;
+  const originalRelative =
+    typeof originalCandidate?.relativePath === 'string'
+      ? originalCandidate.relativePath
+      : '';
+  const originalAbsolute =
+    typeof originalCandidate?.absolutePath === 'string'
+      ? originalCandidate.absolutePath
+      : '';
 
   return {
-    baseFile: baseLocation?.absolutePath || '',
-    revisedFile: revised.location?.absolutePath || '',
-    diffFile: diffLocation?.absolutePath || '',
-    displayName: originalPath
-      ? getBasename(originalPath)
-      : describeLocation(baseLocation) ||
-        getBasename(baseLocation?.absolutePath || '') ||
-        'unknown',
-    baseRound: entry.baseRound ?? null,
-    revisedRound: revised.round ?? 0,
-    status: entry.status || 'error',
+    baseFile:
+      typeof baseLocation?.absolutePath === 'string'
+        ? baseLocation.absolutePath
+        : '',
+    revisedFile:
+      typeof (revised?.location as Record<string, unknown>)?.absolutePath ===
+      'string'
+        ? ((revised?.location as Record<string, unknown>)
+            .absolutePath as string)
+        : '',
+    diffFile:
+      typeof diffLocation?.absolutePath === 'string'
+        ? diffLocation.absolutePath
+        : '',
+    displayName:
+      originalRelative || originalAbsolute
+        ? getBasename(originalRelative || originalAbsolute)
+        : describeLocation(baseLocation ?? null) ||
+          getBasename(
+            typeof baseLocation?.absolutePath === 'string'
+              ? baseLocation.absolutePath
+              : '',
+          ) ||
+          'unknown',
+    baseRound: typeof entry.baseRound === 'number' ? entry.baseRound : null,
+    revisedRound: typeof revised?.round === 'number' ? revised.round : 0,
+    status: typeof entry.status === 'string' ? entry.status : 'error',
     message: entry.message,
     runId: entry.runId,
   };
@@ -207,7 +258,7 @@ const extractNewFormat = (entry) => {
  * @param {string|undefined} label - Label that might contain round info
  * @returns {number|null} Round number or null if not found
  */
-const parseRoundFromLabel = (label) => {
+const parseRoundFromLabel = (label: string | undefined): number | null => {
   if (typeof label !== 'string') return null;
   const match = label.match(/\[r(\d+)\]/);
   return match ? parseInt(match[1], 10) : null;
@@ -218,28 +269,53 @@ const parseRoundFromLabel = (label) => {
  * @param {object} entry - Legacy entry
  * @returns {object} Extracted fields for rendering
  */
-const extractLegacyFormat = (entry) => {
-  const { locations } = entry;
-  const baseFile = locations.base?.absolutePath || entry.basePath || '';
+const extractLegacyFormat = (entry: DiffResultEntry) => {
+  const locations = entry.locations as Record<string, unknown> | undefined;
+  const baseFile =
+    typeof (locations?.base as Record<string, unknown>)?.absolutePath ===
+    'string'
+      ? ((locations?.base as Record<string, unknown>)?.absolutePath as string)
+      : typeof entry.basePath === 'string'
+        ? entry.basePath
+        : '';
 
   // Try to get round info from entry fields first, then parse from labels
   const baseRound =
-    entry.baseRound ?? parseRoundFromLabel(entry.baseLabel) ?? null;
+    (typeof entry.baseRound === 'number' ? entry.baseRound : null) ??
+    parseRoundFromLabel(entry.baseLabel as string | undefined) ??
+    null;
   const revisedRound =
-    entry.revisedRound ?? parseRoundFromLabel(entry.revisedLabel) ?? 0;
+    (typeof entry.revisedRound === 'number' ? entry.revisedRound : null) ??
+    parseRoundFromLabel(entry.revisedLabel as string | undefined) ??
+    0;
 
   return {
     baseFile,
-    revisedFile: locations.revised?.absolutePath || entry.revisedPath || '',
-    diffFile: locations.diff?.absolutePath || entry.diffPath || '',
+    revisedFile:
+      typeof (locations?.revised as Record<string, unknown>)?.absolutePath ===
+      'string'
+        ? ((locations?.revised as Record<string, unknown>)
+            ?.absolutePath as string)
+        : typeof entry.revisedPath === 'string'
+          ? entry.revisedPath
+          : '',
+    diffFile:
+      typeof (locations?.diff as Record<string, unknown>)?.absolutePath ===
+      'string'
+        ? ((locations?.diff as Record<string, unknown>)?.absolutePath as string)
+        : typeof entry.diffPath === 'string'
+          ? entry.diffPath
+          : '',
     displayName:
-      entry.originalFileName ||
-      entry.baseLabel?.replace(/\s*\[r\d+\]/, '') || // Strip round from label
+      (typeof entry.originalFileName === 'string'
+        ? entry.originalFileName
+        : '') ||
+      (entry.baseLabel as string | undefined)?.replace(/\s*\[r\d+\]/, '') || // Strip round from label
       getBasename(baseFile) ||
       'unknown',
     baseRound,
     revisedRound,
-    status: entry.status || 'error',
+    status: typeof entry.status === 'string' ? entry.status : 'error',
     message: entry.message,
     runId: entry.runId,
   };
@@ -251,7 +327,7 @@ const extractLegacyFormat = (entry) => {
  * @param {object} entry - Latexdiff entry
  * @returns {string} HTML string for the entry
  */
-const buildLatexdiffEntryHtml = (entry) => {
+const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
   if (!entry) return '';
 
   // Extract fields based on format - new format has revised object, legacy has locations
@@ -305,7 +381,10 @@ const buildLatexdiffEntryHtml = (entry) => {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Latexdiff element or null
  */
-export function formatLatexdiff(normalizedPayload, logId) {
+export function formatLatexdiff(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+): HTMLElement | null {
   const entries = ensureLatexdiffArray(normalizedPayload?.structured);
   if (!entries || entries.length === 0) return null;
 
@@ -325,7 +404,7 @@ export function formatLatexdiff(normalizedPayload, logId) {
   });
 
   const summaryElem = element.querySelector('.summary-text');
-  if (summaryElem) {
+  if (summaryElem instanceof HTMLElement) {
     summaryElem.textContent =
       entries.length === 1
         ? 'Latexdiff result'
@@ -333,7 +412,7 @@ export function formatLatexdiff(normalizedPayload, logId) {
   }
 
   const contentElem = element.querySelector('.latexdiff-content');
-  if (contentElem) {
+  if (contentElem instanceof HTMLElement) {
     contentElem.innerHTML = items.join('');
     if (logId) contentElem.dataset.logId = logId;
     if (aggregatedRunId) contentElem.dataset.runId = aggregatedRunId;
@@ -343,27 +422,28 @@ export function formatLatexdiff(normalizedPayload, logId) {
 }
 
 // Statistics field configuration: [key, icon, label, formatter]
-const STAT_FIELDS = [
-  ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
-  ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
-  ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
-  ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
+const STAT_FIELDS: Array<[string, string, string, (value: number) => string]> =
   [
-    'percentageCached',
-    'codicon-graph-line',
-    'Cached %',
-    (v) => `${v.toFixed(2)}%`,
-  ],
-  [
-    'reasoningTokens',
-    'codicon-comment-discussion',
-    'Reasoning tokens',
-    formatTokens,
-  ],
-  ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
-  ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
-  ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
-];
+    ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
+    ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
+    ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
+    ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
+    [
+      'percentageCached',
+      'codicon-graph-line',
+      'Cached %',
+      (v) => `${v.toFixed(2)}%`,
+    ],
+    [
+      'reasoningTokens',
+      'codicon-comment-discussion',
+      'Reasoning tokens',
+      formatTokens,
+    ],
+    ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
+    ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
+    ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+  ];
 
 /**
  * Format statistics entry
@@ -371,7 +451,10 @@ const STAT_FIELDS = [
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Statistics element or null
  */
-export function formatStatistics(normalizedPayload, logId) {
+export function formatStatistics(
+  normalizedPayload: NormalizedPayload,
+  logId: string,
+): HTMLElement | null {
   const parsed = normalizedPayload?.structured;
   if (!parsed || typeof parsed !== 'object') return null;
 
@@ -380,13 +463,16 @@ export function formatStatistics(normalizedPayload, logId) {
 
   initToggleIcon(element, false);
 
-  const items = STAT_FIELDS.filter(([key]) => parsed[key] !== undefined).map(
+  const typedParsed = parsed as Record<string, number>;
+  const items = STAT_FIELDS.filter(
+    ([key]) => typedParsed[key] !== undefined,
+  ).map(
     ([key, icon, label, formatter]) =>
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(parsed[key])}</span>`,
+      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(typedParsed[key])}</span>`,
   );
 
   const contentElem = element.querySelector('.statistics-content');
-  if (contentElem) {
+  if (contentElem instanceof HTMLElement) {
     contentElem.innerHTML = items.join('');
     if (logId) contentElem.dataset.logId = logId;
   }

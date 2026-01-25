@@ -3,6 +3,9 @@ import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
+// Local imports - shared webview
+import { vscode } from '@shared/vscode';
+
 // Local imports - common helpers
 import {
   awaitTextareaUpgrade,
@@ -10,9 +13,6 @@ import {
   resolveTextareaTarget,
 } from '@common/modules/textareaUtils.js';
 import { RecordingButtonManager } from '@common/modules/RecordingButtonManager.js';
-
-// Local imports - shared webview
-import { vscode } from '@shared/vscode';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';

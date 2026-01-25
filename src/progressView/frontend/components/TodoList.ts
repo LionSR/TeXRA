@@ -4,14 +4,14 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-// Local imports - progress view constants
-import { ELEMENT_IDS } from '../constants';
+// Local imports - common constants
+import { TODO_STATUS } from '@common/constants/todoStatus';
 
 // Local imports - shared schemas
 import type { TodoItem } from '@shared/schemas';
 
-// Local imports - common constants
-import { TODO_STATUS } from '@common/constants/todoStatus';
+// Local imports - progress view constants
+import { ELEMENT_IDS } from '../constants';
 
 const STATUS_ICONS: Record<string, string> = {
   [TODO_STATUS.PENDING]: 'circle-outline',

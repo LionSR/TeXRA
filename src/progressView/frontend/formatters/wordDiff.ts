@@ -1,10 +1,12 @@
-// @ts-nocheck
 /**
  * Word-level diff utilities using diff-match-patch.
  * Provides clean inline highlighting for text changes.
  */
 
+// Third-party imports
 import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
+
+// Local imports - common helpers
 import { encodeHtml } from '@common/modules/htmlEncoding.js';
 
 /**
@@ -15,7 +17,7 @@ import { encodeHtml } from '@common/modules/htmlEncoding.js';
  * @param {string} newText - New text (null/undefined treated as empty)
  * @returns {string} HTML string with inline diff highlighting
  */
-export function generateInlineDiff(oldText, newText) {
+export function generateInlineDiff(oldText: string, newText: string): string {
   const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(oldText ?? '', newText ?? '');
   dmp.diff_cleanupSemantic(diffs);

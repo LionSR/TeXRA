@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Data normalization functions for progress view formatters.
  * These functions transform raw data into structured formats for rendering.
@@ -20,15 +19,56 @@
  * | extractTrimmedContent         | `{isEmpty: true}`    | `{isEmpty: true}`            |
  */
 
+// Third-party imports
 import yaml from 'yaml';
+
+// Local imports - common helpers
 import { getBasename } from '@common/modules/pathUtils.js';
+
+export type NormalizedPayload = {
+  decodedText: string;
+  structured: unknown;
+};
+
+export type StringifyResult = {
+  text: string;
+  language: 'yaml' | 'json' | 'plaintext';
+};
+
+export type NormalizedFileEntry = {
+  filePath: string;
+  fileName: string;
+  ok: boolean;
+  source: string;
+  sourceDisplay: string;
+  internal: boolean;
+  varName: string;
+};
+
+export type NormalizedMissingOutputs = {
+  missing: string[];
+  xmlFile: string | null;
+  documentTag: string | null;
+};
+
+export type NormalizedToolUseLog = {
+  parsed: Record<string, unknown>;
+  toolName: string;
+  errorText: string;
+  outputText: string;
+  userInstructionText: string;
+  input: unknown;
+  isError: boolean;
+  isUserFeedback: boolean;
+  headerSummary: string;
+};
 
 /**
  * Return trimmed string if non-empty, null otherwise.
  * @param {*} value - Value to check
  * @returns {string|null} Trimmed string or null
  */
-function trimmedOrNull(value) {
+function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed || null;
@@ -40,7 +80,7 @@ function trimmedOrNull(value) {
  * @param {*} fallback - Fallback source value
  * @returns {string} Trimmed string or empty string
  */
-function firstTrimmed(primary, fallback) {
+function firstTrimmed(primary: unknown, fallback: unknown): string {
   return trimmedOrNull(primary) ?? trimmedOrNull(fallback) ?? '';
 }
 
@@ -50,7 +90,7 @@ function firstTrimmed(primary, fallback) {
  * @param {string} fallback - Fallback value
  * @returns {string} Value or fallback
  */
-function stringOr(value, fallback) {
+function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
@@ -66,7 +106,7 @@ function stringOr(value, fallback) {
  * @param {*} value - Value to stringify
  * @returns {StringifyResult} Object with text and language hint
  */
-export function stringifyWithLanguage(value) {
+export function stringifyWithLanguage(value: unknown): StringifyResult {
   if (value === undefined || value === null) {
     return { text: '', language: 'plaintext' };
   }
@@ -90,7 +130,10 @@ export function stringifyWithLanguage(value) {
  * @param {*} value - Value to check
  * @returns {{isCodeOnly: boolean, code: string}} Result with code extraction
  */
-export function extractCodeOnlyInput(value) {
+export function extractCodeOnlyInput(value: unknown): {
+  isCodeOnly: boolean;
+  code: string;
+} {
   if (!isPlainObject(value) || Object.keys(value).length !== 1) {
     return { isCodeOnly: false, code: '' };
   }
@@ -107,13 +150,13 @@ export function extractCodeOnlyInput(value) {
  * @param {string} text - Text to parse
  * @returns {object|null} Parsed JSON or null
  */
-export function tryParseJson(text) {
+export function tryParseJson(text: string): Record<string, unknown> | null {
   if (!text || typeof text !== 'string') {
     return null;
   }
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -125,7 +168,10 @@ export function tryParseJson(text) {
  * @param {*} data - Optional structured data
  * @returns {{decodedText: string, structured: *}} Normalized payload
  */
-export function normalizeStructuredContent(text, data) {
+export function normalizeStructuredContent(
+  text: string,
+  data: unknown,
+): NormalizedPayload {
   if (data !== undefined) {
     return { decodedText: '', structured: data };
   }
@@ -139,12 +185,14 @@ export function normalizeStructuredContent(text, data) {
  * @param {Array} structured - Raw file list array
  * @returns {Array|null} Normalized file entries or null
  */
-export function normalizeFileListEntries(structured) {
+export function normalizeFileListEntries(
+  structured: unknown,
+): NormalizedFileEntry[] | null {
   if (!Array.isArray(structured)) return null;
 
-  return structured.map((file) => {
+  return structured.map((file: Record<string, unknown>) => {
     const filePath = String(file?.path ?? '');
-    const source = file?.source || 'unknown';
+    const source = typeof file?.source === 'string' ? file.source : 'unknown';
 
     return {
       filePath,
@@ -163,11 +211,16 @@ export function normalizeFileListEntries(structured) {
  * @param {object} structured - Raw missing outputs data
  * @returns {{missing: Array, xmlFile: string|null, documentTag: string|null}|null} Normalized payload
  */
-export function normalizeMissingOutputsPayload(structured) {
+export function normalizeMissingOutputsPayload(
+  structured: unknown,
+): NormalizedMissingOutputs | null {
   if (!structured) return null;
+  if (!isPlainObject(structured)) return null;
 
   return {
-    missing: Array.isArray(structured.missing) ? structured.missing : [],
+    missing: Array.isArray(structured.missing)
+      ? structured.missing.map((file) => String(file))
+      : [],
     xmlFile: trimmedOrNull(structured.xmlFile),
     documentTag: trimmedOrNull(structured.documentTag),
   };
@@ -180,8 +233,12 @@ export function normalizeMissingOutputsPayload(structured) {
  * @param {*} structured - Input to check
  * @returns {Array|null} Input array or null if not an array
  */
-export function ensureLatexdiffArray(structured) {
-  return Array.isArray(structured) ? structured : null;
+export function ensureLatexdiffArray(
+  structured: unknown,
+): Record<string, unknown>[] | null {
+  return Array.isArray(structured)
+    ? (structured as Record<string, unknown>[])
+    : null;
 }
 
 /**
@@ -189,7 +246,7 @@ export function ensureLatexdiffArray(structured) {
  * @param {*} value - Value to check
  * @returns {boolean} True if non-null, non-array object
  */
-function isPlainObject(value) {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -198,7 +255,7 @@ function isPlainObject(value) {
  * @param {*} candidate - Output candidate value
  * @returns {*} Extracted output content
  */
-function extractOutputContent(candidate) {
+function extractOutputContent(candidate: unknown): unknown {
   if (!isPlainObject(candidate)) return candidate;
 
   // Extract nested output, stripping metadata fields
@@ -219,7 +276,7 @@ function extractOutputContent(candidate) {
  * @param {*} content - Content to format
  * @returns {string} Formatted display string
  */
-function formatOutputText(content) {
+function formatOutputText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (content === undefined) return '';
   if (isPlainObject(content) && Object.keys(content).length === 0) return '';
@@ -231,7 +288,9 @@ function formatOutputText(content) {
  * @param {object} structured - Raw tool use data
  * @returns {object|null} Normalized tool use log
  */
-export function normalizeToolUseLog(structured) {
+export function normalizeToolUseLog(
+  structured: unknown,
+): NormalizedToolUseLog | null {
   if (!isPlainObject(structured)) return null;
 
   const nested = isPlainObject(structured.output) ? structured.output : {};
@@ -266,7 +325,11 @@ export function normalizeToolUseLog(structured) {
  * @param {Object} normalizedPayload - The normalized payload object
  * @returns {{decodedText: string, trimmed: string, isEmpty: boolean}}
  */
-export function extractTrimmedContent(normalizedPayload) {
+export function extractTrimmedContent(normalizedPayload: NormalizedPayload): {
+  decodedText: string;
+  trimmed: string;
+  isEmpty: boolean;
+} {
   const decodedText = normalizedPayload?.decodedText || '';
   const trimmed = decodedText.trim();
   return { decodedText, trimmed, isEmpty: !trimmed };

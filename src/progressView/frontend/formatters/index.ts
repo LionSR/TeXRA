@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Main entry point for progress view formatters.
  * Provides the LogEntryFormatter class and minimal re-exports for external use.
@@ -8,7 +7,7 @@
 export { formatTokens } from './timestampUtils';
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter';
 
-// Internal imports for LogEntryFormatter
+// Local imports - formatter helpers
 import { normalizeStructuredContent } from './normalizers';
 import {
   applyOpenState,
@@ -35,11 +34,32 @@ import {
   formatDefaultLogMessage,
 } from './logFormatters/messageFormatters';
 
+// Local imports - shared schemas
+import type { LogMessageData, MessageType } from '@shared/schemas';
+import type { NormalizedPayload } from './normalizers';
+
+type LogFormatOptions = {
+  preservedOpen?: boolean;
+  defaultOpen?: boolean;
+};
+
+type LogMessageWithPayload = LogMessageData & {
+  normalizedPayload: NormalizedPayload;
+};
+
+type FormatterFn = (message: LogMessageWithPayload) => HTMLElement | null;
+type FormatterMap = Record<string, FormatterFn | null | undefined>;
+
 /**
  * Handles log entry formatting with markdown support.
  * This class composes specialized formatters for different message types.
  */
 export class LogEntryFormatter {
+  private md: ReturnType<typeof getMarkdownRenderer> | null = null;
+  private _formatters: FormatterMap = {};
+  private _autoExpandedTypes: Set<MessageType> = new Set();
+  private _nullableTypes: Set<MessageType> = new Set();
+
   constructor() {
     this._initializeMarkdown();
     this._formatters = this._buildFormatterMap();
@@ -53,21 +73,36 @@ export class LogEntryFormatter {
     ]);
   }
 
-  _initializeMarkdown() {
+  _initializeMarkdown(): void {
     this.md = getMarkdownRenderer();
   }
 
-  _buildFormatterMap() {
+  _buildFormatterMap(): FormatterMap {
     // Wrap formatter functions with error handling for graceful degradation
-    const safe = (fn, label) => (m) => safeFormat(() => fn(m), label);
+    const safe =
+      (fn: FormatterFn, label: string) =>
+      (m: LogMessageWithPayload): HTMLElement | null =>
+        safeFormat(() => fn(m), label);
 
     // Field extractors for common formatter signatures
-    const withPayloadId = (fn) => (m) => fn(m.normalizedPayload, m.id);
-    const withFullMeta = (fn) => (m) =>
-      fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
+    const withPayloadId =
+      (fn: (payload: NormalizedPayload, id: string) => HTMLElement | null) =>
+      (m: LogMessageWithPayload) =>
+        fn(m.normalizedPayload, m.id);
+    const withFullMeta =
+      (
+        fn: (
+          payload: NormalizedPayload,
+          id: string,
+          groupId: string | undefined,
+          timestamp: number,
+        ) => HTMLElement | null,
+      ) =>
+      (m: LogMessageWithPayload) =>
+        fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
 
     // Banner formatter (thinking/scratchpad)
-    const banner = (title) =>
+    const banner = (title: string) =>
       withFullMeta((p, id, gid, ts) =>
         formatBannerContent(p, title, id, gid, ts),
       );
@@ -125,7 +160,10 @@ export class LogEntryFormatter {
    * @param {Object} [options] - Formatting options
    * @returns {HTMLElement|null} DOM element for the log message
    */
-  format(logMessage, options = {}) {
+  format(
+    logMessage: LogMessageData,
+    options: LogFormatOptions = {},
+  ): HTMLElement | null {
     const messageWithPayload = {
       ...logMessage,
       normalizedPayload: normalizeStructuredContent(
@@ -138,7 +176,7 @@ export class LogEntryFormatter {
 
     const formatter = messageType ? this._formatters[messageType] : null;
 
-    if (typeof formatter === 'function') {
+    if (messageType && typeof formatter === 'function') {
       const result = formatter(messageWithPayload);
       if (result) {
         if (result instanceof HTMLElement) {
@@ -163,11 +201,13 @@ export class LogEntryFormatter {
 }
 
 // Singleton instance
-let sharedLogEntryFormatter;
+let sharedLogEntryFormatter: LogEntryFormatter | null = null;
 
-export const getSharedLogEntryFormatter = () => {
+export const getSharedLogEntryFormatter = (): LogEntryFormatter => {
   if (!sharedLogEntryFormatter) {
     sharedLogEntryFormatter = new LogEntryFormatter();
   }
   return sharedLogEntryFormatter;
 };
+
+export type { LogFormatOptions };
