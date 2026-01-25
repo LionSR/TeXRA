@@ -36,8 +36,10 @@ export interface StreamState {
   selectedRunId: string | null;
   contextState?: ContextState;
   toolEditBypass?: boolean;
-  followUpText?: string;
-  followupMode?: FollowupMode;
+  /** Text in the follow-up input field. Always initialized to empty string. */
+  followUpText: string;
+  /** Current followup mode. Always initialized to 'chat'. */
+  followupMode: FollowupMode;
 }
 
 /** Followup options derived from schema (minus command field) */

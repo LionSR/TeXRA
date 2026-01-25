@@ -26,7 +26,6 @@ import './QueuedFollowUps';
 export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) visible = false;
   @property({ type: String }) value = '';
-  @property({ type: Boolean }) yoloActive = false;
   @property({ type: Array }) queuedMessages: string[] = [];
 
   @state() private polishing = false;
@@ -74,12 +73,6 @@ export class FollowUpInput extends LitElement {
   }
 
   render(): TemplateResult {
-    const yoloIcon = this.yoloActive ? 'flame' : 'shield';
-    const yoloLabel = this.yoloActive ? 'YOLO mode ON' : 'Enable YOLO';
-    const yoloTitle = this.yoloActive
-      ? 'YOLO mode active - click to disable (resume approval prompts)'
-      : 'Enable YOLO mode (skip approval prompts)';
-
     return html`
       <div
         id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
@@ -102,17 +95,6 @@ export class FollowUpInput extends LitElement {
           ></vscode-textarea>
 
           <div class="follow-up-actions">
-            <vscode-toolbar-button
-              id=${ELEMENT_IDS.YOLO_TOGGLE_BTN}
-              class=${classMap({
-                'yolo-toggle-button': true,
-                'is-active': this.yoloActive,
-              })}
-              icon=${yoloIcon}
-              label=${yoloLabel}
-              title=${yoloTitle}
-              @click=${this.emitToggleBypass}
-            ></vscode-toolbar-button>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}
               icon="sparkle"
@@ -226,10 +208,6 @@ export class FollowUpInput extends LitElement {
 
   private emitClear(): void {
     this.dispatchEvent(ProgressEvents.followupClear());
-  }
-
-  private emitToggleBypass(): void {
-    this.dispatchEvent(ProgressEvents.followupToggleBypass());
   }
 
   private updateValue(value: string): void {

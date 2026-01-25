@@ -29,6 +29,12 @@ import type { FollowupMode } from '../store';
 const MERGE_AGENT_NAME = 'merge';
 
 /**
+ * Type for VSCode web components that expose a value property.
+ * Used for vscode-radio-group, vscode-single-select, etc.
+ */
+type VSCodeValueElement = HTMLElement & { value?: string };
+
+/**
  * Form data collected from the followup section inputs.
  * Component-local type for getFormData() return value.
  */
@@ -65,10 +71,10 @@ export class FollowupSection extends LitElement {
 
   // Agent/model selects still use @query due to dropdownUtils HTML injection
   @query(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`)
-  declare private agentSelect: (HTMLElement & { value?: string }) | null;
+  declare private agentSelect: VSCodeValueElement | null;
 
   @query(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`)
-  declare private modelSelect: (HTMLElement & { value?: string }) | null;
+  declare private modelSelect: VSCodeValueElement | null;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -193,9 +199,9 @@ export class FollowupSection extends LitElement {
     // vscode-radio-group may not update .value synchronously on change
     const target = event.target as Element | null;
     const radio = target?.closest('vscode-radio');
+    const radioGroup = event.currentTarget as VSCodeValueElement | null;
     const nextMode = (radio?.getAttribute('value') ||
-      (event.currentTarget as HTMLElement & { value?: string })
-        ?.value) as FollowupMode;
+      radioGroup?.value) as FollowupMode;
     if (!nextMode) return;
 
     this.dispatchEvent(ProgressEvents.followupModeChange({ mode: nextMode }));
