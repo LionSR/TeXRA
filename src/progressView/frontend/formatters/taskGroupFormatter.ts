@@ -4,7 +4,7 @@
  */
 
 // Local imports - Lit template utilities
-import { html, when, classMap, renderToElement } from './litTemplates';
+import { html, when, classMap, renderToElement, type TemplateResult } from './litTemplates';
 
 // Local imports - progress view constants
 import { STREAM_STATUS, GROUP_DOM_IDS } from '../constants';
@@ -79,10 +79,10 @@ export class TaskGroupHeaderFormatter {
     return group.parentGroupId ? TaskGroupLevel.NESTED : TaskGroupLevel.ROOT;
   }
 
-  /** Get status icon HTML string for DOM updates */
-  _getStatusIcon(status: string): string {
+  /** Get status icon template for DOM updates */
+  _getStatusIcon(status: string): TemplateResult {
     const iconClass = STATUS_ICONS[status] ?? 'circle-outline';
-    return `<i class="codicon codicon-${iconClass}"></i>`;
+    return html`<i class=${`codicon codicon-${iconClass}`}></i>`;
   }
 
   /** Get header class string for DOM updates */
