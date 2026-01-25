@@ -65,7 +65,8 @@ export class InstructionPanel extends LitElement {
     `;
   }
 
-  private async handleCopy(event: Event) {
+  /** Handle copy button click - arrow function for correct `this` binding in Lit */
+  private handleCopy = async (event: Event): Promise<void> => {
     event.preventDefault();
     const text = this.instruction?.text ?? '';
     if (!text.trim()) return;
@@ -73,8 +74,9 @@ export class InstructionPanel extends LitElement {
     if (!this.copyButton) return;
 
     await copyWithFeedback(this.copyButton, text, {
-      defaultTitle: this.copyButton.getAttribute('title') || 'Copy instruction',
+      defaultTitle:
+        this.copyButton.getAttribute('title') || 'Copy instruction',
       successTitle: 'Copied!',
     });
-  }
+  };
 }
