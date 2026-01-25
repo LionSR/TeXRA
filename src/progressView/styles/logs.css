@@ -13,23 +13,26 @@ log-list {
 }
 
 /* Non-scrolling elements should not shrink or grow */
+/* Note: Shadow DOM components (instruction-panel, todo-list, follow-up-input)
+   control their own display via :host styles - don't override here */
 stream-header,
-instruction-panel,
-todo-list,
 usage-panel,
 file-list,
-follow-up-input,
 followup-section {
   display: block;
   flex-shrink: 0;
 }
 
-/* Hide empty custom elements (when component returns nothing) */
-instruction-panel:empty,
-todo-list:empty,
+/* Flex layout hints for Shadow DOM components (flex-shrink only, not display) */
+instruction-panel,
+todo-list,
+follow-up-input {
+  flex-shrink: 0;
+}
+
+/* Hide empty Light DOM components */
 usage-panel:empty,
 file-list:empty,
-follow-up-input:empty,
 followup-section:empty {
   display: none;
 }
@@ -56,7 +59,7 @@ followup-section:empty {
 }
 
 .log-entry-content {
-  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
+  padding: 0 0 var(--spacing-tiny) var(--spacing-medium);
   overflow: visible;
 }
 
@@ -76,10 +79,8 @@ followup-section:empty {
   color: var(--color-text-secondary);
 }
 
-.level-debug,
-.level-info,
-.level-warn,
-.level-error {
+/* Log level badges */
+:is(.level-debug, .level-info, .level-warn, .level-error) {
   font-weight: bold;
 }
 
@@ -91,11 +92,14 @@ followup-section:empty {
   color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
 }
 
-.level-warn {
+/* Shared warning/error colors for level and message */
+.level-warn,
+.message-warn {
   color: var(--color-warning);
 }
 
-.level-error {
+.level-error,
+.message-error {
   color: var(--color-error);
 }
 
@@ -105,14 +109,6 @@ followup-section:empty {
 
 .message-info {
   color: var(--vscode-foreground);
-}
-
-.message-warn {
-  color: var(--color-warning);
-}
-
-.message-error {
-  color: var(--color-error);
 }
 
 .log-header {
@@ -192,7 +188,8 @@ followup-section:empty {
   margin-left: auto;
 }
 
-.run-summary {
+/* Inline summary pattern */
+:is(.run-summary, .context-state) {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-tiny);
@@ -201,17 +198,16 @@ followup-section:empty {
   opacity: 0.9;
 }
 
-.run-summary .codicon {
+:is(.run-summary, .context-state) .codicon {
   font-size: var(--font-size-icon-sm);
   opacity: 0.75;
 }
 
 .run-summary__label {
   font-weight: 500;
-  color: var(--color-text-secondary);
 }
 
-.run-summary__value {
+:is(.run-summary__value, .context-state__value) {
   color: var(--vscode-foreground);
 }
 
@@ -253,35 +249,10 @@ followup-section:empty {
   opacity: var(--opacity-full);
 }
 
+/* Status states defined in utilities.css */
 .status-indicator.is-ready {
   background-color: var(--vscode-descriptionForeground);
   opacity: var(--opacity-disabled);
-}
-
-.status-indicator.is-stopped {
-  background-color: var(--vscode-descriptionForeground);
-}
-
-.status-indicator.is-running {
-  background-color: var(--color-success);
-  box-shadow: 0 0 4px var(--color-success);
-  animation: pulse-scale 2s infinite;
-}
-
-.status-indicator.is-error {
-  background-color: var(--color-error);
-  box-shadow: 0 0 4px var(--color-error);
-}
-
-.status-indicator.is-waiting,
-.status-indicator.is-resuming {
-  background-color: var(--vscode-textLink-foreground);
-  box-shadow: 0 0 4px var(--vscode-textLink-foreground);
-  animation: pulse-scale 3s infinite;
-}
-
-.status-indicator.is-resuming {
-  animation-duration: 1.5s;
 }
 
 .files-container {
@@ -305,24 +276,6 @@ followup-section:empty {
 
 .usage-summary-footer .run-summary {
   margin-left: auto;
-}
-
-.context-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  opacity: 0.9;
-}
-
-.context-state .codicon {
-  font-size: var(--font-size-icon-sm);
-  opacity: 0.75;
-}
-
-.context-state__value {
-  color: var(--vscode-foreground);
 }
 
 .file-item {
@@ -368,8 +321,7 @@ followup-section:empty {
   flex-wrap: nowrap;
 }
 
-.file-actions vscode-button,
-.file-actions vscode-toolbar-button {
+.file-actions :is(vscode-button, vscode-toolbar-button) {
   margin-right: 0;
   margin-left: var(--spacing-tiny);
 }
@@ -439,9 +391,5 @@ followup-section:empty {
 
   .header-actions {
     margin-left: auto;
-  }
-
-  .follow-up-container {
-    padding: var(--spacing-small);
   }
 }
