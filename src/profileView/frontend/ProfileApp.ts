@@ -58,7 +58,13 @@ export class ProfileApp extends BaseWebviewApp {
 
   protected handleMessage(raw: unknown): void {
     const result = UpdateProfileMessageSchema.safeParse(raw);
-    if (!result.success) return;
+    if (!result.success) {
+      this.logSchemaError(
+        '[ProfileApp] Update profile message validation failed.',
+        result.error,
+      );
+      return;
+    }
 
     const data = result.data;
     this.authenticated = data.authenticated;

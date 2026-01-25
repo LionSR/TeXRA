@@ -1,6 +1,6 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { customElement, property, queryAll } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared styles
@@ -16,20 +16,6 @@ import { HistoryViewEvents } from '../events';
 // Local imports - shared schemas
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 
-type MarkInstance = {
-  mark: (
-    term: string,
-    options: { each?: () => void; done?: () => void },
-  ) => void;
-  unmark: (options: { done?: () => void }) => void;
-};
-
-type MarkConstructor = new (
-  context: Element | DocumentFragment,
-) => MarkInstance;
-
-declare const Mark: MarkConstructor;
-
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
 @customElement('history-item')
@@ -44,7 +30,10 @@ export class HistoryItem extends LitElement {
   @property({ attribute: false }) item?: HistoryItemData;
   @property({ type: Boolean }) open = false;
 
-  private markInstance: MarkInstance | null = null;
+  private markInstance: Mark | null = null;
+
+  @queryAll('mark')
+  private markElements!: HTMLElement[];
 
   private handleAction = (action: string): void => {
     if (!this.item) return;
@@ -53,13 +42,13 @@ export class HistoryItem extends LitElement {
     );
   };
 
-  private handleToggle = (event: Event): void => {
+  private handleToggle = (event: CustomEvent<{ open?: boolean }>): void => {
     if (!this.item) return;
-    const target = event.target as HTMLElement & { open?: boolean };
+    const open = event.detail?.open ?? this.open;
     this.dispatchEvent(
       HistoryViewEvents.toggleItem({
         historyId: this.item.id,
-        open: Boolean(target.open),
+        open: Boolean(open),
       }),
     );
   };
@@ -92,7 +81,7 @@ export class HistoryItem extends LitElement {
   }
 
   getMarks(): HTMLElement[] {
-    return [...this.renderRoot.querySelectorAll('mark')];
+    return this.markElements ?? [];
   }
 
   private renderValue(value: ConfigValue): TemplateResult {
@@ -224,7 +213,7 @@ export class HistoryItem extends LitElement {
                 ? html`<i
                     class=${ifDefined(`codicon codicon-${decorator.icon}`)}
                   ></i>`
-                : ''}
+                : nothing}
               ${decorator.label}
             </span>
           </span>
@@ -249,13 +238,13 @@ export class HistoryItem extends LitElement {
                   >${config.inputFiles.join(', ')}</span
                 >
               `
-            : ''}
+            : nothing}
           ${config.mediaFile
             ? html`
                 <span class="history-label">MediaFile:</span>
                 <span class="history-value">${config.mediaFile}</span>
               `
-            : ''}
+            : nothing}
           ${config.mediaFiles?.length
             ? html`
                 <span class="history-label">MediaFiles:</span>
@@ -263,7 +252,7 @@ export class HistoryItem extends LitElement {
                   >${config.mediaFiles.join(', ')}</span
                 >
               `
-            : ''}
+            : nothing}
         </div>
         ${extraDetails.length
           ? html`
@@ -271,13 +260,13 @@ export class HistoryItem extends LitElement {
                 class="collapsible"
                 heading="More details"
                 ?open=${this.open}
-                @toggle=${this.handleToggle}
+                @vsc-collapsible-toggle=${this.handleToggle}
                 data-id=${this.item.id}
               >
                 <div class="history-details extra-details">${extraDetails}</div>
               </vscode-collapsible>
             `
-          : ''}
+          : nothing}
       </div>
     `;
   }

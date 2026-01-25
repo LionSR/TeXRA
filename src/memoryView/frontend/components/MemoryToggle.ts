@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles/litStyles';
@@ -29,16 +29,6 @@ export class MemoryToggle extends LitElement {
   @property({ type: Boolean }) enabled = false;
   @property({ type: Boolean }) disabled = false;
 
-  @query('vscode-checkbox')
-  declare private checkboxEl: HTMLElement & { checked?: boolean };
-
-  protected updated(): void {
-    if (!this.checkboxEl) return;
-    void customElements.whenDefined('vscode-checkbox').then(() => {
-      this.checkboxEl.checked = this.enabled;
-    });
-  }
-
   private handleChange = (event: Event): void => {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
@@ -50,6 +40,7 @@ export class MemoryToggle extends LitElement {
     return html`
       <div class="memory-settings">
         <vscode-checkbox
+          ?checked=${this.enabled}
           ?disabled=${this.disabled}
           @change=${this.handleChange}
         >

@@ -220,7 +220,8 @@ export function getSelectOptionElements(
   if (!isSelectLikeElement(element)) {
     return [];
   }
-  return [...element.querySelectorAll('vscode-option')];
+  // eslint-disable-next-line unicorn/prefer-spread -- vscode-option typing lacks iterator support
+  return Array.from(element.querySelectorAll('vscode-option')) as HTMLElement[];
 }
 
 /**
