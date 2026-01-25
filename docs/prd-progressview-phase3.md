@@ -10,8 +10,8 @@
 | **3b-1**   | UI parity/stabilization    | ✅ Complete | Regressions fixed, handlers done |
 | **3b-1.5** | CSS pilot (TodoList)       | ✅ Complete | Shadow DOM pattern validated     |
 | **3b-1.6** | CSS batch migration        | ✅ Complete | 11 components to Shadow DOM      |
-| **3b-2**   | Utility conversion         | ⬜ Pending  | textareaUtils, RecordingButton   |
-| **3b-3**   | Formatter → TemplateResult | ⬜ Pending  | LogList, TaskGroupList blockers  |
+| **3b-2**   | Utility conversion         | 🟡 In Progress | 1 JS import remains (themeHandlers.js) |
+| **3b-3**   | Formatter → TemplateResult | 🔶 Bridge   | Using renderToElement() bridge pattern |
 
 **Note:** Phase 3c (other webview migrations) has been moved to **[Phase 4](./prd-progressview-phase4.md)**.
 
@@ -125,7 +125,7 @@ Several JS constant files are duplicates of TypeScript sources or will be supers
 | File                               | Lines | Duplicate Of                    | Delete When                       |
 | ---------------------------------- | ----- | ------------------------------- | --------------------------------- |
 | `common/webview/commands.js`       | 298   | `common/webview/commands.ts`    | **Immediate** - TS version exists |
-| `common/webview/themeHandlers.js`  | ~50   | N/A                             | Phase 3a - migrate to TS          |
+| `common/webview/themeHandlers.js`  | 35    | N/A                             | **Quick win** - 15 min to migrate |
 | `historyView/modules/constants.js` | 37    | Will be `frontend/constants.ts` | Phase 3c - HistoryView migration  |
 | `profileView/modules/constants.js` | 41    | Will be `frontend/constants.ts` | Phase 3c - ProfileView migration  |
 | `memoryView/modules/constants.js`  | 24    | Will be `frontend/constants.ts` | Phase 3c - MemoryView migration   |
@@ -142,6 +142,13 @@ Several JS constant files are duplicates of TypeScript sources or will be supers
 2. Defines view-specific constants with proper types
 
 **Total duplicate lines to delete:** ~612 lines
+
+### Outstanding Cleanup Tasks
+
+| File                         | Action          | Effort  | Notes                                    |
+| ---------------------------- | --------------- | ------- | ---------------------------------------- |
+| `common/webview/commands.js` | DELETE          | 1 min   | TS version exists, identical content     |
+| `common/webview/themeHandlers.js` | Migrate to TS | 15 min  | 35 lines, imported by ProgressApp.ts:12  |
 
 ---
 
@@ -654,21 +661,33 @@ export function formatBannerContent(
 
 \*Target 13 includes LogList and TaskGroupList which are blocked until Phase 3b-3 (formatter conversion).
 
-**3b-2: Utility Conversion** ⬜ Pending
+**3b-2: Utility Conversion** 🟡 In Progress
 
-| Metric                                | Before | After |
-| ------------------------------------- | ------ | ----- |
-| JS imports in ProgressView components | 3+     | 0     |
-| `RecordingButtonManager` as JS class  | 1      | 0     |
+| Metric                                | Before | Current | Target |
+| ------------------------------------- | ------ | ------- | ------ |
+| JS imports in ProgressView components | 3+     | 1       | 0      |
+| `RecordingButtonManager` as JS class  | 1      | 0 ✅    | 0      |
 
-**3b-3: Formatter Conversion** ⬜ Pending
+**Remaining:** `themeHandlers.js` import in `ProgressApp.ts:12` (~15 min to convert to TS)
 
-| Metric                             | Before | After |
-| ---------------------------------- | ------ | ----- |
-| Formatters returning `HTMLElement` | 15+    | 0     |
-| Manual `innerHTML` assignments     | 10+    | 0     |
-| `document.createElement()` calls   | 30+    | 0     |
-| String-based HTML builders         | 20+    | 0     |
+**3b-3: Formatter Conversion** 🔶 Bridge Pattern
+
+**Current State (2026-01-25):** Formatters use Lit templates internally but convert to HTMLElement via `renderToElement()` bridge function. This allows Lit template authoring benefits while maintaining backward compatibility with LogList's appendChild pattern.
+
+| Metric                             | Before | Current | Target |
+| ---------------------------------- | ------ | ------- | ------ |
+| Formatters returning `HTMLElement` | 15+    | 14      | 0      |
+| Using Lit templates internally     | 0      | 14 ✅   | 14     |
+| Manual `innerHTML` assignments     | 10+    | 2       | 0      |
+| `document.createElement()` calls   | 30+    | 2       | 0      |
+
+**Bridge function:** `src/progressView/frontend/formatters/litTemplates.ts:28-33`
+
+**To complete Phase 3b-3:**
+1. Remove `renderToElement()` calls from formatters (return `TemplateResult` directly)
+2. Update `LogList.renderLogs()` to use Lit's `render()` instead of `appendChild()`
+3. Migrate LogList/TaskGroupList to Shadow DOM
+4. Delete `renderToElement()` bridge function
 
 ---
 
