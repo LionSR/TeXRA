@@ -23,8 +23,6 @@ import {
   type StreamState,
 } from './store';
 
-// Local imports - shared state
-
 /** Persisted preferences for the progress view. */
 interface ProgressViewPreferences extends Record<string, unknown> {
   streamFilter: StreamFilter;
@@ -52,9 +50,9 @@ import {
   handleToolbarCommand,
   type FrontendEventHandlerContext,
 } from './eventHandlers';
-import type { MessageHandlerContext } from './messageHandlers';
 import { MESSAGE_HANDLERS } from './messageHandlerRegistry';
 import { getFilteredStreams } from './stateUtils';
+import type { MessageHandlerContext } from './messageHandlers';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - progress view components

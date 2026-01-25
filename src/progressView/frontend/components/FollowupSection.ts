@@ -12,7 +12,7 @@ import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - common helpers
 import {
@@ -56,7 +56,7 @@ export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
 @customElement('followup-section')
 export class FollowupSection extends LitElement {
   static styles = [
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: block;

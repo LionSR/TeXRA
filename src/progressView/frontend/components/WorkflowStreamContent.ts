@@ -20,13 +20,24 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
 import { getRunGroups, hasOutputFiles } from '../stateUtils';
-import type { InstructionUpdate, OutputFileInfo, StreamTabInfo, TokenUsageStats } from '@shared/schemas';
+import type {
+  InstructionUpdate,
+  OutputFileInfo,
+  StreamTabInfo,
+  TokenUsageStats,
+} from '@shared/schemas';
 
 // Local imports - progress view
 import type { FollowupOptionsState, WorkflowStreamState } from '../store';
@@ -62,7 +73,8 @@ export class WorkflowStreamContent extends LitElement {
   @property({ type: Object }) state!: WorkflowStreamState;
   @property({ type: Object }) streamInfo!: StreamTabInfo;
   @property({ type: String }) runId: string | null = null;
-  @property({ type: Object }) followupOptions: FollowupOptionsState | null = null;
+  @property({ type: Object }) followupOptions: FollowupOptionsState | null =
+    null;
 
   // Cached derived values - recomputed only when dependencies change
   private _cachedRunGroups: RunGroup[] = [];

@@ -4,7 +4,7 @@ import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
@@ -18,7 +18,7 @@ import type { InstructionUpdate } from '@shared/schemas';
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   static styles = [
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: none;

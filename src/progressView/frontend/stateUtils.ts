@@ -129,18 +129,17 @@ export function hasOutputFiles(
 
 /**
  * Resolve the best run ID when none is explicitly selected.
- * Only meaningful for workflow streams.
  *
  * Resolution priority:
- * 1. Explicit selection (selectedRunId or activeRunId from backend)
- * 2. Latest root task group by startTime (guaranteed number per TaskGroupSchema)
+ * 1. Explicit selection (selectedRunId or activeRunId from backend) - workflow only
+ * 2. Latest root task group by startTime (any stream type)
  *
- * Note: No fallback to run-scoped maps needed - task groups are the source of
- * truth for runs, and the backend provides activeRunId when known.
+ * Note: Unlike `getEffectiveRunId` (which only returns explicit selections),
+ * this function falls back to finding the latest task group when no run is
+ * explicitly selected. Use this for operations that need a run context even
+ * when none is explicitly selected (e.g., updating instructions).
  */
-export function resolveActiveRunId(
-  streamState: StreamState | WorkflowStreamState,
-): string | null {
+export function resolveActiveRunId(streamState: StreamState): string | null {
   // Only workflow streams have selectedRunId/activeRunId
   if (isWorkflowState(streamState)) {
     if (streamState.selectedRunId) return streamState.selectedRunId;

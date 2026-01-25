@@ -7,7 +7,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { codiconStyles } from '@shared/styles/codiconStyles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
@@ -40,7 +40,7 @@ function formatStatusLabel(status: string): string {
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
   static styles = [
-    codiconStyles,
+    codiconIconClasses,
     css`
       :host {
         display: flex;
