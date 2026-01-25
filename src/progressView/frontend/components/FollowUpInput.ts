@@ -32,8 +32,6 @@ export class FollowUpInput extends LitElement {
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
 
-  private focusTimer: ReturnType<typeof setTimeout> | null = null;
-
   private recordingManager = new RecordingButtonManager(vscode, {
     buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
     startCommand: COMMANDS.START_RECORDING,
@@ -48,7 +46,6 @@ export class FollowUpInput extends LitElement {
   }
 
   override disconnectedCallback(): void {
-    this.clearPendingFocus();
     this.recordingManager.dispose();
     super.disconnectedCallback();
   }
@@ -134,33 +131,22 @@ export class FollowUpInput extends LitElement {
     this.focusInput();
   }
 
-  focusInput(options: { scrollIntoView?: boolean } = {}): void {
-    // Clear any pending focus attempt
-    this.clearPendingFocus();
-
+  /** Focus the textarea after Lit finishes rendering */
+  async focusInput(options: { scrollIntoView?: boolean } = {}): Promise<void> {
     // Don't focus if not visible
     if (!this.visible) return;
 
-    // Debounce focus to prevent multiple rapid focus attempts
-    this.focusTimer = setTimeout(() => {
-      this.focusTimer = null;
+    // Wait for Lit to finish rendering (replaces setTimeout debounce)
+    await this.updateComplete;
 
-      if (!this.textAreaEl || !this.visible) return;
+    if (!this.textAreaEl || !this.visible) return;
 
-      const { textarea } = resolveTextareaTarget(this.textAreaEl);
-      if (!textarea) return;
+    const { textarea } = resolveTextareaTarget(this.textAreaEl);
+    if (!textarea) return;
 
-      textarea.focus();
-      if (options.scrollIntoView) {
-        textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    }, 50);
-  }
-
-  private clearPendingFocus(): void {
-    if (this.focusTimer !== null) {
-      clearTimeout(this.focusTimer);
-      this.focusTimer = null;
+    textarea.focus();
+    if (options.scrollIntoView) {
+      textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
