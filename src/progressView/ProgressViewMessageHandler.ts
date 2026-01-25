@@ -4,44 +4,62 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import { getAgent, computeAgentOptions } from '@agent/index/agentRegistry';
-import { computeModelOptions } from '@model/computeModelOptions';
+// Local imports - shared schemas
+import { AgentProposalActionMessageSchema } from '@shared/schemas';
+
+// Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import type { OutputFileInfo } from '@shared/schemas';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { getAgent, computeAgentOptions } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
-import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+  PROGRESS_VIEW_COMMANDS,
+} from '@common/webview';
+
+// Local imports - frontend
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+
+// Local imports - logger
 import {
   isWorkflowTaskState,
-  type WorkflowTaskState,
   type TaskState,
+  type WorkflowTaskState,
 } from '@logger/TaskState';
+
+// Local imports - model
+import { computeModelOptions } from '@model/computeModelOptions';
+
+// Local imports - progress view
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
+
+// Local imports - tools
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
-  handleProgressViewToolEditApprovalAction,
   handleProgressViewBashApprovalAction,
+  handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
-  pathToLocation,
-  flexibleFS,
   createExternalLocation,
   createFileMapping,
+  flexibleFS,
+  pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
@@ -50,25 +68,32 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { AgentProposalActionMessageSchema } from '@shared/schemas';
+
+// Local imports - webview
 import {
-  PolishFollowUpMessageSchema,
-  InfoMessageSchema,
   ApprovalActionMessageSchema,
+  BaseFileCommandMessageSchema,
   BashApprovalActionMessageSchema,
+  CompareMessageSchema,
+  FileCommandMessageSchema,
+  FilterStreamsMessageSchema,
   FollowupTaskMessageSchema,
-  StreamMessageSchema,
+  InfoMessageSchema,
+  OpenLabelMessageSchema,
+  PolishFollowUpMessageSchema,
   RetryStreamMessageSchema,
   SendFollowUpMessageSchema,
   SortStreamsMessageSchema,
-  FilterStreamsMessageSchema,
-  FileCommandMessageSchema,
-  BaseFileCommandMessageSchema,
-  CompareMessageSchema,
-  OpenLabelMessageSchema,
+  StreamMessageSchema,
 } from '@webview/types/messages';
 
 // Type imports
+import type {
+  ExecutionId,
+  OutputFileInfo,
+  StorageKey,
+  StreamTabId,
+} from '@shared/schemas';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler<

@@ -5,20 +5,20 @@ import Transport from 'winston-transport';
 
 // Internal imports
 import {
-  ContextStateDataSchema,
-  type ContextStateData,
-} from '@logger/AgentLogger';
-import { getEmitFilter } from '@logger/filterUtils';
-import type { LogMessageData } from '@shared/schemas';
-import {
   MESSAGE_TYPES,
   MessageTypeSchema,
   type MessageType,
 } from '@shared/schemas';
-import type { EndGroupStatus } from '@shared/schemas';
+import {
+  ContextStateDataSchema,
+  type ContextStateData,
+} from '@logger/AgentLogger';
+import { getEmitFilter } from '@logger/filterUtils';
 import { getColorForLevel } from '@logger/utils';
 import { serializeError } from '@utils/core';
 import { bus } from '@eventBus/ProgressEventBus';
+import type { EndGroupStatus } from '@shared/schemas';
+import type { LogMessageData } from '@shared/schemas';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;

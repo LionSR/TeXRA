@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - model types
-import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 import * as logger from '@logger/logUtils';
+import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 
 const CHANNEL = 'AgentDataclass';
 

@@ -11,14 +11,14 @@
  */
 
 // Local imports
+import { STREAM_STATUS } from '@shared/schemas';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { StreamTabId } from '@shared/schemas';
-import { STREAM_STATUS } from '@shared/schemas';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
+import type { StreamTabId } from '@shared/schemas';
 
 // ============================================================================
 // Result Types

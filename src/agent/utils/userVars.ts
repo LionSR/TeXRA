@@ -14,11 +14,11 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { FileListEntry } from '@shared/schemas';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@utils/files/varsUtils';
+import type { FileListEntry } from '@shared/schemas';
 
 /**
  * User variables for prompt rendering

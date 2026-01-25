@@ -1,10 +1,9 @@
 import * as path from 'path';
 
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@shared/schemas';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   replaceInputCommands,
   flexibleFS,
@@ -21,6 +20,7 @@ import {
   indentLatexFiles,
   cleanupLatexBackups,
 } from './LatexOutputUtils';
+import type { StorageKey } from '@shared/schemas';
 import type { XmlOutputManager } from './XmlOutputManager';
 import type { OutputFileInfo, OutputXmlSummary } from '@shared/schemas';
 

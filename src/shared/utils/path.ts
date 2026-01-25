@@ -12,7 +12,7 @@ export function getBasename(filePath: string | undefined | null): string {
   if (!filePath) return '';
 
   // Normalize path separators to forward slashes
-  const normalized = filePath.replace(/\\/g, '/');
+  const normalized = filePath.replaceAll('\\', '/');
 
   // Remove trailing slashes except for root
   const cleaned = normalized.replace(/\/+$/, '') || '/';

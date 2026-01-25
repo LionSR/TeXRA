@@ -8,10 +8,10 @@ import { ZodError } from 'zod';
 // Local imports
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import type { ExecutionId } from '@shared/schemas';
 import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 

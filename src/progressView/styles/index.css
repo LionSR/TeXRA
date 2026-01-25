@@ -1,6 +1,10 @@
 /**
  * ProgressView CSS main file
  * Imports all modular CSS files
+ *
+ * Note: Many components now use Shadow DOM with static styles.
+ * These CSS files are for Light DOM components (LogList, TaskGroupList)
+ * and dynamically-generated content from formatters.
  */
 
 /* Import base styles */
@@ -9,27 +13,28 @@
 /* Import utility classes (must come before components) */
 @import './utilities.css';
 
-/* Import component styles */
-@import './tabs.css';
+/* Import component styles for Light DOM components */
 @import './buttons.css';
 @import './logs.css';
 @import './native-status.css';
 @import './placeholder.css';
 @import './groups.css';
+
+/* Import formatter output styles (dynamically generated HTML) */
 @import './markdown.css';
 @import './scratchpad.css';
 @import './code-block.css';
-@import './file-list.css';
 @import './latexdiff.css';
 @import './statistics.css';
 @import './context-management.css';
 @import './user-message.css';
-@import './follow-up-input.css';
-@import './instruction-panel.css';
 @import './requests-shared.css';
 @import './approval-requests.css';
 @import './retry-requests.css';
 @import './workflow-proposals.css';
-@import './todo-list.css';
-@import './queued-follow-ups.css';
-@import './followup-section.css';
+
+/* Shadow DOM components (styles inline in .ts files):
+ * - PromptOverlay, TodoList, FileList, StreamTabs, QueuedFollowUps
+ * - FollowupSection, InstructionPanel, FollowUpInput
+ * - UsagePanel, RunSelector, StreamHeader
+ */

@@ -4,6 +4,17 @@
  */
 // Third-party imports
 import { z } from 'zod';
+import {
+  MESSAGE_TYPES,
+  StreamDiagnosticsSchema,
+  type StreamDiagnostics,
+} from '@shared/schemas';
+import {
+  extractDomain,
+  type WebSearchResult,
+  type WebSearchResultEntry,
+} from '@agent/modelHandlers/types/ServerToolTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,
@@ -12,17 +23,6 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
-import {
-  extractDomain,
-  type WebSearchResult,
-  type WebSearchResultEntry,
-} from '@agent/modelHandlers/types/ServerToolTypes';
-import {
-  MESSAGE_TYPES,
-  StreamDiagnosticsSchema,
-  type StreamDiagnostics,
-} from '@shared/schemas';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Duck-typed interface for Anthropic message streams.
@@ -166,7 +166,7 @@ export class AnthropicStreamHandler {
       thinkingChars: this.diagnostics.thinkingChars,
       textChars: this.diagnostics.textChars,
       toolInputChars: this.diagnostics.toolInputChars,
-      blockTypesSeen: Array.from(this.diagnostics.blockTypesSeen),
+      blockTypesSeen: [...this.diagnostics.blockTypesSeen],
       eventsProcessed: this.diagnostics.eventsProcessed,
       lastEventType: this.diagnostics.lastEventType,
       elapsedSecs: Math.round((now - this.diagnostics.startTime) / 1000),

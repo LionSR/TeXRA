@@ -70,11 +70,10 @@ function buildStreamInfo(
   const inputFile = config?.inputFile ?? '';
   const rawAgentName = config?.agent ?? id.split('@')[0];
   const agentName = getCleanAgentName(rawAgentName);
-  const isToolAgent = category === AgentCategory.ToolUse;
 
-  // Build display label
+  // Build display label (workflow agents show input file, tool-use agents don't)
   const label =
-    !isToolAgent && inputFile
+    category !== AgentCategory.ToolUse && inputFile
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
 
@@ -84,7 +83,6 @@ function buildStreamInfo(
     model: config?.model,
     agent: config?.agent,
     agentCategory: category,
-    uiTraits: { agentCategory: category, isToolAgent },
     hasMultipleOutputs:
       config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
     isRemote: taskState

@@ -1,49 +1,34 @@
 // Local imports
-import type {
-  AgentCategoryFilter,
-  ContextState,
-  InstructionUpdate,
-  LogMessageData,
-  OutputFileInfo,
-  SetFollowupOptionsMessage,
-  StreamStatus,
-  StreamTabInfo,
-  StreamTabId,
-  TaskGroup,
-  TodoItem,
-  TokenUsageStats,
+import {
+  AGENT_CATEGORY,
+  createStreamState,
+  type AgentCategory,
+  type AgentCategoryFilter,
+  type ContextState,
+  type SetFollowupOptionsMessage,
+  type StreamState,
+  type StreamTabInfo,
+  type StreamTabId,
 } from '@shared/schemas';
 
-/** Re-export schema type for components (single source of truth) */
+// Re-export schema types for components (single source of truth)
+export {
+  createStreamState,
+  isToolUseState,
+  isWorkflowState,
+  type FollowupMode,
+  type StreamState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from '@shared/schemas';
+
 export type StreamFilter = AgentCategoryFilter;
 export type StreamSort = 'time' | 'agent' | 'inputFile';
-export type FollowupMode = 'chat' | 'workflow' | 'merge';
 
 export type { ContextState };
 
-export interface StreamState {
-  info?: StreamTabInfo;
-  status?: StreamStatus;
-  logs: LogMessageData[];
-  taskGroups: TaskGroup[];
-  todos: TodoItem[];
-  queuedFollowUps: string[];
-  runInstructions: Record<string, InstructionUpdate>;
-  runUsage: Record<string, TokenUsageStats>;
-  runFiles: Record<string, Record<string, OutputFileInfo[]>>;
-  runMissingOutputs: Record<string, Record<string, string[]>>;
-  activeRunId: string | null;
-  selectedRunId: string | null;
-  contextState?: ContextState;
-  toolEditBypass?: boolean;
-  /** Text in the follow-up input field. Always initialized to empty string. */
-  followUpText: string;
-  /** Current followup mode. Always initialized to 'chat'. */
-  followupMode: FollowupMode;
-}
-
 /** Followup options derived from schema (minus command field) */
-type FollowupOptionsState = Omit<SetFollowupOptionsMessage, 'command'>;
+export type FollowupOptionsState = Omit<SetFollowupOptionsMessage, 'command'>;
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
@@ -54,21 +39,14 @@ export interface ProgressState {
   followupOptions: FollowupOptionsState | null;
 }
 
-export function createEmptyStreamState(): StreamState {
-  return {
-    logs: [],
-    taskGroups: [],
-    todos: [],
-    queuedFollowUps: [],
-    runInstructions: {},
-    runUsage: {},
-    runFiles: {},
-    runMissingOutputs: {},
-    activeRunId: null,
-    selectedRunId: null,
-    followUpText: '',
-    followupMode: 'chat',
-  };
+/**
+ * Create an empty stream state for the given agent category.
+ * Uses the schema factory to create the correct discriminated type.
+ */
+export function createEmptyStreamState(
+  agentCategory: AgentCategory = AGENT_CATEGORY.WORKFLOW,
+): StreamState {
+  return createStreamState(agentCategory);
 }
 
 export function createInitialState(): ProgressState {
@@ -82,13 +60,27 @@ export function createInitialState(): ProgressState {
   };
 }
 
+/**
+ * Get stream state for a stream ID.
+ * If state doesn't exist, creates a default workflow state.
+ * Pass agentCategory to create the correct discriminated type.
+ */
 export function getStreamState(
   state: ProgressState,
   streamId: StreamTabId,
+  agentCategory?: AgentCategory,
 ): StreamState {
-  return state.streamStates.get(streamId) ?? createEmptyStreamState();
+  return (
+    state.streamStates.get(streamId) ??
+    createEmptyStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
+  );
 }
 
+/**
+ * Get the effective run ID for display (selected or active).
+ * Only meaningful for workflow streams; tool-use streams don't have run selection.
+ */
 export function getEffectiveRunId(streamState: StreamState): string | null {
+  if (streamState.kind !== AGENT_CATEGORY.WORKFLOW) return null;
   return streamState.selectedRunId ?? streamState.activeRunId;
 }

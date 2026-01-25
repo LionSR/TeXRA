@@ -7,8 +7,6 @@ import { AgentRunState } from '@agent/core/AgentState';
 
 // Type imports
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-import type { TokenUsageStats } from '@shared/schemas';
-import type { StorageKey, StreamTabId } from '@shared/schemas';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports
@@ -16,6 +14,8 @@ import { UsageLogService } from '@logger/UsageLogService';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import type { ModelCapabilities, ModelConfig } from '@model';
+import type { StorageKey, StreamTabId } from '@shared/schemas';
+import type { TokenUsageStats } from '@shared/schemas';
 
 /**
  * Optional metadata for usage logging.

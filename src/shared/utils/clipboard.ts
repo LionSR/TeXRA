@@ -15,7 +15,7 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     return false;
   }
 
-  const normalized = text.replace(/\r?\n/g, '\n');
+  const normalized = text.replaceAll(/\r?\n/g, '\n');
 
   try {
     await navigator.clipboard.writeText(normalized);

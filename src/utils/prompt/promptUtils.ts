@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - agent
-import type { ExecutionId } from '@shared/schemas';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);

@@ -1,20 +1,77 @@
 /**
- * Copy button styles for ProgressView
+ * Utility classes for ProgressView
  */
 
-.banner-content-copy,
-.instruction-panel__copy {
+/* =============================================================================
+   Text Utilities
+   ============================================================================= */
+
+/* Truncate text with ellipsis */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Preserve whitespace and wrap */
+.pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* =============================================================================
+   Status Indicator States (shared between .status-indicator and .tab-status)
+   ============================================================================= */
+
+.status-indicator.is-running,
+.tab-status.is-running {
+  background-color: var(--color-success);
+  box-shadow: 0 0 4px var(--color-success);
+  opacity: 1;
+  animation: pulse-scale 2s infinite;
+}
+
+.status-indicator.is-error,
+.tab-status.is-error {
+  background-color: var(--color-error);
+  box-shadow: 0 0 4px var(--color-error);
+  opacity: 1;
+}
+
+.status-indicator.is-waiting,
+.status-indicator.is-resuming,
+.tab-status.is-waiting,
+.tab-status.is-resuming {
+  background-color: var(--vscode-textLink-foreground);
+  box-shadow: 0 0 4px var(--vscode-textLink-foreground);
+  opacity: 1;
+  animation: pulse-scale 3s infinite;
+}
+
+.status-indicator.is-resuming,
+.tab-status.is-resuming {
+  animation-duration: 1.5s;
+}
+
+.status-indicator.is-stopped,
+.tab-status.is-stopped {
+  background-color: var(--vscode-descriptionForeground);
+}
+
+/* =============================================================================
+   Copy Button Styles (Light DOM only)
+   Note: .instruction-panel__copy is in Shadow DOM, styled in component
+   ============================================================================= */
+
+.banner-content-copy {
   transition: opacity 0.2s ease;
 }
 
 .banner-content-copy:focus-visible,
-.banner-content-copy.copy-success,
-.instruction-panel__copy:focus-visible,
-.instruction-panel__copy.copy-success {
+.banner-content-copy.copy-success {
   opacity: 1;
 }
 
-.banner-content-copy.copy-success,
-.instruction-panel__copy.copy-success {
+.banner-content-copy.copy-success {
   color: var(--color-success);
 }

@@ -59,19 +59,12 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 // Progress view stream metadata
 // ============================================================================
 
-export const StreamUITraitsSchema = z.object({
-  agentCategory: AgentCategorySchema,
-  isToolAgent: z.boolean(),
-});
-export type StreamUITraits = z.infer<typeof StreamUITraitsSchema>;
-
 export const StreamTabInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
   model: z.string().optional(),
   agent: z.string().optional(),
   agentCategory: AgentCategorySchema,
-  uiTraits: StreamUITraitsSchema,
   hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   lastTimestamp: z.number().optional(),
