@@ -5,20 +5,22 @@ import {
   type TemplateResult,
   type PropertyValues,
 } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - common helpers
-import { formatRelativeTime } from '@common/modules/stringUtils.js';
-import {
-  AGENT_DECORATORS,
-  getAgentCategoryDecorator,
-} from '@common/modules/iconConstants.js';
 import {
   getRadioChangeValue,
   setRadioGroupValue,
 } from '@common/modules/domUtils.js';
+
+// Local imports - shared utilities
+import { formatRelativeTime } from '@shared/utils/string';
+import {
+  AGENT_DECORATORS,
+  getAgentCategoryDecorator,
+} from '@shared/utils/icons';
 
 // Local imports - progress view constants
 import {
@@ -40,6 +42,9 @@ export class StreamTabs extends LitElement {
   @property({ type: String }) filter: StreamFilter = 'all';
   @property({ type: String }) sort: StreamSort = 'time';
 
+  @query(`#${ELEMENT_IDS.AGENT_FILTER_CONTAINER}`)
+  private declare filterGroup: HTMLElement | null;
+
   protected createRenderRoot(): HTMLElement {
     return this;
   }
@@ -55,11 +60,8 @@ export class StreamTabs extends LitElement {
   }
 
   private syncFilterRadioGroup(): void {
-    const group = this.querySelector(
-      `#${ELEMENT_IDS.AGENT_FILTER_CONTAINER}`,
-    ) as HTMLElement | null;
-    if (group) {
-      setRadioGroupValue(group, this.filter);
+    if (this.filterGroup) {
+      setRadioGroupValue(this.filterGroup, this.filter);
     }
   }
 

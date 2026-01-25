@@ -71,8 +71,8 @@ export class MessageTimestampExtractor {
     }
 
     const text = logLine
-      ? logLine.textContent || ''
-      : element.textContent || '';
+      ? (logLine.textContent ?? '')
+      : (element.textContent ?? '');
     const match = text.match(/\[(.*?)\]/);
     return match ? match[1] : '';
   }

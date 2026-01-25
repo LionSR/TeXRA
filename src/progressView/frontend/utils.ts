@@ -17,12 +17,13 @@ export function appendFormatted(
 
   if (formatted instanceof HTMLElement) {
     container.appendChild(formatted);
-  } else {
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = formatted;
-    if (wrapper.firstElementChild) {
-      container.appendChild(wrapper.firstElementChild);
-    }
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = formatted;
+  if (wrapper.firstElementChild) {
+    container.appendChild(wrapper.firstElementChild);
   }
 }
 

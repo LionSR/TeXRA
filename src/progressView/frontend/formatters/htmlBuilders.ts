@@ -6,12 +6,12 @@
 // Third-party imports
 import hljs from 'highlight.js';
 
-// Local imports - common helpers
-import { encodeHtml } from '@common/modules/htmlEncoding.js';
-import {
-  CHEVRON_RIGHT_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/modules/iconConstants.js';
+// Local imports - shared utilities
+import { encodeHtml } from '@shared/utils/html';
+import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
+
+// Local imports - shared schemas
+import type { NormalizedFileEntry } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -20,7 +20,6 @@ import {
   DIFF_MARKER_THRESHOLD,
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
-import type { NormalizedFileEntry } from './normalizers';
 
 /** Build a tool-use section HTML block. */
 export function buildToolUseSection(label: string, content: string): string {
@@ -191,6 +190,19 @@ const LANGUAGE_LABELS: Record<string, string> = {
 const getLanguageLabel = (language: string): string =>
   LANGUAGE_LABELS[language] ?? (language || 'Text');
 
+/** Apply syntax highlighting to code if language is supported. */
+function highlightCode(text: string, language: string): string {
+  const isHighlightable = language && language !== 'plaintext';
+  if (!isHighlightable || !hljs.getLanguage(language)) {
+    return encodeHtml(text);
+  }
+  try {
+    return hljs.highlight(text, { language, ignoreIllegals: true }).value;
+  } catch {
+    return encodeHtml(text);
+  }
+}
+
 /** Build a code block with optional syntax highlighting, language badge, and copy button. Does NOT use auto-detection - requires explicit language or defaults to plaintext. */
 export function buildCodeBlock(
   text: string,
@@ -211,22 +223,10 @@ export function buildCodeBlock(
   const preClasses = ['hljs', className].filter(Boolean).join(' ');
 
   // Build code content with or without highlighting
-  let codeContent;
-  const isHighlightable = language && language !== 'plaintext';
-
-  if (isHighlightable && hljs.getLanguage(language)) {
-    try {
-      const result = hljs.highlight(text, { language, ignoreIllegals: true });
-      codeContent = result.value;
-    } catch {
-      codeContent = encodeHtml(text);
-    }
-  } else {
-    codeContent = encodeHtml(text);
-  }
+  const codeContent = highlightCode(text, language);
 
   // Build header with optional badge and copy button
-  const headerParts = [];
+  const headerParts: string[] = [];
   if (showLanguage) {
     const label = getLanguageLabel(language);
     headerParts.push(
