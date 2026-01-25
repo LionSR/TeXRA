@@ -138,6 +138,8 @@ export interface DetailsSummaryOptions {
   includeIconClass?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: { title: string; hidden?: boolean };
+  /** Initial expanded state for toggle icon. Default: false (collapsed). */
+  expanded?: boolean;
 }
 
 /** Build a details summary element with icon, label, and optional extras. */
@@ -151,13 +153,15 @@ export function buildDetailsSummary(
     includeIconClass = true,
     timestamp,
     copyButton,
+    expanded = false,
   } = options;
   const iconClasses = includeIconClass
     ? `codicon icon ${iconClass}`
     : `codicon ${iconClass}`;
+  const toggleIconClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
   return html`
     <summary class="details-summary">
-      <i class="toggle-icon"></i>
+      <i class="${toggleIconClass} toggle-icon"></i>
       <i class=${iconClasses}></i>
       <span class=${labelClass}>${label}</span>
       ${timestamp

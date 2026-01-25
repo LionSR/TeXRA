@@ -6,6 +6,9 @@
  * Uses Lit templates for declarative DOM construction.
  */
 
+// Local imports - shared utilities
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
+
 // Local imports - Lit template utilities
 import { html, ifDefined, renderToElement } from '../litTemplates';
 
@@ -147,7 +150,7 @@ export function formatContextManagement(
   return renderToElement(html`
     <details class="banner-details context-management-details">
       <summary class="details-summary">
-        <i class="toggle-icon"></i>
+        <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
         <i
           class=${`codicon ${config.icon} context-management-icon`}
           style=${`color: ${config.color}`}

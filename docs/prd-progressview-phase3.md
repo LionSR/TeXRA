@@ -608,12 +608,12 @@ export function formatBannerContent(
 
 ### Migration Order
 
-| Order | Webview         | Handler Lines | JS Modules | Rationale                             |
-| ----- | --------------- | ------------- | ---------- | ------------------------------------- |
-| 1     | **HistoryView** | 160           | 7          | Simplest, good validation of patterns |
-| 2     | **ProfileView** | 211           | 7          | Simple, mostly static display         |
-| 3     | **MemoryView**  | 278           | 7          | Has toggle state, moderate complexity |
-| 4     | **MainView**    | 461           | 80+        | Most complex after ProgressView       |
+| Order | Webview         | JS Lines | Complexity | Rationale                                      |
+| ----- | --------------- | -------- | ---------- | ---------------------------------------------- |
+| 1     | **MemoryView**  | 305      | Low        | Simplest UI, validates migration patterns      |
+| 2     | **HistoryView** | 610      | Medium     | Search feature adds complexity, list rendering |
+| 3     | **ProfileView** | 636      | Medium     | Auth state, conditional sections               |
+| 4     | **MainView**    | 4,953    | Very High  | Most complex, benefits from earlier learnings  |
 
 ### Per-Webview Migration Template
 
