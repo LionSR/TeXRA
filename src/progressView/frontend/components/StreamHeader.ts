@@ -1,8 +1,12 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+
+// Local imports - shared styles
+// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import {
@@ -98,6 +102,195 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
+  static styles = [
+    codiconStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      .log-header {
+        padding: var(--spacing-tiny) var(--spacing-small);
+        font-size: var(--font-size-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        color: var(--color-text-secondary);
+        border-bottom: var(--border-thin) solid var(--color-border);
+      }
+
+      .log-header__primary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
+
+      .log-header__secondary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        font-size: var(--font-size-sm);
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+        flex: 1;
+        min-width: 0;
+      }
+
+      .stream-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        min-width: 0;
+      }
+
+      .stream-header #activeStreamName {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .run-selector {
+        min-width: 180px;
+        max-width: 260px;
+        flex-shrink: 0;
+      }
+
+      .run-selector-title {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .run-selector-title .codicon {
+        font-size: var(--font-size-icon);
+        line-height: 1;
+      }
+
+      .header-actions {
+        flex-shrink: 0;
+        margin-left: auto;
+      }
+
+      .status-indicator {
+        width: var(--spacing-medium);
+        height: var(--spacing-medium);
+        border-radius: 50%;
+        display: inline-block;
+        margin: 0 var(--spacing-small);
+        position: relative;
+        opacity: var(--opacity-subtle);
+        transition: all 0.3s ease;
+      }
+
+      .status-indicator:hover {
+        opacity: var(--opacity-full);
+      }
+
+      .status-indicator::after {
+        content: attr(data-status);
+        position: absolute;
+        left: 50%;
+        top: 100%;
+        transform: translateX(-50%);
+        margin-top: var(--spacing-tiny);
+        padding: var(--spacing-small) var(--spacing-medium);
+        background: var(--background-color);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius-small);
+        font-size: var(--font-size-sm);
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 100;
+      }
+
+      .status-indicator:hover::after {
+        opacity: var(--opacity-full);
+      }
+
+      .status-indicator.is-ready {
+        background-color: var(--vscode-descriptionForeground);
+        opacity: var(--opacity-disabled);
+      }
+
+      .status-indicator.is-running {
+        background-color: var(--color-success);
+        box-shadow: 0 0 4px var(--color-success);
+        opacity: 1;
+        animation: pulse-scale 2s infinite;
+      }
+
+      .status-indicator.is-error {
+        background-color: var(--color-error);
+        box-shadow: 0 0 4px var(--color-error);
+        opacity: 1;
+      }
+
+      .status-indicator.is-waiting,
+      .status-indicator.is-resuming {
+        background-color: var(--vscode-textLink-foreground);
+        box-shadow: 0 0 4px var(--vscode-textLink-foreground);
+        opacity: 1;
+        animation: pulse-scale 3s infinite;
+      }
+
+      .status-indicator.is-resuming {
+        animation-duration: 1.5s;
+      }
+
+      .status-indicator.is-stopped {
+        background-color: var(--vscode-descriptionForeground);
+        opacity: var(--opacity-subtle);
+      }
+
+      @keyframes pulse-scale {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.15);
+          opacity: 0.8;
+        }
+      }
+
+      .toolbar-button--hidden {
+        display: none;
+      }
+
+      @media (max-width: 500px) {
+        .log-header {
+          flex-wrap: wrap;
+          gap: var(--spacing-small);
+        }
+
+        .header-left {
+          flex-basis: 100%;
+        }
+
+        .header-actions {
+          margin-left: auto;
+        }
+      }
+    `,
+  ];
+
   @property({ type: Object }) stream: StreamTabInfo | null = null;
   @property({ type: Object }) streamState: StreamState | null = null;
   @property({ type: String }) runId: string | null = null;
@@ -107,10 +300,6 @@ export class StreamHeader extends LitElement {
     startTime: number;
   }> = [];
   @property({ type: Boolean }) yoloActive = false;
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
 
   render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -145,7 +334,6 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${this.renderRunSelector()}
           </div>
           <div class="header-actions">
             <vscode-toolbar-container
@@ -184,6 +372,7 @@ export class StreamHeader extends LitElement {
             </vscode-toolbar-container>
           </div>
         </div>
+        ${this.renderRunSelector()}
       </div>
     `;
   }
@@ -196,23 +385,23 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
     const hasRuns = this.runs.length > 0;
+    if (!hasRuns) {
+      return nothing;
+    }
 
     return html`
-      <div
-        id=${ELEMENT_IDS.RUN_SELECTOR_CONTAINER}
-        class="run-selector"
-        ?hidden=${!hasRuns}
-        aria-hidden=${hasRuns ? 'false' : 'true'}
-      >
-        <div class="run-selector-title" aria-hidden="true">
-          <i class="codicon codicon-history"></i>
-          <span>Sessions</span>
+      <div class="log-header__secondary">
+        <div id=${ELEMENT_IDS.RUN_SELECTOR_CONTAINER} class="run-selector">
+          <div class="run-selector-title" aria-hidden="true">
+            <i class="codicon codicon-history"></i>
+            <span>Sessions</span>
+          </div>
+          <run-selector
+            .runs=${this.runs}
+            .activeRunId=${this.runId}
+            @run-selected=${this.handleRunSelected}
+          ></run-selector>
         </div>
-        <run-selector
-          .runs=${this.runs}
-          .activeRunId=${this.runId}
-          @run-selected=${this.handleRunSelected}
-        ></run-selector>
       </div>
     `;
   }

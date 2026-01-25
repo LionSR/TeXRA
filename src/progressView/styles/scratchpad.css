@@ -3,11 +3,11 @@
  */
 
 .banner-details {
-  margin: var(--spacing-small) 0;
+  margin: 1px 0;
 }
 
 .tool-use-section {
-  margin: var(--spacing-small) 0;
+  margin: var(--spacing-tiny) 0;
 }
 
 .tool-use-title {
@@ -87,10 +87,14 @@
   color: var(--vscode-textLink-foreground, #3794ff);
 }
 
-.tool-user-feedback,
-.tool-error-content {
+/* Shared pre-wrap base - uses .pre-wrap utility pattern */
+:is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Feedback/error content boxes */
+:is(.tool-user-feedback, .tool-error-content) {
   padding: var(--spacing-small);
   border-radius: var(--border-radius-small);
   border-left: 3px solid;
@@ -114,8 +118,6 @@
 }
 
 .tool-output-full {
-  white-space: pre-wrap;
-  word-break: break-word;
   max-height: var(--height-large);
   overflow: auto;
 }
@@ -148,6 +150,12 @@
   line-height: 1.5;
 }
 
+/* Inline diff: shared base */
+:is(.diff-inline-del, .diff-inline-add) {
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 /* Inline diff: deleted text - red with strikethrough */
 .diff-inline-del {
   background-color: var(
@@ -156,8 +164,6 @@
   );
   color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
   text-decoration: line-through;
-  border-radius: 2px;
-  padding: 0 2px;
 }
 
 /* Inline diff: added text - green highlight */
@@ -167,8 +173,6 @@
     rgba(0, 255, 0, 0.2)
   );
   color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
-  border-radius: 2px;
-  padding: 0 2px;
 }
 
 /* Syntax highlighted code blocks (base hljs styling) */
