@@ -1,9 +1,10 @@
 /**
  * Task group header formatter for progress view.
+ * Uses Lit templates for declarative DOM construction.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import { html, when, classMap, renderToElement } from './litTemplates';
 
 // Local imports - progress view constants
 import { STREAM_STATUS, GROUP_DOM_IDS } from '../constants';
@@ -20,8 +21,15 @@ import {
 import type { TaskGroup } from '@shared/schemas';
 import type { TaskGroupLevelConfig } from './taskGroupLevel';
 
+// Status icon mapping
+const STATUS_ICONS: Record<string, string> = {
+  [STREAM_STATUS.RUNNING]: 'sync spin',
+  [STREAM_STATUS.ERROR]: 'error',
+  [STREAM_STATUS.STOPPED]: 'check',
+};
+
 /**
- * Formats task group headers.
+ * Formats task group headers using Lit templates.
  */
 export class TaskGroupHeaderFormatter {
   /** Create a group header element. */
@@ -33,44 +41,38 @@ export class TaskGroupHeaderFormatter {
         ? getDateTimeFormatter()
         : getTimeFormatter();
     const formattedStartTime = level.formatTime(startDate, formatter);
+    const iconClass = STATUS_ICONS[group.status] ?? 'circle-outline';
+    const durationText = group.endTime
+      ? formatDuration(group.endTime - group.startTime)
+      : '';
 
-    const header = createFromTemplate('groupHeaderTemplate');
-    if (!header) return null;
-
-    header.id = `${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}`;
-    header.className = this._getHeaderClass(group, level);
-
-    const statusIconElem = header.querySelector('.group-status-icon');
-    if (statusIconElem instanceof HTMLElement) {
-      statusIconElem.innerHTML = this._getStatusIcon(group.status);
-    }
-
-    const titleElem = header.querySelector('.group-title');
-    if (titleElem instanceof HTMLElement) {
-      if (level.showTitle) {
-        titleElem.textContent = group.name;
-      } else {
-        titleElem.remove();
-      }
-    }
-
-    const startTimeElem = header.querySelector('.group-start-time');
-    if (startTimeElem instanceof HTMLElement) {
-      startTimeElem.dataset.start = String(group.startTime);
-      startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
-    }
-
-    const durationElem = header.querySelector('.group-duration');
-    if (durationElem instanceof HTMLElement) {
-      if (group.endTime) {
-        const durationMs = group.endTime - group.startTime;
-        durationElem.textContent = formatDuration(durationMs);
-      } else {
-        durationElem.remove();
-      }
-    }
-
-    return header;
+    return renderToElement(html`
+      <summary
+        id=${`${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}`}
+        class=${classMap({
+          'log-group-header': true,
+          [`is-${group.status}`]: true,
+          [level.cssClass ?? '']: Boolean(level.cssClass),
+        })}
+      >
+        <span class="group-status-icon">
+          <i class=${`codicon codicon-${iconClass}`}></i>
+        </span>
+        ${when(
+          level.showTitle,
+          () => html`<span class="group-title">${group.name}</span>`,
+        )}
+        <span class="group-time">
+          <span class="group-start-time" data-start=${String(group.startTime)}>
+            <i class="codicon codicon-clock"></i> ${formattedStartTime}
+          </span>
+          ${when(
+            durationText,
+            () => html`<span class="group-duration">${durationText}</span>`,
+          )}
+        </span>
+      </summary>
+    `);
   }
 
   _getGroupLevel(group: TaskGroup): TaskGroupLevelConfig {
@@ -86,12 +88,8 @@ export class TaskGroupHeaderFormatter {
   }
 
   _getStatusIcon(status: string): string {
-    const icons: Record<string, string> = {
-      [STREAM_STATUS.RUNNING]: '<i class="codicon codicon-sync spin"></i>',
-      [STREAM_STATUS.ERROR]: '<i class="codicon codicon-error"></i>',
-      [STREAM_STATUS.STOPPED]: '<i class="codicon codicon-check"></i>',
-    };
-    return icons[status] ?? '<i class="codicon codicon-circle-outline"></i>';
+    const iconClass = STATUS_ICONS[status] ?? 'circle-outline';
+    return `<i class="codicon codicon-${iconClass}"></i>`;
   }
 
   /** Format duration in milliseconds to human-readable string. Exposed as instance method for external callers. */

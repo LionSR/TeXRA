@@ -3,7 +3,27 @@
 const fs = require('fs');
 const path = require('path');
 
-const IMPORT_REGEX = /@import\s+(?:url\()?['"]([^'"]+)['"]\)?\s*;/g;
+/**
+ * CSS @import regex - handles all valid @import formats:
+ * - @import 'path';
+ * - @import "path";
+ * - @import url('path');
+ * - @import url("path");
+ * - @import url(path);  (no quotes)
+ * - @import 'path' media-query;
+ *
+ * Pattern breakdown:
+ * @import\s+           - @import followed by whitespace
+ * (?:url\(\s*)?        - optional url( with optional space
+ * (['"]?)              - optional opening quote (group 1)
+ * ([^'"\s)]+)          - the path (group 2)
+ * \1                   - matching closing quote
+ * (?:\s*\))?           - optional closing ) with optional space
+ * [^;]*                - anything before semicolon (media query)
+ * ;                    - semicolon
+ */
+const IMPORT_REGEX =
+  /@import\s+(?:url\(\s*)?(['"]?)([^'"\s)]+)\1(?:\s*\))?[^;]*;/g;
 
 function inlineCss(filePath, loaderContext, visited) {
   const absolutePath = path.resolve(filePath);
@@ -15,7 +35,7 @@ function inlineCss(filePath, loaderContext, visited) {
   let css = fs.readFileSync(absolutePath, 'utf8');
   const baseDir = path.dirname(absolutePath);
 
-  css = css.replace(IMPORT_REGEX, (match, importPath) => {
+  css = css.replace(IMPORT_REGEX, (match, _quote, importPath) => {
     if (
       importPath.startsWith('http://') ||
       importPath.startsWith('https://') ||

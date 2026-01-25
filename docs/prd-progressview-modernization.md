@@ -77,6 +77,51 @@ The legacy codebase has accumulated sequential band-aid workarounds. **These mus
 
 ---
 
+## Eliminated Abstractions (Zod-First Architecture Wins)
+
+The migration to Zod schemas as the single source of truth eliminated **~185 lines** of redundant normalization code. These abstractions existed because the old architecture lacked schema-first validation:
+
+### Data Flow: Before vs After
+
+```
+BEFORE (5 layers):
+  logMessage → normalizeStructuredContent() → NormalizedPayload
+            → normalizeFileListEntries() → NormalizedFileEntry[]
+            → buildFileListRender() → HTML
+
+AFTER (2 layers):
+  logMessage.data → FileListEntrySchema.safeParse()
+                  → buildFileListRender() (inline field computation) → HTML
+```
+
+### Removed Abstractions
+
+| Abstraction                        | What It Did                         | Why Redundant                                        |
+| ---------------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `NormalizedPayload`                | Wrapped `text` + `data` fields      | Direct access to `logMessage.data/text` is clearer   |
+| `normalizeStructuredContent()`     | Parsed JSON from text field         | Backend now uses `data` field for structured content |
+| `tryParseJson()`                   | Legacy text-as-JSON fallback        | Dead code path - backend sends proper `data`         |
+| `NormalizedFileEntry`              | Pre-computed `fileName`, `filePath` | Computed inline at render time                       |
+| `normalizeFileListData()`          | FileListEntry → NormalizedFileEntry | Schema validation + inline computation               |
+| `normalizeMissingOutputsPayload()` | Hand-rolled object extraction       | `MissingOutputsPayloadSchema.safeParse()`            |
+| `normalizeToolUseLog()`            | Nested field extraction             | `ToolUseLogSchema.safeParse()` + focused normalizer  |
+| `ensureLatexdiffArray()`           | Type guard wrapper                  | Inline `Array.isArray()`                             |
+| `extractTrimmedContent()`          | Wrapper around `.trim()`            | Inline `text.trim()`                                 |
+| Local `WebSearchPayload` type      | Duplicate type definition           | Import from `@shared/schemas`                        |
+
+### Key Insight
+
+**Zod schemas eliminate the need for separate "normalizer" layers.** When the schema is the source of truth:
+
+- Validation returns typed data directly
+- `.prefault()` / `.default()` handle missing fields
+- `.transform()` handles computed fields when needed
+- Formatters receive validated, typed data - no intermediate types needed
+
+This is a fundamental architectural advantage that will compound as more webviews migrate.
+
+---
+
 ## Existing Schemas (Single Source of Truth)
 
 **60+ Zod schemas already exist.** The work is relocation to `src/shared/`, not re-exporting.

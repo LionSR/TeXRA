@@ -1,5 +1,10 @@
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
+// Local imports - Lit template utilities
+import {
+  html,
+  render,
+  unsafeHTML,
+  renderToElement,
+} from '../formatters/litTemplates';
 
 // Local imports - shared state
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
@@ -203,11 +208,11 @@ export class TaskGroupDomManager {
     const header = this._getById(`${GROUP_DOM_IDS.HEADER_PREFIX}${id}`);
     if (!header) return;
 
+    // Update status icon using Lit render with unsafeHTML for the HTML string
     const statusIconElem = header.querySelector('.group-status-icon');
-    if (statusIconElem) {
-      statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(
-        group.status,
-      );
+    if (statusIconElem instanceof HTMLElement) {
+      const iconHtml = this.headerFormatter._getStatusIcon(group.status);
+      render(html`${unsafeHTML(iconHtml)}`, statusIconElem);
     }
 
     header.className = this.headerFormatter._getHeaderClass(
@@ -215,15 +220,13 @@ export class TaskGroupDomManager {
       this.headerFormatter._getGroupLevel(group),
     );
 
+    // Update duration
     const durationElem = header.querySelector('.group-duration');
     if (durationElem) {
-      if (group.endTime) {
-        const durationMs = group.endTime - group.startTime;
-        durationElem.textContent =
-          this.headerFormatter._formatDuration(durationMs);
-      } else {
-        durationElem.textContent = '';
-      }
+      const durationMs = group.endTime ? group.endTime - group.startTime : null;
+      durationElem.textContent = durationMs
+        ? this.headerFormatter._formatDuration(durationMs)
+        : '';
     }
   }
 
@@ -343,36 +346,49 @@ export class TaskGroupDomManager {
   }
 
   _createGroupElement(group: TaskGroup): HTMLElement | null {
-    const baseGroupElement = createFromTemplate('groupDetailsTemplate');
-    if (!baseGroupElement) return null;
+    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    const groupContainer = baseGroupElement.querySelector('.log-group-content');
-    if (!(groupContainer instanceof HTMLElement)) return null;
-    groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
-
+    // Root groups: simple container div
     if (!group.parentGroupId) {
-      baseGroupElement.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-      baseGroupElement.classList.add('log-run');
-      baseGroupElement.dataset.runId = group.id;
-      this._registerGroupElement(group, baseGroupElement);
-      return baseGroupElement;
+      const element = renderToElement(html`
+        <div
+          id=${`${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`}
+          class="log-group log-run"
+          data-run-id=${group.id}
+        >
+          <div id=${contentId} class="log-group-content"></div>
+        </div>
+      `);
+      if (!element) return null;
+      this._registerGroupElement(group, element);
+      return element;
     }
 
-    return this._createChildGroupElement(group, groupContainer);
+    // Child groups: details element with header
+    return this._createChildGroupElement(group, contentId);
   }
 
   _createChildGroupElement(
     group: TaskGroup,
-    groupContainer: HTMLElement,
+    contentId: string,
   ): HTMLElement | null {
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) return null;
 
-    const detailsElem = document.createElement('details');
-    detailsElem.className = 'log-group';
-    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-    detailsElem.appendChild(headerElement);
-    detailsElem.appendChild(groupContainer);
+    // Create details element using Lit template
+    const detailsElem = renderToElement(html`
+      <details
+        id=${`${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`}
+        class="log-group"
+      >
+        <div id=${contentId} class="log-group-content"></div>
+      </details>
+    `) as HTMLDetailsElement | null;
+
+    if (!detailsElem) return null;
+
+    // Insert header before content
+    detailsElem.insertBefore(headerElement, detailsElem.firstChild);
 
     this._setupToggleState(group.id, detailsElem);
     this._registerGroupElement(group, detailsElem);

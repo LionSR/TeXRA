@@ -42,9 +42,8 @@ import {
 } from '@shared/schemas';
 
 // Local imports - progress view
-import type { FollowupOptions } from './components/FollowupSection';
 import type { PromptState } from './components/PromptOverlay';
-import type { EventHandlerContext } from './eventHandlers';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 import {
   createEmptyStreamState,
   getEffectiveRunId,
@@ -68,10 +67,10 @@ const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 const AUTO_EXPAND_MESSAGE_TYPES = new Set(['thinking', 'scratchpad']);
 
 /**
- * Context passed to message handlers. Extends EventHandlerContext with
+ * Context passed to message handlers. Extends FrontendEventHandlerContext with
  * prompt state accessors needed for handling approval/retry messages.
  */
-export interface MessageHandlerContext extends EventHandlerContext {
+export interface MessageHandlerContext extends FrontendEventHandlerContext {
   getPrompts(): PromptState[];
   setPrompts(prompts: PromptState[]): void;
 }
@@ -112,7 +111,7 @@ export function handleUpdateStreams(
   ctx.setState(() => ({
     ...updated,
     activeStreamId: activeStream || null,
-    streamFilter: result.data.agentFilter as StreamFilter,
+    streamFilter: result.data.agentFilter,
   }));
 
   // Clear log content when:
@@ -366,7 +365,7 @@ export function handleUpdateInstruction(
     const runId = resolveActiveRunId(prev) ?? 'default';
     const runInstructions = { ...prev.runInstructions };
     if (result.data.instruction) {
-      runInstructions[runId] = result.data.instruction as InstructionUpdate;
+      runInstructions[runId] = result.data.instruction;
     } else {
       delete runInstructions[runId];
     }
@@ -674,14 +673,24 @@ export function handleSetFollowupOptions(
   const result = SetFollowupOptionsMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  const options: FollowupOptions = {
-    workflowAgentsHtml: result.data.workflowAgentsHtml ?? '',
-    toolUseAgentsHtml: result.data.toolUseAgentsHtml ?? '',
-    modelOptionsHtml: result.data.modelOptionsHtml ?? '',
-    defaultMergeModel: result.data.defaultMergeModel,
-  };
+  // Destructure parsed data, providing defaults for optional HTML strings
+  const {
+    command: _command,
+    workflowAgentsHtml = '',
+    toolUseAgentsHtml = '',
+    modelOptionsHtml = '',
+    defaultMergeModel,
+  } = result.data;
 
-  ctx.setState((prev) => ({ ...prev, followupOptions: options }));
+  ctx.setState((prev) => ({
+    ...prev,
+    followupOptions: {
+      workflowAgentsHtml,
+      toolUseAgentsHtml,
+      modelOptionsHtml,
+      defaultMergeModel,
+    },
+  }));
 }
 
 export function handleDeleteStream(

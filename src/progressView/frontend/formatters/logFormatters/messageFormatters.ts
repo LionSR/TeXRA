@@ -1,54 +1,58 @@
 /**
  * Message-style formatters for user messages, errors, and progress status.
  * These formatters use logMessage.text and logMessage.data directly.
+ *
+ * Uses Lit templates for declarative DOM construction.
  */
 
-// Local imports - common helpers
-import { createFromTemplate } from '@common/modules/templateUtils.js';
-
-// Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
+// Local imports - Lit template utilities
+import {
+  html,
+  when,
+  classMap,
+  ifDefined,
+  renderToElement,
+} from '../litTemplates';
 
 // Local imports - formatter helpers
-import { setElementDataset, wrapInPre } from '../htmlBuilders';
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatTimestamp } from '../timestampUtils';
-import { createBannerEntry } from '../baseLogFormatter';
 import { EMOJI_BY_LEVEL } from '../constants';
 
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
 
-/** Format user message entry. */
+/** Format user message entry (Lit-native). */
 export function formatUserMessage(
   text: string,
   logId: string,
   timestamp: number,
 ): HTMLElement | null {
-  const element = createFromTemplate('userMessageTemplate');
-  if (!element) return null;
-
   const { timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
-  const timestampElem = element.querySelector('.user-message-timestamp');
-  if (timestampElem instanceof HTMLElement) {
-    timestampElem.textContent = timeDisplay;
-    timestampElem.title = tooltipTimestamp;
-  }
-
-  const contentElem = element.querySelector('.user-message-content');
-  if (contentElem instanceof HTMLElement) {
-    contentElem.textContent = text ?? '';
-    if (logId) contentElem.dataset.logId = logId;
-  }
-
-  return element;
+  return renderToElement(html`
+    <div class="user-message-container">
+      <div class="user-message">
+        <div class="user-message-header">
+          <i class="codicon codicon-comment user-message-icon"></i>
+          <span class="user-message-timestamp" title=${tooltipTimestamp}
+            >${timeDisplay}</span
+          >
+        </div>
+        <div class="user-message-content" data-log-id=${ifDefined(logId)}>
+          ${text ?? ''}
+        </div>
+      </div>
+    </div>
+  `);
 }
 
-/** Format progress status entry. */
-export function formatProgressStatus(message: LogMessageData): HTMLElement {
+/** Format progress status entry (Lit-native). */
+export function formatProgressStatus(
+  message: LogMessageData,
+): HTMLElement | null {
   const { level = 'info', id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
@@ -58,28 +62,26 @@ export function formatProgressStatus(message: LogMessageData): HTMLElement {
   const detailText = stringifyWithLanguage(data).text;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
 
-  const container = document.createElement('div');
-  setElementDataset(container, {
-    logId: id,
-    groupId,
-    timestamp: fullTimestamp,
-  });
-
-  const summaryLine = document.createElement('div');
-  summaryLine.className = 'log-line';
-  summaryLine.innerHTML =
-    `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> ` +
-    `<span class="message-${level}">${encodeHtml(summaryText)}</span>`;
-  container.appendChild(summaryLine);
-
-  if (detailText) {
-    const detailLine = document.createElement('pre');
-    detailLine.className = `log-line message-${level}`;
-    detailLine.textContent = detailText;
-    container.appendChild(detailLine);
-  }
-
-  return container;
+  return renderToElement(html`
+    <div
+      data-log-id=${ifDefined(id)}
+      data-group-id=${ifDefined(groupId)}
+      data-timestamp=${ifDefined(fullTimestamp)}
+    >
+      <div class="log-line">
+        <span class="timestamp" title=${tooltipTimestamp}
+          >${emoji} [${timeDisplay}]</span
+        >
+        <span class=${`message-${level}`}>${summaryText}</span>
+      </div>
+      ${when(
+        detailText,
+        () => html`
+          <pre class=${`log-line message-${level}`}>${detailText}</pre>
+        `,
+      )}
+    </div>
+  `);
 }
 
 // Error detail fields in display order (matches ProviderError schema)
@@ -97,7 +99,7 @@ const ERROR_DETAIL_FIELDS: readonly string[] = [
   'rawErrorBody',
 ] as const;
 
-/** Format error message as a foldable banner. */
+/** Format error message as a foldable banner (Lit-native). */
 export function formatError(message: LogMessageData): HTMLElement | null {
   const { id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
@@ -134,56 +136,53 @@ export function formatError(message: LogMessageData): HTMLElement | null {
   });
 
   const detailText = detailLines.join('\n');
+  const hasDetails = Boolean(detailText);
+  const rawContent = detailText || summaryText;
 
-  const bannerEntry = createBannerEntry({
-    logId: id,
-    groupId,
-    timestamp: fullTimestamp,
-    iconClass: 'codicon-error',
-    labelText: `[${timeDisplay}] ${summaryText}`,
-    copyTitle: 'Copy error details',
-    contentClass: 'banner-content--error',
-    open: false,
-  });
-
-  if (!bannerEntry || !bannerEntry.element) {
-    return null;
-  }
-
-  // Add error class to the banner
-  bannerEntry.element.classList.add('banner-details--error');
-
-  // Add relay error class for distinct styling
-  if (isRelayError) {
-    bannerEntry.element.classList.add('banner-details--relay-error');
-  }
-
-  // If there are no details, hide the copy button and make it non-expandable
-  if (!detailText) {
-    bannerEntry.copyButton?.style.setProperty('display', 'none');
-    const toggleIcon = bannerEntry.element.querySelector('.toggle-icon');
-    if (toggleIcon instanceof HTMLElement) {
-      toggleIcon.style.setProperty('visibility', 'hidden');
-    }
-  }
-
-  if (bannerEntry.contentElem) {
-    bannerEntry.contentElem.dataset.rawContent = detailText || summaryText;
-    if (detailText) {
-      bannerEntry.contentElem.innerHTML = `<pre class="error-details">${encodeHtml(detailText)}</pre>`;
-    }
-  }
-
-  // Add timestamp tooltip to the label
-  const labelElem = bannerEntry.element.querySelector('.label');
-  if (labelElem instanceof HTMLElement) {
-    labelElem.title = tooltipTimestamp;
-  }
-
-  return bannerEntry.element;
+  return renderToElement(html`
+    <details
+      class=${classMap({
+        'banner-details': true,
+        'banner-details--error': true,
+        'banner-details--relay-error': isRelayError,
+      })}
+      data-log-id=${ifDefined(id)}
+      data-group-id=${ifDefined(groupId)}
+      data-timestamp=${ifDefined(fullTimestamp)}
+    >
+      <summary class="details-summary">
+        <i
+          class="toggle-icon"
+          style=${hasDetails ? '' : 'visibility: hidden'}
+        ></i>
+        <i class="codicon icon codicon-error"></i>
+        <span class="label" title=${tooltipTimestamp}
+          >[${timeDisplay}] ${summaryText}</span
+        >
+        <vscode-toolbar-button
+          class="banner-content-copy"
+          icon="copy"
+          title="Copy error details"
+          aria-label="Copy error details"
+          data-default-title="Copy error details"
+          data-success-title="Copied!"
+          ?hidden=${!hasDetails}
+        ></vscode-toolbar-button>
+      </summary>
+      <div
+        class="banner-content log-entry-content banner-content--error"
+        data-raw-content=${rawContent}
+      >
+        ${when(
+          hasDetails,
+          () => html`<pre class="error-details">${detailText}</pre>`,
+        )}
+      </div>
+    </details>
+  `);
 }
 
-/** Format default log message. */
+/** Format default log message (Lit-native). */
 export function formatDefaultLogMessage(
   logMessage: LogMessageData,
 ): HTMLElement | null {
@@ -193,24 +192,27 @@ export function formatDefaultLogMessage(
     new Date(timestamp),
   );
 
-  const groupIdAttr = groupId ? ` data-group-id="${groupId}"` : '';
-  const dataAttrs = `data-log-id="${id}"${groupIdAttr}`;
-
   const timestampContent = verbose ? `${emoji} [${timeDisplay}]` : emoji;
-  const levelMarkup = verbose
-    ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
-    : '';
 
-  const htmlMessage =
-    `<div class="log-line" ${dataAttrs} data-full-timestamp="${fullTimestamp}">` +
-    `<span class="timestamp" title="${tooltipTimestamp}">${timestampContent}</span> ` +
-    levelMarkup +
-    `<span class="message-${level}">${encodeHtml(text)}</span>` +
-    `</div>`;
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = htmlMessage;
-  return wrapper.firstElementChild instanceof HTMLElement
-    ? wrapper.firstElementChild
-    : null;
+  return renderToElement(html`
+    <div
+      class="log-line"
+      data-log-id=${id}
+      data-group-id=${ifDefined(groupId)}
+      data-full-timestamp=${fullTimestamp}
+    >
+      <span class="timestamp" title=${tooltipTimestamp}
+        >${timestampContent}</span
+      >
+      ${when(
+        verbose,
+        () => html`
+          <span class=${`level-${level}`}
+            >${level.toUpperCase().padEnd(8)}</span
+          >
+        `,
+      )}
+      <span class=${`message-${level}`}>${text}</span>
+    </div>
+  `);
 }
