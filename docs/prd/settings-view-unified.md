@@ -884,36 +884,85 @@ SecretManager.setApiKey('anthropic', 'sk-...');
 
 ## Implementation Phases
 
-Settings View is implemented as part of **Phase 3** of the ProgressView modernization.
+Settings View is implemented as part of **Phase 4** of the ProgressView modernization, consolidating three existing webviews (HistoryView, ProfileView, MemoryView) into a unified interface.
 
-### Prerequisites (From ProgressView PRD)
+### ProgressView Modernization Status
 
-- Phase 1 complete: Shared schemas in `src/shared/schemas/`
-- Phase 2 complete: Shared components in `src/shared/components/`
-- Webpack configuration for webview bundling
+| Phase       | Scope                                        | Status         |
+| ----------- | -------------------------------------------- | -------------- |
+| **Phase 1** | Schema relocation to `src/shared/schemas/`   | ✅ Complete    |
+| **Phase 2** | Extract shared infrastructure                | ✅ Complete    |
+| **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress |
+| **Phase 4** | Migrate other webviews (including Settings)  | ⬜ Not Started |
 
-### Settings View Implementation
+### Phase 3 Sub-Status (Prerequisites for Settings View)
+
+| Sub-Phase | Scope                      | Status                         |
+| --------- | -------------------------- | ------------------------------ |
+| 3a        | JS → TS shared utilities   | ✅ Complete                    |
+| 3b-1      | UI parity/stabilization    | ✅ Complete                    |
+| 3b-1.5/6  | CSS Shadow DOM migration   | ✅ Complete (11/13 components) |
+| 3b-2      | Utility conversion         | ⬜ Not Started                 |
+| 3b-3      | Formatter → TemplateResult | ⬜ Not Started                 |
+
+**Settings View can begin once Phase 3b-1 is complete** (current status: ready).
+
+### Anti-Patterns to Avoid
+
+The legacy codebase has accumulated band-aid workarounds. **These must not be replicated in Settings View:**
+
+| Pattern                 | Example                        | Problem                               |
+| ----------------------- | ------------------------------ | ------------------------------------- |
+| Render-state comparison | `lastRenderedStream`           | Duplicates state for change detection |
+| Pending ID buffers      | `_pendingActiveId`             | Two sources of truth, race conditions |
+| Global mutable maps     | `pendingLogUpdates`            | Memory leaks, race conditions         |
+| Scattered conditionals  | 18× `isToolUse` checks         | Logic spread across 1000+ lines       |
+| Manual state wipes      | `_clearAgentCategoryState()`   | Shotgun surgery on mode switch        |
+
+**See [Phase 2 Anti-Patterns](../prd-progressview-phase2.md#anti-patterns-to-avoid) for detailed analysis and Lit solutions.**
+
+### Zod-First Architecture Benefits
+
+The migration to Zod schemas as single source of truth eliminates normalizer layers:
+
+```
+BEFORE (5 layers):
+  message → normalize() → NormalizedPayload → buildRender() → HTML
+
+AFTER (2 layers):
+  message.data → Schema.safeParse() → buildRender() → HTML
+```
+
+**Key insight:** Zod schemas eliminate the need for separate "normalizer" layers:
+- Validation returns typed data directly
+- `.prefault()` / `.default()` handle missing fields
+- `.transform()` handles computed fields when needed
+- Formatters receive validated, typed data - no intermediate types needed
+
+### Settings View Implementation Steps
 
 #### Step 1: Schema Setup
 - Add settings-specific schemas to `src/shared/schemas/settings.ts`
 - Add commands to `src/shared/schemas/commands.ts`
-- No duplicate definitions
+- No duplicate definitions - leverage existing 60+ Zod schemas
 
 #### Step 2: Backend Handlers
 - Create `SettingsViewMessageHandler.ts` with domain-specific handler classes
-- Implement all command handlers
-- Validate all messages with Zod schemas
+- Use registry pattern (`Record<string, Handler>`) instead of switch statements
+- Validate all messages with Zod schemas using `safeParse()`
 
 #### Step 3: Lit Frontend
 - Create `src/settingsView/frontend/` with Lit components
-- Implement reactive store
+- Follow native Lit patterns (Shadow DOM, static styles array, arrow handlers)
+- Implement reactive store with `@lit-labs/preact-signals`
 - Build all 5 tab components
 
-#### Step 4: Delete Legacy
-- Remove `src/profileView/`
-- Remove `src/historyView/`
-- Remove `src/memoryView/`
-- Update command redirects
+#### Step 4: Delete Legacy Views
+- Remove `src/profileView/` (636 lines JS)
+- Remove `src/historyView/` (610 lines JS)
+- Remove `src/memoryView/` (305 lines JS)
+- Update command redirects to Settings View
+- Delete legacy `constants.js` files (102 lines total)
 
 ---
 
@@ -2228,6 +2277,75 @@ html`
 
 ---
 
+## Native Lit Patterns Checklist
+
+These patterns were established in ProgressView Phase 2-3. Settings View **MUST** follow them.
+
+### Component Patterns
+
+| Pattern | Requirement |
+| ------- | ----------- |
+| Shadow DOM | No `createRenderRoot()` override — use Lit default |
+| Static styles | Use `static styles = [codiconStyles, animationStyles, css\`...\`]` array composition |
+| Arrow functions | Use arrow functions for event handlers to preserve `this` binding |
+| @property vs @state | `@property` for parent inputs, `@state` for internal state |
+| @query | Use for imperative DOM access only; await `updateComplete` first |
+| Reflected properties | Use `reflect: true` for CSS `:host([attr])` targeting |
+
+### Message Handling Patterns
+
+| Pattern | Requirement |
+| ------- | ----------- |
+| Registry pattern | Use `Record<string, Handler>` instead of switch statements |
+| Zod validation | Validate at entry point with `safeParse()`, silent fail on error |
+| Context interface | Pass `getState()`/`setState()` accessors, not direct state |
+
+### Rendering Patterns
+
+| Pattern | When to Use |
+| ------- | ----------- |
+| `nothing` | Element should be absent from DOM entirely |
+| `?hidden` | Element stays in DOM but visually hidden |
+| `repeat()` | Lists with stable keys (sorted/reordered) |
+| `classMap()` | Dynamic CSS class bindings |
+| `live()` | Textarea/input to preserve cursor position |
+| `when()` | Conditional template blocks |
+| `ifDefined()` | Optional attributes |
+
+### Event Patterns
+
+| Pattern | Requirement |
+| ------- | ----------- |
+| Custom events factory | Centralized event creation with typed details |
+| bubbles + composed | All custom events must use `bubbles: true, composed: true` |
+| Event naming | Use kebab-case: `item-select`, `filter-change` |
+
+**Example:**
+
+```typescript
+// events.ts
+function createEvent<T>(type: string, detail: T): CustomEvent<T> {
+  return new CustomEvent(type, { detail, bubbles: true, composed: true });
+}
+
+export const SettingsEvents = {
+  tabChange: (detail: { tab: SettingsTab }) => createEvent('tab-change', detail),
+  modelToggle: (detail: { id: string; enabled: boolean }) => createEvent('model-toggle', detail),
+  settingChange: (detail: { key: string; value: unknown }) => createEvent('setting-change', detail),
+};
+```
+
+### CSS Patterns
+
+| Pattern | Requirement |
+| ------- | ----------- |
+| Design tokens | Access via CSS custom properties (`var(--spacing-medium)`) |
+| Shared styles | Import from `@shared/styles/litStyles.ts` |
+| Codicon styles | Import `codiconStyles` for icon fonts |
+| No external CSS | All component styles in `static styles` array |
+
+---
+
 ## Implementation Checklist
 
 Before merging Settings View implementation, verify:
@@ -2260,10 +2378,23 @@ Before merging Settings View implementation, verify:
 
 ## References
 
-- **ProgressView Modernization PRD:** `docs/prd-progressview-modernization.md`
+### ProgressView Modernization PRDs
+- **Overview:** `docs/prd-progressview-modernization.md`
+- **Phase 1 (Schema relocation):** `docs/prd-progressview-phase1.md`
+- **Phase 2 (Shared infrastructure):** `docs/prd-progressview-phase2.md` — includes anti-patterns analysis
+- **Phase 3 (Native Lit patterns):** `docs/prd-progressview-phase3.md`
+- **Phase 4 (Other webviews):** `docs/prd-progressview-phase4.md` — includes migration order and patterns checklist
+
+### External Documentation
 - **Lit Documentation:** https://lit.dev/
+- **Lit Reactive Controllers:** https://lit.dev/docs/composition/controllers/
 - **Zod Documentation:** https://zod.dev/
+- **VS Code Webview API:** https://code.visualstudio.com/api/extension-guides/webview
+- **GitLens (reference):** Production Lit webviews in VS Code
+
+### Codebase References
 - **Shared Schemas:** `src/shared/schemas/`
 - **Shared Components:** `src/shared/components/`
+- **Shared Styles:** `src/shared/styles/litStyles.ts`
 - **Base Classes:** `src/common/webview/Base*.ts`
 - **PR Review:** #2206 - Initial implementation attempt with review feedback
