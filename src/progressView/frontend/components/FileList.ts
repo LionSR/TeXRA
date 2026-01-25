@@ -66,32 +66,21 @@ export class FileList extends LitElement {
     if (!file?.location) return html``;
 
     const location = file.location;
-    const relativePath =
-      location.kind === 'workspace' || location.kind === 'runStorage'
-        ? location.relativePath
-        : location.absolutePath;
-    const originalLocation = file.lineage?.original;
-    const originalRelativePath =
-      originalLocation &&
-      (originalLocation.kind === 'workspace' ||
-        originalLocation.kind === 'runStorage')
-        ? originalLocation.relativePath
-        : originalLocation?.absolutePath;
-    const displayPath = originalRelativePath || relativePath;
+    const relativePath = this.getDisplayPath(location);
+    const originalRelativePath = file.lineage?.original
+      ? this.getDisplayPath(file.lineage.original)
+      : undefined;
+    const displayPath = originalRelativePath ?? relativePath;
     const normalizedPath = displayPath.replaceAll('\\', '/');
     const lastSlash = normalizedPath.lastIndexOf('/');
     const basename =
       lastSlash >= 0 ? normalizedPath.slice(lastSlash + 1) : normalizedPath;
     const dir = lastSlash >= 0 ? normalizedPath.slice(0, lastSlash + 1) : '';
-    const tooltipPath =
-      location.kind === 'workspace' || location.kind === 'runStorage'
-        ? location.relativePath
-        : location.absolutePath;
+    const tooltipPath = this.getDisplayPath(location);
     const effectiveBase =
-      file.lineage?.diffBase?.absolutePath ||
-      file.lineage?.original?.absolutePath ||
+      file.lineage?.diffBase?.absolutePath ??
+      file.lineage?.original?.absolutePath ??
       '';
-
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     return html`
@@ -214,5 +203,14 @@ export class FileList extends LitElement {
           !Number.isNaN(round) && Array.isArray(files) && files.length > 0,
       )
       .sort((a, b) => a[0] - b[0]);
+  }
+
+  private getDisplayPath(
+    loc: OutputFileInfo['location'],
+  ): string {
+    if (!loc) return '';
+    return loc.kind === 'workspace' || loc.kind === 'runStorage'
+      ? loc.relativePath
+      : loc.absolutePath;
   }
 }

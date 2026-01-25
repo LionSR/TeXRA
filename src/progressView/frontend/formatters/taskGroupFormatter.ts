@@ -86,16 +86,12 @@ export class TaskGroupHeaderFormatter {
   }
 
   _getStatusIcon(status: string): string {
-    switch (status) {
-      case STREAM_STATUS.RUNNING:
-        return '<i class="codicon codicon-sync spin"></i>';
-      case STREAM_STATUS.ERROR:
-        return '<i class="codicon codicon-error"></i>';
-      case STREAM_STATUS.STOPPED:
-        return '<i class="codicon codicon-check"></i>';
-      default:
-        return '<i class="codicon codicon-circle-outline"></i>';
-    }
+    const icons: Record<string, string> = {
+      [STREAM_STATUS.RUNNING]: '<i class="codicon codicon-sync spin"></i>',
+      [STREAM_STATUS.ERROR]: '<i class="codicon codicon-error"></i>',
+      [STREAM_STATUS.STOPPED]: '<i class="codicon codicon-check"></i>',
+    };
+    return icons[status] ?? '<i class="codicon codicon-circle-outline"></i>';
   }
 
   /** Format duration in milliseconds to human-readable string. Exposed as instance method for external callers. */
