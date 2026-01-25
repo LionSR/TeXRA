@@ -21,7 +21,6 @@ import {
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
-import type { NormalizedPayload } from '../parseUtils';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
@@ -143,13 +142,12 @@ function createToolElement(
 
 /** Format tool use log entry. */
 export function formatToolUse(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
   groupId: string | undefined,
   timestamp: number,
 ): HTMLElement | null {
-  const { structured } = normalizedPayload ?? {};
-  const normalizedToolLog = normalizeToolUseData(structured);
+  const normalizedToolLog = normalizeToolUseData(data);
 
   if (!normalizedToolLog) {
     return null;
@@ -367,7 +365,7 @@ export function formatToolUse(
 
 /** Format web search results from native provider tools (Anthropic, OpenAI). */
 export function formatWebSearch(
-  normalizedPayload: NormalizedPayload,
+  data: unknown,
   logId: string,
   groupId: string | undefined,
   timestamp: number,
@@ -386,12 +384,11 @@ export function formatWebSearch(
     return element;
   }
 
-  const { structured } = normalizedPayload ?? {};
-  if (!structured || typeof structured !== 'object') {
+  if (!data || typeof data !== 'object') {
     return null;
   }
 
-  const { query, results, provider, status } = structured as WebSearchPayload;
+  const { query, results, provider, status } = data as WebSearchPayload;
   const resultCount = Array.isArray(results) ? results.length : 0;
   const providerKey = typeof provider === 'string' ? provider : 'web';
   const statusKey = typeof status === 'string' ? status : '';

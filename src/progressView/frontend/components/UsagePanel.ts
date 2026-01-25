@@ -1,6 +1,7 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas
 import type { TokenUsageStats } from '@shared/schemas';
@@ -21,7 +22,7 @@ export class UsagePanel extends LitElement {
     return this;
   }
 
-  render(): TemplateResult {
+  render(): TemplateResult | typeof nothing {
     const hasUsage =
       (this.usage?.inputTokens ?? 0) > 0 ||
       (this.usage?.outputTokens ?? 0) > 0 ||
@@ -31,7 +32,7 @@ export class UsagePanel extends LitElement {
       this.contextState?.utilizationPercent !== undefined;
 
     if (!hasUsage && !hasContext) {
-      return html``;
+      return nothing;
     }
 
     return html`
@@ -54,8 +55,8 @@ export class UsagePanel extends LitElement {
     `;
   }
 
-  private renderUsage(): TemplateResult {
-    if (!this.usage) return html``;
+  private renderUsage(): TemplateResult | typeof nothing {
+    if (!this.usage) return nothing;
 
     const inputTokens = this.usage.inputTokens ?? 0;
     const outputTokens = this.usage.outputTokens ?? 0;
@@ -69,22 +70,24 @@ export class UsagePanel extends LitElement {
       <span class="run-summary__value">
         <i class="codicon codicon-arrow-up" title="Input tokens"></i
         >${formatTokens(inputTokens)}
-        ${cacheRead > 0
-          ? html` ·
-              <i
-                class="codicon codicon-cloud-download"
-                title="Cache read tokens (discounted)"
-              ></i>
-              ${formatTokens(cacheRead)}`
-          : null}
-        ${cacheWrite > 0
-          ? html` ·
-              <i
-                class="codicon codicon-database"
-                title="Cache creation tokens (1.25x cost)"
-              ></i>
-              ${formatTokens(cacheWrite)}`
-          : null}
+        ${when(
+          cacheRead > 0,
+          () => html` ·
+            <i
+              class="codicon codicon-cloud-download"
+              title="Cache read tokens (discounted)"
+            ></i>
+            ${formatTokens(cacheRead)}`,
+        )}
+        ${when(
+          cacheWrite > 0,
+          () => html` ·
+            <i
+              class="codicon codicon-database"
+              title="Cache creation tokens (1.25x cost)"
+            ></i>
+            ${formatTokens(cacheWrite)}`,
+        )}
         ·
         <i class="codicon codicon-arrow-down" title="Output tokens"></i
         >${formatTokens(outputTokens)} · $${cost.toFixed(3)}
@@ -92,8 +95,8 @@ export class UsagePanel extends LitElement {
     `;
   }
 
-  private renderContext(): TemplateResult {
-    if (!this.contextState) return html``;
+  private renderContext(): TemplateResult | typeof nothing {
+    if (!this.contextState) return nothing;
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
     const contextLeft = Math.max(0, 100 - utilizationPercent);

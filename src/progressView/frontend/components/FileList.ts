@@ -1,7 +1,8 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -62,8 +63,8 @@ export class FileList extends LitElement {
     `;
   }
 
-  private renderFileItem(file: OutputFileInfo): TemplateResult {
-    if (!file?.location) return html``;
+  private renderFileItem(file: OutputFileInfo): TemplateResult | typeof nothing {
+    if (!file?.location) return nothing;
 
     const location = file.location;
     const relativePath = this.getDisplayPath(location);
@@ -110,76 +111,80 @@ export class FileList extends LitElement {
             <span class="file-dir">${dir}</span>
           </span>
         </span>
-        ${file.diff?.added !== undefined
-          ? html`
-              <span class="file-stats">
-                <span class="added">+${file.diff.added}</span>
-                ${file.diff.removed !== undefined
-                  ? html`<span class="removed">-${file.diff.removed}</span>`
-                  : null}
-              </span>
-            `
-          : null}
+        ${when(
+          file.diff?.added !== undefined,
+          () => html`
+            <span class="file-stats">
+              <span class="added">+${file.diff!.added}</span>
+              ${when(
+                file.diff!.removed !== undefined,
+                () => html`<span class="removed">-${file.diff!.removed}</span>`,
+              )}
+            </span>
+          `,
+        )}
         <div class="file-actions">
-          ${effectiveBase
-            ? html`
-                <vscode-toolbar-button
-                  class="compare-btn"
-                  icon="diff"
-                  title="Compare with original"
-                  @click=${() =>
-                    this.emitFileAction(COMMANDS.COMPARE_ORIGINAL, {
-                      file: location.absolutePath,
-                      base: effectiveBase,
-                    })}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  class="accept-btn"
-                  icon="pass"
-                  title="Accept output"
-                  @click=${() =>
-                    this.emitFileAction(COMMANDS.ACCEPT_FILE, {
-                      file: location.absolutePath,
-                      base: effectiveBase,
-                    })}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  class="merge-btn"
-                  icon="git-merge"
-                  title="Merge changes"
-                  @click=${() =>
-                    this.emitFileAction(COMMANDS.MERGE_FILE, {
-                      file: location.absolutePath,
-                      base: effectiveBase,
-                    })}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  class="diff-btn"
-                  icon="diff-multiple"
-                  title="Run latexdiff"
-                  @click=${() =>
-                    this.emitFileAction(COMMANDS.LATEXDIFF_FILE, {
-                      file: location.absolutePath,
-                      base: effectiveBase,
-                    })}
-                ></vscode-toolbar-button>
-              `
-            : null}
-          ${diffBase
-            ? html`
-                <vscode-toolbar-button
-                  class="prev-btn"
-                  icon="history"
-                  title="Compare with previous"
-                  @click=${() =>
-                    this.emitFileAction(COMMANDS.COMPARE_PREVIOUS, {
-                      file: location.absolutePath,
-                      prev: diffBase,
-                      ...(effectiveBase ? { base: effectiveBase } : {}),
-                    })}
-                ></vscode-toolbar-button>
-              `
-            : null}
+          ${when(
+            effectiveBase,
+            () => html`
+              <vscode-toolbar-button
+                class="compare-btn"
+                icon="diff"
+                title="Compare with original"
+                @click=${() =>
+                  this.emitFileAction(COMMANDS.COMPARE_ORIGINAL, {
+                    file: location.absolutePath,
+                    base: effectiveBase,
+                  })}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="accept-btn"
+                icon="pass"
+                title="Accept output"
+                @click=${() =>
+                  this.emitFileAction(COMMANDS.ACCEPT_FILE, {
+                    file: location.absolutePath,
+                    base: effectiveBase,
+                  })}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="merge-btn"
+                icon="git-merge"
+                title="Merge changes"
+                @click=${() =>
+                  this.emitFileAction(COMMANDS.MERGE_FILE, {
+                    file: location.absolutePath,
+                    base: effectiveBase,
+                  })}
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="diff-btn"
+                icon="diff-multiple"
+                title="Run latexdiff"
+                @click=${() =>
+                  this.emitFileAction(COMMANDS.LATEXDIFF_FILE, {
+                    file: location.absolutePath,
+                    base: effectiveBase,
+                  })}
+              ></vscode-toolbar-button>
+            `,
+          )}
+          ${when(
+            diffBase,
+            () => html`
+              <vscode-toolbar-button
+                class="prev-btn"
+                icon="history"
+                title="Compare with previous"
+                @click=${() =>
+                  this.emitFileAction(COMMANDS.COMPARE_PREVIOUS, {
+                    file: location.absolutePath,
+                    prev: diffBase!,
+                    ...(effectiveBase ? { base: effectiveBase } : {}),
+                  })}
+              ></vscode-toolbar-button>
+            `,
+          )}
         </div>
       </div>
     `;
@@ -192,7 +197,7 @@ export class FileList extends LitElement {
     this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
   }
 
-  private getSortedRounds(): Array<[number, OutputFileInfo[]]> {
+  private getSortedRounds(): [number, OutputFileInfo[]][] {
     return Object.entries(this.filesByRound)
       .map(
         ([round, files]) =>

@@ -1,7 +1,8 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - progress view constants
 import {
@@ -31,9 +32,9 @@ export class StreamHeader extends LitElement {
     return this;
   }
 
-  render(): TemplateResult {
+  render(): TemplateResult | typeof nothing {
     if (!this.stream) {
-      return html``;
+      return nothing;
     }
 
     const status = this.resolveStatus();
@@ -51,7 +52,7 @@ export class StreamHeader extends LitElement {
               <span
                 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
                 data-stream=${this.stream.name}
-                title=${this.stream.label || ''}
+                title=${ifDefined(this.stream.label || undefined)}
               >
                 ${this.stream.label || this.stream.name}
               </span>
@@ -101,15 +102,15 @@ export class StreamHeader extends LitElement {
     `;
   }
 
-  private renderRunSelector(): TemplateResult | null {
+  private renderRunSelector(): TemplateResult | typeof nothing {
     if (!this.stream) {
-      return null;
+      return nothing;
     }
 
     const isWorkflow = this.stream.agentCategory === 'workflow';
     const hasRuns = this.runs.length > 0;
     if (!isWorkflow) {
-      return null;
+      return nothing;
     }
 
     return html`
@@ -119,10 +120,10 @@ export class StreamHeader extends LitElement {
         ?hidden=${!hasRuns}
         aria-hidden=${hasRuns ? 'false' : 'true'}
       >
-        <span class="run-selector-title">
-          <i class="codicon codicon-run"></i>
-          Run
-        </span>
+        <div class="run-selector-title" aria-hidden="true">
+          <i class="codicon codicon-history"></i>
+          <span>Sessions</span>
+        </div>
         <run-selector
           .runs=${this.runs}
           .activeRunId=${this.runId}
