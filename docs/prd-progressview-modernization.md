@@ -113,7 +113,7 @@ NODE_OPTIONS=--max-old-space-size=8192 npm run compile
 
 - Adding new features during migration
 - Changing EventBus architecture
-- Virtual scrolling (future optimization)
+- Virtual scrolling (incremental updates in Phase 5, virtual scrolling deferred)
 - CLI or web app support (but architecture doesn't preclude it)
 
 ## Anti-Patterns to Eliminate
