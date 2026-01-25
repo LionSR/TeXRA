@@ -1,6 +1,7 @@
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, render, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared webview
 import { postMessage } from '@shared/vscode';
@@ -71,13 +72,21 @@ export class LogList extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('toggle', this.handleToggleEvent, { capture: true });
-    document.addEventListener('click', this.handleClickEvent, { capture: true });
+    document.addEventListener('toggle', this.handleToggleEvent, {
+      capture: true,
+    });
+    document.addEventListener('click', this.handleClickEvent, {
+      capture: true,
+    });
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('toggle', this.handleToggleEvent, { capture: true });
-    document.removeEventListener('click', this.handleClickEvent, { capture: true });
+    document.removeEventListener('toggle', this.handleToggleEvent, {
+      capture: true,
+    });
+    document.removeEventListener('click', this.handleClickEvent, {
+      capture: true,
+    });
     super.disconnectedCallback();
   }
 
@@ -285,12 +294,12 @@ export class LogList extends LitElement {
       return;
     }
 
-    const placeholder = document.createElement('div');
-    placeholder.id = ELEMENT_IDS.LOG_PLACEHOLDER;
-    placeholder.className = 'log-placeholder';
-    placeholder.innerHTML = PLACEHOLDER_HTML;
-    container.innerHTML = '';
-    container.appendChild(placeholder);
+    render(
+      html`<div id=${ELEMENT_IDS.LOG_PLACEHOLDER} class="log-placeholder">
+        ${unsafeHTML(PLACEHOLDER_HTML)}
+      </div>`,
+      container,
+    );
   }
 
   private saveToggleStates(): void {
@@ -385,5 +394,5 @@ export class LogList extends LitElement {
         successClass: 'copied',
       });
     }
-  }
+  };
 }
