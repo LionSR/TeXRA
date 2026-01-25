@@ -36,11 +36,15 @@ import {
   UpdateToolEditApprovalStateMessageSchema,
   UpdateUsageMessageSchema,
   type InstructionUpdate,
+  type LogMessageData,
+  type StreamTabId,
+  type StreamTabInfo,
 } from '@shared/schemas';
 
 // Local imports - progress view
 import type { FollowupOptions } from './components/FollowupSection';
 import type { PromptState } from './components/PromptOverlay';
+import type { EventHandlerContext } from './eventHandlers';
 import {
   createEmptyStreamState,
   getEffectiveRunId,
@@ -51,27 +55,25 @@ import {
 } from './store';
 import { updateNestedRounds } from './stateUtils';
 
-// Local imports - shared schemas (types)
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
-
-// Local imports - component types
-import type { FollowUpInput } from './components/FollowUpInput';
-import type { LogList } from './components/LogList';
+/**
+ * Stores pending log updates that arrive before their APPEND_LOG.
+ * When UPDATE_LOG arrives for a log that doesn't exist yet, we store it here.
+ * When APPEND_LOG arrives, we merge any pending update before rendering.
+ */
+const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 
 /**
- * Context passed to message handlers providing access to state and refs.
+ * Message types that should auto-expand by default.
  */
-export interface MessageHandlerContext {
-  getState(): ProgressState;
-  setState(updater: (prev: ProgressState) => ProgressState): void;
-  setStreamState(
-    streamId: StreamTabId,
-    updater: (prev: StreamState) => StreamState,
-  ): void;
+const AUTO_EXPAND_MESSAGE_TYPES = new Set(['thinking', 'scratchpad']);
+
+/**
+ * Context passed to message handlers. Extends EventHandlerContext with
+ * prompt state accessors needed for handling approval/retry messages.
+ */
+export interface MessageHandlerContext extends EventHandlerContext {
   getPrompts(): PromptState[];
   setPrompts(prompts: PromptState[]): void;
-  getLogListRef(): LogList | undefined;
-  getFollowUpRef(): FollowUpInput | undefined;
 }
 
 function updateStreamInfo(
@@ -102,7 +104,7 @@ export function handleUpdateStreams(
   const result = UpdateStreamsMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  const activeStream = result.data.activeStream || null;
+  const activeStream = result.data.activeStream ?? null;
   const updated = updateStreamInfo(ctx.getState(), result.data.streams);
 
   ctx.setState(() => ({
@@ -123,6 +125,7 @@ export function handleUpdateLogs(
   const logList = ctx.getLogListRef();
 
   if (!stream && action === 'clear') {
+    pendingLogUpdates.clear();
     ctx.setState((prev) => ({ ...prev, streamStates: new Map() }));
     logList?.renderLogs({
       streamId: '',
@@ -199,13 +202,31 @@ export function handleAppendLog(
   const result = AppendLogMessageSchema.safeParse(raw);
   if (!result.success) return;
 
+  const logId = result.data.logMessage.id;
+  const pendingUpdate = logId ? pendingLogUpdates.get(logId) : null;
+
+  // Merge any pending update that arrived before this APPEND_LOG
+  const mergedLogMessage = pendingUpdate
+    ? { ...result.data.logMessage, ...pendingUpdate }
+    : result.data.logMessage;
+
+  if (logId && pendingUpdate) {
+    pendingLogUpdates.delete(logId);
+  }
+
   ctx.setStreamState(result.data.stream, (prev) => ({
     ...prev,
-    logs: [...prev.logs, result.data.logMessage],
+    logs: [...prev.logs, mergedLogMessage],
   }));
 
   if (ctx.getState().activeStreamId === result.data.stream) {
-    ctx.getLogListRef()?.appendLog(result.data.logMessage);
+    // Auto-expand thinking and scratchpad messages by default
+    const shouldAutoExpand = AUTO_EXPAND_MESSAGE_TYPES.has(
+      mergedLogMessage.messageType ?? '',
+    );
+    ctx.getLogListRef()?.appendLog(mergedLogMessage, {
+      defaultOpen: shouldAutoExpand,
+    });
   }
 }
 
@@ -216,6 +237,23 @@ export function handleUpdateLog(
   const result = UpdateLogMessageSchema.safeParse(raw);
   if (!result.success) return;
 
+  const logId = result.data.logMessage.id;
+  const state = ctx.getState();
+  const streamState = getStreamState(state, result.data.stream);
+  const logExists = streamState.logs.some((entry) => entry.id === logId);
+
+  if (!logExists) {
+    // Log doesn't exist yet - store update for when APPEND_LOG arrives
+    if (logId) {
+      const existingUpdate = pendingLogUpdates.get(logId) ?? {};
+      pendingLogUpdates.set(logId, {
+        ...existingUpdate,
+        ...result.data.logMessage,
+      });
+    }
+    return;
+  }
+
   ctx.setStreamState(result.data.stream, (prev) => ({
     ...prev,
     logs: prev.logs.map((entry) =>
@@ -223,7 +261,7 @@ export function handleUpdateLog(
     ),
   }));
 
-  if (ctx.getState().activeStreamId === result.data.stream) {
+  if (state.activeStreamId === result.data.stream) {
     ctx.getLogListRef()?.updateLog(result.data.logMessage);
   }
 }
@@ -664,6 +702,7 @@ export function handleDeleteStream(
 
   // Clear log list if active stream was deleted
   if (state.activeStreamId === streamId) {
+    pendingLogUpdates.clear();
     ctx.getLogListRef()?.renderLogs({
       streamId: '',
       messages: [],
@@ -682,6 +721,7 @@ export function handleDeleteAll(
   const result = DeleteAllMessageSchema.safeParse(_raw);
   if (!result.success) return;
 
+  pendingLogUpdates.clear();
   ctx.setState((prev) => ({
     ...prev,
     streams: [],

@@ -27,6 +27,7 @@ import {
   SORT_BUTTONS,
   STREAM_STATUS,
 } from '../constants';
+import { ProgressEvents } from '../events';
 import type { StreamFilter, StreamSort } from '../store';
 
 // Local imports - shared schemas
@@ -195,11 +196,7 @@ export class StreamTabs extends LitElement {
     const tabButton = target.closest('.tab');
     if (tabButton instanceof HTMLElement && tabButton.dataset.stream) {
       this.dispatchEvent(
-        new CustomEvent('stream-switch', {
-          detail: { streamId: tabButton.dataset.stream },
-          bubbles: true,
-          composed: true,
-        }),
+        ProgressEvents.streamSwitch({ streamId: tabButton.dataset.stream }),
       );
       return;
     }
@@ -207,11 +204,7 @@ export class StreamTabs extends LitElement {
     const deleteButton = target.closest('.tab-delete');
     if (deleteButton instanceof HTMLElement && deleteButton.dataset.stream) {
       this.dispatchEvent(
-        new CustomEvent('stream-delete', {
-          detail: { streamId: deleteButton.dataset.stream },
-          bubbles: true,
-          composed: true,
-        }),
+        ProgressEvents.streamDelete({ streamId: deleteButton.dataset.stream }),
       );
     }
   }
@@ -221,13 +214,7 @@ export class StreamTabs extends LitElement {
     const filter = getRadioChangeValue(event, group) as StreamFilter;
     if (!filter) return;
 
-    this.dispatchEvent(
-      new CustomEvent('filter-change', {
-        detail: { filter },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.filterChange({ filter }));
   }
 
   private handleSortClick(event: MouseEvent) {
@@ -238,18 +225,12 @@ export class StreamTabs extends LitElement {
     if (!button?.dataset.sort) return;
 
     this.dispatchEvent(
-      new CustomEvent('sort-change', {
-        detail: { sort: button.dataset.sort as StreamSort },
-        bubbles: true,
-        composed: true,
-      }),
+      ProgressEvents.sortChange({ sort: button.dataset.sort as StreamSort }),
     );
   }
 
   private handleDeleteAll() {
-    this.dispatchEvent(
-      new CustomEvent('delete-all', { bubbles: true, composed: true }),
-    );
+    this.dispatchEvent(ProgressEvents.deleteAll());
   }
 
   private buildTooltip(info: StreamTabInfo): string {

@@ -140,6 +140,10 @@ export class ProgressApp extends BaseWebviewApp {
     const runId = streamState ? getEffectiveRunId(streamState) : null;
     const isToolUse =
       activeStream?.agentCategory === AGENT_CATEGORY.TOOL_USE || false;
+    const filteredPrompts = this.getFilteredPrompts(
+      activeStream?.name ?? null,
+      isToolUse,
+    );
 
     return html`
       <div class="main-container">
@@ -233,8 +237,8 @@ export class ProgressApp extends BaseWebviewApp {
       </div>
 
       <prompt-overlay
-        ?hidden=${this.prompts.length === 0}
-        .prompt=${this.prompts.at(0) ?? null}
+        ?hidden=${filteredPrompts.length === 0}
+        .prompt=${filteredPrompts.at(0) ?? null}
         @prompt-action=${this.onPromptAction}
       ></prompt-overlay>
     `;
@@ -242,15 +246,15 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object') return;
-    const message = raw as { command?: string };
-    if (!message.command) return;
+    if (!('command' in raw) || typeof raw.command !== 'string') return;
+    const command = raw.command;
 
     // Handle theme commands first
     const themeHandlers = createThemeHandlers({
       commands: PROGRESS_VIEW_COMMANDS,
       onThemeChange: updateHighlightTheme,
     }) as Record<string, (message: unknown) => void>;
-    const themeHandler = themeHandlers[message.command];
+    const themeHandler = themeHandlers[command];
     if (themeHandler) {
       themeHandler(raw);
       return;
@@ -259,7 +263,7 @@ export class ProgressApp extends BaseWebviewApp {
     const ctx = this.createMessageHandlerContext();
 
     // Handle app-specific commands
-    switch (message.command) {
+    switch (command) {
       case PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS:
         handleUpdateStreams(raw, ctx);
         break;
@@ -371,6 +375,28 @@ export class ProgressApp extends BaseWebviewApp {
     );
   }
 
+  /**
+   * Filter prompts to only show those matching the active stream.
+   * Prompts are only shown for tool-use agents (legacy behavior).
+   * Prompts with empty streamId are shown for all streams.
+   */
+  private getFilteredPrompts(
+    activeStreamId: string | null,
+    isToolUse: boolean,
+  ): PromptState[] {
+    // Only show prompts for tool-use agents
+    if (!isToolUse) return [];
+    if (!activeStreamId) return [];
+
+    return this.prompts.filter((prompt) => {
+      const promptStreamId = prompt.data.streamId;
+      // Show prompts with empty streamId for all streams (global prompts)
+      if (!promptStreamId) return true;
+      // Show prompts matching the active stream
+      return promptStreamId === activeStreamId;
+    });
+  }
+
   private setStreamState(
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
@@ -379,23 +405,6 @@ export class ProgressApp extends BaseWebviewApp {
     const current = getStreamState(this.appState, streamId);
     nextStates.set(streamId, updater(current));
     this.appState = { ...this.appState, streamStates: nextStates };
-  }
-
-  private createMessageHandlerContext(): MessageHandlerContext {
-    return {
-      getState: () => this.appState,
-      setState: (updater) => {
-        this.appState = updater(this.appState);
-      },
-      setStreamState: (streamId, updater) =>
-        this.setStreamState(streamId, updater),
-      getPrompts: () => this.prompts,
-      setPrompts: (prompts) => {
-        this.prompts = prompts;
-      },
-      getLogListRef: () => this.logListRef.value,
-      getFollowUpRef: () => this.followUpRef.value,
-    };
   }
 
   private createEventHandlerContext(): EventHandlerContext {
@@ -408,6 +417,16 @@ export class ProgressApp extends BaseWebviewApp {
         this.setStreamState(streamId, updater),
       getLogListRef: () => this.logListRef.value,
       getFollowUpRef: () => this.followUpRef.value,
+    };
+  }
+
+  private createMessageHandlerContext(): MessageHandlerContext {
+    return {
+      ...this.createEventHandlerContext(),
+      getPrompts: () => this.prompts,
+      setPrompts: (prompts) => {
+        this.prompts = prompts;
+      },
     };
   }
 

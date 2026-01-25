@@ -22,12 +22,7 @@ import { formatTokens } from '../timestampUtils';
 
 type DiffResultEntry = Record<string, unknown>;
 
-/**
- * Format file list entry
- * @param {object} normalizedPayload - Normalized payload
- * @param {string} logId - Log entry ID
- * @returns {HTMLElement|null} File list element or null
- */
+/** Format file list entry. */
 export function formatFileList(
   normalizedPayload: NormalizedPayload,
   logId: string,
@@ -75,12 +70,7 @@ export function formatFileList(
   return element;
 }
 
-/**
- * Create XML link element from file info
- * @param {string} xmlFile - XML file path
- * @param {string} documentTag - Expected document tag
- * @returns {HTMLElement|null} XML link element or null
- */
+/** Create XML link element from file info. */
 function createXmlLinkElement(
   xmlFile: string,
   documentTag: string | null,
@@ -103,12 +93,7 @@ function createXmlLinkElement(
     : null;
 }
 
-/**
- * Format missing outputs entry
- * @param {object} normalizedPayload - Normalized payload
- * @param {string} logId - Log entry ID
- * @returns {HTMLElement|null} Missing outputs element or null
- */
+/** Format missing outputs entry. */
 export function formatMissingOutputs(
   normalizedPayload: NormalizedPayload,
   logId: string,
@@ -161,19 +146,11 @@ export function formatMissingOutputs(
 // Latexdiff Helpers
 // =============================================================================
 
-/**
- * Convert value to string if non-empty, otherwise return empty string
- * @param {*} value - Value to convert
- * @returns {string} String value or empty string
- */
+/** Convert value to string if non-empty, otherwise return empty string. */
 const toStringOrEmpty = (value: unknown): string =>
   typeof value === 'string' && value.length > 0 ? value : '';
 
-/**
- * Get display path from a location object
- * @param {object|null} location - Location object with kind and relativePath
- * @returns {string} Relative path or empty string
- */
+/** Get display path from a location object. */
 const describeLocation = (location: Record<string, unknown> | null): string => {
   if (!location) return '';
   if (location.kind === 'workspace' || location.kind === 'runStorage') {
@@ -184,22 +161,14 @@ const describeLocation = (location: Record<string, unknown> | null): string => {
   return '';
 };
 
-/**
- * Get status icon class for latexdiff entry
- * @param {string} status - Entry status ('success', 'error', or other)
- * @returns {string} Codicon class
- */
+/** Get status icon class for latexdiff entry. */
 const getLatexdiffStatusIcon = (status: string): string => {
   if (status === 'success') return 'codicon-check';
   if (status === 'error') return 'codicon-error';
   return 'codicon-question';
 };
 
-/**
- * Extract display data from new DiffResult format.
- * @param {object} entry - DiffResult entry
- * @returns {object} Extracted fields for rendering
- */
+/** Extract display data from new DiffResult format. */
 const extractNewFormat = (entry: DiffResultEntry) => {
   const baseLocation = entry.baseLocation as
     | Record<string, unknown>
@@ -253,22 +222,14 @@ const extractNewFormat = (entry: DiffResultEntry) => {
   };
 };
 
-/**
- * Extract round number from a label like "[r1]" or "file.tex [r2]"
- * @param {string|undefined} label - Label that might contain round info
- * @returns {number|null} Round number or null if not found
- */
+/** Extract round number from a label like "[r1]" or "file.tex [r2]". */
 const parseRoundFromLabel = (label: string | undefined): number | null => {
   if (typeof label !== 'string') return null;
   const match = label.match(/\[r(\d+)\]/);
   return match ? parseInt(match[1], 10) : null;
 };
 
-/**
- * Extract display data from legacy format (locations + labels).
- * @param {object} entry - Legacy entry
- * @returns {object} Extracted fields for rendering
- */
+/** Extract display data from legacy format (locations + labels). */
 const extractLegacyFormat = (entry: DiffResultEntry) => {
   const locations = entry.locations as Record<string, unknown> | undefined;
   const baseFile =
@@ -324,8 +285,6 @@ const extractLegacyFormat = (entry: DiffResultEntry) => {
 /**
  * Build HTML for a latexdiff entry.
  * Handles both new format (DiffResult) and legacy format (locations + labels).
- * @param {object} entry - Latexdiff entry
- * @returns {string} HTML string for the entry
  */
 const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
   if (!entry) return '';
@@ -375,12 +334,7 @@ const buildLatexdiffEntryHtml = (entry: DiffResultEntry): string => {
 // Latexdiff Formatter
 // =============================================================================
 
-/**
- * Format latexdiff entry
- * @param {object} normalizedPayload - Normalized payload
- * @param {string} logId - Log entry ID
- * @returns {HTMLElement|null} Latexdiff element or null
- */
+/** Format latexdiff entry. */
 export function formatLatexdiff(
   normalizedPayload: NormalizedPayload,
   logId: string,
@@ -445,12 +399,7 @@ const STAT_FIELDS: Array<[string, string, string, (value: number) => string]> =
     ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
   ];
 
-/**
- * Format statistics entry
- * @param {object} normalizedPayload - Normalized payload
- * @param {string} logId - Log entry ID
- * @returns {HTMLElement|null} Statistics element or null
- */
+/** Format statistics entry. */
 export function formatStatistics(
   normalizedPayload: NormalizedPayload,
   logId: string,

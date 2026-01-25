@@ -19,10 +19,7 @@ const TOKENS_FREED_ACTIONS = new Set([
   'compaction',
 ]);
 
-/**
- * Action display configuration
- * @type {Record<string, {icon: string, label: string, color: string}>}
- */
+/** Action display configuration. */
 const ACTION_CONFIG: Record<
   string,
   { icon: string; label: string; color: string }
@@ -54,12 +51,7 @@ const ACTION_CONFIG: Record<
   },
 };
 
-/**
- * Format context management event for display
- * @param {object} normalizedPayload - Normalized payload with structured data
- * @param {string} logId - Log entry ID
- * @returns {HTMLElement|null} Context management element or null
- */
+/** Format context management event for display. */
 export const formatContextManagement = (
   normalizedPayload: NormalizedPayload,
   logId: string,

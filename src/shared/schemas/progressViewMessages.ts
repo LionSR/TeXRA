@@ -353,6 +353,9 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SetFollowupOptionsMessageSchema,
     // Theme
     SetThemeMessageSchema,
+    // Stream deletion
+    DeleteStreamMessageSchema,
+    DeleteAllMessageSchema,
   ],
 );
 

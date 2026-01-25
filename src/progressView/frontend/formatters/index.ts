@@ -154,12 +154,7 @@ export class LogEntryFormatter {
     };
   }
 
-  /**
-   * Format a log entry with Markdown rendering for banner content
-   * @param {Object} logMessage - The log message to format
-   * @param {Object} [options] - Formatting options
-   * @returns {HTMLElement|null} DOM element for the log message
-   */
+  /** Format a log entry with Markdown rendering for banner content. */
   format(
     logMessage: LogMessageData,
     options: LogFormatOptions = {},
