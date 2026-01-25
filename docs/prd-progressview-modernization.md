@@ -79,7 +79,7 @@ The legacy codebase has accumulated sequential band-aid workarounds. **These mus
 
 ## Eliminated Abstractions (Zod-First Architecture Wins)
 
-The migration to Zod schemas as the single source of truth eliminated **~185 lines** of redundant normalization code. These abstractions existed because the old architecture lacked schema-first validation:
+The migration to Zod schemas as the single source of truth eliminated **~200 lines** of redundant code. These abstractions existed because the old architecture lacked schema-first validation:
 
 ### Data Flow: Before vs After
 
@@ -108,6 +108,10 @@ AFTER (2 layers):
 | `ensureLatexdiffArray()`           | Type guard wrapper                  | Inline `Array.isArray()`                             |
 | `extractTrimmedContent()`          | Wrapper around `.trim()`            | Inline `text.trim()`                                 |
 | Local `WebSearchPayload` type      | Duplicate type definition           | Import from `@shared/schemas`                        |
+| `MAX_HEIGHT` constant              | Unused height value (400)           | Never imported or referenced                         |
+| `AGENT_PROPOSAL_ACTIONS` constant  | `['approve', 'reject', 'setup']`    | Actions used inline, not via constant                |
+| `AGENT_PROPOSAL_CATEGORIES` const  | `{ WORKFLOW, TOOL_USE }`            | Categories defined in agent schemas                  |
+| `sortStreams()` export             | Exported but internal-only          | Made private (only used by `getFilteredStreams`)     |
 
 ### Key Insight
 
