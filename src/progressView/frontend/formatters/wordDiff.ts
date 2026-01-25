@@ -6,8 +6,8 @@
 // Third-party imports
 import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 
-// Local imports - shared utilities
-import { encodeHtml } from '@shared/utils/html';
+// Local imports - Lit utilities
+import { html, type TemplateResult } from './litTemplates';
 
 // Type alias for the diff_match_patch instance
 type DiffMatchPatch = InstanceType<typeof diff_match_patch>;
@@ -22,23 +22,23 @@ function getDmp(): DiffMatchPatch {
   return dmpInstance;
 }
 
-/** Generate inline diff HTML showing changes between old and new text. Uses diff-match-patch for reliable diffing. */
-export function generateInlineDiff(oldText: string, newText: string): string {
+/** Generate inline diff template showing changes between old and new text. */
+export function generateInlineDiff(
+  oldText: string,
+  newText: string,
+): TemplateResult {
   const dmp = getDmp();
   const diffs = dmp.diff_main(oldText ?? '', newText ?? '');
   dmp.diff_cleanupSemantic(diffs);
 
-  return diffs
-    .map(([op, text]: [number, string]) => {
-      const encoded = encodeHtml(text);
-      switch (op) {
-        case DIFF_DELETE:
-          return `<span class="diff-inline-del">${encoded}</span>`;
-        case DIFF_INSERT:
-          return `<span class="diff-inline-add">${encoded}</span>`;
-        default:
-          return encoded;
-      }
-    })
-    .join('');
+  return html`${diffs.map(([op, text]: [number, string]) => {
+    switch (op) {
+      case DIFF_DELETE:
+        return html`<span class="diff-inline-del">${text}</span>`;
+      case DIFF_INSERT:
+        return html`<span class="diff-inline-add">${text}</span>`;
+      default:
+        return text;
+    }
+  })}`;
 }
