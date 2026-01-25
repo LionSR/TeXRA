@@ -3,7 +3,9 @@ export function capitalize(str: string): string {
 }
 
 /** Type guard for non-array plain objects. */
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 

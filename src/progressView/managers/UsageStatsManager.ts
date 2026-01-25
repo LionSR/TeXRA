@@ -1,13 +1,22 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - identifiers
-import type { StorageKey, StreamTabId } from '@shared/schemas';
-// Types - import canonical schema as source of truth
-import { TokenUsageStatsSchema, type TokenUsageStats } from '@shared/schemas';
+// Local imports - shared schemas
+import {
+  TokenUsageStatsSchema,
+  type StorageKey,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
+
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

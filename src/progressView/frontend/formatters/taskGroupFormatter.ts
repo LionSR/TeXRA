@@ -4,7 +4,13 @@
  */
 
 // Local imports - Lit template utilities
-import { html, when, classMap, renderToElement, type TemplateResult } from './litTemplates';
+import {
+  html,
+  when,
+  classMap,
+  renderToElement,
+  type TemplateResult,
+} from './litTemplates';
 
 // Local imports - progress view constants
 import { STREAM_STATUS, GROUP_DOM_IDS } from '../constants';
