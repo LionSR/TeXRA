@@ -10,6 +10,7 @@ import {
   STREAM_STATUS,
   TOOLBAR_BUTTONS,
 } from '../constants';
+import { ProgressEvents } from '../events';
 import type { StreamState } from '../store';
 
 // Local imports - shared schemas
@@ -224,22 +225,10 @@ export class StreamHeader extends LitElement {
     const command = button.dataset.command;
     if (!command) return;
 
-    this.dispatchEvent(
-      new CustomEvent('toolbar-command', {
-        detail: { command },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.toolbarCommand({ command }));
   }
 
   private handleRunSelected(event: CustomEvent) {
-    this.dispatchEvent(
-      new CustomEvent('run-selected', {
-        detail: event.detail,
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.runSelected(event.detail));
   }
 }

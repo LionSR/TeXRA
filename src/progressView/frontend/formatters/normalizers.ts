@@ -63,49 +63,24 @@ export type NormalizedToolUseLog = {
   headerSummary: string;
 };
 
-/**
- * Return trimmed string if non-empty, null otherwise.
- * @param {*} value - Value to check
- * @returns {string|null} Trimmed string or null
- */
+/** Return trimmed string if non-empty, null otherwise. */
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed || null;
 }
 
-/**
- * Get first non-empty trimmed string from primary or fallback.
- * @param {*} primary - Primary source value
- * @param {*} fallback - Fallback source value
- * @returns {string} Trimmed string or empty string
- */
+/** Get first non-empty trimmed string from primary or fallback. */
 function firstTrimmed(primary: unknown, fallback: unknown): string {
   return trimmedOrNull(primary) ?? trimmedOrNull(fallback) ?? '';
 }
 
-/**
- * Return value if it's a string, otherwise return fallback.
- * @param {*} value - Value to check
- * @param {string} fallback - Fallback value
- * @returns {string} Value or fallback
- */
+/** Return value if it's a string, otherwise return fallback. */
 function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
-/**
- * @typedef {Object} StringifyResult
- * @property {string} text - The stringified text
- * @property {string} language - Language hint for syntax highlighting ('yaml', 'json', 'plaintext')
- */
-
-/**
- * Convert a value to a display-friendly string with language metadata.
- * Avoids repeated parsing by tracking the serialization format used.
- * @param {*} value - Value to stringify
- * @returns {StringifyResult} Object with text and language hint
- */
+/** Convert a value to a display-friendly string with language metadata. Avoids repeated parsing by tracking the serialization format used. */
 export function stringifyWithLanguage(value: unknown): StringifyResult {
   if (value === undefined || value === null) {
     return { text: '', language: 'plaintext' };
@@ -124,12 +99,7 @@ export function stringifyWithLanguage(value: unknown): StringifyResult {
   }
 }
 
-/**
- * Check if an input object is code-only (has only a code/command field with string content).
- * Supports 'code' field (wolfram) and 'command' field (bash).
- * @param {*} value - Value to check
- * @returns {{isCodeOnly: boolean, code: string}} Result with code extraction
- */
+/** Check if an input object is code-only (has only a code/command field with string content). Supports 'code' field (wolfram) and 'command' field (bash). */
 export function extractCodeOnlyInput(value: unknown): {
   isCodeOnly: boolean;
   code: string;
@@ -145,11 +115,7 @@ export function extractCodeOnlyInput(value: unknown): {
   return { isCodeOnly: false, code: '' };
 }
 
-/**
- * Try to parse a string as JSON
- * @param {string} text - Text to parse
- * @returns {object|null} Parsed JSON or null
- */
+/** Try to parse a string as JSON. */
 export function tryParseJson(text: string): Record<string, unknown> | null {
   if (!text || typeof text !== 'string') {
     return null;
@@ -162,12 +128,7 @@ export function tryParseJson(text: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Normalize structured content from text and data
- * @param {string} text - Raw text content
- * @param {*} data - Optional structured data
- * @returns {{decodedText: string, structured: *}} Normalized payload
- */
+/** Normalize structured content from text and data. */
 export function normalizeStructuredContent(
   text: string,
   data: unknown,
@@ -180,11 +141,7 @@ export function normalizeStructuredContent(
   return { decodedText: rawText, structured: tryParseJson(rawText) };
 }
 
-/**
- * Normalize file list entries from structured data
- * @param {Array} structured - Raw file list array
- * @returns {Array|null} Normalized file entries or null
- */
+/** Normalize file list entries from structured data. */
 export function normalizeFileListEntries(
   structured: unknown,
 ): NormalizedFileEntry[] | null {
@@ -206,11 +163,7 @@ export function normalizeFileListEntries(
   });
 }
 
-/**
- * Normalize missing outputs payload
- * @param {object} structured - Raw missing outputs data
- * @returns {{missing: Array, xmlFile: string|null, documentTag: string|null}|null} Normalized payload
- */
+/** Normalize missing outputs payload. */
 export function normalizeMissingOutputsPayload(
   structured: unknown,
 ): NormalizedMissingOutputs | null {
@@ -226,13 +179,7 @@ export function normalizeMissingOutputsPayload(
   };
 }
 
-/**
- * Ensure input is an array for latexdiff entries.
- * Returns the input unchanged if it's an array, null otherwise.
- * Does not validate individual entry structure.
- * @param {*} structured - Input to check
- * @returns {Array|null} Input array or null if not an array
- */
+/** Ensure input is an array for latexdiff entries. Returns the input unchanged if it's an array, null otherwise. */
 export function ensureLatexdiffArray(
   structured: unknown,
 ): Record<string, unknown>[] | null {
@@ -241,20 +188,12 @@ export function ensureLatexdiffArray(
     : null;
 }
 
-/**
- * Check if value is a non-array object
- * @param {*} value - Value to check
- * @returns {boolean} True if non-null, non-array object
- */
+/** Check if value is a non-array object. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/**
- * Extract output content from possibly nested structure, stripping metadata.
- * @param {*} candidate - Output candidate value
- * @returns {*} Extracted output content
- */
+/** Extract output content from possibly nested structure, stripping metadata. */
 function extractOutputContent(candidate: unknown): unknown {
   if (!isPlainObject(candidate)) return candidate;
 
@@ -271,11 +210,7 @@ function extractOutputContent(candidate: unknown): unknown {
   return output !== undefined ? output : rest;
 }
 
-/**
- * Format output content as display string.
- * @param {*} content - Content to format
- * @returns {string} Formatted display string
- */
+/** Format output content as display string. */
 function formatOutputText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (content === undefined) return '';
@@ -283,11 +218,7 @@ function formatOutputText(content: unknown): string {
   return stringifyWithLanguage(content).text;
 }
 
-/**
- * Normalize tool use log entry
- * @param {object} structured - Raw tool use data
- * @returns {object|null} Normalized tool use log
- */
+/** Normalize tool use log entry. */
 export function normalizeToolUseLog(
   structured: unknown,
 ): NormalizedToolUseLog | null {
@@ -320,11 +251,7 @@ export function normalizeToolUseLog(
   };
 }
 
-/**
- * Extract and trim content from normalized payload
- * @param {Object} normalizedPayload - The normalized payload object
- * @returns {{decodedText: string, trimmed: string, isEmpty: boolean}}
- */
+/** Extract and trim content from normalized payload. */
 export function extractTrimmedContent(normalizedPayload: NormalizedPayload): {
   decodedText: string;
   trimmed: string;

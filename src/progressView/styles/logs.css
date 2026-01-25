@@ -2,6 +2,28 @@
  * Log entry styles for ProgressView
  */
 
+/* Custom elements must participate in flex layout properly */
+task-group-list,
+log-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Non-scrolling elements should not shrink or grow */
+stream-header,
+instruction-panel,
+todo-list,
+usage-panel,
+file-list,
+follow-up-input,
+followup-section {
+  display: block;
+  flex-shrink: 0;
+}
+
 .log-container {
   flex: 1 1 auto;
   padding: var(--spacing-tiny) var(--spacing-medium);

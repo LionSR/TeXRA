@@ -88,7 +88,7 @@ export class LogList extends LitElement {
   }
 
   setAgentCategory(category: string): void {
-    this.activeAgentCategory = category || 'workflow';
+    this.activeAgentCategory = category ?? 'workflow';
     this.groupManager.setActiveAgentCategory(this.activeAgentCategory);
   }
 
@@ -218,13 +218,19 @@ export class LogList extends LitElement {
     this.showPlaceholderIfEmpty(sortedMessages, groups);
   }
 
-  appendLog(logMessage: LogMessageData): void {
+  appendLog(
+    logMessage: LogMessageData,
+    options: { defaultOpen?: boolean } = {},
+  ): void {
     const container = this.getContainer();
     if (!container) return;
 
-    const appendedToGroup = this.logManager.append(logMessage);
+    const appendedToGroup = this.logManager.append(logMessage, options);
     if (!appendedToGroup) {
-      const formatted = this.logManager.entryFormatter.format(logMessage);
+      const formatted = this.logManager.entryFormatter.format(
+        logMessage,
+        options,
+      );
       if (formatted) {
         appendFormatted(container, formatted);
       }

@@ -17,10 +17,7 @@ let markdownRenderer: MarkdownIt | null = null;
 const CACHE_MAX_SIZE = 500;
 const markdownCache = new Map<string, string>();
 
-/**
- * Get the shared markdown renderer instance
- * @returns {MarkdownIt} Configured markdown renderer
- */
+/** Get the shared markdown renderer instance. */
 export const getMarkdownRenderer = (): MarkdownIt => {
   if (!markdownRenderer) {
     markdownRenderer = new MarkdownIt({
@@ -43,12 +40,7 @@ export const getMarkdownRenderer = (): MarkdownIt => {
   return markdownRenderer;
 };
 
-/**
- * Create LaTeX reference HTML element
- * @param {string} refType - The reference type (ref, cref, eqref)
- * @param {string} label - The label value
- * @returns {string} HTML for the clickable reference
- */
+/** Create LaTeX reference HTML element. */
 export const createLatexReferenceHtml = (
   refType: string,
   label: string,
@@ -56,11 +48,7 @@ export const createLatexReferenceHtml = (
   return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
 };
 
-/**
- * Protect LaTeX references from markdown parsing
- * @param {string} content - Content with LaTeX references
- * @returns {string} Content with placeholder references
- */
+/** Protect LaTeX references from markdown parsing. */
 export const protectLatexReferences = (content: string): string => {
   content = content.replaceAll(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
   content = content.replaceAll(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
@@ -68,11 +56,7 @@ export const protectLatexReferences = (content: string): string => {
   return content;
 };
 
-/**
- * Restore LaTeX references from placeholders to clickable elements
- * @param {string} content - Content with placeholder references
- * @returns {string} Content with clickable LaTeX references
- */
+/** Restore LaTeX references from placeholders to clickable elements. */
 export const restoreLatexReferences = (content: string): string => {
   return content
     .replaceAll(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
@@ -86,11 +70,7 @@ export const restoreLatexReferences = (content: string): string => {
     );
 };
 
-/**
- * Simple hash function for cache keys (FNV-1a variant)
- * @param {string} str - String to hash
- * @returns {string} Hash string
- */
+/** Simple hash function for cache keys (FNV-1a variant). */
 const hashContent = (str: string): string => {
   let hash = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -100,12 +80,7 @@ const hashContent = (str: string): string => {
   return hash.toString(36);
 };
 
-/**
- * Process markdown content with LaTeX reference protection
- * @param {string} content - Raw content to process
- * @param {MarkdownIt} [renderer] - Optional custom renderer
- * @returns {string} Processed markdown HTML
- */
+/** Process markdown content with LaTeX reference protection. */
 export const processMarkdownContent = (
   content: string,
   renderer?: MarkdownIt,
