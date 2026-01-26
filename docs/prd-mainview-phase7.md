@@ -301,6 +301,60 @@ this.postMessage({
 });
 ```
 
+### 7.4.4 Inconsistent Webview File Structures
+
+**Current State:** Each webview has a different organization.
+
+| Webview | Backend Files | Frontend Structure | State | Types |
+|---------|--------------|-------------------|-------|-------|
+| **MainView** | Provider, Handler, `managers/` | `frontend/`, `types/` | `store.ts` | Local `types/messages.ts` |
+| **ProgressView** | Provider, Handler, `managers/`, `state/`, `persistence/` | `frontend/formatters/`, `frontend/managers/` | `state/`, `stateUtils.ts` | `@shared/schemas` |
+| **HistoryView** | Provider, ContentProvider, Handler | `frontend/` | `state.ts` | `@shared/schemas` |
+| **ProfileView** | Provider, ContentProvider, Handler | `frontend/` | None | `@shared/schemas` |
+| **MemoryView** | Provider, ContentProvider, Handler | `frontend/` | None | `@shared/schemas` |
+
+#### Inconsistencies Found
+
+1. **Type locations:** MainView has local `types/messages.ts`, others use `@shared/schemas`
+2. **Backend managers:** Only MainView has `managers/` folder at root
+3. **State management:** `store.ts` vs `state.ts` vs `state/` folder vs none
+4. **Provider pattern:** Some split Provider/ContentProvider, some combined
+5. **Frontend complexity:** ProgressView has `formatters/`, `managers/` in frontend; others flat
+
+#### Recommended Consistent Structure
+
+```
+src/{viewName}View/
+├── {ViewName}ViewProvider.ts       # VS Code webview provider
+├── {ViewName}ViewContentProvider.ts # HTML/asset generation
+├── {ViewName}ViewMessageHandler.ts  # Message routing
+├── managers/                        # Backend business logic (if needed)
+│   └── *.ts
+└── frontend/
+    ├── {ViewName}App.ts            # Root Lit component
+    ├── index.ts                    # Entry point (registers components)
+    ├── events.ts                   # Event creators (types from @shared/schemas)
+    ├── styles.ts                   # Component styles
+    ├── components/
+    │   ├── index.ts                # Barrel export
+    │   └── *.ts                    # Extracted Lit components
+    └── utils/                      # Frontend-only utilities (if needed)
+        └── *.ts
+
+src/shared/schemas/
+├── {viewName}Messages.ts           # ALL message schemas for this view
+├── {viewName}State.ts              # Persisted state schema (if any)
+└── index.ts                        # Barrel export
+```
+
+#### Key Principles
+
+1. **Schemas in `@shared/schemas/`** - Never local `types/` folder
+2. **Types derived from schemas** - `type X = z.infer<typeof XSchema>`
+3. **Events import types** - `events.ts` imports from `@shared/schemas`, defines creators only
+4. **Flat frontend structure** - Avoid nested `formatters/`, `managers/` in frontend
+5. **Backend managers at root** - If needed, `managers/` folder at view root (not in frontend)
+
 ### 7.5 MainApp Decomposition
 
 **Current:** MainApp.ts at ~2,300 lines after Phase 6 extractions.
