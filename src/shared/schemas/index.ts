@@ -16,6 +16,8 @@ export * from './contextManagement';
 export * from './diffResult';
 export * from './mainViewState';
 export * from './mainViewEvents';
+export * as mainViewMessages from './mainViewMessages';
+export type { MainViewMessage } from './mainViewMessages';
 
 // Message schemas (depend on data schemas) - must come before streamState
 export * from './progressViewMessages';

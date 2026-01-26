@@ -1,16 +1,25 @@
+// Local imports - shared schemas
+import {
+  FileTypeSchema,
+  MultipleFileTypeSchema,
+  SessionTypeSchema,
+  type FileType,
+  type MultipleFileType,
+  type SessionType,
+} from '@shared/schemas';
+
+const [toolUseSessionType, workflowSessionType] = SessionTypeSchema.options;
+
 // Local constants - session types
 export const SESSION_TYPES = {
-  TOOL_USE: 'toolUse',
-  WORKFLOW: 'workflow',
+  TOOL_USE: toolUseSessionType,
+  WORKFLOW: workflowSessionType,
 } as const;
 
-export type SessionType = (typeof SESSION_TYPES)[keyof typeof SESSION_TYPES];
+export type { SessionType, FileType, MultipleFileType };
 
-export const FILE_TYPES = ['input', 'reference', 'auxiliary', 'media'] as const;
-export type FileType = (typeof FILE_TYPES)[number];
-
-export const MULTIPLE_FILE_TYPES = [...FILE_TYPES, 'output'] as const;
-export type MultipleFileType = (typeof MULTIPLE_FILE_TYPES)[number];
+export const FILE_TYPES = FileTypeSchema.options;
+export const MULTIPLE_FILE_TYPES = MultipleFileTypeSchema.options;
 
 export const CHECK_BOXES_AUTO_EXTRACT = [
   'autoExtractFigure',
