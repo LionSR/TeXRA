@@ -38,8 +38,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - main view
 import {
   AGENT_SELECT_LIST,
-  CHECK_BOXES_AUTO_EXTRACT,
-  CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
   FILE_TYPES,
   MULTIPLE_FILE_TYPES,
@@ -60,7 +58,6 @@ import './components/LatexDiffsSection';
 // Local imports - main view component types
 import type {
   FileSelectConfig,
-  CheckboxValues,
   ApiKeyBannerState,
   AgentConfigBannerState,
   DependencyBannerState,
@@ -275,8 +272,6 @@ export class MainApp extends BaseWebviewApp {
   @state() private dependencyBanner: BannerState = { visible: false };
   @state() private gettingStartedVisible = false;
   @state() private loginBannerVisible = false;
-  @state() private autoExtractMenuOpen = false;
-  @state() private toolConfigMenuOpen = false;
   @state() private instructionPlaceholder =
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0];
   @state() protected override debugMode = false;
@@ -302,34 +297,10 @@ export class MainApp extends BaseWebviewApp {
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
   private sortables: Sortable[] = [];
-  private readonly documentClickHandler = (event: MouseEvent) => {
-    const path = event.composedPath();
-    const autoExtractMenu = this.renderRoot.querySelector(
-      `#${ELEMENT_IDS.AUTO_EXTRACT_OPTIONS}`,
-    ) as HTMLElement | null;
-    const toolConfigMenu = this.renderRoot.querySelector(
-      `#${ELEMENT_IDS.TOOL_CONFIG_OPTIONS}`,
-    ) as HTMLElement | null;
-    const autoExtractButton = this.renderRoot.querySelector(
-      `#${ELEMENT_IDS.TOGGLE_AUTO_EXTRACT}`,
-    ) as HTMLElement | null;
-    const toolConfigButton = this.renderRoot.querySelector(
-      `#${ELEMENT_IDS.TOGGLE_TOOL_CONFIG}`,
-    ) as HTMLElement | null;
-
-    const clickedAutoExtract =
-      (autoExtractMenu && path.includes(autoExtractMenu)) ||
-      (autoExtractButton && path.includes(autoExtractButton));
-    const clickedToolConfig =
-      (toolConfigMenu && path.includes(toolConfigMenu)) ||
-      (toolConfigButton && path.includes(toolConfigButton));
-
-    if (!clickedAutoExtract && this.autoExtractMenuOpen) {
-      this.autoExtractMenuOpen = false;
-    }
-    if (!clickedToolConfig && this.toolConfigMenuOpen) {
-      this.toolConfigMenuOpen = false;
-    }
+  // Document click handler - can be used for click-outside detection
+  // Currently empty as menus are now managed by child components
+  private readonly documentClickHandler = (_event: MouseEvent) => {
+    // Reserved for future click-outside detection needs
   };
   private readonly messageHandlers: Record<string, MainViewMessageHandler> = {
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) =>
@@ -1273,20 +1244,6 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    if (type === 'autoExtract') {
-      this.autoExtractMenuOpen = !this.autoExtractMenuOpen;
-      if (this.autoExtractMenuOpen) {
-        this.toolConfigMenuOpen = false;
-      }
-    } else {
-      this.toolConfigMenuOpen = !this.toolConfigMenuOpen;
-      if (this.toolConfigMenuOpen) {
-        this.autoExtractMenuOpen = false;
-      }
-    }
-  }
-
   private handleCheckboxChange(
     id: keyof typeof this.checkboxValues,
     value: boolean,
@@ -2059,20 +2016,6 @@ export class MainApp extends BaseWebviewApp {
     return optionsHtml.includes(`value=\"${value}\"`);
   }
 
-  private buildOptionsHtml(options: string[], selectedValue: string): string {
-    const htmlOptions = [...options]
-      .sort((a, b) => a.localeCompare(b))
-      .map(
-        (value) => `<vscode-option value="${value}">${value}</vscode-option>`,
-      )
-      .join('\n');
-    const withPlaceholderHtml = withPlaceholder(
-      htmlOptions,
-      '<vscode-option value="">None</vscode-option>',
-    );
-    return markOptionAsSelected(withPlaceholderHtml, selectedValue);
-  }
-
   private buildCommitOptions(): string {
     const commits = this.fileOptions.commit ?? [];
     if (!this.isGitRepo) {
@@ -2123,67 +2066,144 @@ export class MainApp extends BaseWebviewApp {
       <div class="content-wrapper">
         <div class="main-content">
           <div class=${fileSelectionClasses}>
-            ${this.renderFileSelect({
-              type: 'input',
-              label: 'Input',
-              icon: 'file-code',
-              refreshTitle: 'Refresh input files',
-              currentTitle: 'Set current file as input',
-              emptyTitle: 'Clear input file',
-              toggleTitle: 'Show or hide additional input files',
-              addOpenedLabel: 'Add opened files as input',
-              emptyListLabel: 'Clear all input files',
-              selectListLabel: 'Add input files',
-              tooltip:
-                'Primary files the agent processes, such as .tex, .txt, or .md',
-              toolConfig: 'tool',
-              focusInstruction: {
-                key: 'inputFileSelect',
-                text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-              },
-            })}
-            ${this.renderFileSelect({
-              type: 'reference',
-              label: 'Reference',
-              icon: 'book',
-              refreshTitle: 'Refresh reference files',
-              currentTitle: 'Set current file as reference',
-              emptyTitle: 'Clear reference file',
-              toggleTitle: 'Show or hide additional reference files',
-              addOpenedLabel: 'Add opened files as reference',
-              emptyListLabel: 'Clear all reference files',
-              selectListLabel: 'Add reference files',
-              tooltip:
-                "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
-            })}
-            ${this.renderFileSelect({
-              type: 'auxiliary',
-              label: 'Auxiliary',
-              icon: 'archive',
-              refreshTitle: 'Refresh auxiliary files',
-              currentTitle: 'Set current file as auxiliary',
-              emptyTitle: 'Clear auxiliary file',
-              toggleTitle: 'Show or hide additional auxiliary files',
-              addOpenedLabel: 'Add opened files as auxiliary',
-              emptyListLabel: 'Clear all auxiliary files',
-              selectListLabel: 'Add auxiliary files',
-              tooltip:
-                'Files such as .cls/.sty that define document structure and styles',
-            })}
-            ${this.renderFileSelect({
-              type: 'media',
-              label: 'Media',
-              icon: 'device-camera-video',
-              refreshTitle: 'Refresh media files',
-              currentTitle: 'Set current file as media',
-              emptyTitle: 'Clear media file',
-              toggleTitle: 'Show or hide additional media files',
-              addOpenedLabel: 'Add opened files as media',
-              emptyListLabel: 'Clear all media files',
-              selectListLabel: 'Add media files',
-              tooltip: 'Images, figures, and media assets used by the document',
-              toolConfig: 'autoExtract',
-            })}
+            <file-select-group
+              .config=${{
+                type: 'input',
+                label: 'Input',
+                icon: 'file-code',
+                refreshTitle: 'Refresh input files',
+                currentTitle: 'Set current file as input',
+                emptyTitle: 'Clear input file',
+                toggleTitle: 'Show or hide additional input files',
+                addOpenedLabel: 'Add opened files as input',
+                emptyListLabel: 'Clear all input files',
+                selectListLabel: 'Add input files',
+                tooltip:
+                  'Primary files the agent processes, such as .tex, .txt, or .md',
+                toolConfig: 'tool',
+                focusInstruction: {
+                  key: 'inputFileSelect',
+                  text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
+                },
+              } as FileSelectConfig}
+              .selectedValue=${this.singleFiles.inputFile}
+              .options=${this.fileOptions.inputFile ?? []}
+              .listVisible=${this.multiFilesVisible.inputFiles}
+              .files=${this.multiFiles.inputFiles ?? []}
+              .checkboxValues=${this.checkboxValues}
+              .isToolUse=${isToolUse}
+              @file-change=${this.handleComponentFileChange}
+              @refresh-files=${this.handleComponentRefreshFiles}
+              @get-current-file=${this.handleComponentGetCurrentFile}
+              @empty-file=${this.handleComponentEmptyFile}
+              @toggle-list=${this.handleComponentToggleList}
+              @add-opened-files=${this.handleComponentAddOpenedFiles}
+              @empty-files=${this.handleComponentEmptyFiles}
+              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+              @remove-file=${this.handleComponentRemoveFile}
+              @checkbox-change=${this.handleComponentCheckboxChange}
+              @focus-instruction=${this.handleComponentFocusInstruction}
+            ></file-select-group>
+            <file-select-group
+              .config=${{
+                type: 'reference',
+                label: 'Reference',
+                icon: 'book',
+                refreshTitle: 'Refresh reference files',
+                currentTitle: 'Set current file as reference',
+                emptyTitle: 'Clear reference file',
+                toggleTitle: 'Show or hide additional reference files',
+                addOpenedLabel: 'Add opened files as reference',
+                emptyListLabel: 'Clear all reference files',
+                selectListLabel: 'Add reference files',
+                tooltip:
+                  "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
+              } as FileSelectConfig}
+              .selectedValue=${this.singleFiles.referenceFile}
+              .options=${this.fileOptions.referenceFile ?? []}
+              .listVisible=${this.multiFilesVisible.referenceFiles}
+              .files=${this.multiFiles.referenceFiles ?? []}
+              .checkboxValues=${this.checkboxValues}
+              .isToolUse=${isToolUse}
+              @file-change=${this.handleComponentFileChange}
+              @refresh-files=${this.handleComponentRefreshFiles}
+              @get-current-file=${this.handleComponentGetCurrentFile}
+              @empty-file=${this.handleComponentEmptyFile}
+              @toggle-list=${this.handleComponentToggleList}
+              @add-opened-files=${this.handleComponentAddOpenedFiles}
+              @empty-files=${this.handleComponentEmptyFiles}
+              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+              @remove-file=${this.handleComponentRemoveFile}
+              @checkbox-change=${this.handleComponentCheckboxChange}
+              @focus-instruction=${this.handleComponentFocusInstruction}
+            ></file-select-group>
+            <file-select-group
+              .config=${{
+                type: 'auxiliary',
+                label: 'Auxiliary',
+                icon: 'archive',
+                refreshTitle: 'Refresh auxiliary files',
+                currentTitle: 'Set current file as auxiliary',
+                emptyTitle: 'Clear auxiliary file',
+                toggleTitle: 'Show or hide additional auxiliary files',
+                addOpenedLabel: 'Add opened files as auxiliary',
+                emptyListLabel: 'Clear all auxiliary files',
+                selectListLabel: 'Add auxiliary files',
+                tooltip:
+                  'Files such as .cls/.sty that define document structure and styles',
+              } as FileSelectConfig}
+              .selectedValue=${this.singleFiles.auxiliaryFile}
+              .options=${this.fileOptions.auxiliaryFile ?? []}
+              .listVisible=${this.multiFilesVisible.auxiliaryFiles}
+              .files=${this.multiFiles.auxiliaryFiles ?? []}
+              .checkboxValues=${this.checkboxValues}
+              .isToolUse=${isToolUse}
+              @file-change=${this.handleComponentFileChange}
+              @refresh-files=${this.handleComponentRefreshFiles}
+              @get-current-file=${this.handleComponentGetCurrentFile}
+              @empty-file=${this.handleComponentEmptyFile}
+              @toggle-list=${this.handleComponentToggleList}
+              @add-opened-files=${this.handleComponentAddOpenedFiles}
+              @empty-files=${this.handleComponentEmptyFiles}
+              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+              @remove-file=${this.handleComponentRemoveFile}
+              @checkbox-change=${this.handleComponentCheckboxChange}
+              @focus-instruction=${this.handleComponentFocusInstruction}
+            ></file-select-group>
+            <file-select-group
+              .config=${{
+                type: 'media',
+                label: 'Media',
+                icon: 'device-camera-video',
+                refreshTitle: 'Refresh media files',
+                currentTitle: 'Set current file as media',
+                emptyTitle: 'Clear media file',
+                toggleTitle: 'Show or hide additional media files',
+                addOpenedLabel: 'Add opened files as media',
+                emptyListLabel: 'Clear all media files',
+                selectListLabel: 'Add media files',
+                tooltip:
+                  'Images, figures, and media assets used by the document',
+                toolConfig: 'autoExtract',
+              } as FileSelectConfig}
+              .selectedValue=${this.singleFiles.mediaFile}
+              .options=${this.fileOptions.mediaFile ?? []}
+              .listVisible=${this.multiFilesVisible.mediaFiles}
+              .files=${this.multiFiles.mediaFiles ?? []}
+              .checkboxValues=${this.checkboxValues}
+              .isToolUse=${isToolUse}
+              @file-change=${this.handleComponentFileChange}
+              @refresh-files=${this.handleComponentRefreshFiles}
+              @get-current-file=${this.handleComponentGetCurrentFile}
+              @empty-file=${this.handleComponentEmptyFile}
+              @toggle-list=${this.handleComponentToggleList}
+              @add-opened-files=${this.handleComponentAddOpenedFiles}
+              @empty-files=${this.handleComponentEmptyFiles}
+              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+              @remove-file=${this.handleComponentRemoveFile}
+              @checkbox-change=${this.handleComponentCheckboxChange}
+              @focus-instruction=${this.handleComponentFocusInstruction}
+            ></file-select-group>
             <div
               class="file-select"
               data-expanded=${String(this.outputFilesActive)}
@@ -2508,276 +2528,4 @@ export class MainApp extends BaseWebviewApp {
       </div>
     `;
   }
-
-  private renderAutoExtractMenu(): TemplateResult {
-    const hasChecked = CHECK_BOXES_AUTO_EXTRACT.some(
-      (id) => this.checkboxValues[id],
-    );
-    const chevronClass = this.autoExtractMenuOpen
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
-
-    return html`
-      <div class="dropdown-container dropdown-left">
-        <vscode-toolbar-button
-          id="toggleAutoExtract"
-          icon="wand"
-          title="Auto-extract options"
-          toggleable
-          aria-haspopup="true"
-          aria-expanded=${this.autoExtractMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
-          @click=${() => this.toggleMenu('autoExtract')}
-        >
-          <i class="codicon ${chevronClass}"></i>
-        </vscode-toolbar-button>
-        <vscode-context-menu
-          id="autoExtractOptions"
-          class="dropdown-menu"
-          ?show=${this.autoExtractMenuOpen}
-        >
-          <div class="dropdown-menu-content">
-            <vscode-checkbox
-              id="autoExtractFigure"
-              ?checked=${this.checkboxValues.autoExtractFigure}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoExtractFigure',
-                  (event.target as HTMLInputElement).checked,
-                )}
-            >
-              Figures
-            </vscode-checkbox>
-            <vscode-checkbox
-              id="autoExtractTikzFigure"
-              ?checked=${this.checkboxValues.autoExtractTikzFigure}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoExtractTikzFigure',
-                  (event.target as HTMLInputElement).checked,
-                )}
-            >
-              TikZ Figures
-            </vscode-checkbox>
-            <vscode-checkbox
-              id="autoCompileInputPdf"
-              ?checked=${this.checkboxValues.autoCompileInputPdf}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoCompileInputPdf',
-                  (event.target as HTMLInputElement).checked,
-                )}
-            >
-              Compile Input PDF
-            </vscode-checkbox>
-          </div>
-        </vscode-context-menu>
-      </div>
-    `;
-  }
-
-  private renderToolConfigMenu(): TemplateResult {
-    const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
-    const hasChecked = CHECK_BOXES_TOOL_USE.some(
-      (id) => this.checkboxValues[id],
-    );
-    const chevronClass = this.toolConfigMenuOpen
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
-
-    return html`
-      <div class="dropdown-container dropdown-left">
-        <vscode-toolbar-button
-          id="toggleToolConfig"
-          icon="tools"
-          title="Tool configuration options"
-          toggleable
-          aria-haspopup="true"
-          aria-expanded=${this.toolConfigMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
-          @click=${() => this.toggleMenu('toolConfig')}
-        >
-          <i class="codicon ${chevronClass}"></i>
-        </vscode-toolbar-button>
-        <vscode-context-menu
-          id="toolConfigOptions"
-          class="dropdown-menu"
-          ?show=${this.toolConfigMenuOpen}
-        >
-          <div class="dropdown-menu-content">
-            <vscode-checkbox
-              id="attachTeXCount"
-              ?checked=${this.checkboxValues.attachTeXCount}
-              ?disabled=${isToolUse}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'attachTeXCount',
-                  (event.target as HTMLInputElement).checked,
-                )}
-            >
-              Attach TeX Count
-            </vscode-checkbox>
-            <vscode-checkbox
-              id="attachDiagnostics"
-              ?checked=${this.checkboxValues.attachDiagnostics}
-              ?disabled=${isToolUse}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'attachDiagnostics',
-                  (event.target as HTMLInputElement).checked,
-                )}
-            >
-              Attach Diagnostics
-            </vscode-checkbox>
-          </div>
-        </vscode-context-menu>
-      </div>
-    `;
-  }
-
-  private renderFileSelect(config: {
-    type: FileType;
-    label: string;
-    icon: string;
-    refreshTitle: string;
-    currentTitle: string;
-    emptyTitle: string;
-    toggleTitle: string;
-    addOpenedLabel: string;
-    emptyListLabel: string;
-    selectListLabel: string;
-    tooltip: string;
-    toolConfig?: 'tool' | 'autoExtract';
-    focusInstruction?: { key: string; text: string };
-  }): TemplateResult {
-    const listId = `${config.type}Files`;
-    const selectId = `${config.type}File` as keyof typeof this.singleFiles;
-    const toggleId = `toggle${config.type[0].toUpperCase()}${config.type.slice(1)}Files`;
-    const isVisible = this.multiFilesVisible[listId];
-    const selectedValue = this.singleFiles[selectId];
-    const chevronClass = isVisible
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
-    const toolConfigMenu =
-      config.toolConfig === 'tool'
-        ? this.renderToolConfigMenu()
-        : config.toolConfig === 'autoExtract'
-          ? this.renderAutoExtractMenu()
-          : null;
-    const focusHandler = config.focusInstruction
-      ? () =>
-          postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-            key: config.focusInstruction?.key,
-            text: config.focusInstruction?.text,
-          })
-      : undefined;
-
-    return html`
-      <div class="file-select" data-expanded=${String(isVisible)}>
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <vscode-toolbar-button
-              id="refresh${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton"
-              icon=${config.icon}
-              label=${config.refreshTitle}
-              title=${config.refreshTitle}
-              @click=${() => this.handleRefreshFiles(config.type)}
-            ></vscode-toolbar-button>
-            <label for=${selectId} title=${config.tooltip}
-              >${config.label}</label
-            >
-            ${toolConfigMenu}
-          </div>
-          <vscode-toolbar-container class="file-select-actions">
-            <vscode-toolbar-button
-              id="current${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton"
-              icon="file-code"
-              label=${config.currentTitle}
-              title=${config.currentTitle}
-              @click=${() => this.handleGetCurrentFile(config.type)}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton"
-              icon="close"
-              label=${config.emptyTitle}
-              title=${config.emptyTitle}
-              @click=${() => this.handleEmptyFile(config.type)}
-            ></vscode-toolbar-button>
-            <span
-              id=${toggleId}
-              class="toggle-icon"
-              title=${config.toggleTitle}
-              @click=${() => this.toggleListVisibility(listId)}
-            >
-              <i class="codicon ${chevronClass}"></i>
-            </span>
-            <vscode-toolbar-button
-              id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton"
-              class="file-action-button"
-              icon="folder-opened"
-              label=${config.addOpenedLabel}
-              title=${config.addOpenedLabel}
-              @click=${() => this.handleAddOpenedFiles(config.type)}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton"
-              class="file-action-button"
-              icon="trash"
-              label=${config.emptyListLabel}
-              title=${config.emptyListLabel}
-              @click=${() => this.handleEmptyFiles(config.type)}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="select${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FilesButton"
-              class="file-action-button"
-              icon="add"
-              label=${config.selectListLabel}
-              title=${config.selectListLabel}
-              @click=${() => this.handleSelectMultipleFiles(listId)}
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
-        </div>
-        <vscode-single-select
-          id=${selectId}
-          .value=${selectedValue}
-          @focus=${focusHandler}
-          @change=${(event: Event) => {
-            const target = event.currentTarget as HTMLInputElement;
-            this.handleSingleFileChange(config.type, target.value);
-          }}
-        >
-          ${unsafeHTML(
-            this.buildOptionsHtml(
-              this.fileOptions[selectId] ?? [],
-              selectedValue,
-            ),
-          )}
-        </vscode-single-select>
-        <div
-          id="${listId}Container"
-          class="multiple-files-container"
-          style=${isVisible ? 'display: block' : 'display: none'}
-        >
-          <div class="multiple-files-content">
-            <div id=${listId} class="multiple-files-list">
-              ${this.renderFileList(listId)}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
 }

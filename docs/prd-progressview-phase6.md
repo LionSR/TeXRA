@@ -15,13 +15,13 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 ## Status Summary
 
-> **Overall Phase 6 Completion: ~85%**
+> **Overall Phase 6 Completion: ~95%**
 >
 > - ✅ Component extraction complete (FileSelectGroup, BannerGroup, LatexDiffsSection)
 > - ✅ `.map()` → `repeat()` migration complete (5 files)
 > - ✅ Derived state memoization complete (willUpdate pattern with @state)
-> - ✅ MainApp integration complete (BannerGroup, LatexDiffsSection)
-> - ⬜ FileSelectGroup integration (deferred - existing code works fine)
+> - ✅ MainApp integration complete (FileSelectGroup, BannerGroup, LatexDiffsSection)
+> - ✅ MainApp.ts reduced from 2,900 to 2,531 lines (369 lines removed)
 > - ⬜ Inline arrow function extraction (deferred - low priority)
 > - ⬜ TaskGroupDomManager refactor (deferred - low priority)
 
@@ -30,9 +30,11 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Extract FileSelectGroup | ✅ Complete | Component created in `src/webview/frontend/components/` |
 | Extract BannerGroup components | ✅ Complete | Component created with all 5 banner types |
 | Extract LatexDiffsSection | ✅ Complete | Component created with all controls |
+| Integrate FileSelectGroup | ✅ Complete | Replaced renderFileSelect() calls for input/ref/aux/media files |
 | Integrate BannerGroup | ✅ Complete | Replaced renderBanners() in MainApp |
 | Integrate LatexDiffsSection | ✅ Complete | Replaced renderLatexdiffsSection() in MainApp |
 | Create events.ts | ✅ Complete | MainViewEvents factory for typed event dispatch |
+| Delete unused methods | ✅ Complete | Removed renderFileSelect, renderAutoExtractMenu, renderToolConfigMenu, buildOptionsHtml, toggleMenu |
 | Convert 37 inline arrows | ⬜ Deferred | Low priority - components use class methods |
 | Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM |
 | renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
@@ -449,11 +451,11 @@ Fix known bugs before refactoring to establish stable baseline.
 
 | Metric | Before | Current | Target |
 |--------|--------|---------|--------|
-| MainApp.ts lines | 2,900 | 2,783 ✅ | ~500 (FileSelectGroup integration remaining) |
+| MainApp.ts lines | 2,900 | 2,531 ✅ | ~500 (continued extraction possible) |
 | Extracted components | 0 | 3 ✅ | 6+ |
-| Integrated components | 0 | 2 ✅ | BannerGroup, LatexDiffsSection |
+| Integrated components | 0 | 3 ✅ | FileSelectGroup, BannerGroup, LatexDiffsSection |
 | Events/types infrastructure | 0 | 1 ✅ | events.ts complete |
-| Inline arrow functions | 37 | 37 | 0 (deferred) |
+| Inline arrow functions | 37 | ~25 | 0 (deferred) |
 | Formatters using Lit templates | 0 | 14 ✅ | 14 (complete) |
 | `.map()` → `repeat()` migrations | 0 | 8+ ✅ | 8+ (complete) |
 | Derived state memoization | manual | @state pattern ✅ | (complete) |
@@ -463,7 +465,7 @@ Fix known bugs before refactoring to establish stable baseline.
 
 | Component | Location | Purpose | Integrated |
 |-----------|----------|---------|------------|
-| `FileSelectGroup.ts` | `src/webview/frontend/components/` | File selection with menus | ⬜ |
+| `FileSelectGroup.ts` | `src/webview/frontend/components/` | File selection with menus | ✅ |
 | `BannerGroup.ts` | `src/webview/frontend/components/` | All 5 banner types | ✅ |
 | `LatexDiffsSection.ts` | `src/webview/frontend/components/` | LaTeXDiff controls | ✅ |
 | `events.ts` | `src/webview/frontend/` | MainViewEvents factory | ✅ |
