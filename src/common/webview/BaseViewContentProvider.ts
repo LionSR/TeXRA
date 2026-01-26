@@ -152,17 +152,7 @@ export abstract class BaseViewContentProvider {
 
   /** Common module descriptors from src/common */
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [
-      { key: 'commonStyleUri', path: 'styles/common.css' },
-      { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
-      {
-        key: 'recordingButtonManagerUri',
-        path: 'modules/RecordingButtonManager.js',
-      },
-      { key: 'iconConstantsUri', path: 'modules/iconConstants.js' },
-      { key: 'domUtilsUri', path: 'modules/domUtils.js' },
-      { key: 'baseDomHandlerUri', path: 'modules/BaseDomHandler.js' },
-    ];
+    [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
   /** Node module descriptors from node_modules */
   private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
