@@ -132,8 +132,18 @@ const webviewConfigs = [
         // is handled via optimization.usedExports instead.
       },
       {
+        // CSS as string with ?inline suffix (for Lit css`` templates)
+        // Returns raw CSS text for use with unsafeCSS()
         test: /\.css$/,
-        use: [path.resolve(__dirname, 'scripts/inlineCssLoader.js')],
+        resourceQuery: /inline/,
+        type: 'asset/source',
+      },
+      {
+        // Side-effect CSS imports - inject into document head at runtime
+        // Used for: import 'katex/dist/katex.min.css', import './styles/index.css'
+        test: /\.css$/,
+        resourceQuery: { not: [/inline/] },
+        use: ['style-loader', 'css-loader'],
       },
     ],
   },

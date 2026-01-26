@@ -66,17 +66,6 @@ import type { PromptState } from './components/PromptOverlay';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
-/**
- * Updates the highlight.js theme stylesheet based on VS Code theme.
- */
-function updateHighlightTheme(theme: string): void {
-  const link = document.getElementById('hljs-theme') as HTMLLinkElement | null;
-  if (!link) return;
-  link.href = `https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/${
-    theme === 'dark' ? 'github-dark' : 'github'
-  }.css`;
-}
-
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
@@ -200,11 +189,6 @@ export class ProgressApp extends BaseWebviewApp {
     if (handler) {
       handler(raw, this.createMessageHandlerContext());
     }
-  }
-
-  protected override onThemeChange(theme: string): void {
-    super.onThemeChange(theme);
-    updateHighlightTheme(theme);
   }
 
   private getActiveStreamInfo(): StreamTabInfo | null {
