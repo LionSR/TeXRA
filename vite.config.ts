@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
+// Shared path aliases from tsconfig.json (single source of truth)
+// @ts-expect-error - .mjs import works at runtime via Vite's ESM handling
+import { aliases } from './scripts/aliases.mjs';
+
 const webviews = [
   'progressView',
   'memoryView',
@@ -8,34 +12,6 @@ const webviews = [
   'profileView',
   'webview',
 ] as const;
-
-/**
- * Path aliases matching tsconfig.json
- */
-const aliases = {
-  '@': resolve(__dirname, 'src'),
-  '~': resolve(__dirname, 'src'),
-  '@common': resolve(__dirname, 'src/common'),
-  '@webview': resolve(__dirname, 'src/webview'),
-  '@agent': resolve(__dirname, 'src/agent'),
-  '@frontend': resolve(__dirname, 'src/frontend'),
-  '@utils': resolve(__dirname, 'src/utils'),
-  '@logger': resolve(__dirname, 'src/logger'),
-  '@latex': resolve(__dirname, 'src/latex'),
-  '@commands': resolve(__dirname, 'src/commands'),
-  '@model': resolve(__dirname, 'src/model'),
-  '@housekeeping': resolve(__dirname, 'src/housekeeping'),
-  '@shared': resolve(__dirname, 'src/shared'),
-  '@progressView': resolve(__dirname, 'src/progressView'),
-  '@historyView': resolve(__dirname, 'src/historyView'),
-  '@memoryView': resolve(__dirname, 'src/memoryView'),
-  '@profileView': resolve(__dirname, 'src/profileView'),
-  '@replacement': resolve(__dirname, 'src/replacement'),
-  '@tools': resolve(__dirname, 'src/tools'),
-  '@types': resolve(__dirname, 'src/types'),
-  '@eventBus': resolve(__dirname, 'src/eventBus'),
-  '@auth': resolve(__dirname, 'src/auth'),
-};
 
 /**
  * Build configuration for a single webview.
