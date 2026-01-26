@@ -8,6 +8,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - progress view constants
 import {
@@ -105,6 +106,7 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 export class StreamHeader extends LitElement {
   static styles = [
     codiconIconClasses,
+    statusIndicatorStyles,
     css`
       :host {
         display: block;
@@ -186,21 +188,19 @@ export class StreamHeader extends LitElement {
         margin-left: auto;
       }
 
+      /* Status indicator overrides - base styles from statusIndicatorStyles */
       .status-indicator {
         width: var(--spacing-medium);
         height: var(--spacing-medium);
-        border-radius: 50%;
-        display: inline-block;
         margin: 0 var(--spacing-small);
         position: relative;
-        opacity: var(--opacity-subtle);
-        transition: all 0.3s ease;
       }
 
       .status-indicator:hover {
         opacity: var(--opacity-full);
       }
 
+      /* Tooltip on hover */
       .status-indicator::after {
         content: attr(data-status);
         position: absolute;
@@ -224,51 +224,10 @@ export class StreamHeader extends LitElement {
         opacity: var(--opacity-full);
       }
 
+      /* Ready state - not in shared module */
       .status-indicator.is-ready {
         background-color: var(--vscode-descriptionForeground);
         opacity: var(--opacity-disabled);
-      }
-
-      .status-indicator.is-running {
-        background-color: var(--color-success);
-        box-shadow: 0 0 4px var(--color-success);
-        opacity: 1;
-        animation: pulse-scale 2s infinite;
-      }
-
-      .status-indicator.is-error {
-        background-color: var(--color-error);
-        box-shadow: 0 0 4px var(--color-error);
-        opacity: 1;
-      }
-
-      .status-indicator.is-waiting,
-      .status-indicator.is-resuming {
-        background-color: var(--vscode-textLink-foreground);
-        box-shadow: 0 0 4px var(--vscode-textLink-foreground);
-        opacity: 1;
-        animation: pulse-scale 3s infinite;
-      }
-
-      .status-indicator.is-resuming {
-        animation-duration: 1.5s;
-      }
-
-      .status-indicator.is-stopped {
-        background-color: var(--vscode-descriptionForeground);
-        opacity: var(--opacity-subtle);
-      }
-
-      @keyframes pulse-scale {
-        0%,
-        100% {
-          transform: scale(1);
-          opacity: 1;
-        }
-        50% {
-          transform: scale(1.15);
-          opacity: 0.8;
-        }
       }
 
       .toolbar-button--hidden {
