@@ -73,11 +73,21 @@ export const mainViewStyles: CSSResult = css`
     top: calc(100% + var(--spacing-tiny));
     right: 0;
     z-index: 100;
+    display: block;
+    background-color: var(--vscode-menu-background);
+    color: var(--vscode-menu-foreground);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: var(--border-radius);
+    min-width: 160px;
   }
 
   .dropdown-container.dropdown-left .dropdown-menu {
     left: 0;
     right: auto;
+  }
+
+  .dropdown-container .dropdown-menu:not([show]) {
+    display: none;
   }
 
   .dropdown-container .dropdown-menu .dropdown-menu-content {
