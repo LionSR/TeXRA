@@ -1,9 +1,13 @@
 // Third-party imports
 import { LitElement } from 'lit';
 
+// Local imports - shared handlers
+import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';
+
 // Local imports - webview commands
 import { postMessage } from '@shared/vscode';
 import { COMMON_COMMANDS } from '@common/webview/commands';
+import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
 // Local imports - shared webview
 
@@ -16,12 +20,18 @@ export abstract class BaseWebviewApp extends LitElement {
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
-    const data = event.data as { command?: string; debugMode?: boolean } | null;
-    if (data?.command === COMMON_COMMANDS.DEBUG_MODE_SET) {
-      this.debugMode = Boolean(data.debugMode);
-      return;
+    const handled = handleCommonMessage(event.data, {
+      setTheme: (theme) => this.onThemeChange(theme),
+      setDebugMode: (enabled) => {
+        this.debugMode = enabled;
+      },
+      restoreState: (message) => this.onStateRestore(message),
+      onError: (message, details) => this.onError(message, details),
+      onSchemaError: (context, error) => this.logSchemaError(context, error),
+    });
+    if (!handled) {
+      this.handleMessage(event.data);
     }
-    this.handleMessage(event.data);
   };
 
   /**
@@ -39,6 +49,27 @@ export abstract class BaseWebviewApp extends LitElement {
       return;
     }
     console.warn(context, error);
+  }
+
+  /**
+   * Handle theme updates from the extension host.
+   */
+  protected onThemeChange(theme: string): void {
+    document.body.className = theme;
+  }
+
+  /**
+   * Handle state restoration from the extension host.
+   */
+  protected onStateRestore(_message: StateRestoreMessage): void {
+    // Override in subclasses if needed.
+  }
+
+  /**
+   * Handle error messages from the extension host.
+   */
+  protected onError(message: string, details?: unknown): void {
+    console.error(message, details);
   }
 
   override connectedCallback(): void {

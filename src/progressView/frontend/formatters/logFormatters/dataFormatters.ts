@@ -82,20 +82,8 @@ export function formatFileList(
 /** Render XML link template. */
 function renderXmlLink(xmlFile: string, documentTag: string | null) {
   const xmlFileName = getBasename(xmlFile);
-  return html`
-    <div class="xml-link-container">
-      <i class="codicon codicon-file-code"></i>
-      <span>Open XML to check tag consistency:</span>
-      <span class="file-link clickable-link" data-file=${xmlFile}
-        >${xmlFileName}</span
-      >
-      ${documentTag
-        ? html`<span class="document-tag"
-            >(Expected &lt;${documentTag}&gt; block)</span
-          >`
-        : ''}
-    </div>
-  `;
+  // prettier-ignore
+  return html`<div class="xml-link-container"><i class="codicon codicon-file-code"></i> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile}>${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
 }
 
 /** Format missing outputs entry. */
@@ -128,14 +116,8 @@ export function formatMissingOutputs(
         ${missing.map((f) => {
           const filePath = String(f);
           const basename = getBasename(filePath);
-          return html`
-            <li class="detail-item" title=${filePath}>
-              <i class="codicon codicon-warning"></i>
-              <span class="file-link clickable-link" data-file=${filePath}
-                >${basename}</span
-              >
-            </li>
-          `;
+          // prettier-ignore
+          return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
         })}
       </ul>
       ${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}
@@ -288,11 +270,7 @@ export function formatStatistics(
       })}
       <div class="statistics-content" data-log-id=${ifDefined(logId)}>
         ${items.map(
-          (item) => html`
-            <span class="stat-item detail-item" title=${item.label}>
-              <i class=${`codicon ${item.icon}`}></i> ${item.value}
-            </span>
-          `,
+          (item) => html`<span class="stat-item detail-item" title=${item.label}><i class=${`codicon ${item.icon}`}></i> ${item.value}</span>`,
         )}
       </div>
     </details>
