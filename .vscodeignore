@@ -23,9 +23,6 @@ eslint.config.mjs
 tsconfig.json
 **/*.map
 **/*.ts
-
-# Exclude codicon font (loaded via VS Code webview URI, not bundled)
-**/codicon.ttf
 **/.vscode-test.*
 
 venv/**
@@ -40,6 +37,9 @@ CLAUDE.md
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
 !node_modules/@vscode-elements/elements/dist/**
+
+# Exclude codicon font AFTER negations (loaded via VS Code webview URI, not bundled)
+**/codicon.ttf
 
 
 !resources/**
