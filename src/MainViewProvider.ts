@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import { MainViewPersistedStateSchema } from '@shared/schemas';
+
 // Local imports - agent
 import { refresh, computeAgentOptions } from '@agent/index';
 
@@ -9,6 +12,8 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { consumePendingState } from '@common/state';
+
+// Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptions } from '@model/computeModelOptions';
 import {
@@ -263,14 +268,20 @@ export class MainViewProvider
     });
 
     // Check if there's state to restore (consume it from pending state)
-    const pendingData = consumePendingState();
-
-    if (pendingData) {
+    let pendingData = consumePendingState();
+    while (pendingData) {
+      const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
+      if (!parsed.success) {
+        console.warn('Invalid pending state restore payload', parsed.error);
+        pendingData = consumePendingState();
+        continue;
+      }
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: pendingData.state,
+        state: parsed.data,
         executeImmediately: pendingData.executeImmediately,
       });
+      pendingData = consumePendingState();
     }
   }
 }
