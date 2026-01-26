@@ -30,6 +30,10 @@ import {
   ToolEditApprovalPromptSchema,
   UpdateTaskGroupPayloadSchema,
 } from './index';
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from './mainViewMessages';
 
 // Local imports - command constants
 
@@ -272,9 +276,14 @@ export const RecordingErrorMessageSchema = z.object({
 
 export const SetFollowupOptionsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
+  // Legacy HTML options (deprecated - use typed data instead)
   workflowAgentsHtml: z.string().optional(),
   toolUseAgentsHtml: z.string().optional(),
   modelOptionsHtml: z.string().optional(),
+  // Typed data options (Lit-native)
+  workflowAgentsData: z.array(AgentOptionDataSchema).optional(),
+  toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
+  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
   defaultMergeModel: z.string().optional(),
 });
 

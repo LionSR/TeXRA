@@ -2,9 +2,6 @@
  * Base log formatter utilities for open state management and error handling.
  */
 
-// Local imports - formatter helpers
-import { initToggleIcon } from './htmlBuilders';
-
 type FormatOptions = {
   preservedOpen?: boolean;
   defaultOpen?: boolean;
@@ -17,7 +14,7 @@ export function applyOpenState(
 ): void {
   if (element instanceof HTMLDetailsElement && shouldOpen !== undefined) {
     element.open = shouldOpen;
-    initToggleIcon(element, shouldOpen);
+    // Note: Toggle icon rotation is handled by CSS via details[open] selector
   }
 }
 

@@ -15,7 +15,7 @@ import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
-import { CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 // Local imports - schemas
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
@@ -169,10 +169,11 @@ export class LatexdiffResults extends LitElement {
         ? 'Latexdiff result'
         : `Latexdiff results (${this.entries.length})`;
 
+    // Note: CSS rotation via details[open] handles the icon direction
     return html`
       <details open>
         <summary>
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-diff"></i>
           <span>${summaryText}</span>
         </summary>

@@ -307,11 +307,9 @@ export function handleUpdateStatus(
   ctx.setStreamState(streamId, (prev) => ({
     ...prev,
     status: result.data.status,
+    // Trigger focus on follow-up input when entering waiting state (Lit-native)
+    ...(result.data.status === 'waiting' ? { shouldFocusFollowUp: true } : {}),
   }));
-
-  if (result.data.status === 'waiting') {
-    ctx.getFollowUpRef()?.focusInput({ scrollIntoView: true });
-  }
 }
 
 export function handleUpdateStreamStatus(
@@ -322,7 +320,16 @@ export function handleUpdateStreamStatus(
   if (!result.success) return;
 
   const { stream, status, lastTimestamp } = result.data;
-  ctx.setStreamState(stream, (prev) => ({ ...prev, status }));
+  const isActiveStream = stream === ctx.getState().activeStreamId;
+
+  ctx.setStreamState(stream, (prev) => ({
+    ...prev,
+    status,
+    // Trigger focus on follow-up input when entering waiting state (Lit-native)
+    ...(isActiveStream && status === 'waiting'
+      ? { shouldFocusFollowUp: true }
+      : {}),
+  }));
 
   ctx.setState((prev) => ({
     ...prev,
@@ -336,10 +343,6 @@ export function handleUpdateStreamStatus(
         : item,
     ),
   }));
-
-  if (stream === ctx.getState().activeStreamId && status === 'waiting') {
-    ctx.getFollowUpRef()?.focusInput({ scrollIntoView: true });
-  }
 }
 
 export function handleUpdateFiles(
@@ -573,11 +576,13 @@ export function handleFollowUpTextPolished(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
+  // Use reactive property to trigger polish application (Lit-native Phase 9e)
   updateToolUseState(ctx, streamId, (prev) => ({
     ...prev,
     followUpText: result.data.text,
+    polishedText: result.data.text,
+    shouldFocusFollowUp: true,
   }));
-  ctx.getFollowUpRef()?.applyPolishedText(result.data.text);
 }
 
 export function handleFollowUpTextTranscribed(
@@ -590,7 +595,12 @@ export function handleFollowUpTextTranscribed(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
 
-  ctx.getFollowUpRef()?.insertTranscription(result.data.text);
+  // Use reactive property to trigger transcription insert (Lit-native Phase 9e)
+  updateToolUseState(ctx, streamId, (prev) => ({
+    ...prev,
+    transcribedText: result.data.text,
+    shouldFocusFollowUp: true,
+  }));
 }
 
 export function handleRecordingStarted(
@@ -600,7 +610,14 @@ export function handleRecordingStarted(
   const result = RecordingStartedMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.getFollowUpRef()?.setRecording(true);
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+
+  // Use reactive property to set recording state (Lit-native Phase 9e)
+  updateToolUseState(ctx, streamId, (prev) => ({
+    ...prev,
+    recording: true,
+  }));
 }
 
 export function handleRecordingStopped(
@@ -610,7 +627,14 @@ export function handleRecordingStopped(
   const result = RecordingStoppedMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.getFollowUpRef()?.setRecording(false);
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+
+  // Use reactive property to clear recording state (Lit-native Phase 9e)
+  updateToolUseState(ctx, streamId, (prev) => ({
+    ...prev,
+    recording: false,
+  }));
 }
 
 export function handleRecordingError(
@@ -620,7 +644,14 @@ export function handleRecordingError(
   const result = RecordingErrorMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  ctx.getFollowUpRef()?.setRecording(false);
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+
+  // Use reactive property to clear recording state (Lit-native Phase 9e)
+  updateToolUseState(ctx, streamId, (prev) => ({
+    ...prev,
+    recording: false,
+  }));
 }
 
 export function handleSetFollowupOptions(
