@@ -206,7 +206,12 @@ export class FollowupSection extends LitElement {
 
   render(): TemplateResult | typeof nothing {
     // Visibility computed from declarative props
-    const isTerminal = this.status === 'stopped' || this.status === 'ready';
+    // Note: READY streams have their status deleted from statusMemory, so
+    // this.status will be undefined for ready streams. Treat undefined as ready.
+    const isTerminal =
+      this.status === 'stopped' ||
+      this.status === 'ready' ||
+      this.status === undefined;
     const visible =
       this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
 
