@@ -26,8 +26,6 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
-      // Keep default 4KB inline limit - don't inline fonts
-      assetsInlineLimit: 4 * 1024,
       rollupOptions: {
         input: resolve(__dirname, `src/${webviewName}/frontend/index.ts`),
         output: {
