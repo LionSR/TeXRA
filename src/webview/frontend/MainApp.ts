@@ -60,6 +60,8 @@ import './components/OutputFilesSection';
 import {
   DEFAULT_STATE,
   FILE_UPDATE_COMMANDS,
+  FILE_REFRESH_COMMANDS,
+  FILE_SELECTED_COMMANDS,
   PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
@@ -1221,13 +1223,8 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleRefreshFiles(type: FileType): void {
-    const commandMap: Record<FileType, string> = {
-      input: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-      reference: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
-      auxiliary: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
-      media: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
-    };
-    postMessage(commandMap[type]);
+    const command = FILE_REFRESH_COMMANDS[type];
+    if (command) postMessage(command);
   }
 
   private handleSingleFileChange(type: FileType, value: string): void {
@@ -1235,13 +1232,8 @@ export class MainApp extends BaseWebviewApp {
     this.singleFiles = { ...this.singleFiles, [key]: value };
     this.saveState();
 
-    const commandMap: Record<FileType, string> = {
-      input: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-      reference: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-      auxiliary: MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
-      media: MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-    };
-    postMessage(commandMap[type], { filePath: value });
+    const command = FILE_SELECTED_COMMANDS[type];
+    if (command) postMessage(command, { filePath: value });
 
     if (type === 'input') {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
