@@ -33,6 +33,8 @@ import {
   type ApiKeyBannerState,
   type AgentConfigBannerState,
   type DependencyBannerState,
+  type ModelOptionData,
+  type AgentOptionData,
 } from '@shared/schemas';
 
 // Local imports - webview commands
@@ -177,9 +179,18 @@ export class MainApp extends BaseWebviewApp {
   };
   @state() private isRecording = false;
   @state() private isPolishing = false;
+  /** @deprecated Use modelOptions for Lit-native rendering */
   @state() private modelOptionsHtml = '';
+  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
   @state() private workflowAgentOptionsHtml = '';
+  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
   @state() private toolUseAgentOptionsHtml = '';
+  /** Typed model options for Lit-native rendering */
+  @state() private modelOptions: ModelOptionData[] = [];
+  /** Typed workflow agent options for Lit-native rendering */
+  @state() private workflowAgentOptions: AgentOptionData[] = [];
+  /** Typed tool-use agent options for Lit-native rendering */
+  @state() private toolUseAgentOptions: AgentOptionData[] = [];
   @state() private apiKeyBanner: ApiKeyBannerState = { visible: false };
   @state() private agentConfigBanner: AgentConfigBannerState = {
     visible: false,
@@ -640,9 +651,22 @@ export class MainApp extends BaseWebviewApp {
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
-    this.modelOptionsHtml = message.options;
-    if (this.model && !this.hasOptionValue(message.options, this.model)) {
-      this.model = '';
+    // Store typed data (preferred for Lit-native rendering)
+    if (message.optionsData) {
+      this.modelOptions = message.optionsData;
+    }
+    // Also store HTML for backward compatibility during migration
+    if (message.options) {
+      this.modelOptionsHtml = message.options;
+    }
+    // Validate selected model exists in new options
+    if (this.model) {
+      const hasModel = message.optionsData
+        ? message.optionsData.some((opt) => opt.value === this.model)
+        : this.hasOptionValue(message.options ?? '', this.model);
+      if (!hasModel) {
+        this.model = '';
+      }
     }
   }
 
@@ -650,21 +674,38 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS>,
   ): void {
     const options = message.options ?? {};
+    const optionsData = message.optionsData ?? {};
+
+    // Workflow agents
+    if (optionsData.workflow) {
+      this.workflowAgentOptions = optionsData.workflow;
+    }
     if (options.workflow !== null && options.workflow !== undefined) {
       this.workflowAgentOptionsHtml = options.workflow;
-      if (
-        this.workflowAgent &&
-        !this.hasOptionValue(options.workflow, this.workflowAgent)
-      ) {
+    }
+    // Validate selected workflow agent
+    if (this.workflowAgent) {
+      const hasAgent = optionsData.workflow
+        ? optionsData.workflow.some((opt) => opt.value === this.workflowAgent)
+        : this.hasOptionValue(options.workflow ?? '', this.workflowAgent);
+      if (!hasAgent) {
         this.workflowAgent = '';
       }
     }
+
+    // Tool-use agents
+    if (optionsData.toolUse) {
+      this.toolUseAgentOptions = optionsData.toolUse;
+    }
     if (options.toolUse !== null && options.toolUse !== undefined) {
       this.toolUseAgentOptionsHtml = options.toolUse;
-      if (
-        this.toolUseAgent &&
-        !this.hasOptionValue(options.toolUse, this.toolUseAgent)
-      ) {
+    }
+    // Validate selected tool-use agent
+    if (this.toolUseAgent) {
+      const hasAgent = optionsData.toolUse
+        ? optionsData.toolUse.some((opt) => opt.value === this.toolUseAgent)
+        : this.hasOptionValue(options.toolUse ?? '', this.toolUseAgent);
+      if (!hasAgent) {
         this.toolUseAgent = '';
       }
     }
@@ -1952,6 +1993,9 @@ export class MainApp extends BaseWebviewApp {
             .workflowAgentOptionsHtml=${this.workflowAgentOptionsHtml}
             .toolUseAgentOptionsHtml=${this.toolUseAgentOptionsHtml}
             .modelOptionsHtml=${this.modelOptionsHtml}
+            .workflowAgentOptions=${this.workflowAgentOptions}
+            .toolUseAgentOptions=${this.toolUseAgentOptions}
+            .modelOptions=${this.modelOptions}
             .isRecording=${this.isRecording}
             .isPolishing=${this.isPolishing}
             .debugMode=${this.debugMode}

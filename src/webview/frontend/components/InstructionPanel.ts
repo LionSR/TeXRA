@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -17,6 +17,11 @@ import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
 import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
+import {
+  renderAgentOptions,
+  renderModelOptions,
+  renderPlaceholder,
+} from '@shared/utils/selectTemplates';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -29,6 +34,8 @@ import type {
   InstructionChangeDetail,
   ModelChangeDetail,
   SessionTypeChangeDetail,
+  AgentOptionData,
+  ModelOptionData,
 } from '@shared/schemas';
 
 @customElement('instruction-panel')
@@ -165,14 +172,23 @@ export class InstructionPanel extends LitElement {
   /** Current model */
   @property({ type: String }) model = '';
 
-  /** Workflow agent options HTML */
+  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
   @property({ type: String }) workflowAgentOptionsHtml = '';
 
-  /** Tool-use agent options HTML */
+  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
   @property({ type: String }) toolUseAgentOptionsHtml = '';
 
-  /** Model options HTML */
+  /** @deprecated Use modelOptions for Lit-native rendering */
   @property({ type: String }) modelOptionsHtml = '';
+
+  /** Typed workflow agent options for Lit-native rendering */
+  @property({ type: Array }) workflowAgentOptions: AgentOptionData[] = [];
+
+  /** Typed tool-use agent options for Lit-native rendering */
+  @property({ type: Array }) toolUseAgentOptions: AgentOptionData[] = [];
+
+  /** Typed model options for Lit-native rendering */
+  @property({ type: Array }) modelOptions: ModelOptionData[] = [];
 
   /** Whether recording is active */
   @property({ type: Boolean }) isRecording = false;
@@ -244,28 +260,69 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
-  override render(): TemplateResult {
-    const workflowOptions = markOptionAsSelected(
+  /**
+   * Render workflow agent options - prefer typed data, fall back to HTML string.
+   */
+  private renderWorkflowAgentOptions(): TemplateResult {
+    if (this.workflowAgentOptions.length > 0) {
+      return renderAgentOptions(
+        this.workflowAgentOptions,
+        this.workflowAgent,
+        'Select agent',
+      );
+    }
+    // Fallback to HTML string (legacy)
+    const htmlOptions = markOptionAsSelected(
       withPlaceholder(
         this.workflowAgentOptionsHtml,
         '<vscode-option value="">Select agent</vscode-option>',
       ),
       this.workflowAgent,
     );
-    const toolUseOptions = markOptionAsSelected(
+    return html`${unsafeHTML(htmlOptions)}`;
+  }
+
+  /**
+   * Render tool-use agent options - prefer typed data, fall back to HTML string.
+   */
+  private renderToolUseAgentOptions(): TemplateResult {
+    if (this.toolUseAgentOptions.length > 0) {
+      return renderAgentOptions(
+        this.toolUseAgentOptions,
+        this.toolUseAgent,
+        'Select agent',
+      );
+    }
+    // Fallback to HTML string (legacy)
+    const htmlOptions = markOptionAsSelected(
       withPlaceholder(
         this.toolUseAgentOptionsHtml,
         '<vscode-option value="">Select agent</vscode-option>',
       ),
       this.toolUseAgent,
     );
-    const modelOptions = markOptionAsSelected(
+    return html`${unsafeHTML(htmlOptions)}`;
+  }
+
+  /**
+   * Render model options - prefer typed data, fall back to HTML string.
+   */
+  private renderModelOptionsTemplate(): TemplateResult {
+    if (this.modelOptions.length > 0) {
+      return renderModelOptions(this.modelOptions, this.model, 'Select model');
+    }
+    // Fallback to HTML string (legacy)
+    const htmlOptions = markOptionAsSelected(
       withPlaceholder(
         this.modelOptionsHtml,
         '<vscode-option value="">Select model</vscode-option>',
       ),
       this.model,
     );
+    return html`${unsafeHTML(htmlOptions)}`;
+  }
+
+  override render(): TemplateResult {
 
     return html`
       <div class="instruction-box">
@@ -414,7 +471,7 @@ export class InstructionPanel extends LitElement {
                       );
                     }}
                   >
-                    ${unsafeHTML(workflowOptions)}
+                    ${this.renderWorkflowAgentOptions()}
                   </vscode-single-select>
                   <vscode-single-select
                     id="toolUseAgent"
@@ -442,7 +499,7 @@ export class InstructionPanel extends LitElement {
                       );
                     }}
                   >
-                    ${unsafeHTML(toolUseOptions)}
+                    ${this.renderToolUseAgentOptions()}
                   </vscode-single-select>
                 </div>
               </div>
@@ -469,7 +526,7 @@ export class InstructionPanel extends LitElement {
                   this.handleModelChange(target.value);
                 }}
               >
-                ${unsafeHTML(modelOptions)}
+                ${this.renderModelOptionsTemplate()}
               </vscode-single-select>
             </div>
           </div>

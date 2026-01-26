@@ -129,6 +129,11 @@ export class ToolUseStreamContent extends LitElement {
         .visible=${true}
         .value=${this.state.followUpText}
         .queuedMessages=${this.state.queuedFollowUps}
+        .shouldFocus=${this.state.shouldFocusFollowUp ?? false}
+        .polishedText=${this.state.polishedText ?? null}
+        .transcribedText=${this.state.transcribedText ?? null}
+        .recording=${this.state.recording ?? false}
+        @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;
   }
@@ -140,5 +145,18 @@ export class ToolUseStreamContent extends LitElement {
    */
   getFollowUpRef(): FollowUpInput | undefined {
     return this.followUpRef.value;
+  }
+
+  /**
+   * Handle focus-complete event from FollowUpInput.
+   * Dispatches event to reset the shouldFocusFollowUp state.
+   */
+  private handleFocusComplete(): void {
+    this.dispatchEvent(
+      new CustomEvent('followup-focus-complete', {
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 }
