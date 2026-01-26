@@ -2,6 +2,20 @@
 import { css, type CSSResult } from 'lit';
 
 export const profileViewStyles: CSSResult = css`
+  /* Base badge styles - provides consistent foundation for all badge types */
+  .badge {
+    display: inline-block;
+    padding: var(--spacing-tiny, 2px) var(--spacing-small, 4px);
+    border-radius: var(--border-radius, 3px);
+    font-size: var(--font-size-sm, 12px);
+    font-weight: 500;
+  }
+
+  .badge--small {
+    padding: var(--spacing-tiny, 2px) var(--spacing-small, 4px);
+    border-radius: var(--border-radius-small, 2px);
+  }
+
   h2 {
     color: var(--vscode-foreground);
     margin-top: var(--spacing-xlarge);
@@ -134,6 +148,25 @@ export const profileViewStyles: CSSResult = css`
   .category-badge {
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
+    text-transform: capitalize;
+  }
+
+  /* Category-specific colors for visual distinction */
+  .category-badge.workflow {
+    background-color: var(
+      --vscode-editorInfo-background,
+      rgba(0, 127, 212, 0.15)
+    );
+    color: var(--vscode-editorInfo-foreground, #3794ff);
+  }
+
+  .category-badge.tooluse,
+  .category-badge.tool-use {
+    background-color: var(
+      --vscode-editorWarning-background,
+      rgba(255, 204, 0, 0.15)
+    );
+    color: var(--vscode-editorWarning-foreground, #cca700);
   }
 
   .badge.multi-output-badge.supported {
