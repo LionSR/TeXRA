@@ -39,6 +39,12 @@ vscode-split-layout {
   overflow: hidden;
 }
 
+/* Stream content containers - Light DOM pass-through */
+tool-use-stream-content,
+workflow-stream-content {
+  display: contents;
+}
+
 .progress-collapsible {
   background-color: transparent;
 }

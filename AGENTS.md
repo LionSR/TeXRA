@@ -15,7 +15,7 @@ When updating CHANGELOG.md:
 1. **Install dependencies**: run `npm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
-   - Build the extension bundle with `npm run compile` to ensure the webpack build succeeds.
+   - Build the extension bundle with `npm run compile:fast` (recommended) or `npm run compile`.
    - Lint TypeScript sources with `npm run lint`.
    - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 3. Commit only when `npm run lint` completes without errors.

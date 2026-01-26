@@ -14,66 +14,93 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 
 ## Status Summary
 
-| Webview         | JS Lines | Components | Complexity  | Status         |
-| --------------- | -------- | ---------- | ----------- | -------------- |
-| **MemoryView**  | ~305     | 4          | Low         | ✅ Complete    |
-| **HistoryView** | ~610     | 3          | Medium      | ✅ Complete    |
-| **ProfileView** | ~636     | 4          | Medium-High | ✅ Complete    |
-| **MainView**    | ~2,259   | 8+         | High        | ⬜ Not Started |
+| Webview         | JS Lines | Components | Complexity  | Lit Migration | Zod Validation | Status      |
+| --------------- | -------- | ---------- | ----------- | ------------- | -------------- | ----------- |
+| **MemoryView**  | ~305     | 5          | Low         | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **HistoryView** | ~610     | 4          | Medium      | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **ProfileView** | ~636     | 5          | Medium-High | ✅ Complete   | ✅ Complete    | ✅ Complete |
+| **MainView**    | ~2,259   | 1 (mono)   | High        | ✅ Complete   | ❌ **Missing** | 🟡 Phase 5  |
+
+### Lit Native Compliance (Deep-Dive Analysis 2026-01-25)
+
+| Webview         | Compliance | Notes                                                                         |
+| --------------- | ---------- | ----------------------------------------------------------------------------- |
+| **MemoryView**  | **100%**   | Shadow DOM, static styles, Zod validation, registry pattern                   |
+| **HistoryView** | **100%**   | Shadow DOM, static styles, Zod validation, mark.js integration                |
+| **ProfileView** | **100%**   | Shadow DOM, static styles, Zod validation, auth state handling                |
+| **MainView**    | **75%**    | Shadow DOM, static styles, but **no Zod**, **monolithic**, **58-case switch** |
+
+### Message Handling Pattern Consistency
+
+| Webview          | Pattern           | Validation | Compliant |
+| ---------------- | ----------------- | ---------- | --------- |
+| **ProgressView** | ✅ Registry       | ✅ Zod     | ✅        |
+| **MemoryView**   | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **HistoryView**  | ⚠️ if/else chain  | ✅ Zod     | 🟡        |
+| **ProfileView**  | ✅ Single handler | ✅ Zod     | ✅        |
+| **MainView**     | ❌ 58-case switch | ❌ None    | ❌        |
+
+**Target:** All webviews should use registry pattern with Zod validation (like ProgressView).
 
 ### Completed Migrations (2026-01-25)
 
 **Commits:**
+
 - `111e289a` - feat: migrate memory history profile webviews
 - `0e1d13e0` - fix: align lit history behaviors
 
 **MemoryView** - 4 Lit components created:
+
 - `MemoryApp.ts` (root), `MemoryItem.ts`, `MemoryList.ts`, `MemoryToggle.ts`, `MemoryToolbar.ts`
-- All legacy `modules/` deleted (constants.js, domHandlers.js, memoryViewState.js, messageHandlers.js, uiManagers/*, script.js)
+- All legacy `modules/` deleted (constants.js, domHandlers.js, memoryViewState.js, messageHandlers.js, uiManagers/\*, script.js)
 
 **HistoryView** - 3 Lit components created:
+
 - `HistoryApp.ts` (root), `HistoryItem.ts`, `HistoryList.ts`, `SearchBar.ts` (with mark.js integration)
 - All legacy `modules/` deleted
 
 **ProfileView** - 4 Lit components created:
+
 - `ProfileApp.ts` (root), `AgentsTable.ts`, `ApiAccessSection.ts`, `ProfileInfo.ts`, `SignInPrompt.ts`
 - All legacy `modules/` deleted
 
-**Remaining:** MainView migration not yet started. See migration approach below.
+**MainView:** Lit migration complete (2026-01-25). Requires Phase 5 refactoring for Zod validation and component extraction.
 
 ---
 
-## Shared Infrastructure to Migrate First
+## Shared Infrastructure Migration Status
 
-Before migrating individual webviews, these shared JS utilities in `src/common/modules/` need attention:
+### JS Files Migration Status (Updated 2026-01-26)
 
-### JS Files Used by Multiple Webviews
-
-| File                  | Used By                                  | Migration Path                    |
-| --------------------- | ---------------------------------------- | --------------------------------- |
-| `htmlEncoding.js`     | HistoryView, MemoryView, ProfileView     | Already has TS: `@shared/utils/html.ts` |
-| `iconConstants.js`    | HistoryView, MainView, domUtils.js       | Already has TS: `@shared/utils/icons.ts` |
-| `pathUtils.js`        | BaseViewContentProvider, test file       | Already has TS: `@shared/utils/path.ts` |
-| `stringUtils.js`      | MemoryView, MainView                     | Already has TS: `@shared/utils/string.ts` |
-| `clipboardUtils.js`   | BaseViewContentProvider                  | Already has TS: `@shared/utils/clipboard.ts` |
-| `ToggleStateStore.js` | HistoryView                              | Already has TS: `@shared/state/ToggleStateStore.ts` |
-| `webviewState.js`     | HistoryView, MemoryView, ProfileView, MainView | Already has TS: `@shared/state/WebviewStateManager.ts` |
-| `domUtils.js`         | Multiple views                           | Partially migrated to `@shared/utils/dom.ts` |
-| `dropdownUtils.js`    | FollowupSection, MainView                | Keep as local util or inline |
-
-**Strategy:** TypeScript versions already exist in `@shared/`. When migrating each webview:
-1. Update imports from `@common/modules/*.js` to `@shared/*`
-2. After all webviews migrated, delete the JS originals
+| File                           | Status         | TS Replacement                          |
+| ------------------------------ | -------------- | --------------------------------------- |
+| `htmlEncoding.js`              | ✅ Deleted     | `@shared/utils/html.ts`                 |
+| `stringUtils.js`               | ✅ Deleted     | `@shared/utils/string.ts`               |
+| `pathUtils.js`                 | ✅ Deleted     | `@shared/utils/path.ts`                 |
+| `clipboardUtils.js`            | ✅ Deleted     | `@shared/utils/clipboard.ts`            |
+| `ToggleStateStore.js`          | ✅ Deleted     | `@shared/state/ToggleStateStore.ts`     |
+| `webviewState.js`              | ✅ Deleted     | `@shared/state/WebviewStateManager.ts`  |
+| `textareaUtils.js`             | ✅ Deleted     | `@shared/utils/textarea.ts`             |
+| `dropdownUtils.js`             | ✅ Deleted     | `@shared/utils/dropdown.ts`             |
+| `debounce.js`                  | ✅ Deleted     | `@utils/core` (perfect-debounce)        |
+| `BaseWebviewMessageHandler.js` | ✅ Deleted     | `BaseViewMessageHandler.ts`             |
+| `iconConstants.js`             | ⏳ Blocked     | TS exists, but imported by domUtils.js  |
+| `domUtils.js`                  | ⏳ Blocked     | Partial (10/27 functions in TS)         |
+| `templateUtils.js`             | ⏳ Blocked     | No TS replacement                       |
+| `webviewContext.js`            | ⏳ Blocked     | registerMessageHandlers missing in TS   |
+| `BaseDomHandler.js`            | ⏳ Infra       | Webview infrastructure, no migration    |
+| `StreamScopedMap.js`           | ⏳ Infra       | Webview infrastructure, no migration    |
+| `RecordingButtonManager.js`    | ⏳ In progress | TS controller exists, migration ongoing |
 
 ### Duplicate Constant Files to Delete
 
-| File                               | Lines | Status                            |
-| ---------------------------------- | ----- | --------------------------------- |
-| `common/webview/commands.js`       | 298   | ⏳ **DELETE NOW** - TS version exists |
-| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete)   |
-| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete)   |
-| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete)   |
-| `webview/modules/constants.js`     | 162   | ⬜ Delete with MainView migration |
+| File                               | Lines | Status                          |
+| ---------------------------------- | ----- | ------------------------------- |
+| `common/webview/commands.js`       | 298   | ✅ Deleted (TS version exists)  |
+| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete) |
+| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete) |
+| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete) |
+| `webview/modules/constants.js`     | 162   | ✅ Deleted (MainView migrated)  |
 
 ---
 
@@ -99,6 +126,7 @@ During each webview migration, **always reference the legacy `index.html` and JS
 3. **After migration**: Systematically test all features side-by-side with legacy (if possible)
 
 **Key areas to verify:**
+
 - Element class names match CSS expectations
 - Event handlers produce same behavior
 - Loading states and empty states display correctly
@@ -107,6 +135,7 @@ During each webview migration, **always reference the legacy `index.html` and JS
 - Theme changes apply correctly (light/dark/high-contrast)
 
 **Useful files to reference:**
+
 - `src/{viewName}/index.html` - HTML structure, element IDs, CSS class names
 - `src/{viewName}/modules/script.js` - Initialization sequence, event listeners
 - `src/{viewName}/modules/constants.js` - Element IDs, class names, labels
@@ -122,14 +151,14 @@ These patterns were established in ProgressView Phase 2. All Phase 4 migrations 
 
 ### Component Patterns
 
-| Pattern | Requirement |
-| ------- | ----------- |
-| Shadow DOM | No `createRenderRoot()` override — use Lit default |
-| Static styles | Use `static styles = [codiconStyles, animationStyles, css\`...\`]` array composition |
-| Arrow functions | Use arrow functions for event handlers to preserve `this` binding |
-| @property vs @state | `@property` for parent inputs, `@state` for internal state |
-| @query | Use for imperative DOM access only; await `updateComplete` first |
-| Reflected properties | Use `reflect: true` for CSS `:host([attr])` targeting |
+| Pattern              | Requirement                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Shadow DOM           | No `createRenderRoot()` override — use Lit default                                   |
+| Static styles        | Use `static styles = [codiconStyles, animationStyles, css\`...\`]` array composition |
+| Arrow functions      | Use arrow functions for event handlers to preserve `this` binding                    |
+| @property vs @state  | `@property` for parent inputs, `@state` for internal state                           |
+| @query               | Use for imperative DOM access only; await `updateComplete` first                     |
+| Reflected properties | Use `reflect: true` for CSS `:host([attr])` targeting                                |
 
 **Example:**
 
@@ -139,9 +168,15 @@ export class MyComponent extends LitElement {
   static styles = [
     codiconStyles,
     css`
-      :host { display: block; }
-      :host([visible]) { display: flex; }
-      .container { padding: var(--spacing-medium); }
+      :host {
+        display: block;
+      }
+      :host([visible]) {
+        display: flex;
+      }
+      .container {
+        padding: var(--spacing-medium);
+      }
     `,
   ];
 
@@ -156,12 +191,12 @@ export class MyComponent extends LitElement {
 
 ### Message Handling Patterns
 
-| Pattern | Requirement |
-| ------- | ----------- |
-| Registry pattern | Use `Record<string, Handler>` instead of switch statements |
-| Zod validation | Validate at entry point with `safeParse()`, silent fail on error |
-| Context interface | Pass `getState()`/`setState()` accessors, not direct state |
-| Pending updates | Buffer out-of-order messages in component-scoped Map |
+| Pattern           | Requirement                                                      |
+| ----------------- | ---------------------------------------------------------------- |
+| Registry pattern  | Use `Record<string, Handler>` instead of switch statements       |
+| Zod validation    | Validate at entry point with `safeParse()`, silent fail on error |
+| Context interface | Pass `getState()`/`setState()` accessors, not direct state       |
+| Pending updates   | Buffer out-of-order messages in component-scoped Map             |
 
 **Example:**
 
@@ -180,23 +215,23 @@ export function handleUpdateData(raw: unknown, ctx: Context): void {
 
 ### Rendering Patterns
 
-| Pattern | When to Use |
-| ------- | ----------- |
-| `nothing` | Element should be absent from DOM entirely |
-| `?hidden` | Element stays in DOM but visually hidden |
-| `repeat()` | Lists with stable keys (sorted/reordered) |
-| `classMap()` | Dynamic CSS class bindings |
-| `live()` | Textarea/input to preserve cursor position |
-| `when()` | Conditional template blocks |
-| `ifDefined()` | Optional attributes |
+| Pattern       | When to Use                                |
+| ------------- | ------------------------------------------ |
+| `nothing`     | Element should be absent from DOM entirely |
+| `?hidden`     | Element stays in DOM but visually hidden   |
+| `repeat()`    | Lists with stable keys (sorted/reordered)  |
+| `classMap()`  | Dynamic CSS class bindings                 |
+| `live()`      | Textarea/input to preserve cursor position |
+| `when()`      | Conditional template blocks                |
+| `ifDefined()` | Optional attributes                        |
 
 ### Event Patterns
 
-| Pattern | Requirement |
-| ------- | ----------- |
-| Custom events factory | Centralized event creation with typed details |
-| bubbles + composed | All custom events must use `bubbles: true, composed: true` |
-| Event naming | Use kebab-case: `item-select`, `filter-change` |
+| Pattern               | Requirement                                                |
+| --------------------- | ---------------------------------------------------------- |
+| Custom events factory | Centralized event creation with typed details              |
+| bubbles + composed    | All custom events must use `bubbles: true, composed: true` |
+| Event naming          | Use kebab-case: `item-select`, `filter-change`             |
 
 **Example:**
 
@@ -217,12 +252,12 @@ this.dispatchEvent(ViewEvents.itemSelect({ id: item.id }));
 
 ### CSS Patterns
 
-| Pattern | Requirement |
-| ------- | ----------- |
-| Design tokens | Access via CSS custom properties (`var(--spacing-medium)`) |
-| Shared styles | Import from `@shared/styles/litStyles.ts` |
-| Codicon styles | Import `codiconStyles` for icon fonts |
-| No external CSS | All component styles in `static styles` array |
+| Pattern         | Requirement                                                |
+| --------------- | ---------------------------------------------------------- |
+| Design tokens   | Access via CSS custom properties (`var(--spacing-medium)`) |
+| Shared styles   | Import from `@shared/styles/litStyles.ts`                  |
+| Codicon styles  | Import `codiconStyles` for icon fonts                      |
+| No external CSS | All component styles in `static styles` array              |
 
 ---
 
@@ -345,6 +380,7 @@ src/historyView/
 Search highlighting via mark.js may need adaptation for Lit's reactive rendering.
 
 **Mitigation:**
+
 - Use `ref()` directive to get DOM reference for mark.js
 - Re-apply marks in `updated()` lifecycle when items change
 - Consider extracting to reactive controller if pattern is useful elsewhere
@@ -412,63 +448,38 @@ src/profileView/
 
 **Complexity:** High (file selection, recording, multiple managers)
 
-### Current Structure
+**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **[Phase 5 refactoring](./prd-progressview-phase5.md)**
 
-- `MainViewMessageHandler.ts`: 461 lines (TypeScript - keep as-is)
-- `modules/`: ~20 JS files, ~2,259 lines
-- `managers/`: 5 TypeScript files (keep and integrate)
+### Current Structure (Post-Migration)
+
+- `MainViewMessageHandler.ts`: 461 lines (TypeScript - backend)
+- `frontend/MainApp.ts`: **~2,737 lines** ⚠️ MONOLITHIC
+- `managers/`: 5 TypeScript files (integrated)
   - `InstructionManager.ts`
   - `FileManager.ts`
   - `ExecutionManager.ts`
   - `DiffManager.ts`
   - `BaseWebviewManager.ts`
+- Legacy `modules/`: ✅ Deleted
 
-### Key Challenges
+### Key Challenges (Addressed)
 
-- Complex file selection UI with drag-and-drop
-- Recording functionality (audio capture, transcription)
-- Multiple manager classes with cross-dependencies
-- Complex form state (file list, instruction, agent, model options)
-- Diff/merge functionality integration
-- Latexdiff configuration panel
+- ✅ Complex file selection UI with drag-and-drop
+- ✅ Recording functionality (audio capture, transcription)
+- ✅ Multiple manager classes with cross-dependencies
+- ✅ Complex form state (file list, instruction, agent, model options)
+- ✅ Diff/merge functionality integration
+- ✅ Latexdiff configuration panel
 
-### Target Structure
+### Phase 5 Required (Post-Migration Refactoring)
 
-```
-src/webview/
-├── frontend/
-│   ├── index.ts
-│   ├── MainApp.ts                  # Root: message routing, orchestration
-│   ├── store.ts                    # Form state types
-│   └── components/
-│       ├── FileSelector/
-│       │   ├── FileSelector.ts     # Container with drag-drop
-│       │   ├── FileList.ts         # Categorized file lists
-│       │   └── FileItem.ts         # Single file with remove button
-│       ├── InstructionPanel/
-│       │   ├── InstructionPanel.ts # Instruction input + recording
-│       │   └── RecordingButton.ts  # Audio recording UI
-│       ├── AgentSelector.ts        # Agent + model dropdowns
-│       ├── ActionButtons.ts        # Run, Polish, etc.
-│       └── LatexdiffPanel.ts       # Diff configuration
-├── managers/                       # Keep existing TypeScript
-│   ├── InstructionManager.ts
-│   ├── FileManager.ts
-│   ├── ExecutionManager.ts
-│   └── DiffManager.ts
-├── styles/                         # Keep existing CSS
-├── MainViewMessageHandler.ts       # Keep existing
-└── MainViewContentProvider.ts      # Update to load Lit bundle
-```
+MainView migration is functionally complete but requires Phase 5 refactoring for maintainability:
 
-### Migration Approach (Incremental)
+- **Monolithic component:** 2,737 lines needs extraction into 6+ components
+- **Missing validation:** 58 message types lack Zod validation (security risk)
+- **Known bugs:** 6 bugs identified during code review (see Phase 5)
 
-1. **Week 1:** Create `MainApp.ts` shell, integrate with existing managers
-2. **Week 1:** Create `AgentSelector.ts` and `ActionButtons.ts` (simpler components)
-3. **Week 2:** Create `FileSelector/` components (most complex)
-4. **Week 2:** Create `InstructionPanel/` with recording integration
-5. **Week 3:** Create `LatexdiffPanel.ts`, final integration testing
-6. Delete `modules/` directory and `script.js`
+**See [prd-progressview-phase5.md](./prd-progressview-phase5.md) for full details.**
 
 ---
 
@@ -532,6 +543,7 @@ Each webview migration may deviate from established patterns.
 MainView has more manager classes and cross-dependencies than ProgressView.
 
 **Mitigation:**
+
 - Keep existing TypeScript managers (`InstructionManager.ts`, etc.)
 - Migrate JS modules incrementally, not all at once
 - Test each component integration before proceeding
@@ -547,6 +559,7 @@ Smaller webviews may not benefit as much from Lit migration.
 Search highlighting via mark.js may need adaptation for Lit's reactive rendering.
 
 **Mitigation**:
+
 - Use `ref()` directive to get DOM reference for mark.js
 - Re-apply marks in `updated()` lifecycle when items change
 - Consider extracting to reactive controller if pattern is useful elsewhere
@@ -556,6 +569,7 @@ Search highlighting via mark.js may need adaptation for Lit's reactive rendering
 The `vscode-checkbox` web component must be defined before setting `checked` property.
 
 **Mitigation**:
+
 - Use `customElements.whenDefined('vscode-checkbox')` before setting state
 - Or use Lit's `@query` with `updateComplete` promise
 
@@ -566,33 +580,123 @@ The `vscode-checkbox` web component must be defined before setting `checked` pro
 ### JS Files to Delete
 
 **Already deleted (2026-01-25):**
+
 ```
 src/memoryView/modules/     ✅ All deleted
 src/historyView/modules/    ✅ All deleted
 src/profileView/modules/    ✅ All deleted
+src/webview/modules/        ✅ All deleted (MainView migrated)
 ```
 
-**Remaining after MainView migration:**
+**Shared utilities deleted (2026-01-26):**
+
+These files had complete TS replacements in `@shared/` and zero active imports:
+
 ```
 src/common/modules/
-├── htmlEncoding.js
-├── iconConstants.js
-├── pathUtils.js
-├── stringUtils.js
-├── clipboardUtils.js
-├── ToggleStateStore.js
-├── webviewState.js
-├── domUtils.js
-├── dropdownUtils.js
-├── templateUtils.js
-├── textareaUtils.js
-└── RecordingButtonManager.js
+├── htmlEncoding.js         ✅ Deleted → @shared/utils/html.ts
+├── stringUtils.js          ✅ Deleted → @shared/utils/string.ts
+├── pathUtils.js            ✅ Deleted → @shared/utils/path.ts
+├── clipboardUtils.js       ✅ Deleted → @shared/utils/clipboard.ts
+├── ToggleStateStore.js     ✅ Deleted → @shared/state/ToggleStateStore.ts
+├── webviewState.js         ✅ Deleted → @shared/state/WebviewStateManager.ts
+├── textareaUtils.js        ✅ Deleted → @shared/utils/textarea.ts
+├── dropdownUtils.js        ✅ Deleted → @shared/utils/dropdown.ts
+├── debounce.js             ✅ Deleted → @utils/core (perfect-debounce)
+└── BaseWebviewMessageHandler.js ✅ Deleted → BaseViewMessageHandler.ts
+```
 
-src/common/webview/commands.js  ← DELETE NOW (TS version exists)
+Also cleaned up:
 
-src/webview/modules/ (MainView - last remaining)
+- Removed 10 obsolete URI entries from `BaseViewContentProvider.ts`
+- Removed 8 obsolete type declarations from `common-modules.d.ts`
+- Updated `pathUtils.test.js` to import from `@shared/utils/path`
+
+**Remaining JS files (have blockers):**
+
+```
+src/common/modules/
+├── iconConstants.js        ⏳ Blocked: imported by domUtils.js
+├── domUtils.js             ⏳ Blocked: only 10/27 functions migrated to TS
+├── templateUtils.js        ⏳ Blocked: no TS replacement exists
+├── webviewContext.js       ⏳ Blocked: registerMessageHandlers missing in TS
+├── BaseDomHandler.js       ⏳ Webview infrastructure (no migration needed)
+├── StreamScopedMap.js      ⏳ Webview infrastructure (no migration needed)
+└── RecordingButtonManager.js ⏳ Migration in progress (TS controller exists)
 ```
 
 **Cleanup summary:**
-- Deleted: ~1,551 lines (memoryView + historyView + profileView modules)
-- Remaining: ~612 duplicate constant lines + ~1,872 shared utility lines + ~2,259 MainView JS lines
+
+- Phase 4 deleted: ~1,551 lines (memoryView + historyView + profileView modules)
+- Phase 4 shared utils deleted: 10 files (~800 lines)
+- Remaining: 11 JS files, 3 CSS files to delete (see below)
+
+---
+
+## Final JS/CSS Cleanup (Audited 2026-01-26)
+
+### Deleted (2026-01-26) - Zero External Imports
+
+**JS Constants (3 files)** - TS replacements exist in `@shared/schemas/`:
+```
+src/common/constants/agentTypes.js    ✅ DELETED
+src/common/constants/streamStatus.js  ✅ DELETED
+src/common/constants/todoStatus.js    ✅ DELETED
+```
+
+**JS Dead Code (3 files)** - Never imported anywhere:
+```
+src/common/modules/StreamScopedMap.js      ✅ DELETED
+src/common/modules/webviewContext.js       ✅ DELETED
+src/common/modules/files/baseFileUtils.js  ✅ DELETED
+```
+
+**CSS Duplicates (3 files)** - Replaced by Lit TypeScript styles:
+```
+src/historyView/styles/index.css  ✅ DELETED → historyViewStyles.ts
+src/memoryView/styles/index.css   ✅ DELETED → Lit component styles
+src/profileView/styles/index.css  ✅ DELETED → profileViewStyles.ts
+```
+
+### Remaining JS Files (5 files) - Internal Cross-References Only
+
+> **ACTION REQUIRED:** These 5 files form a closed dependency chain with **zero external consumers**.
+> They can be safely deleted together in a single cleanup pass. After deletion, also remove their
+> entries from `BaseViewContentProvider.ts` and type declarations from `common-modules.d.ts`.
+
+These files only import each other (no external TypeScript imports):
+
+| File | Imported By | Status |
+|------|-------------|--------|
+| `iconConstants.js` | domUtils.js | ⏳ Delete with chain |
+| `templateUtils.js` | RecordingButtonManager.js | ⏳ Delete with chain |
+| `domUtils.js` | BaseDomHandler.js, templateUtils.js | ⏳ Delete with chain |
+| `RecordingButtonManager.js` | (none - never instantiated) | ⏳ Delete with chain |
+| `BaseDomHandler.js` | (none - never imported) | ⏳ Delete with chain |
+
+```
+src/common/modules/
+├── iconConstants.js        # Chevron classes, agent decorators
+├── templateUtils.js        # createFromTemplate, createCodicon
+├── domUtils.js             # DOM utilities (40+ functions)
+├── RecordingButtonManager.js # Recording button class
+└── BaseDomHandler.js       # Base class for DOM handlers
+```
+
+**Why safe to delete:**
+- Main view migration (commit 12c8efc75) removed all import map references
+- Modern webviews use Lit components with webpack bundles
+- No TypeScript code imports these modules
+- All functionality replicated in Lit components or `@shared/` utilities
+
+### CSS Files to Keep
+
+| File | Reason |
+|------|--------|
+| `common/styles/common.css` | Light DOM baseline for all webviews |
+| `shared/styles/tokens.css` | Design tokens (consider dedup with litStyles.ts) |
+| `progressView/styles/*.css` | Formatter output + Light DOM layout (19 files) |
+
+**Note:** ProgressView CSS files must remain as Light DOM CSS because:
+- LogList, TaskGroupList are Light DOM components
+- Formatters generate HTML strings (not Lit templates) that need external CSS
