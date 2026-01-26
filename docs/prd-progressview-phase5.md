@@ -14,30 +14,33 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## Status Summary
 
-> **Overall Phase 5 Completion: 100% (regressions & validation)**
+> **Overall Phase 5 Completion: 99% (regressions & validation)**
 >
 > Remaining refactoring tasks moved to [Phase 6](./prd-progressview-phase6.md).
 >
-> - ✅ All critical regressions fixed (R1-R16, H1-H15, J1-J2, P1-P3, R11)
+> - ✅ All critical regressions fixed (R1-R15, H1-H15, J1-J2, P1-P3, R11)
+> - 🟡 R16 (FollowUp sticky positioning) partial - uses `flex-shrink: 0` but no sticky/fixed positioning
 > - ✅ Zod message validation complete (mainViewMessages.ts, commonViewMessages.ts)
 > - ✅ Cross-webview infrastructure unified (BaseWebviewApp pattern)
 > - ✅ All JavaScript behavioral issues resolved (debounce, checkbox timing)
 > - ➡️ Component extraction → [Phase 6](./prd-progressview-phase6.md)
 > - ➡️ Formatters migration → [Phase 6](./prd-progressview-phase6.md)
+>
+> **Verified 2026-01-26** via code inspection.
 
 ### Critical Issues (Fix Immediately)
 
-| ID      | View         | Issue                            | Status                    |
-| ------- | ------------ | -------------------------------- | ------------------------- |
-| R1      | MainView     | Missing `SET_SELECTED_AGENT`     | ✅ Fixed                  |
-| CODICON | All          | 403 Forbidden font loading error | ✅ Fixed                  |
-| H1      | History      | Mark highlight colors SWAPPED    | ✅ Fixed                  |
-| TOKENS  | All          | CSS spacing 2-4px larger         | ✅ Fixed (tokens correct) |
-| **R12** | ProgressView | FollowUp section never visible   | ✅ Fixed                  |
-| **R13** | MainView     | Dropdowns invisible (clickable)  | ✅ Fixed                  |
-| **R14** | MainView     | Run button shows text not icon   | ✅ Fixed                  |
-| **R15** | ProgressView | User message shows plain text    | ✅ Fixed (CSS verified)   |
-| **R16** | ProgressView | FollowUp not fixed at bottom     | ✅ Fixed                  |
+| ID      | View         | Issue                            | Status                                        |
+| ------- | ------------ | -------------------------------- | --------------------------------------------- |
+| R1      | MainView     | Missing `SET_SELECTED_AGENT`     | ✅ Fixed                                      |
+| CODICON | All          | 403 Forbidden font loading error | ✅ Fixed                                      |
+| H1      | History      | Mark highlight colors SWAPPED    | ✅ Fixed                                      |
+| TOKENS  | All          | CSS spacing 2-4px larger         | ✅ Fixed (tokens correct)                     |
+| **R12** | ProgressView | FollowUp section never visible   | ✅ Fixed                                      |
+| **R13** | MainView     | Dropdowns invisible (clickable)  | ✅ Fixed                                      |
+| **R14** | MainView     | Run button shows text not icon   | ✅ Fixed                                      |
+| **R15** | ProgressView | User message shows plain text    | ✅ Fixed (CSS verified)                       |
+| **R16** | ProgressView | FollowUp not fixed at bottom     | 🟡 Partial (`flex-shrink: 0` only, no sticky) |
 
 ### Migration Regressions (High Priority)
 
@@ -83,29 +86,29 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ### Refactoring Tasks
 
-| Task                           | Status         | Impact                           |
-| ------------------------------ | -------------- | -------------------------------- |
-| Extract FileSelectGroup        | ➡️ Phase 6    | -300 lines from MainApp          |
-| Extract BannerGroup components | ➡️ Phase 6    | -150 lines from MainApp          |
-| Extract LatexDiffsSection      | ➡️ Phase 6    | -200 lines from MainApp          |
-| Create shared message schemas  | ✅ Complete    | mainViewMessages.ts (46 schemas) |
-| Add Zod validation to MainApp  | ✅ Complete    | All 34 message types validated   |
-| Convert 37 inline arrows       | ➡️ Phase 6    | Performance                      |
-| Delete duplicate debug handler | ✅ Complete    | commonMessageHandlers.ts         |
-| Install @types/sortablejs      | ✅ Complete    | Complete type definitions        |
+| Task                           | Status      | Impact                           |
+| ------------------------------ | ----------- | -------------------------------- |
+| Extract FileSelectGroup        | ➡️ Phase 6  | -300 lines from MainApp          |
+| Extract BannerGroup components | ➡️ Phase 6  | -150 lines from MainApp          |
+| Extract LatexDiffsSection      | ➡️ Phase 6  | -200 lines from MainApp          |
+| Create shared message schemas  | ✅ Complete | mainViewMessages.ts (46 schemas) |
+| Add Zod validation to MainApp  | ✅ Complete | All 34 message types validated   |
+| Convert 37 inline arrows       | ➡️ Phase 6  | Performance                      |
+| Delete duplicate debug handler | ✅ Complete | commonMessageHandlers.ts         |
+| Install @types/sortablejs      | ✅ Complete | Complete type definitions        |
 
 ### Architectural Tasks (NEW - Phase 5 Scope)
 
-| Task                              | Status            | Impact                            |
-| --------------------------------- | ----------------- | --------------------------------- |
-| Formatters → TemplateResult       | ✅ Complete       | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
-| renderLogs incremental updates    | 🟡 Hybrid         | appendLog/updateLog are incremental; full rebuild only on stream switch |
+| Task                           | Status      | Impact                                                                              |
+| ------------------------------ | ----------- | ----------------------------------------------------------------------------------- |
+| Formatters → TemplateResult    | ✅ Complete | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
+| renderLogs incremental updates | 🟡 Hybrid   | appendLog/updateLog are incremental; full rebuild only on stream switch             |
 
 > **Open to ideas:** We welcome suggestions for more native Lit patterns that could improve the architecture. See [Phase 6 section 6.2b](./prd-progressview-phase6.md#62b-lit-directive--native-feature-improvements) for areas open for exploration.
-| Create commonViewMessages.ts      | ✅ Complete       | Zod schemas for 5 common cmds     |
-| themeHandlers.ts Zod migration    | ✅ Complete       | commonMessageHandlers.ts          |
-| Eliminate normalization layers    | ✅ Complete       | -160 lines (done in Phase 3)      |
-| Cross-webview command unification | ✅ Complete       | BaseWebviewApp pattern            |
+> | Create commonViewMessages.ts | ✅ Complete | Zod schemas for 5 common cmds |
+> | themeHandlers.ts Zod migration | ✅ Complete | commonMessageHandlers.ts |
+> | Eliminate normalization layers | ✅ Complete | -160 lines (done in Phase 3) |
+> | Cross-webview command unification | ✅ Complete | BaseWebviewApp pattern |
 
 ---
 
@@ -630,7 +633,7 @@ const isTerminal =
 - Check CSS variable values (`--spacing-small`, `--color-text-link`, etc.)
 - Inspect DOM to see if classes are applied but styles aren't
 
-#### R16. FollowUp Section Not Fixed at Bottom (MEDIUM)
+#### R16. FollowUp Section Not Fixed at Bottom (MEDIUM) - 🟡 PARTIAL
 
 **Location:** `src/progressView/frontend/components/WorkflowStreamContent.ts:137-144`
 
@@ -659,6 +662,12 @@ const isTerminal =
 │ Followup Section    │
 └─────────────────────┘
 ```
+
+**Current state (2026-01-26):**
+
+- `flex-shrink: 0` applied in `logs.css:29-31` - prevents shrinking
+- **No sticky/fixed positioning** - section flows with content
+- Partial fix only
 
 **Fix approaches:**
 
