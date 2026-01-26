@@ -32,11 +32,13 @@ export function formatUserMessage(
   logId: string,
   timestamp: number,
 ): HTMLElement | null {
-  const element = document.createElement('user-message');
-  element.setAttribute('text', text ?? '');
-  element.setAttribute('logId', logId);
-  element.setAttribute('timestamp', String(timestamp));
-  return element;
+  return renderToElement(html`
+    <user-message
+      .text=${text ?? ''}
+      .logId=${logId}
+      .timestamp=${timestamp}
+    ></user-message>
+  `);
 }
 
 /** Format progress status entry (Lit-native). */

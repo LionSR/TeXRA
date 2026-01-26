@@ -128,14 +128,13 @@ export function formatLatexdiff(
 
   const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
 
-  const element = document.createElement('latexdiff-results');
-  element.setAttribute('logId', logId);
-  if (aggregatedRunId) {
-    element.setAttribute('runId', aggregatedRunId);
-  }
-  // Pass entries as property since it's an array
-  (element as HTMLElement & { entries: typeof entries }).entries = entries;
-  return element;
+  return renderToElement(html`
+    <latexdiff-results
+      .logId=${logId}
+      .runId=${ifDefined(aggregatedRunId || undefined)}
+      .entries=${entries}
+    ></latexdiff-results>
+  `);
 }
 
 // =============================================================================
@@ -193,9 +192,7 @@ export function formatStatistics(
 
   if (items.length === 0) return null;
 
-  const element = document.createElement('statistics-panel');
-  element.setAttribute('logId', logId);
-  // Pass items as property since it's an array
-  (element as HTMLElement & { items: typeof items }).items = items;
-  return element;
+  return renderToElement(html`
+    <statistics-panel .logId=${logId} .items=${items}></statistics-panel>
+  `);
 }
