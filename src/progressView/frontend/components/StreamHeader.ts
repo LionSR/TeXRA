@@ -3,6 +3,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
@@ -341,34 +342,38 @@ export class StreamHeader extends LitElement {
               data-agent-mode=${agentCategory}
               @click=${this.handleToolbarClick}
             >
-              ${(toolbarButtons as ToolbarButton[]).map((btn) => {
-                const { disabled, hidden } = this.resolveButtonState(
-                  btn.id,
-                  status,
-                  hasExecutionId,
-                );
-                const isActive = Boolean(btn.isToggle && this.yoloActive);
-                const icon =
-                  isActive && btn.iconActive ? btn.iconActive : btn.icon;
-                const title =
-                  isActive && btn.titleActive ? btn.titleActive : btn.title;
-                return html`
-                  <vscode-toolbar-button
-                    id=${btn.id}
-                    icon=${icon}
-                    label=${title}
-                    title=${title}
-                    data-command=${btn.command}
-                    aria-hidden=${hidden ? 'true' : 'false'}
-                    ?disabled=${disabled}
-                    class=${classMap({
-                      [btn.className || '']: Boolean(btn.className),
-                      'toolbar-button--hidden': hidden,
-                      'is-active': isActive,
-                    })}
-                  ></vscode-toolbar-button>
-                `;
-              })}
+              ${repeat(
+                toolbarButtons as ToolbarButton[],
+                (btn) => btn.id,
+                (btn) => {
+                  const { disabled, hidden } = this.resolveButtonState(
+                    btn.id,
+                    status,
+                    hasExecutionId,
+                  );
+                  const isActive = Boolean(btn.isToggle && this.yoloActive);
+                  const icon =
+                    isActive && btn.iconActive ? btn.iconActive : btn.icon;
+                  const title =
+                    isActive && btn.titleActive ? btn.titleActive : btn.title;
+                  return html`
+                    <vscode-toolbar-button
+                      id=${btn.id}
+                      icon=${icon}
+                      label=${title}
+                      title=${title}
+                      data-command=${btn.command}
+                      aria-hidden=${hidden ? 'true' : 'false'}
+                      ?disabled=${disabled}
+                      class=${classMap({
+                        [btn.className || '']: Boolean(btn.className),
+                        'toolbar-button--hidden': hidden,
+                        'is-active': isActive,
+                      })}
+                    ></vscode-toolbar-button>
+                  `;
+                },
+              )}
             </vscode-toolbar-container>
           </div>
         </div>

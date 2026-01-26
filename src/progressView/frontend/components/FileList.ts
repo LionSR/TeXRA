@@ -202,7 +202,11 @@ export class FileList extends LitElement {
 
   private renderRound(round: number, files: OutputFileInfo[]): TemplateResult {
     if (!this.showRoundHeaders) {
-      return html`${files.map((file) => this.renderFileItem(file))}`;
+      return html`${repeat(
+        files,
+        (file) => file.location?.absolutePath ?? '',
+        (file) => this.renderFileItem(file),
+      )}`;
     }
 
     return html`
@@ -212,7 +216,11 @@ export class FileList extends LitElement {
         ?open=${true}
       >
         <div class="round-content">
-          ${files.map((file) => this.renderFileItem(file))}
+          ${repeat(
+            files,
+            (file) => file.location?.absolutePath ?? '',
+            (file) => this.renderFileItem(file),
+          )}
         </div>
       </vscode-collapsible>
     `;
