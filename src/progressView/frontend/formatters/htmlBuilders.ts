@@ -9,7 +9,7 @@ import hljs from '@shared/highlighting/hljs';
 // Local imports - Lit utilities
 
 // Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS, CHEVRON_DOWN_CLASS } from '@shared/utils/icons';
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { getBasename } from '@shared/utils/path';
 import {
   html,
@@ -105,15 +105,8 @@ export function setElementDataset(
   if (timestamp) element.dataset.fullTimestamp = timestamp;
 }
 
-/** Initialize toggle icon on a collapsible element. */
-export function initToggleIcon(element: HTMLElement, expanded = false): void {
-  const toggleIcon = element.querySelector('.toggle-icon');
-  if (toggleIcon) {
-    toggleIcon.className = `${
-      expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
-    } toggle-icon`;
-  }
-}
+// Note: Toggle icons now use CSS-only rotation via details[open] selector.
+// Always render with CHEVRON_RIGHT_CLASS and CSS will rotate when open.
 
 /** Build a copy button for banner content. */
 export function buildCopyButton(title: string, hidden = false): TemplateResult {
@@ -138,8 +131,6 @@ export interface DetailsSummaryOptions {
   includeIconClass?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: { title: string; hidden?: boolean };
-  /** Initial expanded state for toggle icon. Default: false (collapsed). */
-  expanded?: boolean;
 }
 
 /** Build a details summary element with icon, label, and optional extras. */
@@ -153,14 +144,13 @@ export function buildDetailsSummary(
     includeIconClass = true,
     timestamp,
     copyButton,
-    expanded = false,
   } = options;
   const iconClasses = includeIconClass
     ? `codicon icon ${iconClass}`
     : `codicon ${iconClass}`;
-  const toggleIconClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
+  // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
   // prettier-ignore
-  return html`<summary class="details-summary"><i class="${toggleIconClass} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestamp
+  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestamp
         ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
         : ''}${copyButton ? buildCopyButton(copyButton.title, copyButton.hidden) : ''}</summary>`;
 }

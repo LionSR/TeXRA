@@ -3,6 +3,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import type { ModelConfig } from '@model/ModelConfig';
+import type { ModelOptionData } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 
 /**
@@ -176,4 +177,65 @@ async function buildModelOption(
   ].filter(Boolean);
 
   return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
+}
+
+// =============================================================================
+// TYPED OPTIONS BUILDER (Lit-native)
+// =============================================================================
+
+// ModelOptionData type is imported from @shared/schemas (single source of truth)
+
+/**
+ * Build typed model option data for a single model.
+ */
+async function buildModelOptionData(
+  model: string,
+  ctx: ModelAvailabilityContext,
+): Promise<ModelOptionData> {
+  const config = MODEL_CONFIGS[model];
+  if (!config) {
+    return { value: model, label: model };
+  }
+
+  const available = await isModelAvailable(model, config, ctx);
+  const contextStr = config.contextWindow
+    ? formatContext(config.contextWindow)
+    : undefined;
+  const costStr = formatCost(config.inputPrice, config.outputPrice) || undefined;
+
+  return {
+    value: model,
+    label: model,
+    provider: config.provider,
+    context: contextStr,
+    cost: costStr,
+    requiresKey: !available,
+    disabled: !available,
+  };
+}
+
+/**
+ * Compute typed model options data for Lit-native rendering.
+ * Returns structured data instead of HTML strings.
+ */
+export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
+  const models = getVisibleModels();
+
+  // Prime caches for availability checks
+  const serverSideKeyService = getServerSideKeyService();
+  const [hasOpenRouter, hasServerAccess] = await Promise.all([
+    SecretManager.apiKeyExists('openRouter'),
+    serverSideKeyService.canUseServerSideKeys(),
+  ]);
+
+  const availabilityCtx: ModelAvailabilityContext = {
+    hasOpenRouter,
+    hasServerAccess,
+    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
+    serverSideKeyService,
+  };
+
+  return Promise.all(
+    models.map((model) => buildModelOptionData(model, availabilityCtx)),
+  );
 }

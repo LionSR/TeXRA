@@ -7,30 +7,31 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - shared helpers
+// Local imports - shared utils
 import {
-  applyAgentOptions,
-  applyModelOptions,
-  withPlaceholder,
-  AGENT_PLACEHOLDER,
-  MODEL_PLACEHOLDER,
-} from '@shared/utils/dropdown';
+  renderAgentOptions,
+  renderModelOptions,
+} from '@shared/utils/selectTemplates';
 
 // Local imports - shared schemas
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import { getRadioValue, type VSCodeValueElement } from '../utils';
+import { getRadioValue } from '../utils';
 import type { FollowupMode } from '../store';
-import type { SetFollowupOptionsMessage } from '@shared/schemas';
+import type {
+  SetFollowupOptionsMessage,
+  AgentOptionData,
+  ModelOptionData,
+} from '@shared/schemas';
 
 /** Agent name used for merge mode (fixed, not user-selectable) */
 const MERGE_AGENT_NAME = 'merge';
@@ -187,15 +188,13 @@ export class FollowupSection extends LitElement {
   @state() private includeInstruction = true;
   @state() private attachOutputs = false;
   @state() private initialQuestion = '';
+  @state() private selectedAgent = '';
+  @state() private selectedModel = '';
 
-  // Agent/model selects still use @query due to dropdownUtils HTML injection
-  @query(`#${ELEMENT_IDS.FOLLOWUP_AGENT}`)
-  declare private agentSelect: VSCodeValueElement | null;
-
-  @query(`#${ELEMENT_IDS.FOLLOWUP_MODEL}`)
-  declare private modelSelect: VSCodeValueElement | null;
-
-  // firstUpdated removed - Lit's .value binding handles initial radio state
+  // Typed options for Lit-native rendering
+  @state() private workflowAgentOptions: AgentOptionData[] = [];
+  @state() private toolUseAgentOptions: AgentOptionData[] = [];
+  @state() private modelOptions: ModelOptionData[] = [];
 
   updated(changedProps: PropertyValues): void {
     // Radio group sync handled by .value binding, only need to apply options
@@ -256,7 +255,11 @@ export class FollowupSection extends LitElement {
                 id=${ELEMENT_IDS.FOLLOWUP_AGENT}
                 class="followup-agent-select"
                 position="above"
-              ></vscode-single-select>
+                .value=${this.selectedAgent}
+                @change=${this.handleAgentChange}
+              >
+                ${this.renderAgentSelect()}
+              </vscode-single-select>
             </div>
             <div class="followup-select-group">
               <i class="codicon codicon-robot"></i>
@@ -264,7 +267,11 @@ export class FollowupSection extends LitElement {
                 id=${ELEMENT_IDS.FOLLOWUP_MODEL}
                 class="followup-model-select"
                 position="above"
-              ></vscode-single-select>
+                .value=${this.selectedModel}
+                @change=${this.handleModelChange}
+              >
+                ${this.renderModelSelect()}
+              </vscode-single-select>
             </div>
           </div>
 
@@ -329,10 +336,10 @@ export class FollowupSection extends LitElement {
   }
 
   private getFormData(): FollowupFormData | null {
-    // Agent/model still from DOM (dropdownUtils), rest from reactive state
+    // All form data now from reactive state (Lit-native)
     const agent =
-      this.mode === 'merge' ? MERGE_AGENT_NAME : this.agentSelect?.value;
-    const model = this.modelSelect?.value;
+      this.mode === 'merge' ? MERGE_AGENT_NAME : this.selectedAgent;
+    const model = this.selectedModel;
     if (!agent || !model) return null;
 
     return {
@@ -342,6 +349,28 @@ export class FollowupSection extends LitElement {
       attachOutputs: this.attachOutputs,
       initialQuestion: this.initialQuestion.trim(),
     };
+  }
+
+  private handleAgentChange(event: Event): void {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    this.selectedAgent = target?.value ?? '';
+  }
+
+  private handleModelChange(event: Event): void {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    this.selectedModel = target?.value ?? '';
+  }
+
+  private renderAgentSelect(): TemplateResult {
+    const agentOptions =
+      this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
+    // renderAgentOptions includes placeholder, no need to add manually
+    return renderAgentOptions(agentOptions, this.selectedAgent);
+  }
+
+  private renderModelSelect(): TemplateResult {
+    // renderModelOptions includes placeholder, no need to add manually
+    return renderModelOptions(this.modelOptions, this.selectedModel);
   }
 
   private emitSetup(): void {
@@ -379,28 +408,41 @@ export class FollowupSection extends LitElement {
   private applyOptions(): void {
     if (!this.options) return;
 
-    if (this.agentSelect) {
-      const agentsHtml =
-        this.mode === 'chat'
-          ? (this.options.toolUseAgentsHtml ?? '')
-          : (this.options.workflowAgentsHtml ?? '');
-      applyAgentOptions(
-        this.agentSelect,
-        withPlaceholder(agentsHtml, AGENT_PLACEHOLDER),
-      );
+    // Update typed options for Lit-native rendering
+    if (this.options.workflowAgentsData) {
+      this.workflowAgentOptions = this.options.workflowAgentsData;
+    }
+    if (this.options.toolUseAgentsData) {
+      this.toolUseAgentOptions = this.options.toolUseAgentsData;
+    }
+    if (this.options.modelOptionsData) {
+      this.modelOptions = this.options.modelOptionsData;
     }
 
-    const modelHtml = this.options.modelOptionsHtml ?? '';
-    if (this.modelSelect && modelHtml) {
-      const preferredModel =
-        this.mode === 'merge'
-          ? this.options.defaultMergeModel
-          : this.streamModel || this.modelSelect.value;
-      applyModelOptions(
-        this.modelSelect,
-        withPlaceholder(modelHtml, MODEL_PLACEHOLDER),
-        { preserveValue: preferredModel },
-      );
+    // Set default model based on mode
+    const preferredModel =
+      this.mode === 'merge'
+        ? this.options.defaultMergeModel
+        : this.streamModel || this.selectedModel;
+    const modelIsValid =
+      preferredModel && this.modelOptions.some((m) => m.value === preferredModel);
+    if (modelIsValid) {
+      this.selectedModel = preferredModel;
+    } else if (this.modelOptions.length > 0) {
+      // Reset to first available model if current selection is invalid
+      this.selectedModel = this.modelOptions[0].value;
+    } else {
+      this.selectedModel = '';
+    }
+
+    // Set or reset agent based on current mode's options
+    const agentOptions =
+      this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
+    const agentIsValid =
+      this.selectedAgent && agentOptions.some((a) => a.value === this.selectedAgent);
+    if (!agentIsValid) {
+      // Reset to first available agent if current selection is invalid for this mode
+      this.selectedAgent = agentOptions.length > 0 ? agentOptions[0].value : '';
     }
   }
 }

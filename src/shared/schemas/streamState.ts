@@ -69,6 +69,15 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   followUpText: z.string().prefault(''),
   /** Whether tool edit approval is bypassed (YOLO mode) */
   toolEditBypass: z.boolean().optional(),
+  // === Reactive follow-up input state (Lit-native Phase 9e) ===
+  /** Trigger to focus the follow-up input */
+  shouldFocusFollowUp: z.boolean().prefault(false),
+  /** Polished text to apply (null = no pending update) */
+  polishedText: z.string().nullable().prefault(null),
+  /** Transcribed text to insert (null = no pending update) */
+  transcribedText: z.string().nullable().prefault(null),
+  /** Recording state for the microphone button */
+  recording: z.boolean().prefault(false),
 });
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 
