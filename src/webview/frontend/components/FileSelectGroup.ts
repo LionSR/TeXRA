@@ -10,11 +10,9 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { when } from 'lit/directives/when.js';
 
-// Local imports - shared utils
-import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
+// Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -265,22 +263,42 @@ export class FileSelectGroup extends LitElement {
   private readonly boundDocumentClickHandler =
     this.handleDocumentClick.bind(this);
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener('click', this.boundDocumentClickHandler);
-  }
+  /** Track if listener is currently attached */
+  private documentListenerAttached = false;
 
   override disconnectedCallback(): void {
-    document.removeEventListener('click', this.boundDocumentClickHandler);
+    this.removeDocumentListener();
     super.disconnectedCallback();
   }
 
-  private handleDocumentClick(event: MouseEvent): void {
-    // Only handle if a menu is open
-    if (!this.autoExtractMenuOpen && !this.toolConfigMenuOpen) {
-      return;
+  protected override updated(changedProps: Map<string, unknown>): void {
+    // Manage document listener based on menu state
+    const menuOpen = this.autoExtractMenuOpen || this.toolConfigMenuOpen;
+    if (menuOpen && !this.documentListenerAttached) {
+      this.addDocumentListener();
+    } else if (!menuOpen && this.documentListenerAttached) {
+      this.removeDocumentListener();
     }
+  }
 
+  private addDocumentListener(): void {
+    if (this.documentListenerAttached) return;
+    // Use capture phase to detect clicks before they're handled
+    document.addEventListener('click', this.boundDocumentClickHandler, {
+      capture: true,
+    });
+    this.documentListenerAttached = true;
+  }
+
+  private removeDocumentListener(): void {
+    if (!this.documentListenerAttached) return;
+    document.removeEventListener('click', this.boundDocumentClickHandler, {
+      capture: true,
+    });
+    this.documentListenerAttached = false;
+  }
+
+  private handleDocumentClick(event: MouseEvent): void {
     const path = event.composedPath();
     const clickedInside = path.some(
       (el) => el instanceof HTMLElement && el.getRootNode() === this.shadowRoot,
@@ -376,18 +394,22 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
-  private buildOptionsHtml(): string {
-    const htmlOptions = [...this.options]
-      .sort((a, b) => a.localeCompare(b))
-      .map(
-        (value) => `<vscode-option value="${value}">${value}</vscode-option>`,
-      )
-      .join('\n');
-    const withPlaceholderHtml = withPlaceholder(
-      htmlOptions,
-      '<vscode-option value="">None</vscode-option>',
-    );
-    return markOptionAsSelected(withPlaceholderHtml, this.selectedValue);
+  private renderFileOptions(): TemplateResult {
+    const sortedOptions = [...this.options].sort((a, b) => a.localeCompare(b));
+    return html`
+      <vscode-option value="" ?selected=${this.selectedValue === ''}
+        >None</vscode-option
+      >
+      ${repeat(
+        sortedOptions,
+        (opt) => opt,
+        (opt) => html`
+          <vscode-option value=${opt} ?selected=${opt === this.selectedValue}>
+            ${opt}
+          </vscode-option>
+        `,
+      )}
+    `;
   }
 
   private renderToolConfigMenu(): TemplateResult {
@@ -635,7 +657,7 @@ export class FileSelectGroup extends LitElement {
             this.handleFileChange(target.value);
           }}
         >
-          ${unsafeHTML(this.buildOptionsHtml())}
+          ${this.renderFileOptions()}
         </vscode-single-select>
         <div
           id="${this.listId}Container"

@@ -10,17 +10,6 @@ import Sortable from 'sortablejs';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 import { WebviewStateManager } from '@shared/state';
-import {
-  decorateAgentOptions,
-  decorateModelOptions,
-  markOptionAsSelected,
-  updateAgentSelectTooltip,
-} from '@shared/utils/dropdown';
-import {
-  getSelectedOptionElement,
-  isSelectLikeElement,
-} from '@shared/utils/dom';
-import { resolveTextareaTarget, syncHostValue } from '@shared/utils/textarea';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
@@ -34,6 +23,8 @@ import {
   type ApiKeyBannerState,
   type AgentConfigBannerState,
   type DependencyBannerState,
+  type ModelOptionData,
+  type AgentOptionData,
 } from '@shared/schemas';
 
 // Local imports - webview commands
@@ -52,7 +43,6 @@ import {
   parseSessionType,
 } from './constants';
 import { mainViewStyles } from './styles';
-import { handleImagePaste } from './pasteHandler';
 
 // Local imports - main view components (side-effect imports to register custom elements)
 import './components/FileSelectGroup';
@@ -178,9 +168,18 @@ export class MainApp extends BaseWebviewApp {
   };
   @state() private isRecording = false;
   @state() private isPolishing = false;
+  /** @deprecated Use modelOptions for Lit-native rendering */
   @state() private modelOptionsHtml = '';
+  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
   @state() private workflowAgentOptionsHtml = '';
+  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
   @state() private toolUseAgentOptionsHtml = '';
+  /** Typed model options for Lit-native rendering */
+  @state() private modelOptions: ModelOptionData[] = [];
+  /** Typed workflow agent options for Lit-native rendering */
+  @state() private workflowAgentOptions: AgentOptionData[] = [];
+  /** Typed tool-use agent options for Lit-native rendering */
+  @state() private toolUseAgentOptions: AgentOptionData[] = [];
   @state() private apiKeyBanner: ApiKeyBannerState = { visible: false };
   @state() private agentConfigBanner: AgentConfigBannerState = {
     visible: false,
@@ -198,17 +197,8 @@ export class MainApp extends BaseWebviewApp {
   private apiKeyBannerForced = false;
   private instructionSaveTimer: number | null = null;
 
-  @query('#instruction')
-  declare private instructionElement: HTMLElement | null;
-
-  @query('#model')
-  declare private modelSelectElement: HTMLElement | null;
-
-  @query('#workflowAgent')
-  declare private workflowAgentElement: HTMLElement | null;
-
-  @query('#toolUseAgent')
-  declare private toolUseAgentElement: HTMLElement | null;
+  // Note: model/agent selects are inside InstructionPanel's shadow DOM.
+  // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
 
   private readonly stateManager =
     new WebviewStateManager<MainViewPersistedState>(
@@ -218,11 +208,6 @@ export class MainApp extends BaseWebviewApp {
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
   private sortables: Sortable[] = [];
-  // Document click handler - can be used for click-outside detection
-  // Currently empty as menus are now managed by child components
-  private readonly documentClickHandler = (_event: MouseEvent) => {
-    // Reserved for future click-outside detection needs
-  };
   private readonly messageHandlers: Record<string, MainViewMessageHandler> = {
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) =>
       this.handleSetModelOptions(
@@ -387,12 +372,10 @@ export class MainApp extends BaseWebviewApp {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('click', this.documentClickHandler);
     this.restorePersistedState();
   }
 
   override disconnectedCallback(): void {
-    document.removeEventListener('click', this.documentClickHandler);
     this.sortables.forEach((sortable) => sortable.destroy());
     this.sortables = [];
     this.stopPlaceholderRotation();
@@ -423,49 +406,15 @@ export class MainApp extends BaseWebviewApp {
   protected override firstUpdated(): void {
     this.requestInitialData();
     this.initializeSortables();
-    this.setupInstructionHandlers();
     this.refreshInstructionPlaceholder(false);
   }
 
   protected override updated(changed: Map<string, unknown>): void {
-    if (changed.has('modelOptionsHtml')) {
-      const modelSelect = this.modelSelectElement;
-      if (modelSelect) {
-        decorateModelOptions(modelSelect);
-        this.updateModelApiKeyBanner(modelSelect);
-      }
-    }
-
-    if (changed.has('workflowAgentOptionsHtml')) {
-      const select = this.workflowAgentElement;
-      if (select) {
-        decorateAgentOptions(select);
-        updateAgentSelectTooltip(select);
-      }
-    }
-
-    if (changed.has('toolUseAgentOptionsHtml')) {
-      const select = this.toolUseAgentElement;
-      if (select) {
-        decorateAgentOptions(select);
-        updateAgentSelectTooltip(select);
-      }
-    }
-
     if (changed.has('sessionType')) {
       this.refreshInstructionPlaceholder(false);
     }
-
-    if (changed.has('workflowAgent') || changed.has('toolUseAgent')) {
-      AGENT_SELECT_LIST.forEach((id) => {
-        const select = this.renderRoot.querySelector(
-          `#${id}`,
-        ) as HTMLElement | null;
-        if (select) {
-          updateAgentSelectTooltip(select);
-        }
-      });
-    }
+    // Note: Option decoration is handled declaratively in selectTemplates.ts
+    // via renderAgentOptions/renderModelOptions.
   }
 
   private blockSave(): void {
@@ -587,7 +536,17 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
+  /**
+   * Initialize Sortable.js for file lists.
+   * Note: This queries into child component shadow DOMs which doesn't work.
+   * TODO: Phase 9 - Move Sortable initialization to FileSelectGroup and
+   * OutputFilesSection components, have them emit 'files-reordered' events.
+   * @deprecated Sortable integration needs to be moved to child components
+   */
   private initializeSortables(): void {
+    // File lists are now inside shadow DOM of child components.
+    // This code is preserved for backward compatibility but Sortable
+    // will not initialize since elements can't be found.
     const listIds = MULTIPLE_FILE_TYPES.map((type) => `${type}Files`);
     listIds.forEach((listId) => {
       const element = this.renderRoot.querySelector(
@@ -596,24 +555,27 @@ export class MainApp extends BaseWebviewApp {
       if (!element) return;
       const sortable = new Sortable(element, {
         animation: 150,
-        onEnd: () => this.handleSortEnd(listId),
+        onEnd: (event) => this.handleSortEnd(listId, event),
       });
       this.sortables.push(sortable);
     });
   }
 
-  private handleSortEnd(listId: string): void {
-    const element = this.renderRoot.querySelector(
-      `#${listId}`,
-    ) as HTMLElement | null;
-    if (!element) return;
-    // eslint-disable-next-line unicorn/prefer-spread -- NodeList lacks iterator typing.
-    const items = Array.from(element.querySelectorAll('.file-item'));
-    const files = items
-      .map((item) => item.getAttribute('data-path') || '')
-      .filter(Boolean);
+  /**
+   * Handle Sortable drag end - update state from event indices.
+   * @deprecated Will be replaced by handling events from child components
+   */
+  private handleSortEnd(listId: string, event: Sortable.SortableEvent): void {
+    // Use Sortable event indices instead of querying DOM
+    const oldIndex = event.oldIndex;
+    const newIndex = event.newIndex;
+    if (oldIndex === undefined || newIndex === undefined) return;
 
-    this.updateMultiFiles(listId, files);
+    const current = [...(this.multiFiles[listId] ?? [])];
+    const [moved] = current.splice(oldIndex, 1);
+    current.splice(newIndex, 0, moved);
+
+    this.updateMultiFiles(listId, current);
   }
 
   private updateMultiFiles(listId: string, files: string[]): void {
@@ -630,9 +592,22 @@ export class MainApp extends BaseWebviewApp {
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
-    this.modelOptionsHtml = message.options;
-    if (this.model && !this.hasOptionValue(message.options, this.model)) {
-      this.model = '';
+    // Store typed data (preferred for Lit-native rendering)
+    if (message.optionsData) {
+      this.modelOptions = message.optionsData;
+    }
+    // Also store HTML for backward compatibility during migration
+    if (message.options) {
+      this.modelOptionsHtml = message.options;
+    }
+    // Validate selected model exists in new options
+    if (this.model) {
+      const hasModel = message.optionsData
+        ? message.optionsData.some((opt) => opt.value === this.model)
+        : this.hasOptionValue(message.options ?? '', this.model);
+      if (!hasModel) {
+        this.model = '';
+      }
     }
   }
 
@@ -640,21 +615,38 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS>,
   ): void {
     const options = message.options ?? {};
+    const optionsData = message.optionsData ?? {};
+
+    // Workflow agents
+    if (optionsData.workflow) {
+      this.workflowAgentOptions = optionsData.workflow;
+    }
     if (options.workflow !== null && options.workflow !== undefined) {
       this.workflowAgentOptionsHtml = options.workflow;
-      if (
-        this.workflowAgent &&
-        !this.hasOptionValue(options.workflow, this.workflowAgent)
-      ) {
+    }
+    // Validate selected workflow agent
+    if (this.workflowAgent) {
+      const hasAgent = optionsData.workflow
+        ? optionsData.workflow.some((opt) => opt.value === this.workflowAgent)
+        : this.hasOptionValue(options.workflow ?? '', this.workflowAgent);
+      if (!hasAgent) {
         this.workflowAgent = '';
       }
     }
+
+    // Tool-use agents
+    if (optionsData.toolUse) {
+      this.toolUseAgentOptions = optionsData.toolUse;
+    }
     if (options.toolUse !== null && options.toolUse !== undefined) {
       this.toolUseAgentOptionsHtml = options.toolUse;
-      if (
-        this.toolUseAgent &&
-        !this.hasOptionValue(options.toolUse, this.toolUseAgent)
-      ) {
+    }
+    // Validate selected tool-use agent
+    if (this.toolUseAgent) {
+      const hasAgent = optionsData.toolUse
+        ? optionsData.toolUse.some((opt) => opt.value === this.toolUseAgent)
+        : this.hasOptionValue(options.toolUse ?? '', this.toolUseAgent);
+      if (!hasAgent) {
         this.toolUseAgent = '';
       }
     }
@@ -759,10 +751,7 @@ export class MainApp extends BaseWebviewApp {
 
     if (!this.isGitRepo) {
       this.commit = '';
-    } else if (
-      !this.commit ||
-      !this.hasOptionValue(this.buildCommitOptions(), this.commit)
-    ) {
+    } else if (!this.commit || !this.hasCommitValue(this.commit)) {
       this.commit = 'HEAD';
     }
     this.saveState();
@@ -913,28 +902,12 @@ export class MainApp extends BaseWebviewApp {
       return;
     }
 
-    const instructionEl = this.instructionElement;
-    if (!instructionEl) {
-      return;
-    }
-
-    const { textarea } = resolveTextareaTarget(instructionEl);
-    if (!textarea) {
-      return;
-    }
-
-    const startPos = textarea.selectionStart ?? textarea.value.length;
-    const endPos = textarea.selectionEnd ?? textarea.value.length;
-    const updated =
-      textarea.value.slice(0, startPos) +
-      message.text +
-      textarea.value.slice(endPos);
-    textarea.value = updated;
-    textarea.setSelectionRange(
-      startPos + message.text.length,
-      startPos + message.text.length,
-    );
-    syncHostValue(instructionEl, textarea);
+    // Append transcribed text to instruction (Lit-native: update state, not DOM)
+    // Note: Cursor position insertion is not supported with shadow DOM isolation.
+    // The InstructionPanel receives the updated instruction via property binding.
+    const updated = this.instruction
+      ? `${this.instruction} ${message.text}`
+      : message.text;
     this.instruction = updated;
     this.isRecording = false;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
@@ -1212,11 +1185,7 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleAgentChange(
-    sessionType: SessionType,
-    value: string,
-    selectElement?: HTMLElement,
-  ): void {
+  private handleAgentChange(sessionType: SessionType, value: string): void {
     if (sessionType === SESSION_TYPES.WORKFLOW) {
       this.workflowAgent = value;
     } else {
@@ -1229,15 +1198,12 @@ export class MainApp extends BaseWebviewApp {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
         agent: value,
       });
-    }
-    if (selectElement && isSelectLikeElement(selectElement)) {
-      const selectedOption = getSelectedOptionElement(selectElement);
-      if (
-        selectedOption &&
-        !selectedOption.classList.contains('disabled-option')
-      ) {
-        postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
-      }
+      // Hide banner when a valid agent is selected.
+      // Previously checked classList.contains('disabled-option') but that
+      // required access to select element which is in InstructionPanel's
+      // shadow DOM. If the backend needs to show the banner for disabled
+      // agents, it should send a message.
+      postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     }
   }
 
@@ -1245,30 +1211,10 @@ export class MainApp extends BaseWebviewApp {
     this.model = value;
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
-    if (this.modelSelectElement) {
-      this.updateModelApiKeyBanner(this.modelSelectElement);
-    }
-  }
-
-  private updateModelApiKeyBanner(selectElement: HTMLElement): void {
-    if (!isSelectLikeElement(selectElement)) return;
-    const selectedOption = getSelectedOptionElement(selectElement);
-    const requiresKey = selectedOption?.dataset?.requiresKey === 'true';
-    const provider = selectedOption?.dataset?.provider;
-
-    if (requiresKey) {
-      this.apiKeyBannerForced = false;
-      this.apiKeyBanner = {
-        visible: true,
-        provider: provider || '',
-        requiresKey: true,
-      };
-      return;
-    }
-
-    if (!this.apiKeyBanner.requiresKey && !this.apiKeyBannerForced) {
-      this.apiKeyBanner = { visible: false };
-    }
+    // Note: API key banner updates are handled by backend messages
+    // (SHOW_API_KEY_BANNER, HIDE_API_KEY_BANNER) since the model select
+    // is inside InstructionPanel's shadow DOM and data attributes
+    // can't be read from here.
   }
 
   private handleShowApiKeyBanner(
@@ -1322,30 +1268,13 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private setupInstructionHandlers(): void {
-    const instructionHost = this.instructionElement;
-    if (!instructionHost) return;
+  // Note: Instruction input events are handled via @instruction-input from InstructionPanel.
+  // Image paste is handled by @instruction-paste from InstructionPanel (Lit-native pattern).
 
-    instructionHost.addEventListener('input', () => {
-      const { textarea } = resolveTextareaTarget(instructionHost);
-      if (!textarea) return;
-      this.instruction = textarea.value;
-      this.scheduleInstructionSave();
-      if (textarea.value.trim()) {
-        this.stopPlaceholderRotation();
-      } else {
-        this.startPlaceholderRotation();
-      }
-    });
-
-    instructionHost.addEventListener('paste', async (event: Event) => {
-      if (!(event instanceof ClipboardEvent)) return;
-      const handled = await handleImagePaste(event, instructionHost);
-      if (handled) {
-        this.saveState();
-      }
-    });
-  }
+  /** Handle image paste in instruction - save state after paste completes */
+  private handleComponentInstructionPaste = (): void => {
+    this.saveState();
+  };
 
   private scheduleInstructionSave(): void {
     if (this.instructionSaveTimer) {
@@ -1799,19 +1728,11 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentAgentChange = (
     e: CustomEvent<AgentChangeDetail>,
   ): void => {
-    // Get the select element for decorator updates
-    const selectId =
-      e.detail.sessionType === SESSION_TYPES.WORKFLOW
-        ? 'workflowAgent'
-        : 'toolUseAgent';
-    const selectElement = this.renderRoot.querySelector(
-      `#${selectId}`,
-    ) as HTMLElement | null;
-    this.handleAgentChange(
-      e.detail.sessionType,
-      e.detail.value,
-      selectElement ?? undefined,
-    );
+    // Note: Select element is inside InstructionPanel's shadow DOM and
+    // cannot be queried from here. The disabled-option check in
+    // handleAgentChange will be skipped. This should be handled by
+    // InstructionPanel emitting additional event data when needed.
+    this.handleAgentChange(e.detail.sessionType, e.detail.value);
   };
 
   private handleComponentModelChange = (
@@ -1871,28 +1792,17 @@ export class MainApp extends BaseWebviewApp {
     this.dependencyBanner = { visible: false };
   }
 
-  private hasOptionValue(optionsHtml: string, value: string): boolean {
-    if (!value) {
-      return false;
-    }
-    return optionsHtml.includes(`value=\"${value}\"`);
-  }
-
-  private buildCommitOptions(): string {
+  /** Check if a commit hash exists in the options array. */
+  private hasCommitValue(value: string): boolean {
+    if (!value) return false;
     const commits = this.fileOptions.commit ?? [];
-    if (!this.isGitRepo) {
-      return '<vscode-option value="">Not a Git repository</vscode-option>';
-    }
     const entries = commits.some((commit) => commit.startsWith('HEAD'))
       ? commits
       : ['HEAD', ...commits];
-    const optionsHtml = entries
-      .map((commit) => {
-        const [hash] = commit.split(': ');
-        return `<vscode-option value="${hash}">${commit}</vscode-option>`;
-      })
-      .join('\n');
-    return markOptionAsSelected(optionsHtml, this.commit);
+    return entries.some((commit) => {
+      const [hash] = commit.split(': ');
+      return hash === value;
+    });
   }
 
   /** Get single file value for a file type */
@@ -1977,6 +1887,9 @@ export class MainApp extends BaseWebviewApp {
             .workflowAgentOptionsHtml=${this.workflowAgentOptionsHtml}
             .toolUseAgentOptionsHtml=${this.toolUseAgentOptionsHtml}
             .modelOptionsHtml=${this.modelOptionsHtml}
+            .workflowAgentOptions=${this.workflowAgentOptions}
+            .toolUseAgentOptions=${this.toolUseAgentOptions}
+            .modelOptions=${this.modelOptions}
             .isRecording=${this.isRecording}
             .isPolishing=${this.isPolishing}
             .debugMode=${this.debugMode}
@@ -1984,6 +1897,7 @@ export class MainApp extends BaseWebviewApp {
             @agent-change=${this.handleComponentAgentChange}
             @model-change=${this.handleComponentModelChange}
             @instruction-input=${this.handleComponentInstructionInput}
+            @instruction-paste=${this.handleComponentInstructionPaste}
             @panel-action=${this.handleComponentPanelAction}
             @execute=${this.handleComponentExecute}
             @agent-settings=${this.handleComponentAgentSettings}
