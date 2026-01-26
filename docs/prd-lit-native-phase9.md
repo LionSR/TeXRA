@@ -532,6 +532,45 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 - `src/historyView/frontend/components/HistoryList.ts` - willUpdate lifecycle for reactive updates
 - `docs/prd-lit-native-phase9.md` - This document
 
+### 2026-01-26 - Additional Lit-native Refactoring
+
+**Completed:**
+- Removed unnecessary `requestUpdate()` in MemoryToggle.ts (vscode-checkbox upgrade is automatic)
+- Refactored 4 formatters to use `renderToElement(html`...`)` instead of `document.createElement`:
+  - `formatUserMessage` in messageFormatters.ts
+  - `formatLatexdiff` in dataFormatters.ts
+  - `formatStatistics` in dataFormatters.ts
+  - `formatContextManagement` in contextManagementFormatters.ts
+
+**Files Modified:**
+- `src/memoryView/frontend/components/MemoryToggle.ts` - Removed firstUpdated/requestUpdate
+- `src/progressView/frontend/formatters/logFormatters/messageFormatters.ts` - Lit template
+- `src/progressView/frontend/formatters/logFormatters/dataFormatters.ts` - Lit templates
+- `src/progressView/frontend/formatters/logFormatters/contextManagementFormatters.ts` - Lit template
+
+**Remaining Anti-patterns (for future phases):**
+These patterns exist in shared utilities and are lower priority since they're helper functions, not Lit components:
+
+1. **src/shared/utils/dropdown.ts** - innerHTML assignment, createElement, setAttribute
+   - Legacy dropdown string manipulation utilities
+   - Will be fully deprecated when all consumers use Lit templates
+
+2. **src/shared/utils/dom.ts** - querySelector, createElement, setAttribute
+   - General DOM utility functions for VS Code web components
+   - Some patterns necessary for external library integration
+
+3. **src/shared/utils/clipboard.ts** - classList, setAttribute
+   - Copy button feedback utilities
+   - Could be converted to Lit reactive controller pattern
+
+4. **src/shared/controllers/RecordingButtonController.ts** - classList, setAttribute, innerHTML
+   - Reactive controller managing external button element
+   - Could be refactored to property-based approach
+
+5. **src/progressView/frontend/components/LogList.ts** - querySelector in event handlers
+   - Light DOM component with event delegation
+   - Acceptable for Light DOM event handling pattern
+
 ---
 
 ## References
