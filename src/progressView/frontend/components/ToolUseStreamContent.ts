@@ -39,7 +39,6 @@ import type { StreamTabInfo } from '@shared/schemas';
 import type { ToolUseStreamState } from '../store';
 import type { PromptState } from './PromptOverlay';
 import type { FollowUpInput } from './FollowUpInput';
-import type { LogList } from './LogList';
 
 // Local imports - sibling components
 import './StreamHeader';
@@ -68,8 +67,6 @@ export class ToolUseStreamContent extends LitElement {
   @state() private filteredPrompts: PromptState[] = [];
   @state() private runGroups: RunGroup[] = [];
 
-  /** Ref for LogList - exposed for parent access via getLogListRef() */
-  private logListRef: Ref<LogList> = createRef();
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
@@ -117,7 +114,11 @@ export class ToolUseStreamContent extends LitElement {
 
       <todo-list .todos=${this.state.todos}></todo-list>
 
-      <task-group-list ${ref(this.logListRef)}></task-group-list>
+      <log-list
+        .groups=${this.state.taskGroups}
+        .messages=${this.state.logs}
+        .isToolUse=${true}
+      ></log-list>
 
       <usage-panel
         .contextState=${this.state.contextState ?? null}
@@ -130,14 +131,6 @@ export class ToolUseStreamContent extends LitElement {
         .queuedMessages=${this.state.queuedFollowUps}
       ></follow-up-input>
     `;
-  }
-
-  /**
-   * Get the LogList component ref for imperative operations.
-   * @returns The LogList instance, or undefined if not mounted
-   */
-  getLogListRef(): LogList | undefined {
-    return this.logListRef.value;
   }
 
   /**

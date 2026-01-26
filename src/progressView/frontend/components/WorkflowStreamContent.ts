@@ -30,7 +30,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
 import { getRunGroups, hasOutputFiles } from '../stateUtils';
@@ -43,7 +42,6 @@ import type {
 
 // Local imports - progress view
 import type { FollowupOptionsState, WorkflowStreamState } from '../store';
-import type { LogList } from './LogList';
 
 // Local imports - sibling components
 import './StreamHeader';
@@ -87,9 +85,6 @@ export class WorkflowStreamContent extends LitElement {
     hasFiles: false,
   };
 
-  /** Ref for LogList - exposed for parent access via getLogListRef() */
-  private logListRef: Ref<LogList> = createRef();
-
   protected willUpdate(changedProperties: PropertyValues<this>): void {
     // Recompute run groups when state changes (taskGroups is inside state)
     if (changedProperties.has('state')) {
@@ -130,7 +125,12 @@ export class WorkflowStreamContent extends LitElement {
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
-      <task-group-list ${ref(this.logListRef)}></task-group-list>
+      <log-list
+        .groups=${this.state.taskGroups}
+        .messages=${this.state.logs}
+        .activeRunId=${this.runId}
+        .isToolUse=${false}
+      ></log-list>
 
       <usage-panel
         .usage=${usage}
@@ -148,13 +148,5 @@ export class WorkflowStreamContent extends LitElement {
         .streamModel=${this.streamInfo.model ?? null}
       ></followup-section>
     `;
-  }
-
-  /**
-   * Get the LogList component ref for imperative operations.
-   * @returns The LogList instance, or undefined if not mounted
-   */
-  getLogListRef(): LogList | undefined {
-    return this.logListRef.value;
   }
 }

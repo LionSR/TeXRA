@@ -8,6 +8,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -229,7 +230,7 @@ export class OutputFilesSection extends LitElement {
         <div
           id="outputFilesContainer"
           class="multiple-files-container"
-          style=${this.expanded ? 'display: block' : 'display: none'}
+          style=${styleMap({ display: this.expanded ? 'block' : 'none' })}
         >
           <div class="multiple-files-content">
             <div id="outputFiles" class="multiple-files-list">

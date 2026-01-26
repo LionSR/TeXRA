@@ -52,6 +52,7 @@ import {
   type StreamState,
 } from './store';
 import {
+  prependInstructionForToolUse,
   resolveActiveRunId,
   updateNestedRounds,
   updateToolUseState,
@@ -168,15 +169,6 @@ export function handleUpdateStreams(
     activeStreamId: activeStream || null,
     streamFilter: result.data.agentFilter,
   }));
-
-  // Clear log content when:
-  // 1. No active stream (filtered to empty category, or no streams at all)
-  // 2. Stream switched (need fresh render from UPDATE_LOGS)
-  const isStreamSwitch = activeStream !== previousStreamId;
-  if (!activeStream || isStreamSwitch) {
-    const logList = ctx.getLogListRef();
-    logList?.clear();
-  }
 }
 
 export function handleUpdateLogs(
@@ -187,19 +179,10 @@ export function handleUpdateLogs(
   if (!result.success) return;
 
   const { stream, messages, groups, action } = result.data;
-  const logList = ctx.getLogListRef();
 
   if (!stream && action === 'clear') {
     pendingLogUpdates.clear();
     ctx.setState((prev) => ({ ...prev, streamStates: new Map() }));
-    logList?.renderLogs({
-      streamId: '',
-      messages: [],
-      groups: [],
-      action: 'clear',
-      activeRunId: null,
-      runInstructions: null,
-    });
     return;
   }
 
@@ -216,10 +199,20 @@ export function handleUpdateLogs(
       contextState,
     } = result.data;
 
+    // For tool-use streams, prepend instruction as first userMessage if needed
+    let processedMessages = isClear ? [] : messages;
+    if (!isClear && isToolUseState(prev) && runInstructions) {
+      processedMessages = prependInstructionForToolUse(
+        [...messages],
+        runInstructions,
+        stream,
+      );
+    }
+
     // Base fields shared by all stream types
     const baseUpdate = {
       ...prev,
-      logs: isClear ? [] : messages,
+      logs: processedMessages,
       taskGroups: isClear ? [] : (groups ?? prev.taskGroups),
       contextState: contextState ?? prev.contextState,
     };
@@ -242,23 +235,6 @@ export function handleUpdateLogs(
 
     return baseUpdate;
   });
-
-  const state = ctx.getState();
-  if (state.activeStreamId === stream) {
-    const streamState = getStreamState(state, stream);
-    const isToolUse = isToolUseState(streamState);
-    logList?.renderLogs({
-      streamId: stream,
-      messages: streamState.logs,
-      groups: streamState.taskGroups,
-      action: action ?? 'render',
-      activeRunId: getEffectiveRunId(streamState),
-      runInstructions: isWorkflowState(streamState)
-        ? streamState.runInstructions
-        : null,
-      isToolUse,
-    });
-  }
 }
 
 export function handleAppendLog(
@@ -284,16 +260,6 @@ export function handleAppendLog(
     ...prev,
     logs: [...prev.logs, mergedLogMessage],
   }));
-
-  if (ctx.getState().activeStreamId === result.data.stream) {
-    // Auto-expand thinking and scratchpad messages by default
-    const shouldAutoExpand = AUTO_EXPAND_MESSAGE_TYPES.has(
-      mergedLogMessage.messageType ?? '',
-    );
-    ctx.getLogListRef()?.appendLog(mergedLogMessage, {
-      defaultOpen: shouldAutoExpand,
-    });
-  }
 }
 
 export function handleUpdateLog(
@@ -326,10 +292,6 @@ export function handleUpdateLog(
       entry.id === result.data.logMessage.id ? result.data.logMessage : entry,
     ),
   }));
-
-  if (state.activeStreamId === result.data.stream) {
-    ctx.getLogListRef()?.updateLog(result.data.logMessage);
-  }
 }
 
 export function handleUpdateStatus(
@@ -479,10 +441,6 @@ export function handleAddTaskGroup(
     ...prev,
     taskGroups: [...prev.taskGroups, result.data.group],
   }));
-
-  if (ctx.getState().activeStreamId === result.data.stream) {
-    ctx.getLogListRef()?.addGroup(result.data.group);
-  }
 }
 
 export function handleUpdateTaskGroup(
@@ -505,10 +463,6 @@ export function handleUpdateTaskGroup(
         : group,
     ),
   }));
-
-  if (ctx.getState().activeStreamId === streamId) {
-    ctx.getLogListRef()?.updateGroup({ id, status, endTime });
-  }
 }
 
 export function handleUpdateTodos(
@@ -717,25 +671,17 @@ export function handleDeleteStream(
   const nextActiveStreamId =
     state.activeStreamId === streamId ? null : state.activeStreamId;
 
+  // Clear pending updates if active stream was deleted
+  if (state.activeStreamId === streamId) {
+    pendingLogUpdates.clear();
+  }
+
   ctx.setState(() => ({
     ...state,
     streams: nextStreams,
     streamStates: nextStates,
     activeStreamId: nextActiveStreamId,
   }));
-
-  // Clear log list if active stream was deleted
-  if (state.activeStreamId === streamId) {
-    pendingLogUpdates.clear();
-    ctx.getLogListRef()?.renderLogs({
-      streamId: '',
-      messages: [],
-      groups: [],
-      action: 'clear',
-      activeRunId: null,
-      runInstructions: null,
-    });
-  }
 }
 
 export function handleDeleteAll(
@@ -752,15 +698,6 @@ export function handleDeleteAll(
     streamStates: new Map(),
     activeStreamId: null,
   }));
-
-  ctx.getLogListRef()?.renderLogs({
-    streamId: '',
-    messages: [],
-    groups: [],
-    action: 'clear',
-    activeRunId: null,
-    runInstructions: null,
-  });
 }
 
 export function handleUpdateUsage(

@@ -9,11 +9,21 @@
 import { html, render, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { when } from 'lit/directives/when.js';
 
 // Re-export directives for use in formatter templates
-export { html, nothing, render, classMap, ifDefined, unsafeHTML, when };
+export {
+  html,
+  nothing,
+  render,
+  classMap,
+  ifDefined,
+  styleMap,
+  unsafeHTML,
+  when,
+};
 export type { TemplateResult };
 
 /**

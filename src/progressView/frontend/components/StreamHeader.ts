@@ -224,11 +224,7 @@ export class StreamHeader extends LitElement {
         opacity: var(--opacity-full);
       }
 
-      /* Ready state - not in shared module */
-      .status-indicator.is-ready {
-        background-color: var(--vscode-descriptionForeground);
-        opacity: var(--opacity-disabled);
-      }
+      /* Note: .is-ready and other status states from statusIndicatorStyles */
 
       .toolbar-button--hidden {
         display: none;
