@@ -153,13 +153,6 @@ export class FollowUpInput extends LitElement {
     }
   }
 
-  protected override updated(): void {
-    this.recordingController.attach(
-      this.renderRoot.querySelector(
-        `#${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}`,
-      ) as HTMLElement | null,
-    );
-  }
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
   private handleKeydown = (event: KeyboardEvent): void => {
@@ -207,9 +200,14 @@ export class FollowUpInput extends LitElement {
             ></vscode-progress-ring>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
-              icon="mic"
-              label="Record follow-up"
-              title="Record follow-up with microphone"
+              icon=${this.recordingController.state.icon}
+              label=${this.recordingController.state.title}
+              title=${this.recordingController.state.title}
+              class=${classMap({
+                [this.recordingController.state.recordingClass]:
+                  this.recordingController.state.recording,
+              })}
+              @click=${this.recordingController.handleClick}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
