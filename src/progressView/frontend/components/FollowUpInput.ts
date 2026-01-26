@@ -68,9 +68,10 @@ export class FollowUpInput extends LitElement {
       overflow-y: auto;
     }
 
-    .follow-up-actions {
+    .follow-up-actions,
+    vscode-toolbar-container.follow-up-actions {
       display: flex;
-      flex-direction: column;
+      flex-direction: column !important;
       align-items: center;
       gap: var(--spacing-small);
     }
