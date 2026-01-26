@@ -23,7 +23,10 @@ pre.hljs,
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-tag {
-  color: var(--vscode-symbolIcon-keywordForeground, var(--vscode-textLink-foreground));
+  color: var(
+    --vscode-symbolIcon-keywordForeground,
+    var(--vscode-textLink-foreground)
+  );
 }
 
 /* Strings, literals */
@@ -47,7 +50,10 @@ pre.hljs,
 .hljs-variable,
 .hljs-params,
 .hljs-attr {
-  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-editor-foreground));
+  color: var(
+    --vscode-symbolIcon-variableForeground,
+    var(--vscode-editor-foreground)
+  );
 }
 
 /* Functions, methods */
@@ -67,7 +73,10 @@ pre.hljs,
 /* Properties, attributes */
 .hljs-property,
 .hljs-name {
-  color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-editor-foreground));
+  color: var(
+    --vscode-symbolIcon-propertyForeground,
+    var(--vscode-editor-foreground)
+  );
 }
 
 /* Operators, punctuation */

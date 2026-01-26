@@ -26,7 +26,8 @@ const markdownCache = new Map<string, string>();
 const highlightCode = (code: string, lang: string): string => {
   if (lang && hljs.getLanguage(lang)) {
     try {
-      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true })
+        .value;
     } catch {
       // Fall through to plain text
     }

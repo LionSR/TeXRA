@@ -58,6 +58,10 @@ import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import './components/StreamTabs';
 import './components/ToolUseStreamContent';
 import './components/WorkflowStreamContent';
+import './components/UserMessage';
+import './components/StatisticsPanel';
+import './components/LatexdiffResults';
+import './components/ContextManagement';
 
 // Local imports - progress view modules
 import type { FollowUpInput } from './components/FollowUpInput';
