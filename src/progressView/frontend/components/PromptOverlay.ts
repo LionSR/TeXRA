@@ -10,6 +10,7 @@ import { getBasename } from '@shared/utils/path';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { promptOverlayStyles } from '@shared/styles/promptOverlayStyles';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -142,194 +143,7 @@ const SECONDARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
 
 @customElement('prompt-overlay')
 export class PromptOverlay extends LitElement {
-  static styles = [
-    designTokens,
-    codiconIconClasses,
-    css`
-      :host {
-        display: block;
-      }
-
-      :host([hidden]) {
-        display: none;
-      }
-
-      /* Card container */
-      .prompt-card {
-        border: 1px solid var(--vscode-input-border);
-        border-radius: var(--border-radius-medium);
-        background: var(--vscode-editor-background);
-        margin-bottom: var(--spacing-medium);
-      }
-
-      /* Header */
-      .prompt-header {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) var(--spacing-medium);
-        font-weight: 500;
-        border-bottom: 1px solid var(--vscode-input-border);
-      }
-
-      .prompt-header .codicon {
-        color: var(--vscode-terminal-ansiYellow);
-      }
-
-      /* Body */
-      .prompt-body {
-        padding: var(--spacing-medium);
-        font-size: var(--font-size);
-        line-height: 1.5;
-      }
-
-      .prompt-body p {
-        margin: 0 0 var(--spacing-small);
-      }
-
-      .prompt-body p:last-child {
-        margin-bottom: 0;
-      }
-
-      /* Code block for commands */
-      .code-block {
-        display: block;
-        padding: var(--spacing-medium);
-        background: var(--vscode-textCodeBlock-background);
-        border-radius: var(--border-radius);
-        color: var(--vscode-terminal-foreground);
-        font-family: var(--vscode-editor-font-family);
-        font-size: var(--font-size-sm);
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow-x: auto;
-      }
-
-      /* Actions bar */
-      .prompt-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-medium);
-        padding: var(--spacing-small) var(--spacing-medium);
-        border-top: 1px solid var(--vscode-input-border);
-      }
-
-      .secondary-actions {
-        margin-left: auto;
-        display: flex;
-        gap: var(--spacing-small);
-      }
-
-      /* Action buttons */
-      .action-button {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        background: transparent;
-        border: none;
-        color: var(--vscode-foreground);
-        font-size: var(--font-size);
-        cursor: pointer;
-        border-radius: var(--border-radius);
-      }
-
-      .action-button:hover {
-        background: var(--vscode-toolbar-hoverBackground);
-      }
-
-      .action-button--approve {
-        color: var(--vscode-testing-iconPassed, #89d185);
-      }
-
-      .action-button--reject {
-        color: var(--vscode-testing-iconFailed, #f48771);
-      }
-
-      .action-button--secondary {
-        color: var(--vscode-descriptionForeground);
-      }
-
-      /* File path styling */
-      .file-path {
-        font-family: var(--vscode-editor-font-family);
-        font-size: var(--font-size-sm);
-        color: var(--color-text-link);
-        word-break: break-word;
-      }
-
-      /* Diff info styling */
-      .diff-info {
-        display: inline-flex;
-        align-items: baseline;
-        gap: var(--spacing-small);
-        font-size: var(--font-size-sm);
-      }
-
-      .diff-added {
-        color: var(--color-added);
-      }
-
-      .diff-removed {
-        color: var(--color-removed);
-      }
-
-      .meta-text {
-        color: var(--vscode-descriptionForeground);
-        margin-left: var(--spacing-small);
-      }
-
-      /* File list styling */
-      .file-list {
-        margin: var(--spacing-tiny) 0;
-      }
-
-      .file-list-label {
-        color: var(--vscode-descriptionForeground);
-        margin-right: var(--spacing-tiny);
-      }
-
-      .file-link {
-        color: var(--vscode-textLink-foreground);
-        cursor: pointer;
-        text-decoration: none;
-      }
-
-      .file-link:hover {
-        text-decoration: underline;
-      }
-
-      /* Feedback section */
-      .feedback-section {
-        margin-top: var(--spacing-small);
-      }
-
-      .feedback-label {
-        display: block;
-        margin-bottom: var(--spacing-tiny);
-        font-size: var(--font-size-sm);
-        color: var(--vscode-descriptionForeground);
-      }
-
-      .feedback-input {
-        width: 100%;
-        min-height: 60px;
-        padding: var(--spacing-small);
-        border: 1px solid var(--vscode-input-border);
-        background: var(--vscode-input-background);
-        color: var(--vscode-input-foreground);
-        border-radius: var(--border-radius);
-        font-family: inherit;
-        font-size: var(--font-size-sm);
-        resize: vertical;
-        box-sizing: border-box;
-      }
-
-      .feedback-input:focus {
-        outline: 1px solid var(--vscode-focusBorder);
-      }
-    `,
-  ];
+  static styles = [designTokens, codiconIconClasses, promptOverlayStyles];
 
   @property({ type: Object }) prompt: PromptState | null = null;
   @state() private showFeedback = false;
@@ -345,7 +159,7 @@ export class PromptOverlay extends LitElement {
     if (!this.prompt) return nothing;
 
     return html`
-      <div class="prompt-card">
+      <div class="prompt-card" data-type=${this.prompt.kind}>
         <div class="prompt-header">
           <i class="codicon ${PROMPT_ICONS[this.prompt.kind]}"></i>
           <span>${this.getTitle()}</span>

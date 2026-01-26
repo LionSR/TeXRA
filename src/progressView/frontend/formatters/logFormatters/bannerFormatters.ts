@@ -73,7 +73,7 @@ export function formatBannerContent(
         expanded: false,
       })}
       <div
-        class="banner-content log-entry-content ${config.contentClass}"
+        class="banner-content markdown-content log-entry-content ${config.contentClass}"
         data-raw-content=${trimmedContent}
       >
         ${unsafeHTML(markdownHtml)}
@@ -128,6 +128,7 @@ export function formatModelResponse({
       <div
         class=${classMap({
           'banner-content': true,
+          'markdown-content': true,
           'log-entry-content': true,
           'banner-content--model': true,
           [`message-${level}`]: true,
