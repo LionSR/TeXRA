@@ -154,34 +154,14 @@ export abstract class BaseViewContentProvider {
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
       { key: 'commonStyleUri', path: 'styles/common.css' },
-      { key: 'webviewStateUri', path: 'modules/webviewState.js' },
-      { key: 'webviewContextUri', path: 'modules/webviewContext.js' },
       { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
       {
         key: 'recordingButtonManagerUri',
         path: 'modules/RecordingButtonManager.js',
       },
-      { key: 'textareaUtilsUri', path: 'modules/textareaUtils.js' },
-      { key: 'htmlEncodingUri', path: 'modules/htmlEncoding.js' },
       { key: 'iconConstantsUri', path: 'modules/iconConstants.js' },
-      {
-        key: 'baseWebviewMessageHandlerUri',
-        path: 'modules/BaseWebviewMessageHandler.js',
-      },
-      { key: 'baseFileUtilsUri', path: 'modules/files/baseFileUtils.js' },
       { key: 'domUtilsUri', path: 'modules/domUtils.js' },
       { key: 'baseDomHandlerUri', path: 'modules/BaseDomHandler.js' },
-      { key: 'stringUtilsUri', path: 'modules/stringUtils.js' },
-      { key: 'pathUtilsUri', path: 'modules/pathUtils.js' },
-      { key: 'debounceUri', path: 'modules/debounce.js' },
-      { key: 'clipboardUtilsUri', path: 'modules/clipboardUtils.js' },
-      { key: 'dropdownUtilsUri', path: 'modules/dropdownUtils.js' },
-      { key: 'streamStatusUri', path: 'constants/streamStatus.js' },
-      { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
-      // Filename kept as agentTypes.js for import map compatibility in webviews
-      { key: 'agentCategoriesUri', path: 'constants/agentTypes.js' },
-      { key: 'toggleStateStoreUri', path: 'modules/ToggleStateStore.js' },
-      { key: 'streamScopedMapUri', path: 'modules/StreamScopedMap.js' },
     ];
 
   /** Node module descriptors from node_modules */
