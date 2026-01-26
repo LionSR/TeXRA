@@ -18,31 +18,14 @@ import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES, type SessionType } from '../constants';
 
-/** Session type change event detail */
-export interface SessionTypeChangeDetail {
-  value: string;
-}
-
-/** Agent change event detail */
-export interface AgentChangeDetail {
-  sessionType: SessionType;
-  value: string;
-}
-
-/** Model change event detail */
-export interface ModelChangeDetail {
-  value: string;
-}
-
-/** Instruction change event detail */
-export interface InstructionChangeDetail {
-  value: string;
-}
-
-/** Action event detail */
-export interface ActionDetail {
-  action: string;
-}
+// Local imports - shared schemas
+import type {
+  ActionDetail,
+  AgentChangeDetail,
+  InstructionChangeDetail,
+  ModelChangeDetail,
+  SessionTypeChangeDetail,
+} from '@shared/schemas';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
@@ -213,7 +196,7 @@ export class InstructionPanel extends LitElement {
     return new CustomEvent(type, { detail, bubbles: true, composed: true });
   }
 
-  private handleSessionTypeChange(value: string): void {
+  private handleSessionTypeChange(value: SessionType): void {
     this.dispatchEvent(
       this.createEvent<SessionTypeChangeDetail>('session-type-change', {
         value,
@@ -243,11 +226,15 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleAction(action: string): void {
-    this.dispatchEvent(this.createEvent<ActionDetail>('panel-action', { action }));
+    this.dispatchEvent(
+      this.createEvent<ActionDetail>('panel-action', { action }),
+    );
   }
 
   private handleExecute(): void {
-    this.dispatchEvent(new CustomEvent('execute', { bubbles: true, composed: true }));
+    this.dispatchEvent(
+      new CustomEvent('execute', { bubbles: true, composed: true }),
+    );
   }
 
   private handleAgentSettings(): void {
@@ -263,9 +250,7 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleFocus(key: string, text: string): void {
-    this.dispatchEvent(
-      MainViewEvents.focusInstruction({ key, text }),
-    );
+    this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
   override render(): TemplateResult {
@@ -308,7 +293,11 @@ export class InstructionPanel extends LitElement {
                 .value=${this.sessionType}
                 @change=${(event: Event) => {
                   const target = event.target as HTMLInputElement | null;
-                  this.handleSessionTypeChange(target?.value ?? '');
+                  const nextValue =
+                    target?.value === SESSION_TYPES.WORKFLOW
+                      ? SESSION_TYPES.WORKFLOW
+                      : SESSION_TYPES.TOOL_USE;
+                  this.handleSessionTypeChange(nextValue);
                 }}
               >
                 <vscode-radio
@@ -427,7 +416,10 @@ export class InstructionPanel extends LitElement {
                       )}
                     @change=${(event: Event) => {
                       const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(SESSION_TYPES.WORKFLOW, target.value);
+                      this.handleAgentChange(
+                        SESSION_TYPES.WORKFLOW,
+                        target.value,
+                      );
                     }}
                   >
                     ${unsafeHTML(workflowOptions)}
@@ -452,7 +444,10 @@ export class InstructionPanel extends LitElement {
                       )}
                     @change=${(event: Event) => {
                       const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(SESSION_TYPES.TOOL_USE, target.value);
+                      this.handleAgentChange(
+                        SESSION_TYPES.TOOL_USE,
+                        target.value,
+                      );
                     }}
                   >
                     ${unsafeHTML(toolUseOptions)}

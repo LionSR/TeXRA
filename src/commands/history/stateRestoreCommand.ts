@@ -1,13 +1,20 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+// Local imports - common
+import { showLoggedErrorMessage } from '@common/errors';
 import { setPendingState } from '@common/state';
+import { buildMainViewState } from '@common/state/mainViewStateUtils';
+import { COMMON_COMMANDS } from '@common/webview/commands';
+
+// Local imports - frontend
 import { getMainWebview } from '@frontend/system/commandUtils';
+
+// Local imports - logging
 import * as logger from '@logger/logUtils';
+
+// Local imports - task state
 import type { TaskState } from '@logger/TaskState';
-// Type imports
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
@@ -34,14 +41,16 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
   });
 
   try {
+    const nextState = buildMainViewState(state);
+
     // Focus the webview panel first to make sure it's visible
     await vscode.commands.executeCommand('texra.mainView.focus');
 
     const webviewView = await getMainWebview(CHANNEL);
     if (webviewView) {
       webviewView.webview.postMessage({
-        command: 'restoreState',
-        state,
+        command: COMMON_COMMANDS.STATE_RESTORE,
+        state: nextState,
         executeImmediately,
       });
       logger.info(CHANNEL, 'State restored via direct webview access');
@@ -49,7 +58,7 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
     }
 
     // Store the state in memory for the MainViewProvider to pick up
-    setPendingState(state, executeImmediately);
+    setPendingState(nextState, executeImmediately);
     await vscode.commands.executeCommand('texra.mainView.focus');
     logger.info(CHANNEL, 'State stored for later restoration', {
       data: { executeImmediately },

@@ -4,119 +4,32 @@
  * Centralizes state management concerns for MainApp.
  */
 
+// Local imports - shared schemas
+import {
+  MainViewPersistedStateSchema,
+  type MainViewPersistedState,
+  type FileSelectConfig,
+  type CheckboxValues,
+} from '@shared/schemas';
+
+// Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { SESSION_TYPES, type SessionType, type MultipleFileType, type FileType } from './constants';
-
-// =========================================================================
-// State Types
-// =========================================================================
-
-/** Persisted state for MainView across sessions */
-export interface MainViewPersistedState extends Record<string, unknown> {
-  sessionType: SessionType;
-  workflowAgent: string;
-  toolUseAgent: string;
-  model: string;
-  commit: string;
-  instruction: string;
-  inputFile: string;
-  referenceFile: string;
-  auxiliaryFile: string;
-  mediaFile: string;
-  editedFile: string;
-  baseFile: string;
-  inputFiles: string[];
-  referenceFiles: string[];
-  auxiliaryFiles: string[];
-  mediaFiles: string[];
-  outputFiles: string[];
-  inputFilesVisible: boolean;
-  referenceFilesVisible: boolean;
-  auxiliaryFilesVisible: boolean;
-  mediaFilesVisible: boolean;
-  outputFilesVisible: boolean;
-  outputFilesActive: boolean;
-  latexdiffsVisible: boolean;
-  autoExtractFigure: boolean;
-  autoExtractTikzFigure: boolean;
-  autoCompileInputPdf: boolean;
-  attachTeXCount: boolean;
-  attachDiagnostics: boolean;
-  agent: string;
-  isToolUseAgent: boolean;
-  openedFiles?: string[];
-}
-
-/** Banner display state */
-export interface BannerState {
-  visible: boolean;
-  provider?: string;
-  requiresKey?: boolean;
-  agentName?: string;
-  customDirSet?: boolean;
-  missingTools?: string[];
-}
-
-/** Single file selections state */
-export interface SingleFilesState {
-  inputFile: string;
-  referenceFile: string;
-  auxiliaryFile: string;
-  mediaFile: string;
-  baseFile: string;
-  editedFile: string;
-}
-
-/** Checkbox configuration values */
-export interface CheckboxValuesState {
-  autoExtractFigure: boolean;
-  autoExtractTikzFigure: boolean;
-  autoCompileInputPdf: boolean;
-  attachTeXCount: boolean;
-  attachDiagnostics: boolean;
-}
+import {
+  SESSION_TYPES,
+  type SessionType,
+  type MultipleFileType,
+} from './constants';
 
 // =========================================================================
 // Default State
 // =========================================================================
 
 /** Default persisted state values */
-export const DEFAULT_STATE: MainViewPersistedState = {
-  sessionType: SESSION_TYPES.TOOL_USE,
-  workflowAgent: 'correct',
-  toolUseAgent: 'chat',
-  model: 'gemini3p',
-  commit: 'HEAD',
-  instruction: '',
-  inputFile: '',
-  referenceFile: '',
-  auxiliaryFile: '',
-  mediaFile: '',
-  editedFile: '',
-  baseFile: '',
-  inputFiles: [],
-  referenceFiles: [],
-  auxiliaryFiles: [],
-  mediaFiles: [],
-  outputFiles: [],
-  inputFilesVisible: false,
-  referenceFilesVisible: false,
-  auxiliaryFilesVisible: false,
-  mediaFilesVisible: false,
-  outputFilesVisible: false,
-  outputFilesActive: false,
-  latexdiffsVisible: false,
-  autoExtractFigure: false,
-  autoExtractTikzFigure: false,
-  autoCompileInputPdf: false,
-  attachTeXCount: false,
-  attachDiagnostics: false,
-  agent: '',
-  isToolUseAgent: true,
-};
+export const DEFAULT_STATE: MainViewPersistedState =
+  MainViewPersistedStateSchema.parse({});
 
 /** Default single files state */
-export const DEFAULT_SINGLE_FILES: SingleFilesState = {
+export const DEFAULT_SINGLE_FILES = {
   inputFile: DEFAULT_STATE.inputFile,
   referenceFile: DEFAULT_STATE.referenceFile,
   auxiliaryFile: DEFAULT_STATE.auxiliaryFile,
@@ -154,7 +67,7 @@ export const DEFAULT_MULTI_FILES_VISIBLE: Record<string, boolean> = {
 };
 
 /** Default checkbox values */
-export const DEFAULT_CHECKBOX_VALUES: CheckboxValuesState = {
+export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoExtractFigure: DEFAULT_STATE.autoExtractFigure,
   autoExtractTikzFigure: DEFAULT_STATE.autoExtractTikzFigure,
   autoCompileInputPdf: DEFAULT_STATE.autoCompileInputPdf,
@@ -212,32 +125,8 @@ export const ONBOARDING_PLACEHOLDERS: Record<SessionType, string[]> = {
   ],
 };
 
-// =========================================================================
-// File Selector Configuration
-// =========================================================================
-
-/** File selector config type (matches FileSelectGroup.ts) */
-export interface FileSelectConfigData {
-  type: FileType;
-  label: string;
-  icon: string;
-  refreshTitle: string;
-  currentTitle: string;
-  emptyTitle: string;
-  toggleTitle: string;
-  addOpenedLabel: string;
-  emptyListLabel: string;
-  selectListLabel: string;
-  tooltip: string;
-  toolConfig?: 'tool' | 'autoExtract';
-  focusInstruction?: {
-    key: string;
-    text: string;
-  };
-}
-
 /** Static configuration for each file selector type */
-export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfigData> = [
+export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {
     type: 'input',
     label: 'Input',
@@ -281,7 +170,8 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfigData> = [
     addOpenedLabel: 'Add opened files as auxiliary',
     emptyListLabel: 'Clear all auxiliary files',
     selectListLabel: 'Add auxiliary files',
-    tooltip: 'Files such as .cls/.sty that define document structure and styles',
+    tooltip:
+      'Files such as .cls/.sty that define document structure and styles',
   },
   {
     type: 'media',
