@@ -14,25 +14,12 @@ import { when } from 'lit/directives/when.js';
 // Local imports - main view
 import { MainViewEvents } from '../events';
 
-/** State for API key banner */
-export interface ApiKeyBannerState {
-  visible: boolean;
-  provider?: string;
-  requiresKey?: boolean;
-}
-
-/** State for agent config banner */
-export interface AgentConfigBannerState {
-  visible: boolean;
-  agentName?: string;
-  customDirSet?: boolean;
-}
-
-/** State for dependency banner */
-export interface DependencyBannerState {
-  visible: boolean;
-  missingTools?: string[];
-}
+// Local imports - shared schemas
+import type {
+  AgentConfigBannerState,
+  ApiKeyBannerState,
+  DependencyBannerState,
+} from '@shared/schemas';
 
 @customElement('banner-group')
 export class BannerGroup extends LitElement {

@@ -4,94 +4,23 @@
  * Both dispatch and handler sides use these types.
  */
 
-import type { FileType, MultipleFileType } from './constants';
-
-// =============================================================================
-// Event Detail Types
-// =============================================================================
-
-/** File select dropdown change */
-export interface FileSelectChangeDetail {
-  type: FileType;
-  value: string;
-}
-
-/** Base file select change */
-export interface BaseFileChangeDetail {
-  value: string;
-}
-
-/** Edited file select change */
-export interface EditedFileChangeDetail {
-  value: string;
-}
-
-/** Single file action (refresh, current, empty) */
-export interface FileActionDetail {
-  type: FileType | 'base' | 'edited';
-}
-
-/** Multiple files action (toggle, select) */
-export interface MultipleFilesActionDetail {
-  listId: string;
-}
-
-/** Multiple files type action (add opened, empty) */
-export interface MultipleFilesTypeActionDetail {
-  type: FileType | MultipleFileType;
-}
-
-/** Remove file from list */
-export interface RemoveFileDetail {
-  listId: string;
-  file: string;
-}
-
-/** Checkbox change */
-export interface CheckboxChangeDetail {
-  id: string;
-  checked: boolean;
-}
-
-/** Banner action */
-export interface BannerActionDetail {
-  action: string;
-  provider?: string;
-  customDirSet?: boolean;
-}
-
-/** Install guide action */
-export interface InstallGuideDetail {
-  tool: string;
-}
-
-/** LaTeXDiffs visibility toggle */
-export interface LatexDiffsToggleDetail {
-  visible: boolean;
-}
-
-/** LaTeXDiffs action (diff, merge, compare, etc.) */
-export interface LatexDiffsActionDetail {
-  action:
-    | 'latexdiff'
-    | 'latexdiffvc'
-    | 'packLatexdiffvc'
-    | 'cleanLatexdiffvc'
-    | 'merge'
-    | 'compare'
-    | 'accept';
-}
-
-/** Commit change */
-export interface CommitChangeDetail {
-  value: string;
-}
-
-/** Focus instruction detail */
-export interface FocusInstructionDetail {
-  key: string;
-  text: string;
-}
+// Local imports - shared schemas
+import type {
+  BaseFileChangeDetail,
+  BannerActionDetail,
+  CheckboxChangeDetail,
+  CommitChangeDetail,
+  EditedFileChangeDetail,
+  FileActionDetail,
+  FileSelectChangeDetail,
+  FocusInstructionDetail,
+  InstallGuideDetail,
+  LatexDiffsActionDetail,
+  LatexDiffsToggleDetail,
+  MultipleFilesActionDetail,
+  MultipleFilesTypeActionDetail,
+  RemoveFileDetail,
+} from '@shared/schemas';
 
 // =============================================================================
 // Event Creators - use these to dispatch typed events
