@@ -10,6 +10,9 @@
  * - File list showing output files by round
  * - Follow-up section for chat/iterate/compare modes
  *
+ * Uses memoized state for derived values - only recomputes when
+ * dependencies change.
+ *
  * @fires toolbar-command - When toolbar actions are triggered
  * @fires run-selected - When a different run is selected
  * @fires file-action - When a file action (open, copy, etc.) is triggered
@@ -20,13 +23,8 @@
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
@@ -53,7 +51,7 @@ import './FollowupSection';
 /** Run group info for the run selector */
 type RunGroup = { id: string; name: string; startTime: number };
 
-/** Cached derived values for a specific runId */
+/** Derived values for the currently selected run */
 interface RunDerivedValues {
   instruction: InstructionUpdate | null;
   usage: TokenUsageStats | null;
@@ -75,50 +73,53 @@ export class WorkflowStreamContent extends LitElement {
   @property({ type: Object }) followupOptions: FollowupOptionsState | null =
     null;
 
-  // Cached derived values - recomputed only when dependencies change
-  private _cachedRunGroups: RunGroup[] = [];
-  private _cachedRunValues: RunDerivedValues = {
+  // Memoized derived values - updated in willUpdate when deps change
+  @state() private runGroups: RunGroup[] = [];
+  @state() private runValues: RunDerivedValues = {
     instruction: null,
     usage: null,
     files: {},
     hasFiles: false,
   };
-  private _prevTaskGroups: unknown[] | null = null;
-  private _prevRunId: string | null = null;
-  private _prevState: WorkflowStreamState | null = null;
 
   /** Ref for LogList - exposed for parent access via getLogListRef() */
   private logListRef: Ref<LogList> = createRef();
 
   protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Recompute run groups when state.taskGroups changes
+    // Recompute run groups when state changes (taskGroups is inside state)
     if (changedProperties.has('state')) {
-      const taskGroups = this.state?.taskGroups;
-      if (this._prevTaskGroups !== taskGroups) {
-        this._cachedRunGroups = getRunGroups(taskGroups ?? []);
-        this._prevTaskGroups = taskGroups ?? null;
-      }
+      this.runGroups = getRunGroups(this.state?.taskGroups ?? []);
     }
 
     // Recompute run-specific values when runId or state changes
     if (changedProperties.has('runId') || changedProperties.has('state')) {
-      if (this._prevRunId !== this.runId || this._prevState !== this.state) {
-        this._cachedRunValues = this.computeRunValues();
-        this._prevRunId = this.runId;
-        this._prevState = this.state;
-      }
+      this.runValues = this.computeRunValues();
     }
   }
 
+  /**
+   * Compute all run-specific derived values at once.
+   * This avoids multiple object lookups during render.
+   */
+  private computeRunValues(): RunDerivedValues {
+    const runKey = this.runId ?? 'default';
+    const instruction = this.state.runInstructions[runKey] ?? null;
+    const usage = this.runId ? (this.state.runUsage[this.runId] ?? null) : null;
+    const files = this.runId ? (this.state.runFiles[this.runId] ?? {}) : {};
+    const hasFiles = hasOutputFiles(files);
+
+    return { instruction, usage, files, hasFiles };
+  }
+
   render(): TemplateResult {
-    const { instruction, usage, files, hasFiles } = this._cachedRunValues;
+    const { instruction, usage, files, hasFiles } = this.runValues;
 
     return html`
       <stream-header
         .stream=${this.streamInfo}
         .streamState=${this.state}
         .runId=${this.runId}
-        .runs=${this._cachedRunGroups}
+        .runs=${this.runGroups}
         .yoloActive=${false}
       ></stream-header>
 
@@ -142,20 +143,6 @@ export class WorkflowStreamContent extends LitElement {
         .streamModel=${this.streamInfo.model ?? null}
       ></followup-section>
     `;
-  }
-
-  /**
-   * Compute all run-specific derived values at once.
-   * This avoids multiple object lookups during render.
-   */
-  private computeRunValues(): RunDerivedValues {
-    const runKey = this.runId ?? 'default';
-    const instruction = this.state.runInstructions[runKey] ?? null;
-    const usage = this.runId ? (this.state.runUsage[this.runId] ?? null) : null;
-    const files = this.runId ? (this.state.runFiles[this.runId] ?? {}) : {};
-    const hasFiles = hasOutputFiles(files);
-
-    return { instruction, usage, files, hasFiles };
   }
 
   /**
