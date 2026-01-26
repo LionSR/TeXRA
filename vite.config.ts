@@ -26,6 +26,9 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
+      // Keep default 4KB limit - fonts above this are emitted as files (not inlined as base64)
+      // KaTeX fonts are ~10-60KB each, so they will be emitted to dist/{webview}/
+      assetsInlineLimit: 4 * 1024,
       rollupOptions: {
         input: resolve(__dirname, `src/${webviewName}/frontend/index.ts`),
         output: {
