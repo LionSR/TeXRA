@@ -38,6 +38,8 @@ export class HistoryList extends LitElement {
   @property({ type: Boolean }) clearSearchTrigger = false;
 
   @state() private hasSearchMatches = false;
+  /** Match counts per item, keyed by item.id - used to compute highlighted index */
+  @state() private matchCounts: Map<string, number> = new Map();
 
   @queryAll('history-item')
   private historyItemElements!: Array<
@@ -91,6 +93,7 @@ export class HistoryList extends LitElement {
 
   private performClearSearch(): void {
     this.hasSearchMatches = false;
+    this.matchCounts = new Map();
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
     this.clearItemMarks();
@@ -115,7 +118,9 @@ export class HistoryList extends LitElement {
     if (!this.state || this.state.totalMatches === 0) return;
     const nextIndex = (this.state.searchIndex + 1) % this.state.totalMatches;
     this.state.setSearchIndex(nextIndex);
-    this.scrollToCurrentMatch();
+    this.updateMatchCount();
+    // Trigger re-render to update highlightedMatchIndex props
+    this.requestUpdate();
   }
 
   private performNavigatePrev(): void {
@@ -124,7 +129,9 @@ export class HistoryList extends LitElement {
       (this.state.searchIndex - 1 + this.state.totalMatches) %
       this.state.totalMatches;
     this.state.setSearchIndex(nextIndex);
-    this.scrollToCurrentMatch();
+    this.updateMatchCount();
+    // Trigger re-render to update highlightedMatchIndex props
+    this.requestUpdate();
   }
 
   private updateMatchCount(): void {
@@ -134,29 +141,51 @@ export class HistoryList extends LitElement {
     this.dispatchEvent(HistoryViewEvents.matchCount({ display }));
   }
 
-  private scrollToCurrentMatch(): void {
-    if (!this.state || this.state.totalMatches === 0) return;
-    const marks = this.getAllMarks();
-    marks.forEach((mark) => mark.classList.remove('current-match'));
-    if (marks.length > this.state.searchIndex) {
-      const active = marks[this.state.searchIndex];
-      active.classList.add('current-match');
-      active.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      this.updateMatchCount();
+  /**
+   * Compute the local highlighted match index for a specific item.
+   * Returns the local index within the item, or null if the current match is not in this item.
+   */
+  private getHighlightedMatchIndex(itemId: string): number | null {
+    if (!this.state || this.state.searchIndex < 0) return null;
+
+    const globalIndex = this.state.searchIndex;
+    let cumulativeIndex = 0;
+
+    for (const item of this.items) {
+      const count = this.matchCounts.get(item.id) ?? 0;
+      if (item.id === itemId) {
+        // Check if the global index falls within this item's range
+        if (globalIndex >= cumulativeIndex && globalIndex < cumulativeIndex + count) {
+          return globalIndex - cumulativeIndex;
+        }
+        return null;
+      }
+      cumulativeIndex += count;
     }
+    return null;
   }
 
   private async applySearchToItems(term: string): Promise<void> {
-    const items = this.getHistoryItems();
+    const historyItems = this.getHistoryItems();
     const counts = await Promise.all(
-      items.map((item) => item.applySearch?.(term) ?? Promise.resolve(0)),
+      historyItems.map((item) => item.applySearch?.(term) ?? Promise.resolve(0)),
     );
+
+    // Store match counts per item for computing highlighted indices
+    const newMatchCounts = new Map<string, number>();
+    this.items.forEach((item, index) => {
+      newMatchCounts.set(item.id, counts[index] ?? 0);
+    });
+    this.matchCounts = newMatchCounts;
+
     const total = counts.reduce((sum, count) => sum + count, 0);
     this.hasSearchMatches = total > 0;
     this.state?.setTotalMatches(total);
     if (total > 0) {
       this.state?.setSearchIndex(0);
-      this.scrollToCurrentMatch();
+      this.updateMatchCount();
+      // Trigger re-render to update highlightedMatchIndex props
+      this.requestUpdate();
     } else {
       this.state?.setSearchIndex(-1);
       this.updateMatchCount();
@@ -177,10 +206,6 @@ export class HistoryList extends LitElement {
     }
   > {
     return this.historyItemElements ?? [];
-  }
-
-  private getAllMarks(): HTMLElement[] {
-    return this.getHistoryItems().flatMap((item) => item.getMarks?.() ?? []);
   }
 
   private handleToggle = (
@@ -219,6 +244,7 @@ export class HistoryList extends LitElement {
               .open=${this.searchTerm && this.hasSearchMatches
                 ? true
                 : Boolean(this.state?.toggleStates.get(item.id))}
+              .highlightedMatchIndex=${this.getHighlightedMatchIndex(item.id)}
               @history-toggle=${this.handleToggle}
             ></history-item>
           `,
