@@ -8,11 +8,10 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
-// Local imports - shared utils
-import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
+// Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -208,36 +207,50 @@ export class LatexDiffsSection extends LitElement {
     this.dispatchEvent(MainViewEvents.latexDiffsAction({ action }));
   }
 
-  private buildOptionsHtml(options: string[], selectedValue: string): string {
-    const htmlOptions = [...options]
-      .sort((a, b) => a.localeCompare(b))
-      .map(
-        (value) => `<vscode-option value="${value}">${value}</vscode-option>`,
-      )
-      .join('\n');
-    const withPlaceholderHtml = withPlaceholder(
-      htmlOptions,
-      '<vscode-option value="">None</vscode-option>',
-    );
-    return markOptionAsSelected(withPlaceholderHtml, selectedValue);
+  private renderFileOptions(
+    options: string[],
+    selectedValue: string,
+  ): TemplateResult {
+    const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
+    return html`
+      <vscode-option value="" ?selected=${selectedValue === ''}
+        >None</vscode-option
+      >
+      ${repeat(
+        sortedOptions,
+        (opt) => opt,
+        (opt) => html`
+          <vscode-option value=${opt} ?selected=${opt === selectedValue}>
+            ${opt}
+          </vscode-option>
+        `,
+      )}
+    `;
   }
 
-  private buildCommitOptionsHtml(): string {
+  private renderCommitOptions(): TemplateResult {
     if (!this.isGitRepo) {
-      return '<vscode-option value="">Not a Git repository</vscode-option>';
+      return html`<vscode-option value="">Not a Git repository</vscode-option>`;
     }
     const entries = this.commitOptions.some((commit) =>
       commit.startsWith('HEAD'),
     )
       ? this.commitOptions
       : ['HEAD', ...this.commitOptions];
-    const optionsHtml = entries
-      .map((commit) => {
-        const [hash] = commit.split(': ');
-        return `<vscode-option value="${hash}">${commit}</vscode-option>`;
-      })
-      .join('\n');
-    return markOptionAsSelected(optionsHtml, this.commit);
+    return html`
+      ${repeat(
+        entries,
+        (commit) => commit,
+        (commit) => {
+          const [hash] = commit.split(': ');
+          return html`
+            <vscode-option value=${hash} ?selected=${hash === this.commit}>
+              ${commit}
+            </vscode-option>
+          `;
+        },
+      )}
+    `;
   }
 
   override render(): TemplateResult {
@@ -296,9 +309,7 @@ export class LatexDiffsSection extends LitElement {
                 this.handleBaseFileChange(target.value);
               }}
             >
-              ${unsafeHTML(
-                this.buildOptionsHtml(this.baseFileOptions, this.baseFile),
-              )}
+              ${this.renderFileOptions(this.baseFileOptions, this.baseFile)}
             </vscode-single-select>
           </div>
           <div class="file-select">
@@ -338,8 +349,9 @@ export class LatexDiffsSection extends LitElement {
                 this.handleEditedFileChange(target.value);
               }}
             >
-              ${unsafeHTML(
-                this.buildOptionsHtml(this.editedFileOptions, this.editedFile),
+              ${this.renderFileOptions(
+                this.editedFileOptions,
+                this.editedFile,
               )}
             </vscode-single-select>
           </div>
@@ -369,7 +381,7 @@ export class LatexDiffsSection extends LitElement {
                 this.handleCommitChange(target.value);
               }}
             >
-              ${unsafeHTML(this.buildCommitOptionsHtml())}
+              ${this.renderCommitOptions()}
             </vscode-single-select>
           </div>
           <div class="instruction-controls">
