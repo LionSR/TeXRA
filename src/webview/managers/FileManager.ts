@@ -5,6 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
+// Local imports - shared utils
+import { normalizeFilePath } from '@shared/utils/path';
+
 // Local imports - webview
 import { getAgent } from '@agent/index';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
@@ -21,7 +24,6 @@ import {
   parseLatexDiffMetadata,
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
-import { uncapitalize } from '@utils/text/stringUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
@@ -47,11 +49,67 @@ type FileUpdateOptions = {
   additionalPayload?: Record<string, unknown>;
 };
 
+const FILE_SELECT_COMMANDS = new Map<
+  string,
+  { singleFileType: string; selectedCommand: string }
+>([
+  [
+    MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
+    {
+      singleFileType: 'InputFile',
+      selectedCommand: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
+    },
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
+    {
+      singleFileType: 'ReferenceFile',
+      selectedCommand: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
+    },
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
+    {
+      singleFileType: 'AuxiliaryFile',
+      selectedCommand: MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+    },
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
+    {
+      singleFileType: 'MediaFile',
+      selectedCommand: MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
+    },
+  ],
+]);
+
+const FILE_UPDATE_COMMANDS = new Map<string, string>([
+  [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES, MAIN_VIEW_COMMANDS.SET_INPUT_FILES],
+  [
+    MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
+    MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
+  ],
+  [
+    MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
+    MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
+  ],
+  [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES, MAIN_VIEW_COMMANDS.SET_MEDIA_FILES],
+  [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES, MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES],
+]);
+
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
-    const singleFileType = message.command.replace('select', '');
+    const config = FILE_SELECT_COMMANDS.get(message.command);
+    if (!config) {
+      logger.warn(
+        CHANNEL,
+        `Invalid file selection command: ${message.command}`,
+      );
+      return;
+    }
+    const { singleFileType, selectedCommand } = config;
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
     const file = await vscode.commands.executeCommand<string>(
@@ -60,7 +118,7 @@ export class FileManager extends BaseWebviewManager {
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       this.postMessage({
-        command: `${uncapitalize(singleFileType)}Selected`,
+        command: selectedCommand,
         filePath: file,
       });
     }
@@ -385,12 +443,16 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
-    const fileType = message.command.replace('update', '');
+    const command = FILE_UPDATE_COMMANDS.get(message.command);
+    if (!command) {
+      logger.warn(CHANNEL, `Invalid update command: ${message.command}`);
+      return;
+    }
     logger.debug(
       CHANNEL,
-      `Updating ${fileType} with ${message.files?.length ?? 0} files`,
+      `Updating ${message.command} with ${message.files?.length ?? 0} files`,
     );
-    this.postMessage({ command: `set${fileType}`, files: message.files ?? [] });
+    this.postMessage({ command, files: message.files ?? [] });
   }
 
   async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
@@ -478,7 +540,9 @@ export class FileManager extends BaseWebviewManager {
     // Convert to relative paths and deduplicate
     const relevantFiles = [
       ...new Set(
-        fileUris.map((uri) => workspace.asRelativePath(uri.fsPath, false)),
+        fileUris.map((uri) =>
+          normalizeFilePath(workspace.asRelativePath(uri.fsPath, false)),
+        ),
       ),
     ];
 

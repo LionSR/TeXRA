@@ -16,33 +16,20 @@ import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
-import { SESSION_TYPES, type SessionType } from '../constants';
+import {
+  SESSION_TYPES,
+  parseSessionType,
+  type SessionType,
+} from '../constants';
 
-/** Session type change event detail */
-export interface SessionTypeChangeDetail {
-  value: string;
-}
-
-/** Agent change event detail */
-export interface AgentChangeDetail {
-  sessionType: SessionType;
-  value: string;
-}
-
-/** Model change event detail */
-export interface ModelChangeDetail {
-  value: string;
-}
-
-/** Instruction change event detail */
-export interface InstructionChangeDetail {
-  value: string;
-}
-
-/** Action event detail */
-export interface ActionDetail {
-  action: string;
-}
+// Local imports - shared schemas
+import type {
+  ActionDetail,
+  AgentChangeDetail,
+  InstructionChangeDetail,
+  ModelChangeDetail,
+  SessionTypeChangeDetail,
+} from '@shared/schemas';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
@@ -214,9 +201,13 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleSessionTypeChange(value: string): void {
+    const parsed = parseSessionType(value);
+    if (!parsed) {
+      return;
+    }
     this.dispatchEvent(
       this.createEvent<SessionTypeChangeDetail>('session-type-change', {
-        value,
+        value: parsed,
       }),
     );
   }
@@ -242,12 +233,16 @@ export class InstructionPanel extends LitElement {
     );
   }
 
-  private handleAction(action: string): void {
-    this.dispatchEvent(this.createEvent<ActionDetail>('panel-action', { action }));
+  private handleAction(action: ActionDetail['action']): void {
+    this.dispatchEvent(
+      this.createEvent<ActionDetail>('panel-action', { action }),
+    );
   }
 
   private handleExecute(): void {
-    this.dispatchEvent(new CustomEvent('execute', { bubbles: true, composed: true }));
+    this.dispatchEvent(
+      new CustomEvent('execute', { bubbles: true, composed: true }),
+    );
   }
 
   private handleAgentSettings(): void {
@@ -263,9 +258,7 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleFocus(key: string, text: string): void {
-    this.dispatchEvent(
-      MainViewEvents.focusInstruction({ key, text }),
-    );
+    this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
   override render(): TemplateResult {
@@ -427,7 +420,10 @@ export class InstructionPanel extends LitElement {
                       )}
                     @change=${(event: Event) => {
                       const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(SESSION_TYPES.WORKFLOW, target.value);
+                      this.handleAgentChange(
+                        SESSION_TYPES.WORKFLOW,
+                        target.value,
+                      );
                     }}
                   >
                     ${unsafeHTML(workflowOptions)}
@@ -452,7 +448,10 @@ export class InstructionPanel extends LitElement {
                       )}
                     @change=${(event: Event) => {
                       const target = event.currentTarget as HTMLInputElement;
-                      this.handleAgentChange(SESSION_TYPES.TOOL_USE, target.value);
+                      this.handleAgentChange(
+                        SESSION_TYPES.TOOL_USE,
+                        target.value,
+                      );
                     }}
                   >
                     ${unsafeHTML(toolUseOptions)}

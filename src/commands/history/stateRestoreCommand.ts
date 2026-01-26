@@ -1,12 +1,23 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports - shared schemas
+import { MainViewPersistedStateSchema } from '@shared/schemas/mainViewState';
+
+// Local imports - common
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { setPendingState } from '@common/state';
+import {
+  buildMainViewStateFromTaskState,
+  setPendingState,
+} from '@common/state';
+import { COMMON_COMMANDS } from '@common/webview/commands';
+
+// Local imports - frontend
 import { getMainWebview } from '@frontend/system/commandUtils';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
-import type { TaskState } from '@logger/TaskState';
+import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 // Type imports
 
 const CHANNEL = 'stateRestoreCommand';
@@ -34,14 +45,21 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
   });
 
   try {
+    const parsedTaskState = TaskStateSchema.safeParse(state);
+    if (!parsedTaskState.success) {
+      throw new Error('Invalid task state provided for restoration.');
+    }
+    const restoredState = buildMainViewStateFromTaskState(state);
+    const validatedState = MainViewPersistedStateSchema.parse(restoredState);
+
     // Focus the webview panel first to make sure it's visible
     await vscode.commands.executeCommand('texra.mainView.focus');
 
     const webviewView = await getMainWebview(CHANNEL);
     if (webviewView) {
       webviewView.webview.postMessage({
-        command: 'restoreState',
-        state,
+        command: COMMON_COMMANDS.STATE_RESTORE,
+        state: validatedState,
         executeImmediately,
       });
       logger.info(CHANNEL, 'State restored via direct webview access');
@@ -49,7 +67,7 @@ async function restoreState(state: TaskState, executeImmediately?: boolean) {
     }
 
     // Store the state in memory for the MainViewProvider to pick up
-    setPendingState(state, executeImmediately);
+    setPendingState(validatedState, executeImmediately);
     await vscode.commands.executeCommand('texra.mainView.focus');
     logger.info(CHANNEL, 'State stored for later restoration', {
       data: { executeImmediately },

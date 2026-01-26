@@ -4,6 +4,9 @@ import { z } from 'zod';
 // Local imports - shared commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
+// Local imports - shared schemas
+import { FileTypeSchema, SessionTypeSchema } from './mainViewState';
+
 const FileListSchema = z.array(z.string());
 
 const FilesPayloadSchema = z.object({
@@ -118,7 +121,7 @@ export const SetRecentCommitsMessageSchema = z.object({
 export const SetCurrentFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_CURRENT_FILE),
   filePath: z.string(),
-  fileType: z.string(),
+  fileType: z.enum([...FileTypeSchema.options, 'base', 'edited']),
 });
 
 export const SetSelectedCommitMessageSchema = z.object({
@@ -130,7 +133,7 @@ export const SetSelectedCommitMessageSchema = z.object({
 export const SetOpenedFilesMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_OPENED_FILES),
   files: FileListSchema,
-  fileType: z.string(),
+  fileType: FileTypeSchema,
   shouldFilter: z.boolean().nullish(),
 });
 
@@ -217,7 +220,7 @@ export const HideLoginBannerMessageSchema = z.object({
 export const SetSelectedAgentMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT),
   agentId: z.string().nullish(),
-  sessionType: z.string().nullish(),
+  sessionType: SessionTypeSchema.nullish(),
 });
 
 export const MainViewMessageSchema = z.discriminatedUnion('command', [

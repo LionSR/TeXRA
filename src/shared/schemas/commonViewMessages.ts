@@ -4,6 +4,9 @@ import { z } from 'zod';
 // Local imports - shared commands
 import { COMMON_COMMANDS } from '@common/webview/commands';
 
+// Local imports - shared schemas
+import { MainViewPersistedStateSchema } from './mainViewState';
+
 export const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
   theme: z.enum(['dark', 'light', 'high-contrast']),
@@ -16,7 +19,7 @@ export const SetDebugModeMessageSchema = z.object({
 
 export const StateRestoreMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.STATE_RESTORE),
-  state: z.record(z.string(), z.unknown()).nullish(),
+  state: MainViewPersistedStateSchema.partial().nullish(),
   executeImmediately: z.boolean().nullish(),
   isResetOperation: z.boolean().nullish(),
 });

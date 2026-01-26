@@ -24,3 +24,13 @@ export function getBasename(filePath: string | undefined | null): string {
   const parts = cleaned.split('/');
   return parts.at(-1) ?? '';
 }
+
+/**
+ * Normalize a file path to use forward slashes and trim extra separators.
+ *
+ * @example
+ * normalizeFilePath('C:\\Users\\file.txt') // returns 'C:/Users/file.txt'
+ */
+export function normalizeFilePath(filePath: string): string {
+  return filePath.replaceAll('\\', '/').replace(/\/+$/, '');
+}

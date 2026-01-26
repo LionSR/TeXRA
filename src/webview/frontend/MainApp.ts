@@ -30,6 +30,32 @@ import {
   MainViewMessageSchema,
   type MainViewMessage,
 } from '@shared/schemas/mainViewMessages';
+import {
+  MainViewPersistedStateSchema,
+  type ActionDetail,
+  type AgentChangeDetail,
+  type AgentConfigBannerState,
+  type ApiKeyBannerState,
+  type BannerActionDetail,
+  type BaseFileChangeDetail,
+  type CheckboxChangeDetail,
+  type CommitChangeDetail,
+  type DependencyBannerState,
+  type EditedFileChangeDetail,
+  type FileActionDetail,
+  type FileSelectChangeDetail,
+  type FocusInstructionDetail,
+  type InstallGuideDetail,
+  type InstructionChangeDetail,
+  type LatexDiffsActionDetail,
+  type LatexDiffsToggleDetail,
+  type MainViewPersistedState,
+  type ModelChangeDetail,
+  type MultipleFilesActionDetail,
+  type MultipleFilesTypeActionDetail,
+  type RemoveFileDetail,
+  type SessionTypeChangeDetail,
+} from '@shared/schemas';
 
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -65,38 +91,7 @@ import {
   PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
-  type MainViewPersistedState,
-  type BannerState,
 } from './store';
-
-// Local imports - main view component types
-import type {
-  FileSelectConfig,
-  ApiKeyBannerState,
-  AgentConfigBannerState,
-  DependencyBannerState,
-  SessionTypeChangeDetail,
-  AgentChangeDetail,
-  ModelChangeDetail,
-  InstructionChangeDetail,
-  ActionDetail,
-} from './components';
-import type {
-  FileSelectChangeDetail,
-  FileActionDetail,
-  MultipleFilesActionDetail,
-  MultipleFilesTypeActionDetail,
-  RemoveFileDetail,
-  CheckboxChangeDetail,
-  BannerActionDetail,
-  InstallGuideDetail,
-  LatexDiffsToggleDetail,
-  LatexDiffsActionDetail,
-  BaseFileChangeDetail,
-  EditedFileChangeDetail,
-  CommitChangeDetail,
-  FocusInstructionDetail,
-} from './events';
 
 // Type imports
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
@@ -186,9 +181,13 @@ export class MainApp extends BaseWebviewApp {
   @state() private modelOptionsHtml = '';
   @state() private workflowAgentOptionsHtml = '';
   @state() private toolUseAgentOptionsHtml = '';
-  @state() private apiKeyBanner: BannerState = { visible: false };
-  @state() private agentConfigBanner: BannerState = { visible: false };
-  @state() private dependencyBanner: BannerState = { visible: false };
+  @state() private apiKeyBanner: ApiKeyBannerState = { visible: false };
+  @state() private agentConfigBanner: AgentConfigBannerState = {
+    visible: false,
+  };
+  @state() private dependencyBanner: DependencyBannerState = {
+    visible: false,
+  };
   @state() private gettingStartedVisible = false;
   @state() private loginBannerVisible = false;
   @state() private instructionPlaceholder =
@@ -212,7 +211,10 @@ export class MainApp extends BaseWebviewApp {
   declare private toolUseAgentElement: HTMLElement | null;
 
   private readonly stateManager =
-    new WebviewStateManager<MainViewPersistedState>(DEFAULT_STATE);
+    new WebviewStateManager<MainViewPersistedState>(
+      DEFAULT_STATE,
+      MainViewPersistedStateSchema,
+    );
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
   private sortables: Sortable[] = [];
@@ -516,6 +518,7 @@ export class MainApp extends BaseWebviewApp {
           ? this.toolUseAgent
           : this.workflowAgent,
       isToolUseAgent: this.sessionType === SESSION_TYPES.TOOL_USE,
+      openedFiles: [],
     };
 
     this.stateManager.setState(persisted);
@@ -525,45 +528,42 @@ export class MainApp extends BaseWebviewApp {
     const saved = this.stateManager.getState();
     const state = { ...DEFAULT_STATE, ...saved };
 
-    const sessionType =
-      parseSessionType(state.sessionType) ?? DEFAULT_STATE.sessionType;
-
-    this.sessionType = sessionType;
-    this.workflowAgent = state.workflowAgent || this.workflowAgent;
-    this.toolUseAgent = state.toolUseAgent || this.toolUseAgent;
-    this.model = state.model || this.model;
-    this.commit = state.commit || this.commit;
-    this.instruction = state.instruction || '';
+    this.sessionType = state.sessionType;
+    this.workflowAgent = state.workflowAgent;
+    this.toolUseAgent = state.toolUseAgent;
+    this.model = state.model;
+    this.commit = state.commit;
+    this.instruction = state.instruction;
     this.singleFiles = {
-      inputFile: state.inputFile || '',
-      referenceFile: state.referenceFile || '',
-      auxiliaryFile: state.auxiliaryFile || '',
-      mediaFile: state.mediaFile || '',
-      editedFile: state.editedFile || '',
-      baseFile: state.baseFile || '',
+      inputFile: state.inputFile,
+      referenceFile: state.referenceFile,
+      auxiliaryFile: state.auxiliaryFile,
+      mediaFile: state.mediaFile,
+      editedFile: state.editedFile,
+      baseFile: state.baseFile,
     };
     this.multiFiles = {
-      inputFiles: state.inputFiles ?? [],
-      referenceFiles: state.referenceFiles ?? [],
-      auxiliaryFiles: state.auxiliaryFiles ?? [],
-      mediaFiles: state.mediaFiles ?? [],
-      outputFiles: state.outputFiles ?? [],
+      inputFiles: state.inputFiles,
+      referenceFiles: state.referenceFiles,
+      auxiliaryFiles: state.auxiliaryFiles,
+      mediaFiles: state.mediaFiles,
+      outputFiles: state.outputFiles,
     };
     this.multiFilesVisible = {
-      inputFiles: state.inputFilesVisible ?? false,
-      referenceFiles: state.referenceFilesVisible ?? false,
-      auxiliaryFiles: state.auxiliaryFilesVisible ?? false,
-      mediaFiles: state.mediaFilesVisible ?? false,
-      outputFiles: state.outputFilesVisible ?? false,
+      inputFiles: state.inputFilesVisible,
+      referenceFiles: state.referenceFilesVisible,
+      auxiliaryFiles: state.auxiliaryFilesVisible,
+      mediaFiles: state.mediaFilesVisible,
+      outputFiles: state.outputFilesVisible,
     };
-    this.outputFilesActive = state.outputFilesActive ?? false;
-    this.latexdiffsVisible = state.latexdiffsVisible ?? false;
+    this.outputFilesActive = state.outputFilesActive;
+    this.latexdiffsVisible = state.latexdiffsVisible;
     this.checkboxValues = {
-      autoExtractFigure: state.autoExtractFigure ?? false,
-      autoExtractTikzFigure: state.autoExtractTikzFigure ?? false,
-      autoCompileInputPdf: state.autoCompileInputPdf ?? false,
-      attachTeXCount: state.attachTeXCount ?? false,
-      attachDiagnostics: state.attachDiagnostics ?? false,
+      autoExtractFigure: state.autoExtractFigure,
+      autoExtractTikzFigure: state.autoExtractTikzFigure,
+      autoCompileInputPdf: state.autoCompileInputPdf,
+      attachTeXCount: state.attachTeXCount,
+      attachDiagnostics: state.attachDiagnostics,
     };
   }
 
@@ -850,10 +850,6 @@ export class MainApp extends BaseWebviewApp {
   ): void {
     this.blockSave();
     try {
-      const messageValues = message as unknown as Record<
-        string,
-        string[] | null | undefined
-      >;
       const updates: Record<string, string[]> = {};
       (
         [
@@ -863,18 +859,16 @@ export class MainApp extends BaseWebviewApp {
           'mediaFiles',
         ] as const
       ).forEach((key) => {
-        const files = messageValues[key] ?? [];
-        if (Array.isArray(files)) {
-          const target = key.replace('Files', 'File');
-          updates[target] = files;
-          const currentValue =
-            this.singleFiles[target as keyof typeof this.singleFiles];
-          if (currentValue && !files.includes(currentValue)) {
-            this.singleFiles = {
-              ...this.singleFiles,
-              [target]: '',
-            };
-          }
+        const files = message[key] ?? [];
+        const target = key.replace('Files', 'File');
+        updates[target] = files;
+        const currentValue =
+          this.singleFiles[target as keyof typeof this.singleFiles];
+        if (currentValue && !files.includes(currentValue)) {
+          this.singleFiles = {
+            ...this.singleFiles,
+            [target]: '',
+          };
         }
       });
       this.fileOptions = { ...this.fileOptions, ...updates };
@@ -959,54 +953,100 @@ export class MainApp extends BaseWebviewApp {
       this.clearForNewSession();
       return;
     }
-    if (!message.state || typeof message.state !== 'object') {
+    if (message.state === null || message.state === undefined) {
       return;
     }
-    const state = message.state as Record<string, unknown>;
+    const parseResult = MainViewPersistedStateSchema.partial().safeParse(
+      message.state,
+    );
+    if (!parseResult.success) {
+      this.logSchemaError(
+        '[MainApp] Invalid restore state payload.',
+        parseResult.error,
+      );
+      return;
+    }
+    const state = parseResult.data;
     this.blockSave();
     try {
-      const sessionType = this.determineSessionType(state);
-      this.sessionType = sessionType;
-      this.workflowAgent = this.extractAgentValue(state, false, sessionType);
-      this.toolUseAgent = this.extractAgentValue(state, true, sessionType);
-      if (typeof state.model === 'string') {
+      if (state.sessionType !== undefined) {
+        this.sessionType = state.sessionType;
+      }
+      if (state.workflowAgent !== undefined) {
+        this.workflowAgent = state.workflowAgent;
+      }
+      if (state.toolUseAgent !== undefined) {
+        this.toolUseAgent = state.toolUseAgent;
+      }
+      if (state.model !== undefined) {
         this.model = state.model;
       }
-      this.instruction =
-        typeof state.instruction === 'string' ? state.instruction : '';
-      this.singleFiles = {
-        inputFile: typeof state.inputFile === 'string' ? state.inputFile : '',
-        referenceFile:
-          typeof state.referenceFile === 'string' ? state.referenceFile : '',
-        auxiliaryFile:
-          typeof state.auxiliaryFile === 'string' ? state.auxiliaryFile : '',
-        mediaFile: typeof state.mediaFile === 'string' ? state.mediaFile : '',
-        editedFile:
-          typeof state.editedFile === 'string' ? state.editedFile : '',
-        baseFile: typeof state.baseFile === 'string' ? state.baseFile : '',
-      };
+      if (state.commit !== undefined) {
+        this.commit = state.commit;
+      }
+      if (state.instruction !== undefined) {
+        this.instruction = state.instruction;
+      }
 
-      const toolConfig = (state.toolConfig as Record<string, unknown>) ?? {};
-      this.checkboxValues = {
-        autoExtractFigure: Boolean(
-          state.autoExtractFigure ?? toolConfig.autoExtractFigure,
-        ),
-        autoExtractTikzFigure: Boolean(
-          state.autoExtractTikzFigure ?? toolConfig.autoExtractTikzFigure,
-        ),
-        autoCompileInputPdf: Boolean(
-          state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf,
-        ),
-        attachTeXCount: Boolean(
-          state.attachTeXCount ?? toolConfig.attachTeXCount,
-        ),
-        attachDiagnostics: Boolean(
-          state.attachDiagnostics ?? toolConfig.attachDiagnostics,
-        ),
-      };
+      const singleFiles = { ...this.singleFiles };
+      (
+        [
+          'inputFile',
+          'referenceFile',
+          'auxiliaryFile',
+          'mediaFile',
+          'editedFile',
+          'baseFile',
+        ] as const
+      ).forEach((key) => {
+        if (state[key] !== undefined) {
+          singleFiles[key] = state[key];
+        }
+      });
+      this.singleFiles = singleFiles;
 
-      const activeFiles = (state.activeFiles as Record<string, boolean>) ?? {};
-      this.restoreFileArrays(state, activeFiles);
+      const updatedFiles: Record<string, string[]> = { ...this.multiFiles };
+      const updatedVisibility: Record<string, boolean> = {
+        ...this.multiFilesVisible,
+      };
+      MULTIPLE_FILE_TYPES.forEach((fileType) => {
+        const listKey = `${fileType}Files` as keyof MainViewPersistedState;
+        const visibilityKey =
+          `${fileType}FilesVisible` as keyof MainViewPersistedState;
+        const files = state[listKey] as string[] | undefined;
+        if (files !== undefined) {
+          updatedFiles[listKey as string] = files ?? [];
+        }
+        const visible = state[visibilityKey];
+        if (visible !== undefined) {
+          updatedVisibility[listKey as string] = Boolean(visible);
+        }
+      });
+      this.multiFiles = updatedFiles;
+      this.multiFilesVisible = updatedVisibility;
+
+      if (state.outputFilesActive !== undefined) {
+        this.outputFilesActive = state.outputFilesActive;
+      }
+      if (state.latexdiffsVisible !== undefined) {
+        this.latexdiffsVisible = state.latexdiffsVisible;
+      }
+
+      const checkboxValues = { ...this.checkboxValues };
+      (
+        [
+          'autoExtractFigure',
+          'autoExtractTikzFigure',
+          'autoCompileInputPdf',
+          'attachTeXCount',
+          'attachDiagnostics',
+        ] as const
+      ).forEach((key) => {
+        if (state[key] !== undefined) {
+          checkboxValues[key] = state[key];
+        }
+      });
+      this.checkboxValues = checkboxValues;
     } finally {
       this.unblockSave();
     }
@@ -1015,60 +1055,6 @@ export class MainApp extends BaseWebviewApp {
     if (message.executeImmediately) {
       this.executeAgent();
     }
-  }
-
-  private determineSessionType(state: Record<string, unknown>): SessionType {
-    const candidate = state.agentCategory ?? state.sessionType;
-    const parsed = parseSessionType(
-      typeof candidate === 'string' ? candidate : undefined,
-    );
-    if (parsed) return parsed;
-    if (state.isToolUseAgent) return SESSION_TYPES.TOOL_USE;
-    return SESSION_TYPES.WORKFLOW;
-  }
-
-  private extractAgentValue(
-    state: Record<string, unknown>,
-    forToolUse: boolean,
-    sessionType: SessionType,
-  ): string {
-    const explicit = forToolUse ? state.toolUseAgent : state.workflowAgent;
-    if (typeof explicit === 'string') {
-      return explicit;
-    }
-
-    if (
-      typeof state.agent === 'string' &&
-      forToolUse === (sessionType === SESSION_TYPES.TOOL_USE)
-    ) {
-      return state.agent;
-    }
-
-    return '';
-  }
-
-  private restoreFileArrays(
-    state: Record<string, unknown>,
-    activeFiles: Record<string, boolean>,
-  ): void {
-    const updatedFiles: Record<string, string[]> = { ...this.multiFiles };
-    const updatedVisibility: Record<string, boolean> = {
-      ...this.multiFilesVisible,
-    };
-
-    MULTIPLE_FILE_TYPES.forEach((fileType) => {
-      const key = `${fileType}Files`;
-      const files = (state[key] as string[]) ?? [];
-      const visible =
-        activeFiles[fileType] ??
-        (state[`${key}Active`] as boolean | undefined) ??
-        (state[`${key}Visible`] as boolean | undefined);
-      updatedFiles[key] = Array.isArray(files) ? files : [];
-      updatedVisibility[key] = Boolean(visible);
-    });
-
-    this.multiFiles = updatedFiles;
-    this.multiFilesVisible = updatedVisibility;
   }
 
   private clearForNewSession(): void {
@@ -1246,11 +1232,10 @@ export class MainApp extends BaseWebviewApp {
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
   }
 
-  private handleSessionTypeChange(value: string): void {
-    const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
-    if (parsed === this.sessionType) return;
-    this.sessionType = parsed;
-    if (parsed === SESSION_TYPES.TOOL_USE) {
+  private handleSessionTypeChange(value: SessionType): void {
+    if (value === this.sessionType) return;
+    this.sessionType = value;
+    if (value === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive = false;
       this.multiFiles = { ...this.multiFiles, outputFiles: [] };
       this.multiFilesVisible = {
@@ -1744,13 +1729,19 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentApiKeyAction = (
     e: CustomEvent<BannerActionDetail>,
   ): void => {
-    this.handleApiKeyBannerAction(e.detail.action as 'set' | 'guide');
+    const { action } = e.detail;
+    if (action === 'set' || action === 'guide') {
+      this.handleApiKeyBannerAction(action);
+    }
   };
 
   private handleComponentAgentConfigAction = (
     e: CustomEvent<BannerActionDetail>,
   ): void => {
-    this.handleAgentConfigAction(e.detail.action as 'edit' | 'dir' | 'docs');
+    const { action } = e.detail;
+    if (action === 'edit' || action === 'dir' || action === 'docs') {
+      this.handleAgentConfigAction(action);
+    }
   };
 
   private handleComponentDependencyDismiss = (): void => {
@@ -1856,7 +1847,11 @@ export class MainApp extends BaseWebviewApp {
     const selectElement = this.renderRoot.querySelector(
       `#${selectId}`,
     ) as HTMLElement | null;
-    this.handleAgentChange(e.detail.sessionType, e.detail.value, selectElement ?? undefined);
+    this.handleAgentChange(
+      e.detail.sessionType,
+      e.detail.value,
+      selectElement ?? undefined,
+    );
   };
 
   private handleComponentModelChange = (
@@ -1994,7 +1989,8 @@ export class MainApp extends BaseWebviewApp {
                   @toggle-list=${this.handleComponentToggleList}
                   @add-opened-files=${this.handleComponentAddOpenedFiles}
                   @empty-files=${this.handleComponentEmptyFiles}
-                  @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+                  @select-multiple-files=${this
+                    .handleComponentSelectMultipleFiles}
                   @remove-file=${this.handleComponentRemoveFile}
                   @checkbox-change=${this.handleComponentCheckboxChange}
                   @focus-instruction=${this.handleComponentFocusInstruction}

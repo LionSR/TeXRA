@@ -8,6 +8,7 @@ import { z } from 'zod';
 // Local imports
 import { StreamTabIdSchema } from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   TOOL_EDIT_APPROVAL_ACTIONS,
   BASH_APPROVAL_ACTIONS,
@@ -217,6 +218,48 @@ export const SetAllSingleFilesMessageSchema = BaseMessageSchema.extend(
 
 export type SetAllSingleFilesMessage = z.infer<
   typeof SetAllSingleFilesMessageSchema
+>;
+
+/**
+ * LaTeX diff message from webview
+ */
+export const LatexdiffMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFF),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+
+export type LatexdiffMessage = z.infer<typeof LatexdiffMessageSchema>;
+
+/**
+ * LaTeX diff with version control message from webview
+ */
+export const LatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFFVC),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+});
+
+export type LatexdiffvcMessage = z.infer<typeof LatexdiffvcMessageSchema>;
+
+/**
+ * LaTeX diff VC pack/clean message from webview
+ */
+export const LatexdiffvcOperationMessageSchema = z.object({
+  command: z.enum([
+    MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
+    MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
+  ]),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+  clean: z.boolean(),
+});
+
+export type LatexdiffvcOperationMessage = z.infer<
+  typeof LatexdiffvcOperationMessageSchema
 >;
 
 // --- Common Utilities ---

@@ -3,8 +3,19 @@ import * as vscode from 'vscode';
 
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+
+// Local imports - logging
 import * as logger from '@logger/logUtils';
+
+// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
+
+// Local imports - message schemas
+import {
+  LatexdiffMessageSchema,
+  LatexdiffvcMessageSchema,
+  LatexdiffvcOperationMessageSchema,
+} from '../types/messages';
 
 const CHANNEL = 'DiffManager';
 logger.initialize(CHANNEL);
@@ -12,24 +23,45 @@ logger.initialize(CHANNEL);
 export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  handleLatexdiff(message: any): void {
-    this.runDiffCommand('latexdiff', message, [
+  handleLatexdiff(message: unknown): void {
+    const parsed = LatexdiffMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiff message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(MAIN_VIEW_COMMANDS.LATEXDIFF, parsed.data, [
       'inputFile',
       'baseFile',
       'editedFile',
     ]);
   }
 
-  handleLatexdiffvc(message: any): void {
-    this.runDiffCommand('latexdiffvc', message, [
+  handleLatexdiffvc(message: unknown): void {
+    const parsed = LatexdiffvcMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiffvc message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(MAIN_VIEW_COMMANDS.LATEXDIFFVC, parsed.data, [
       'inputFile',
       'baseFile',
       'commitHash',
     ]);
   }
 
-  handleLatexdiffvcOperation(message: any): void {
-    this.runDiffCommand(message.command, message, [
+  handleLatexdiffvcOperation(message: unknown): void {
+    const parsed = LatexdiffvcOperationMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiffvc operation message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(parsed.data.command, parsed.data, [
       'inputFile',
       'baseFile',
       'commitHash',
@@ -39,7 +71,7 @@ export class DiffManager extends BaseWebviewManager {
 
   private runDiffCommand(
     command: string,
-    message: any,
+    message: Record<string, unknown>,
     paramKeys: string[],
   ): void {
     void vscode.commands.executeCommand(

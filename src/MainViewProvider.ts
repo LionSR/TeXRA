@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import { MainViewPersistedStateSchema } from '@shared/schemas/mainViewState';
+
 // Local imports - agent
 import { refresh, computeAgentOptions } from '@agent/index';
 
@@ -266,9 +269,15 @@ export class MainViewProvider
     const pendingData = consumePendingState();
 
     if (pendingData) {
+      const parsedState = MainViewPersistedStateSchema.partial().safeParse(
+        pendingData.state,
+      );
+      if (!parsedState.success) {
+        return;
+      }
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: pendingData.state,
+        state: parsedState.data,
         executeImmediately: pendingData.executeImmediately,
       });
     }
