@@ -70,6 +70,7 @@ NODE_OPTIONS=--max-old-space-size=8192 npm run compile
 | **Phase 6** | Component extraction + performance           | ✅ Complete    | [prd-progressview-phase6.md](./prd-progressview-phase6.md) |
 | **Phase 7** | Zod-native types & MainApp decomposition     | ⬜ Not Started | [prd-mainview-phase7.md](./prd-mainview-phase7.md)         |
 | **Phase 8** | Lit-native improvements                      | ⬜ Not Started | [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)     |
+| **Phase 9** | Task group state, UI, and persistence        | ⬜ Not Started | [prd-taskgroup-phase9.md](./prd-taskgroup-phase9.md)       |
 
 \*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
 
