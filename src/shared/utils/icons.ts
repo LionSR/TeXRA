@@ -109,37 +109,6 @@ export const AGENT_DECORATORS = {
 export type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
 
 /**
- * Build a codicon CSS class string from an icon name.
- */
-export function getCodiconClass(iconName: string): string {
-  return `codicon codicon-${iconName}`;
-}
-
-/**
- * Get codicon classes as an object for use with Lit's classMap directive.
- * @example
- * import { classMap } from 'lit/directives/class-map.js';
- * html`<i class=${classMap(getCodiconClasses('chevron-down'))}></i>`
- */
-export function getCodiconClasses(iconName: string): Record<string, boolean> {
-  return {
-    codicon: true,
-    [`codicon-${iconName}`]: true,
-  };
-}
-
-/**
- * Apply codicon classes to an element.
- * @deprecated Use getCodiconClasses() with classMap directive for Lit-native patterns.
- */
-export function applyCodiconClass(
-  element: HTMLElement,
-  iconName: string,
-): void {
-  element.classList.add('codicon', `codicon-${iconName}`);
-}
-
-/**
  * Get the decorator config for an agent category.
  */
 export function getAgentCategoryDecorator(
