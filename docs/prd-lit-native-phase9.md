@@ -22,7 +22,7 @@ Phase 9 addresses remaining Lit anti-patterns identified in the codebase. This p
 | 9.2 Replace manual DOM queries                 | **Complete** | Reactive patterns, testability|
 | 9.3 Replace classList with classMap            | **Deferred** | mark.js boundary case         |
 | 9.4 Convert dropdown utils to Lit-native       | **Complete** | Type safety, maintainability  |
-| 9.5 Convert imperative child methods           | **Partial**  | FollowUpInput done, HistoryList deferred |
+| 9.5 Convert imperative child methods           | **Complete** | FollowUpInput and HistoryList done       |
 | 9.6 Refactor Sortable.js integration           | **Deferred** | Needs child component move    |
 
 ## Key Discoveries
@@ -260,17 +260,20 @@ render() {
 
 ---
 
-## 9.5 Convert Imperative Child Methods to Reactive Properties (MEDIUM Priority)
+## 9.5 Convert Imperative Child Methods to Reactive Properties (MEDIUM Priority) ✅
 
 **Problem:** Parent components call imperative methods on children instead of passing reactive properties.
 
+**Status:** Complete
+
 ### Files Affected
 
-| File | Methods Called |
-|------|----------------|
-| `src/progressView/frontend/messageHandlers.ts` | `focusInput()`, `applyPolishedText()`, `insertTranscription()`, `setRecording()` |
-| `src/progressView/frontend/components/FollowUpInput.ts` | Defines imperative methods |
-| `src/historyView/frontend/components/HistoryList.ts` | Calls `applySearch()` on children |
+| File | Methods Called | Status |
+|------|----------------|--------|
+| `src/progressView/frontend/messageHandlers.ts` | `focusInput()`, `applyPolishedText()`, `insertTranscription()`, `setRecording()` | ✅ Done |
+| `src/progressView/frontend/components/FollowUpInput.ts` | Defines imperative methods | ✅ Done |
+| `src/historyView/frontend/HistoryApp.ts` | `clearSearch()`, `search()`, `navigateNext()`, `navigatePrev()` | ✅ Done |
+| `src/historyView/frontend/components/HistoryList.ts` | Defines imperative methods | ✅ Done |
 
 ### Current Anti-Pattern
 
@@ -409,7 +412,7 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 ### Phase 9e: Reactive Properties (2-3 hours)
 17. ✅ Convert FollowUpInput methods to properties
 18. ✅ Update messageHandlers to use properties
-19. ⏸️ Convert HistoryList child method calls (deferred - mark.js boundary)
+19. ✅ Convert HistoryApp/HistoryList to reactive properties
 
 ---
 
@@ -421,13 +424,13 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 | querySelector calls in Lit components | 11 | 6** | 0 |
 | classList manipulation calls | 4 | 2*** | 0 |
 | unsafeHTML for dropdowns | 7 | 0**** | 0 |
-| Imperative child method calls | 7 | 2***** | 0 |
+| Imperative child method calls | 7 | 0***** | 0 |
 
 \* FileSelectGroup now lazy-attaches, LogList uses component-level
 \*\* MainApp dead code removed, some remain in child component queries
 \*\*\* mark.js boundary (acceptable), icons.ts deprecated
 \*\*\*\* All dropdown components now use Lit templates (with HTML fallback for backward compatibility)
-\*\*\*\*\* FollowUpInput uses reactive properties; HistoryList deferred (mark.js boundary)
+\*\*\*\*\* FollowUpInput and HistoryList use reactive properties (mark.js child calls remain - acceptable boundary)
 
 ---
 
@@ -509,6 +512,25 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 - `src/shared/schemas/progressViewMessages.ts` - Added typed option fields
 - `src/shared/schemas/streamState.ts` - Added reactive state fields
 - `src/shared/utils/selectTemplates.ts` - Fixed import order
+
+### 2026-01-26 - Phase 9e HistoryApp/HistoryList Reactive Properties
+
+**Completed:**
+- HistoryApp no longer uses @query decorator to call methods on HistoryList
+- HistoryList now accepts reactive properties: `searchTerm`, `searchAction`, `clearSearchTrigger`
+- HistoryList reacts to property changes in `willUpdate()` lifecycle method
+- Completion events (`search-navigate-complete`, `search-clear-complete`) reset parent state
+
+**Key Changes:**
+- Added `SearchAction` type export from HistoryList.ts
+- HistoryApp stores search state and passes as properties
+- HistoryList uses `willUpdate()` to detect property changes and perform operations
+- Parent resets trigger properties on completion events (one-shot trigger pattern)
+
+**Files Modified:**
+- `src/historyView/frontend/HistoryApp.ts` - Reactive properties instead of @query
+- `src/historyView/frontend/components/HistoryList.ts` - willUpdate lifecycle for reactive updates
+- `docs/prd-lit-native-phase9.md` - This document
 
 ---
 
