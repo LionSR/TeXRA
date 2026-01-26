@@ -29,7 +29,8 @@ export class QueuedFollowUps extends LitElement {
       .queued-follow-ups-collapsible {
         border-radius: var(--border-radius);
         background-color: var(--vscode-inputValidation-infoBackground);
-        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-infoBorder);
       }
 
       .queued-follow-ups-collapsible::part(header) {
