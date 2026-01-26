@@ -4,9 +4,11 @@
 
 // Third-party imports
 import MarkdownIt from 'markdown-it';
-import highlight from 'markdown-it-highlightjs';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
+
+// Local imports - optimized highlight.js with only TeXRA-relevant languages
+import hljs from '@shared/highlighting/hljs';
 
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
@@ -17,6 +19,22 @@ let markdownRenderer: MarkdownIt | null = null;
 const CACHE_MAX_SIZE = 500;
 const markdownCache = new Map<string, string>();
 
+/**
+ * Custom highlight function for markdown-it using optimized hljs.
+ * Falls back to plain text if language is not registered.
+ */
+const highlightCode = (code: string, lang: string): string => {
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {
+      // Fall through to plain text
+    }
+  }
+  // Return escaped code for unknown/missing language
+  return '';
+};
+
 /** Get the shared markdown renderer instance. */
 export const getMarkdownRenderer = (): MarkdownIt => {
   if (!markdownRenderer) {
@@ -24,17 +42,16 @@ export const getMarkdownRenderer = (): MarkdownIt => {
       breaks: false,
       linkify: true,
       html: false,
-    })
-      .use(texmath, {
-        engine: katex,
-        delimiters: ['dollars', 'brackets'],
-        katexOptions: {
-          throwOnError: false,
-          errorColor: '#cc0000',
-          macros: katexMacros,
-        },
-      })
-      .use(highlight);
+      highlight: highlightCode,
+    }).use(texmath, {
+      engine: katex,
+      delimiters: ['dollars', 'brackets'],
+      katexOptions: {
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: katexMacros,
+      },
+    });
   }
 
   return markdownRenderer;
