@@ -253,7 +253,7 @@ export class MainApp extends BaseWebviewApp {
   @state() private isGitRepo = true;
   private defaultOutputFiles: string[] = [];
   private apiKeyBannerForced = false;
-  private instructionSaveTimer: number | null = null;
+  private instructionSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   @query('#instruction')
   declare private instructionElement: HTMLElement | null;

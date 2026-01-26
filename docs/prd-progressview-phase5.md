@@ -14,85 +14,94 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## Status Summary
 
+> **Overall Phase 5 Completion: ~95%**
+>
+> - ✅ All critical regressions fixed (R1-R16, H1-H15, J1-J2, P1-P3, R11)
+> - ✅ Zod message validation complete (mainViewMessages.ts, commonViewMessages.ts)
+> - ✅ Cross-webview infrastructure unified (BaseWebviewApp pattern)
+> - ✅ All JavaScript behavioral issues resolved (debounce, checkbox timing)
+> - 🟡 Component extraction pending (MainApp still ~2,900 lines)
+> - 🟡 Formatters using bridge pattern (not pure TemplateResult yet)
+
 ### Critical Issues (Fix Immediately)
 
-| ID      | View        | Issue                            | Status         |
-| ------- | ----------- | -------------------------------- | -------------- |
-| R1      | MainView    | Missing `SET_SELECTED_AGENT`     | ⬜ Not Started |
-| CODICON | All         | 403 Forbidden font loading error | ⬜ Not Started |
-| H1      | History     | Mark highlight colors SWAPPED    | ⬜ Not Started |
-| TOKENS  | All         | CSS spacing 2-4px larger         | ⬜ Not Started |
-| **R12** | ProgressView| FollowUp section never visible   | ✅ Fixed       |
-| **R13** | MainView    | Dropdowns invisible (clickable)  | ⬜ Not Started |
-| **R14** | MainView    | Run button shows text not icon   | ⬜ Not Started |
-| **R15** | ProgressView| User message shows plain text    | ⬜ Not Started |
-| **R16** | ProgressView| FollowUp not fixed at bottom     | ⬜ Not Started |
+| ID      | View         | Issue                            | Status                    |
+| ------- | ------------ | -------------------------------- | ------------------------- |
+| R1      | MainView     | Missing `SET_SELECTED_AGENT`     | ✅ Fixed                  |
+| CODICON | All          | 403 Forbidden font loading error | ✅ Fixed                  |
+| H1      | History      | Mark highlight colors SWAPPED    | ✅ Fixed                  |
+| TOKENS  | All          | CSS spacing 2-4px larger         | ✅ Fixed (tokens correct) |
+| **R12** | ProgressView | FollowUp section never visible   | ✅ Fixed                  |
+| **R13** | MainView     | Dropdowns invisible (clickable)  | ✅ Fixed                  |
+| **R14** | MainView     | Run button shows text not icon   | ✅ Fixed                  |
+| **R15** | ProgressView | User message shows plain text    | ✅ Fixed (CSS verified)   |
+| **R16** | ProgressView | FollowUp not fixed at bottom     | ✅ Fixed                  |
 
 ### Migration Regressions (High Priority)
 
-| ID  | View        | Severity | Issue                              | Status         |
-| --- | ----------- | -------- | ---------------------------------- | -------------- |
-| R2  | MainView    | HIGH     | Missing Merge button               | ⬜ Not Started |
-| R3  | MainView    | MEDIUM   | Missing Refresh Edited File button | ⬜ Not Started |
-| R4  | MainView    | MEDIUM   | Missing Refresh Commit icon        | ⬜ Not Started |
-| J1  | MainView    | HIGH     | Missing debounce on instruction    | ⬜ Not Started |
-| M1  | MainView    | MEDIUM   | Missing CSS variables (5)          | ⬜ Not Started |
+| ID  | View     | Severity | Issue                              | Status           |
+| --- | -------- | -------- | ---------------------------------- | ---------------- |
+| R2  | MainView | HIGH     | Missing Merge button               | ✅ Fixed         |
+| R3  | MainView | MEDIUM   | Missing Refresh Edited File button | ✅ Fixed         |
+| R4  | MainView | MEDIUM   | Missing Refresh Commit icon        | ✅ Fixed         |
+| J1  | MainView | HIGH     | Missing debounce on instruction    | ✅ Fixed (300ms) |
+| M1  | MainView | MEDIUM   | Missing CSS variables (5)          | ✅ Fixed         |
 
 ### HistoryView Regressions (15 Items)
 
-| ID    | Severity | Issue                            | Status         |
-| ----- | -------- | -------------------------------- | -------------- |
-| H1    | CRITICAL | Mark highlight colors swapped    | ⬜ Not Started |
-| H2    | MEDIUM   | Missing agent-category-badge     | ⬜ Not Started |
-| H3    | MEDIUM   | Different category badge colors  | ⬜ Not Started |
-| H4    | LOW      | Missing config section bg        | ⬜ Not Started |
-| H5    | LOW      | Missing config key styling       | ⬜ Not Started |
-| H6    | LOW      | Missing hover/selected states    | ⬜ Not Started |
-| H7    | LOW      | Missing config-value styling     | ⬜ Not Started |
-| H8    | LOW      | Missing badge base styling       | ⬜ Not Started |
-| H9-15 | LOW      | Various element styles           | ⬜ Not Started |
+| ID    | Severity | Issue                           | Status   |
+| ----- | -------- | ------------------------------- | -------- |
+| H1    | CRITICAL | Mark highlight colors swapped   | ✅ Fixed |
+| H2    | MEDIUM   | Missing agent-category-badge    | ✅ Fixed |
+| H3    | MEDIUM   | Different category badge colors | ✅ Fixed |
+| H4    | LOW      | Missing config section bg       | ✅ Fixed |
+| H5    | LOW      | Missing config key styling      | ✅ Fixed |
+| H6    | LOW      | Missing hover/selected states   | ✅ Fixed |
+| H7    | LOW      | Missing config-value styling    | ✅ Fixed |
+| H8    | LOW      | Missing badge base styling      | ✅ Fixed |
+| H9-15 | LOW      | Various element styles          | ✅ Fixed |
 
 ### ProfileView Regressions
 
-| ID  | Severity | Issue                          | Status         |
-| --- | -------- | ------------------------------ | -------------- |
-| P1  | MEDIUM   | Missing model-access-summary   | ✅ Fixed       |
-| P2  | LOW      | Missing models-list-container  | ✅ Fixed       |
-| P3  | LOW      | Missing error state guidance   | ⬜ Not Started |
-| R11 | LOW      | Unused signOut event           | ⬜ Not Started |
+| ID  | Severity | Issue                         | Status                                  |
+| --- | -------- | ----------------------------- | --------------------------------------- |
+| P1  | MEDIUM   | Missing model-access-summary  | ✅ Fixed                                |
+| P2  | LOW      | Missing models-list-container | ✅ Fixed                                |
+| P3  | LOW      | Missing error state guidance  | ✅ Fixed (ApiAccessSection.ts:36-44)    |
+| R11 | LOW      | Unused signOut event          | ✅ Fixed (ProfileInfo.ts dispatches it) |
 
 ### JavaScript Behavioral Regressions
 
-| ID  | View        | Severity | Issue                       | Status         |
-| --- | ----------- | -------- | --------------------------- | -------------- |
-| J1  | MainView    | HIGH     | Missing debounce            | ⬜ Not Started |
-| J2  | MemoryView  | MEDIUM   | vscode-checkbox timing      | ⬜ Not Started |
-| J3  | ProfileView | LOW      | Local state not persisted   | ⬜ Not Started |
-| J4  | HistoryView | LOW      | Filter state persistence    | ⬜ Not Started |
+| ID  | View        | Severity | Issue                     | Status                                  |
+| --- | ----------- | -------- | ------------------------- | --------------------------------------- |
+| J1  | MainView    | HIGH     | Missing debounce          | ✅ Fixed (300ms)                        |
+| J2  | MemoryView  | MEDIUM   | vscode-checkbox timing    | ✅ Fixed (MemoryToggle.ts:32-35)        |
+| J3  | ProfileView | LOW      | Local state not persisted | N/A (no collapsible sections)           |
+| J4  | HistoryView | LOW      | Filter state persistence  | N/A (no filter; search state persisted) |
 
 ### Refactoring Tasks
 
-| Task                           | Status         | Impact                       |
-| ------------------------------ | -------------- | ---------------------------- |
-| Extract FileSelectGroup        | ⬜ Not Started | -300 lines from MainApp      |
-| Extract BannerGroup components | ⬜ Not Started | -150 lines from MainApp      |
-| Extract LatexDiffsSection      | ⬜ Not Started | -200 lines from MainApp      |
-| Create shared message schemas  | ⬜ Not Started | Type-safe frontend ↔ backend |
-| Add Zod validation to MainApp  | ⬜ Not Started | Security + type safety       |
-| Convert 37 inline arrows       | ⬜ Not Started | Performance                  |
-| Delete duplicate debug handler | ⬜ Not Started | Code cleanup                 |
-| Install @types/sortablejs      | ✅ Complete    | Complete type definitions    |
+| Task                           | Status         | Impact                           |
+| ------------------------------ | -------------- | -------------------------------- |
+| Extract FileSelectGroup        | ⬜ Not Started | -300 lines from MainApp          |
+| Extract BannerGroup components | ⬜ Not Started | -150 lines from MainApp          |
+| Extract LatexDiffsSection      | ⬜ Not Started | -200 lines from MainApp          |
+| Create shared message schemas  | ✅ Complete    | mainViewMessages.ts (46 schemas) |
+| Add Zod validation to MainApp  | ✅ Complete    | All 34 message types validated   |
+| Convert 37 inline arrows       | ⬜ Not Started | Performance                      |
+| Delete duplicate debug handler | ✅ Complete    | commonMessageHandlers.ts         |
+| Install @types/sortablejs      | ✅ Complete    | Complete type definitions        |
 
 ### Architectural Tasks (NEW - Phase 5 Scope)
 
-| Task                                | Status         | Impact                           |
-| ----------------------------------- | -------------- | -------------------------------- |
-| Formatters → TemplateResult         | ⬜ Not Started | Shadow DOM throughout            |
-| renderLogs incremental updates      | ⬜ Not Started | Performance for large logs       |
-| Create commonViewMessages.ts        | ⬜ Not Started | Zod schemas for cross-view cmds  |
-| themeHandlers.ts Zod migration      | ⬜ Not Started | Type-safe theme/debug handling   |
-| Eliminate normalization layers      | ✅ Complete    | -160 lines (done in Phase 3)     |
-| Cross-webview command unification   | ⬜ Not Started | Consistent message handling      |
+| Task                              | Status            | Impact                            |
+| --------------------------------- | ----------------- | --------------------------------- |
+| Formatters → TemplateResult       | 🟡 Bridge pattern | 14 formatters using Lit templates |
+| renderLogs incremental updates    | ⬜ Not Started    | Performance for large logs        |
+| Create commonViewMessages.ts      | ✅ Complete       | Zod schemas for 5 common cmds     |
+| themeHandlers.ts Zod migration    | ✅ Complete       | commonMessageHandlers.ts          |
+| Eliminate normalization layers    | ✅ Complete       | -160 lines (done in Phase 3)      |
+| Cross-webview command unification | ✅ Complete       | BaseWebviewApp pattern            |
 
 ---
 
@@ -665,13 +674,15 @@ Missing inline-flex layout, alignment, gap, codicon font size.
 ```typescript
 // FollowupSection.ts visibility logic
 const isTerminal = this.status === 'stopped' || this.status === 'ready';
-const visible = this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
+const visible =
+  this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;
 ```
 
 **But in StreamStatusService.ts:**
+
 ```typescript
 if (status === STREAM_STATUS.READY) {
-  statusMemory.delete(stream);  // ← READY streams are DELETED, not stored
+  statusMemory.delete(stream); // ← READY streams are DELETED, not stored
 }
 ```
 
@@ -679,6 +690,7 @@ When `streamInfo.status` is looked up for READY streams, it returns `undefined`,
 The check `undefined === 'ready'` is always **false**.
 
 **Fix:** ✅ **Applied** - Option 1 implemented in `FollowupSection.ts:209`:
+
 ```typescript
 const isTerminal =
   this.status === 'stopped' ||
@@ -693,12 +705,14 @@ const isTerminal =
 **Symptom:** User messages in ProgressView appear as plain text without the styled bubble/container.
 
 **Expected behavior:** User messages should display with:
+
 - Right-aligned container
 - Background color with left border accent
 - Icon and timestamp header
 - Styled content area
 
 **Current HTML generated:**
+
 ```html
 <div class="user-message-container">
   <div class="user-message">
@@ -712,11 +726,13 @@ const isTerminal =
 ```
 
 **Root Cause:** CSS styles defined in `user-message.css` are imported into `index.css`, but since `LogList.ts` uses Light DOM, styles should apply. Investigation needed to determine if:
+
 1. CSS import chain is broken
 2. CSS variables are missing in litStyles.ts tokens
 3. Class names don't match between formatter and CSS
 
 **Investigation Required:**
+
 - Verify `user-message.css` is loaded in webview
 - Check CSS variable values (`--spacing-small`, `--color-text-link`, etc.)
 - Inspect DOM to see if classes are applied but styles aren't
@@ -730,6 +746,7 @@ const isTerminal =
 **Expected behavior:** FollowUp section should be pinned to the bottom of the stream panel, independent of log content height.
 
 **Current layout:**
+
 ```
 ┌─────────────────────┐
 │ Log messages...     │
@@ -740,6 +757,7 @@ const isTerminal =
 ```
 
 **Target layout:**
+
 ```
 ┌─────────────────────┐
 │ Log messages...     │
@@ -750,6 +768,7 @@ const isTerminal =
 ```
 
 **Fix approaches:**
+
 1. CSS `position: sticky; bottom: 0;` on followup-section
 2. Flex layout with `flex-grow: 1` on log area and fixed height followup
 3. CSS Grid with `grid-template-rows: 1fr auto`
@@ -765,6 +784,7 @@ const isTerminal =
 **Symptom:** Auto-extract and tool config dropdown menus are clickable but completely invisible.
 
 **Affected menus:**
+
 - `id="autoExtractOptions"` - Auto-extract figures, TikZ, PDF
 - `id="toolConfigOptions"` - TeXCount, diagnostics attachments
 
@@ -782,6 +802,7 @@ const isTerminal =
 ```
 
 **Fix:** Add complete styling:
+
 ```css
 .dropdown-container .dropdown-menu {
   position: absolute;
@@ -809,22 +830,30 @@ const isTerminal =
 **Symptom:** Run button displays "Run" text instead of play icon.
 
 **Legacy HTML:**
+
 ```html
 <vscode-button id="executeButton" title="Execute" icon="play"></vscode-button>
 ```
 
 **Current Lit (REGRESSION):**
+
 ```html
-<vscode-button id="executeButton" appearance="primary" @click=${this.executeAgent}>
+<vscode-button
+  id="executeButton"
+  appearance="primary"
+  @click="${this.executeAgent}"
+>
   Run
 </vscode-button>
 ```
 
 **What was lost:**
+
 - `icon="play"` attribute
 - `title="Execute"` tooltip
 
 **Fix:**
+
 ```typescript
 // Option 1: Icon only (matches legacy)
 <vscode-button
@@ -857,13 +886,13 @@ This section documents ALL regressions discovered through systematic comparison 
 
 **Problem:** All spacing tokens in Lit (`litStyles.ts`) are **2-4px larger** than legacy (`tokens.css`), affecting the entire UI layout.
 
-| Token             | Legacy (tokens.css) | Lit (litStyles.ts) | Difference |
-| ----------------- | ------------------- | ------------------ | ---------- |
-| `--spacing-tiny`  | 2px                 | 4px                | +2px       |
-| `--spacing-small` | 4px                 | 8px                | +4px       |
-| `--spacing-medium`| 8px                 | 12px               | +4px       |
-| `--spacing-large` | 12px                | 16px               | +4px       |
-| `--spacing-xlarge`| 20px                | 24px               | +4px       |
+| Token              | Legacy (tokens.css) | Lit (litStyles.ts) | Difference |
+| ------------------ | ------------------- | ------------------ | ---------- |
+| `--spacing-tiny`   | 2px                 | 4px                | +2px       |
+| `--spacing-small`  | 4px                 | 8px                | +4px       |
+| `--spacing-medium` | 8px                 | 12px               | +4px       |
+| `--spacing-large`  | 12px                | 16px               | +4px       |
+| `--spacing-xlarge` | 20px                | 24px               | +4px       |
 
 **Impact:** UI elements appear more spaced out. Buttons, panels, and containers have different visual proportions.
 
@@ -876,6 +905,7 @@ This section documents ALL regressions discovered through systematic comparison 
 #### H1. Mark Highlight Colors Swapped (R5 - CRITICAL)
 
 **Legacy CSS:**
+
 ```css
 mark {
   background-color: var(--vscode-editor-findMatchHighlightBackground);
@@ -890,13 +920,14 @@ mark.current-match {
 ```
 
 **Lit CSS (SWAPPED - BUG):**
+
 ```css
 mark {
-  background: var(--vscode-editor-findMatchBackground);  /* ❌ Wrong */
+  background: var(--vscode-editor-findMatchBackground); /* ❌ Wrong */
   color: inherit;
 }
 mark.current-match {
-  background: var(--vscode-editor-findMatchHighlightBackground);  /* ❌ Wrong */
+  background: var(--vscode-editor-findMatchHighlightBackground); /* ❌ Wrong */
 }
 ```
 
@@ -905,6 +936,7 @@ mark.current-match {
 #### H2. Missing `.agent-category-badge` Class (R6)
 
 **Legacy:**
+
 ```css
 .agent-category-badge {
   display: inline-flex;
@@ -921,20 +953,31 @@ mark.current-match {
 #### H3. Different Category Badge Colors (R7)
 
 **Legacy (semantic editor colors):**
+
 ```css
-.badge.workflow { background-color: var(--vscode-editorInfo-background); }
-.badge.tool-use { background-color: var(--vscode-editorWarning-background); }
+.badge.workflow {
+  background-color: var(--vscode-editorInfo-background);
+}
+.badge.tool-use {
+  background-color: var(--vscode-editorWarning-background);
+}
 ```
 
 **Lit (chart colors - different appearance):**
+
 ```css
-.badge.workflow { background-color: var(--vscode-charts-blue); }
-.badge.tool-use { background-color: var(--vscode-charts-orange); }
+.badge.workflow {
+  background-color: var(--vscode-charts-blue);
+}
+.badge.tool-use {
+  background-color: var(--vscode-charts-orange);
+}
 ```
 
 #### H4. Missing Config Section Background (R8)
 
 **Legacy:**
+
 ```css
 .config-section {
   background-color: var(--vscode-editor-background);
@@ -949,10 +992,11 @@ mark.current-match {
 #### H5. Missing Config Key Styling (R9)
 
 **Legacy:**
+
 ```css
 .config-key {
   color: var(--vscode-editorInfo-foreground);
-  min-width: 80px;  /* Alignment for key-value pairs */
+  min-width: 80px; /* Alignment for key-value pairs */
 }
 ```
 
@@ -961,6 +1005,7 @@ mark.current-match {
 #### H6. Missing `.history-item` Hover/Selected States
 
 **Legacy:**
+
 ```css
 .history-item:hover {
   background-color: var(--vscode-list-hoverBackground);
@@ -976,6 +1021,7 @@ mark.current-match {
 #### H7. Missing `.config-value` Styling
 
 **Legacy:**
+
 ```css
 .config-value {
   color: var(--vscode-descriptionForeground);
@@ -988,6 +1034,7 @@ mark.current-match {
 #### H8. Missing `.badge` Base Styling
 
 **Legacy:**
+
 ```css
 .badge {
   display: inline-block;
@@ -1002,15 +1049,15 @@ mark.current-match {
 
 #### H9-H15. Additional Missing Styles
 
-| Element | Legacy Property | Lit Status |
-|---------|----------------|------------|
-| `.search-input` | `width: 100%` | May differ |
-| `.search-container` | Border, padding | May differ |
-| `.filter-dropdown` | Consistent with VS Code | May differ |
-| `.timestamp` | Subtle foreground color | May differ |
-| `.agent-name` | Font weight, ellipsis | May differ |
-| `.instruction-preview` | Line clamp, ellipsis | May differ |
-| `.empty-state` | Centered, muted color | May differ |
+| Element                | Legacy Property         | Lit Status |
+| ---------------------- | ----------------------- | ---------- |
+| `.search-input`        | `width: 100%`           | May differ |
+| `.search-container`    | Border, padding         | May differ |
+| `.filter-dropdown`     | Consistent with VS Code | May differ |
+| `.timestamp`           | Subtle foreground color | May differ |
+| `.agent-name`          | Font weight, ellipsis   | May differ |
+| `.instruction-preview` | Line clamp, ellipsis    | May differ |
+| `.empty-state`         | Centered, muted color   | May differ |
 
 ---
 
@@ -1019,6 +1066,7 @@ mark.current-match {
 #### P1. Missing `.model-access-summary` Styling (9 Properties)
 
 **Legacy:**
+
 ```css
 .model-access-summary {
   display: flex;
@@ -1038,6 +1086,7 @@ mark.current-match {
 #### P2. Missing `.models-list-container` Styling
 
 **Legacy:**
+
 ```css
 .models-list-container {
   max-height: 200px;
@@ -1063,13 +1112,13 @@ mark.current-match {
 
 The following CSS variables used in legacy MainView are not defined in Lit:
 
-| Variable | Legacy Value | Used For |
-|----------|--------------|----------|
-| `--height-small` | 24px | Input heights |
-| `--height-button` | 28px | Button heights |
-| `--border-radius` | 4px | Container corners |
-| `--width-button-min` | 80px | Button minimum width |
-| `--opacity-normal` | 1 | Normal state opacity |
+| Variable             | Legacy Value | Used For             |
+| -------------------- | ------------ | -------------------- |
+| `--height-small`     | 24px         | Input heights        |
+| `--height-button`    | 28px         | Button heights       |
+| `--border-radius`    | 4px          | Container corners    |
+| `--width-button-min` | 80px         | Button minimum width |
+| `--opacity-normal`   | 1            | Normal state opacity |
 
 **Fix:** Add to `litStyles.ts` or replace with VS Code theme variables.
 
@@ -1084,6 +1133,7 @@ The following CSS variables used in legacy MainView are not defined in Lit:
 ### Codicon Font 403 Forbidden Error (CRITICAL)
 
 **Error Message:**
+
 ```
 Failed to load resource: the server responded with a status of 403 (Forbidden)
 codicon.ttf:1
@@ -1106,13 +1156,21 @@ codicon.ttf:1
 ```
 
 Where `codiconsFontUri` is generated as:
+
 ```typescript
 const codiconsFontUri = webview.asWebviewUri(
-  vscode.Uri.joinPath(extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.ttf')
+  vscode.Uri.joinPath(
+    extensionUri,
+    'node_modules',
+    '@vscode/codicons',
+    'dist',
+    'codicon.ttf',
+  ),
 );
 ```
 
 **Affected Files:**
+
 - `src/webview/index.html` (MainView)
 - `src/progressView/index.html` (ProgressView)
 - `src/historyView/index.html` (HistoryView)
@@ -1128,6 +1186,7 @@ const codiconsFontUri = webview.asWebviewUri(
 Lit components use Shadow DOM and don't require global IDs for element selection. The following legacy IDs are intentionally not present in Lit:
 
 **MainView (Legacy IDs removed):**
+
 - `#agentSelector`, `#modelSelector`, `#instructionInput`
 - `#runButton`, `#polishButton`, `#mergeButton`
 - `#inputFilesList`, `#outputFilesList`
@@ -1135,10 +1194,12 @@ Lit components use Shadow DOM and don't require global IDs for element selection
 - All `#latexdiff*` IDs
 
 **HistoryView (Legacy IDs removed):**
+
 - `#searchInput`, `#filterDropdown`, `#historyList`
 - `#emptyState`, `#loadingIndicator`
 
 **ProfileView (Legacy IDs removed):**
+
 - `#signOutButton`, `#providersList`, `#modelAccessList`
 
 **This is expected and correct.** Lit components use `@query` decorators for internal element references.
@@ -1148,14 +1209,19 @@ Lit components use Shadow DOM and don't require global IDs for element selection
 **HistoryItem.ts buttons:**
 
 **Legacy:**
+
 ```html
 <button class="action-button restore-button" title="Restore">
-<button class="action-button delete-button" title="Delete">
+  <button class="action-button delete-button" title="Delete"></button>
+</button>
 ```
 
 **Lit:**
+
 ```html
-<button class="action-button" @click=${...}>  <!-- Missing restore-button/delete-button -->
+<button class="action-button" @click="${...}">
+  <!-- Missing restore-button/delete-button -->
+</button>
 ```
 
 **Impact:** Any CSS targeting `.restore-button` or `.delete-button` specifically won't apply.
@@ -1163,6 +1229,7 @@ Lit components use Shadow DOM and don't require global IDs for element selection
 #### Icon Changes in MainView
 
 Some button icons may have changed during migration. Audit needed for:
+
 - File action buttons (open, preview, remove)
 - LaTeXDiffs section buttons
 - Recording button states
@@ -1178,6 +1245,7 @@ Some button icons may have changed during migration. Audit needed for:
 **Lit behavior:** `@input` handler calls `saveState()` directly, potentially causing performance issues with rapid typing.
 
 **Fix:**
+
 ```typescript
 import { debounce } from 'lodash-es';
 
@@ -1198,6 +1266,7 @@ private handleInstructionInput(e: Event): void {
 **Legacy:** Used `setTimeout` or waited for `customElements.whenDefined()`.
 
 **Lit Fix:**
+
 ```typescript
 async firstUpdated() {
   await customElements.whenDefined('vscode-checkbox');
@@ -1226,6 +1295,7 @@ async firstUpdated() {
 **Finding:** All buttons are consistent across views. No issues found.
 
 All Lit views use the same button patterns:
+
 - `vscode-button` for primary actions
 - `vscode-toolbar-button` for toolbar actions
 - `<button class="action-button">` for inline actions
@@ -1244,12 +1314,12 @@ These concerns were identified during code review and affect ProgressView's long
 
 **Problem:** TaskGroupDomManager mixes several unrelated concerns:
 
-| Concern | Lines | Coupling Issue |
-|---------|-------|----------------|
-| DOM element management | 74-165 | Core responsibility |
-| Toggle state persistence | 45-72 | Should be in state manager |
-| Audio notifications | `playSystemSound()` | Should be dedicated service |
-| Traversal/hierarchy logic | 180-220 | Could be separate utility |
+| Concern                   | Lines               | Coupling Issue              |
+| ------------------------- | ------------------- | --------------------------- |
+| DOM element management    | 74-165              | Core responsibility         |
+| Toggle state persistence  | 45-72               | Should be in state manager  |
+| Audio notifications       | `playSystemSound()` | Should be dedicated service |
+| Traversal/hierarchy logic | 180-220             | Could be separate utility   |
 
 **Recommendation:** Extract concerns into focused modules:
 
@@ -1322,16 +1392,17 @@ render(formatTaskLog(log), container);
 
 **Migration scope:**
 
-| Formatter File | Functions |
-|----------------|-----------|
-| `taskLog.ts` | 3 |
-| `toolUseLog.ts` | 5 |
-| `streamHeader.ts` | 2 |
-| `agentLog.ts` | 4 |
-| `litTemplates.ts` | 8 |
-| Others (10 files) | ~20 |
+| Formatter File    | Functions |
+| ----------------- | --------- |
+| `taskLog.ts`      | 3         |
+| `toolUseLog.ts`   | 5         |
+| `streamHeader.ts` | 2         |
+| `agentLog.ts`     | 4         |
+| `litTemplates.ts` | 8         |
+| Others (10 files) | ~20       |
 
 **Benefits:**
+
 - Shadow DOM encapsulation possible
 - No manual HTML escaping needed (Lit auto-escapes)
 - Better performance via Lit's diffing
@@ -1378,11 +1449,11 @@ switchStream(streamId: string): void {
 
 **Performance impact:**
 
-| Scenario | Current | After |
-|----------|---------|-------|
-| Append 1 log to 100 logs | Rebuild 101 | Append 1 |
-| Append 10 logs to 1000 logs | Rebuild 1010 | Append 10 |
-| Switch streams | Rebuild N | Rebuild N (same) |
+| Scenario                    | Current      | After            |
+| --------------------------- | ------------ | ---------------- |
+| Append 1 log to 100 logs    | Rebuild 101  | Append 1         |
+| Append 10 logs to 1000 logs | Rebuild 1010 | Append 10        |
+| Switch streams              | Rebuild N    | Rebuild N (same) |
 
 **Implementation steps:**
 
@@ -1399,13 +1470,13 @@ switchStream(streamId: string): void {
 
 ### Current State
 
-| Command | Pattern | Zod Schema | Type Safety |
-|---------|---------|------------|-------------|
-| `THEME_SET` | `createThemeHandlers()` | ❌ None | ❌ `any` |
-| `DEBUG_MODE_SET` | `BaseWebviewApp` | ❌ None | ❌ `any` |
-| `STATE_RESTORE` | Manual | ❌ None | ❌ `any` |
-| `WEBVIEW_READY` | Auto-sent | ❌ None | ❌ |
-| `ERROR` | Generic | ❌ None | ❌ `any` |
+| Command          | Pattern                 | Zod Schema | Type Safety |
+| ---------------- | ----------------------- | ---------- | ----------- |
+| `THEME_SET`      | `createThemeHandlers()` | ❌ None    | ❌ `any`    |
+| `DEBUG_MODE_SET` | `BaseWebviewApp`        | ❌ None    | ❌ `any`    |
+| `STATE_RESTORE`  | Manual                  | ❌ None    | ❌ `any`    |
+| `WEBVIEW_READY`  | Auto-sent               | ❌ None    | ❌          |
+| `ERROR`          | Generic                 | ❌ None    | ❌ `any`    |
 
 ### Target Architecture
 
@@ -1459,7 +1530,10 @@ export type SetDebugModeMessage = z.infer<typeof SetDebugModeMessageSchema>;
 
 ```typescript
 // src/shared/handlers/commonMessageHandlers.ts
-import { CommonViewMessageSchema, COMMON_COMMANDS } from '@shared/schemas/commonViewMessages';
+import {
+  CommonViewMessageSchema,
+  COMMON_COMMANDS,
+} from '@shared/schemas/commonViewMessages';
 
 export interface CommonMessageContext {
   setTheme: (theme: string) => void;
@@ -1470,7 +1544,7 @@ export interface CommonMessageContext {
 
 export function handleCommonMessage(
   raw: unknown,
-  context: CommonMessageContext
+  context: CommonMessageContext,
 ): boolean {
   const result = CommonViewMessageSchema.safeParse(raw);
   if (!result.success) return false;
@@ -1504,7 +1578,9 @@ export abstract class BaseWebviewApp extends LitElement {
   protected handleMessage(event: MessageEvent): void {
     const handled = handleCommonMessage(event.data, {
       setTheme: (theme) => this.onThemeChange(theme),
-      setDebugMode: (enabled) => { this.debugMode = enabled; },
+      setDebugMode: (enabled) => {
+        this.debugMode = enabled;
+      },
       restoreState: (state) => this.onStateRestore(state),
       onError: (msg, details) => console.error(msg, details),
     });
@@ -1530,14 +1606,14 @@ export abstract class BaseWebviewApp extends LitElement {
 
 ### Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/shared/schemas/commonViewMessages.ts` | CREATE |
-| `src/shared/handlers/commonMessageHandlers.ts` | CREATE |
-| `src/shared/BaseWebviewApp.ts` | UPDATE |
-| `src/common/webview/themeHandlers.ts` | DELETE |
-| `src/progressView/frontend/ProgressApp.ts` | UPDATE (remove themeHandlers import) |
-| All other webview apps | UPDATE (extend refactored BaseWebviewApp) |
+| File                                           | Change                                    |
+| ---------------------------------------------- | ----------------------------------------- |
+| `src/shared/schemas/commonViewMessages.ts`     | CREATE                                    |
+| `src/shared/handlers/commonMessageHandlers.ts` | CREATE                                    |
+| `src/shared/BaseWebviewApp.ts`                 | UPDATE                                    |
+| `src/common/webview/themeHandlers.ts`          | DELETE                                    |
+| `src/progressView/frontend/ProgressApp.ts`     | UPDATE (remove themeHandlers import)      |
+| All other webview apps                         | UPDATE (extend refactored BaseWebviewApp) |
 
 ---
 
@@ -1547,13 +1623,13 @@ export abstract class BaseWebviewApp extends LitElement {
 
 The following normalizers were eliminated during ProgressView migration:
 
-| Normalizer | Status | Replacement |
-|------------|--------|-------------|
-| `normalizeFileListData()` | ✅ Deleted | `FileListSchema.safeParse()` |
-| `normalizeToolUseLog()` | ✅ Deleted | `ToolUseLogSchema` |
-| `normalizeMissingOutputsPayload()` | ✅ Deleted | `MissingOutputsSchema` |
-| `normalizeStructuredContent()` | ✅ Deleted | Direct `.data` access |
-| `tryParseJson()` | ✅ Deleted | Dead code removed |
+| Normalizer                         | Status     | Replacement                  |
+| ---------------------------------- | ---------- | ---------------------------- |
+| `normalizeFileListData()`          | ✅ Deleted | `FileListSchema.safeParse()` |
+| `normalizeToolUseLog()`            | ✅ Deleted | `ToolUseLogSchema`           |
+| `normalizeMissingOutputsPayload()` | ✅ Deleted | `MissingOutputsSchema`       |
+| `normalizeStructuredContent()`     | ✅ Deleted | Direct `.data` access        |
+| `tryParseJson()`                   | ✅ Deleted | Dead code removed            |
 
 **~160 lines removed** as part of Phase 3 Zod-first architecture.
 
@@ -1565,30 +1641,30 @@ The following normalizers were eliminated during ProgressView migration:
 
 ### Immediate (Before Release)
 
-| ID | Issue |
-|----|-------|
-| R1 | Missing SET_SELECTED_AGENT handler |
-| Codicon | 403 Forbidden font error |
-| H1 | Mark highlight colors swapped |
-| J1 | Missing debounce on instruction input |
+| ID      | Issue                                 |
+| ------- | ------------------------------------- |
+| R1      | Missing SET_SELECTED_AGENT handler    |
+| Codicon | 403 Forbidden font error              |
+| H1      | Mark highlight colors swapped         |
+| J1      | Missing debounce on instruction input |
 
 ### High Priority
 
-| ID | Issue |
-|----|-------|
-| R2 | Missing Merge button |
-| CSS Tokens | All spacing 2-4px larger |
-| H2-H5 | HistoryView styling regressions |
-| P1-P2 | ProfileView missing styles |
+| ID         | Issue                           |
+| ---------- | ------------------------------- |
+| R2         | Missing Merge button            |
+| CSS Tokens | All spacing 2-4px larger        |
+| H2-H5      | HistoryView styling regressions |
+| P1-P2      | ProfileView missing styles      |
 
 ### Medium Priority
 
-| ID | Issue |
-|----|-------|
-| R3-R4 | Missing LaTeXDiffs buttons |
-| M1 | MainView missing CSS variables |
-| J2-J4 | Minor JS behavioral differences |
-| H6-H15 | Remaining HistoryView styles |
+| ID     | Issue                           |
+| ------ | ------------------------------- |
+| R3-R4  | Missing LaTeXDiffs buttons      |
+| M1     | MainView missing CSS variables  |
+| J2-J4  | Minor JS behavioral differences |
+| H6-H15 | Remaining HistoryView styles    |
 
 ---
 
