@@ -1672,7 +1672,7 @@
     "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1",
-    "zod-v3-to-v4": "^1.14.0"
+    "zod-v3-to-v4": "^1.15.0"
   },
   "repository": {
     "type": "git",
