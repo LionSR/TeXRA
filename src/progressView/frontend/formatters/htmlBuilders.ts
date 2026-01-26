@@ -3,8 +3,8 @@
  * These functions create reusable Lit templates from normalized data.
  */
 
-// Third-party imports
-import hljs from 'highlight.js';
+// Third-party imports - use optimized hljs with only TeXRA-relevant languages
+import hljs from '@shared/highlighting/hljs';
 
 // Local imports - Lit utilities
 
