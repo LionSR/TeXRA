@@ -140,14 +140,16 @@ We actively welcome more native Lit approaches where they're more suitable. The 
 
 ### Not Yet Used (Explore These)
 
-| Directive | Potential Use Case |
-|-----------|-------------------|
-| `guard()` | Memoize expensive template sections |
-| `cache()` | Preserve DOM when toggling visibility |
-| `keyed()` | Force re-render on identity change |
-| `asyncAppend()` / `asyncReplace()` | Streaming content rendering |
-| `templateContent()` | Reuse `<template>` elements |
-| `until()` | Async data loading with placeholders |
+| Directive | Stability | Potential Use Case |
+|-----------|-----------|-------------------|
+| `guard()` | ⭐⭐⭐ Excellent | Memoize expensive template sections |
+| `cache()` | ⭐⭐⭐ Excellent | Preserve DOM when toggling visibility |
+| `until()` | ⭐⭐⭐ Excellent | Async data loading with placeholders |
+| `keyed()` | ⭐⭐ Good | Force re-render on identity change |
+| `templateContent()` | ⭐⭐ Good | Reuse `<template>` elements |
+| `asyncAppend()` / `asyncReplace()` | ⭐ Niche | Streaming content (rarely needed with async/await) |
+
+**Recommendation:** Start with `guard()` - it's the most immediately useful for replacing the manual `_cached*` variables in `ToolUseStreamContent.ts` and `WorkflowStreamContent.ts`. Clear win with minimal risk.
 
 ### Known Opportunities
 
