@@ -19,7 +19,6 @@ import {
 // Note: getSelectedOptionElement and isSelectLikeElement were removed -
 // they required access to select elements which are now in child
 // component shadow DOMs.
-import { resolveTextareaTarget, syncHostValue } from '@shared/utils/textarea';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
@@ -53,7 +52,6 @@ import {
   parseSessionType,
 } from './constants';
 import { mainViewStyles } from './styles';
-import { handleImagePaste } from './pasteHandler';
 
 // Local imports - main view components (side-effect imports to register custom elements)
 import './components/FileSelectGroup';
@@ -207,9 +205,6 @@ export class MainApp extends BaseWebviewApp {
   private defaultOutputFiles: string[] = [];
   private apiKeyBannerForced = false;
   private instructionSaveTimer: number | null = null;
-
-  @query('#instruction')
-  declare private instructionElement: HTMLElement | null;
 
   // Note: model/agent selects are inside InstructionPanel's shadow DOM.
   // These @query decorators only find elements in MainApp's shadow root,
@@ -432,7 +427,6 @@ export class MainApp extends BaseWebviewApp {
   protected override firstUpdated(): void {
     this.requestInitialData();
     this.initializeSortables();
-    this.setupInstructionHandlers();
     this.refreshInstructionPlaceholder(false);
   }
 
@@ -964,28 +958,12 @@ export class MainApp extends BaseWebviewApp {
       return;
     }
 
-    const instructionEl = this.instructionElement;
-    if (!instructionEl) {
-      return;
-    }
-
-    const { textarea } = resolveTextareaTarget(instructionEl);
-    if (!textarea) {
-      return;
-    }
-
-    const startPos = textarea.selectionStart ?? textarea.value.length;
-    const endPos = textarea.selectionEnd ?? textarea.value.length;
-    const updated =
-      textarea.value.slice(0, startPos) +
-      message.text +
-      textarea.value.slice(endPos);
-    textarea.value = updated;
-    textarea.setSelectionRange(
-      startPos + message.text.length,
-      startPos + message.text.length,
-    );
-    syncHostValue(instructionEl, textarea);
+    // Append transcribed text to instruction (Lit-native: update state, not DOM)
+    // Note: Cursor position insertion is not supported with shadow DOM isolation.
+    // The InstructionPanel receives the updated instruction via property binding.
+    const updated = this.instruction
+      ? `${this.instruction} ${message.text}`
+      : message.text;
     this.instruction = updated;
     this.isRecording = false;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
@@ -1346,30 +1324,13 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private setupInstructionHandlers(): void {
-    const instructionHost = this.instructionElement;
-    if (!instructionHost) return;
+  // Note: Instruction input events are handled via @instruction-input from InstructionPanel.
+  // Image paste is handled by @instruction-paste from InstructionPanel (Lit-native pattern).
 
-    instructionHost.addEventListener('input', () => {
-      const { textarea } = resolveTextareaTarget(instructionHost);
-      if (!textarea) return;
-      this.instruction = textarea.value;
-      this.scheduleInstructionSave();
-      if (textarea.value.trim()) {
-        this.stopPlaceholderRotation();
-      } else {
-        this.startPlaceholderRotation();
-      }
-    });
-
-    instructionHost.addEventListener('paste', async (event: Event) => {
-      if (!(event instanceof ClipboardEvent)) return;
-      const handled = await handleImagePaste(event, instructionHost);
-      if (handled) {
-        this.saveState();
-      }
-    });
-  }
+  /** Handle image paste in instruction - save state after paste completes */
+  private handleComponentInstructionPaste = (): void => {
+    this.saveState();
+  };
 
   private scheduleInstructionSave(): void {
     if (this.instructionSaveTimer) {
@@ -2003,6 +1964,7 @@ export class MainApp extends BaseWebviewApp {
             @agent-change=${this.handleComponentAgentChange}
             @model-change=${this.handleComponentModelChange}
             @instruction-input=${this.handleComponentInstructionInput}
+            @instruction-paste=${this.handleComponentInstructionPaste}
             @panel-action=${this.handleComponentPanelAction}
             @execute=${this.handleComponentExecute}
             @agent-settings=${this.handleComponentAgentSettings}
