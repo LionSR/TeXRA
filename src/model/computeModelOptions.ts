@@ -3,6 +3,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import type { ModelConfig } from '@model/ModelConfig';
+import type { ModelOptionData } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 
 /**
@@ -182,19 +183,7 @@ async function buildModelOption(
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
 
-/**
- * Typed model option for Lit-native rendering.
- * Replaces HTML string building with structured data.
- */
-export interface ModelOptionData {
-  value: string;
-  label: string;
-  provider?: string;
-  context?: string;
-  cost?: string;
-  requiresKey?: boolean;
-  disabled?: boolean;
-}
+// ModelOptionData type is imported from @shared/schemas (single source of truth)
 
 /**
  * Build typed model option data for a single model.
