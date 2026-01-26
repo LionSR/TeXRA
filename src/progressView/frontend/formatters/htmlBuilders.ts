@@ -3,8 +3,8 @@
  * These functions create reusable Lit templates from normalized data.
  */
 
-// Third-party imports
-import hljs from 'highlight.js';
+// Third-party imports - use optimized hljs with only TeXRA-relevant languages
+import hljs from '@shared/highlighting/hljs';
 
 // Local imports - Lit utilities
 
@@ -159,19 +159,10 @@ export function buildDetailsSummary(
     ? `codicon icon ${iconClass}`
     : `codicon ${iconClass}`;
   const toggleIconClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
-  return html`
-    <summary class="details-summary">
-      <i class="${toggleIconClass} toggle-icon"></i>
-      <i class=${iconClasses}></i>
-      <span class=${labelClass}>${label}</span>
-      ${timestamp
-        ? html`<span class="timestamp" title=${timestamp.tooltip}
-            >${timestamp.display}</span
-          >`
-        : ''}
-      ${copyButton ? buildCopyButton(copyButton.title, copyButton.hidden) : ''}
-    </summary>
-  `;
+  // prettier-ignore
+  return html`<summary class="details-summary"><i class="${toggleIconClass} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestamp
+        ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
+        : ''}${copyButton ? buildCopyButton(copyButton.title, copyButton.hidden) : ''}</summary>`;
 }
 
 /** Build rendered templates for file list. */
@@ -181,6 +172,7 @@ export function buildFileListRender(files: FileListEntry[]): {
 } | null {
   if (!Array.isArray(files)) return null;
 
+  // prettier-ignore
   const items = html`${files.map((file) => {
     const icon = file.ok ? 'codicon-check' : 'codicon-warning';
     const filePath = file.path;
@@ -193,20 +185,8 @@ export function buildFileListRender(files: FileListEntry[]): {
       ? `${sourceDisplay}, internal`
       : sourceDisplay;
 
-    return html`
-      <li class="detail-item" title=${filePath}>
-        <i class=${`codicon ${icon}`}></i>
-        <span class="file-link clickable-link" data-file=${filePath}
-          >${fileName}</span
-        >
-        ${file.varName
-          ? html`<span class="file-var">[${file.varName}]</span>`
-          : ''}
-        ${showSource
-          ? html`<span class="file-source">(${sourceText})</span>`
-          : ''}
-      </li>
-    `;
+    // prettier-ignore
+    return html`<li class="detail-item" title=${filePath}><i class=${`codicon ${icon}`}></i> <span class="file-link clickable-link" data-file=${filePath}>${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
@@ -225,9 +205,7 @@ export function buildFileLink(
   if (!filePath) {
     return html`<span>${displayName}</span>`;
   }
-  return html`<span class="file-link clickable-link" data-file=${filePath}
-    >${displayName}</span
-  >`;
+  return html`<span class="file-link clickable-link" data-file=${filePath}>${displayName}</span>`;
 }
 
 /** Get appropriate icon class for a tool. */
@@ -342,15 +320,8 @@ export function buildFileLinkWithLines(
 
   const displayText = fileName + lineInfo;
 
-  return html`
-    <span
-      class="file-link clickable-link"
-      data-file=${filePath}
-      data-file-line=${ifDefined(startLine)}
-    >
-      <i class="codicon codicon-file"></i> ${displayText}
-    </span>
-  `;
+  // prettier-ignore
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)}><i class="codicon codicon-file"></i> ${displayText}</span>`;
 }
 
 // ============================================================================

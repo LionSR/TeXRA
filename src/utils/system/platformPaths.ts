@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import glob from 'glob';
+import { globSync } from 'glob';
 import { execaSync } from 'execa';
 
 // Local imports - log
@@ -69,8 +69,7 @@ export function getExtraDirs(): string[] {
     if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
       dirs.push(path.join(scoopDir, 'shims'));
       try {
-        const matches = glob
-          .sync(path.join(scoopDir, 'apps', '*', 'current'))
+        const matches = globSync(path.join(scoopDir, 'apps', '*', 'current'))
           .sort()
           .reverse();
         dirs.push(...matches);
@@ -142,7 +141,7 @@ export function getExtraDirs(): string[] {
   // Collect matches from all TeX-related patterns
   for (const pattern of [...texDistPatterns, ...texScriptPatterns]) {
     try {
-      const matches = glob.sync(pattern).sort().reverse();
+      const matches = globSync(pattern).sort().reverse();
       dirs.push(...matches);
     } catch (_err) {
       // ignore glob errors
