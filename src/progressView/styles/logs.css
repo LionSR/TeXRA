@@ -69,6 +69,81 @@ follow-up-input {
   overflow: visible;
 }
 
+/* Light DOM formatter styles */
+.file-list-content {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-list-content .file-var {
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  font-size: 0.9em;
+  margin-left: var(--spacing-tiny);
+}
+
+.file-list-content .file-source {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+.xml-link-container {
+  margin-top: var(--spacing-small);
+  padding-top: var(--spacing-small);
+  border-top: var(--border-thin) solid var(--vscode-widget-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.xml-link-container .codicon {
+  opacity: var(--opacity-subtle);
+}
+
+.xml-link-container .document-tag {
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.xml-link-container .xml-fix-hint {
+  flex-basis: 100%;
+  margin-top: var(--spacing-tiny);
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+}
+
+.xml-link-container .xml-fix-hint .codicon {
+  opacity: 1;
+  color: var(--color-text-link);
+}
+
+.xml-link-container .xml-fix-hint strong {
+  color: var(--color-text-link);
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.file-link {
+  color: var(--color-text-link);
+  cursor: pointer;
+}
+
+.file-link:hover {
+  text-decoration: underline;
+}
+
 .banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);

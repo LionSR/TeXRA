@@ -105,6 +105,17 @@ export class InstructionPanel extends LitElement {
       gap: var(--spacing-tiny);
     }
 
+    .select-group .codicon {
+      margin-right: var(--spacing-small);
+      color: var(--text-color);
+      vertical-align: text-bottom;
+    }
+
+    .select-group vscode-single-select {
+      min-width: 6rem;
+      max-width: 10rem;
+    }
+
     .agent-select-group {
       flex: 1;
       min-width: 0;
@@ -112,12 +123,15 @@ export class InstructionPanel extends LitElement {
 
     .agent-select-controls {
       flex: 1;
-      min-width: 0;
+      min-width: 10rem;
+      max-width: 14rem;
     }
 
     .agent-select-dropdowns {
       position: relative;
       width: 100%;
+      min-width: 10rem;
+      max-width: 14rem;
     }
 
     .agent-select {
@@ -138,6 +152,27 @@ export class InstructionPanel extends LitElement {
 
     .clickable:hover {
       color: var(--vscode-foreground);
+    }
+
+    .codicon.clickable:hover {
+      color: var(--button-hover-background);
+    }
+
+    vscode-option {
+      font-family: var(--vscode-font-family);
+    }
+
+    vscode-option.disabled-option,
+    vscode-option.disabled-model,
+    vscode-option.disabled-agent,
+    vscode-option[data-requires-key='true'] {
+      color: var(--color-text-secondary);
+      opacity: var(--opacity-subtle);
+      font-style: italic;
+    }
+
+    vscode-option[data-tool-use='true'] {
+      font-style: italic;
     }
 
     .recording {
