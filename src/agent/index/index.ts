@@ -5,13 +5,15 @@
 // AgentSource is defined in @agent/core/AgentDataclass (value + type with same name)
 export { AgentSource } from '@agent/core/AgentDataclass';
 
+// AgentOptionData: canonical type from shared schemas (Zod source of truth)
+export type { AgentOptionData } from '@shared/schemas';
+
 export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
   type RemoteVisibility,
   type AgentOptionsPayload,
-  type AgentOptionData,
   type AgentOptionsDataPayload,
   // Core functions
   loadAgents,
