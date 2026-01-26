@@ -17,7 +17,7 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
-import { scrollToBottom, setChevronIconHorizontal } from '@shared/utils/dom';
+import { scrollToBottom } from '@shared/utils/dom';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
@@ -63,7 +63,7 @@ export class LogList extends LitElement {
     super.connectedCallback();
     // Use component-level listeners instead of document-level
     // Since LogList uses Light DOM, events bubble naturally to this element
-    this.addEventListener('toggle', this.handleToggleEvent, { capture: true });
+    // Note: Toggle icon rotation is handled by CSS via details[open] selector
     this.addEventListener('click', this.handleClickEvent as EventListener);
     this.addEventListener(
       'file-click',
@@ -72,9 +72,6 @@ export class LogList extends LitElement {
   }
 
   override disconnectedCallback(): void {
-    this.removeEventListener('toggle', this.handleToggleEvent, {
-      capture: true,
-    });
     this.removeEventListener('click', this.handleClickEvent as EventListener);
     this.removeEventListener(
       'file-click',
@@ -116,27 +113,6 @@ export class LogList extends LitElement {
       console.error('[LogList] Failed to save toggle states', error);
     }
   }
-
-  /** Handle details toggle events for chevron icon rotation */
-  private handleToggleEvent = (event: Event): void => {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-    const hasToggleClass = [
-      'banner-details',
-      'file-list-details',
-      'latexdiff-details',
-      'statistics-details',
-    ].some((cls) => target.classList.contains(cls));
-    if (!hasToggleClass) return;
-
-    const toggleIcon = target.querySelector('.toggle-icon');
-    if (
-      toggleIcon instanceof HTMLElement &&
-      target instanceof HTMLDetailsElement
-    ) {
-      setChevronIconHorizontal(toggleIcon, target.open);
-    }
-  };
 
   /** Handle click events for file links, copy buttons, etc. */
   private handleClickEvent = async (event: MouseEvent): Promise<void> => {
