@@ -11,7 +11,7 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 - Phase 5: All regressions fixed, Zod validation complete ✅
 - MainApp functional but monolithic (~2,900 lines) ✅
-- Formatters using bridge pattern (HTML strings) ✅
+- Formatters using Lit templates with bridge pattern ✅
 
 ## Status Summary
 
@@ -21,9 +21,11 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Extract BannerGroup components | ⬜ Not Started | -150 lines from MainApp |
 | Extract LatexDiffsSection | ⬜ Not Started | -200 lines from MainApp |
 | Convert 37 inline arrows | ⬜ Not Started | Performance |
-| Formatters → TemplateResult | ⬜ Not Started | Shadow DOM enablement |
-| renderLogs incremental updates | ⬜ Not Started | Performance for large logs |
+| Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM; open to future improvements |
+| renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
 | TaskGroupDomManager refactor | ⬜ Not Started | Separation of concerns |
+| Replace .map() with repeat() | ⬜ Not Started | Keyed list updates in RunSelector, FileList, StreamHeader, PromptOverlay |
+| Add guard() memoization | ⬜ Not Started | ToolUseStreamContent, WorkflowStreamContent caching |
 
 ---
 
@@ -119,6 +121,69 @@ private handleFileAction = (e: Event) => {
 
 ---
 
+## 6.2b Lit Directive & Native Feature Improvements
+
+**Status: ⬜ Not Started | Open to Ideas**
+
+We actively welcome more native Lit approaches where they're more suitable. The current codebase uses some Lit features but there may be better patterns we haven't discovered yet.
+
+### Currently Used Directives
+
+| Directive | Files | Notes |
+|-----------|-------|-------|
+| `repeat()` | 5 | Keyed list iteration |
+| `when()` | 5 | Conditional rendering |
+| `classMap()` | 6 | Dynamic CSS classes |
+| `ifDefined()` | 4 | Optional attributes |
+| `live()` | 2 | Form input preservation |
+| `ref()` | 3 | Element references |
+
+### Not Yet Used (Explore These)
+
+| Directive | Potential Use Case |
+|-----------|-------------------|
+| `guard()` | Memoize expensive template sections |
+| `cache()` | Preserve DOM when toggling visibility |
+| `keyed()` | Force re-render on identity change |
+| `asyncAppend()` / `asyncReplace()` | Streaming content rendering |
+| `templateContent()` | Reuse `<template>` elements |
+| `until()` | Async data loading with placeholders |
+
+### Known Opportunities
+
+**Replace `.map()` with `repeat()`:**
+
+| File | Line | Current | Suggested |
+|------|------|---------|-----------|
+| `RunSelector.ts` | 47 | `.map()` | `repeat(sortedRuns, r => r.id, ...)` |
+| `FileList.ts` | 205, 215 | `.map()` | `repeat(files, f => f.location.absolutePath, ...)` |
+| `StreamHeader.ts` | 344 | `.map()` | `repeat(buttons, b => b.id, ...)` |
+| `PromptOverlay.ts` | 478, 516 | `.map()` | `repeat(fileLists, f => f.label, ...)` |
+| `StreamTabs.ts` | 290, 303 | `.map()` | `repeat(FILTER_BUTTONS, b => b.id, ...)` |
+
+**Replace manual caching with `guard()`:**
+
+| File | Current Pattern | Native Alternative |
+|------|-----------------|-------------------|
+| `ToolUseStreamContent.ts` | `_cached*` variables | `guard([deps], () => expensiveTemplate)` |
+| `WorkflowStreamContent.ts` | `_cachedRunGroups` | `guard([runGroups], () => ...)` |
+
+### Areas Open for Native Lit Exploration
+
+1. **LogList streaming** - Currently uses imperative `appendChild()`. Could `asyncAppend()` or Lit's streaming render work better?
+
+2. **TaskGroup hierarchy** - Currently managed by `TaskGroupDomManager`. Could nested Lit components with `@property` propagation be cleaner?
+
+3. **State management** - Currently uses `WebviewStateManager`. Could Lit's `@state()` with context protocol (`@lit/context`) simplify cross-component state?
+
+4. **Form handling** - Currently manual event listeners. Could `@lit-labs/forms` or native `live()` directive improve this?
+
+5. **Virtualization** - For very large log lists. Could `@lit-labs/virtualizer` help?
+
+**If you know a more native Lit pattern for any of these, please suggest it!**
+
+---
+
 ## 6.3 Suggested Computed Getters
 
 Some derived state is computed repeatedly. Use Lit's reactive getters:
@@ -144,105 +209,105 @@ private get isToolUse(): boolean {
 
 ## 6.4 Formatter → TemplateResult Migration
 
-**Problem:** Formatters in `src/progressView/frontend/formatters/` return HTML strings, forcing Light DOM usage.
+**Status: ✅ COMPLETE (Phase 5)**
 
-**Current pattern:**
+All 14 formatters now use Lit `html` templates internally and return `HTMLElement` via the `renderToElement()` bridge pattern. Zero string concatenation remains.
 
-```typescript
-// formatters/taskLog.ts - returns string
-export function formatTaskLog(log: LogEntry): string {
-  return `<div class="task-log">${escapeHtml(log.text)}</div>`;
-}
-
-// Used in LogList.ts via innerHTML
-container.innerHTML = formatTaskLog(log);
-```
-
-**Target pattern:**
+**Current pattern (intentional):**
 
 ```typescript
-// formatters/taskLog.ts - returns TemplateResult
-import { html, TemplateResult } from 'lit';
-
-export function formatTaskLog(log: LogEntry): TemplateResult {
-  return html`<div class="task-log">${log.text}</div>`;
+// formatters/toolFormatters.ts - uses Lit templates, returns HTMLElement
+export function formatToolUse(data: unknown, ...): HTMLElement | null {
+  const template = html`
+    <details class=${classMap({ 'banner-details': true, ... })}>
+      ${buildDetailsSummary({ iconClass, label: titleText, ... })}
+      <div class="banner-content">${contentTemplate}</div>
+    </details>
+  `;
+  return renderToElement(template);  // Bridge to HTMLElement
 }
 
-// Used in LogList.ts via render()
-render(formatTaskLog(log), container);
+// litTemplates.ts - bridge function
+export function renderToElement(template: TemplateResult): HTMLElement | null {
+  const container = document.createElement('div');
+  render(template, container);
+  return container.firstElementChild as HTMLElement | null;
+}
 ```
 
-**Migration scope:**
+**Why bridge pattern is intentional:**
 
-| Formatter File | Functions |
-|----------------|-----------|
-| `taskLog.ts` | 3 |
-| `toolUseLog.ts` | 5 |
-| `streamHeader.ts` | 2 |
-| `agentLog.ts` | 4 |
-| `litTemplates.ts` | 8 |
-| Others (10 files) | ~20 |
+- LogList uses Light DOM for streaming append pattern
+- CSS must apply to logs (not isolated in Shadow DOM)
+- Supports imperative `appendChild()` for incremental updates
+- Performance for 100+ messages with mixed append/update patterns
 
-**Benefits:**
+**Future consideration:** If Shadow DOM becomes desirable, formatters could return `TemplateResult` directly with minimal changes since they already use Lit templates internally.
 
-- Shadow DOM encapsulation possible
-- No manual HTML escaping needed (Lit auto-escapes)
-- Better performance via Lit's diffing
-- Type-safe template composition
+**Completed scope (14 formatters):**
+
+| Formatter File | Functions | Status |
+|----------------|-----------|--------|
+| `bannerFormatters.ts` | 2 | ✅ Lit templates |
+| `messageFormatters.ts` | 4 | ✅ Lit templates |
+| `toolFormatters.ts` | 2 | ✅ Lit templates |
+| `dataFormatters.ts` | 4 | ✅ Lit templates |
+| `contextManagementFormatters.ts` | 1 | ✅ Lit templates |
+| `taskGroupFormatter.ts` | 1 | ✅ Lit templates |
 
 ---
 
 ## 6.5 renderLogs Incremental Updates
 
-**Problem:** `LogList.ts:131-207` clears and rebuilds entire DOM on every update.
+**Status: 🟡 HYBRID (Partially Complete)**
 
-**Current (O(n) rebuild):**
+Incremental updates already work for append/update operations. Full rebuild only occurs on stream switch.
+
+**Current state:**
+
+| Method | Pattern | Performance | Status |
+|--------|---------|-------------|--------|
+| `appendLog()` | Incremental append | O(1) | ✅ Complete |
+| `updateLog()` | Single element replace | O(1) | ✅ Complete |
+| `addGroup()` | Incremental insert | O(m) | ✅ Complete |
+| `updateGroup()` | Micro-updates (icon, duration) | O(1) | ✅ Complete |
+| `renderLogs()` | Full rebuild | O(n log n) | ❌ Still rebuilds |
+
+**Typical flow (mostly incremental):**
+
+```
+APPEND_LOG event → appendLog()        [✅ incremental, O(1)]
+UPDATE_LOG event → updateLog()        [✅ incremental, O(1)]
+UPDATE_LOGS event → renderLogs()      [❌ full rebuild, rare]
+SWITCH_STREAM → renderLogs()          [❌ full rebuild, expected]
+```
+
+**Why this is acceptable:**
+
+- Most messages arrive via `APPEND_LOG` (streaming) - already incremental
+- `UPDATE_LOGS` full re-sync is rare (only on reconnect or explicit refresh)
+- Stream switch full rebuild is expected behavior
+- `LogEntryManager` caches elements in `Map<id, HTMLElement>` for fast lookups
+
+**Remaining opportunity (if needed):**
 
 ```typescript
+// Could add diff logic to renderLogs for incremental re-sync
 renderLogs(logs: LogEntry[]): void {
-  container.innerHTML = '';  // ❌ Clear everything
-  this.groupManager.clear();
-  this.logManager.clear();
+  const prevIds = new Set(this.logManager.getIds());
+  const nextIds = new Set(logs.map(l => l.id));
 
+  // Only remove/add changed entries instead of full rebuild
+  for (const id of prevIds) {
+    if (!nextIds.has(id)) this.logManager.remove(id);
+  }
   for (const log of logs) {
-    // Rebuild from scratch
+    if (!prevIds.has(log.id)) this.appendLog(log);
   }
 }
 ```
 
-**Target (O(1) append for new logs):**
-
-```typescript
-renderLogs(logs: LogEntry[]): void {
-  const existingCount = this.logManager.size;
-  const newLogs = logs.slice(existingCount);  // Only new logs
-
-  for (const log of newLogs) {
-    this.appendLog(log);  // Incremental append
-  }
-}
-
-// Full rebuild only when switching streams
-switchStream(streamId: string): void {
-  this.clearAll();
-  this.renderLogs(this.getLogsForStream(streamId));
-}
-```
-
-**Performance impact:**
-
-| Scenario | Current | After |
-|----------|---------|-------|
-| Append 1 log to 100 logs | Rebuild 101 | Append 1 |
-| Append 10 logs to 1000 logs | Rebuild 1010 | Append 10 |
-| Switch streams | Rebuild N | Rebuild N (same) |
-
-**Implementation steps:**
-
-1. Track rendered log count per stream
-2. Implement `appendLog()` for single log insertion
-3. Implement `updateLog()` for in-place updates
-4. Keep full rebuild for stream switches only
+**Assessment:** Current hybrid approach is appropriate for the streaming use case. Full incremental `renderLogs` is a nice-to-have optimization, not critical.
 
 ---
 
@@ -279,7 +344,7 @@ managers/
 
 **Why it exists:** Streaming log architecture requires direct DOM manipulation that conflicts with Shadow DOM boundaries.
 
-**Fix:** Refactor formatters to return `TemplateResult` instead of HTML strings, enabling Shadow DOM throughout. (See 6.4)
+**Status:** Formatters now use Lit templates with bridge pattern (see 6.4). Light DOM is intentional for the streaming append pattern. Shadow DOM migration is possible but not currently needed.
 
 ---
 
@@ -347,26 +412,27 @@ Fix known bugs before refactoring to establish stable baseline.
 ### Step 3: Performance Optimization (6.2, 6.5)
 
 1. Extract 37 inline arrows to class methods
-2. Implement incremental log rendering
-3. Add computed getters for derived state
+2. Replace `.map()` with `repeat()` for keyed list updates
+3. Add `guard()` memoization where beneficial
+4. Add computed getters for derived state
 
-### Step 4: Architecture (6.4, 6.6)
+### Step 4: Architecture (6.6)
 
-1. Migrate formatters to TemplateResult
-2. Refactor TaskGroupDomManager
-3. Enable Shadow DOM where possible
+1. Refactor TaskGroupDomManager concerns
+2. Consider Shadow DOM if style encapsulation needed (formatters already Lit-ready)
 
 ---
 
 ## Success Metrics
 
-| Metric | Before | After |
-|--------|--------|-------|
-| MainApp.ts lines | 2,900 | ~500 |
-| Extracted components | 0 | 6+ |
-| Inline arrow functions | 37 | 0 |
-| Formatters returning TemplateResult | 0 | 42 |
-| Shadow DOM components | 60% | 100% |
+| Metric | Before | Current | Target |
+|--------|--------|---------|--------|
+| MainApp.ts lines | 2,900 | 2,900 | ~500 |
+| Extracted components | 0 | 0 | 6+ |
+| Inline arrow functions | 37 | 37 | 0 |
+| Formatters using Lit templates | 0 | 14 ✅ | 14 (complete) |
+| `.map()` → `repeat()` migrations | 0 | 4 | 8+ |
+| Incremental log updates | partial | hybrid ✅ | hybrid (acceptable) |
 
 ---
 
