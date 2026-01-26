@@ -8,11 +8,6 @@ declare module 'markdown-it' {
   export = MarkdownIt;
 }
 
-declare module 'markdown-it-highlightjs' {
-  const highlight: unknown;
-  export = highlight;
-}
-
 declare module 'markdown-it-texmath' {
   const texmath: unknown;
   export = texmath;
