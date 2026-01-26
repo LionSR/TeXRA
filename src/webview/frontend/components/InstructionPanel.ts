@@ -9,7 +9,11 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+
+// Local imports - shared styles
+import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
 import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
@@ -29,167 +33,113 @@ import type {
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
-
-    .instruction-box {
-      display: flex;
-      flex-direction: column;
-      padding: var(--spacing-medium);
-      background-color: var(--background-color);
-      border-radius: var(--border-radius);
-      margin-bottom: var(--spacing-large);
-    }
-
-    .instruction-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: var(--spacing-medium);
-      margin-bottom: var(--spacing-small);
-      height: var(--height-control);
-    }
-
-    .instruction-header-leading {
-      display: flex;
-      gap: var(--spacing-medium);
-      align-items: center;
-    }
-
-    .instruction-header-actions {
-      display: flex;
-      gap: var(--spacing-tiny);
-      align-items: center;
-    }
-
-    .instruction-session-toggle {
-      display: flex;
-      align-items: center;
-    }
-
-    .instruction-session-toggle vscode-radio-group {
-      display: flex;
-      gap: var(--spacing-small);
-    }
-
-    .instruction-session-toggle vscode-radio {
-      font-size: var(--font-size-sm);
-    }
-
-    vscode-textarea#instruction {
-      width: 100%;
-      font-family: var(--vscode-editor-font-family);
-      font-size: var(--font-size);
-    }
-
-    .instruction-controls {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--spacing-small);
-      margin-top: var(--spacing-small);
-    }
-
-    .model-selection-footer {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-medium);
-      flex: 1;
-    }
-
-    .select-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-tiny);
-    }
-
-    .select-group .codicon {
-      margin-right: var(--spacing-small);
-      color: var(--text-color);
-      vertical-align: text-bottom;
-    }
-
-    .select-group vscode-single-select {
-      min-width: 6rem;
-      max-width: 10rem;
-    }
-
-    .agent-select-group {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .agent-select-controls {
-      flex: 1;
-      min-width: 10rem;
-      max-width: 14rem;
-    }
-
-    .agent-select-dropdowns {
-      position: relative;
-      width: 100%;
-      min-width: 10rem;
-      max-width: 14rem;
-    }
-
-    .agent-select {
-      width: 100%;
-    }
-
-    .agent-select--hidden {
-      display: none;
-    }
-
-    .agent-select--active {
-      display: block;
-    }
-
-    .clickable {
-      cursor: pointer;
-    }
-
-    .clickable:hover {
-      color: var(--vscode-foreground);
-    }
-
-    .codicon.clickable:hover {
-      color: var(--button-hover-background);
-    }
-
-    vscode-option {
-      font-family: var(--vscode-font-family);
-    }
-
-    vscode-option.disabled-option,
-    vscode-option.disabled-model,
-    vscode-option.disabled-agent,
-    vscode-option[data-requires-key='true'] {
-      color: var(--color-text-secondary);
-      opacity: var(--opacity-subtle);
-      font-style: italic;
-    }
-
-    vscode-option[data-tool-use='true'] {
-      font-style: italic;
-    }
-
-    .recording {
-      color: var(--vscode-errorForeground);
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%,
-      100% {
-        opacity: 1;
+  static override styles = [
+    selectStyles,
+    css`
+      :host {
+        display: block;
       }
-      50% {
-        opacity: 0.5;
+
+      .instruction-box {
+        display: flex;
+        flex-direction: column;
+        padding: var(--spacing-medium);
+        background-color: var(--background-color);
+        border-radius: var(--border-radius);
+        margin-bottom: var(--spacing-large);
       }
-    }
-  `;
+
+      .instruction-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--spacing-medium);
+        margin-bottom: var(--spacing-small);
+        height: var(--height-control);
+      }
+
+      .instruction-header-leading {
+        display: flex;
+        gap: var(--spacing-medium);
+        align-items: center;
+      }
+
+      .instruction-header-actions {
+        display: flex;
+        gap: var(--spacing-tiny);
+        align-items: center;
+      }
+
+      .instruction-session-toggle {
+        display: flex;
+        align-items: center;
+      }
+
+      .instruction-session-toggle vscode-radio-group {
+        display: flex;
+        gap: var(--spacing-small);
+      }
+
+      .instruction-session-toggle vscode-radio {
+        font-size: var(--font-size-sm);
+      }
+
+      vscode-textarea#instruction {
+        width: 100%;
+        font-family: var(--vscode-editor-font-family);
+        font-size: var(--font-size);
+      }
+
+      .instruction-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+      }
+
+      .model-selection-footer {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+        flex: 1;
+      }
+
+      /* Select styles from shared selectStyles module */
+      /* Component-specific overrides only */
+      .agent-select-group {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .agent-select {
+        width: 100%;
+      }
+
+      .agent-select--hidden {
+        display: none;
+      }
+
+      .agent-select--active {
+        display: block;
+      }
+
+      .recording {
+        color: var(--vscode-errorForeground);
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+    `,
+  ];
 
   /** Current session type */
   @property({ type: String }) sessionType: SessionType = SESSION_TYPES.TOOL_USE;
@@ -360,7 +310,7 @@ export class InstructionPanel extends LitElement {
               icon="archive"
               label="Pack output to History"
               title="Pack the output for this agent into the History folder"
-              style=${this.debugMode ? '' : 'display: none'}
+              style=${styleMap({ display: this.debugMode ? '' : 'none' })}
               @click=${() => this.handleAction('pack')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
@@ -368,7 +318,7 @@ export class InstructionPanel extends LitElement {
               icon="trash"
               label="Clean output"
               title="Clean the output for this agent"
-              style=${this.debugMode ? '' : 'display: none'}
+              style=${styleMap({ display: this.debugMode ? '' : 'none' })}
               @click=${() => this.handleAction('clean')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
@@ -380,9 +330,10 @@ export class InstructionPanel extends LitElement {
             ></vscode-toolbar-button>
             <vscode-progress-ring
               id="polishProgressContainer"
-              style=${this.isPolishing
-                ? 'display: block; width: 16px; height: 16px'
-                : 'display: none'}
+              style=${styleMap({
+                display: this.isPolishing ? 'block' : 'none',
+                ...(this.isPolishing && { width: '16px', height: '16px' }),
+              })}
             ></vscode-progress-ring>
             <vscode-toolbar-button
               id="recordInstructionButton"
