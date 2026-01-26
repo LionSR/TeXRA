@@ -132,17 +132,18 @@ const webviewConfigs = [
         // is handled via optimization.usedExports instead.
       },
       {
-        // CSS as string with ?inline suffix (Vite compatibility)
-        // Uses Webpack 5 built-in asset/source (replaces raw-loader)
+        // CSS as string with ?inline suffix (for Lit css`` templates)
+        // Returns raw CSS text for use with unsafeCSS()
         test: /\.css$/,
         resourceQuery: /inline/,
         type: 'asset/source',
       },
       {
-        // Standard CSS imports (no ?inline) - also return as string for consistency
+        // Side-effect CSS imports - inject into document head at runtime
+        // Used for: import 'katex/dist/katex.min.css', import './styles/index.css'
         test: /\.css$/,
         resourceQuery: { not: [/inline/] },
-        type: 'asset/source',
+        use: ['style-loader', 'css-loader'],
       },
     ],
   },
