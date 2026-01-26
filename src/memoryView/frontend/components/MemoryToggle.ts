@@ -29,6 +29,11 @@ export class MemoryToggle extends LitElement {
   @property({ type: Boolean }) enabled = false;
   @property({ type: Boolean }) disabled = false;
 
+  protected override async firstUpdated(): Promise<void> {
+    await customElements.whenDefined('vscode-checkbox');
+    this.requestUpdate();
+  }
+
   private handleChange = (event: Event): void => {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
