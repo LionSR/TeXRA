@@ -15,13 +15,13 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 ## Status Summary
 
-> **Overall Phase 6 Completion: ~95%**
+> **Overall Phase 6 Completion: ~98%**
 >
-> - ✅ Component extraction complete (FileSelectGroup, BannerGroup, LatexDiffsSection)
+> - ✅ Component extraction complete (5 components extracted)
 > - ✅ `.map()` → `repeat()` migration complete (5 files)
 > - ✅ Derived state memoization complete (willUpdate pattern with @state)
-> - ✅ MainApp integration complete (FileSelectGroup, BannerGroup, LatexDiffsSection)
-> - ✅ MainApp.ts reduced from 2,900 to 2,531 lines (369 lines removed)
+> - ✅ MainApp integration complete (all 5 components integrated)
+> - ✅ MainApp.ts reduced from 2,924 to 2,313 lines (611 lines, 21% reduction)
 > - ⬜ Inline arrow function extraction (deferred - low priority)
 > - ⬜ TaskGroupDomManager refactor (deferred - low priority)
 
@@ -30,11 +30,15 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Extract FileSelectGroup | ✅ Complete | Component created in `src/webview/frontend/components/` |
 | Extract BannerGroup components | ✅ Complete | Component created with all 5 banner types |
 | Extract LatexDiffsSection | ✅ Complete | Component created with all controls |
+| Extract InstructionPanel | ✅ Complete | Component with session toggle, instruction input, agent/model selectors |
+| Extract OutputFilesSection | ✅ Complete | Component with collapsible file list and actions |
 | Integrate FileSelectGroup | ✅ Complete | Replaced renderFileSelect() calls for input/ref/aux/media files |
 | Integrate BannerGroup | ✅ Complete | Replaced renderBanners() in MainApp |
 | Integrate LatexDiffsSection | ✅ Complete | Replaced renderLatexdiffsSection() in MainApp |
+| Integrate InstructionPanel | ✅ Complete | Replaced instruction box section in MainApp |
+| Integrate OutputFilesSection | ✅ Complete | Replaced output files section in MainApp |
 | Create events.ts | ✅ Complete | MainViewEvents factory for typed event dispatch |
-| Delete unused methods | ✅ Complete | Removed renderFileSelect, renderAutoExtractMenu, renderToolConfigMenu, buildOptionsHtml, toggleMenu |
+| Delete unused methods | ✅ Complete | Removed renderFileSelect, renderFileList, renderAutoExtractMenu, etc. |
 | Convert 37 inline arrows | ⬜ Deferred | Low priority - components use class methods |
 | Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM |
 | renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
@@ -59,32 +63,27 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Event handlers | 450-700 | Click, input, form handlers |
 | State management | 100-296 | @state properties |
 
-**Target Structure:**
+**Current Structure (implemented):**
 
 ```
 src/webview/frontend/
-├── MainApp.ts                    # Root: message routing, orchestration (~500 lines)
-├── store.ts                      # State types, schemas
-├── constants.ts                  # Commands, element IDs
-├── events.ts                     # Typed event factories
-├── handlers/
-│   └── messageHandlers.ts        # Registry-based message handling with Zod validation
+├── MainApp.ts                    # Root: message routing, orchestration (~2,313 lines)
+├── constants.ts                  # Session types, element IDs, file types
+├── events.ts                     # MainViewEvents factory for typed event dispatch
+├── pasteHandler.ts               # Image paste handling
+├── styles.ts                     # MainView-specific styles
 └── components/
-    ├── FileSelector/
-    │   ├── FileSelector.ts       # Container with drag-drop
-    │   ├── FileSelectGroup.ts    # Categorized file lists
-    │   └── FileItem.ts           # Single file with remove button
-    ├── BannerGroup/
-    │   ├── ApiKeyBanner.ts       # API key missing warning
-    │   ├── AgentConfigBanner.ts  # Agent configuration notice
-    │   └── WarningBanner.ts      # Generic warning component
-    ├── InstructionPanel/
-    │   ├── InstructionPanel.ts   # Instruction input + recording
-    │   └── RecordingButton.ts    # Audio recording UI
-    ├── AgentSelector.ts          # Agent + model dropdowns
-    ├── ActionButtons.ts          # Run, Polish, etc.
-    └── LatexDiffsSection.ts      # Diff configuration panel
+    ├── index.ts                  # Barrel export for all components
+    ├── FileSelectGroup.ts        # File selection with dropdown, multi-file list, checkboxes (~500 lines)
+    ├── BannerGroup.ts            # API key, agent config, dependency, login banners (~350 lines)
+    ├── LatexDiffsSection.ts      # Diff configuration panel (~320 lines)
+    ├── InstructionPanel.ts       # Session toggle, instruction textarea, agent/model selectors (~500 lines)
+    └── OutputFilesSection.ts     # Collapsible output files list (~250 lines)
 ```
+
+**Remaining opportunities (deferred):**
+- Message handler registry extraction (~200 lines potential)
+- Data-driven file selector configs (reduce 4 repetitive configs)
 
 **Extraction priority:**
 
