@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - shared schemas
-import { MainViewPersistedStateSchema } from '@shared/schemas/mainViewState';
+import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - shared commands
 import { COMMON_COMMANDS } from '@common/webview/commands';
@@ -19,7 +19,7 @@ export const SetDebugModeMessageSchema = z.object({
 
 export const StateRestoreMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.STATE_RESTORE),
-  state: MainViewPersistedStateSchema.partial().nullish(),
+  state: MainViewPersistedStateSchema.nullish(),
   executeImmediately: z.boolean().nullish(),
   isResetOperation: z.boolean().nullish(),
 });

@@ -126,11 +126,11 @@ export const FileSelectConfigSchema = z.object({
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
-export const CheckboxValuesSchema = z.object({
-  autoExtractFigure: z.boolean(),
-  autoExtractTikzFigure: z.boolean(),
-  autoCompileInputPdf: z.boolean(),
-  attachTeXCount: z.boolean(),
-  attachDiagnostics: z.boolean(),
+export const CheckboxValuesSchema = MainViewPersistedStateSchema.pick({
+  autoExtractFigure: true,
+  autoExtractTikzFigure: true,
+  autoCompileInputPdf: true,
+  attachTeXCount: true,
+  attachDiagnostics: true,
 });
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;

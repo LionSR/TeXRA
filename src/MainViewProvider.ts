@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - shared schemas
-import { MainViewPersistedStateSchema } from '@shared/schemas/mainViewState';
+import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - agent
 import { refresh, computeAgentOptions } from '@agent/index';
