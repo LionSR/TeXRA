@@ -38,12 +38,7 @@ export function formatUserMessage(
   return renderToElement(html`
     <div class="user-message-container">
       <div class="user-message">
-        <div class="user-message-header">
-          <i class="codicon codicon-comment user-message-icon"></i>
-          <span class="user-message-timestamp" title=${tooltipTimestamp}
-            >${timeDisplay}</span
-          >
-        </div>
+        <div class="user-message-header"><i class="codicon codicon-comment user-message-icon"></i> <span class="user-message-timestamp" title=${tooltipTimestamp}>${timeDisplay}</span></div>
         <div class="user-message-content" data-log-id=${ifDefined(logId)}>
           ${text ?? ''}
         </div>
@@ -65,26 +60,15 @@ export function formatProgressStatus(
   const detailText = stringifyWithLanguage(data).text;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
 
-  return renderToElement(html`
-    <div
+  // prettier-ignore
+  return renderToElement(html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
-    >
-      <div class="log-line">
-        <span class="timestamp" title=${tooltipTimestamp}
-          >${emoji} [${timeDisplay}]</span
-        >
-        <span class=${`message-${level}`}>${summaryText}</span>
-      </div>
-      ${when(
+    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${emoji} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
         detailText,
-        () => html`
-          <pre class=${`log-line message-${level}`}>${detailText}</pre>
-        `,
-      )}
-    </div>
-  `);
+        () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
+      )}</div>`);
 }
 
 // Error detail fields in display order (matches ProviderError schema)
@@ -197,25 +181,14 @@ export function formatDefaultLogMessage(
 
   const timestampContent = verbose ? `${emoji} [${timeDisplay}]` : emoji;
 
-  return renderToElement(html`
-    <div
+  // prettier-ignore
+  return renderToElement(html`<div
       class="log-line"
       data-log-id=${id}
       data-group-id=${ifDefined(groupId)}
       data-full-timestamp=${fullTimestamp}
-    >
-      <span class="timestamp" title=${tooltipTimestamp}
-        >${timestampContent}</span
-      >
-      ${when(
+    ><span class="timestamp" title=${tooltipTimestamp}>${timestampContent}</span>${when(
         verbose,
-        () => html`
-          <span class=${`level-${level}`}
-            >${level.toUpperCase().padEnd(8)}</span
-          >
-        `,
-      )}
-      <span class=${`message-${level}`}>${text}</span>
-    </div>
-  `);
+        () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,
+      )} <span class=${`message-${level}`}>${text}</span></div>`);
 }

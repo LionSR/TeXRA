@@ -12,6 +12,14 @@ log-list {
   overflow: hidden;
 }
 
+/* vscode-scrollable must fill its parent and be the scrolling container */
+task-group-list > vscode-scrollable,
+log-list > vscode-scrollable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* Non-scrolling elements should not shrink or grow */
 /* Note: Shadow DOM components (instruction-panel, todo-list, follow-up-input)
    control their own display via :host styles - don't override here */
@@ -25,17 +33,15 @@ followup-section {
 
 /* Flex layout hints for Shadow DOM components (flex-shrink only, not display) */
 instruction-panel,
+prompt-overlay,
 todo-list,
 follow-up-input {
   flex-shrink: 0;
 }
 
-/* Hide empty Light DOM components */
-usage-panel:empty,
-file-list:empty,
-followup-section:empty {
-  display: none;
-}
+/* Note: Shadow DOM components handle their own visibility via render() returning `nothing`.
+   Do NOT use :empty selector here - it incorrectly hides Shadow DOM components
+   because their content is in shadow root, not light DOM children. */
 
 .log-container {
   flex: 1 1 auto;

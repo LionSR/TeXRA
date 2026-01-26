@@ -23,7 +23,6 @@
 import {
   LitElement,
   html,
-  css,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
@@ -64,11 +63,11 @@ interface RunDerivedValues {
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends LitElement {
-  static styles = css`
-    :host {
-      display: contents;
-    }
-  `;
+  // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
+  // can style the task-group-list and its content
+  protected createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   @property({ type: Object }) state!: WorkflowStreamState;
   @property({ type: Object }) streamInfo!: StreamTabInfo;

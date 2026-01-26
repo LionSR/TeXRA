@@ -20,6 +20,12 @@ export const profileViewStyles: CSSResult = css`
     margin-bottom: var(--spacing-xlarge);
   }
 
+  .profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--spacing-medium);
+  }
+
   .info-row {
     margin: var(--spacing-medium) 0;
     display: flex;
@@ -218,21 +224,63 @@ export const profileViewStyles: CSSResult = css`
     margin-top: var(--spacing-medium);
   }
 
+  .model-access-error {
+    margin-top: var(--spacing-medium);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground);
+    border: var(--border-thin) solid var(--vscode-inputValidation-errorBorder);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+  }
+
   .model-access-summary {
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-textBlockQuote-background);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
     cursor: pointer;
+    list-style: none;
+  }
+
+  .model-access-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .model-access-summary::after {
+    content: '';
+    margin-left: auto;
+    border: solid var(--color-text-secondary);
+    border-width: 0 1.5px 1.5px 0;
+    padding: 3px;
+    transform: rotate(45deg);
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+  }
+
+  .model-access-info[open] .model-access-summary::after {
+    transform: rotate(-135deg);
+  }
+
+  .model-access-summary:hover {
+    background: var(--vscode-list-hoverBackground);
   }
 
   .separator {
-    opacity: 0.6;
+    opacity: 0.5;
   }
 
   .models-list-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-small);
-    margin-top: var(--spacing-medium);
+    margin-top: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-textBlockQuote-background);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
   }
 `;
