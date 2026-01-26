@@ -33,17 +33,15 @@ followup-section {
 
 /* Flex layout hints for Shadow DOM components (flex-shrink only, not display) */
 instruction-panel,
+prompt-overlay,
 todo-list,
 follow-up-input {
   flex-shrink: 0;
 }
 
-/* Hide empty Light DOM components */
-usage-panel:empty,
-file-list:empty,
-followup-section:empty {
-  display: none;
-}
+/* Note: Shadow DOM components handle their own visibility via render() returning `nothing`.
+   Do NOT use :empty selector here - it incorrectly hides Shadow DOM components
+   because their content is in shadow root, not light DOM children. */
 
 .log-container {
   flex: 1 1 auto;
