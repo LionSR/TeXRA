@@ -16,7 +16,6 @@ declare module '@common/modules/domUtils.js' {
   export function safeGetElementById(id: string): HTMLElement | null;
 }
 
-
 declare module '@common/modules/RecordingButtonManager.js' {
   export class RecordingButtonManager {
     constructor(
@@ -62,10 +61,3 @@ declare module '@common/modules/templateUtils.js' {
   ): HTMLElement | null;
 }
 
-declare module '@common/constants/todoStatus' {
-  export const TODO_STATUS: {
-    PENDING: string;
-    IN_PROGRESS: string;
-    COMPLETED: string;
-  };
-}
