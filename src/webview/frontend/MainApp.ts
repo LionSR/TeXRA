@@ -10,15 +10,6 @@ import Sortable from 'sortablejs';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 import { WebviewStateManager } from '@shared/state';
-import {
-  decorateAgentOptions,
-  decorateModelOptions,
-  markOptionAsSelected,
-  updateAgentSelectTooltip,
-} from '@shared/utils/dropdown';
-// Note: getSelectedOptionElement and isSelectLikeElement were removed -
-// they required access to select elements which are now in child
-// component shadow DOMs.
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
@@ -207,19 +198,7 @@ export class MainApp extends BaseWebviewApp {
   private instructionSaveTimer: number | null = null;
 
   // Note: model/agent selects are inside InstructionPanel's shadow DOM.
-  // These @query decorators only find elements in MainApp's shadow root,
-  // not in child component shadow DOMs. The decoration logic in updated()
-  // currently doesn't work and should be moved to InstructionPanel.
-  // TODO: Phase 9 - Move decoration to InstructionPanel when converting
-  // to Lit-native data structures (removing unsafeHTML).
-  @query('#model')
-  declare private modelSelectElement: HTMLElement | null;
-
-  @query('#workflowAgent')
-  declare private workflowAgentElement: HTMLElement | null;
-
-  @query('#toolUseAgent')
-  declare private toolUseAgentElement: HTMLElement | null;
+  // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
 
   private readonly stateManager =
     new WebviewStateManager<MainViewPersistedState>(
@@ -431,43 +410,11 @@ export class MainApp extends BaseWebviewApp {
   }
 
   protected override updated(changed: Map<string, unknown>): void {
-    if (changed.has('modelOptionsHtml')) {
-      const modelSelect = this.modelSelectElement;
-      if (modelSelect) {
-        decorateModelOptions(modelSelect);
-        this.updateModelApiKeyBanner(modelSelect);
-      }
-    }
-
-    if (changed.has('workflowAgentOptionsHtml')) {
-      const select = this.workflowAgentElement;
-      if (select) {
-        decorateAgentOptions(select);
-        updateAgentSelectTooltip(select);
-      }
-    }
-
-    if (changed.has('toolUseAgentOptionsHtml')) {
-      const select = this.toolUseAgentElement;
-      if (select) {
-        decorateAgentOptions(select);
-        updateAgentSelectTooltip(select);
-      }
-    }
-
     if (changed.has('sessionType')) {
       this.refreshInstructionPlaceholder(false);
     }
-
-    if (changed.has('workflowAgent') || changed.has('toolUseAgent')) {
-      // Use existing @query references instead of querySelector
-      if (this.workflowAgentElement) {
-        updateAgentSelectTooltip(this.workflowAgentElement);
-      }
-      if (this.toolUseAgentElement) {
-        updateAgentSelectTooltip(this.toolUseAgentElement);
-      }
-    }
+    // Note: Option decoration is handled declaratively in selectTemplates.ts
+    // via renderAgentOptions/renderModelOptions.
   }
 
   private blockSave(): void {
@@ -804,10 +751,7 @@ export class MainApp extends BaseWebviewApp {
 
     if (!this.isGitRepo) {
       this.commit = '';
-    } else if (
-      !this.commit ||
-      !this.hasOptionValue(this.buildCommitOptions(), this.commit)
-    ) {
+    } else if (!this.commit || !this.hasCommitValue(this.commit)) {
       this.commit = 'HEAD';
     }
     this.saveState();
@@ -1848,28 +1792,17 @@ export class MainApp extends BaseWebviewApp {
     this.dependencyBanner = { visible: false };
   }
 
-  private hasOptionValue(optionsHtml: string, value: string): boolean {
-    if (!value) {
-      return false;
-    }
-    return optionsHtml.includes(`value=\"${value}\"`);
-  }
-
-  private buildCommitOptions(): string {
+  /** Check if a commit hash exists in the options array. */
+  private hasCommitValue(value: string): boolean {
+    if (!value) return false;
     const commits = this.fileOptions.commit ?? [];
-    if (!this.isGitRepo) {
-      return '<vscode-option value="">Not a Git repository</vscode-option>';
-    }
     const entries = commits.some((commit) => commit.startsWith('HEAD'))
       ? commits
       : ['HEAD', ...commits];
-    const optionsHtml = entries
-      .map((commit) => {
-        const [hash] = commit.split(': ');
-        return `<vscode-option value="${hash}">${commit}</vscode-option>`;
-      })
-      .join('\n');
-    return markOptionAsSelected(optionsHtml, this.commit);
+    return entries.some((commit) => {
+      const [hash] = commit.split(': ');
+      return hash === value;
+    });
   }
 
   /** Get single file value for a file type */
