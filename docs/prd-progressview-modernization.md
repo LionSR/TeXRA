@@ -64,9 +64,12 @@ NODE_OPTIONS=--max-old-space-size=8192 npm run compile
 | ----------- | -------------------------------------------- | -------------- | ---------------------------------------------------------- |
 | **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
-| **Phase 3** | ProgressView stabilization + native Lit      | 🟡 In Progress | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
-| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete\*  | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
-| **Phase 5** | MainView refactoring + message contracts     | ⬜ Not Started | [prd-progressview-phase5.md](./prd-progressview-phase5.md) |
+| **Phase 3** | ProgressView stabilization + native Lit      | ✅ Complete    | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete    | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 5** | Regression fixes + Zod validation            | ✅ 99%         | [prd-progressview-phase5.md](./prd-progressview-phase5.md) |
+| **Phase 6** | Component extraction + performance           | ✅ Complete    | [prd-progressview-phase6.md](./prd-progressview-phase6.md) |
+| **Phase 7** | Zod-native types & MainApp decomposition     | ⬜ Not Started | [prd-mainview-phase7.md](./prd-mainview-phase7.md)         |
+| **Phase 8** | Lit-native improvements                      | ⬜ Not Started | [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)     |
 
 \*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
 
