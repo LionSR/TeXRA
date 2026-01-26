@@ -15,13 +15,14 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 ## Status Summary
 
-> **Overall Phase 6 Completion: ~75%**
+> **Overall Phase 6 Completion: ~85%**
 >
 > - ✅ Component extraction complete (FileSelectGroup, BannerGroup, LatexDiffsSection)
 > - ✅ `.map()` → `repeat()` migration complete (5 files)
 > - ✅ Derived state memoization complete (willUpdate pattern with @state)
+> - ✅ MainApp integration complete (BannerGroup, LatexDiffsSection)
+> - ⬜ FileSelectGroup integration (deferred - existing code works fine)
 > - ⬜ Inline arrow function extraction (deferred - low priority)
-> - ⬜ MainApp integration (components created, pending integration)
 > - ⬜ TaskGroupDomManager refactor (deferred - low priority)
 
 | Task | Status | Impact |
@@ -29,6 +30,8 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Extract FileSelectGroup | ✅ Complete | Component created in `src/webview/frontend/components/` |
 | Extract BannerGroup components | ✅ Complete | Component created with all 5 banner types |
 | Extract LatexDiffsSection | ✅ Complete | Component created with all controls |
+| Integrate BannerGroup | ✅ Complete | Replaced renderBanners() in MainApp |
+| Integrate LatexDiffsSection | ✅ Complete | Replaced renderLatexdiffsSection() in MainApp |
 | Create events.ts | ✅ Complete | MainViewEvents factory for typed event dispatch |
 | Convert 37 inline arrows | ⬜ Deferred | Low priority - components use class methods |
 | Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM |
@@ -446,8 +449,9 @@ Fix known bugs before refactoring to establish stable baseline.
 
 | Metric | Before | Current | Target |
 |--------|--------|---------|--------|
-| MainApp.ts lines | 2,900 | 2,900 | ~500 (pending integration) |
+| MainApp.ts lines | 2,900 | 2,783 ✅ | ~500 (FileSelectGroup integration remaining) |
 | Extracted components | 0 | 3 ✅ | 6+ |
+| Integrated components | 0 | 2 ✅ | BannerGroup, LatexDiffsSection |
 | Events/types infrastructure | 0 | 1 ✅ | events.ts complete |
 | Inline arrow functions | 37 | 37 | 0 (deferred) |
 | Formatters using Lit templates | 0 | 14 ✅ | 14 (complete) |
@@ -457,13 +461,13 @@ Fix known bugs before refactoring to establish stable baseline.
 
 ### Components Created
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `FileSelectGroup.ts` | `src/webview/frontend/components/` | File selection with menus |
-| `BannerGroup.ts` | `src/webview/frontend/components/` | All 5 banner types |
-| `LatexDiffsSection.ts` | `src/webview/frontend/components/` | LaTeXDiff controls |
-| `events.ts` | `src/webview/frontend/` | MainViewEvents factory |
-| `index.ts` | `src/webview/frontend/components/` | Barrel export |
+| Component | Location | Purpose | Integrated |
+|-----------|----------|---------|------------|
+| `FileSelectGroup.ts` | `src/webview/frontend/components/` | File selection with menus | ⬜ |
+| `BannerGroup.ts` | `src/webview/frontend/components/` | All 5 banner types | ✅ |
+| `LatexDiffsSection.ts` | `src/webview/frontend/components/` | LaTeXDiff controls | ✅ |
+| `events.ts` | `src/webview/frontend/` | MainViewEvents factory | ✅ |
+| `index.ts` | `src/webview/frontend/components/` | Barrel export | ✅ |
 
 ---
 
