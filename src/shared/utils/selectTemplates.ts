@@ -139,11 +139,11 @@ export function renderAgentOption(
     >
       ${opt.label}${opt.isMultiple
         ? html`<span class="agent-icon">
-            ${AGENT_DECORATORS.properties.multipleOutputs.unicode}</span
+            ${' '}${AGENT_DECORATORS.properties.multipleOutputs.unicode}</span
           >`
         : nothing}${opt.isRemote
         ? html`<span class="agent-icon">
-            ${AGENT_DECORATORS.properties.remote.unicode}</span
+            ${' '}${AGENT_DECORATORS.properties.remote.unicode}</span
           >`
         : nothing}
     </vscode-option>
