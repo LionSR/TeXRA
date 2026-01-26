@@ -8,6 +8,9 @@ import { designTokens } from '@shared/styles';
 // Local imports - profile view styles
 import { profileViewStyles } from '../styles';
 
+// Local imports - profile view events
+import { ProfileViewEvents } from '../events';
+
 @customElement('profile-info')
 export class ProfileInfo extends LitElement {
   static styles = [designTokens, profileViewStyles];
@@ -16,6 +19,11 @@ export class ProfileInfo extends LitElement {
   @property({ type: String }) userId = '';
   @property({ type: String }) tier = 'free';
   @property({ type: String }) accessExpiresAt: string | null = null;
+  @property({ type: Boolean }) showSignOut = false;
+
+  private handleSignOut = (): void => {
+    this.dispatchEvent(ProfileViewEvents.signOut());
+  };
 
   private formatExpiration(): string | null {
     if (!this.accessExpiresAt) return null;
@@ -50,6 +58,15 @@ export class ProfileInfo extends LitElement {
               <div class="info-row">
                 <span class="label">Access Expires:</span>
                 <span class="value">${expiration}</span>
+              </div>
+            `
+          : ''}
+        ${this.showSignOut
+          ? html`
+              <div class="profile-actions">
+                <vscode-button @click=${this.handleSignOut}>
+                  Sign out
+                </vscode-button>
               </div>
             `
           : ''}
