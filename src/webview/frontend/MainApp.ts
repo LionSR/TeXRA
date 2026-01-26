@@ -27,11 +27,9 @@ import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
 // Local imports - shared schemas
 import {
-  MainViewMessageSchema,
-  type MainViewMessage,
-} from '@shared/schemas/mainViewMessages';
-import {
+  mainViewMessages,
   MainViewPersistedStateSchema,
+  type MainViewMessage,
   type MainViewPersistedState,
   type ApiKeyBannerState,
   type AgentConfigBannerState,
@@ -407,7 +405,7 @@ export class MainApp extends BaseWebviewApp {
   }
 
   protected handleMessage(raw: unknown): void {
-    const result = MainViewMessageSchema.safeParse(raw);
+    const result = mainViewMessages.MainViewMessageSchema.safeParse(raw);
     if (!result.success) {
       this.logSchemaError(
         '[MainApp] Main view message validation failed.',
@@ -958,9 +956,7 @@ export class MainApp extends BaseWebviewApp {
       return;
     }
 
-    const parsed = MainViewPersistedStateSchema.partial().safeParse(
-      message.state,
-    );
+    const parsed = MainViewPersistedStateSchema.safeParse(message.state);
     if (!parsed.success) {
       this.logSchemaError(
         '[MainApp] State restore validation failed.',
@@ -968,7 +964,7 @@ export class MainApp extends BaseWebviewApp {
       );
       return;
     }
-    const state = MainViewPersistedStateSchema.parse(parsed.data);
+    const state = parsed.data;
     this.blockSave();
     try {
       this.sessionType = state.sessionType;
