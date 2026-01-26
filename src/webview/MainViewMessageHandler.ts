@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { computeAgentOptions } from '@agent/index';
+import { computeAgentOptions, computeAgentOptionsData } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - webview
@@ -12,7 +12,10 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { computeModelOptions } from '@model/computeModelOptions';
+import {
+  computeModelOptions,
+  computeModelOptionsData,
+} from '@model/computeModelOptions';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
@@ -426,20 +429,31 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(_message, webviewView);
     try {
-      // Fetch options and auth status concurrently
-      const [modelOptions, agentOptions, authStatus] = await Promise.all([
+      // Fetch options (both HTML and typed data) and auth status concurrently
+      const [
+        modelOptions,
+        modelOptionsData,
+        agentOptions,
+        agentOptionsData,
+        authStatus,
+      ] = await Promise.all([
         computeModelOptions(),
+        computeModelOptionsData(),
         computeAgentOptions(),
+        computeAgentOptionsData(),
         getAuthStatus(),
       ]);
 
+      // Send both HTML (legacy) and typed data (Lit-native)
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         options: modelOptions,
+        optionsData: modelOptionsData,
       });
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         options: agentOptions,
+        optionsData: agentOptionsData,
       });
 
       // Show login banner if not authenticated and banner not dismissed

@@ -710,3 +710,83 @@ export function computeAgentOptionsSync(): AgentOptionsPayload {
     ),
   };
 }
+
+// =============================================================================
+// TYPED OPTIONS BUILDER (Lit-native)
+// =============================================================================
+
+/**
+ * Typed agent option for Lit-native rendering.
+ * Replaces HTML string building with structured data.
+ */
+export interface AgentOptionData {
+  value: string;
+  label: string;
+  isMultiple?: boolean;
+  isToolUse?: boolean;
+  isRemote?: boolean;
+  isCustom?: boolean;
+  description?: string;
+}
+
+export interface AgentOptionsDataPayload {
+  workflow: AgentOptionData[];
+  toolUse: AgentOptionData[];
+}
+
+/**
+ * Convert AgentEntry to typed option data.
+ */
+function entryToOptionData(entry: AgentEntry): AgentOptionData {
+  const key = `${entry.source}:${entry.name}`;
+  return {
+    value: key,
+    label: entry.name,
+    isMultiple: Boolean(entry.multiplePath),
+    isToolUse: entry.category === AgentCategory.ToolUse,
+    isRemote: entry.source === 'remote',
+    isCustom: entry.source === 'custom',
+    description: entry.description,
+  };
+}
+
+/**
+ * Sort entries: default agent first, then alphabetically.
+ */
+function sortAgentEntries(
+  entries: AgentEntry[],
+  defaultName: string,
+): AgentEntry[] {
+  const defaultEntry = entries.find((e) => e.name === defaultName);
+  return [...entries].sort((a, b) => {
+    if (a === defaultEntry) return -1;
+    if (b === defaultEntry) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/**
+ * Build typed agent options data for Lit-native rendering.
+ */
+export function buildAgentOptionsData(): AgentOptionsDataPayload {
+  const visibleWorkflow = getVisibleWorkflowAgents();
+  const visibleToolUse = getVisibleToolUseAgents();
+
+  return {
+    workflow: sortAgentEntries(visibleWorkflow, DEFAULT_WORKFLOW_AGENT).map(
+      entryToOptionData,
+    ),
+    toolUse: sortAgentEntries(visibleToolUse, DEFAULT_TOOL_USE_AGENT).map(
+      entryToOptionData,
+    ),
+  };
+}
+
+/**
+ * Async version - ensures cache is loaded first.
+ * Returns typed data for Lit-native rendering.
+ */
+export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
+  await ensureAgentsLoaded();
+  return buildAgentOptionsData();
+}

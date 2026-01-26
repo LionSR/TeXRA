@@ -10,11 +10,9 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { when } from 'lit/directives/when.js';
 
-// Local imports - shared utils
-import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
+// Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -396,18 +394,22 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
-  private buildOptionsHtml(): string {
-    const htmlOptions = [...this.options]
-      .sort((a, b) => a.localeCompare(b))
-      .map(
-        (value) => `<vscode-option value="${value}">${value}</vscode-option>`,
-      )
-      .join('\n');
-    const withPlaceholderHtml = withPlaceholder(
-      htmlOptions,
-      '<vscode-option value="">None</vscode-option>',
-    );
-    return markOptionAsSelected(withPlaceholderHtml, this.selectedValue);
+  private renderFileOptions(): TemplateResult {
+    const sortedOptions = [...this.options].sort((a, b) => a.localeCompare(b));
+    return html`
+      <vscode-option value="" ?selected=${this.selectedValue === ''}
+        >None</vscode-option
+      >
+      ${repeat(
+        sortedOptions,
+        (opt) => opt,
+        (opt) => html`
+          <vscode-option value=${opt} ?selected=${opt === this.selectedValue}>
+            ${opt}
+          </vscode-option>
+        `,
+      )}
+    `;
   }
 
   private renderToolConfigMenu(): TemplateResult {
@@ -655,7 +657,7 @@ export class FileSelectGroup extends LitElement {
             this.handleFileChange(target.value);
           }}
         >
-          ${unsafeHTML(this.buildOptionsHtml())}
+          ${this.renderFileOptions()}
         </vscode-single-select>
         <div
           id="${this.listId}Container"
