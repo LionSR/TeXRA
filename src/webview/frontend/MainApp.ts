@@ -2,7 +2,6 @@
 import { html, type TemplateResult } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import Sortable from 'sortablejs';
 
@@ -15,7 +14,6 @@ import {
   decorateModelOptions,
   markOptionAsSelected,
   updateAgentSelectTooltip,
-  withPlaceholder,
 } from '@shared/utils/dropdown';
 import {
   getSelectedOptionElement,
@@ -54,6 +52,8 @@ import { handleImagePaste } from './pasteHandler';
 import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
+import './components/InstructionPanel';
+import './components/OutputFilesSection';
 
 // Local imports - main view component types
 import type {
@@ -61,6 +61,11 @@ import type {
   ApiKeyBannerState,
   AgentConfigBannerState,
   DependencyBannerState,
+  SessionTypeChangeDetail,
+  AgentChangeDetail,
+  ModelChangeDetail,
+  InstructionChangeDetail,
+  ActionDetail,
 } from './components';
 import type {
   FileSelectChangeDetail,
@@ -1971,6 +1976,73 @@ export class MainApp extends BaseWebviewApp {
     postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS);
   };
 
+  // InstructionPanel component handlers
+  private handleComponentSessionTypeChange = (
+    e: CustomEvent<SessionTypeChangeDetail>,
+  ): void => {
+    this.handleSessionTypeChange(e.detail.value);
+  };
+
+  private handleComponentAgentChange = (
+    e: CustomEvent<AgentChangeDetail>,
+  ): void => {
+    // Get the select element for decorator updates
+    const selectId =
+      e.detail.sessionType === SESSION_TYPES.WORKFLOW
+        ? 'workflowAgent'
+        : 'toolUseAgent';
+    const selectElement = this.renderRoot.querySelector(
+      `#${selectId}`,
+    ) as HTMLElement | null;
+    this.handleAgentChange(e.detail.sessionType, e.detail.value, selectElement);
+  };
+
+  private handleComponentModelChange = (
+    e: CustomEvent<ModelChangeDetail>,
+  ): void => {
+    this.handleModelChange(e.detail.value);
+  };
+
+  private handleComponentInstructionInput = (
+    e: CustomEvent<InstructionChangeDetail>,
+  ): void => {
+    this.instruction = e.detail.value;
+    this.scheduleInstructionSave();
+  };
+
+  private handleComponentPanelAction = (e: CustomEvent<ActionDetail>): void => {
+    switch (e.detail.action) {
+      case 'pack':
+        this.handlePackClean('pack');
+        break;
+      case 'clean':
+        this.handlePackClean('clean');
+        break;
+      case 'polish':
+        this.handlePolishInstruction();
+        break;
+      case 'record':
+        this.handleRecordingToggle();
+        break;
+      case 'erase':
+        this.instruction = '';
+        this.saveState();
+        break;
+    }
+  };
+
+  private handleComponentExecute = (): void => {
+    this.executeAgent();
+  };
+
+  private handleComponentAgentSettings = (): void => {
+    this.handleAgentConfigAction('edit');
+  };
+
+  private handleComponentModelSettings = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
+  };
+
   // =========================================================================
   // Existing Handler Methods
   // =========================================================================
@@ -1980,33 +2052,6 @@ export class MainApp extends BaseWebviewApp {
       value: false,
     });
     this.dependencyBanner = { visible: false };
-  }
-
-  private renderFileList(listId: string): TemplateResult {
-    const files = this.multiFiles[listId] ?? [];
-    if (files.length === 0) {
-      if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-        return html`<div class="file-list-placeholder">
-          No extra outputs selected. Click "Add" to choose files.
-        </div>`;
-      }
-      return html`<div class="file-list-placeholder">No files selected.</div>`;
-    }
-
-    return html`${repeat(
-      files,
-      (file) => file,
-      (file) => html`
-        <div class="file-item" data-path=${file}>
-          <span class="file-name">${file}</span>
-          <span
-            class="remove-button codicon codicon-trash"
-            role="button"
-            @click=${() => this.handleRemoveFile(listId, file)}
-          ></span>
-        </div>
-      `,
-    )}`;
   }
 
   private hasOptionValue(optionsHtml: string, value: string): boolean {
@@ -2039,28 +2084,6 @@ export class MainApp extends BaseWebviewApp {
       'file-selection-group': true,
       'file-selection-group--disabled': isToolUse,
     });
-
-    const workflowOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.workflowAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
-      this.workflowAgent,
-    );
-    const toolUseOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.toolUseAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
-      this.toolUseAgent,
-    );
-    const modelOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.modelOptionsHtml,
-        '<vscode-option value="">Select model</vscode-option>',
-      ),
-      this.model,
-    );
 
     return html`
       <div class="content-wrapper">
@@ -2204,280 +2227,39 @@ export class MainApp extends BaseWebviewApp {
               @checkbox-change=${this.handleComponentCheckboxChange}
               @focus-instruction=${this.handleComponentFocusInstruction}
             ></file-select-group>
-            <div
-              class="file-select"
-              data-expanded=${String(this.outputFilesActive)}
-            >
-              <div class="file-select-header">
-                <div class="file-select-label-group">
-                  <span
-                    id="toggleOutputFiles"
-                    class="toggle-icon"
-                    title="Show or hide additional files for the agent's output"
-                    @click=${() => this.toggleListVisibility('outputFiles')}
-                  >
-                    <i
-                      class="codicon ${this.outputFilesActive
-                        ? 'codicon-chevron-up'
-                        : 'codicon-chevron-down'}"
-                    ></i>
-                  </span>
-                  <span
-                    class="optional-label"
-                    title="List the files that should receive the agent’s output"
-                    >Multiple Outputs</span
-                  >
-                </div>
-                <vscode-toolbar-container class="file-select-actions">
-                  <vscode-toolbar-button
-                    id="emptyOutputFilesButton"
-                    class="file-action-button"
-                    icon="trash"
-                    label="Clear all output files"
-                    title="Clear all output files"
-                    @click=${() => this.handleEmptyFiles('output')}
-                  ></vscode-toolbar-button>
-                  <vscode-toolbar-button
-                    id="selectOutputFilesButton"
-                    class="file-action-button"
-                    icon="add"
-                    label="Add output files"
-                    title="Add output files"
-                    @click=${() =>
-                      this.handleSelectMultipleFiles('outputFiles')}
-                  ></vscode-toolbar-button>
-                </vscode-toolbar-container>
-              </div>
-              <div
-                id="outputFilesContainer"
-                class="multiple-files-container"
-                style=${this.outputFilesActive
-                  ? 'display: block'
-                  : 'display: none'}
-              >
-                <div class="multiple-files-content">
-                  <div id="outputFiles" class="multiple-files-list">
-                    ${this.renderFileList('outputFiles')}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <output-files-section
+              .expanded=${this.outputFilesActive}
+              .files=${this.multiFiles.outputFiles ?? []}
+              @toggle-list=${this.handleComponentToggleList}
+              @empty-files=${this.handleComponentEmptyFiles}
+              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+              @remove-file=${this.handleComponentRemoveFile}
+            ></output-files-section>
           </div>
 
-          <div class="instruction-box">
-            <div class="instruction-header">
-              <div class="instruction-header-leading">
-                <div class="instruction-session-toggle">
-                  <input
-                    type="hidden"
-                    id="sessionType"
-                    .value=${this.sessionType}
-                  />
-                  <vscode-radio-group
-                    id="sessionTypeToggle"
-                    aria-label="Choose the session type"
-                    orientation="horizontal"
-                    .value=${this.sessionType}
-                    @change=${(event: Event) => {
-                      const target = event.target as HTMLInputElement | null;
-                      this.handleSessionTypeChange(target?.value ?? '');
-                    }}
-                  >
-                    <vscode-radio
-                      value="toolUse"
-                      data-session-type="toolUse"
-                      ?checked=${this.sessionType === SESSION_TYPES.TOOL_USE}
-                      title="Chat agents execute commands and scripts"
-                    >
-                      Chat
-                    </vscode-radio>
-                    <vscode-radio
-                      value="workflow"
-                      data-session-type="workflow"
-                      ?checked=${this.sessionType === SESSION_TYPES.WORKFLOW}
-                      title="Workflow agents automate document editing tasks"
-                    >
-                      Workflow
-                    </vscode-radio>
-                  </vscode-radio-group>
-                </div>
-              </div>
-              <vscode-toolbar-container class="instruction-header-actions">
-                <vscode-toolbar-button
-                  id="packButton"
-                  icon="archive"
-                  label="Pack output to History"
-                  title="Pack the output for this agent into the History folder"
-                  style=${this.debugMode ? '' : 'display: none'}
-                  @click=${() => this.handlePackClean('pack')}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="cleanButton"
-                  icon="trash"
-                  label="Clean output"
-                  title="Clean the output for this agent"
-                  style=${this.debugMode ? '' : 'display: none'}
-                  @click=${() => this.handlePackClean('clean')}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="magicPolishButton"
-                  icon="sparkle"
-                  label="Polish instruction"
-                  title="Polish instruction text with AI"
-                  @click=${this.handlePolishInstruction}
-                ></vscode-toolbar-button>
-                <vscode-progress-ring
-                  id="polishProgressContainer"
-                  style=${this.isPolishing
-                    ? 'display: block; width: 16px; height: 16px'
-                    : 'display: none'}
-                ></vscode-progress-ring>
-                <vscode-toolbar-button
-                  id="recordInstructionButton"
-                  icon=${this.isRecording ? 'stop-circle' : 'mic'}
-                  class=${this.isRecording ? 'recording' : ''}
-                  label="Record instruction"
-                  title=${this.isRecording
-                    ? 'Stop recording'
-                    : 'Record instruction with microphone'}
-                  @click=${this.handleRecordingToggle}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="eraseInstructionButton"
-                  icon="clear-all"
-                  label="Erase instruction"
-                  title="Erase instruction"
-                  @click=${() => {
-                    this.instruction = '';
-                    this.saveState();
-                  }}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
-            </div>
-            <vscode-textarea
-              id="instruction"
-              rows="10"
-              resize="none"
-              placeholder=${this.instructionPlaceholder}
-              .value=${this.instruction}
-            ></vscode-textarea>
-            <div class="instruction-controls">
-              <div class="model-selection-footer">
-                <div class="select-group agent-select-group">
-                  <i
-                    id="agentSettingsButton"
-                    class="codicon codicon-sparkle clickable"
-                    title="Agent settings"
-                    @click=${() => this.handleAgentConfigAction('edit')}
-                  ></i>
-                  <div class="agent-select-controls">
-                    <div class="agent-select-dropdowns">
-                      <vscode-single-select
-                        id="workflowAgent"
-                        class=${classMap({
-                          'agent-select': true,
-                          'agent-select--hidden':
-                            this.sessionType !== SESSION_TYPES.WORKFLOW,
-                          'agent-select--active':
-                            this.sessionType === SESSION_TYPES.WORKFLOW,
-                        })}
-                        data-session-type="workflow"
-                        aria-label="Workflow agent"
-                        tabindex=${this.sessionType === SESSION_TYPES.WORKFLOW
-                          ? 0
-                          : -1}
-                        aria-hidden=${this.sessionType ===
-                        SESSION_TYPES.WORKFLOW
-                          ? 'false'
-                          : 'true'}
-                        position="above"
-                        .value=${this.workflowAgent}
-                        @focus=${() =>
-                          postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-                            key: 'agentPicker',
-                            text: 'Select which agent will handle your request.',
-                          })}
-                        @change=${(event: Event) => {
-                          const target =
-                            event.currentTarget as HTMLInputElement;
-                          this.handleAgentChange(
-                            SESSION_TYPES.WORKFLOW,
-                            target.value,
-                            target,
-                          );
-                        }}
-                      >
-                        ${unsafeHTML(workflowOptions)}
-                      </vscode-single-select>
-                      <vscode-single-select
-                        id="toolUseAgent"
-                        class=${classMap({
-                          'agent-select': true,
-                          'agent-select--hidden':
-                            this.sessionType !== SESSION_TYPES.TOOL_USE,
-                          'agent-select--active':
-                            this.sessionType === SESSION_TYPES.TOOL_USE,
-                        })}
-                        data-session-type="toolUse"
-                        aria-label="Tool-use agent"
-                        position="above"
-                        .value=${this.toolUseAgent}
-                        @focus=${() =>
-                          postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-                            key: 'agentPicker',
-                            text: 'Select which agent will handle your request.',
-                          })}
-                        @change=${(event: Event) => {
-                          const target =
-                            event.currentTarget as HTMLInputElement;
-                          this.handleAgentChange(
-                            SESSION_TYPES.TOOL_USE,
-                            target.value,
-                            target,
-                          );
-                        }}
-                      >
-                        ${unsafeHTML(toolUseOptions)}
-                      </vscode-single-select>
-                    </div>
-                  </div>
-                </div>
-                <div class="select-group">
-                  <i
-                    id="modelSettingsButton"
-                    class="codicon codicon-robot clickable"
-                    title="Model settings"
-                    @click=${() =>
-                      postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS)}
-                  ></i>
-                  <vscode-single-select
-                    id="model"
-                    position="above"
-                    aria-label="Model"
-                    .value=${this.model}
-                    @focus=${() =>
-                      postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-                        key: 'modelPicker',
-                        text: 'Choose the AI model used by the selected agent.',
-                      })}
-                    @change=${(event: Event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      this.handleModelChange(target.value);
-                    }}
-                  >
-                    ${unsafeHTML(modelOptions)}
-                  </vscode-single-select>
-                </div>
-              </div>
-              <vscode-button
-                id="executeButton"
-                icon="play"
-                title="Execute"
-                appearance="primary"
-                @click=${this.executeAgent}
-              ></vscode-button>
-            </div>
-          </div>
+          <instruction-panel
+            .sessionType=${this.sessionType}
+            .instruction=${this.instruction}
+            .placeholder=${this.instructionPlaceholder}
+            .workflowAgent=${this.workflowAgent}
+            .toolUseAgent=${this.toolUseAgent}
+            .model=${this.model}
+            .workflowAgentOptionsHtml=${this.workflowAgentOptionsHtml}
+            .toolUseAgentOptionsHtml=${this.toolUseAgentOptionsHtml}
+            .modelOptionsHtml=${this.modelOptionsHtml}
+            .isRecording=${this.isRecording}
+            .isPolishing=${this.isPolishing}
+            .debugMode=${this.debugMode}
+            @session-type-change=${this.handleComponentSessionTypeChange}
+            @agent-change=${this.handleComponentAgentChange}
+            @model-change=${this.handleComponentModelChange}
+            @instruction-input=${this.handleComponentInstructionInput}
+            @panel-action=${this.handleComponentPanelAction}
+            @execute=${this.handleComponentExecute}
+            @agent-settings=${this.handleComponentAgentSettings}
+            @model-settings=${this.handleComponentModelSettings}
+            @focus-instruction=${this.handleComponentFocusInstruction}
+          ></instruction-panel>
 
           <banner-group
             .apiKeyBanner=${{
