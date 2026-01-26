@@ -154,6 +154,7 @@ export class ProgressApp extends BaseWebviewApp {
           @followup-send=${this.onFollowUpSend}
           @followup-polish=${this.onFollowUpPolish}
           @followup-clear=${this.onFollowUpClear}
+          @followup-focus-complete=${this.onFollowUpFocusComplete}
         ></tool-use-stream-content>
       `;
     }
@@ -273,4 +274,23 @@ export class ProgressApp extends BaseWebviewApp {
   private onFollowupRun = (e: CustomEvent): void =>
     handleFollowupRun(e, this.createEventHandlerContext());
   private onPromptAction = (e: CustomEvent): void => handlePromptAction(e);
+
+  /**
+   * Reset focus/polish/transcription triggers after they've been consumed.
+   * Part of Lit-native Phase 9e reactive property pattern.
+   */
+  private onFollowUpFocusComplete = (): void => {
+    const streamId = this.appState.activeStreamId;
+    if (!streamId) return;
+
+    this.setStreamState(streamId, (prev) => {
+      if (prev.kind !== 'tool-use') return prev;
+      return {
+        ...prev,
+        shouldFocusFollowUp: false,
+        polishedText: null,
+        transcribedText: null,
+      };
+    });
+  };
 }
