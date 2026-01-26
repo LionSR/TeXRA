@@ -149,7 +149,7 @@ We actively welcome more native Lit approaches where they're more suitable. The 
 | `templateContent()` | ⭐⭐ Good | Reuse `<template>` elements |
 | `asyncAppend()` / `asyncReplace()` | ⭐ Niche | Streaming content (rarely needed with async/await) |
 
-**Recommendation:** Start with `guard()` - it's the most immediately useful for replacing the manual `_cached*` variables in `ToolUseStreamContent.ts` and `WorkflowStreamContent.ts`. Clear win with minimal risk.
+**Recommendation:** Start with `guard()` - it can replace ~10 private cache variables and ~30 lines of `willUpdate()` boilerplate in `ToolUseStreamContent.ts` (lines 65-98) and `WorkflowStreamContent.ts` (lines 79-108). See concrete before/after examples below.
 
 ### Known Opportunities
 
@@ -165,10 +165,59 @@ We actively welcome more native Lit approaches where they're more suitable. The 
 
 **Replace manual caching with `guard()`:**
 
-| File | Current Pattern | Native Alternative |
-|------|-----------------|-------------------|
-| `ToolUseStreamContent.ts` | `_cached*` variables | `guard([deps], () => expensiveTemplate)` |
-| `WorkflowStreamContent.ts` | `_cachedRunGroups` | `guard([runGroups], () => ...)` |
+| File | Variables | Lines |
+|------|-----------|-------|
+| `ToolUseStreamContent.ts` | `_cachedFilteredPrompts`, `_cachedRunGroups`, `_prevStreamId`, `_prevPrompts`, `_prevTaskGroups` | 65-98 |
+| `WorkflowStreamContent.ts` | `_cachedRunGroups`, `_cachedRunValues`, `_prevTaskGroups`, `_prevRunId`, `_prevState` | 79-108 |
+
+**Current pattern (manual memoization):**
+
+```typescript
+// ToolUseStreamContent.ts:65-98 - 8 private variables for manual caching
+private _cachedFilteredPrompts: PromptState[] = [];
+private _cachedRunGroups: RunGroup[] = [];
+private _prevStreamId: string | null = null;
+private _prevPrompts: PromptState[] | null = null;
+private _prevTaskGroups: TaskGroup[] | null = null;
+
+willUpdate(changedProperties: PropertyValues): void {
+  if (changedProperties.has('prompts') || changedProperties.has('streamId')) {
+    if (this._prevPrompts !== this.prompts || this._prevStreamId !== streamId) {
+      this._cachedFilteredPrompts = this.computeFilteredPrompts();
+      this._prevPrompts = this.prompts;
+      this._prevStreamId = streamId ?? null;
+    }
+  }
+  // ... similar for _cachedRunGroups
+}
+```
+
+**With `guard()` (native Lit memoization):**
+
+```typescript
+// No private cache variables needed
+import { guard } from 'lit/directives/guard.js';
+
+render(): TemplateResult {
+  return html`
+    <prompt-overlay
+      .prompt=${guard(
+        [this.prompts, this.streamId],
+        () => this.computeFilteredPrompts().at(0) ?? null
+      )}
+    ></prompt-overlay>
+
+    <stream-header
+      .runs=${guard(
+        [this.state?.taskGroups],
+        () => getRunGroups(this.state?.taskGroups ?? [])
+      )}
+    ></stream-header>
+  `;
+}
+```
+
+**Benefits:** Removes ~30 lines of manual cache management per file, eliminates `willUpdate()` boilerplate, and uses Lit's built-in dependency tracking.
 
 ### Areas Open for Native Lit Exploration
 
