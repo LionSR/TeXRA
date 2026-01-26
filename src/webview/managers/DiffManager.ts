@@ -2,12 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - shared schemas
-import {
-  LatexdiffMessageSchema,
-  LatexdiffvcMessageSchema,
-  LatexdiffvcOperationMessageSchema,
-  RequestRecentCommitsMessageSchema,
-} from '@shared/schemas/mainViewMessages';
+import { mainViewMessages } from '@shared/schemas';
 
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -25,7 +20,7 @@ export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   handleLatexdiff(message: unknown): void {
-    const parsed = LatexdiffMessageSchema.safeParse(message);
+    const parsed = mainViewMessages.LatexdiffMessageSchema.safeParse(message);
     if (!parsed.success) {
       logger.warn(CHANNEL, 'Invalid latexdiff message', {
         data: parsed.error,
@@ -40,7 +35,7 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   handleLatexdiffvc(message: unknown): void {
-    const parsed = LatexdiffvcMessageSchema.safeParse(message);
+    const parsed = mainViewMessages.LatexdiffvcMessageSchema.safeParse(message);
     if (!parsed.success) {
       logger.warn(CHANNEL, 'Invalid latexdiffvc message', {
         data: parsed.error,
@@ -55,7 +50,8 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   handleLatexdiffvcOperation(message: unknown): void {
-    const parsed = LatexdiffvcOperationMessageSchema.safeParse(message);
+    const parsed =
+      mainViewMessages.LatexdiffvcOperationMessageSchema.safeParse(message);
     if (!parsed.success) {
       logger.warn(CHANNEL, 'Invalid latexdiffvc operation message', {
         data: parsed.error,
@@ -98,7 +94,8 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   async handleRequestRecentCommits(message: unknown): Promise<void> {
-    const parsed = RequestRecentCommitsMessageSchema.safeParse(message);
+    const parsed =
+      mainViewMessages.RequestRecentCommitsMessageSchema.safeParse(message);
     if (!parsed.success) {
       logger.warn(CHANNEL, 'Invalid request recent commits message', {
         data: parsed.error,
