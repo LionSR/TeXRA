@@ -477,6 +477,7 @@ export class MainApp extends BaseWebviewApp {
     if (this.instructionSaveTimer) {
       window.clearTimeout(this.instructionSaveTimer);
       this.instructionSaveTimer = null;
+      this.saveState();
     }
     super.disconnectedCallback();
   }
@@ -2268,7 +2269,7 @@ export class MainApp extends BaseWebviewApp {
         <vscode-context-menu
           id="autoExtractOptions"
           class="dropdown-menu"
-          .show=${this.autoExtractMenuOpen}
+          ?show=${this.autoExtractMenuOpen}
         >
           <div class="dropdown-menu-content">
             <vscode-checkbox
@@ -2336,7 +2337,7 @@ export class MainApp extends BaseWebviewApp {
         <vscode-context-menu
           id="toolConfigOptions"
           class="dropdown-menu"
-          .show=${this.toolConfigMenuOpen}
+          ?show=${this.toolConfigMenuOpen}
         >
           <div class="dropdown-menu-content">
             <vscode-checkbox
