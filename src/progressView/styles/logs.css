@@ -144,6 +144,47 @@ follow-up-input {
   text-decoration: underline;
 }
 
+/* Web search result styles */
+.detail-list {
+  list-style: none;
+  margin: var(--spacing-small) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+}
+
+.file-list-summary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.web-search-link {
+  color: var(--color-text-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.web-search-link:hover {
+  text-decoration: underline;
+}
+
+/* Toggle icon for collapsible details (Light DOM) */
+.toggle-icon {
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+details[open] > summary .toggle-icon {
+  transform: rotate(90deg);
+}
+
+/* File list details styling */
+.file-list-details {
+  margin: var(--spacing-small) 0;
+}
+
 .banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
