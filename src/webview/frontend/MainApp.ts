@@ -16,10 +16,9 @@ import {
   markOptionAsSelected,
   updateAgentSelectTooltip,
 } from '@shared/utils/dropdown';
-import {
-  getSelectedOptionElement,
-  isSelectLikeElement,
-} from '@shared/utils/dom';
+// Note: getSelectedOptionElement and isSelectLikeElement were removed -
+// they required access to select elements which are now in child
+// component shadow DOMs.
 import { resolveTextareaTarget, syncHostValue } from '@shared/utils/textarea';
 
 // Local imports - shared styles
@@ -201,6 +200,12 @@ export class MainApp extends BaseWebviewApp {
   @query('#instruction')
   declare private instructionElement: HTMLElement | null;
 
+  // Note: model/agent selects are inside InstructionPanel's shadow DOM.
+  // These @query decorators only find elements in MainApp's shadow root,
+  // not in child component shadow DOMs. The decoration logic in updated()
+  // currently doesn't work and should be moved to InstructionPanel.
+  // TODO: Phase 9 - Move decoration to InstructionPanel when converting
+  // to Lit-native data structures (removing unsafeHTML).
   @query('#model')
   declare private modelSelectElement: HTMLElement | null;
 
@@ -218,11 +223,6 @@ export class MainApp extends BaseWebviewApp {
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
   private sortables: Sortable[] = [];
-  // Document click handler - can be used for click-outside detection
-  // Currently empty as menus are now managed by child components
-  private readonly documentClickHandler = (_event: MouseEvent) => {
-    // Reserved for future click-outside detection needs
-  };
   private readonly messageHandlers: Record<string, MainViewMessageHandler> = {
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) =>
       this.handleSetModelOptions(
@@ -387,12 +387,10 @@ export class MainApp extends BaseWebviewApp {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('click', this.documentClickHandler);
     this.restorePersistedState();
   }
 
   override disconnectedCallback(): void {
-    document.removeEventListener('click', this.documentClickHandler);
     this.sortables.forEach((sortable) => sortable.destroy());
     this.sortables = [];
     this.stopPlaceholderRotation();
@@ -457,14 +455,13 @@ export class MainApp extends BaseWebviewApp {
     }
 
     if (changed.has('workflowAgent') || changed.has('toolUseAgent')) {
-      AGENT_SELECT_LIST.forEach((id) => {
-        const select = this.renderRoot.querySelector(
-          `#${id}`,
-        ) as HTMLElement | null;
-        if (select) {
-          updateAgentSelectTooltip(select);
-        }
-      });
+      // Use existing @query references instead of querySelector
+      if (this.workflowAgentElement) {
+        updateAgentSelectTooltip(this.workflowAgentElement);
+      }
+      if (this.toolUseAgentElement) {
+        updateAgentSelectTooltip(this.toolUseAgentElement);
+      }
     }
   }
 
@@ -587,7 +584,17 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
+  /**
+   * Initialize Sortable.js for file lists.
+   * Note: This queries into child component shadow DOMs which doesn't work.
+   * TODO: Phase 9 - Move Sortable initialization to FileSelectGroup and
+   * OutputFilesSection components, have them emit 'files-reordered' events.
+   * @deprecated Sortable integration needs to be moved to child components
+   */
   private initializeSortables(): void {
+    // File lists are now inside shadow DOM of child components.
+    // This code is preserved for backward compatibility but Sortable
+    // will not initialize since elements can't be found.
     const listIds = MULTIPLE_FILE_TYPES.map((type) => `${type}Files`);
     listIds.forEach((listId) => {
       const element = this.renderRoot.querySelector(
@@ -596,24 +603,27 @@ export class MainApp extends BaseWebviewApp {
       if (!element) return;
       const sortable = new Sortable(element, {
         animation: 150,
-        onEnd: () => this.handleSortEnd(listId),
+        onEnd: (event) => this.handleSortEnd(listId, event),
       });
       this.sortables.push(sortable);
     });
   }
 
-  private handleSortEnd(listId: string): void {
-    const element = this.renderRoot.querySelector(
-      `#${listId}`,
-    ) as HTMLElement | null;
-    if (!element) return;
-    // eslint-disable-next-line unicorn/prefer-spread -- NodeList lacks iterator typing.
-    const items = Array.from(element.querySelectorAll('.file-item'));
-    const files = items
-      .map((item) => item.getAttribute('data-path') || '')
-      .filter(Boolean);
+  /**
+   * Handle Sortable drag end - update state from event indices.
+   * @deprecated Will be replaced by handling events from child components
+   */
+  private handleSortEnd(listId: string, event: Sortable.SortableEvent): void {
+    // Use Sortable event indices instead of querying DOM
+    const oldIndex = event.oldIndex;
+    const newIndex = event.newIndex;
+    if (oldIndex === undefined || newIndex === undefined) return;
 
-    this.updateMultiFiles(listId, files);
+    const current = [...(this.multiFiles[listId] ?? [])];
+    const [moved] = current.splice(oldIndex, 1);
+    current.splice(newIndex, 0, moved);
+
+    this.updateMultiFiles(listId, current);
   }
 
   private updateMultiFiles(listId: string, files: string[]): void {
@@ -1212,11 +1222,7 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private handleAgentChange(
-    sessionType: SessionType,
-    value: string,
-    selectElement?: HTMLElement,
-  ): void {
+  private handleAgentChange(sessionType: SessionType, value: string): void {
     if (sessionType === SESSION_TYPES.WORKFLOW) {
       this.workflowAgent = value;
     } else {
@@ -1229,15 +1235,12 @@ export class MainApp extends BaseWebviewApp {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
         agent: value,
       });
-    }
-    if (selectElement && isSelectLikeElement(selectElement)) {
-      const selectedOption = getSelectedOptionElement(selectElement);
-      if (
-        selectedOption &&
-        !selectedOption.classList.contains('disabled-option')
-      ) {
-        postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
-      }
+      // Hide banner when a valid agent is selected.
+      // Previously checked classList.contains('disabled-option') but that
+      // required access to select element which is in InstructionPanel's
+      // shadow DOM. If the backend needs to show the banner for disabled
+      // agents, it should send a message.
+      postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     }
   }
 
@@ -1245,30 +1248,10 @@ export class MainApp extends BaseWebviewApp {
     this.model = value;
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
-    if (this.modelSelectElement) {
-      this.updateModelApiKeyBanner(this.modelSelectElement);
-    }
-  }
-
-  private updateModelApiKeyBanner(selectElement: HTMLElement): void {
-    if (!isSelectLikeElement(selectElement)) return;
-    const selectedOption = getSelectedOptionElement(selectElement);
-    const requiresKey = selectedOption?.dataset?.requiresKey === 'true';
-    const provider = selectedOption?.dataset?.provider;
-
-    if (requiresKey) {
-      this.apiKeyBannerForced = false;
-      this.apiKeyBanner = {
-        visible: true,
-        provider: provider || '',
-        requiresKey: true,
-      };
-      return;
-    }
-
-    if (!this.apiKeyBanner.requiresKey && !this.apiKeyBannerForced) {
-      this.apiKeyBanner = { visible: false };
-    }
+    // Note: API key banner updates are handled by backend messages
+    // (SHOW_API_KEY_BANNER, HIDE_API_KEY_BANNER) since the model select
+    // is inside InstructionPanel's shadow DOM and data attributes
+    // can't be read from here.
   }
 
   private handleShowApiKeyBanner(
@@ -1799,19 +1782,11 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentAgentChange = (
     e: CustomEvent<AgentChangeDetail>,
   ): void => {
-    // Get the select element for decorator updates
-    const selectId =
-      e.detail.sessionType === SESSION_TYPES.WORKFLOW
-        ? 'workflowAgent'
-        : 'toolUseAgent';
-    const selectElement = this.renderRoot.querySelector(
-      `#${selectId}`,
-    ) as HTMLElement | null;
-    this.handleAgentChange(
-      e.detail.sessionType,
-      e.detail.value,
-      selectElement ?? undefined,
-    );
+    // Note: Select element is inside InstructionPanel's shadow DOM and
+    // cannot be queried from here. The disabled-option check in
+    // handleAgentChange will be skipped. This should be handled by
+    // InstructionPanel emitting additional event data when needed.
+    this.handleAgentChange(e.detail.sessionType, e.detail.value);
   };
 
   private handleComponentModelChange = (

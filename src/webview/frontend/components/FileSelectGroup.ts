@@ -265,22 +265,42 @@ export class FileSelectGroup extends LitElement {
   private readonly boundDocumentClickHandler =
     this.handleDocumentClick.bind(this);
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener('click', this.boundDocumentClickHandler);
-  }
+  /** Track if listener is currently attached */
+  private documentListenerAttached = false;
 
   override disconnectedCallback(): void {
-    document.removeEventListener('click', this.boundDocumentClickHandler);
+    this.removeDocumentListener();
     super.disconnectedCallback();
   }
 
-  private handleDocumentClick(event: MouseEvent): void {
-    // Only handle if a menu is open
-    if (!this.autoExtractMenuOpen && !this.toolConfigMenuOpen) {
-      return;
+  protected override updated(changedProps: Map<string, unknown>): void {
+    // Manage document listener based on menu state
+    const menuOpen = this.autoExtractMenuOpen || this.toolConfigMenuOpen;
+    if (menuOpen && !this.documentListenerAttached) {
+      this.addDocumentListener();
+    } else if (!menuOpen && this.documentListenerAttached) {
+      this.removeDocumentListener();
     }
+  }
 
+  private addDocumentListener(): void {
+    if (this.documentListenerAttached) return;
+    // Use capture phase to detect clicks before they're handled
+    document.addEventListener('click', this.boundDocumentClickHandler, {
+      capture: true,
+    });
+    this.documentListenerAttached = true;
+  }
+
+  private removeDocumentListener(): void {
+    if (!this.documentListenerAttached) return;
+    document.removeEventListener('click', this.boundDocumentClickHandler, {
+      capture: true,
+    });
+    this.documentListenerAttached = false;
+  }
+
+  private handleDocumentClick(event: MouseEvent): void {
     const path = event.composedPath();
     const clickedInside = path.some(
       (el) => el instanceof HTMLElement && el.getRootNode() === this.shadowRoot,

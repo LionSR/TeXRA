@@ -116,7 +116,21 @@ export function getCodiconClass(iconName: string): string {
 }
 
 /**
+ * Get codicon classes as an object for use with Lit's classMap directive.
+ * @example
+ * import { classMap } from 'lit/directives/class-map.js';
+ * html`<i class=${classMap(getCodiconClasses('chevron-down'))}></i>`
+ */
+export function getCodiconClasses(iconName: string): Record<string, boolean> {
+  return {
+    codicon: true,
+    [`codicon-${iconName}`]: true,
+  };
+}
+
+/**
  * Apply codicon classes to an element.
+ * @deprecated Use getCodiconClasses() with classMap directive for Lit-native patterns.
  */
 export function applyCodiconClass(
   element: HTMLElement,
