@@ -2,6 +2,7 @@
 
 > **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
 > **Prior phase:** [prd-progressview-phase6.md](./prd-progressview-phase6.md)
+> **Next phase:** [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)
 
 ## Overview
 
@@ -19,13 +20,13 @@ Phase 7 focuses on **Zod-native type migration** across all webviews. The goal i
 
 ### Scope
 
-| Webview | Current State | Work Needed |
-|---------|---------------|-------------|
-| **MainView** | Standalone interfaces, no validation | Full migration |
-| **ProgressView** | ✅ Zod-native | Reference implementation |
-| **HistoryView** | ✅ Mostly good | Minor cleanup |
-| **ProfileView** | ✅ Mostly good | Minor cleanup |
-| **MemoryView** | ✅ Mostly good | Remove duplicate interface |
+| Webview          | Current State                        | Work Needed                |
+| ---------------- | ------------------------------------ | -------------------------- |
+| **MainView**     | Standalone interfaces, no validation | Full migration             |
+| **ProgressView** | ✅ Zod-native                        | Reference implementation   |
+| **HistoryView**  | ✅ Mostly good                       | Minor cleanup              |
+| **ProfileView**  | ✅ Mostly good                       | Minor cleanup              |
+| **MemoryView**   | ✅ Mostly good                       | Remove duplicate interface |
 
 ### 7.1 Problem Statement
 
@@ -54,33 +55,33 @@ type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 
 #### Priority 1: State Schemas (enables runtime validation)
 
-| Interface | File | Fields |
-|-----------|------|--------|
-| `MainViewPersistedState` | MainApp.ts:90-123 | 23 fields |
-| `BannerState` | MainApp.ts:125-132 | 5 fields |
-| `ApiKeyBannerState` | BannerGroup.ts:18-22 | 3 fields |
-| `AgentConfigBannerState` | BannerGroup.ts:25-29 | 3 fields |
-| `DependencyBannerState` | BannerGroup.ts:32-35 | 2 fields |
+| Interface                | File                 | Fields    |
+| ------------------------ | -------------------- | --------- |
+| `MainViewPersistedState` | MainApp.ts:90-123    | 23 fields |
+| `BannerState`            | MainApp.ts:125-132   | 5 fields  |
+| `ApiKeyBannerState`      | BannerGroup.ts:18-22 | 3 fields  |
+| `AgentConfigBannerState` | BannerGroup.ts:25-29 | 3 fields  |
+| `DependencyBannerState`  | BannerGroup.ts:32-35 | 2 fields  |
 
 #### Priority 2: Event Detail Types (14 interfaces in events.ts + 5 in InstructionPanel.ts)
 
-| Interface | Current Location |
-|-----------|------------------|
-| `FileSelectChangeDetail` | events.ts |
-| `BaseFileChangeDetail` | events.ts |
-| `CheckboxChangeDetail` | events.ts |
-| `BannerActionDetail` | events.ts |
-| `LatexDiffsActionDetail` | events.ts |
-| `SessionTypeChangeDetail` | InstructionPanel.ts → consolidate |
-| `AgentChangeDetail` | InstructionPanel.ts → consolidate |
-| ... (19 total event detail types) | |
+| Interface                         | Current Location                  |
+| --------------------------------- | --------------------------------- |
+| `FileSelectChangeDetail`          | events.ts                         |
+| `BaseFileChangeDetail`            | events.ts                         |
+| `CheckboxChangeDetail`            | events.ts                         |
+| `BannerActionDetail`              | events.ts                         |
+| `LatexDiffsActionDetail`          | events.ts                         |
+| `SessionTypeChangeDetail`         | InstructionPanel.ts → consolidate |
+| `AgentChangeDetail`               | InstructionPanel.ts → consolidate |
+| ... (19 total event detail types) |                                   |
 
 #### Priority 3: Configuration Types
 
-| Interface | File | Fields |
-|-----------|------|--------|
+| Interface          | File               | Fields    |
+| ------------------ | ------------------ | --------- |
 | `FileSelectConfig` | FileSelectGroup.ts | 12 fields |
-| `CheckboxValues` | FileSelectGroup.ts | 5 fields |
+| `CheckboxValues`   | FileSelectGroup.ts | 5 fields  |
 
 ### 7.4 Shared Schema Contract
 
@@ -89,39 +90,42 @@ type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 #### Current State (Investigation Findings)
 
 **Backend sends state with no validation:**
+
 ```typescript
 // src/shared/schemas/commonViewMessages.ts:17-22
 export const StateRestoreMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.STATE_RESTORE),
-  state: z.record(z.string(), z.unknown()).nullish(),  // ← NO TYPE VALIDATION
+  state: z.record(z.string(), z.unknown()).nullish(), // ← NO TYPE VALIDATION
   executeImmediately: z.boolean().nullish(),
 });
 ```
 
 **Frontend receives with unsafe cast:**
+
 ```typescript
 // src/webview/frontend/MainApp.ts:1117
-const state = message.state as Record<string, unknown>;  // ← UNSAFE CAST
+const state = message.state as Record<string, unknown>; // ← UNSAFE CAST
 ```
 
 **Legacy field support creates confusion:**
+
 ```typescript
 // MainApp.ts:1172-1180 - determineSessionType()
-state.agentCategory ?? state.sessionType  // Which is canonical?
+state.agentCategory ?? state.sessionType; // Which is canonical?
 
 // MainApp.ts:1213-1220 - restoreFileArrays()
-state[`${key}Active`] ?? state[`${key}Visible`]  // Which is canonical?
+state[`${key}Active`] ?? state[`${key}Visible`]; // Which is canonical?
 ```
 
 #### Specific Type Drift Risks
 
-| Risk | Location | Issue |
-|------|----------|-------|
-| Schema too loose | `commonViewMessages.ts:19` | `state: z.record(z.string(), z.unknown())` accepts ANY keys |
-| No shape validation | `MainApp.ts:1117` | Cast `as Record<string, unknown>` without parsing |
-| Legacy field names | `MainApp.ts:1172-1180` | Supports both `agentCategory` and `sessionType` |
-| No agent validation | `MainApp.ts:1187-1197` | Agent names not validated against available options |
-| No enum validation | `MainApp.ts:1172-1180` | Session type accepts any string, not `SESSION_TYPES` enum |
+| Risk                | Location                   | Issue                                                       |
+| ------------------- | -------------------------- | ----------------------------------------------------------- |
+| Schema too loose    | `commonViewMessages.ts:19` | `state: z.record(z.string(), z.unknown())` accepts ANY keys |
+| No shape validation | `MainApp.ts:1117`          | Cast `as Record<string, unknown>` without parsing           |
+| Legacy field names  | `MainApp.ts:1172-1180`     | Supports both `agentCategory` and `sessionType`             |
+| No agent validation | `MainApp.ts:1187-1197`     | Agent names not validated against available options         |
+| No enum validation  | `MainApp.ts:1172-1180`     | Session type accepts any string, not `SESSION_TYPES` enum   |
 
 #### Solution
 
@@ -137,12 +141,14 @@ src/shared/schemas/
 ```
 
 **Key changes:**
+
 1. Create `MainViewPersistedStateSchema` with all 26 fields typed
 2. Update `StateRestoreMessageSchema` to use typed state: `state: MainViewPersistedStateSchema.nullish()`
 3. Frontend uses `.safeParse()` instead of `as` cast
 4. Remove legacy field support (or document migration path)
 
 **Contract enforcement:**
+
 - Backend validates before sending: `MainViewPersistedStateSchema.parse(state)`
 - Frontend validates on restore: `MainViewPersistedStateSchema.safeParse(raw)`
 - Both sides get compile-time type safety via `z.infer<>`
@@ -153,13 +159,13 @@ src/shared/schemas/
 
 #### Current Organization (Good)
 
-| Location | Purpose | Status |
-|----------|---------|--------|
+| Location                                     | Purpose                              | Status                      |
+| -------------------------------------------- | ------------------------------------ | --------------------------- |
 | `src/shared/schemas/progressViewMessages.ts` | Backend → ProgressView (30+ schemas) | ✅ Uses discriminated union |
-| `src/shared/schemas/historyViewMessages.ts` | Backend → HistoryView | ✅ Well-typed |
-| `src/shared/schemas/mainViewMessages.ts` | Backend → MainView (40+ types) | ✅ Well-typed |
-| `src/webview/types/messages.ts` | Frontend → Backend | ✅ Validated with Zod |
-| `src/common/webview/commands.ts` | Command constants | ✅ Single source of truth |
+| `src/shared/schemas/historyViewMessages.ts`  | Backend → HistoryView                | ✅ Well-typed               |
+| `src/shared/schemas/mainViewMessages.ts`     | Backend → MainView (40+ types)       | ✅ Well-typed               |
+| `src/webview/types/messages.ts`              | Frontend → Backend                   | ✅ Validated with Zod       |
+| `src/common/webview/commands.ts`             | Command constants                    | ✅ Single source of truth   |
 
 #### Communication Flows (All Through Extension Host)
 
@@ -183,12 +189,12 @@ The **one weak point** is `StateRestoreMessage` - it's the bridge for cross-webv
 
 ```typescript
 // Current - too loose
-executeCommand('texra.restoreState', taskState);  // taskState is untyped
+executeCommand('texra.restoreState', taskState); // taskState is untyped
 
 // src/commands/history/stateRestoreCommand.ts:42-46
 webviewView.webview.postMessage({
-  command: 'restoreState',  // Hardcoded string, not using constant!
-  state: state,             // Unvalidated TaskState
+  command: 'restoreState', // Hardcoded string, not using constant!
+  state: state, // Unvalidated TaskState
 });
 ```
 
@@ -200,11 +206,11 @@ webviewView.webview.postMessage({
 
 #### Triple Path Normalization (3 different approaches)
 
-| Location | Method | Issue |
-|----------|--------|-------|
-| `src/shared/utils/path.ts:11-26` | Manual separator replacement | `replaceAll('\\', '/')` |
-| `src/webview/managers/FileManager.ts:82` | Node.js `path.basename()` | Different normalization |
-| `src/webview/managers/FileManager.ts:479-482` | VSCode `workspace.asRelativePath()` | Yet another approach |
+| Location                                      | Method                              | Issue                   |
+| --------------------------------------------- | ----------------------------------- | ----------------------- |
+| `src/shared/utils/path.ts:11-26`              | Manual separator replacement        | `replaceAll('\\', '/')` |
+| `src/webview/managers/FileManager.ts:82`      | Node.js `path.basename()`           | Different normalization |
+| `src/webview/managers/FileManager.ts:479-482` | VSCode `workspace.asRelativePath()` | Yet another approach    |
 
 **Risk:** Files stored in different normalized forms depending on code path.
 
@@ -224,20 +230,20 @@ isToolUseAgent: this.sessionType === SESSION_TYPES.TOOL_USE,
 
 Same concept defined in 3 places:
 
-| Location | Mapping |
-|----------|---------|
-| `MainApp.ts:1111-1117` | `singleSelectIdMap` |
-| `store.ts:170-192` | `FILE_UPDATE_COMMANDS` |
-| `store.ts:170-192` | `FILE_REFRESH_COMMANDS`, `FILE_SELECTED_COMMANDS` |
+| Location               | Mapping                                           |
+| ---------------------- | ------------------------------------------------- |
+| `MainApp.ts:1111-1117` | `singleSelectIdMap`                               |
+| `store.ts:170-192`     | `FILE_UPDATE_COMMANDS`                            |
+| `store.ts:170-192`     | `FILE_REFRESH_COMMANDS`, `FILE_SELECTED_COMMANDS` |
 
 #### Multiple Visibility Field Names (3 names for same concept)
 
 ```typescript
 // MainApp.ts:1050-1072 - restoreFileArrays()
 const visible =
-  activeFiles[fileType] ??                    // Priority 1: activeFiles map
-  (state[`${key}Active`] as boolean) ??       // Priority 2: ${key}Active
-  (state[`${key}Visible`] as boolean) ??      // Priority 3: ${key}Visible
+  activeFiles[fileType] ?? // Priority 1: activeFiles map
+  (state[`${key}Active`] as boolean) ?? // Priority 2: ${key}Active
+  (state[`${key}Visible`] as boolean) ?? // Priority 3: ${key}Visible
   false;
 ```
 
@@ -245,10 +251,13 @@ const visible =
 
 ```typescript
 // src/common/state/pendingStateManager.ts:21-36
-let pendingStateData: PendingStateData | undefined = undefined;  // SINGLE GLOBAL!
+let pendingStateData: PendingStateData | undefined = undefined; // SINGLE GLOBAL!
 
-export function setPendingState(state: TaskState, executeImmediately?: boolean): void {
-  pendingStateData = { state, executeImmediately };  // Overwrites previous!
+export function setPendingState(
+  state: TaskState,
+  executeImmediately?: boolean,
+): void {
+  pendingStateData = { state, executeImmediately }; // Overwrites previous!
 }
 ```
 
@@ -276,7 +285,8 @@ private runDiffCommand(command: string, message: any, paramKeys: string[]): void
 
 ```typescript
 // MainApp.ts:853-856 - handleSetAllSingleFiles()
-const messageValues = message as unknown as Record<  // ← DOUBLE CAST!
+const messageValues = message as unknown as Record<
+  // ← DOUBLE CAST!
   string,
   string[] | null | undefined
 >;
@@ -286,7 +296,7 @@ const messageValues = message as unknown as Record<  // ← DOUBLE CAST!
 
 ```typescript
 // src/shared/state/WebviewStateManager.ts:14-15
-const saved = (vscode.getState() as T | undefined) ?? ({} as T);  // ← No validation!
+const saved = (vscode.getState() as T | undefined) ?? ({} as T); // ← No validation!
 ```
 
 #### String Command Construction (Injection Risk)
@@ -294,10 +304,10 @@ const saved = (vscode.getState() as T | undefined) ?? ({} as T);  // ← No vali
 ```typescript
 // src/webview/managers/FileManager.ts:58-63
 const file = await vscode.commands.executeCommand<string>(
-  `texra.${message.command}`,  // ← Command from unvalidated input!
+  `texra.${message.command}`, // ← Command from unvalidated input!
 );
 this.postMessage({
-  command: `${uncapitalize(singleFileType)}Selected`,  // ← Constructed string
+  command: `${uncapitalize(singleFileType)}Selected`, // ← Constructed string
 });
 ```
 
@@ -305,13 +315,13 @@ this.postMessage({
 
 **Current State:** Each webview has a different organization.
 
-| Webview | Backend Files | Frontend Structure | State | Types |
-|---------|--------------|-------------------|-------|-------|
-| **MainView** | Provider, Handler, `managers/` | `frontend/`, `types/` | `store.ts` | Local `types/messages.ts` |
-| **ProgressView** | Provider, Handler, `managers/`, `state/`, `persistence/` | `frontend/formatters/`, `frontend/managers/` | `state/`, `stateUtils.ts` | `@shared/schemas` |
-| **HistoryView** | Provider, ContentProvider, Handler | `frontend/` | `state.ts` | `@shared/schemas` |
-| **ProfileView** | Provider, ContentProvider, Handler | `frontend/` | None | `@shared/schemas` |
-| **MemoryView** | Provider, ContentProvider, Handler | `frontend/` | None | `@shared/schemas` |
+| Webview          | Backend Files                                            | Frontend Structure                           | State                     | Types                     |
+| ---------------- | -------------------------------------------------------- | -------------------------------------------- | ------------------------- | ------------------------- |
+| **MainView**     | Provider, Handler, `managers/`                           | `frontend/`, `types/`                        | `store.ts`                | Local `types/messages.ts` |
+| **ProgressView** | Provider, Handler, `managers/`, `state/`, `persistence/` | `frontend/formatters/`, `frontend/managers/` | `state/`, `stateUtils.ts` | `@shared/schemas`         |
+| **HistoryView**  | Provider, ContentProvider, Handler                       | `frontend/`                                  | `state.ts`                | `@shared/schemas`         |
+| **ProfileView**  | Provider, ContentProvider, Handler                       | `frontend/`                                  | None                      | `@shared/schemas`         |
+| **MemoryView**   | Provider, ContentProvider, Handler                       | `frontend/`                                  | None                      | `@shared/schemas`         |
 
 #### Inconsistencies Found
 
@@ -389,7 +399,12 @@ Create `src/shared/schemas/mainViewState.ts`:
 import { z } from 'zod';
 
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
-export const FileTypeSchema = z.enum(['input', 'reference', 'auxiliary', 'media']);
+export const FileTypeSchema = z.enum([
+  'input',
+  'reference',
+  'auxiliary',
+  'media',
+]);
 
 // State schema - single source of truth for persistence contract
 // All 26 fields from MainApp.ts:91-124
@@ -428,7 +443,9 @@ export const MainViewPersistedStateSchema = z.object({
   openedFiles: z.array(z.string()).optional(),
 });
 
-export type MainViewPersistedState = z.infer<typeof MainViewPersistedStateSchema>;
+export type MainViewPersistedState = z.infer<
+  typeof MainViewPersistedStateSchema
+>;
 ```
 
 #### Step 2: Update StateRestoreMessageSchema
@@ -454,7 +471,9 @@ Replace unsafe cast with validation:
 const state = message.state as Record<string, unknown>;
 
 // After
-const parseResult = MainViewPersistedStateSchema.partial().safeParse(message.state);
+const parseResult = MainViewPersistedStateSchema.partial().safeParse(
+  message.state,
+);
 if (!parseResult.success) {
   console.warn('Invalid state restore:', parseResult.error);
   return;
@@ -465,6 +484,7 @@ const state = parseResult.data;
 #### Step 4: Remove legacy field support
 
 In `MainApp.ts`, remove fallback logic for legacy field names:
+
 - `state.agentCategory ?? state.sessionType` → just `state.sessionType`
 - `state[key + 'Active'] ?? state[key + 'Visible']` → just `state[key + 'Visible']`
 
@@ -477,7 +497,7 @@ Fix hardcoded string and add validation:
 ```typescript
 // Before (stateRestoreCommand.ts:42-46)
 webviewView.webview.postMessage({
-  command: 'restoreState',  // Hardcoded!
+  command: 'restoreState', // Hardcoded!
   state: state,
 });
 
@@ -494,6 +514,7 @@ webviewView.webview.postMessage({
 #### Step 6: Fix normalization layers
 
 **6a. Create single path normalization function:**
+
 ```typescript
 // src/shared/utils/path.ts
 export function normalizeFilePath(filePath: string): string {
@@ -502,6 +523,7 @@ export function normalizeFilePath(filePath: string): string {
 ```
 
 **6b. Remove dead `agentCategory` fallback:**
+
 ```typescript
 // MainApp.ts:1020-1028 - Before
 const candidate = state.agentCategory ?? state.sessionType;
@@ -511,11 +533,13 @@ const candidate = state.sessionType;
 ```
 
 **6c. Consolidate visibility field names:**
+
 - Choose canonical name: `${key}Visible`
 - Remove `${key}Active` and `activeFiles` map support
 - Document migration for existing persisted states
 
 **6d. Fix global pending state:**
+
 ```typescript
 // Option 1: Use Map keyed by target
 const pendingStates = new Map<string, PendingStateData>();
@@ -527,6 +551,7 @@ const pendingStateQueue: PendingStateData[] = [];
 #### Step 7: Fix manager contract gaps
 
 **7a. Add schemas for DiffManager messages:**
+
 ```typescript
 // src/shared/schemas/mainViewMessages.ts
 export const LatexdiffMessageSchema = z.object({
@@ -538,9 +563,13 @@ export const LatexdiffMessageSchema = z.object({
 ```
 
 **7b. Remove double casts in MainApp:**
+
 ```typescript
 // Before (MainApp.ts:853-856)
-const messageValues = message as unknown as Record<string, string[] | null | undefined>;
+const messageValues = message as unknown as Record<
+  string,
+  string[] | null | undefined
+>;
 
 // After - use schema
 const parseResult = SetAllSingleFilesSchema.safeParse(message);
@@ -549,6 +578,7 @@ const messageValues = parseResult.data;
 ```
 
 **7c. Add validation to WebviewStateManager:**
+
 ```typescript
 // WebviewStateManager.ts
 constructor(defaultState: Partial<T>, schema: z.ZodType<T>) {
@@ -561,6 +591,7 @@ constructor(defaultState: Partial<T>, schema: z.ZodType<T>) {
 ```
 
 **7d. Validate command construction in FileManager:**
+
 ```typescript
 // Before
 const file = await vscode.commands.executeCommand(`texra.${message.command}`);
@@ -575,6 +606,7 @@ if (!VALID_FILE_COMMANDS.has(message.command)) {
 #### Step 8: Fix other webviews (minor)
 
 **HistoryView** - Use `unknown` instead of `any`:
+
 ```typescript
 // src/historyView/HistoryViewMessageHandler.ts:43-45
 // Before
@@ -585,6 +617,7 @@ private async handleGetHistoryData(_message: unknown, view: ...): Promise<void>
 ```
 
 **MemoryView** - Remove duplicate interface, use schema:
+
 ```typescript
 // src/memoryView/MemoryViewMessageHandler.ts:43
 // Before - duplicate interface
@@ -606,18 +639,21 @@ Move event types to `src/shared/schemas/mainViewEvents.ts` if needed for cross-c
 #### Step 10: Create regression test infrastructure
 
 **10a. Create manual test checklist:**
+
 - Create `docs/testing/mainview-manual-tests.md`
 - Document state persistence tests
 - Document cross-webview restore tests
 - Document legacy state migration tests
 
 **10b. Add state migration unit tests:**
+
 - Create `src/test/webview/stateMigration.test.ts`
 - Test legacy field migration (`agentCategory` → `sessionType`)
 - Test default application via `.prefault()`
 - Test partial state restoration
 
 **10c. Add schema validation tests:**
+
 - Test `MainViewPersistedStateSchema.safeParse()` with various inputs
 - Test invalid state rejection
 - Test backward compatibility with old formats
@@ -631,81 +667,81 @@ Move event types to `src/shared/schemas/mainViewEvents.ts` if needed for cross-c
 
 #### Shared Schemas (single source of truth)
 
-| File | Changes |
-|------|---------|
-| `src/shared/schemas/mainViewState.ts` | **NEW** - MainViewPersistedStateSchema with 26 fields |
-| `src/shared/schemas/commonViewMessages.ts` | Update StateRestoreMessageSchema to use typed state |
-| `src/shared/schemas/index.ts` | Export new mainViewState schemas |
+| File                                       | Changes                                               |
+| ------------------------------------------ | ----------------------------------------------------- |
+| `src/shared/schemas/mainViewState.ts`      | **NEW** - MainViewPersistedStateSchema with 26 fields |
+| `src/shared/schemas/commonViewMessages.ts` | Update StateRestoreMessageSchema to use typed state   |
+| `src/shared/schemas/index.ts`              | Export new mainViewState schemas                      |
 
 #### Backend (State Restore Flow)
 
-| File | Changes |
-|------|---------|
+| File                                                | Changes                                      |
+| --------------------------------------------------- | -------------------------------------------- |
 | `src/commands/history/stateRestoreCommand.ts:42-46` | Use COMMON_COMMANDS constant, validate state |
-| `src/MainViewProvider.ts:265-274` | Validate state in setupInitialState() |
+| `src/MainViewProvider.ts:265-274`                   | Validate state in setupInitialState()        |
 
 #### Frontend
 
-| File | Changes |
-|------|---------|
-| `src/webview/frontend/MainApp.ts:91-124` | Remove `MainViewPersistedState` interface, import from @shared/schemas |
-| `src/webview/frontend/MainApp.ts:1109-1170` | Use `.safeParse()` in handleRestoreState() |
-| `src/webview/frontend/MainApp.ts:1172-1224` | Remove legacy field fallbacks |
-| `src/webview/frontend/MainApp.ts:134-166` | Remove DEFAULT_STATE, use schema `.parse({})` |
-| `src/webview/frontend/components/BannerGroup.ts:18-35` | Remove banner state interfaces |
-| `src/webview/frontend/components/FileSelectGroup.ts:23-46` | Remove config interfaces |
-| `src/webview/frontend/components/InstructionPanel.ts:22-45` | Remove event detail interfaces |
+| File                                                        | Changes                                                                |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/webview/frontend/MainApp.ts:91-124`                    | Remove `MainViewPersistedState` interface, import from @shared/schemas |
+| `src/webview/frontend/MainApp.ts:1109-1170`                 | Use `.safeParse()` in handleRestoreState()                             |
+| `src/webview/frontend/MainApp.ts:1172-1224`                 | Remove legacy field fallbacks                                          |
+| `src/webview/frontend/MainApp.ts:134-166`                   | Remove DEFAULT_STATE, use schema `.parse({})`                          |
+| `src/webview/frontend/components/BannerGroup.ts:18-35`      | Remove banner state interfaces                                         |
+| `src/webview/frontend/components/FileSelectGroup.ts:23-46`  | Remove config interfaces                                               |
+| `src/webview/frontend/components/InstructionPanel.ts:22-45` | Remove event detail interfaces                                         |
 
 #### Other Webviews (Minor Cleanup)
 
-| File | Changes |
-|------|---------|
-| `src/historyView/HistoryViewMessageHandler.ts:44` | `_message: any` → `_message: unknown` |
-| `src/memoryView/MemoryViewMessageHandler.ts:43` | Remove duplicate `MemoryViewItem` interface, use `z.infer<>` |
+| File                                              | Changes                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------ |
+| `src/historyView/HistoryViewMessageHandler.ts:44` | `_message: any` → `_message: unknown`                        |
+| `src/memoryView/MemoryViewMessageHandler.ts:43`   | Remove duplicate `MemoryViewItem` interface, use `z.infer<>` |
 
 #### Testing Infrastructure
 
-| File | Changes |
-|------|---------|
-| `docs/testing/mainview-manual-tests.md` | **NEW** - Manual test checklist |
+| File                                      | Changes                              |
+| ----------------------------------------- | ------------------------------------ |
+| `docs/testing/mainview-manual-tests.md`   | **NEW** - Manual test checklist      |
 | `src/test/webview/stateMigration.test.ts` | **NEW** - State migration unit tests |
 
 #### Optional
 
-| File | Changes |
-|------|---------|
-| `src/webview/frontend/events.ts` | Import types from @shared/schemas |
+| File                                               | Changes                            |
+| -------------------------------------------------- | ---------------------------------- |
+| `src/webview/frontend/events.ts`                   | Import types from @shared/schemas  |
 | `src/webview/frontend/handlers/messageHandlers.ts` | **NEW** - Message handler registry |
-| `src/webview/frontend/state/MainViewState.ts` | **NEW** - State management |
+| `src/webview/frontend/state/MainViewState.ts`      | **NEW** - State management         |
 
 ### 7.8 Success Metrics
 
 #### Zod-Native Compliance
 
-| Metric | Before | Target |
-|--------|--------|--------|
-| Standalone interfaces (MainView) | ~25 | 0 |
-| Types derived from schemas | 0 | ~25 |
-| `message: any` handlers | 5+ | 0 |
-| Double casts (`as unknown as`) | 3 | 0 |
-| Duplicate interfaces | 2 | 0 |
+| Metric                           | Before | Target |
+| -------------------------------- | ------ | ------ |
+| Standalone interfaces (MainView) | ~25    | 0      |
+| Types derived from schemas       | 0      | ~25    |
+| `message: any` handlers          | 5+     | 0      |
+| Double casts (`as unknown as`)   | 3      | 0      |
+| Duplicate interfaces             | 2      | 0      |
 
 #### Contract Enforcement
 
-| Metric | Before | Target |
-|--------|--------|--------|
-| StateRestoreMessage validation | None | Schema validated |
-| WebviewStateManager validation | None | Schema validated |
-| Path normalization functions | 3 different | 1 canonical |
-| Visibility field names | 3 variants | 1 canonical |
+| Metric                         | Before      | Target           |
+| ------------------------------ | ----------- | ---------------- |
+| StateRestoreMessage validation | None        | Schema validated |
+| WebviewStateManager validation | None        | Schema validated |
+| Path normalization functions   | 3 different | 1 canonical      |
+| Visibility field names         | 3 variants  | 1 canonical      |
 
 #### Code Quality
 
-| Metric | Before | Target |
-|--------|--------|--------|
-| MainApp.ts lines | ~2,087 | ~800 |
-| Dead code paths (`agentCategory`) | 1 | 0 |
-| Global state race conditions | 1 | 0 |
+| Metric                            | Before | Target |
+| --------------------------------- | ------ | ------ |
+| MainApp.ts lines                  | ~2,087 | ~800   |
+| Dead code paths (`agentCategory`) | 1      | 0      |
+| Global state race conditions      | 1      | 0      |
 
 ### 7.9 UI Regression Testing Strategy
 
@@ -713,13 +749,13 @@ Move event types to `src/shared/schemas/mainViewEvents.ts` if needed for cross-c
 
 #### Gap Analysis
 
-| Category | Status | Risk |
-|----------|--------|------|
-| Component tests | ❌ None | High - Lit components untested |
-| State migration tests | ❌ None | High - Legacy format handling untested |
-| Snapshot tests | ❌ None | Medium - HTML structure changes undetected |
-| E2E tests | ❌ None | Medium - User flows untested |
-| Manual test docs | ❌ None | Low - Only implicit in walkthrough |
+| Category              | Status  | Risk                                       |
+| --------------------- | ------- | ------------------------------------------ |
+| Component tests       | ❌ None | High - Lit components untested             |
+| State migration tests | ❌ None | High - Legacy format handling untested     |
+| Snapshot tests        | ❌ None | Medium - HTML structure changes undetected |
+| E2E tests             | ❌ None | Medium - User flows untested               |
+| Manual test docs      | ❌ None | Low - Only implicit in walkthrough         |
 
 #### Recommended Testing Approach
 
@@ -731,21 +767,25 @@ Create `docs/testing/mainview-manual-tests.md`:
 ## MainView Manual Test Checklist
 
 ### State Persistence
+
 - [ ] Set all form fields, close/reopen VS Code → fields restored
 - [ ] Switch session type (workflow ↔ tool-use) → correct agent shown
 - [ ] Add multiple files to lists → lists restored after reload
 - [ ] Toggle visibility on file lists → visibility preserved
 
 ### State Restore (Cross-webview)
+
 - [ ] From HistoryView: click "Restore" → MainView populated correctly
 - [ ] From ProgressView: click "Setup Followup" → MainView populated correctly
 
 ### Legacy State Migration
+
 - [ ] Load state with `agentCategory` field → maps to `sessionType`
 - [ ] Load state with `inputFilesActive` → maps to `inputFilesVisible`
 - [ ] Load state with `activeFiles` map → extracts visibility correctly
 
 ### Component Interactions
+
 - [ ] File dropdowns: select file → field updates
 - [ ] Checkboxes: toggle → state saves
 - [ ] Banners: API key missing → banner shows, add key → banner hides
@@ -815,24 +855,14 @@ describe('FileSelectGroup', () => {
 #### Phase 7 Verification Steps
 
 **Build Verification:**
+
 1. `npm run compile:fast` - No TypeScript errors
 2. `npm run lint` - No issues
 
-**State Contract Verification:**
-3. Add state migration unit tests (Option B above)
-4. Run: `npm run test` (after fixing test infrastructure)
+**State Contract Verification:** 3. Add state migration unit tests (Option B above) 4. Run: `npm run test` (after fixing test infrastructure)
 
-**Manual Regression Testing:**
-5. Open extension, verify main view loads correctly
-6. Execute manual test checklist (create as part of Phase 7)
-7. Test state persistence: Close/reopen VS Code
-8. Test cross-webview restore: HistoryView → MainView
-9. Test legacy state: Manually edit stored state to legacy format, verify migration
+**Manual Regression Testing:** 5. Open extension, verify main view loads correctly 6. Execute manual test checklist (create as part of Phase 7) 7. Test state persistence: Close/reopen VS Code 8. Test cross-webview restore: HistoryView → MainView 9. Test legacy state: Manually edit stored state to legacy format, verify migration
 
-**Smoke Test Critical Paths:**
-10. New user flow: No state → defaults load correctly
-11. Existing user: Persisted state → restores correctly
-12. State restore: From history → fields populate correctly
+**Smoke Test Critical Paths:** 10. New user flow: No state → defaults load correctly 11. Existing user: Persisted state → restores correctly 12. State restore: From history → fields populate correctly
 
 ---
-

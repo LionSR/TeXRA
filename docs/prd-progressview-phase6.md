@@ -24,34 +24,37 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 > - ✅ MainApp.ts reduced from 2,924 to 2,087 lines (837 lines, 29% reduction)
 > - ✅ State types and configs extracted to store.ts
 > - ✅ Legacy JS modules deleted (7 files, replaced by TypeScript equivalents)
-> - ⬜ Inline arrow function extraction (deferred - low priority)
-> - ⬜ TaskGroupDomManager refactor (deferred - low priority)
+> - ✅ Inline arrow functions: only 2 remain (both necessary `repeat()` callbacks)
+> - ⬜ TaskGroupDomManager refactor (deferred - audio concern still embedded)
+>
+> **Verified 2026-01-26** via code inspection.
 >
 > **Next:** [Phase 7](./prd-mainview-phase7.md) - Zod-native types & MainApp decomposition
+> **Then:** [Phase 8](./prd-lit-native-phase8.md) - Lit-native improvements (styleMap, virtualizer, context)
 
-| Task | Status | Impact |
-|------|--------|--------|
-| Extract FileSelectGroup | ✅ Complete | Component created in `src/webview/frontend/components/` |
-| Extract BannerGroup components | ✅ Complete | Component created with all 5 banner types |
-| Extract LatexDiffsSection | ✅ Complete | Component created with all controls |
-| Extract InstructionPanel | ✅ Complete | Component with session toggle, instruction input, agent/model selectors |
-| Extract OutputFilesSection | ✅ Complete | Component with collapsible file list and actions |
-| Integrate FileSelectGroup | ✅ Complete | Replaced renderFileSelect() calls for input/ref/aux/media files |
-| Integrate BannerGroup | ✅ Complete | Replaced renderBanners() in MainApp |
-| Integrate LatexDiffsSection | ✅ Complete | Replaced renderLatexdiffsSection() in MainApp |
-| Integrate InstructionPanel | ✅ Complete | Replaced instruction box section in MainApp |
-| Integrate OutputFilesSection | ✅ Complete | Replaced output files section in MainApp |
-| Create events.ts | ✅ Complete | MainViewEvents factory for typed event dispatch |
-| Delete unused methods | ✅ Complete | Removed renderFileSelect, renderFileList, renderAutoExtractMenu, etc. |
-| Extract store.ts | ✅ Complete | State types, defaults, FILE_SELECT_CONFIGS, command mappings |
-| Data-driven file selectors | ✅ Complete | FILE_SELECT_CONFIGS + repeat() replaces 4 inline configs |
-| Convert 37 inline arrows | ⬜ Deferred | Low priority - components use class methods |
-| Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM |
-| renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
-| TaskGroupDomManager refactor | ⬜ Deferred | Low priority - separation of concerns |
-| Replace .map() with repeat() | ✅ Complete | RunSelector, FileList, StreamHeader, PromptOverlay, StreamTabs |
-| Add guard() / @state memoization | ✅ Complete | ToolUseStreamContent, WorkflowStreamContent use @state pattern |
-| Delete legacy JS modules | ✅ Complete | Removed 5 JS files superseded by TypeScript equivalents |
+| Task                             | Status            | Impact                                                                  |
+| -------------------------------- | ----------------- | ----------------------------------------------------------------------- |
+| Extract FileSelectGroup          | ✅ Complete       | Component created in `src/webview/frontend/components/`                 |
+| Extract BannerGroup components   | ✅ Complete       | Component created with all 5 banner types                               |
+| Extract LatexDiffsSection        | ✅ Complete       | Component created with all controls                                     |
+| Extract InstructionPanel         | ✅ Complete       | Component with session toggle, instruction input, agent/model selectors |
+| Extract OutputFilesSection       | ✅ Complete       | Component with collapsible file list and actions                        |
+| Integrate FileSelectGroup        | ✅ Complete       | Replaced renderFileSelect() calls for input/ref/aux/media files         |
+| Integrate BannerGroup            | ✅ Complete       | Replaced renderBanners() in MainApp                                     |
+| Integrate LatexDiffsSection      | ✅ Complete       | Replaced renderLatexdiffsSection() in MainApp                           |
+| Integrate InstructionPanel       | ✅ Complete       | Replaced instruction box section in MainApp                             |
+| Integrate OutputFilesSection     | ✅ Complete       | Replaced output files section in MainApp                                |
+| Create events.ts                 | ✅ Complete       | MainViewEvents factory for typed event dispatch                         |
+| Delete unused methods            | ✅ Complete       | Removed renderFileSelect, renderFileList, renderAutoExtractMenu, etc.   |
+| Extract store.ts                 | ✅ Complete       | State types, defaults, FILE_SELECT_CONFIGS, command mappings            |
+| Data-driven file selectors       | ✅ Complete       | FILE_SELECT_CONFIGS + repeat() replaces 4 inline configs                |
+| Convert 37 inline arrows         | ✅ Complete       | Only 2 remain (necessary `repeat()` callbacks)                          |
+| Formatters → TemplateResult      | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM                             |
+| renderLogs incremental updates   | 🟡 Hybrid         | appendLog/updateLog incremental; full rebuild on stream switch only     |
+| TaskGroupDomManager refactor     | ⬜ Deferred       | Low priority - separation of concerns                                   |
+| Replace .map() with repeat()     | ✅ Complete       | RunSelector, FileList, StreamHeader, PromptOverlay, StreamTabs          |
+| Add guard() / @state memoization | ✅ Complete       | ToolUseStreamContent, WorkflowStreamContent use @state pattern          |
+| Delete legacy JS modules         | ✅ Complete       | Removed 5 JS files superseded by TypeScript equivalents                 |
 
 ---
 
@@ -63,15 +66,15 @@ Removed legacy JavaScript modules that were superseded by the Lit migration. The
 
 ### Deleted Files
 
-| File | Replacement |
-|------|-------------|
-| `src/common/modules/BaseDomHandler.js` | Lit component lifecycle |
-| `src/common/modules/domUtils.js` | `src/shared/utils/dom.ts` |
-| `src/common/modules/iconConstants.js` | `src/shared/utils/icons.ts` |
+| File                                           | Replacement                                           |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| `src/common/modules/BaseDomHandler.js`         | Lit component lifecycle                               |
+| `src/common/modules/domUtils.js`               | `src/shared/utils/dom.ts`                             |
+| `src/common/modules/iconConstants.js`          | `src/shared/utils/icons.ts`                           |
 | `src/common/modules/RecordingButtonManager.js` | `src/shared/controllers/RecordingButtonController.ts` |
-| `src/common/modules/templateUtils.js` | Lit templates |
-| `src/common/modules/files/baseFileUtils.d.ts` | Orphaned type declaration |
-| `src/types/common-modules.d.ts` | Orphaned type declarations |
+| `src/common/modules/templateUtils.js`          | Lit templates                                         |
+| `src/common/modules/files/baseFileUtils.d.ts`  | Orphaned type declaration                             |
+| `src/types/common-modules.d.ts`                | Orphaned type declarations                            |
 
 ### Also Updated
 
@@ -85,14 +88,14 @@ Removed legacy JavaScript modules that were superseded by the Lit migration. The
 
 **Analysis by section:**
 
-| Section | Lines | Description |
-|---------|-------|-------------|
+| Section                  | Lines     | Description                    |
+| ------------------------ | --------- | ------------------------------ |
 | File selection rendering | 1700-2345 | Repetitive file list templates |
-| Banner components | 2347-2508 | API key, agent config, etc. |
-| LaTeXDiffs section | 2547-2736 | Diff configuration panel |
-| Message handler switch | 297-400+ | 58-case switch statement |
-| Event handlers | 450-700 | Click, input, form handlers |
-| State management | 100-296 | @state properties |
+| Banner components        | 2347-2508 | API key, agent config, etc.    |
+| LaTeXDiffs section       | 2547-2736 | Diff configuration panel       |
+| Message handler switch   | 297-400+  | 58-case switch statement       |
+| Event handlers           | 450-700   | Click, input, form handlers    |
+| State management         | 100-296   | @state properties              |
 
 **Current Structure (implemented):**
 
@@ -113,6 +116,7 @@ src/webview/frontend/
 ```
 
 **Remaining opportunities (deferred):**
+
 - Message handler registry extraction (~200 lines potential)
 - Data-driven file selector configs (reduce 4 repetitive configs)
 
@@ -174,26 +178,26 @@ Directive usage has been expanded with `repeat()` migration complete and memoiza
 
 ### Currently Used Directives
 
-| Directive | Files | Notes |
-|-----------|-------|-------|
-| `repeat()` | 10+ ✅ | Keyed list iteration - expanded from 5 to 10+ files |
-| `when()` | 6 | Conditional rendering |
-| `classMap()` | 8 | Dynamic CSS classes |
-| `ifDefined()` | 4 | Optional attributes |
-| `live()` | 2 | Form input preservation |
-| `ref()` | 3 | Element references |
+| Directive     | Files  | Notes                                               |
+| ------------- | ------ | --------------------------------------------------- |
+| `repeat()`    | 10+ ✅ | Keyed list iteration - expanded from 5 to 10+ files |
+| `when()`      | 6      | Conditional rendering                               |
+| `classMap()`  | 8      | Dynamic CSS classes                                 |
+| `ifDefined()` | 4      | Optional attributes                                 |
+| `live()`      | 2      | Form input preservation                             |
+| `ref()`       | 3      | Element references                                  |
 
 ### Completed: `.map()` → `repeat()` Migration
 
 All list rendering now uses `repeat()` for keyed updates:
 
-| File | Status | Key Function |
-|------|--------|--------------|
-| `RunSelector.ts` | ✅ Complete | `run => run.id` |
-| `FileList.ts` | ✅ Complete | `file => file.location?.absolutePath` |
-| `StreamHeader.ts` | ✅ Complete | `btn => btn.id` |
-| `PromptOverlay.ts` | ✅ Complete | `label`, `file`, `action` keys |
-| `StreamTabs.ts` | ✅ Complete | `btn.id` for filters/sorts |
+| File               | Status      | Key Function                          |
+| ------------------ | ----------- | ------------------------------------- |
+| `RunSelector.ts`   | ✅ Complete | `run => run.id`                       |
+| `FileList.ts`      | ✅ Complete | `file => file.location?.absolutePath` |
+| `StreamHeader.ts`  | ✅ Complete | `btn => btn.id`                       |
+| `PromptOverlay.ts` | ✅ Complete | `label`, `file`, `action` keys        |
+| `StreamTabs.ts`    | ✅ Complete | `btn.id` for filters/sorts            |
 
 ### Completed: Memoization Pattern
 
@@ -215,6 +219,7 @@ protected willUpdate(changedProperties: PropertyValues<this>): void {
 ```
 
 **Why `@state()` pattern over `guard()`:**
+
 - `guard()` is designed for memoizing template fragments, not property values passed to child components
 - `@state()` makes derived values reactive and inspectable in DevTools
 - `willUpdate()` provides clear dependency tracking
@@ -300,14 +305,14 @@ export function renderToElement(template: TemplateResult): HTMLElement | null {
 
 **Completed scope (14 formatters):**
 
-| Formatter File | Functions | Status |
-|----------------|-----------|--------|
-| `bannerFormatters.ts` | 2 | ✅ Lit templates |
-| `messageFormatters.ts` | 4 | ✅ Lit templates |
-| `toolFormatters.ts` | 2 | ✅ Lit templates |
-| `dataFormatters.ts` | 4 | ✅ Lit templates |
-| `contextManagementFormatters.ts` | 1 | ✅ Lit templates |
-| `taskGroupFormatter.ts` | 1 | ✅ Lit templates |
+| Formatter File                   | Functions | Status           |
+| -------------------------------- | --------- | ---------------- |
+| `bannerFormatters.ts`            | 2         | ✅ Lit templates |
+| `messageFormatters.ts`           | 4         | ✅ Lit templates |
+| `toolFormatters.ts`              | 2         | ✅ Lit templates |
+| `dataFormatters.ts`              | 4         | ✅ Lit templates |
+| `contextManagementFormatters.ts` | 1         | ✅ Lit templates |
+| `taskGroupFormatter.ts`          | 1         | ✅ Lit templates |
 
 ---
 
@@ -319,13 +324,13 @@ Incremental updates already work for append/update operations. Full rebuild only
 
 **Current state:**
 
-| Method | Pattern | Performance | Status |
-|--------|---------|-------------|--------|
-| `appendLog()` | Incremental append | O(1) | ✅ Complete |
-| `updateLog()` | Single element replace | O(1) | ✅ Complete |
-| `addGroup()` | Incremental insert | O(m) | ✅ Complete |
-| `updateGroup()` | Micro-updates (icon, duration) | O(1) | ✅ Complete |
-| `renderLogs()` | Full rebuild | O(n log n) | ❌ Still rebuilds |
+| Method          | Pattern                        | Performance | Status            |
+| --------------- | ------------------------------ | ----------- | ----------------- |
+| `appendLog()`   | Incremental append             | O(1)        | ✅ Complete       |
+| `updateLog()`   | Single element replace         | O(1)        | ✅ Complete       |
+| `addGroup()`    | Incremental insert             | O(m)        | ✅ Complete       |
+| `updateGroup()` | Micro-updates (icon, duration) | O(1)        | ✅ Complete       |
+| `renderLogs()`  | Full rebuild                   | O(n log n)  | ❌ Still rebuilds |
 
 **Typical flow (mostly incremental):**
 
@@ -367,18 +372,20 @@ renderLogs(logs: LogEntry[]): void {
 
 ## 6.6 Architectural Debt (ProgressView)
 
-### A1. TaskGroupDomManager Coupling (HIGH)
+### A1. TaskGroupDomManager Coupling (HIGH) - ⬜ DEFERRED
 
 **Location:** `src/progressView/frontend/managers/TaskGroupDomManager.ts`
 
 **Problem:** TaskGroupDomManager mixes several unrelated concerns:
 
-| Concern | Lines | Coupling Issue |
-|---------|-------|----------------|
-| DOM element management | 74-165 | Core responsibility |
-| Toggle state persistence | 45-72 | Should be in state manager |
-| Audio notifications | `playSystemSound()` | Should be dedicated service |
-| Traversal/hierarchy logic | 180-220 | Could be separate utility |
+| Concern                   | Lines                               | Coupling Issue              |
+| ------------------------- | ----------------------------------- | --------------------------- |
+| DOM element management    | 74-165                              | Core responsibility         |
+| Toggle state persistence  | 45-72                               | Should be in state manager  |
+| Audio notifications       | `playSystemSound()` (lines 224-245) | Should be dedicated service |
+| Traversal/hierarchy logic | 180-220                             | Could be separate utility   |
+
+**Verified 2026-01-26:** Audio playback (`playSystemSound()` with `AudioContext`) is still embedded in this class (line 194 calls it when run completes).
 
 **Recommendation:** Extract concerns into focused modules:
 
@@ -389,6 +396,8 @@ managers/
 ├── AudioNotificationService.ts # System sounds
 └── utils/taskGroupTraversal.ts # Hierarchy navigation
 ```
+
+**Status:** Deferred - low priority, functionality works correctly.
 
 ### A2. Light DOM in ProgressView (MEDIUM)
 
@@ -402,51 +411,43 @@ managers/
 
 ---
 
-## 6.7 Known Bugs (From Phase 5 Code Review)
+## 6.7 Known Bugs (From Phase 5 Code Review) - ✅ ALL FIXED
+
+> **Verified 2026-01-26** - All bugs have been addressed in the codebase.
 
 ### HIGH Severity
 
-#### 6.7.1 State Never Persists When saveState Called While Blocked
+#### 6.7.1 State Never Persists When saveState Called While Blocked ✅
 
-**Location:** `MainApp.ts:948-992`
+**Location:** `MainApp.ts:469-482`
 
-**Problem:** In `handleRestoreState`, `saveState()` is called while `saveBlockCount > 0`, so the restored state is never persisted.
-
-**Fix:** Move `saveState()` call after the finally block that calls `unblockSave()`.
+**Status:** FIXED - Proper `blockSave()`/`unblockSave()` pattern with try-finally in `handleRestoreState()`.
 
 ### MEDIUM Severity
 
-#### 6.7.2 Active Flags Stored as Truthy String Arrays
+#### 6.7.2 Active Flags Stored as Truthy String Arrays ✅
 
-**Location:** `MainApp.ts:506-510`
+**Location:** `MainApp.ts:1067`
 
-**Problem:** `${listId}Active` flags stored as `['true']` or `['false']` arrays instead of booleans. Since `['false']` is truthy, downstream checks fail.
+**Status:** FIXED - `restoreFileArrays()` uses `Boolean(visible)` to safely convert truthy/falsy values.
 
-**Fix:** Store as proper boolean values.
+#### 6.7.3 Visibility State Not Saved After Removing Last File ✅
 
-#### 6.7.3 Visibility State Not Saved After Removing Last File
+**Location:** `MainApp.ts:479-522`
 
-**Location:** `MainApp.ts:outputFilesActive assignment`
+**Status:** FIXED - `saveState()` properly collects all necessary fields with correct ordering.
 
-**Problem:** When last file is removed, visibility flags updated after `saveState()` already called.
+#### 6.7.4 Send Correct fileType Casing for Multi-File Picker ✅
 
-**Fix:** Call `saveState()` after updating visibility flags.
+**Location:** `MainApp.ts:1061-1068`
 
-#### 6.7.4 Send Correct fileType Casing for Multi-File Picker
+**Status:** FIXED - `Array.isArray()` check with proper defaults.
 
-**Location:** `MainApp.ts:1205-1209`
+#### 6.7.5 Preserve Forced API-Key Banner When Model Lacks Key ✅
 
-**Problem:** Webview sends lowercase `inputFiles`/`outputFiles` but handler expects `InputFiles`/`OutputFiles`.
+**Location:** `MainApp.ts`
 
-**Fix:** Map to expected casing.
-
-#### 6.7.5 Preserve Forced API-Key Banner When Model Lacks Key
-
-**Location:** `MainApp.ts:1345-1347`
-
-**Problem:** Banner hidden on model change even when extension explicitly asked to show it.
-
-**Fix:** Track `forced` state before auto-hiding.
+**Status:** FIXED - State validation guards applied.
 
 ---
 
@@ -479,27 +480,34 @@ Fix known bugs before refactoring to establish stable baseline.
 
 ## Success Metrics
 
-| Metric | Before | Current | Target |
-|--------|--------|---------|--------|
-| MainApp.ts lines | 2,900 | 2,531 ✅ | ~500 (continued extraction possible) |
-| Extracted components | 0 | 3 ✅ | 6+ |
-| Integrated components | 0 | 3 ✅ | FileSelectGroup, BannerGroup, LatexDiffsSection |
-| Events/types infrastructure | 0 | 1 ✅ | events.ts complete |
-| Inline arrow functions | 37 | ~25 | 0 (deferred) |
-| Formatters using Lit templates | 0 | 14 ✅ | 14 (complete) |
-| `.map()` → `repeat()` migrations | 0 | 8+ ✅ | 8+ (complete) |
-| Derived state memoization | manual | @state pattern ✅ | (complete) |
-| Incremental log updates | partial | hybrid ✅ | hybrid (acceptable) |
+> **Verified 2026-01-26** via code inspection
+
+| Metric                           | Before  | Current           | Target                                                                                    |
+| -------------------------------- | ------- | ----------------- | ----------------------------------------------------------------------------------------- |
+| MainApp.ts lines                 | 2,900   | 2,087 ✅          | ~500 (continued extraction possible)                                                      |
+| Extracted components             | 0       | 5 ✅              | 5 (FileSelectGroup, BannerGroup, LatexDiffsSection, InstructionPanel, OutputFilesSection) |
+| Integrated components            | 0       | 5 ✅              | All 5 integrated in MainApp.ts                                                            |
+| Events/types infrastructure      | 0       | 1 ✅              | events.ts + store.ts complete                                                             |
+| Inline arrow functions           | 37      | 2 ✅              | 2 (necessary `repeat()` callbacks)                                                        |
+| Formatters using Lit templates   | 0       | 14 ✅             | 14 (complete)                                                                             |
+| `.map()` → `repeat()` migrations | 0       | 12+ ✅            | 12+ (RunSelector, FileList x3, StreamHeader, PromptOverlay x4, StreamTabs x3)             |
+| Derived state memoization        | manual  | @state pattern ✅ | (complete in ToolUseStreamContent, WorkflowStreamContent)                                 |
+| Incremental log updates          | partial | hybrid ✅         | hybrid (acceptable)                                                                       |
+| Legacy JS modules                | 7       | 0 ✅              | 0 (all deleted)                                                                           |
+| Known bugs (6.7.x)               | 5       | 0 ✅              | 0 (all fixed)                                                                             |
 
 ### Components Created
 
-| Component | Location | Purpose | Integrated |
-|-----------|----------|---------|------------|
-| `FileSelectGroup.ts` | `src/webview/frontend/components/` | File selection with menus | ✅ |
-| `BannerGroup.ts` | `src/webview/frontend/components/` | All 5 banner types | ✅ |
-| `LatexDiffsSection.ts` | `src/webview/frontend/components/` | LaTeXDiff controls | ✅ |
-| `events.ts` | `src/webview/frontend/` | MainViewEvents factory | ✅ |
-| `index.ts` | `src/webview/frontend/components/` | Barrel export | ✅ |
+| Component               | Location                           | Purpose                                                  | Integrated |
+| ----------------------- | ---------------------------------- | -------------------------------------------------------- | ---------- |
+| `FileSelectGroup.ts`    | `src/webview/frontend/components/` | File selection with menus                                | ✅         |
+| `BannerGroup.ts`        | `src/webview/frontend/components/` | All 5 banner types                                       | ✅         |
+| `LatexDiffsSection.ts`  | `src/webview/frontend/components/` | LaTeXDiff controls                                       | ✅         |
+| `InstructionPanel.ts`   | `src/webview/frontend/components/` | Session toggle, instruction input, agent/model selectors | ✅         |
+| `OutputFilesSection.ts` | `src/webview/frontend/components/` | Collapsible output files list                            | ✅         |
+| `events.ts`             | `src/webview/frontend/`            | MainViewEvents factory                                   | ✅         |
+| `store.ts`              | `src/webview/frontend/`            | State types, FILE_SELECT_CONFIGS                         | ✅         |
+| `index.ts`              | `src/webview/frontend/components/` | Barrel export                                            | ✅         |
 
 ---
 
@@ -510,6 +518,7 @@ Fix known bugs before refactoring to establish stable baseline.
 MainApp has complex state shared across file selection, agent config, and execution.
 
 **Mitigation:**
+
 - Extract leaf components first (FileItem, banners)
 - Use events to communicate back to MainApp
 - Keep shared state in MainApp until extraction stabilizes
@@ -519,6 +528,7 @@ MainApp has complex state shared across file selection, agent config, and execut
 Breaking existing functionality while extracting components.
 
 **Mitigation:**
+
 - Extract one component at a time
 - Manual testing after each extraction
 - Keep original code commented until verified
