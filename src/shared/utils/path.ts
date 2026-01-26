@@ -1,4 +1,11 @@
 /**
+ * Normalize a file path to forward slashes for consistent comparisons.
+ */
+export function normalizeFilePath(filePath: string): string {
+  return filePath.replaceAll('\\', '/');
+}
+
+/**
  * Extract the base name (filename) from a file path.
  * Handles platform-specific separators (\ on Windows, / on Unix).
  *
@@ -11,8 +18,7 @@
 export function getBasename(filePath: string | undefined | null): string {
   if (!filePath) return '';
 
-  // Normalize path separators to forward slashes
-  const normalized = filePath.replaceAll('\\', '/');
+  const normalized = normalizeFilePath(filePath);
 
   // Remove trailing slashes except for root
   const cleaned = normalized.replace(/\/+$/, '') || '/';

@@ -14,6 +14,8 @@ export * from './proposalFields';
 export * from './stream';
 export * from './contextManagement';
 export * from './diffResult';
+export * from './mainViewState';
+export * from './mainViewEvents';
 
 // Message schemas (depend on data schemas) - must come before streamState
 export * from './progressViewMessages';
