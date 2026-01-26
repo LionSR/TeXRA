@@ -41,7 +41,8 @@ function stripJsonComments(text) {
       // Skip block comments
       if (char === '/' && next === '*') {
         i += 2;
-        while (i < text.length - 1 && !(text[i] === '*' && text[i + 1] === '/')) i++;
+        while (i < text.length - 1 && !(text[i] === '*' && text[i + 1] === '/'))
+          i++;
         i += 2;
         continue;
       }
@@ -72,7 +73,7 @@ export const aliases = Object.fromEntries(
     const pathValue = values[0].replace('/*', '');
     // Resolve to absolute path
     return [aliasKey, resolve(rootDir, pathValue)];
-  })
+  }),
 );
 
 /**

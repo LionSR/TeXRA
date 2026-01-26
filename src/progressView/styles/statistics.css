@@ -1,9 +1,0 @@
-/**
- * Statistics styles for ProgressView
- */
-
-.statistics-content {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-large);
-}

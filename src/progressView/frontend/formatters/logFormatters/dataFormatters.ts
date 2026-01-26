@@ -17,23 +17,12 @@ import {
   FileListEntrySchema,
   MissingOutputsPayloadSchema,
   parseDiffResultEntries,
-  type DiffResultDisplay,
-  type DiffStatus,
   type ExtendedTokenUsageStats,
 } from '@shared/schemas';
-import {
-  html,
-  ifDefined,
-  renderToElement,
-  type TemplateResult,
-} from '../litTemplates';
+import { html, ifDefined, renderToElement } from '../litTemplates';
 
 // Local imports - formatter helpers
-import {
-  buildFileLink,
-  buildFileListRender,
-  buildDetailsSummary,
-} from '../htmlBuilders';
+import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
 /** Format file list entry. */
@@ -126,43 +115,10 @@ export function formatMissingOutputs(
 }
 
 // =============================================================================
-// Latexdiff Helpers
-// =============================================================================
-
-/** Status icon class lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
-  success: 'codicon-check',
-  error: 'codicon-error',
-};
-
-/** Build Lit template for a latexdiff entry. */
-function buildLatexdiffEntry(entry: DiffResultDisplay): TemplateResult {
-  const {
-    baseFile,
-    revisedFile,
-    diffFile,
-    displayName,
-    baseRound,
-    revisedRound,
-    status,
-    message,
-    runId,
-  } = entry;
-
-  const icon = LATEXDIFF_STATUS_ICONS[status];
-  const baseLabel =
-    baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
-  const revisedLabel = `[r${revisedRound}]`;
-
-  // prettier-ignore
-  return html`<li class="detail-item" data-run-id=${ifDefined(runId)} title=${ifDefined(message)}><i class=${`codicon ${icon}`}></i> ${buildFileLink(baseFile, baseLabel)} <span class="arrow">→</span> ${buildFileLink(revisedFile, revisedLabel)} (${buildFileLink(diffFile, 'diff')})</li>`;
-}
-
-// =============================================================================
 // Latexdiff Formatter
 // =============================================================================
 
-/** Format latexdiff entry using Zod schema validation. */
+/** Format latexdiff entry using Lit-native component. */
 export function formatLatexdiff(
   data: unknown,
   logId: string,
@@ -171,29 +127,15 @@ export function formatLatexdiff(
   if (entries.length === 0) return null;
 
   const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
-  const summaryText =
-    entries.length === 1
-      ? 'Latexdiff result'
-      : `Latexdiff results (${entries.length})`;
 
-  return renderToElement(html`
-    <details class="banner-details latexdiff-details" open>
-      ${buildDetailsSummary({
-        iconClass: 'codicon-diff',
-        label: summaryText,
-        labelClass: 'summary-text',
-        includeIconClass: false,
-        expanded: true,
-      })}
-      <ul
-        class="latexdiff-content"
-        data-log-id=${ifDefined(logId)}
-        data-run-id=${ifDefined(aggregatedRunId)}
-      >
-        ${entries.map(buildLatexdiffEntry)}
-      </ul>
-    </details>
-  `);
+  const element = document.createElement('latexdiff-results');
+  element.setAttribute('logId', logId);
+  if (aggregatedRunId) {
+    element.setAttribute('runId', aggregatedRunId);
+  }
+  // Pass entries as property since it's an array
+  (element as HTMLElement & { entries: typeof entries }).entries = entries;
+  return element;
 }
 
 // =============================================================================
@@ -231,7 +173,7 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
 ];
 
-/** Format statistics entry using schema validation. */
+/** Format statistics entry using Lit-native component. */
 export function formatStatistics(
   data: unknown,
   logId: string,
@@ -249,19 +191,11 @@ export function formatStatistics(
     }),
   );
 
-  return renderToElement(html`
-    <details class="banner-details statistics-details">
-      ${buildDetailsSummary({
-        iconClass: 'codicon-graph',
-        label: 'Statistics',
-        labelClass: 'summary-text',
-        includeIconClass: false,
-      })}
-      <div class="statistics-content" data-log-id=${ifDefined(logId)}>
-        ${items.map(
-          (item) => html`<span class="stat-item detail-item" title=${item.label}><i class=${`codicon ${item.icon}`}></i> ${item.value}</span>`,
-        )}
-      </div>
-    </details>
-  `);
+  if (items.length === 0) return null;
+
+  const element = document.createElement('statistics-panel');
+  element.setAttribute('logId', logId);
+  // Pass items as property since it's an array
+  (element as HTMLElement & { items: typeof items }).items = items;
+  return element;
 }
