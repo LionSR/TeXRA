@@ -61,26 +61,22 @@ export class LogList extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('toggle', this.handleToggleEvent, {
-      capture: true,
-    });
-    document.addEventListener('click', this.handleClickEvent, {
-      capture: true,
-    });
-    document.addEventListener(
+    // Use component-level listeners instead of document-level
+    // Since LogList uses Light DOM, events bubble naturally to this element
+    this.addEventListener('toggle', this.handleToggleEvent, { capture: true });
+    this.addEventListener('click', this.handleClickEvent as EventListener);
+    this.addEventListener(
       'file-click',
       this.handleFileClickEvent as EventListener,
     );
   }
 
   override disconnectedCallback(): void {
-    document.removeEventListener('toggle', this.handleToggleEvent, {
+    this.removeEventListener('toggle', this.handleToggleEvent, {
       capture: true,
     });
-    document.removeEventListener('click', this.handleClickEvent, {
-      capture: true,
-    });
-    document.removeEventListener(
+    this.removeEventListener('click', this.handleClickEvent as EventListener);
+    this.removeEventListener(
       'file-click',
       this.handleFileClickEvent as EventListener,
     );
