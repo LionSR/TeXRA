@@ -15,15 +15,19 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 ## Status Summary
 
-> **Overall Phase 6 Completion: ~98%**
+> **Overall Phase 6 Completion: 100%**
 >
 > - ✅ Component extraction complete (5 components extracted)
 > - ✅ `.map()` → `repeat()` migration complete (5 files)
 > - ✅ Derived state memoization complete (willUpdate pattern with @state)
 > - ✅ MainApp integration complete (all 5 components integrated)
-> - ✅ MainApp.ts reduced from 2,924 to 2,313 lines (611 lines, 21% reduction)
+> - ✅ MainApp.ts reduced from 2,924 to 2,087 lines (837 lines, 29% reduction)
+> - ✅ State types and configs extracted to store.ts
+> - ✅ Legacy JS modules deleted (7 files, replaced by TypeScript equivalents)
 > - ⬜ Inline arrow function extraction (deferred - low priority)
 > - ⬜ TaskGroupDomManager refactor (deferred - low priority)
+>
+> **Next:** [Phase 7](./prd-mainview-phase7.md) - Zod-native types & MainApp decomposition
 
 | Task | Status | Impact |
 |------|--------|--------|
@@ -39,12 +43,39 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 | Integrate OutputFilesSection | ✅ Complete | Replaced output files section in MainApp |
 | Create events.ts | ✅ Complete | MainViewEvents factory for typed event dispatch |
 | Delete unused methods | ✅ Complete | Removed renderFileSelect, renderFileList, renderAutoExtractMenu, etc. |
+| Extract store.ts | ✅ Complete | State types, defaults, FILE_SELECT_CONFIGS, command mappings |
+| Data-driven file selectors | ✅ Complete | FILE_SELECT_CONFIGS + repeat() replaces 4 inline configs |
 | Convert 37 inline arrows | ⬜ Deferred | Low priority - components use class methods |
 | Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM |
 | renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
 | TaskGroupDomManager refactor | ⬜ Deferred | Low priority - separation of concerns |
 | Replace .map() with repeat() | ✅ Complete | RunSelector, FileList, StreamHeader, PromptOverlay, StreamTabs |
 | Add guard() / @state memoization | ✅ Complete | ToolUseStreamContent, WorkflowStreamContent use @state pattern |
+| Delete legacy JS modules | ✅ Complete | Removed 5 JS files superseded by TypeScript equivalents |
+
+---
+
+## 6.0 Legacy JS Module Cleanup
+
+**Status: ✅ Complete**
+
+Removed legacy JavaScript modules that were superseded by the Lit migration. These files were dead code - generated URIs but never loaded in any webview.
+
+### Deleted Files
+
+| File | Replacement |
+|------|-------------|
+| `src/common/modules/BaseDomHandler.js` | Lit component lifecycle |
+| `src/common/modules/domUtils.js` | `src/shared/utils/dom.ts` |
+| `src/common/modules/iconConstants.js` | `src/shared/utils/icons.ts` |
+| `src/common/modules/RecordingButtonManager.js` | `src/shared/controllers/RecordingButtonController.ts` |
+| `src/common/modules/templateUtils.js` | Lit templates |
+| `src/common/modules/files/baseFileUtils.d.ts` | Orphaned type declaration |
+| `src/types/common-modules.d.ts` | Orphaned type declarations |
+
+### Also Updated
+
+- `src/common/webview/BaseViewContentProvider.ts` - Removed URI generation for deleted modules
 
 ---
 
@@ -499,3 +530,4 @@ Breaking existing functionality while extracting components.
 - [Phase 5 PRD](./prd-progressview-phase5.md) - Completed regression fixes
 - [Lit Documentation](https://lit.dev/)
 - [ProgressView patterns](./prd-progressview-phase3.md) - Reference implementation
+- [progressView/state/ProgressViewState.ts](../src/progressView/state/ProgressViewState.ts) - Zod schema pattern reference
