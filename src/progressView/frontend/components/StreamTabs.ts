@@ -287,7 +287,9 @@ export class StreamTabs extends LitElement {
             .value=${this.filter}
             @change=${this.handleFilterChange}
           >
-            ${FILTER_BUTTONS.map(
+            ${repeat(
+              FILTER_BUTTONS,
+              (btn) => btn.id,
               (btn) => html`
                 <vscode-radio id=${btn.id} value=${btn.filter}>
                   ${btn.label}
@@ -300,7 +302,9 @@ export class StreamTabs extends LitElement {
             id="sortButtons"
             @click=${this.handleSortClick}
           >
-            ${SORT_BUTTONS.map(
+            ${repeat(
+              SORT_BUTTONS,
+              (btn) => btn.id,
               (btn) => html`
                 <vscode-toolbar-button
                   id=${btn.id}
