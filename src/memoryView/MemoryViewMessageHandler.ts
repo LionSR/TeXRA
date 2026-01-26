@@ -40,14 +40,8 @@ import {
   MemoryEnabledMessageSchema,
 } from '@webview/types/messages';
 
-interface MemoryViewItem {
-  displayPath: string;
-  storagePath: string;
-  size: number;
-  mtime: string;
-  lineCount: number;
-  preview: string;
-}
+// Local imports - shared schemas
+import type { MemoryViewItem } from '@shared/schemas';
 
 export class MemoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
