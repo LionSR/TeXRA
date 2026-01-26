@@ -15,10 +15,10 @@
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
-// Import the full codicon CSS (webpack inlineCssLoader handles this)
-import codiconCss from '@vscode/codicons/dist/codicon.css';
+// Import the full codicon CSS as string
+import codiconCss from '@vscode/codicons/dist/codicon.css?inline';
 
-// Declare the global font URI injected by the webview
+// Declare the global font URI injected by the webview HTML
 declare global {
   interface Window {
     __CODICON_FONT_URI__?: string;
@@ -27,12 +27,10 @@ declare global {
 
 /**
  * Get the codicon font URI from the webview context.
- * Falls back to empty string if not available (will use document-level font).
+ * Falls back to empty string if not available.
  */
 function getCodiconFontUri(): string {
-  return typeof window !== 'undefined'
-    ? (window.__CODICON_FONT_URI__ ?? '')
-    : '';
+  return typeof window !== 'undefined' ? (window.__CODICON_FONT_URI__ ?? '') : '';
 }
 
 /**

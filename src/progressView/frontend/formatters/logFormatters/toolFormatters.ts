@@ -355,21 +355,8 @@ export function formatWebSearch(
       <span class="file-list-summary">Results (${resultCount})</span>
       <ul class="detail-list">
         ${(results ?? []).map(
-          (r) => html`
-            <li class="detail-item">
-              <i class="codicon codicon-link"></i>
-              <a
-                href=${r.url ?? ''}
-                class="web-search-link"
-                target="_blank"
-                rel="noopener noreferrer"
-                >${r.title ?? r.domain ?? r.url}</a
-              >
-              ${r.domain
-                ? html`<span class="file-source">(${r.domain})</span>`
-                : ''}
-            </li>
-          `,
+          // prettier-ignore
+          (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
         )}
       </ul>
     `;

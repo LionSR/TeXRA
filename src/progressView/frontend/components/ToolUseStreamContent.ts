@@ -22,7 +22,6 @@
 import {
   LitElement,
   html,
-  css,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
@@ -52,11 +51,11 @@ type RunGroup = { id: string; name: string; startTime: number };
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
-  static styles = css`
-    :host {
-      display: contents;
-    }
-  `;
+  // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
+  // can style the task-group-list and its content
+  protected createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   @property({ type: Object }) state!: ToolUseStreamState;
   @property({ type: Object }) streamInfo!: StreamTabInfo;
