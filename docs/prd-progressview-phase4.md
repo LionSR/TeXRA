@@ -64,42 +64,43 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 - `ProfileApp.ts` (root), `AgentsTable.ts`, `ApiAccessSection.ts`, `ProfileInfo.ts`, `SignInPrompt.ts`
 - All legacy `modules/` deleted
 
-**Remaining:** MainView migration not yet started. See migration approach below.
+**MainView:** Lit migration complete (2026-01-25). Requires Phase 5 refactoring for Zod validation and component extraction.
 
 ---
 
-## Shared Infrastructure to Migrate First
+## Shared Infrastructure Migration Status
 
-Before migrating individual webviews, these shared JS utilities in `src/common/modules/` need attention:
+### JS Files Migration Status (Updated 2026-01-26)
 
-### JS Files Used by Multiple Webviews
-
-| File                  | Used By                                        | Migration Path                                         |
-| --------------------- | ---------------------------------------------- | ------------------------------------------------------ |
-| `htmlEncoding.js`     | HistoryView, MemoryView, ProfileView           | Already has TS: `@shared/utils/html.ts`                |
-| `iconConstants.js`    | HistoryView, MainView, domUtils.js             | Already has TS: `@shared/utils/icons.ts`               |
-| `pathUtils.js`        | BaseViewContentProvider, test file             | Already has TS: `@shared/utils/path.ts`                |
-| `stringUtils.js`      | MemoryView, MainView                           | Already has TS: `@shared/utils/string.ts`              |
-| `clipboardUtils.js`   | BaseViewContentProvider                        | Already has TS: `@shared/utils/clipboard.ts`           |
-| `ToggleStateStore.js` | HistoryView                                    | Already has TS: `@shared/state/ToggleStateStore.ts`    |
-| `webviewState.js`     | HistoryView, MemoryView, ProfileView, MainView | Already has TS: `@shared/state/WebviewStateManager.ts` |
-| `domUtils.js`         | Multiple views                                 | Partially migrated to `@shared/utils/dom.ts`           |
-| `dropdownUtils.js`    | FollowupSection, MainView                      | Keep as local util or inline                           |
-
-**Strategy:** TypeScript versions already exist in `@shared/`. When migrating each webview:
-
-1. Update imports from `@common/modules/*.js` to `@shared/*`
-2. After all webviews migrated, delete the JS originals
+| File                         | Status       | TS Replacement                            |
+| ---------------------------- | ------------ | ----------------------------------------- |
+| `htmlEncoding.js`            | ✅ Deleted   | `@shared/utils/html.ts`                   |
+| `stringUtils.js`             | ✅ Deleted   | `@shared/utils/string.ts`                 |
+| `pathUtils.js`               | ✅ Deleted   | `@shared/utils/path.ts`                   |
+| `clipboardUtils.js`          | ✅ Deleted   | `@shared/utils/clipboard.ts`              |
+| `ToggleStateStore.js`        | ✅ Deleted   | `@shared/state/ToggleStateStore.ts`       |
+| `webviewState.js`            | ✅ Deleted   | `@shared/state/WebviewStateManager.ts`    |
+| `textareaUtils.js`           | ✅ Deleted   | `@shared/utils/textarea.ts`               |
+| `dropdownUtils.js`           | ✅ Deleted   | `@shared/utils/dropdown.ts`               |
+| `debounce.js`                | ✅ Deleted   | `@utils/core` (perfect-debounce)          |
+| `BaseWebviewMessageHandler.js` | ✅ Deleted | `BaseViewMessageHandler.ts`               |
+| `iconConstants.js`           | ⏳ Blocked   | TS exists, but imported by domUtils.js    |
+| `domUtils.js`                | ⏳ Blocked   | Partial (10/27 functions in TS)           |
+| `templateUtils.js`           | ⏳ Blocked   | No TS replacement                         |
+| `webviewContext.js`          | ⏳ Blocked   | registerMessageHandlers missing in TS     |
+| `BaseDomHandler.js`          | ⏳ Infra     | Webview infrastructure, no migration      |
+| `StreamScopedMap.js`         | ⏳ Infra     | Webview infrastructure, no migration      |
+| `RecordingButtonManager.js`  | ⏳ In progress | TS controller exists, migration ongoing |
 
 ### Duplicate Constant Files to Delete
 
-| File                               | Lines | Status                                |
-| ---------------------------------- | ----- | ------------------------------------- |
-| `common/webview/commands.js`       | 298   | ⏳ **DELETE NOW** - TS version exists |
-| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete)       |
-| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete)       |
-| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete)       |
-| `webview/modules/constants.js`     | 162   | ⬜ Delete with MainView migration     |
+| File                               | Lines | Status                            |
+| ---------------------------------- | ----- | --------------------------------- |
+| `common/webview/commands.js`       | 298   | ✅ Deleted (TS version exists)    |
+| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete)   |
+| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete)   |
+| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete)   |
+| `webview/modules/constants.js`     | 162   | ✅ Deleted (MainView migrated)    |
 
 ---
 
@@ -584,31 +585,47 @@ The `vscode-checkbox` web component must be defined before setting `checked` pro
 src/memoryView/modules/     ✅ All deleted
 src/historyView/modules/    ✅ All deleted
 src/profileView/modules/    ✅ All deleted
+src/webview/modules/        ✅ All deleted (MainView migrated)
 ```
 
-**Remaining after MainView migration:**
+**Shared utilities deleted (2026-01-26):**
+
+These files had complete TS replacements in `@shared/` and zero active imports:
 
 ```
 src/common/modules/
-├── htmlEncoding.js
-├── iconConstants.js
-├── pathUtils.js
-├── stringUtils.js
-├── clipboardUtils.js
-├── ToggleStateStore.js
-├── webviewState.js
-├── domUtils.js
-├── dropdownUtils.js
-├── templateUtils.js
-├── textareaUtils.js
-└── RecordingButtonManager.js
+├── htmlEncoding.js         ✅ Deleted → @shared/utils/html.ts
+├── stringUtils.js          ✅ Deleted → @shared/utils/string.ts
+├── pathUtils.js            ✅ Deleted → @shared/utils/path.ts
+├── clipboardUtils.js       ✅ Deleted → @shared/utils/clipboard.ts
+├── ToggleStateStore.js     ✅ Deleted → @shared/state/ToggleStateStore.ts
+├── webviewState.js         ✅ Deleted → @shared/state/WebviewStateManager.ts
+├── textareaUtils.js        ✅ Deleted → @shared/utils/textarea.ts
+├── dropdownUtils.js        ✅ Deleted → @shared/utils/dropdown.ts
+├── debounce.js             ✅ Deleted → @utils/core (perfect-debounce)
+└── BaseWebviewMessageHandler.js ✅ Deleted → BaseViewMessageHandler.ts
+```
 
-src/common/webview/commands.js  ← DELETE NOW (TS version exists)
+Also cleaned up:
+- Removed 10 obsolete URI entries from `BaseViewContentProvider.ts`
+- Removed 8 obsolete type declarations from `common-modules.d.ts`
+- Updated `pathUtils.test.js` to import from `@shared/utils/path`
 
-src/webview/modules/ (MainView - last remaining)
+**Remaining JS files (have blockers):**
+
+```
+src/common/modules/
+├── iconConstants.js        ⏳ Blocked: imported by domUtils.js
+├── domUtils.js             ⏳ Blocked: only 10/27 functions migrated to TS
+├── templateUtils.js        ⏳ Blocked: no TS replacement exists
+├── webviewContext.js       ⏳ Blocked: registerMessageHandlers missing in TS
+├── BaseDomHandler.js       ⏳ Webview infrastructure (no migration needed)
+├── StreamScopedMap.js      ⏳ Webview infrastructure (no migration needed)
+└── RecordingButtonManager.js ⏳ Migration in progress (TS controller exists)
 ```
 
 **Cleanup summary:**
 
-- Deleted: ~1,551 lines (memoryView + historyView + profileView modules)
-- Remaining: ~612 duplicate constant lines + ~1,872 shared utility lines + ~2,259 MainView JS lines
+- Phase 4 deleted: ~1,551 lines (memoryView + historyView + profileView modules)
+- Phase 4 shared utils deleted: 10 files (~800 lines)
+- Remaining: 7 JS files with blockers (~600 lines)
