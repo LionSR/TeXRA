@@ -18,12 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onColorTheme",
-    "onView:texra.mainView",
-    "onView:texra.progressView",
-    "onView:texra.folderExplorer",
-    "onCommand:texra.openGettingStarted",
-    "onCommand:texra.cloneOverleafProject"
+    "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -1352,6 +1347,12 @@
         "shortTitle": "Open in Tab",
         "category": "TeXRA",
         "icon": "$(multiple-windows)"
+      },
+      {
+        "command": "texra.showMemory",
+        "title": "Show Memory",
+        "category": "TeXRA",
+        "icon": "$(database)"
       }
     ],
     "walkthroughs": [
@@ -1653,7 +1654,6 @@
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.7.1",
     "@types/diff-match-patch": "^1.0.36",
-    "@types/difflib": "^0.2.7",
     "@types/fs-extra": "^11.0.4",
     "@types/he": "^1.2.3",
     "@types/identifiers-arxiv": "^0.1.2",
@@ -1737,7 +1737,6 @@
     "deepmerge": "^4.3.1",
     "delay": "^7.0.0",
     "diff-match-patch": "^1.0.5",
-    "difflib": "^0.2.4",
     "dotenv": "^17.2.3",
     "execa": "^9.6.1",
     "fast-xml-parser": "^5.3.3",

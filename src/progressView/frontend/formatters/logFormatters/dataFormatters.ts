@@ -154,19 +154,8 @@ function buildLatexdiffEntry(entry: DiffResultDisplay): TemplateResult {
     baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
   const revisedLabel = `[r${revisedRound}]`;
 
-  return html`
-    <li
-      class="detail-item"
-      data-run-id=${ifDefined(runId)}
-      title=${ifDefined(message)}
-    >
-      <i class=${`codicon ${icon}`}></i>
-      ${buildFileLink(baseFile, baseLabel)}
-      <span class="arrow">→</span>
-      ${buildFileLink(revisedFile, revisedLabel)}
-      (${buildFileLink(diffFile, 'diff')})
-    </li>
-  `;
+  // prettier-ignore
+  return html`<li class="detail-item" data-run-id=${ifDefined(runId)} title=${ifDefined(message)}><i class=${`codicon ${icon}`}></i> ${buildFileLink(baseFile, baseLabel)} <span class="arrow">→</span> ${buildFileLink(revisedFile, revisedLabel)} (${buildFileLink(diffFile, 'diff')})</li>`;
 }
 
 // =============================================================================
