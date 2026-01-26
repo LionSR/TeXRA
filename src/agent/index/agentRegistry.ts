@@ -25,6 +25,7 @@ import {
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
+import type { AgentOptionData } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
@@ -715,19 +716,7 @@ export function computeAgentOptionsSync(): AgentOptionsPayload {
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
 
-/**
- * Typed agent option for Lit-native rendering.
- * Replaces HTML string building with structured data.
- */
-export interface AgentOptionData {
-  value: string;
-  label: string;
-  isMultiple?: boolean;
-  isToolUse?: boolean;
-  isRemote?: boolean;
-  isCustom?: boolean;
-  description?: string;
-}
+// AgentOptionData type is imported from @shared/schemas (single source of truth)
 
 export interface AgentOptionsDataPayload {
   workflow: AgentOptionData[];
