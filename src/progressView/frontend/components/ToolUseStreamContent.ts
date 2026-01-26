@@ -10,6 +10,9 @@
  * - Usage panel for context window stats
  * - Follow-up input for user messages
  *
+ * Uses memoized getters for derived values - only recomputes when
+ * dependencies change.
+ *
  * @fires toolbar-command - When toolbar actions are triggered
  * @fires prompt-action - When user responds to a prompt overlay
  * @fires followup-change - When follow-up text changes
@@ -19,13 +22,8 @@
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
@@ -61,12 +59,9 @@ export class ToolUseStreamContent extends LitElement {
   @property({ type: Object }) streamInfo!: StreamTabInfo;
   @property({ type: Array }) prompts: PromptState[] = [];
 
-  // Cached derived values - recomputed only when dependencies change
-  private _cachedFilteredPrompts: PromptState[] = [];
-  private _cachedRunGroups: RunGroup[] = [];
-  private _prevStreamId: string | null = null;
-  private _prevPrompts: PromptState[] | null = null;
-  private _prevTaskGroups: unknown[] | null = null;
+  // Memoized derived values - updated in willUpdate when deps change
+  @state() private filteredPrompts: PromptState[] = [];
+  @state() private runGroups: RunGroup[] = [];
 
   /** Ref for LogList - exposed for parent access via getLogListRef() */
   private logListRef: Ref<LogList> = createRef();
@@ -79,25 +74,25 @@ export class ToolUseStreamContent extends LitElement {
       changedProperties.has('prompts') ||
       changedProperties.has('streamInfo')
     ) {
-      const streamId = this.streamInfo?.name;
-      if (
-        this._prevPrompts !== this.prompts ||
-        this._prevStreamId !== streamId
-      ) {
-        this._cachedFilteredPrompts = this.computeFilteredPrompts();
-        this._prevPrompts = this.prompts;
-        this._prevStreamId = streamId ?? null;
-      }
+      this.filteredPrompts = this.computeFilteredPrompts();
     }
 
-    // Recompute run groups when state.taskGroups changes
+    // Recompute run groups when state changes (taskGroups is inside state)
     if (changedProperties.has('state')) {
-      const taskGroups = this.state?.taskGroups;
-      if (this._prevTaskGroups !== taskGroups) {
-        this._cachedRunGroups = getRunGroups(taskGroups ?? []);
-        this._prevTaskGroups = taskGroups ?? null;
-      }
+      this.runGroups = getRunGroups(this.state?.taskGroups ?? []);
     }
+  }
+
+  /**
+   * Compute filtered prompts for this stream.
+   * Only prompts matching this stream's ID (or with no streamId) are shown.
+   */
+  private computeFilteredPrompts(): PromptState[] {
+    const streamId = this.streamInfo?.name;
+    if (!streamId) return [];
+    return this.prompts.filter(
+      (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
+    );
   }
 
   render(): TemplateResult {
@@ -106,13 +101,13 @@ export class ToolUseStreamContent extends LitElement {
         .stream=${this.streamInfo}
         .streamState=${this.state}
         .runId=${null}
-        .runs=${this._cachedRunGroups}
+        .runs=${this.runGroups}
         .yoloActive=${Boolean(this.state.toolEditBypass)}
       ></stream-header>
 
       <prompt-overlay
-        ?hidden=${this._cachedFilteredPrompts.length === 0}
-        .prompt=${this._cachedFilteredPrompts.at(0) ?? null}
+        ?hidden=${this.filteredPrompts.length === 0}
+        .prompt=${this.filteredPrompts.at(0) ?? null}
       ></prompt-overlay>
 
       <todo-list .todos=${this.state.todos}></todo-list>
@@ -130,18 +125,6 @@ export class ToolUseStreamContent extends LitElement {
         .queuedMessages=${this.state.queuedFollowUps}
       ></follow-up-input>
     `;
-  }
-
-  /**
-   * Compute filtered prompts for this stream.
-   * Only prompts matching this stream's ID (or with no streamId) are shown.
-   */
-  private computeFilteredPrompts(): PromptState[] {
-    const streamId = this.streamInfo?.name;
-    if (!streamId) return [];
-    return this.prompts.filter(
-      (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
-    );
   }
 
   /**
