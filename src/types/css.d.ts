@@ -1,8 +1,8 @@
 /**
- * Type declarations for CSS imports.
+ * Type declarations for CSS and font imports.
  *
  * Supports Vite's ?inline suffix for importing CSS as string.
- * Webpack uses inlineCssLoader.js to achieve the same result.
+ * Webpack uses type: 'asset/source' to achieve the same result.
  */
 
 // CSS as string (Vite ?inline suffix)
@@ -15,4 +15,20 @@ declare module '*.css?inline' {
 declare module '*.css' {
   const content: string;
   export default content;
+}
+
+// Font imports - returns URL (or base64 data URI if inlined)
+declare module '*.ttf' {
+  const url: string;
+  export default url;
+}
+
+declare module '*.woff' {
+  const url: string;
+  export default url;
+}
+
+declare module '*.woff2' {
+  const url: string;
+  export default url;
 }
