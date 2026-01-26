@@ -2,6 +2,7 @@
 import { html, type TemplateResult } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import Sortable from 'sortablejs';
 
@@ -186,6 +187,69 @@ const ONBOARDING_PLACEHOLDERS: Record<SessionType, string[]> = {
     'Run LaTeX checks and report compilation warnings.',
   ],
 };
+
+/** Static configuration for each file selector type */
+const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
+  {
+    type: 'input',
+    label: 'Input',
+    icon: 'file-code',
+    refreshTitle: 'Refresh input files',
+    currentTitle: 'Set current file as input',
+    emptyTitle: 'Clear input file',
+    toggleTitle: 'Show or hide additional input files',
+    addOpenedLabel: 'Add opened files as input',
+    emptyListLabel: 'Clear all input files',
+    selectListLabel: 'Add input files',
+    tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
+    toolConfig: 'tool',
+    focusInstruction: {
+      key: 'inputFileSelect',
+      text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
+    },
+  },
+  {
+    type: 'reference',
+    label: 'Reference',
+    icon: 'book',
+    refreshTitle: 'Refresh reference files',
+    currentTitle: 'Set current file as reference',
+    emptyTitle: 'Clear reference file',
+    toggleTitle: 'Show or hide additional reference files',
+    addOpenedLabel: 'Add opened files as reference',
+    emptyListLabel: 'Clear all reference files',
+    selectListLabel: 'Add reference files',
+    tooltip:
+      "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
+  },
+  {
+    type: 'auxiliary',
+    label: 'Auxiliary',
+    icon: 'archive',
+    refreshTitle: 'Refresh auxiliary files',
+    currentTitle: 'Set current file as auxiliary',
+    emptyTitle: 'Clear auxiliary file',
+    toggleTitle: 'Show or hide additional auxiliary files',
+    addOpenedLabel: 'Add opened files as auxiliary',
+    emptyListLabel: 'Clear all auxiliary files',
+    selectListLabel: 'Add auxiliary files',
+    tooltip: 'Files such as .cls/.sty that define document structure and styles',
+  },
+  {
+    type: 'media',
+    label: 'Media',
+    icon: 'device-camera-video',
+    refreshTitle: 'Refresh media files',
+    currentTitle: 'Set current file as media',
+    emptyTitle: 'Clear media file',
+    toggleTitle: 'Show or hide additional media files',
+    addOpenedLabel: 'Add opened files as media',
+    emptyListLabel: 'Clear all media files',
+    selectListLabel: 'Add media files',
+    tooltip: 'Images, figures, and media assets used by the document',
+    toolConfig: 'autoExtract',
+  },
+];
 
 type MainViewMessageHandler = (message: MainViewMessage) => void;
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
@@ -2078,6 +2142,30 @@ export class MainApp extends BaseWebviewApp {
     return markOptionAsSelected(optionsHtml, this.commit);
   }
 
+  /** Get single file value for a file type */
+  private getFileValue(type: FileType): string {
+    const key = `${type}File` as keyof typeof this.singleFiles;
+    return this.singleFiles[key] ?? '';
+  }
+
+  /** Get file options for a file type */
+  private getFileOptions(type: FileType): string[] {
+    const key = `${type}File` as keyof typeof this.fileOptions;
+    return (this.fileOptions[key] as string[] | undefined) ?? [];
+  }
+
+  /** Get multi-files visibility for a file type */
+  private getFilesVisible(type: FileType): boolean {
+    const key = `${type}Files` as keyof typeof this.multiFilesVisible;
+    return this.multiFilesVisible[key] ?? false;
+  }
+
+  /** Get multi-files array for a file type */
+  private getFiles(type: FileType): string[] {
+    const key = `${type}Files` as keyof typeof this.multiFiles;
+    return (this.multiFiles[key] as string[] | undefined) ?? [];
+  }
+
   render(): TemplateResult {
     const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
     const fileSelectionClasses = classMap({
@@ -2089,144 +2177,32 @@ export class MainApp extends BaseWebviewApp {
       <div class="content-wrapper">
         <div class="main-content">
           <div class=${fileSelectionClasses}>
-            <file-select-group
-              .config=${{
-                type: 'input',
-                label: 'Input',
-                icon: 'file-code',
-                refreshTitle: 'Refresh input files',
-                currentTitle: 'Set current file as input',
-                emptyTitle: 'Clear input file',
-                toggleTitle: 'Show or hide additional input files',
-                addOpenedLabel: 'Add opened files as input',
-                emptyListLabel: 'Clear all input files',
-                selectListLabel: 'Add input files',
-                tooltip:
-                  'Primary files the agent processes, such as .tex, .txt, or .md',
-                toolConfig: 'tool',
-                focusInstruction: {
-                  key: 'inputFileSelect',
-                  text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-                },
-              } as FileSelectConfig}
-              .selectedValue=${this.singleFiles.inputFile}
-              .options=${this.fileOptions.inputFile ?? []}
-              .listVisible=${this.multiFilesVisible.inputFiles}
-              .files=${this.multiFiles.inputFiles ?? []}
-              .checkboxValues=${this.checkboxValues}
-              .isToolUse=${isToolUse}
-              @file-change=${this.handleComponentFileChange}
-              @refresh-files=${this.handleComponentRefreshFiles}
-              @get-current-file=${this.handleComponentGetCurrentFile}
-              @empty-file=${this.handleComponentEmptyFile}
-              @toggle-list=${this.handleComponentToggleList}
-              @add-opened-files=${this.handleComponentAddOpenedFiles}
-              @empty-files=${this.handleComponentEmptyFiles}
-              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
-              @remove-file=${this.handleComponentRemoveFile}
-              @checkbox-change=${this.handleComponentCheckboxChange}
-              @focus-instruction=${this.handleComponentFocusInstruction}
-            ></file-select-group>
-            <file-select-group
-              .config=${{
-                type: 'reference',
-                label: 'Reference',
-                icon: 'book',
-                refreshTitle: 'Refresh reference files',
-                currentTitle: 'Set current file as reference',
-                emptyTitle: 'Clear reference file',
-                toggleTitle: 'Show or hide additional reference files',
-                addOpenedLabel: 'Add opened files as reference',
-                emptyListLabel: 'Clear all reference files',
-                selectListLabel: 'Add reference files',
-                tooltip:
-                  "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
-              } as FileSelectConfig}
-              .selectedValue=${this.singleFiles.referenceFile}
-              .options=${this.fileOptions.referenceFile ?? []}
-              .listVisible=${this.multiFilesVisible.referenceFiles}
-              .files=${this.multiFiles.referenceFiles ?? []}
-              .checkboxValues=${this.checkboxValues}
-              .isToolUse=${isToolUse}
-              @file-change=${this.handleComponentFileChange}
-              @refresh-files=${this.handleComponentRefreshFiles}
-              @get-current-file=${this.handleComponentGetCurrentFile}
-              @empty-file=${this.handleComponentEmptyFile}
-              @toggle-list=${this.handleComponentToggleList}
-              @add-opened-files=${this.handleComponentAddOpenedFiles}
-              @empty-files=${this.handleComponentEmptyFiles}
-              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
-              @remove-file=${this.handleComponentRemoveFile}
-              @checkbox-change=${this.handleComponentCheckboxChange}
-              @focus-instruction=${this.handleComponentFocusInstruction}
-            ></file-select-group>
-            <file-select-group
-              .config=${{
-                type: 'auxiliary',
-                label: 'Auxiliary',
-                icon: 'archive',
-                refreshTitle: 'Refresh auxiliary files',
-                currentTitle: 'Set current file as auxiliary',
-                emptyTitle: 'Clear auxiliary file',
-                toggleTitle: 'Show or hide additional auxiliary files',
-                addOpenedLabel: 'Add opened files as auxiliary',
-                emptyListLabel: 'Clear all auxiliary files',
-                selectListLabel: 'Add auxiliary files',
-                tooltip:
-                  'Files such as .cls/.sty that define document structure and styles',
-              } as FileSelectConfig}
-              .selectedValue=${this.singleFiles.auxiliaryFile}
-              .options=${this.fileOptions.auxiliaryFile ?? []}
-              .listVisible=${this.multiFilesVisible.auxiliaryFiles}
-              .files=${this.multiFiles.auxiliaryFiles ?? []}
-              .checkboxValues=${this.checkboxValues}
-              .isToolUse=${isToolUse}
-              @file-change=${this.handleComponentFileChange}
-              @refresh-files=${this.handleComponentRefreshFiles}
-              @get-current-file=${this.handleComponentGetCurrentFile}
-              @empty-file=${this.handleComponentEmptyFile}
-              @toggle-list=${this.handleComponentToggleList}
-              @add-opened-files=${this.handleComponentAddOpenedFiles}
-              @empty-files=${this.handleComponentEmptyFiles}
-              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
-              @remove-file=${this.handleComponentRemoveFile}
-              @checkbox-change=${this.handleComponentCheckboxChange}
-              @focus-instruction=${this.handleComponentFocusInstruction}
-            ></file-select-group>
-            <file-select-group
-              .config=${{
-                type: 'media',
-                label: 'Media',
-                icon: 'device-camera-video',
-                refreshTitle: 'Refresh media files',
-                currentTitle: 'Set current file as media',
-                emptyTitle: 'Clear media file',
-                toggleTitle: 'Show or hide additional media files',
-                addOpenedLabel: 'Add opened files as media',
-                emptyListLabel: 'Clear all media files',
-                selectListLabel: 'Add media files',
-                tooltip:
-                  'Images, figures, and media assets used by the document',
-                toolConfig: 'autoExtract',
-              } as FileSelectConfig}
-              .selectedValue=${this.singleFiles.mediaFile}
-              .options=${this.fileOptions.mediaFile ?? []}
-              .listVisible=${this.multiFilesVisible.mediaFiles}
-              .files=${this.multiFiles.mediaFiles ?? []}
-              .checkboxValues=${this.checkboxValues}
-              .isToolUse=${isToolUse}
-              @file-change=${this.handleComponentFileChange}
-              @refresh-files=${this.handleComponentRefreshFiles}
-              @get-current-file=${this.handleComponentGetCurrentFile}
-              @empty-file=${this.handleComponentEmptyFile}
-              @toggle-list=${this.handleComponentToggleList}
-              @add-opened-files=${this.handleComponentAddOpenedFiles}
-              @empty-files=${this.handleComponentEmptyFiles}
-              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
-              @remove-file=${this.handleComponentRemoveFile}
-              @checkbox-change=${this.handleComponentCheckboxChange}
-              @focus-instruction=${this.handleComponentFocusInstruction}
-            ></file-select-group>
+            ${repeat(
+              FILE_SELECT_CONFIGS,
+              (config) => config.type,
+              (config) => html`
+                <file-select-group
+                  .config=${config}
+                  .selectedValue=${this.getFileValue(config.type)}
+                  .options=${this.getFileOptions(config.type)}
+                  .listVisible=${this.getFilesVisible(config.type)}
+                  .files=${this.getFiles(config.type)}
+                  .checkboxValues=${this.checkboxValues}
+                  .isToolUse=${isToolUse}
+                  @file-change=${this.handleComponentFileChange}
+                  @refresh-files=${this.handleComponentRefreshFiles}
+                  @get-current-file=${this.handleComponentGetCurrentFile}
+                  @empty-file=${this.handleComponentEmptyFile}
+                  @toggle-list=${this.handleComponentToggleList}
+                  @add-opened-files=${this.handleComponentAddOpenedFiles}
+                  @empty-files=${this.handleComponentEmptyFiles}
+                  @select-multiple-files=${this.handleComponentSelectMultipleFiles}
+                  @remove-file=${this.handleComponentRemoveFile}
+                  @checkbox-change=${this.handleComponentCheckboxChange}
+                  @focus-instruction=${this.handleComponentFocusInstruction}
+                ></file-select-group>
+              `,
+            )}
             <output-files-section
               .expanded=${this.outputFilesActive}
               .files=${this.multiFiles.outputFiles ?? []}
