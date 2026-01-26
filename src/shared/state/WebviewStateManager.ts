@@ -1,6 +1,9 @@
 // Local imports
 import { vscode } from '../vscode';
 
+// Third-party imports
+import type { z } from 'zod';
+
 /**
  * Manages persistence of state for a single webview.
  * Wraps the VS Code `getState` and `setState` APIs.
@@ -9,10 +12,16 @@ export class WebviewStateManager<T extends Record<string, unknown>> {
   private defaultState: T;
   private state: T;
 
-  constructor(defaultState: Partial<T> = {} as Partial<T>) {
+  constructor(
+    defaultState: Partial<T> = {} as Partial<T>,
+    schema?: z.ZodType<T>,
+  ) {
     this.defaultState = { ...defaultState } as T;
-    const saved = (vscode.getState() as T | undefined) ?? ({} as T);
-    this.state = { ...this.defaultState, ...saved };
+    const saved = vscode.getState();
+    const parsed = schema?.safeParse(saved);
+    this.state = parsed?.success
+      ? { ...this.defaultState, ...parsed.data }
+      : { ...this.defaultState };
   }
 
   /**
