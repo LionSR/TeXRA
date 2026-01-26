@@ -15,15 +15,41 @@ export interface RecordingButtonConfig {
 }
 
 /**
+ * Computed state for recording button (used in templates).
+ */
+export interface RecordingButtonState {
+  /** Current icon name (without codicon- prefix) */
+  icon: string;
+  /** Current title/tooltip text */
+  title: string;
+  /** Whether currently recording */
+  recording: boolean;
+  /** CSS class for recording state (e.g., 'recording') */
+  recordingClass: string;
+}
+
+/**
  * Lit reactive controller for managing a recording toggle button.
+ *
+ * Exposes computed state that the host component can use in templates:
+ * ```typescript
+ * // In host component
+ * render() {
+ *   const { icon, title, recording, recordingClass } = this.recordingController.state;
+ *   return html`
+ *     <vscode-toolbar-button
+ *       icon=${icon}
+ *       label=${title}
+ *       title=${title}
+ *       class=${classMap({ [recordingClass]: recording })}
+ *       @click=${this.recordingController.handleClick}
+ *     ></vscode-toolbar-button>
+ *   `;
+ * }
+ * ```
  */
 export class RecordingButtonController implements ReactiveController {
-  private button: HTMLElement | null = null;
-  private isRecording = false;
-  private handleClick = () => {
-    const nextState = !this.isRecording;
-    postMessage(nextState ? this.config.startCommand : this.config.stopCommand);
-  };
+  private _recording = false;
 
   constructor(
     private readonly host: ReactiveControllerHost,
@@ -32,68 +58,53 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
+  hostConnected(): void {
+    // No setup needed
+  }
+
   hostDisconnected(): void {
-    this.detach();
+    // No cleanup needed
   }
 
-  attach(button: HTMLElement | null): void {
-    if (this.button === button) {
-      return;
-    }
-    this.detach();
-    this.button = button;
-    if (!this.button) {
-      return;
-    }
-    this.button.addEventListener('click', this.handleClick);
-    this.updateButton();
+  /**
+   * Get computed state for use in templates (Lit-native approach).
+   * The host component should use these values in its template bindings.
+   */
+  get state(): RecordingButtonState {
+    return {
+      icon: this._recording
+        ? (this.config.stopIcon ?? 'stop-circle')
+        : (this.config.startIcon ?? 'mic'),
+      title: this._recording
+        ? (this.config.stopTitle ?? 'Stop recording')
+        : (this.config.startTitle ?? 'Record with microphone'),
+      recording: this._recording,
+      recordingClass: this.config.recordingClass ?? 'recording',
+    };
   }
 
+  /** Whether currently recording */
+  get recording(): boolean {
+    return this._recording;
+  }
+
+  /**
+   * Handle button click - toggles recording state and sends command.
+   * Bind this to the button's @click handler in templates.
+   */
+  handleClick = (): void => {
+    const nextState = !this._recording;
+    postMessage(nextState ? this.config.startCommand : this.config.stopCommand);
+  };
+
+  /**
+   * Update recording state and trigger host re-render.
+   */
   setRecording(recording: boolean): void {
-    this.isRecording = Boolean(recording);
-    this.updateButton();
-  }
-
-  private detach(): void {
-    if (this.button) {
-      this.button.removeEventListener('click', this.handleClick);
+    const wasRecording = this._recording;
+    this._recording = Boolean(recording);
+    if (wasRecording !== this._recording) {
+      this.host.requestUpdate();
     }
-    this.button = null;
-  }
-
-  private updateButton(): void {
-    if (!this.button) return;
-
-    const iconName = this.isRecording
-      ? (this.config.stopIcon ?? 'stop-circle')
-      : (this.config.startIcon ?? 'mic');
-    const title = this.isRecording
-      ? (this.config.stopTitle ?? 'Stop recording')
-      : (this.config.startTitle ?? 'Record with microphone');
-    const tagName = this.button.tagName.toLowerCase();
-    const isVsCodeButton =
-      tagName === 'vscode-button' || tagName === 'vscode-toolbar-button';
-
-    if (isVsCodeButton) {
-      this.button.setAttribute('icon', iconName);
-      if (tagName === 'vscode-button') {
-        (this.button as HTMLButtonElement & { iconOnly?: boolean }).iconOnly =
-          true;
-      }
-      if (tagName === 'vscode-toolbar-button') {
-        this.button.setAttribute('label', title);
-      }
-      this.button.setAttribute('aria-label', title);
-      (this.button as HTMLButtonElement).title = title;
-    } else {
-      this.button.innerHTML = '';
-      const icon = document.createElement('i');
-      icon.className = `codicon codicon-${iconName}`;
-      this.button.appendChild(icon);
-      (this.button as HTMLButtonElement).title = title;
-    }
-
-    const recordingClass = this.config.recordingClass ?? 'recording';
-    this.button.classList.toggle(recordingClass, this.isRecording);
   }
 }

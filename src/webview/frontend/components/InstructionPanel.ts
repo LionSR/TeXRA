@@ -25,6 +25,7 @@ import {
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
+import { handleImagePaste } from '../pasteHandler';
 import { SESSION_TYPES, type SessionType } from '../constants';
 
 // Local imports - shared schemas
@@ -232,6 +233,30 @@ export class InstructionPanel extends LitElement {
     );
   }
 
+  /** Handle paste event on instruction textarea (Lit-native) */
+  private handleInstructionPaste = async (event: Event): Promise<void> => {
+    if (!(event instanceof ClipboardEvent)) return;
+    const textarea = this.renderRoot.querySelector(
+      '#instruction',
+    ) as HTMLElement | null;
+    if (!textarea) return;
+    const handled = await handleImagePaste(event, textarea);
+    if (handled) {
+      // Get updated value from textarea after image paste
+      const target = event.target as HTMLTextAreaElement;
+      const updatedValue = target.value ?? '';
+      this.dispatchEvent(
+        this.createEvent<InstructionChangeDetail>('instruction-input', {
+          value: updatedValue,
+        }),
+      );
+      // Dispatch additional event so parent can save state
+      this.dispatchEvent(
+        new CustomEvent('instruction-paste', { bubbles: true, composed: true }),
+      );
+    }
+  };
+
   private handleAction(action: string): void {
     this.dispatchEvent(
       this.createEvent<ActionDetail>('panel-action', { action }),
@@ -427,6 +452,7 @@ export class InstructionPanel extends LitElement {
             const target = event.target as HTMLTextAreaElement;
             this.handleInstructionInput(target.value);
           }}
+          @paste=${this.handleInstructionPaste}
         ></vscode-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
