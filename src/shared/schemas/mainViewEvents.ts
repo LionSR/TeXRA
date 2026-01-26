@@ -16,14 +16,15 @@ export type FileSelectChangeDetail = z.infer<
   typeof FileSelectChangeDetailSchema
 >;
 
-export const BaseFileChangeDetailSchema = z.object({
+export const StringValueDetailSchema = z.object({
   value: z.string(),
 });
+export type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
+
+export const BaseFileChangeDetailSchema = StringValueDetailSchema;
 export type BaseFileChangeDetail = z.infer<typeof BaseFileChangeDetailSchema>;
 
-export const EditedFileChangeDetailSchema = z.object({
-  value: z.string(),
-});
+export const EditedFileChangeDetailSchema = StringValueDetailSchema;
 export type EditedFileChangeDetail = z.infer<
   typeof EditedFileChangeDetailSchema
 >;
@@ -93,9 +94,7 @@ export type LatexDiffsActionDetail = z.infer<
   typeof LatexDiffsActionDetailSchema
 >;
 
-export const CommitChangeDetailSchema = z.object({
-  value: z.string(),
-});
+export const CommitChangeDetailSchema = StringValueDetailSchema;
 export type CommitChangeDetail = z.infer<typeof CommitChangeDetailSchema>;
 
 export const FocusInstructionDetailSchema = z.object({
@@ -119,14 +118,10 @@ export const AgentChangeDetailSchema = z.object({
 });
 export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
 
-export const ModelChangeDetailSchema = z.object({
-  value: z.string(),
-});
+export const ModelChangeDetailSchema = StringValueDetailSchema;
 export type ModelChangeDetail = z.infer<typeof ModelChangeDetailSchema>;
 
-export const InstructionChangeDetailSchema = z.object({
-  value: z.string(),
-});
+export const InstructionChangeDetailSchema = StringValueDetailSchema;
 export type InstructionChangeDetail = z.infer<
   typeof InstructionChangeDetailSchema
 >;
