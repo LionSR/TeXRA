@@ -66,13 +66,9 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
-  /** Shared module descriptors available to all views */
+  /** Shared module descriptors available to all views (relative to view folder) */
   private readonly sharedModuleDescriptors: ModuleDescriptor[] = [
     { key: 'styleUri', path: 'styles/index.css' },
-    { key: 'scriptUri', path: 'script.js' },
-    { key: 'domHandlersUri', path: 'modules/domHandlers.js' },
-    { key: 'constantsUri', path: 'modules/constants.js' },
-    { key: 'messageHandlersUri', path: 'modules/messageHandlers.js' },
   ];
 
   /**

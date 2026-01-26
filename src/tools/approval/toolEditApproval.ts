@@ -9,7 +9,6 @@ import {
   DIFF_INSERT,
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
-import * as difflib from 'difflib';
 
 // Local imports - agent types
 
@@ -285,33 +284,23 @@ interface ComputeUserPatchOptions {
 }
 
 function computeUserPatch(
-  path: string,
+  _path: string,
   suggestedContent: string,
   appliedContent: string,
-  options?: ComputeUserPatchOptions,
+  _options?: ComputeUserPatchOptions,
 ): string | undefined {
   if (suggestedContent === appliedContent) {
     return undefined;
   }
 
-  const diffOptions: Record<string, unknown> = {
-    fromfile: `${path} (proposed)`,
-    tofile: `${path} (final)`,
-    lineterm: '',
-  };
+  const dmp = new diff_match_patch();
+  const patches = dmp.patch_make(suggestedContent, appliedContent);
 
-  const contextLines = options?.contextLines ?? 3;
-  if (Number.isInteger(contextLines)) {
-    diffOptions.n = contextLines;
+  if (patches.length === 0) {
+    return undefined;
   }
 
-  const diffLines = difflib.unifiedDiff(
-    suggestedContent.split('\n'),
-    appliedContent.split('\n'),
-    diffOptions,
-  );
-
-  return diffLines.length ? diffLines.join('\n') : undefined;
+  return dmp.patch_toText(patches);
 }
 
 async function revealFirstChange(
