@@ -98,8 +98,10 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 | Task                              | Status            | Impact                            |
 | --------------------------------- | ----------------- | --------------------------------- |
-| Formatters → TemplateResult       | 🟡 Bridge pattern | 14 formatters using Lit templates |
-| renderLogs incremental updates    | ⬜ Not Started    | Performance for large logs        |
+| Formatters → TemplateResult       | ✅ Complete       | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
+| renderLogs incremental updates    | 🟡 Hybrid         | appendLog/updateLog are incremental; full rebuild only on stream switch |
+
+> **Open to ideas:** We welcome suggestions for more native Lit patterns that could improve the architecture. See [Phase 6 section 6.2b](./prd-progressview-phase6.md#62b-lit-directive--native-feature-improvements) for areas open for exploration.
 | Create commonViewMessages.ts      | ✅ Complete       | Zod schemas for 5 common cmds     |
 | themeHandlers.ts Zod migration    | ✅ Complete       | commonMessageHandlers.ts          |
 | Eliminate normalization layers    | ✅ Complete       | -160 lines (done in Phase 3)      |
