@@ -65,7 +65,6 @@ import './components/ContextManagement';
 
 // Local imports - progress view modules
 import type { FollowUpInput } from './components/FollowUpInput';
-import type { LogList } from './components/LogList';
 import type { PromptState } from './components/PromptOverlay';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
@@ -75,11 +74,9 @@ export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
   @state() private prompts: PromptState[] = [];
 
-  // Container refs for accessing child component methods (LogList, FollowUpInput)
+  // Container refs for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
   private workflowContentRef = createRef<WorkflowStreamContent>();
-  // Fallback ref for when no stream is active (empty task-group-list)
-  private fallbackLogListRef = createRef<LogList>();
 
   private prefsManager = new WebviewStateManager<ProgressViewPreferences>({
     streamFilter: 'all',
@@ -137,10 +134,8 @@ export class ProgressApp extends BaseWebviewApp {
   private renderStreamContent(): TemplateResult {
     const activeStream = this.getActiveStreamInfo();
     if (!activeStream) {
-      // No active stream - show empty task-group-list for global logs
-      return html`<task-group-list
-        ${ref(this.fallbackLogListRef)}
-      ></task-group-list>`;
+      // No active stream - show empty log-list
+      return html`<log-list></log-list>`;
     }
 
     const streamState = getStreamState(this.appState, activeStream.name);
@@ -225,22 +220,9 @@ export class ProgressApp extends BaseWebviewApp {
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
-      getLogListRef: () => this.getLogListRef(),
       getFollowUpRef: () => this.getFollowUpRef(),
       savePrefs: (prefs) => this.prefsManager.update(prefs),
     };
-  }
-
-  /**
-   * Get LogList ref from the active container component.
-   * Falls back to fallback ref when no stream is active.
-   */
-  private getLogListRef(): LogList | undefined {
-    return (
-      this.toolUseContentRef.value?.getLogListRef() ??
-      this.workflowContentRef.value?.getLogListRef() ??
-      this.fallbackLogListRef.value
-    );
   }
 
   /**

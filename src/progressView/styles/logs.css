@@ -149,11 +149,18 @@ follow-up-input {
   padding: 0 var(--spacing-tiny);
   opacity: 0;
   margin-left: auto;
+  transition: opacity 0.2s ease;
 }
 
 .details-summary:hover .banner-content-copy,
-.banner-details:focus-within .banner-content-copy {
+.banner-details:focus-within .banner-content-copy,
+.banner-content-copy:focus-visible {
   opacity: 1;
+}
+
+.banner-content-copy.copy-success {
+  opacity: 1;
+  color: var(--color-success);
 }
 
 .timestamp {
@@ -317,7 +324,7 @@ follow-up-input {
   padding: var(--spacing-small) var(--spacing-medium);
   background: var(--background-color);
   border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--border-radius-large);
+  border-radius: var(--border-radius-small);
   font-size: var(--font-size-sm);
   white-space: nowrap;
   opacity: 0;
@@ -330,7 +337,7 @@ follow-up-input {
   opacity: var(--opacity-full);
 }
 
-/* Status states defined in utilities.css */
+/* Status states in Shadow DOM via statusIndicatorStyles.ts; is-ready kept for Light DOM fallback */
 .status-indicator.is-ready {
   background-color: var(--vscode-descriptionForeground);
   opacity: var(--opacity-disabled);

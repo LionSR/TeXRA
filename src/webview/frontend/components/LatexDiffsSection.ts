@@ -8,6 +8,7 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared utils
@@ -263,7 +264,7 @@ export class LatexDiffsSection extends LitElement {
         </div>
         <div
           id="latexdiffsContent"
-          style=${this.visible ? 'display: block' : 'display: none'}
+          style=${styleMap({ display: this.visible ? 'block' : 'none' })}
         >
           <div class="file-select">
             <div class="file-select-header">

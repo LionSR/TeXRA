@@ -124,6 +124,12 @@ export class InstructionPanel extends LitElement {
         display: block;
       }
 
+      /* Dropdowns in footer open upward */
+      vscode-single-select::part(listbox) {
+        bottom: 100%;
+        top: auto;
+      }
+
       .recording {
         color: var(--vscode-errorForeground);
         animation: pulse 1s infinite;
