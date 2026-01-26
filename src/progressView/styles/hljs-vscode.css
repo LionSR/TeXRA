@@ -1,0 +1,124 @@
+/**
+ * Highlight.js theme using VS Code CSS custom properties.
+ * Automatically adapts to light/dark themes without JavaScript switching.
+ *
+ * Maps hljs token classes to VS Code's semantic token colors.
+ */
+
+/* Base code block styling */
+pre.hljs,
+.hljs {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+/* Comments */
+.hljs-comment,
+.hljs-quote {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* Keywords, tags */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag {
+  color: var(--vscode-symbolIcon-keywordForeground, var(--vscode-textLink-foreground));
+}
+
+/* Strings, literals */
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: var(--vscode-debugTokenExpression-string, #a31515);
+}
+
+/* Numbers, booleans */
+.hljs-number,
+.hljs-literal,
+.hljs-built_in,
+.hljs-type {
+  color: var(--vscode-debugTokenExpression-number, #098658);
+}
+
+/* Variables, parameters */
+.hljs-variable,
+.hljs-params,
+.hljs-attr {
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-editor-foreground));
+}
+
+/* Functions, methods */
+.hljs-function,
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--vscode-symbolIcon-functionForeground, #795e26);
+}
+
+/* Classes, types */
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: var(--vscode-symbolIcon-classForeground, #267f99);
+}
+
+/* Properties, attributes */
+.hljs-property,
+.hljs-name {
+  color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-editor-foreground));
+}
+
+/* Operators, punctuation */
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--vscode-editor-foreground);
+}
+
+/* Sections, selectors */
+.hljs-section,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Meta, preprocessor */
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-meta .hljs-string {
+  color: var(--vscode-symbolIcon-keywordForeground, #0000ff);
+}
+
+/* Additions (diff) */
+.hljs-addition {
+  background-color: var(--vscode-diffEditor-insertedTextBackground);
+  color: var(--vscode-gitDecoration-addedResourceForeground, #22863a);
+}
+
+/* Deletions (diff) */
+.hljs-deletion {
+  background-color: var(--vscode-diffEditor-removedTextBackground);
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #b31d28);
+}
+
+/* Emphasis and strong */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* Symbol, bullet */
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--vscode-symbolIcon-constantForeground, #36acaa);
+}
+
+/* Links */
+.hljs-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: underline;
+}

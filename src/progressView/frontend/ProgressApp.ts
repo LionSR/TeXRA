@@ -66,9 +66,6 @@ import type { PromptState } from './components/PromptOverlay';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
-// Local imports - bundled highlight.js themes (replaces CDN)
-import { updateHighlightTheme } from './hljsThemes';
-
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
@@ -192,11 +189,6 @@ export class ProgressApp extends BaseWebviewApp {
     if (handler) {
       handler(raw, this.createMessageHandlerContext());
     }
-  }
-
-  protected override onThemeChange(theme: string): void {
-    super.onThemeChange(theme);
-    updateHighlightTheme(theme);
   }
 
   private getActiveStreamInfo(): StreamTabInfo | null {

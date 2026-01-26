@@ -24,6 +24,7 @@
 @import './markdown.css';
 @import './scratchpad.css';
 @import './code-block.css';
+@import './hljs-vscode.css';
 @import './latexdiff.css';
 @import './statistics.css';
 @import './context-management.css';
