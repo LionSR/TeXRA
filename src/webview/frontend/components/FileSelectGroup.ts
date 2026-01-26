@@ -32,6 +32,10 @@ export class FileSelectGroup extends LitElement {
       margin-bottom: var(--spacing-large);
     }
 
+    .file-select:has(.optional-label) {
+      margin-bottom: var(--spacing-tiny);
+    }
+
     .file-select-header {
       display: flex;
       justify-content: space-between;
@@ -56,8 +60,19 @@ export class FileSelectGroup extends LitElement {
       opacity: 1;
     }
 
+    .file-select-header > vscode-toolbar-button {
+      opacity: 1;
+      flex-shrink: 0;
+    }
+
     .file-select-label-group label {
       margin-right: var(--spacing-small);
+    }
+
+    .file-select-label-group vscode-textfield {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
     }
 
     .file-select-actions,
@@ -83,8 +98,23 @@ export class FileSelectGroup extends LitElement {
       display: none;
     }
 
+    .file-select[data-expanded='true'] .optional-label {
+      color: var(--vscode-foreground);
+    }
+
     .file-select[data-expanded='true'] .toggle-icon {
       color: var(--vscode-foreground);
+    }
+
+    .optional-label {
+      color: var(--text-color);
+      font-weight: normal;
+      font-size: var(--font-size);
+      white-space: nowrap;
+      min-width: calc(var(--width-button-min) * 2);
+      display: flex;
+      align-items: center;
+      height: var(--height-control);
     }
 
     .toggle-icon {
