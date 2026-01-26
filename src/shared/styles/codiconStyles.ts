@@ -1,9 +1,9 @@
 /**
  * Codicon styles for Lit shadow DOM components.
  *
- * The codicon font is loaded at document level via VS Code's webview URI system.
- * This module provides the icon class definitions that can be used in shadow DOM
- * components. The font-family inherits from the document level.
+ * This module provides codicon icon styles that can be used in Lit components
+ * with shadow DOM encapsulation. The font URI is dynamically injected by the
+ * webview provider via window.__CODICON_FONT_URI__.
  *
  * @example
  * import { codiconStyles } from '@shared/styles/codiconStyles';
@@ -18,43 +18,57 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
 // Import the full codicon CSS as string
 import codiconCss from '@vscode/codicons/dist/codicon.css?inline';
 
+// Declare the global font URI injected by the webview HTML
+declare global {
+  interface Window {
+    __CODICON_FONT_URI__?: string;
+  }
+}
+
+/**
+ * Get the codicon font URI from the webview context.
+ * Falls back to empty string if not available.
+ */
+function getCodiconFontUri(): string {
+  return typeof window !== 'undefined' ? (window.__CODICON_FONT_URI__ ?? '') : '';
+}
+
 /**
  * Strip the @font-face declaration from the codicon CSS.
- * The font is loaded at document level, so we don't need it in shadow DOM.
+ * We provide our own with the correct webview URI.
  */
 function stripFontFace(cssText: string): string {
   return cssText.replaceAll(/@font-face\s*\{[^}]+\}/g, '');
 }
 
 /**
- * Codicon styles for use in Lit components with shadow DOM.
- *
- * Includes:
- * - Font-face that inherits from document level (or uses fallback URI)
- * - All icon class definitions (.codicon, .codicon-*, etc.)
- *
- * The font is loaded at document level by the webview HTML, so shadow DOM
- * components can reference it by font-family name.
+ * Create the codicon styles with the correct font URI.
+ * This is called once when the module loads.
  */
-export const codiconStyles: CSSResult = css`
-  /*
-   * Font-face declaration for shadow DOM.
-   * Uses the same font-family name as the document-level font.
-   * The browser will use the already-loaded font from document level.
-   */
-  @font-face {
-    font-family: 'codicon';
-    font-display: block;
-    /* Inherit from document - browser finds the font loaded at document level */
-    src: local('codicon');
-  }
-  ${unsafeCSS(stripFontFace(codiconCss))}
-`;
+function createCodiconStyles(): CSSResult {
+  const fontUri = getCodiconFontUri();
+  const iconClasses = stripFontFace(codiconCss);
+
+  return css`
+    @font-face {
+      font-family: 'codicon';
+      font-display: block;
+      src: url('${unsafeCSS(fontUri)}') format('truetype');
+    }
+    ${unsafeCSS(iconClasses)}
+  `;
+}
+
+/**
+ * Codicon styles for use in Lit components with shadow DOM.
+ * Includes the font-face declaration and all icon class definitions.
+ */
+export const codiconStyles: CSSResult = createCodiconStyles();
 
 /**
  * Just the codicon icon classes without font-face.
  * Use this when the font is already loaded at the document level
- * and you want minimal CSS in shadow DOM.
+ * (e.g., in light DOM or when sharing styles).
  */
 export const codiconIconClasses: CSSResult = css`
   ${unsafeCSS(stripFontFace(codiconCss))}

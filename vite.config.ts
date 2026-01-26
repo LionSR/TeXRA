@@ -38,85 +38,78 @@ const aliases = {
 };
 
 /**
- * Generate entry points for all webviews
+ * Build configuration for a single webview.
+ * Each webview is built independently to produce a self-contained bundle
+ * that works with VS Code's nonce-only CSP (no external chunk imports).
  */
-const input = Object.fromEntries(
-  webviews.map((name) => [name, resolve(__dirname, `src/${name}/frontend/index.ts`)])
-);
-
-export default defineConfig(({ mode }) => {
-  const isDev = mode === 'development';
-
+function createWebviewConfig(webviewName: string, isDev: boolean) {
   return {
-    // Lit works best with ESM
     build: {
-      // Output to dist folder matching webpack structure
       outDir: 'dist',
       emptyOutDir: false, // Don't clear dist (extension.js lives there)
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
-
-  // Keep default 4KB inline limit - don't inline fonts
-      // Fonts are loaded separately via VS Code's webview URI system
+      // Keep default 4KB inline limit - don't inline fonts
       assetsInlineLimit: 4 * 1024,
-
-      // Library mode for each webview
       rollupOptions: {
-        input,
+        input: resolve(__dirname, `src/${webviewName}/frontend/index.ts`),
         output: {
-          // Match webpack output structure: dist/{webview}/bundle.js
-          entryFileNames: '[name]/bundle.js',
-          chunkFileNames: 'shared/[name]-[hash].js',
-          assetFileNames: '[name]/[name][extname]',
-
-          // Inline dynamic imports to keep single bundle per webview
-          inlineDynamicImports: false,
-
-          // Create a shared vendor chunk for Lit and Zod
-          manualChunks: {
-            vendor: ['lit', 'zod'],
-          },
+          // Single self-contained bundle per webview
+          entryFileNames: `${webviewName}/bundle.js`,
+          assetFileNames: `${webviewName}/[name][extname]`,
+          // Inline all imports - required for nonce-only CSP
+          inlineDynamicImports: true,
         },
       },
     },
-
-    resolve: {
-      alias: aliases,
-    },
-
-    // Enable Lit's production mode in production builds
+    resolve: { alias: aliases },
     define: {
-      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development'),
+      'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
     },
+    esbuild: { keepNames: true, target: 'es2022' },
+  };
+}
 
-    // CSS handling
-    css: {
-      devSourcemap: isDev,
-    },
+/**
+ * Get the webview to build from VITE_WEBVIEW env var.
+ * Usage: VITE_WEBVIEW=progressView npm run vite:build
+ * If not specified, defaults to building all webviews sequentially via npm script.
+ */
+const targetWebview = process.env.VITE_WEBVIEW as (typeof webviews)[number] | undefined;
 
-    // esbuild options for TypeScript
-    esbuild: {
-      // Keep class names for Lit components (decorators use them)
-      keepNames: true,
-      // Target modern browsers (VS Code webviews use Chromium)
+export default defineConfig(({ mode }) => {
+  const isDev = mode === 'development';
+
+  // If a specific webview is targeted, build just that one
+  if (targetWebview && webviews.includes(targetWebview)) {
+    return createWebviewConfig(targetWebview, isDev);
+  }
+
+  // Default config (used when no specific webview is targeted)
+  // Note: For production builds, use the npm script that builds each webview separately
+  return {
+    build: {
+      outDir: 'dist',
+      emptyOutDir: false,
+      sourcemap: isDev ? 'inline' : false,
+      minify: isDev ? false : 'esbuild',
       target: 'es2022',
+      assetsInlineLimit: 4 * 1024,
     },
 
-    // Dev server for HMR (optional - for standalone webview development)
-    server: {
-      port: 5173,
-      strictPort: true,
-      hmr: {
-        port: 5173,
-      },
+    resolve: { alias: aliases },
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
     },
-
-    // Optimize deps for faster dev startup
+    css: { devSourcemap: isDev },
+    esbuild: { keepNames: true, target: 'es2022' },
     optimizeDeps: {
       include: ['lit', 'zod', 'katex'],
-      // Exclude VS Code-specific modules
       exclude: ['vscode'],
     },
   };
 });
+
+/** Export webview names for use in build scripts */
+export { webviews };
