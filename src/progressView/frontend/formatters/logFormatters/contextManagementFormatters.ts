@@ -147,25 +147,13 @@ export function formatContextManagement(
     });
   }
 
+  // prettier-ignore
   return renderToElement(html`
     <details class="banner-details context-management-details">
-      <summary class="details-summary">
-        <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-        <i
-          class=${`codicon ${config.icon} context-management-icon`}
-          style=${`color: ${config.color}`}
-        ></i>
-        <span class="context-management-title" style=${`color: ${config.color}`}
-          >${config.label}</span
-        >
-      </summary>
+      <summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${`codicon ${config.icon} context-management-icon`} style=${`color: ${config.color}`}></i> <span class="context-management-title" style=${`color: ${config.color}`}>${config.label}</span></summary>
       <div class="context-management-content" data-log-id=${ifDefined(logId)}>
         ${items.map(
-          (item) => html`
-            <span class="stat-item detail-item" title=${item.label}>
-              <i class=${`codicon ${item.icon}`}></i> ${item.value}
-            </span>
-          `,
+          (item) => html`<span class="stat-item detail-item" title=${item.label}><i class=${`codicon ${item.icon}`}></i> ${item.value}</span>`,
         )}
       </div>
     </details>
