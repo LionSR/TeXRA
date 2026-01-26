@@ -3,41 +3,8 @@
  * Focused on VS Code web component helpers.
  */
 
-// Icon constants for chevrons
-const CHEVRON_DOWN_CLASS = 'codicon codicon-chevron-down';
-const CHEVRON_RIGHT_CLASS = 'codicon codicon-chevron-right';
-
-/**
- * Set a chevron icon for horizontal expansion (right/down).
- */
-export function setChevronIconHorizontal(
-  element: HTMLElement | null,
-  expanded: boolean,
-): void {
-  if (!element) return;
-
-  let icon: HTMLElement = element;
-  if (element.tagName.toLowerCase() !== 'i') {
-    const existingIcon = element.querySelector('i');
-    if (existingIcon) {
-      icon = existingIcon as HTMLElement;
-    } else {
-      icon = document.createElement('i');
-      element.appendChild(icon);
-    }
-  }
-
-  const existingClasses = icon.className
-    .split(' ')
-    .filter(
-      (cls) => cls && !cls.startsWith('codicon-chevron-') && cls !== 'codicon',
-    )
-    .join(' ');
-  const chevronClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
-  icon.className = existingClasses
-    ? `${chevronClass} ${existingClasses}`
-    : chevronClass;
-}
+// Note: Toggle icon rotation is now CSS-only via details[open] selector.
+// See src/progressView/styles/logs.css for the CSS rules.
 
 /**
  * Scroll an element to its bottom.
