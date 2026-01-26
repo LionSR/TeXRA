@@ -1,10 +1,7 @@
 /**
  * Main entry point for progress view formatters.
- * Provides the LogEntryFormatter class and re-exports for TaskGroupDomManager.
+ * Provides the LogEntryFormatter class for log message formatting.
  */
-
-// Re-export for TaskGroupDomManager (only external consumer of this barrel)
-export { TaskGroupHeaderFormatter } from './taskGroupFormatter';
 
 // Local imports - formatter helpers
 import {

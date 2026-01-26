@@ -30,7 +30,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
-import type { LogList } from './components/LogList';
 import type { ProgressState } from './store';
 
 /**
@@ -47,7 +46,6 @@ export interface FrontendEventHandlerContext {
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
   ): void;
-  getLogListRef(): LogList | undefined;
   getFollowUpRef(): FollowUpInput | undefined;
   /** Persist filter/sort preferences to webview state. */
   savePrefs?(
@@ -74,26 +72,6 @@ export function handleFilterChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { filter } = event.detail;
-  const state = ctx.getState();
-
-  // Check if filtered streams will be empty
-  const filteredStreams =
-    filter === 'all'
-      ? state.streams
-      : state.streams.filter((s) => s.agentCategory === filter);
-
-  // Clear log list if no streams match the filter
-  if (filteredStreams.length === 0) {
-    ctx.getLogListRef()?.renderLogs({
-      streamId: '',
-      messages: [],
-      groups: [],
-      action: 'clear',
-      activeRunId: null,
-      runInstructions: null,
-    });
-  }
-
   ctx.setState((prev) => ({ ...prev, streamFilter: filter }));
   ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
@@ -136,10 +114,6 @@ export function handleRunSelected(
     if (!isWorkflowState(prev)) return prev;
     return { ...prev, selectedRunId: runId };
   });
-
-  const streamState = getStreamState(state, streamId);
-  const isToolUse = isToolUseState(streamState);
-  ctx.getLogListRef()?.showRun(runId ?? null, isToolUse);
 }
 
 export function handleFileAction(

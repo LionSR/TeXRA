@@ -8,7 +8,7 @@
 
 Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting Lit directives, reactive patterns, and modern component architecture. This phase addresses technical debt from the initial Lit migration where imperative patterns were preserved for expediency.
 
-> **Status: Not Started**
+> **Status: Complete** (8.1 and 8.3 fully implemented)
 
 ## Prerequisites
 
@@ -18,18 +18,20 @@ Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting
 
 ## Status Summary
 
-| Task                                    | Status      | Impact                     |
-| --------------------------------------- | ----------- | -------------------------- |
-| 8.1 styleMap directive adoption         | Not Started | Consistency, type safety   |
-| 8.2 @lit-labs/virtualizer for LogList   | Not Started | Performance for 1000+ logs |
-| 8.3 TaskGroupDomManager → Declarative   | Not Started | Architecture cleanup       |
-| 8.4 @lit/context for state distribution | Not Started | Eliminate prop drilling    |
-| 8.5 Light DOM → Shadow DOM migration    | Not Started | Style encapsulation        |
-| 8.6 Additional directive opportunities  | Not Started | Code quality               |
+| Task                                    | Status       | Impact                     |
+| --------------------------------------- | ------------ | -------------------------- |
+| 8.1 styleMap directive adoption         | **Complete** | Consistency, type safety   |
+| 8.2 @lit-labs/virtualizer for LogList   | Deferred     | Performance for 1000+ logs |
+| 8.3 TaskGroupDomManager → Declarative   | **Complete** | Architecture cleanup       |
+| 8.4 @lit/context for state distribution | Deferred     | Eliminate prop drilling    |
+| 8.5 Light DOM → Shadow DOM migration    | Deferred     | Style encapsulation        |
+| 8.6 Additional directive opportunities  | Deferred     | Code quality               |
 
 ---
 
-## 8.1 styleMap Directive Adoption (HIGH Priority)
+## 8.1 styleMap Directive Adoption (HIGH Priority) - COMPLETE
+
+> **Completed:** All 6 files updated to use `styleMap` directive.
 
 **Problem:** 6+ files use inline style template strings instead of the `styleMap` directive.
 
@@ -113,106 +115,64 @@ render() {
 
 ---
 
-## 8.3 TaskGroupDomManager → Declarative Component (CRITICAL)
+## 8.3 TaskGroupDomManager → Declarative Component (CRITICAL) - COMPLETE
 
-**Problem:** `TaskGroupDomManager.ts` is the largest source of imperative DOM manipulation, mixing multiple concerns.
+> **All phases complete.** TaskGroupDomManager.ts has been deleted. LogList now uses fully declarative rendering.
 
-**Location:** `src/progressView/frontend/managers/TaskGroupDomManager.ts`
+### What Was Accomplished
 
-### Current Issues
+**Phase 1:** AudioNotificationService extracted to `src/progressView/frontend/services/AudioNotificationService.ts`
 
-| Concern                   | Lines                         | Coupling Issue              |
-| ------------------------- | ----------------------------- | --------------------------- |
-| DOM element management    | 74-165                        | Core responsibility         |
-| Toggle state persistence  | 45-72                         | Should be in state manager  |
-| Audio notifications       | 224-245 (`playSystemSound()`) | Should be dedicated service |
-| Traversal/hierarchy logic | 180-220                       | Could be separate utility   |
+**Phase 2:** Declarative components created:
 
-### Current (Imperative)
+| Component         | Location                                                  | Purpose                                         |
+| ----------------- | --------------------------------------------------------- | ----------------------------------------------- |
+| `TaskGroupHeader` | `src/progressView/frontend/components/TaskGroupHeader.ts` | Renders group header (status icon, title, time) |
+| `TaskGroupItem`   | `src/progressView/frontend/components/TaskGroupItem.ts`   | Renders single group (details/summary wrapper)  |
+| `TaskGroupList`   | `src/progressView/frontend/components/TaskGroupList.ts`   | **Fully declarative** - data in, DOM out        |
+| `LogEntry`        | `src/progressView/frontend/components/LogEntry.ts`        | Wraps LogEntryFormatter in reactive component   |
 
-```typescript
-const fragment = document.createDocumentFragment();
-for (const group of topLevel) {
-  const element = this._createGroupElement(group);
-  fragment.appendChild(element);
-  traversalQueue.push(group.id);
-}
-container.appendChild(fragment);
+**Phase 3:** LogList refactored:
+
+- Maintains `groups`, `messages`, `activeRunId`, `isToolUse` as `@state()` properties
+- Imperative API preserved for backward compatibility (methods update state → trigger re-render)
+- Delegates rendering to `<task-group-list>` component
+- Event handlers remain in LogList (click, toggle, copy work via Light DOM)
+
+### Files Deleted
+
+| File                     | Reason                                   |
+| ------------------------ | ---------------------------------------- |
+| `TaskGroupDomManager.ts` | Replaced by declarative components       |
+| `taskGroupFormatter.ts`  | Logic moved to TaskGroupHeader component |
+| `taskGroupLevel.ts`      | Logic inlined in TaskGroupHeader         |
+
+### Architecture Before/After
+
+```
+BEFORE (imperative):
+  LogList → TaskGroupDomManager → renderToElement() → DOM manipulation
+                                → insertChronologically()
+                                → appendChild()
+
+AFTER (declarative):
+  LogList (@state) → <task-group-list> → <task-group-item> → <task-group-header>
+       ↓                     ↓                    ↓                   ↓
+  state updates      Lit re-renders       Lit re-renders      Lit re-renders
 ```
 
-### Target (Declarative Lit Component)
+**Original Problem:** `TaskGroupDomManager.ts` was the largest source of imperative DOM manipulation, mixing multiple concerns
 
-```typescript
-// TaskGroupList.ts (new Lit component)
-@customElement('task-group-list')
-export class TaskGroupList extends LitElement {
-  @property({ type: Array }) groups: TaskGroup[] = [];
-  @state() private expandedGroups = new Set<string>();
+### Issues Resolved
 
-  render() {
-    return html`
-      ${repeat(
-        this.getTopLevelGroups(),
-        (g) => g.id,
-        (group) => this.renderGroup(group),
-      )}
-    `;
-  }
+All concerns from TaskGroupDomManager have been addressed:
 
-  private renderGroup(group: TaskGroup): TemplateResult {
-    return html`
-      <details
-        ?open=${this.expandedGroups.has(group.id)}
-        @toggle=${() => this.toggleGroup(group.id)}
-      >
-        <summary>${this.renderGroupHeader(group)}</summary>
-        ${this.renderGroupChildren(group)}
-      </details>
-    `;
-  }
-}
-```
-
-### Extraction Plan
-
-1. **Extract AudioNotificationService**
-
-   ```typescript
-   // src/progressView/frontend/services/AudioNotificationService.ts
-   export class AudioNotificationService {
-     playCompletionSound(): void {
-       const ctx = new AudioContext();
-       const osc = ctx.createOscillator();
-       osc.type = 'sine';
-       osc.frequency.value = 880;
-       osc.connect(ctx.destination);
-       osc.start();
-       setTimeout(() => {
-         osc.stop();
-         ctx.close();
-       }, 150);
-     }
-   }
-   ```
-
-2. **Extract ToggleStateManager**
-
-   ```typescript
-   // src/progressView/frontend/state/ToggleStateManager.ts
-   export class ToggleStateManager {
-     private states = new Map<string, boolean>();
-
-     toggle(id: string): boolean { ... }
-     isExpanded(id: string): boolean { ... }
-     persist(): void { ... }
-   }
-   ```
-
-3. **Create declarative TaskGroupList component**
-
-4. **Delete TaskGroupDomManager.ts**
-
-**Effort:** High (4-6 hours)
+| Original Concern          | Resolution                                                  |
+| ------------------------- | ----------------------------------------------------------- |
+| DOM element management    | Now handled by Lit's declarative rendering in TaskGroupList |
+| Toggle state persistence  | Uses existing ToggleStateStore (already extracted)          |
+| Audio notifications       | Extracted to AudioNotificationService                       |
+| Traversal/hierarchy logic | Handled declaratively in TaskGroupList.buildGroupTree()     |
 
 ---
 

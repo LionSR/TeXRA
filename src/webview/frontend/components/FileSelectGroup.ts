@@ -9,6 +9,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { when } from 'lit/directives/when.js';
 
@@ -639,7 +640,7 @@ export class FileSelectGroup extends LitElement {
         <div
           id="${this.listId}Container"
           class="multiple-files-container"
-          style=${this.listVisible ? 'display: block' : 'display: none'}
+          style=${styleMap({ display: this.listVisible ? 'block' : 'none' })}
         >
           <div class="multiple-files-content">
             <div id=${this.listId} class="multiple-files-list">

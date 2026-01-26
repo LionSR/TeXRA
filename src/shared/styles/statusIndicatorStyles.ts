@@ -74,6 +74,13 @@ export const statusIndicatorStyles: CSSResult = css`
     animation: pulse-scale 1.5s infinite;
   }
 
+  /* Ready state - muted, no activity */
+  .status-indicator.is-ready,
+  .tab-status.is-ready {
+    background-color: var(--vscode-descriptionForeground);
+    opacity: var(--opacity-disabled, 0.5);
+  }
+
   /* Pulse scale animation */
   @keyframes pulse-scale {
     0%,
