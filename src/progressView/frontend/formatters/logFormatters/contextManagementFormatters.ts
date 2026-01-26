@@ -6,6 +6,9 @@
  * Uses Lit-native component.
  */
 
+// Local imports - Lit template utilities
+import { html, renderToElement } from '../litTemplates';
+
 // Local imports - formatter helpers
 import { formatTokens } from '../timestampUtils';
 
@@ -147,14 +150,11 @@ export function formatContextManagement(
 
   if (items.length === 0) return null;
 
-  const element = document.createElement('context-management');
-  element.setAttribute('logId', logId);
-  // Pass config and items as properties
-  const typedElement = element as HTMLElement & {
-    config: ActionConfig;
-    items: ContextStatItem[];
-  };
-  typedElement.config = config;
-  typedElement.items = items;
-  return element;
+  return renderToElement(html`
+    <context-management
+      .logId=${logId}
+      .config=${config}
+      .items=${items}
+    ></context-management>
+  `);
 }

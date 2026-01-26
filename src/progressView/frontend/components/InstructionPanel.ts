@@ -1,13 +1,14 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - shared utilities
-import { copyWithFeedback } from '@shared/utils/clipboard';
+// Local imports - shared controllers
+import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -94,8 +95,10 @@ export class InstructionPanel extends LitElement {
   @property({ type: Object }) instruction: InstructionUpdate | null = null;
   @property({ type: Boolean, reflect: true }) visible = false;
 
-  @query(`#${ELEMENT_IDS.INSTRUCTION_COPY_BTN}`)
-  declare private copyButton: HTMLElement | null;
+  private copyController = new CopyButtonController(this, {
+    defaultTitle: 'Copy instruction',
+    successTitle: 'Copied!',
+  });
 
   override willUpdate(): void {
     this.visible = Boolean(this.instruction?.text?.trim());
@@ -107,6 +110,8 @@ export class InstructionPanel extends LitElement {
       return nothing;
     }
 
+    const copyState = this.copyController.state;
+
     return html`
       <div id=${ELEMENT_IDS.INSTRUCTION_CONTAINER} class="instruction-panel">
         <div class="instruction-panel__header">
@@ -117,13 +122,15 @@ export class InstructionPanel extends LitElement {
           <vscode-toolbar-container class="instruction-panel__actions">
             <vscode-toolbar-button
               id=${ELEMENT_IDS.INSTRUCTION_COPY_BTN}
-              class="instruction-panel__copy"
+              class=${classMap({
+                'instruction-panel__copy': true,
+                [copyState.successClass]: copyState.copied,
+              })}
               icon="copy"
-              label="Copy instruction"
-              title="Copy instruction"
-              data-default-title="Copy instruction"
-              data-success-title="Copied!"
-              @click=${this.handleCopy}
+              label=${copyState.title}
+              title=${copyState.title}
+              aria-label=${copyState.ariaLabel}
+              @click=${() => this.copyController.copy(text)}
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
@@ -140,18 +147,4 @@ export class InstructionPanel extends LitElement {
       </div>
     `;
   }
-
-  /** Handle copy button click - arrow function for correct `this` binding in Lit */
-  private handleCopy = async (event: Event): Promise<void> => {
-    event.preventDefault();
-    const text = this.instruction?.text ?? '';
-    if (!text.trim()) return;
-
-    if (!this.copyButton) return;
-
-    await copyWithFeedback(this.copyButton, text, {
-      defaultTitle: this.copyButton.getAttribute('title') || 'Copy instruction',
-      successTitle: 'Copied!',
-    });
-  };
 }

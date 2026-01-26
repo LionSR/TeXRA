@@ -25,6 +25,7 @@ import {
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
+import type { AgentOptionData } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
@@ -709,4 +710,72 @@ export function computeAgentOptionsSync(): AgentOptionsPayload {
       DEFAULT_TOOL_USE_AGENT,
     ),
   };
+}
+
+// =============================================================================
+// TYPED OPTIONS BUILDER (Lit-native)
+// =============================================================================
+
+// AgentOptionData type is imported from @shared/schemas (single source of truth)
+
+export interface AgentOptionsDataPayload {
+  workflow: AgentOptionData[];
+  toolUse: AgentOptionData[];
+}
+
+/**
+ * Convert AgentEntry to typed option data.
+ */
+function entryToOptionData(entry: AgentEntry): AgentOptionData {
+  const key = `${entry.source}:${entry.name}`;
+  return {
+    value: key,
+    label: entry.name,
+    isMultiple: Boolean(entry.multiplePath),
+    isToolUse: entry.category === AgentCategory.ToolUse,
+    isRemote: entry.source === 'remote',
+    isCustom: entry.source === 'custom',
+    description: entry.description,
+  };
+}
+
+/**
+ * Sort entries: default agent first, then alphabetically.
+ */
+function sortAgentEntries(
+  entries: AgentEntry[],
+  defaultName: string,
+): AgentEntry[] {
+  const defaultEntry = entries.find((e) => e.name === defaultName);
+  return [...entries].sort((a, b) => {
+    if (a === defaultEntry) return -1;
+    if (b === defaultEntry) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/**
+ * Build typed agent options data for Lit-native rendering.
+ */
+export function buildAgentOptionsData(): AgentOptionsDataPayload {
+  const visibleWorkflow = getVisibleWorkflowAgents();
+  const visibleToolUse = getVisibleToolUseAgents();
+
+  return {
+    workflow: sortAgentEntries(visibleWorkflow, DEFAULT_WORKFLOW_AGENT).map(
+      entryToOptionData,
+    ),
+    toolUse: sortAgentEntries(visibleToolUse, DEFAULT_TOOL_USE_AGENT).map(
+      entryToOptionData,
+    ),
+  };
+}
+
+/**
+ * Async version - ensures cache is loaded first.
+ * Returns typed data for Lit-native rendering.
+ */
+export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
+  await ensureAgentsLoaded();
+  return buildAgentOptionsData();
 }
