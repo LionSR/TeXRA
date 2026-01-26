@@ -20,6 +20,8 @@ const webviews = [
  */
 function createWebviewConfig(webviewName: string, isDev: boolean) {
   return {
+    // Use relative paths for assets (required for VS Code webviews)
+    base: './',
     build: {
       outDir: 'dist',
       emptyOutDir: false, // Don't clear dist (extension.js lives there)
