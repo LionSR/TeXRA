@@ -8,6 +8,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - shared utilities
 import { formatRelativeTime } from '@shared/utils/string';
@@ -41,6 +42,7 @@ function formatStatusLabel(status: string): string {
 export class StreamTabs extends LitElement {
   static styles = [
     codiconIconClasses,
+    statusIndicatorStyles,
     css`
       :host {
         display: flex;
@@ -122,61 +124,9 @@ export class StreamTabs extends LitElement {
         width: 100%;
       }
 
-      .tab-status {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-        flex-shrink: 0;
-        background-color: var(--vscode-descriptionForeground);
-        opacity: var(--opacity-subtle);
-        transition: all 0.3s ease;
-      }
-
+      /* .tab-status styles from statusIndicatorStyles */
       .tab-header .tab-status {
         margin: 0;
-      }
-
-      .tab-status.is-running {
-        background-color: var(--color-success);
-        box-shadow: 0 0 4px var(--color-success);
-        opacity: 1;
-        animation: pulse-scale 2s infinite;
-      }
-
-      .tab-status.is-stopped {
-        background-color: var(--vscode-descriptionForeground);
-        opacity: var(--opacity-subtle);
-      }
-
-      .tab-status.is-error {
-        background-color: var(--color-error);
-        box-shadow: 0 0 4px var(--color-error);
-        opacity: 1;
-      }
-
-      .tab-status.is-waiting,
-      .tab-status.is-resuming {
-        background-color: var(--vscode-textLink-foreground);
-        box-shadow: 0 0 4px var(--vscode-textLink-foreground);
-        opacity: 1;
-        animation: pulse-scale 3s infinite;
-      }
-
-      .tab-status.is-resuming {
-        animation-duration: 1.5s;
-      }
-
-      @keyframes pulse-scale {
-        0%,
-        100% {
-          transform: scale(1);
-          opacity: 1;
-        }
-        50% {
-          transform: scale(1.15);
-          opacity: 0.8;
-        }
       }
 
       .tab-title {
