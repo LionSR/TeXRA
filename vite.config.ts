@@ -57,6 +57,10 @@ export default defineConfig(({ mode }) => {
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
 
+  // Keep default 4KB inline limit - don't inline fonts
+      // Fonts are loaded separately via VS Code's webview URI system
+      assetsInlineLimit: 4 * 1024,
+
       // Library mode for each webview
       rollupOptions: {
         input,
