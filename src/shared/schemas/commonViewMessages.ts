@@ -6,7 +6,7 @@ import { COMMON_COMMANDS } from '@common/webview/commands';
 
 export const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
-  theme: z.enum(['vscode-dark', 'vscode-light', 'vscode-high-contrast']),
+  theme: z.enum(['dark', 'light', 'high-contrast']),
 });
 
 export const SetDebugModeMessageSchema = z.object({

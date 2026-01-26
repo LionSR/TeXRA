@@ -220,13 +220,6 @@ export const SetSelectedAgentMessageSchema = z.object({
   sessionType: z.string().nullish(),
 });
 
-export const StateRestoreMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.STATE_RESTORE),
-  state: z.record(z.string(), z.unknown()).nullish(),
-  executeImmediately: z.boolean().nullish(),
-  isResetOperation: z.boolean().nullish(),
-});
-
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
@@ -270,7 +263,6 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   ShowLoginBannerMessageSchema,
   HideLoginBannerMessageSchema,
   SetSelectedAgentMessageSchema,
-  StateRestoreMessageSchema,
 ]);
 
 export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
