@@ -1,9 +1,16 @@
+/**
+ * LogList component - declarative log rendering.
+ *
+ * Receives data via properties and delegates rendering to TaskGroupList.
+ * Handles event delegation for clicks, toggles, and file links.
+ */
+
 // Third-party imports
-import { LitElement, html, render, type TemplateResult } from 'lit';
-import { customElement, query } from 'lit/decorators.js';
+import { LitElement, html, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
-import './LogPlaceholder';
+import './TaskGroupList';
 
 // Local imports - shared webview
 import { postMessage } from '@shared/vscode';
@@ -16,27 +23,9 @@ import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
-import { prependInstructionForToolUse } from '../stateUtils';
-import { appendFormatted } from '../utils';
-
-// Local imports - progress view managers
-import {
-  TaskGroupDomManager,
-  LogEntryManager,
-} from '../managers/TaskGroupDomManager';
 
 // Local imports - shared schemas
-import type {
-  InstructionUpdate,
-  LogMessageData,
-  TaskGroup,
-} from '@shared/schemas';
-const PLACEHOLDER_HTML =
-  'No runs yet—use TeXRA commands to start. Try ' +
-  '<a href="command:texra.openGettingStarted">open the getting started walkthrough</a>, ' +
-  '<a href="command:texra.createSampleProject">create a sample project</a>, ' +
-  '<a href="command:texra.cloneOverleafProject">clone an Overleaf project</a>, or ' +
-  '<a href="command:texra.downloadArXivSource">download an arXiv source</a>.';
+import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 type LogListState = {
   groupToggleStates?: Array<[string, boolean]>;
@@ -45,14 +34,15 @@ type LogListState = {
 
 @customElement('log-list')
 export class LogList extends LitElement {
-  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
-  declare private containerEl: HTMLElement | null;
+  // Reactive properties - passed from parent
+  @property({ type: Array }) groups: TaskGroup[] = [];
+  @property({ type: Array }) messages: LogMessageData[] = [];
+  @property({ type: String }) activeRunId: string | null = null;
+  @property({ type: Boolean }) isToolUse = false;
 
+  // Non-reactive state
   private stateManager: WebviewStateManager<LogListState>;
   private toggleStates: ToggleStateStore;
-  private groupManager: TaskGroupDomManager;
-  private logManager: LogEntryManager;
-  private lastRenderedStream: string;
 
   constructor() {
     super();
@@ -62,16 +52,14 @@ export class LogList extends LitElement {
     if (Array.isArray(previous?.groupToggleStates)) {
       this.toggleStates.load(previous.groupToggleStates);
     }
-    this.groupManager = new TaskGroupDomManager(this.toggleStates, this);
-    this.logManager = new LogEntryManager(this);
-    this.lastRenderedStream = '';
   }
 
-  protected createRenderRoot(): HTMLElement {
+  protected override createRenderRoot(): HTMLElement {
+    // Use Light DOM for CSS compatibility with existing styles
     return this;
   }
 
-  connectedCallback(): void {
+  override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('toggle', this.handleToggleEvent, {
       capture: true,
@@ -79,14 +67,13 @@ export class LogList extends LitElement {
     document.addEventListener('click', this.handleClickEvent, {
       capture: true,
     });
-    // Handle file-click events from Shadow DOM components
     document.addEventListener(
       'file-click',
       this.handleFileClickEvent as EventListener,
     );
   }
 
-  disconnectedCallback(): void {
+  override disconnectedCallback(): void {
     document.removeEventListener('toggle', this.handleToggleEvent, {
       capture: true,
     });
@@ -100,203 +87,29 @@ export class LogList extends LitElement {
     super.disconnectedCallback();
   }
 
-  render(): TemplateResult {
-    return html`<vscode-scrollable
-      id=${ELEMENT_IDS.LOG_CONTENT}
-      class="log-container"
-    ></vscode-scrollable>`;
+  override render(): TemplateResult {
+    return html`
+      <task-group-list
+        .groups=${this.groups}
+        .messages=${this.messages}
+        .activeRunId=${this.activeRunId}
+        ?isToolUse=${this.isToolUse}
+        .toggleStates=${this.toggleStates}
+      ></task-group-list>
+    `;
   }
 
-  renderLogs({
-    streamId,
-    messages = [],
-    groups = [],
-    action = 'render',
-    activeRunId = null,
-    runInstructions = null,
-    isToolUse = false,
-  }: {
-    streamId?: string | null;
-    messages?: LogMessageData[];
-    groups?: TaskGroup[];
-    action?: 'render' | 'clear';
-    activeRunId?: string | null;
-    runInstructions?: Record<string, InstructionUpdate> | null;
-    isToolUse?: boolean;
-  }): void {
-    const container = this.getContainer();
-    if (!container) return;
-
-    // Always clear before full render to prevent duplicate content.
-    // The 'render' action replaces content; 'clear' clears without re-rendering.
-    container.innerHTML = '';
-    this.groupManager.clear();
-    this.logManager.clear();
-
-    if (action === 'clear') {
-      this.lastRenderedStream = streamId ?? '';
-      this.showPlaceholderIfEmpty([], []);
-      return;
-    }
-
-    const sortedMessages = [...messages].sort((a, b) => {
-      const timeA = a.timestamp ?? 0;
-      const timeB = b.timestamp ?? 0;
-      return timeA - timeB;
-    });
-
-    // Tool-use agents: inject instruction as userMessage if not already present
-    if (isToolUse) {
-      prependInstructionForToolUse(sortedMessages, runInstructions, streamId);
-    }
-
-    this.groupManager.showRun(
-      groups.length > 0 ? activeRunId : null,
-      isToolUse,
-    );
-    if (groups.length > 0) {
-      this.groupManager.renderInitial(groups, container);
-    }
-
-    const ungroupedFragment = document.createDocumentFragment();
-    const userMessageFragment = isToolUse
-      ? document.createDocumentFragment()
-      : null;
-    const groupedFragments = new Map<string, DocumentFragment>();
-
-    for (const msg of sortedMessages) {
-      const formatted = this.logManager.entryFormatter.format(msg);
-      if (!formatted) continue;
-
-      if (msg.groupId) {
-        const groupContainer = this.getGroupContainer(msg.groupId);
-        if (groupContainer) {
-          let frag = groupedFragments.get(msg.groupId);
-          if (!frag) {
-            frag = document.createDocumentFragment();
-            groupedFragments.set(msg.groupId, frag);
-          }
-          appendFormatted(frag, formatted);
-        } else {
-          appendFormatted(ungroupedFragment, formatted);
-        }
-      } else if (
-        isToolUse &&
-        msg.messageType === 'userMessage' &&
-        userMessageFragment
-      ) {
-        appendFormatted(userMessageFragment, formatted);
-      } else {
-        appendFormatted(ungroupedFragment, formatted);
-      }
-    }
-
-    if (isToolUse) {
-      if (ungroupedFragment.childNodes.length > 0) {
-        container.prepend(ungroupedFragment);
-      }
-      if (userMessageFragment && userMessageFragment.childNodes.length > 0) {
-        container.prepend(userMessageFragment);
-      }
-    }
-
-    for (const [groupId, frag] of groupedFragments) {
-      const groupContainer = this.getGroupContainer(groupId);
-      if (groupContainer) {
-        groupContainer.appendChild(frag);
-      } else {
-        container.appendChild(frag);
-      }
-    }
-
-    if (!isToolUse && ungroupedFragment.childNodes.length > 0) {
-      container.appendChild(ungroupedFragment);
-    }
-
-    scrollToBottom(container);
-    this.lastRenderedStream = streamId ?? '';
-    this.showPlaceholderIfEmpty(sortedMessages, groups);
-  }
-
-  appendLog(
-    logMessage: LogMessageData,
-    options: { defaultOpen?: boolean } = {},
-  ): void {
-    const container = this.getContainer();
-    if (!container) return;
-
-    const appendedToGroup = this.logManager.append(logMessage, options);
-    if (!appendedToGroup) {
-      const formatted = this.logManager.entryFormatter.format(
-        logMessage,
-        options,
-      );
-      if (formatted) {
-        appendFormatted(container, formatted);
-      }
-    }
-    scrollToBottom(container);
-  }
-
-  updateLog(logMessage: LogMessageData): void {
-    const updated = this.logManager.update(logMessage);
-    if (!updated) {
-      this.appendLog(logMessage);
+  override updated(): void {
+    // Scroll to bottom after render
+    const container = this.querySelector(`#${ELEMENT_IDS.LOG_CONTENT}`);
+    if (container instanceof HTMLElement) {
+      scrollToBottom(container);
     }
   }
 
-  addGroup(group: TaskGroup): void {
-    const container = this.getContainer();
-    if (!container) return;
-    this.groupManager.addGroup(group);
-  }
-
-  updateGroup(update: Partial<TaskGroup> & { id: string }): void {
-    this.groupManager.updateGroup(update);
-  }
-
-  showRun(runId: string | null, isToolUse = false): void {
-    this.groupManager.showRun(runId, isToolUse);
-  }
-
-  clear(): void {
-    const container = this.getContainer();
-    if (container) {
-      container.innerHTML = '';
-    }
-    this.groupManager.clear();
-    this.logManager.clear();
-    this.lastRenderedStream = '';
-    // Show placeholder when cleared (no active stream)
-    this.showPlaceholderIfEmpty([], []);
-  }
-
-  private getContainer(): HTMLElement | null {
-    return this.containerEl;
-  }
-
-  private getGroupContainer(groupId: string): HTMLElement | null {
-    return this.querySelector(`#group-content-${groupId}`);
-  }
-
-  private showPlaceholderIfEmpty(
-    messages: LogMessageData[],
-    groups: TaskGroup[],
-  ): void {
-    const container = this.getContainer();
-    if (!container) return;
-    if (messages.length > 0 || groups.length > 0) {
-      return;
-    }
-
-    render(
-      html`<log-placeholder
-        id=${ELEMENT_IDS.LOG_PLACEHOLDER}
-        .content=${PLACEHOLDER_HTML}
-      ></log-placeholder>`,
-      container,
-    );
-  }
+  // ============================================================
+  // Private methods
+  // ============================================================
 
   private saveToggleStates(): void {
     try {

@@ -21,6 +21,11 @@ export class RunSelector extends LitElement {
     :host([hidden]) {
       display: none;
     }
+
+    /* Constrain dropdown listbox height to prevent viewport overflow */
+    vscode-single-select::part(listbox) {
+      max-height: var(--height-large);
+    }
   `;
 
   @property({ type: Array }) runs: Array<{
