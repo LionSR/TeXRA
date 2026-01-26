@@ -20,7 +20,12 @@
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { guard } from 'lit/directives/guard.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
@@ -70,8 +75,22 @@ export class WorkflowStreamContent extends LitElement {
 
   /** Ref for LogList - exposed for parent access via getLogListRef() */
   private logListRef: Ref<LogList> = createRef();
+  /** Cached derived values for the currently selected run */
+  private runValues: RunDerivedValues = {
+    instruction: null,
+    usage: null,
+    files: {},
+    hasFiles: false,
+  };
+
+  protected willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('runId') || changedProperties.has('state')) {
+      this.runValues = this.computeRunValues();
+    }
+  }
 
   render(): TemplateResult {
+    const runValues = this.runValues;
     return html`
       <stream-header
         .stream=${this.streamInfo}
@@ -84,37 +103,25 @@ export class WorkflowStreamContent extends LitElement {
       ></stream-header>
 
       <instruction-panel
-        .instruction=${guard(
-          [this.runId, this.state],
-          () => this.computeRunValues().instruction,
-        )}
+        .instruction=${runValues.instruction}
       ></instruction-panel>
 
       <task-group-list ${ref(this.logListRef)}></task-group-list>
 
       <usage-panel
-        .usage=${guard(
-          [this.runId, this.state],
-          () => this.computeRunValues().usage,
-        )}
+        .usage=${runValues.usage}
         .contextState=${this.state.contextState ?? null}
       ></usage-panel>
 
       <file-list
-        .filesByRound=${guard(
-          [this.runId, this.state],
-          () => this.computeRunValues().files,
-        )}
+        .filesByRound=${runValues.files}
         .showRoundHeaders=${true}
       ></file-list>
 
       <followup-section
         .agentCategory=${this.streamInfo.agentCategory}
         .status=${this.state.status ?? this.streamInfo.status ?? ''}
-        .hasOutputFiles=${guard(
-          [this.runId, this.state],
-          () => this.computeRunValues().hasFiles,
-        )}
+        .hasOutputFiles=${runValues.hasFiles}
         .options=${this.followupOptions}
         .mode=${this.state.followupMode}
         .streamModel=${this.streamInfo.model ?? null}

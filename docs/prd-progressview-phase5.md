@@ -16,14 +16,14 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 > **Overall Phase 5 Completion: 100% (regressions & validation)**
 >
-> Remaining refactoring tasks moved to [Phase 6](./prd-progressview-phase6.md).
+> Remaining refactoring tasks completed in [Phase 6](./prd-progressview-phase6.md).
 >
 > - ✅ All critical regressions fixed (R1-R16, H1-H15, J1-J2, P1-P3, R11)
 > - ✅ Zod message validation complete (mainViewMessages.ts, commonViewMessages.ts)
 > - ✅ Cross-webview infrastructure unified (BaseWebviewApp pattern)
 > - ✅ All JavaScript behavioral issues resolved (debounce, checkbox timing)
-> - ➡️ Component extraction → [Phase 6](./prd-progressview-phase6.md)
-> - ➡️ Formatters migration → [Phase 6](./prd-progressview-phase6.md)
+> - ✅ Component extraction completed in [Phase 6](./prd-progressview-phase6.md)
+> - ✅ Formatters migration completed (Phase 5)
 
 ### Critical Issues (Fix Immediately)
 
@@ -83,29 +83,29 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ### Refactoring Tasks
 
-| Task                           | Status         | Impact                           |
-| ------------------------------ | -------------- | -------------------------------- |
-| Extract FileSelectGroup        | ➡️ Phase 6    | -300 lines from MainApp          |
-| Extract BannerGroup components | ➡️ Phase 6    | -150 lines from MainApp          |
-| Extract LatexDiffsSection      | ➡️ Phase 6    | -200 lines from MainApp          |
-| Create shared message schemas  | ✅ Complete    | mainViewMessages.ts (46 schemas) |
-| Add Zod validation to MainApp  | ✅ Complete    | All 34 message types validated   |
-| Convert 37 inline arrows       | ➡️ Phase 6    | Performance                      |
-| Delete duplicate debug handler | ✅ Complete    | commonMessageHandlers.ts         |
-| Install @types/sortablejs      | ✅ Complete    | Complete type definitions        |
+| Task                           | Status                | Impact                           |
+| ------------------------------ | --------------------- | -------------------------------- |
+| Extract FileSelectGroup        | ✅ Complete (Phase 6) | -300 lines from MainApp          |
+| Extract BannerGroup components | ✅ Complete (Phase 6) | -150 lines from MainApp          |
+| Extract LatexDiffsSection      | ✅ Complete (Phase 6) | -200 lines from MainApp          |
+| Create shared message schemas  | ✅ Complete           | mainViewMessages.ts (46 schemas) |
+| Add Zod validation to MainApp  | ✅ Complete           | All 34 message types validated   |
+| Convert 37 inline arrows       | ✅ Complete (Phase 6) | Performance                      |
+| Delete duplicate debug handler | ✅ Complete           | commonMessageHandlers.ts         |
+| Install @types/sortablejs      | ✅ Complete           | Complete type definitions        |
 
 ### Architectural Tasks (NEW - Phase 5 Scope)
 
-| Task                              | Status            | Impact                            |
-| --------------------------------- | ----------------- | --------------------------------- |
-| Formatters → TemplateResult       | ✅ Complete       | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
-| renderLogs incremental updates    | 🟡 Hybrid         | appendLog/updateLog are incremental; full rebuild only on stream switch |
+| Task                           | Status      | Impact                                                                              |
+| ------------------------------ | ----------- | ----------------------------------------------------------------------------------- |
+| Formatters → TemplateResult    | ✅ Complete | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
+| renderLogs incremental updates | 🟡 Hybrid   | appendLog/updateLog are incremental; full rebuild only on stream switch             |
 
 > **Open to ideas:** We welcome suggestions for more native Lit patterns that could improve the architecture. See [Phase 6 section 6.2b](./prd-progressview-phase6.md#62b-lit-directive--native-feature-improvements) for areas open for exploration.
-| Create commonViewMessages.ts      | ✅ Complete       | Zod schemas for 5 common cmds     |
-| themeHandlers.ts Zod migration    | ✅ Complete       | commonMessageHandlers.ts          |
-| Eliminate normalization layers    | ✅ Complete       | -160 lines (done in Phase 3)      |
-| Cross-webview command unification | ✅ Complete       | BaseWebviewApp pattern            |
+> | Create commonViewMessages.ts | ✅ Complete | Zod schemas for 5 common cmds |
+> | themeHandlers.ts Zod migration | ✅ Complete | commonMessageHandlers.ts |
+> | Eliminate normalization layers | ✅ Complete | -160 lines (done in Phase 3) |
+> | Cross-webview command unification | ✅ Complete | BaseWebviewApp pattern |
 
 ---
 

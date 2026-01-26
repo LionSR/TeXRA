@@ -209,119 +209,9 @@ export const mainViewStyles: CSSResult = css`
     align-items: center;
   }
 
-  .api-key-banner .actions,
-  .agent-config-banner .actions,
-  .dependency-banner .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-  }
-
-  .dependency-banner .dependency-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-small);
-  }
-
   .remove-button {
     color: var(--vscode-errorForeground);
     cursor: pointer;
-  }
-
-  .api-key-banner,
-  .agent-config-banner,
-  .dependency-banner,
-  .getting-started-banner {
-    border-radius: var(--border-radius);
-    padding: var(--spacing-small) var(--spacing-medium);
-    margin-bottom: var(--spacing-large);
-  }
-
-  .api-key-banner,
-  .agent-config-banner,
-  .dependency-banner {
-    background-color: var(--vscode-inputValidation-warningBackground);
-    color: var(--vscode-inputValidation-warningForeground);
-    border: 1px solid var(--vscode-inputValidation-warningBorder);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .getting-started-banner {
-    background-color: var(--vscode-inputValidation-infoBackground);
-    color: var(--vscode-inputValidation-infoForeground);
-    border: 1px solid var(--vscode-inputValidation-infoBorder);
-    line-height: 1.5;
-  }
-
-  .getting-started-banner a {
-    color: var(--color-text-link);
-    text-decoration: none;
-  }
-
-  .getting-started-banner a:hover {
-    text-decoration: underline;
-  }
-
-  .login-banner {
-    background: linear-gradient(
-      135deg,
-      var(--vscode-inputValidation-infoBackground) 0%,
-      color-mix(
-          in srgb,
-          var(--vscode-inputValidation-infoBackground) 80%,
-          var(--vscode-button-background)
-        )
-        100%
-    );
-    color: var(--vscode-inputValidation-infoForeground);
-    border: 1px solid var(--vscode-inputValidation-infoBorder);
-    border-radius: var(--border-radius);
-    padding: var(--spacing-medium);
-    margin-bottom: var(--spacing-large);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--spacing-medium);
-  }
-
-  .login-banner-content {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-medium);
-    flex: 1;
-  }
-
-  .login-banner-icon {
-    font-size: 1.5em;
-    color: var(--vscode-button-background);
-    display: flex;
-    align-items: center;
-  }
-
-  .login-banner-text {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-tiny);
-  }
-
-  .login-banner-title {
-    font-weight: 600;
-    font-size: 1em;
-  }
-
-  .login-banner-description {
-    font-size: 0.9em;
-    opacity: 0.9;
-  }
-
-  .login-banner .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    flex-shrink: 0;
   }
 
   .file-select {
@@ -572,5 +462,117 @@ export const mainViewStyles: CSSResult = css`
   #model::part(listbox) {
     bottom: 100%;
     top: auto;
+  }
+`;
+
+export const bannerStyles: CSSResult = css`
+  .api-key-banner .actions,
+  .agent-config-banner .actions,
+  .dependency-banner .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .dependency-banner .dependency-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-small);
+  }
+
+  .api-key-banner,
+  .agent-config-banner,
+  .dependency-banner,
+  .getting-started-banner {
+    border-radius: var(--border-radius);
+    padding: var(--spacing-small) var(--spacing-medium);
+    margin-bottom: var(--spacing-large);
+  }
+
+  .api-key-banner,
+  .agent-config-banner,
+  .dependency-banner {
+    background-color: var(--vscode-inputValidation-warningBackground);
+    color: var(--vscode-inputValidation-warningForeground);
+    border: 1px solid var(--vscode-inputValidation-warningBorder);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .getting-started-banner {
+    background-color: var(--vscode-inputValidation-infoBackground);
+    color: var(--vscode-inputValidation-infoForeground);
+    border: 1px solid var(--vscode-inputValidation-infoBorder);
+    line-height: 1.5;
+  }
+
+  .getting-started-banner a {
+    color: var(--color-text-link);
+    text-decoration: none;
+  }
+
+  .getting-started-banner a:hover {
+    text-decoration: underline;
+  }
+
+  .login-banner {
+    background: linear-gradient(
+      135deg,
+      var(--vscode-inputValidation-infoBackground) 0%,
+      color-mix(
+          in srgb,
+          var(--vscode-inputValidation-infoBackground) 80%,
+          var(--vscode-button-background)
+        )
+        100%
+    );
+    color: var(--vscode-inputValidation-infoForeground);
+    border: 1px solid var(--vscode-inputValidation-infoBorder);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-medium);
+    margin-bottom: var(--spacing-large);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-medium);
+  }
+
+  .login-banner-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+    flex: 1;
+  }
+
+  .login-banner-icon {
+    font-size: 1.5em;
+    color: var(--vscode-button-background);
+    display: flex;
+    align-items: center;
+  }
+
+  .login-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+  }
+
+  .login-banner-title {
+    font-weight: 600;
+    font-size: 1em;
+  }
+
+  .login-banner-description {
+    font-size: 0.9em;
+    opacity: 0.9;
+  }
+
+  .login-banner .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    flex-shrink: 0;
   }
 `;

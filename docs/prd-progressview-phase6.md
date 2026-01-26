@@ -15,17 +15,17 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 ## Status Summary
 
-| Task | Status | Impact |
-|------|--------|--------|
-| Extract FileSelectGroup | ⬜ Not Started | -300 lines from MainApp |
-| Extract BannerGroup components | ⬜ Not Started | -150 lines from MainApp |
-| Extract LatexDiffsSection | ⬜ Not Started | -200 lines from MainApp |
-| Convert 37 inline arrows | ⬜ Not Started | Performance |
-| Formatters → TemplateResult | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM; open to future improvements |
-| renderLogs incremental updates | 🟡 Hybrid | appendLog/updateLog incremental; full rebuild on stream switch only |
-| TaskGroupDomManager refactor | ⬜ Not Started | Separation of concerns |
-| Replace .map() with repeat() | ⬜ Not Started | Keyed list updates in RunSelector, FileList, StreamHeader, PromptOverlay |
-| Add guard() memoization | ⬜ Not Started | ToolUseStreamContent, WorkflowStreamContent caching |
+| Task                           | Status            | Impact                                                                   |
+| ------------------------------ | ----------------- | ------------------------------------------------------------------------ |
+| Extract FileSelectGroup        | ✅ Done           | -300 lines from MainApp                                                  |
+| Extract BannerGroup components | ✅ Done           | -150 lines from MainApp                                                  |
+| Extract LatexDiffsSection      | ✅ Done           | -200 lines from MainApp                                                  |
+| Convert 37 inline arrows       | ✅ Done           | Performance                                                              |
+| Formatters → TemplateResult    | ✅ Done (Phase 5) | Bridge pattern is intentional for Light DOM; open to future improvements |
+| renderLogs incremental updates | 🟡 Hybrid         | appendLog/updateLog incremental; full rebuild on stream switch only      |
+| TaskGroupDomManager refactor   | ✅ Done           | Separation of concerns                                                   |
+| Replace .map() with repeat()   | ✅ Done           | Keyed list updates in RunSelector, FileList, StreamHeader, PromptOverlay |
+| Add guard() memoization        | ✅ Done           | ToolUseStreamContent, WorkflowStreamContent caching                      |
 
 ---
 
@@ -35,14 +35,14 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 
 **Analysis by section:**
 
-| Section | Lines | Description |
-|---------|-------|-------------|
+| Section                  | Lines     | Description                    |
+| ------------------------ | --------- | ------------------------------ |
 | File selection rendering | 1700-2345 | Repetitive file list templates |
-| Banner components | 2347-2508 | API key, agent config, etc. |
-| LaTeXDiffs section | 2547-2736 | Diff configuration panel |
-| Message handler switch | 297-400+ | 58-case switch statement |
-| Event handlers | 450-700 | Click, input, form handlers |
-| State management | 100-296 | @state properties |
+| Banner components        | 2347-2508 | API key, agent config, etc.    |
+| LaTeXDiffs section       | 2547-2736 | Diff configuration panel       |
+| Message handler switch   | 297-400+  | 58-case switch statement       |
+| Event handlers           | 450-700   | Click, input, form handlers    |
+| State management         | 100-296   | @state properties              |
 
 **Target Structure:**
 
@@ -123,31 +123,31 @@ private handleFileAction = (e: Event) => {
 
 ## 6.2b Lit Directive & Native Feature Improvements
 
-**Status: ⬜ Not Started | Open to Ideas**
+**Status: ✅ Memoization complete | Open to Ideas**
 
 We actively welcome more native Lit approaches where they're more suitable. The current codebase uses some Lit features but there may be better patterns we haven't discovered yet.
 
 ### Currently Used Directives
 
-| Directive | Files | Notes |
-|-----------|-------|-------|
-| `repeat()` | 5 | Keyed list iteration |
-| `when()` | 5 | Conditional rendering |
-| `classMap()` | 6 | Dynamic CSS classes |
-| `ifDefined()` | 4 | Optional attributes |
-| `live()` | 2 | Form input preservation |
-| `ref()` | 3 | Element references |
+| Directive     | Files | Notes                   |
+| ------------- | ----- | ----------------------- |
+| `repeat()`    | 5     | Keyed list iteration    |
+| `when()`      | 5     | Conditional rendering   |
+| `classMap()`  | 6     | Dynamic CSS classes     |
+| `ifDefined()` | 4     | Optional attributes     |
+| `live()`      | 2     | Form input preservation |
+| `ref()`       | 3     | Element references      |
 
 ### Not Yet Used (Explore These)
 
-| Directive | Stability | Potential Use Case |
-|-----------|-----------|-------------------|
-| `guard()` | ⭐⭐⭐ Excellent | Memoize expensive template sections |
-| `cache()` | ⭐⭐⭐ Excellent | Preserve DOM when toggling visibility |
-| `until()` | ⭐⭐⭐ Excellent | Async data loading with placeholders |
-| `keyed()` | ⭐⭐ Good | Force re-render on identity change |
-| `templateContent()` | ⭐⭐ Good | Reuse `<template>` elements |
-| `asyncAppend()` / `asyncReplace()` | ⭐ Niche | Streaming content (rarely needed with async/await) |
+| Directive                          | Stability        | Potential Use Case                                 |
+| ---------------------------------- | ---------------- | -------------------------------------------------- |
+| `guard()`                          | ⭐⭐⭐ Excellent | Memoize expensive template sections                |
+| `cache()`                          | ⭐⭐⭐ Excellent | Preserve DOM when toggling visibility              |
+| `until()`                          | ⭐⭐⭐ Excellent | Async data loading with placeholders               |
+| `keyed()`                          | ⭐⭐ Good        | Force re-render on identity change                 |
+| `templateContent()`                | ⭐⭐ Good        | Reuse `<template>` elements                        |
+| `asyncAppend()` / `asyncReplace()` | ⭐ Niche         | Streaming content (rarely needed with async/await) |
 
 **Recommendation:** Start with `guard()` - it can replace ~10 private cache variables and ~30 lines of `willUpdate()` boilerplate in `ToolUseStreamContent.ts` (lines 65-98) and `WorkflowStreamContent.ts` (lines 79-108). See concrete before/after examples below.
 
@@ -155,20 +155,20 @@ We actively welcome more native Lit approaches where they're more suitable. The 
 
 **Replace `.map()` with `repeat()`:**
 
-| File | Line | Current | Suggested |
-|------|------|---------|-----------|
-| `RunSelector.ts` | 47 | `.map()` | `repeat(sortedRuns, r => r.id, ...)` |
-| `FileList.ts` | 205, 215 | `.map()` | `repeat(files, f => f.location.absolutePath, ...)` |
-| `StreamHeader.ts` | 344 | `.map()` | `repeat(buttons, b => b.id, ...)` |
-| `PromptOverlay.ts` | 478, 516 | `.map()` | `repeat(fileLists, f => f.label, ...)` |
-| `StreamTabs.ts` | 290, 303 | `.map()` | `repeat(FILTER_BUTTONS, b => b.id, ...)` |
+| File               | Line     | Current  | Suggested                                          |
+| ------------------ | -------- | -------- | -------------------------------------------------- |
+| `RunSelector.ts`   | 47       | `.map()` | `repeat(sortedRuns, r => r.id, ...)`               |
+| `FileList.ts`      | 205, 215 | `.map()` | `repeat(files, f => f.location.absolutePath, ...)` |
+| `StreamHeader.ts`  | 344      | `.map()` | `repeat(buttons, b => b.id, ...)`                  |
+| `PromptOverlay.ts` | 478, 516 | `.map()` | `repeat(fileLists, f => f.label, ...)`             |
+| `StreamTabs.ts`    | 290, 303 | `.map()` | `repeat(FILTER_BUTTONS, b => b.id, ...)`           |
 
-**Replace manual caching with `guard()`:**
+**Replace manual caching with `guard()` (or a single cached pass):**
 
-| File | Variables | Lines |
-|------|-----------|-------|
-| `ToolUseStreamContent.ts` | `_cachedFilteredPrompts`, `_cachedRunGroups`, `_prevStreamId`, `_prevPrompts`, `_prevTaskGroups` | 65-98 |
-| `WorkflowStreamContent.ts` | `_cachedRunGroups`, `_cachedRunValues`, `_prevTaskGroups`, `_prevRunId`, `_prevState` | 79-108 |
+| File                       | Variables                                    | Lines  |
+| -------------------------- | -------------------------------------------- | ------ |
+| `ToolUseStreamContent.ts`  | Cached prompt state computed once per update | 65-98  |
+| `WorkflowStreamContent.ts` | Cached run values computed once per update   | 79-108 |
 
 **Current pattern (manual memoization):**
 
@@ -297,14 +297,14 @@ export function renderToElement(template: TemplateResult): HTMLElement | null {
 
 **Completed scope (14 formatters):**
 
-| Formatter File | Functions | Status |
-|----------------|-----------|--------|
-| `bannerFormatters.ts` | 2 | ✅ Lit templates |
-| `messageFormatters.ts` | 4 | ✅ Lit templates |
-| `toolFormatters.ts` | 2 | ✅ Lit templates |
-| `dataFormatters.ts` | 4 | ✅ Lit templates |
-| `contextManagementFormatters.ts` | 1 | ✅ Lit templates |
-| `taskGroupFormatter.ts` | 1 | ✅ Lit templates |
+| Formatter File                   | Functions | Status           |
+| -------------------------------- | --------- | ---------------- |
+| `bannerFormatters.ts`            | 2         | ✅ Lit templates |
+| `messageFormatters.ts`           | 4         | ✅ Lit templates |
+| `toolFormatters.ts`              | 2         | ✅ Lit templates |
+| `dataFormatters.ts`              | 4         | ✅ Lit templates |
+| `contextManagementFormatters.ts` | 1         | ✅ Lit templates |
+| `taskGroupFormatter.ts`          | 1         | ✅ Lit templates |
 
 ---
 
@@ -316,13 +316,13 @@ Incremental updates already work for append/update operations. Full rebuild only
 
 **Current state:**
 
-| Method | Pattern | Performance | Status |
-|--------|---------|-------------|--------|
-| `appendLog()` | Incremental append | O(1) | ✅ Complete |
-| `updateLog()` | Single element replace | O(1) | ✅ Complete |
-| `addGroup()` | Incremental insert | O(m) | ✅ Complete |
-| `updateGroup()` | Micro-updates (icon, duration) | O(1) | ✅ Complete |
-| `renderLogs()` | Full rebuild | O(n log n) | ❌ Still rebuilds |
+| Method          | Pattern                        | Performance | Status            |
+| --------------- | ------------------------------ | ----------- | ----------------- |
+| `appendLog()`   | Incremental append             | O(1)        | ✅ Complete       |
+| `updateLog()`   | Single element replace         | O(1)        | ✅ Complete       |
+| `addGroup()`    | Incremental insert             | O(m)        | ✅ Complete       |
+| `updateGroup()` | Micro-updates (icon, duration) | O(1)        | ✅ Complete       |
+| `renderLogs()`  | Full rebuild                   | O(n log n)  | ❌ Still rebuilds |
 
 **Typical flow (mostly incremental):**
 
@@ -370,12 +370,12 @@ renderLogs(logs: LogEntry[]): void {
 
 **Problem:** TaskGroupDomManager mixes several unrelated concerns:
 
-| Concern | Lines | Coupling Issue |
-|---------|-------|----------------|
-| DOM element management | 74-165 | Core responsibility |
-| Toggle state persistence | 45-72 | Should be in state manager |
-| Audio notifications | `playSystemSound()` | Should be dedicated service |
-| Traversal/hierarchy logic | 180-220 | Could be separate utility |
+| Concern                   | Lines               | Coupling Issue              |
+| ------------------------- | ------------------- | --------------------------- |
+| DOM element management    | 74-165              | Core responsibility         |
+| Toggle state persistence  | 45-72               | Should be in state manager  |
+| Audio notifications       | `playSystemSound()` | Should be dedicated service |
+| Traversal/hierarchy logic | 180-220             | Could be separate utility   |
 
 **Recommendation:** Extract concerns into focused modules:
 
@@ -383,8 +383,10 @@ renderLogs(logs: LogEntry[]): void {
 managers/
 ├── TaskGroupDomManager.ts    # DOM operations only
 ├── TaskGroupStateManager.ts  # Toggle persistence
-├── AudioNotificationService.ts # System sounds
+├── services/AudioNotificationService.ts # System sounds
 └── utils/taskGroupTraversal.ts # Hierarchy navigation
+
+**Status:** ✅ Implemented (TaskGroupDomManager now delegates toggle state, audio, and traversal concerns).
 ```
 
 ### A2. Light DOM in ProgressView (MEDIUM)
@@ -476,14 +478,14 @@ Fix known bugs before refactoring to establish stable baseline.
 
 ## Success Metrics
 
-| Metric | Before | Current | Target |
-|--------|--------|---------|--------|
-| MainApp.ts lines | 2,900 | 2,900 | ~500 |
-| Extracted components | 0 | 0 | 6+ |
-| Inline arrow functions | 37 | 37 | 0 |
-| Formatters using Lit templates | 0 | 14 ✅ | 14 (complete) |
-| `.map()` → `repeat()` migrations | 0 | 4 | 8+ |
-| Incremental log updates | partial | hybrid ✅ | hybrid (acceptable) |
+| Metric                           | Before  | Current   | Target              |
+| -------------------------------- | ------- | --------- | ------------------- |
+| MainApp.ts lines                 | 2,900   | 2,900     | ~500                |
+| Extracted components             | 0       | 0         | 6+                  |
+| Inline arrow functions           | 37      | 37        | 0                   |
+| Formatters using Lit templates   | 0       | 14 ✅     | 14 (complete)       |
+| `.map()` → `repeat()` migrations | 0       | 4         | 8+                  |
+| Incremental log updates          | partial | hybrid ✅ | hybrid (acceptable) |
 
 ---
 
@@ -494,6 +496,7 @@ Fix known bugs before refactoring to establish stable baseline.
 MainApp has complex state shared across file selection, agent config, and execution.
 
 **Mitigation:**
+
 - Extract leaf components first (FileItem, banners)
 - Use events to communicate back to MainApp
 - Keep shared state in MainApp until extraction stabilizes
@@ -503,6 +506,7 @@ MainApp has complex state shared across file selection, agent config, and execut
 Breaking existing functionality while extracting components.
 
 **Mitigation:**
+
 - Extract one component at a time
 - Manual testing after each extraction
 - Keep original code commented until verified

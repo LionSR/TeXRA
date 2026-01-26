@@ -1,8 +1,5 @@
 // Local imports - Lit template utilities
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { html, render, renderToElement } from '../formatters/litTemplates';
-
-// Local imports - shared state
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS, STREAM_STATUS } from '../constants';
@@ -16,11 +13,20 @@ import {
 
 // Local imports - progress view helpers
 import { insertChronologically } from '../utils';
+import {
+  collapseGroupTree,
+  findActiveGroupId,
+} from '../utils/taskGroupTraversal';
+
+// Local imports - progress view services
+import { AudioNotificationService } from '../services/AudioNotificationService';
+
+// Local imports - progress view managers
+import { TaskGroupStateManager } from './TaskGroupStateManager';
 
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
-type ToggleListener = (event: Event) => void;
 type RootElement = Document | Element;
 type LogFormatOptions = {
   preservedOpen?: boolean;
@@ -32,21 +38,25 @@ export class TaskGroupDomManager {
   private previousActiveGroupId: string | null;
   private groupElements: Map<string, HTMLElement>;
   private _rootGroupIds: Set<string>;
-  private toggleListeners: Map<string, ToggleListener>;
   private taskGroups: Map<string, TaskGroup>;
   private currentGroupId: string | null;
-  private toggleStates: ToggleStateStore;
+  private stateManager: TaskGroupStateManager;
+  private audioService: AudioNotificationService;
   private root: RootElement;
 
-  constructor(toggleStates?: ToggleStateStore, root?: RootElement) {
+  constructor(
+    stateManager?: TaskGroupStateManager,
+    audioService?: AudioNotificationService,
+    root?: RootElement,
+  ) {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
     this._rootGroupIds = new Set();
-    this.toggleListeners = new Map();
     this.taskGroups = new Map();
     this.currentGroupId = null;
-    this.toggleStates = toggleStates ?? new ToggleStateStore();
+    this.stateManager = stateManager ?? new TaskGroupStateManager();
+    this.audioService = audioService ?? new AudioNotificationService();
     this.root = root ?? document;
   }
 
@@ -191,7 +201,7 @@ export class TaskGroupDomManager {
 
     // Play sound when a run group completes (name matches r1, r2, etc.)
     if (wasRunning && isNowComplete && /^r\d+$/.test(group.name)) {
-      this.playSystemSound();
+      this.audioService.playCompletionBeep();
     }
 
     const header = this._getById(`${GROUP_DOM_IDS.HEADER_PREFIX}${id}`);
@@ -215,32 +225,6 @@ export class TaskGroupDomManager {
       durationElem.textContent = durationMs
         ? this.headerFormatter._formatDuration(durationMs)
         : '';
-    }
-  }
-
-  /**
-   * Plays a short system beep to notify the user that a run has completed.
-   */
-  playSystemSound(): void {
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioCtx) return;
-
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      osc.connect(ctx.destination);
-      osc.start();
-      setTimeout(() => {
-        osc.stop();
-        ctx.close();
-      }, 150);
-    } catch {
-      // Ignore errors (e.g., autoplay restrictions)
     }
   }
 
@@ -278,54 +262,27 @@ export class TaskGroupDomManager {
   }
 
   collapseGroupAndChildren(groupId: string): void {
-    for (const [childId, group] of this.taskGroups.entries()) {
-      if (group.parentGroupId === groupId) {
-        this.collapseGroupAndChildren(childId);
+    collapseGroupTree(groupId, this.taskGroups, (id) => {
+      const detailsElem = this.groupElements.get(id);
+      if (detailsElem instanceof HTMLDetailsElement) {
+        detailsElem.open = false;
+        this.stateManager.setCollapsed(id, true);
       }
-    }
-
-    const detailsElem = this.groupElements.get(groupId);
-    if (detailsElem instanceof HTMLDetailsElement) {
-      detailsElem.open = false;
-      this.toggleStates.set(groupId, true);
-    }
+    });
   }
 
   findCurrentActiveGroup(): string | null {
-    const current = this.currentGroupId
-      ? this.taskGroups.get(this.currentGroupId)
-      : undefined;
-    if (current) return current.id;
-
-    let latestGroup: string | null = null;
-    let latestTime = 0;
-    for (const [id, element] of this.groupElements.entries()) {
-      if (!element) continue;
-      const group = this.taskGroups.get(id);
-      if (!group) continue;
-
-      const isRootGroup = !group.parentGroupId;
-      const isVisible = isRootGroup
-        ? !element.hidden
-        : element instanceof HTMLDetailsElement && element.open === true;
-      if (!isVisible) continue;
-
-      if (group.startTime > latestTime) {
-        latestGroup = id;
-        latestTime = group.startTime;
-      }
-    }
-
-    return latestGroup;
+    return findActiveGroupId(
+      this.currentGroupId,
+      this.taskGroups,
+      this.groupElements,
+    );
   }
 
   clear(): void {
-    for (const groupId of this.groupElements.keys()) {
-      this._removeToggleListener(groupId);
-    }
+    this.stateManager.clear(this.groupElements);
     this.groupElements.clear();
     this._rootGroupIds.clear();
-    this.toggleListeners.clear();
     this.taskGroups.clear();
     this.previousActiveGroupId = null;
   }
@@ -380,20 +337,9 @@ export class TaskGroupDomManager {
     // Insert header before content
     detailsElem.insertBefore(headerElement, detailsElem.firstChild);
 
-    this._setupToggleState(group.id, detailsElem);
+    this.stateManager.applyToggleState(group.id, detailsElem);
     this._registerGroupElement(group, detailsElem);
     return detailsElem;
-  }
-
-  _setupToggleState(groupId: string, detailsElem: HTMLDetailsElement): void {
-    const isCollapsed = this.toggleStates.get(groupId) === true;
-    detailsElem.open = !isCollapsed;
-
-    const toggleListener: ToggleListener = () => {
-      this.toggleStates.set(groupId, !detailsElem.open);
-    };
-    detailsElem.addEventListener('toggle', toggleListener);
-    this.toggleListeners.set(groupId, toggleListener);
   }
 
   _registerGroupElement(group: TaskGroup, element: HTMLElement): void {
@@ -420,12 +366,8 @@ export class TaskGroupDomManager {
   }
 
   _removeToggleListener(groupId: string): void {
-    const listener = this.toggleListeners.get(groupId);
     const element = this.groupElements.get(groupId);
-    if (listener && element) {
-      element.removeEventListener('toggle', listener);
-    }
-    this.toggleListeners.delete(groupId);
+    this.stateManager.removeToggleListener(groupId, element ?? null);
   }
 
   _discardGroup(groupId: string): void {

@@ -22,6 +22,7 @@ import {
   TaskGroupDomManager,
   LogEntryManager,
 } from '../managers/TaskGroupDomManager';
+import { TaskGroupStateManager } from '../managers/TaskGroupStateManager';
 
 // Local imports - shared schemas
 import type {
@@ -60,7 +61,12 @@ export class LogList extends LitElement {
     if (Array.isArray(previous?.groupToggleStates)) {
       this.toggleStates.load(previous.groupToggleStates);
     }
-    this.groupManager = new TaskGroupDomManager(this.toggleStates, this);
+    const groupStateManager = new TaskGroupStateManager(this.toggleStates);
+    this.groupManager = new TaskGroupDomManager(
+      groupStateManager,
+      undefined,
+      this,
+    );
     this.logManager = new LogEntryManager(this);
     this.lastRenderedStream = '';
   }
