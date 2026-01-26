@@ -225,7 +225,9 @@ export class LatexDiffsSection extends LitElement {
     if (!this.isGitRepo) {
       return '<vscode-option value="">Not a Git repository</vscode-option>';
     }
-    const entries = this.commitOptions.some((commit) => commit.startsWith('HEAD'))
+    const entries = this.commitOptions.some((commit) =>
+      commit.startsWith('HEAD'),
+    )
       ? this.commitOptions
       : ['HEAD', ...this.commitOptions];
     const optionsHtml = entries

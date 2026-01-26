@@ -103,8 +103,7 @@ function defaultChildTimestamp(child: Element): number | null {
 
   if (
     child.classList.contains('log-line') ||
-    child.classList.contains('banner-details') ||
-    child.classList.contains('native-status-line')
+    child.classList.contains('banner-details')
   ) {
     const fullTs = child.dataset.fullTimestamp;
     if (fullTs) {

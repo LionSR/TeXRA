@@ -30,7 +30,9 @@ declare global {
  * Falls back to empty string if not available.
  */
 function getCodiconFontUri(): string {
-  return typeof window !== 'undefined' ? (window.__CODICON_FONT_URI__ ?? '') : '';
+  return typeof window !== 'undefined'
+    ? (window.__CODICON_FONT_URI__ ?? '')
+    : '';
 }
 
 /**

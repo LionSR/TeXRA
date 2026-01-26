@@ -24,7 +24,7 @@ declare module 'mark.js' {
       node: Text,
       term: string,
       totalCounter: number,
-      counter: number
+      counter: number,
     ) => boolean;
     noMatch?: (term: string) => void;
     done?: (counter: number) => void;
@@ -49,7 +49,7 @@ declare module 'mark.js' {
     markRegExp(regexp: RegExp, options?: MarkOptions): void;
     markRanges(
       ranges: Array<{ start: number; length: number }>,
-      options?: MarkOptions
+      options?: MarkOptions,
     ): void;
     unmark(options?: UnmarkOptions): void;
   }

@@ -275,6 +275,48 @@ export class StreamHeader extends LitElement {
         display: none;
       }
 
+      /* Button type styles */
+      .stop-button {
+        margin-right: var(--spacing-tiny);
+        color: var(--color-error);
+      }
+
+      .pack-button {
+        margin-left: var(--spacing-tiny);
+      }
+
+      .run-button {
+        margin-left: var(--spacing-tiny);
+        color: var(--color-success);
+      }
+
+      .yolo-toggle-button {
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+
+      .yolo-toggle-button.is-active {
+        color: var(--color-error);
+        background-color: color-mix(
+          in srgb,
+          var(--color-error) 15%,
+          transparent
+        );
+        border-radius: 4px;
+        box-shadow: 0 0 8px
+          color-mix(in srgb, var(--color-error) 40%, transparent);
+      }
+
+      .yolo-toggle-button.is-active:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--color-error) 25%,
+          transparent
+        );
+        box-shadow: 0 0 12px
+          color-mix(in srgb, var(--color-error) 60%, transparent);
+      }
+
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;

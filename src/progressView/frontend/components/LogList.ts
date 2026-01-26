@@ -1,7 +1,9 @@
 // Third-party imports
 import { LitElement, html, render, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+
+// Local imports - side-effect: register component
+import './LogPlaceholder';
 
 // Local imports - shared webview
 import { postMessage } from '@shared/vscode';
@@ -77,6 +79,11 @@ export class LogList extends LitElement {
     document.addEventListener('click', this.handleClickEvent, {
       capture: true,
     });
+    // Handle file-click events from Shadow DOM components
+    document.addEventListener(
+      'file-click',
+      this.handleFileClickEvent as EventListener,
+    );
   }
 
   disconnectedCallback(): void {
@@ -86,6 +93,10 @@ export class LogList extends LitElement {
     document.removeEventListener('click', this.handleClickEvent, {
       capture: true,
     });
+    document.removeEventListener(
+      'file-click',
+      this.handleFileClickEvent as EventListener,
+    );
     super.disconnectedCallback();
   }
 
@@ -279,9 +290,10 @@ export class LogList extends LitElement {
     }
 
     render(
-      html`<div id=${ELEMENT_IDS.LOG_PLACEHOLDER} class="log-placeholder">
-        ${unsafeHTML(PLACEHOLDER_HTML)}
-      </div>`,
+      html`<log-placeholder
+        id=${ELEMENT_IDS.LOG_PLACEHOLDER}
+        .content=${PLACEHOLDER_HTML}
+      ></log-placeholder>`,
       container,
     );
   }
@@ -376,6 +388,19 @@ export class LogList extends LitElement {
         defaultTitle: 'Copy to clipboard',
         successTitle: 'Copied!',
         successClass: 'copied',
+      });
+    }
+  };
+
+  /** Handle file-click events from Shadow DOM components. */
+  private handleFileClickEvent = (
+    event: CustomEvent<{ file: string; line?: number }>,
+  ): void => {
+    const { file, line } = event.detail;
+    if (file) {
+      postMessage(COMMANDS.OPEN_FILE, {
+        file,
+        ...(line !== undefined && { line }),
       });
     }
   };
