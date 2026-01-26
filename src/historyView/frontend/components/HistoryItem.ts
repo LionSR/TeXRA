@@ -30,8 +30,11 @@ export class HistoryItem extends LitElement {
 
   @property({ attribute: false }) item?: HistoryItemData;
   @property({ type: Boolean }) open = false;
+  /** Local index of the mark to highlight as current, or null if none in this item */
+  @property({ type: Number }) highlightedMatchIndex: number | null = null;
 
   private markInstance: Mark | null = null;
+  private previousHighlightedIndex: number | null = null;
 
   @queryAll('mark')
   private markElements!: HTMLElement[];
@@ -53,6 +56,38 @@ export class HistoryItem extends LitElement {
       }),
     );
   };
+
+  /**
+   * React to highlightedMatchIndex changes - apply current-match class.
+   * Uses direct DOM manipulation since mark.js creates marks dynamically.
+   */
+  protected override updated(): void {
+    // Only update if highlightedMatchIndex changed
+    if (this.highlightedMatchIndex === this.previousHighlightedIndex) {
+      return;
+    }
+
+    const marks = this.getMarks();
+
+    // Remove current-match from previous
+    if (
+      this.previousHighlightedIndex !== null &&
+      marks[this.previousHighlightedIndex]
+    ) {
+      marks[this.previousHighlightedIndex].classList.remove('current-match');
+    }
+
+    // Add current-match to new and scroll
+    if (this.highlightedMatchIndex !== null && marks[this.highlightedMatchIndex]) {
+      marks[this.highlightedMatchIndex].classList.add('current-match');
+      marks[this.highlightedMatchIndex].scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+
+    this.previousHighlightedIndex = this.highlightedMatchIndex;
+  }
 
   private ensureMarkInstance(): void {
     if (!this.markInstance) {
