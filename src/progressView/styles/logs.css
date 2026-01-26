@@ -12,6 +12,14 @@ log-list {
   overflow: hidden;
 }
 
+/* vscode-scrollable must fill its parent and be the scrolling container */
+task-group-list > vscode-scrollable,
+log-list > vscode-scrollable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* Non-scrolling elements should not shrink or grow */
 /* Note: Shadow DOM components (instruction-panel, todo-list, follow-up-input)
    control their own display via :host styles - don't override here */
