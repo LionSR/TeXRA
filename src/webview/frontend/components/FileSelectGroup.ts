@@ -254,6 +254,39 @@ export class FileSelectGroup extends LitElement {
   /** Tool config menu open state */
   @state() private toolConfigMenuOpen = false;
 
+  /** Document click handler bound to this instance */
+  private readonly boundDocumentClickHandler = this.handleDocumentClick.bind(
+    this,
+  );
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener('click', this.boundDocumentClickHandler);
+  }
+
+  override disconnectedCallback(): void {
+    document.removeEventListener('click', this.boundDocumentClickHandler);
+    super.disconnectedCallback();
+  }
+
+  private handleDocumentClick(event: MouseEvent): void {
+    // Only handle if a menu is open
+    if (!this.autoExtractMenuOpen && !this.toolConfigMenuOpen) {
+      return;
+    }
+
+    const path = event.composedPath();
+    const clickedInside = path.some(
+      (el) => el instanceof HTMLElement && el.getRootNode() === this.shadowRoot,
+    );
+
+    // If clicked outside this component, close all menus
+    if (!clickedInside) {
+      this.autoExtractMenuOpen = false;
+      this.toolConfigMenuOpen = false;
+    }
+  }
+
   private get listId(): string {
     return `${this.config.type}Files`;
   }
