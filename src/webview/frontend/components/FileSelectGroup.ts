@@ -17,33 +17,9 @@ import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
-import type { FileType } from '../constants';
 
-/** Configuration for a file select group */
-export interface FileSelectConfig {
-  type: FileType;
-  label: string;
-  icon: string;
-  refreshTitle: string;
-  currentTitle: string;
-  emptyTitle: string;
-  toggleTitle: string;
-  addOpenedLabel: string;
-  emptyListLabel: string;
-  selectListLabel: string;
-  tooltip: string;
-  toolConfig?: 'tool' | 'autoExtract';
-  focusInstruction?: { key: string; text: string };
-}
-
-/** Checkbox values for auto-extract and tool config */
-export interface CheckboxValues {
-  autoExtractFigure: boolean;
-  autoExtractTikzFigure: boolean;
-  autoCompileInputPdf: boolean;
-  attachTeXCount: boolean;
-  attachDiagnostics: boolean;
-}
+// Local imports - shared schemas
+import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -255,9 +231,8 @@ export class FileSelectGroup extends LitElement {
   @state() private toolConfigMenuOpen = false;
 
   /** Document click handler bound to this instance */
-  private readonly boundDocumentClickHandler = this.handleDocumentClick.bind(
-    this,
-  );
+  private readonly boundDocumentClickHandler =
+    this.handleDocumentClick.bind(this);
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -543,7 +518,9 @@ export class FileSelectGroup extends LitElement {
         <div class="file-select-header">
           <div class="file-select-label-group">
             <vscode-toolbar-button
-              id="refresh${config.type[0].toUpperCase()}${config.type.slice(1)}FileButton"
+              id="refresh${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FileButton"
               icon=${config.icon}
               label=${config.refreshTitle}
               title=${config.refreshTitle}
@@ -552,25 +529,27 @@ export class FileSelectGroup extends LitElement {
             <label for=${this.selectId} title=${config.tooltip}
               >${config.label}</label
             >
-            ${when(
-              config.toolConfig === 'tool',
-              () => this.renderToolConfigMenu(),
+            ${when(config.toolConfig === 'tool', () =>
+              this.renderToolConfigMenu(),
             )}
-            ${when(
-              config.toolConfig === 'autoExtract',
-              () => this.renderAutoExtractMenu(),
+            ${when(config.toolConfig === 'autoExtract', () =>
+              this.renderAutoExtractMenu(),
             )}
           </div>
           <vscode-toolbar-container class="file-select-actions">
             <vscode-toolbar-button
-              id="current${config.type[0].toUpperCase()}${config.type.slice(1)}FileButton"
+              id="current${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FileButton"
               icon="file-code"
               label=${config.currentTitle}
               title=${config.currentTitle}
               @click=${this.handleGetCurrentFile}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(1)}FileButton"
+              id="empty${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FileButton"
               icon="close"
               label=${config.emptyTitle}
               title=${config.emptyTitle}
@@ -585,7 +564,9 @@ export class FileSelectGroup extends LitElement {
               <i class="codicon ${chevronClass}"></i>
             </span>
             <vscode-toolbar-button
-              id="addOpened${config.type[0].toUpperCase()}${config.type.slice(1)}FilesButton"
+              id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FilesButton"
               class="file-action-button"
               icon="folder-opened"
               label=${config.addOpenedLabel}
@@ -593,7 +574,9 @@ export class FileSelectGroup extends LitElement {
               @click=${this.handleAddOpenedFiles}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(1)}FilesButton"
+              id="empty${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FilesButton"
               class="file-action-button"
               icon="trash"
               label=${config.emptyListLabel}
@@ -601,7 +584,9 @@ export class FileSelectGroup extends LitElement {
               @click=${this.handleEmptyFiles}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
-              id="select${config.type[0].toUpperCase()}${config.type.slice(1)}FilesButton"
+              id="select${config.type[0].toUpperCase()}${config.type.slice(
+                1,
+              )}FilesButton"
               class="file-action-button"
               icon="add"
               label=${config.selectListLabel}
