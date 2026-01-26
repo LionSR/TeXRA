@@ -79,6 +79,10 @@ export class OutputFilesSection extends LitElement {
       font-weight: normal;
       font-size: var(--font-size);
       white-space: nowrap;
+      min-width: calc(var(--width-button-min) * 2);
+      display: flex;
+      align-items: center;
+      height: var(--height-control);
     }
 
     .multiple-files-container {
