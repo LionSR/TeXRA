@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
@@ -475,8 +476,10 @@ export class PromptOverlay extends LitElement {
       { label: 'Output', files: prompt.outputFiles ?? [] },
     ];
 
-    return html`${fileLists.map(({ label, files }) =>
-      this.renderFileList(label, files),
+    return html`${repeat(
+      fileLists,
+      ({ label }) => label,
+      ({ label, files }) => this.renderFileList(label, files),
     )}`;
   }
 
@@ -489,12 +492,15 @@ export class PromptOverlay extends LitElement {
     return html`
       <div class="file-list">
         <span class="file-list-label">${label}:</span>
-        ${files.map(
-          (file, i) =>
-            html`${i > 0 ? ', ' : ''}<span
+        ${repeat(
+          files,
+          (file) => file,
+          (file, index) =>
+            html`${index > 0 ? ', ' : ''}<span
                 class="file-link"
                 title=${file}
-                @click=${() => this.openFile(file)}
+                data-file-path=${file}
+                @click=${this.handleFileLinkClick}
                 >${getBasename(file)}</span
               >`,
         )}
@@ -513,12 +519,18 @@ export class PromptOverlay extends LitElement {
     const secondaryActions = SECONDARY_ACTIONS[this.prompt.kind];
 
     return html`
-      ${primaryActions.map((config) => this.renderActionButton(config))}
+      ${repeat(
+        primaryActions,
+        (config) => config.action,
+        (config) => this.renderActionButton(config),
+      )}
       ${secondaryActions.length > 0
         ? html`
             <div class="secondary-actions">
-              ${secondaryActions.map((config) =>
-                this.renderActionButton(config),
+              ${repeat(
+                secondaryActions,
+                (config) => config.action,
+                (config) => this.renderActionButton(config),
               )}
             </div>
           `
@@ -548,6 +560,13 @@ export class PromptOverlay extends LitElement {
   // ===========================================================================
   // Event handlers
   // ===========================================================================
+
+  private handleFileLinkClick = (event: Event): void => {
+    const target = event.currentTarget as HTMLElement | null;
+    const filePath = target?.dataset.filePath;
+    if (!filePath) return;
+    this.openFile(filePath);
+  };
 
   private handleActionClick = (event: MouseEvent): void => {
     const target = event.currentTarget as HTMLElement | null;

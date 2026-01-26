@@ -20,13 +20,9 @@
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { guard } from 'lit/directives/guard.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
@@ -50,9 +46,6 @@ import './UsagePanel';
 import './FileList';
 import './FollowupSection';
 
-/** Run group info for the run selector */
-type RunGroup = { id: string; name: string; startTime: number };
-
 /** Cached derived values for a specific runId */
 interface RunDerivedValues {
   instruction: InstructionUpdate | null;
@@ -75,68 +68,53 @@ export class WorkflowStreamContent extends LitElement {
   @property({ type: Object }) followupOptions: FollowupOptionsState | null =
     null;
 
-  // Cached derived values - recomputed only when dependencies change
-  private _cachedRunGroups: RunGroup[] = [];
-  private _cachedRunValues: RunDerivedValues = {
-    instruction: null,
-    usage: null,
-    files: {},
-    hasFiles: false,
-  };
-  private _prevTaskGroups: unknown[] | null = null;
-  private _prevRunId: string | null = null;
-  private _prevState: WorkflowStreamState | null = null;
-
   /** Ref for LogList - exposed for parent access via getLogListRef() */
   private logListRef: Ref<LogList> = createRef();
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Recompute run groups when state.taskGroups changes
-    if (changedProperties.has('state')) {
-      const taskGroups = this.state?.taskGroups;
-      if (this._prevTaskGroups !== taskGroups) {
-        this._cachedRunGroups = getRunGroups(taskGroups ?? []);
-        this._prevTaskGroups = taskGroups ?? null;
-      }
-    }
-
-    // Recompute run-specific values when runId or state changes
-    if (changedProperties.has('runId') || changedProperties.has('state')) {
-      if (this._prevRunId !== this.runId || this._prevState !== this.state) {
-        this._cachedRunValues = this.computeRunValues();
-        this._prevRunId = this.runId;
-        this._prevState = this.state;
-      }
-    }
-  }
-
   render(): TemplateResult {
-    const { instruction, usage, files, hasFiles } = this._cachedRunValues;
-
     return html`
       <stream-header
         .stream=${this.streamInfo}
         .streamState=${this.state}
         .runId=${this.runId}
-        .runs=${this._cachedRunGroups}
+        .runs=${guard([this.state?.taskGroups], () =>
+          getRunGroups(this.state?.taskGroups ?? []),
+        )}
         .yoloActive=${false}
       ></stream-header>
 
-      <instruction-panel .instruction=${instruction}></instruction-panel>
+      <instruction-panel
+        .instruction=${guard(
+          [this.runId, this.state],
+          () => this.computeRunValues().instruction,
+        )}
+      ></instruction-panel>
 
       <task-group-list ${ref(this.logListRef)}></task-group-list>
 
       <usage-panel
-        .usage=${usage}
+        .usage=${guard(
+          [this.runId, this.state],
+          () => this.computeRunValues().usage,
+        )}
         .contextState=${this.state.contextState ?? null}
       ></usage-panel>
 
-      <file-list .filesByRound=${files} .showRoundHeaders=${true}></file-list>
+      <file-list
+        .filesByRound=${guard(
+          [this.runId, this.state],
+          () => this.computeRunValues().files,
+        )}
+        .showRoundHeaders=${true}
+      ></file-list>
 
       <followup-section
         .agentCategory=${this.streamInfo.agentCategory}
         .status=${this.state.status ?? this.streamInfo.status ?? ''}
-        .hasOutputFiles=${hasFiles}
+        .hasOutputFiles=${guard(
+          [this.runId, this.state],
+          () => this.computeRunValues().hasFiles,
+        )}
         .options=${this.followupOptions}
         .mode=${this.state.followupMode}
         .streamModel=${this.streamInfo.model ?? null}

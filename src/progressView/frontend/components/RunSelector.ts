@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - progress view
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
@@ -44,7 +45,9 @@ export class RunSelector extends LitElement {
         @change=${this.handleChange}
       >
         <span slot="placeholder">No sessions</span>
-        ${sortedRuns.map(
+        ${repeat(
+          sortedRuns,
+          (run) => run.id,
           (run) => html`
             <vscode-option value=${run.id}>
               ${this.formatRunLabel(run)}

@@ -19,13 +19,9 @@
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { guard } from 'lit/directives/guard.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - shared schemas
@@ -46,9 +42,6 @@ import './TaskGroupList';
 import './UsagePanel';
 import './FollowUpInput';
 
-/** Run group info for the run selector */
-type RunGroup = { id: string; name: string; startTime: number };
-
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
   // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
@@ -61,44 +54,10 @@ export class ToolUseStreamContent extends LitElement {
   @property({ type: Object }) streamInfo!: StreamTabInfo;
   @property({ type: Array }) prompts: PromptState[] = [];
 
-  // Cached derived values - recomputed only when dependencies change
-  private _cachedFilteredPrompts: PromptState[] = [];
-  private _cachedRunGroups: RunGroup[] = [];
-  private _prevStreamId: string | null = null;
-  private _prevPrompts: PromptState[] | null = null;
-  private _prevTaskGroups: unknown[] | null = null;
-
   /** Ref for LogList - exposed for parent access via getLogListRef() */
   private logListRef: Ref<LogList> = createRef();
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
-
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Recompute filtered prompts when prompts or streamInfo changes
-    if (
-      changedProperties.has('prompts') ||
-      changedProperties.has('streamInfo')
-    ) {
-      const streamId = this.streamInfo?.name;
-      if (
-        this._prevPrompts !== this.prompts ||
-        this._prevStreamId !== streamId
-      ) {
-        this._cachedFilteredPrompts = this.computeFilteredPrompts();
-        this._prevPrompts = this.prompts;
-        this._prevStreamId = streamId ?? null;
-      }
-    }
-
-    // Recompute run groups when state.taskGroups changes
-    if (changedProperties.has('state')) {
-      const taskGroups = this.state?.taskGroups;
-      if (this._prevTaskGroups !== taskGroups) {
-        this._cachedRunGroups = getRunGroups(taskGroups ?? []);
-        this._prevTaskGroups = taskGroups ?? null;
-      }
-    }
-  }
 
   render(): TemplateResult {
     return html`
@@ -106,13 +65,21 @@ export class ToolUseStreamContent extends LitElement {
         .stream=${this.streamInfo}
         .streamState=${this.state}
         .runId=${null}
-        .runs=${this._cachedRunGroups}
+        .runs=${guard([this.state?.taskGroups], () =>
+          getRunGroups(this.state?.taskGroups ?? []),
+        )}
         .yoloActive=${Boolean(this.state.toolEditBypass)}
       ></stream-header>
 
       <prompt-overlay
-        ?hidden=${this._cachedFilteredPrompts.length === 0}
-        .prompt=${this._cachedFilteredPrompts.at(0) ?? null}
+        ?hidden=${guard(
+          [this.prompts, this.streamInfo?.name],
+          () => this.computeFilteredPrompts().length === 0,
+        )}
+        .prompt=${guard(
+          [this.prompts, this.streamInfo?.name],
+          () => this.computeFilteredPrompts().at(0) ?? null,
+        )}
       ></prompt-overlay>
 
       <todo-list .todos=${this.state.todos}></todo-list>
