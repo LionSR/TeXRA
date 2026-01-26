@@ -19,6 +19,9 @@
   ],
   "activationEvents": [
     "onColorTheme",
+    "onView:texra.mainView",
+    "onView:texra.progressView",
+    "onView:texra.folderExplorer",
     "onCommand:texra.openGettingStarted",
     "onCommand:texra.cloneOverleafProject"
   ],
