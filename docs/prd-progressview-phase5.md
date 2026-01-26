@@ -14,14 +14,16 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## Status Summary
 
-> **Overall Phase 5 Completion: ~95%**
+> **Overall Phase 5 Completion: 100% (regressions & validation)**
+>
+> Remaining refactoring tasks moved to [Phase 6](./prd-progressview-phase6.md).
 >
 > - ✅ All critical regressions fixed (R1-R16, H1-H15, J1-J2, P1-P3, R11)
 > - ✅ Zod message validation complete (mainViewMessages.ts, commonViewMessages.ts)
 > - ✅ Cross-webview infrastructure unified (BaseWebviewApp pattern)
 > - ✅ All JavaScript behavioral issues resolved (debounce, checkbox timing)
-> - 🟡 Component extraction pending (MainApp still ~2,900 lines)
-> - 🟡 Formatters using bridge pattern (not pure TemplateResult yet)
+> - ➡️ Component extraction → [Phase 6](./prd-progressview-phase6.md)
+> - ➡️ Formatters migration → [Phase 6](./prd-progressview-phase6.md)
 
 ### Critical Issues (Fix Immediately)
 
@@ -83,12 +85,12 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 | Task                           | Status         | Impact                           |
 | ------------------------------ | -------------- | -------------------------------- |
-| Extract FileSelectGroup        | ⬜ Not Started | -300 lines from MainApp          |
-| Extract BannerGroup components | ⬜ Not Started | -150 lines from MainApp          |
-| Extract LatexDiffsSection      | ⬜ Not Started | -200 lines from MainApp          |
+| Extract FileSelectGroup        | ➡️ Phase 6    | -300 lines from MainApp          |
+| Extract BannerGroup components | ➡️ Phase 6    | -150 lines from MainApp          |
+| Extract LatexDiffsSection      | ➡️ Phase 6    | -200 lines from MainApp          |
 | Create shared message schemas  | ✅ Complete    | mainViewMessages.ts (46 schemas) |
 | Add Zod validation to MainApp  | ✅ Complete    | All 34 message types validated   |
-| Convert 37 inline arrows       | ⬜ Not Started | Performance                      |
+| Convert 37 inline arrows       | ➡️ Phase 6    | Performance                      |
 | Delete duplicate debug handler | ✅ Complete    | commonMessageHandlers.ts         |
 | Install @types/sortablejs      | ✅ Complete    | Complete type definitions        |
 
@@ -107,52 +109,9 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## 5.1 Monolithic Component (Critical)
 
-**Problem:** `MainApp.ts` is **~2,737 lines** — far exceeding maintainable component size (~500 lines recommended).
+➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#61-monolithic-component-extraction)**
 
-**Analysis by section:**
-
-| Section                  | Lines     | Description                    |
-| ------------------------ | --------- | ------------------------------ |
-| File selection rendering | 1700-2345 | Repetitive file list templates |
-| Banner components        | 2347-2508 | API key, agent config, etc.    |
-| LaTeXDiffs section       | 2547-2736 | Diff configuration panel       |
-| Message handler switch   | 297-400+  | 58-case switch statement       |
-| Event handlers           | 450-700   | Click, input, form handlers    |
-| State management         | 100-296   | @state properties              |
-
-**Target Structure:**
-
-```
-src/webview/frontend/
-├── MainApp.ts                    # Root: message routing, orchestration (~500 lines)
-├── store.ts                      # State types, schemas
-├── constants.ts                  # Commands, element IDs
-├── events.ts                     # Typed event factories
-├── handlers/
-│   └── messageHandlers.ts        # Registry-based message handling with Zod validation
-└── components/
-    ├── FileSelector/
-    │   ├── FileSelector.ts       # Container with drag-drop
-    │   ├── FileSelectGroup.ts    # Categorized file lists
-    │   └── FileItem.ts           # Single file with remove button
-    ├── BannerGroup/
-    │   ├── ApiKeyBanner.ts       # API key missing warning
-    │   ├── AgentConfigBanner.ts  # Agent configuration notice
-    │   └── WarningBanner.ts      # Generic warning component
-    ├── InstructionPanel/
-    │   ├── InstructionPanel.ts   # Instruction input + recording
-    │   └── RecordingButton.ts    # Audio recording UI
-    ├── AgentSelector.ts          # Agent + model dropdowns
-    ├── ActionButtons.ts          # Run, Polish, etc.
-    └── LatexDiffsSection.ts      # Diff configuration panel
-```
-
-**Extraction priority:**
-
-1. **FileSelectGroup.ts** (~300 lines) - Most repetitive, used 5x in template
-2. **BannerGroup.ts** (~150 lines) - Simple extraction, clear boundaries
-3. **LatexDiffsSection.ts** (~200 lines) - Self-contained feature
-4. **messageHandlers.ts** (~200 lines) - Registry pattern with Zod
+MainApp.ts (~2,900 lines) requires component extraction. See Phase 6 for target structure and extraction plan.
 
 ---
 
@@ -409,106 +368,38 @@ export const THEME_HANDLERS: Record<string, (message: unknown) => void> = {
 
 ---
 
-## 5.7 Inline Arrow Functions (37 instances)
+## 5.7-5.8 Performance Optimizations
 
-**Problem:** MainApp.ts contains **37 inline arrow functions** in templates, creating new function instances on every render.
+➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#62-inline-arrow-functions-37-instances)**
 
-**Examples (lines 1700-2345):**
-
-```typescript
-// ❌ Anti-pattern - repeated in file selection loops
-@click=${() => this.handleRemoveFile(listId, file)}
-@click=${() => this.handleOpenFile(file)}
-@click=${() => this.handlePreviewFile(file)}
-```
-
-**Fix:** Extract to class methods with data attributes:
-
-```typescript
-// ✓ Stable reference
-private handleFileAction = (e: Event) => {
-  const target = e.currentTarget as HTMLElement;
-  const action = target.dataset.action;
-  const listId = target.dataset.listId;
-  const filePath = target.dataset.filePath;
-
-  switch (action) {
-    case 'remove': this.handleRemoveFile(listId!, filePath!); break;
-    case 'open': this.handleOpenFile(filePath!); break;
-    case 'preview': this.handlePreviewFile(filePath!); break;
-  }
-};
-
-// In template
-<button
-  @click=${this.handleFileAction}
-  data-action="remove"
-  data-list-id=${listId}
-  data-file-path=${file.path}
->
-```
+- Inline arrow function extraction (37 instances)
+- Computed getters for derived state
 
 ---
 
-## 5.8 Suggested Computed Getters
+## Phase 5 Completed Work
 
-Some derived state is computed repeatedly. Use Lit's reactive getters:
+### Message Validation ✅
 
-**Current:**
+1. Created `src/shared/schemas/mainViewMessages.ts` with 46 schemas
+2. MainApp uses Zod validation via `safeParse()`
+3. Deleted redundant debug mode handler
 
-```typescript
-// Computed in render() multiple times
-const isToolUse = this.agentConfig?.category === 'toolUse';
-```
+### Type Safety ✅
 
-**Preferred:**
+1. Installed `@types/sortablejs`
+2. Migrated `themeHandlers.ts` to `commonMessageHandlers.ts` with Zod
 
-```typescript
-@state() private agentConfig: AgentConfig | null = null;
+### Success Metrics (Phase 5)
 
-private get isToolUse(): boolean {
-  return this.agentConfig?.category === 'toolUse';
-}
-```
+| Metric                 | Before | After   |
+| ---------------------- | ------ | ------- |
+| Message schemas        | 0      | 46 ✅   |
+| Zod-validated messages | 0%     | 100% ✅ |
+| `any` types            | 2      | 0 ✅    |
+| Duplicate handlers     | 1      | 0 ✅    |
 
----
-
-## Implementation Plan
-
-### Step 1: Message Validation
-
-1. Create `src/shared/schemas/mainViewMessages.ts` with all 58 schemas
-2. Create `src/webview/frontend/handlers/messageHandlers.ts` with registry pattern
-3. Update MainApp to use registry + Zod validation
-4. Delete redundant debug mode handler
-
-### Step 2: Component Extraction
-
-1. Extract `FileSelectGroup.ts` component
-2. Extract `BannerGroup.ts` components
-3. Extract `LatexDiffsSection.ts` component
-4. Update MainApp imports
-
-### Step 3: Type Safety
-
-1. Install `@types/sortablejs` or expand local types
-2. Add Zod validation to `themeHandlers.ts`
-3. Extract 37 inline arrows to class methods
-4. Add computed getters for derived state
-
----
-
-## Success Metrics
-
-| Metric                 | Before | After |
-| ---------------------- | ------ | ----- |
-| MainApp.ts lines       | 2,737  | ~500  |
-| Extracted components   | 0      | 6+    |
-| Message schemas        | 0      | 58    |
-| Zod-validated messages | 0%     | 100%  |
-| Inline arrow functions | 37     | 0     |
-| `any` types            | 2      | 0     |
-| Duplicate handlers     | 1      | 0     |
+**Remaining metrics → [Phase 6](./prd-progressview-phase6.md#success-metrics)**
 
 ---
 
@@ -1304,163 +1195,15 @@ Icon usage is consistent with VS Code codicon classes.
 
 ---
 
-## Architectural Debt (ProgressView)
+## Architectural Debt & Performance (ProgressView)
 
-These concerns were identified during code review and affect ProgressView's long-term maintainability.
+➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#66-architectural-debt-progressview)**
 
-### A1. TaskGroupDomManager Coupling (HIGH)
-
-**Location:** `src/progressView/frontend/managers/TaskGroupDomManager.ts`
-
-**Problem:** TaskGroupDomManager mixes several unrelated concerns:
-
-| Concern                   | Lines               | Coupling Issue              |
-| ------------------------- | ------------------- | --------------------------- |
-| DOM element management    | 74-165              | Core responsibility         |
-| Toggle state persistence  | 45-72               | Should be in state manager  |
-| Audio notifications       | `playSystemSound()` | Should be dedicated service |
-| Traversal/hierarchy logic | 180-220             | Could be separate utility   |
-
-**Recommendation:** Extract concerns into focused modules:
-
-```
-managers/
-├── TaskGroupDomManager.ts    # DOM operations only
-├── TaskGroupStateManager.ts  # Toggle persistence
-├── AudioNotificationService.ts # System sounds
-└── utils/taskGroupTraversal.ts # Hierarchy navigation
-```
-
-### A2. renderLogs() Full DOM Rebuild (HIGH) → Phase 5 Scope
-
-**Location:** `src/progressView/frontend/components/LogList.ts:131-207`
-
-**Problem:** Every render clears and rebuilds the entire DOM:
-
-```typescript
-container.innerHTML = '';
-this.groupManager.clear();
-this.logManager.clear();
-// ... rebuild everything
-```
-
-**Impact:** For large log lists (100+ entries), this causes visible jank during updates.
-
-**Phase 5 Solution:** Implement incremental append pattern. See [5.11 renderLogs Incremental Updates](#511-renderlogs-incremental-updates-phase-5-scope) for detailed implementation plan.
-
-### A3. Light DOM in ProgressView (MEDIUM) → Phase 5 Scope
-
-**Location:** `ProgressApp.ts`, `LogList.ts`, `TaskGroupList.ts`
-
-**Problem:** These components use Light DOM (`createRenderRoot() { return this; }`), breaking style encapsulation.
-
-**Why it exists:** Streaming log architecture requires direct DOM manipulation that conflicts with Shadow DOM boundaries.
-
-**Phase 5 Fix:** Refactor formatters to return `TemplateResult` instead of HTML strings, enabling Shadow DOM throughout. See [5.10 Formatter → TemplateResult Migration](#510-formatter--templateresult-migration).
-
----
-
-## 5.10 Formatter → TemplateResult Migration (Phase 5 Scope)
-
-**Problem:** Formatters in `src/progressView/frontend/formatters/` return HTML strings, forcing Light DOM usage.
-
-**Current pattern:**
-
-```typescript
-// formatters/taskLog.ts - returns string
-export function formatTaskLog(log: LogEntry): string {
-  return `<div class="task-log">${escapeHtml(log.text)}</div>`;
-}
-
-// Used in LogList.ts via innerHTML
-container.innerHTML = formatTaskLog(log);
-```
-
-**Target pattern:**
-
-```typescript
-// formatters/taskLog.ts - returns TemplateResult
-import { html, TemplateResult } from 'lit';
-
-export function formatTaskLog(log: LogEntry): TemplateResult {
-  return html`<div class="task-log">${log.text}</div>`;
-}
-
-// Used in LogList.ts via render()
-render(formatTaskLog(log), container);
-```
-
-**Migration scope:**
-
-| Formatter File    | Functions |
-| ----------------- | --------- |
-| `taskLog.ts`      | 3         |
-| `toolUseLog.ts`   | 5         |
-| `streamHeader.ts` | 2         |
-| `agentLog.ts`     | 4         |
-| `litTemplates.ts` | 8         |
-| Others (10 files) | ~20       |
-
-**Benefits:**
-
-- Shadow DOM encapsulation possible
-- No manual HTML escaping needed (Lit auto-escapes)
-- Better performance via Lit's diffing
-- Type-safe template composition
-
----
-
-## 5.11 renderLogs Incremental Updates (Phase 5 Scope)
-
-**Problem:** `LogList.ts:131-207` clears and rebuilds entire DOM on every update.
-
-**Current (O(n) rebuild):**
-
-```typescript
-renderLogs(logs: LogEntry[]): void {
-  container.innerHTML = '';  // ❌ Clear everything
-  this.groupManager.clear();
-  this.logManager.clear();
-
-  for (const log of logs) {
-    // Rebuild from scratch
-  }
-}
-```
-
-**Target (O(1) append for new logs):**
-
-```typescript
-renderLogs(logs: LogEntry[]): void {
-  const existingCount = this.logManager.size;
-  const newLogs = logs.slice(existingCount);  // Only new logs
-
-  for (const log of newLogs) {
-    this.appendLog(log);  // Incremental append
-  }
-}
-
-// Full rebuild only when switching streams
-switchStream(streamId: string): void {
-  this.clearAll();
-  this.renderLogs(this.getLogsForStream(streamId));
-}
-```
-
-**Performance impact:**
-
-| Scenario                    | Current      | After            |
-| --------------------------- | ------------ | ---------------- |
-| Append 1 log to 100 logs    | Rebuild 101  | Append 1         |
-| Append 10 logs to 1000 logs | Rebuild 1010 | Append 10        |
-| Switch streams              | Rebuild N    | Rebuild N (same) |
-
-**Implementation steps:**
-
-1. Track rendered log count per stream
-2. Implement `appendLog()` for single log insertion
-3. Implement `updateLog()` for in-place updates
-4. Keep full rebuild for stream switches only
+- A1. TaskGroupDomManager coupling
+- A2. renderLogs() full DOM rebuild
+- A3. Light DOM in ProgressView
+- Formatter → TemplateResult migration
+- renderLogs incremental updates
 
 ---
 
@@ -1670,172 +1413,15 @@ The following normalizers were eliminated during ProgressView migration:
 
 ## Known Bugs (Code Review Findings)
 
-These bugs were identified during code review and should be fixed as part of Phase 5.
+➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#67-known-bugs-from-phase-5-code-review)**
 
-### HIGH Severity
-
-#### 5.9.1 State Never Persists When saveState Called While Blocked
-
-**Location:** `MainApp.ts:948-992`
-
-**Problem:** In `handleRestoreState`, `saveState()` is called at line 992 while still inside the try block after `blockSave()` was called at line 948. Since `saveState()` returns early when `saveBlockCount > 0`, the restored state is never actually persisted.
-
-**Fix:** Move the `saveState()` call after the finally block that calls `unblockSave()`.
-
-```typescript
-// Current (broken)
-try {
-  this.blockSave();
-  // ... restore state ...
-  this.saveState(); // ❌ Called while blocked - does nothing!
-} finally {
-  this.unblockSave();
-}
-
-// Fixed
-try {
-  this.blockSave();
-  // ... restore state ...
-} finally {
-  this.unblockSave();
-}
-this.saveState(); // ✅ Called after unblock
-```
-
-### MEDIUM Severity
-
-#### 5.9.2 Active Flags Stored as Truthy String Arrays
-
-**Location:** `MainApp.ts:506-510`
-
-**Problem:** The `collectCurrentContext` method stores `${listId}Active` flags as string arrays `['true']` or `['false']` via `[String(isActive)] as unknown as string[]`, instead of boolean values. Since `['false']` is truthy in JavaScript, downstream code checking `if (message.inputFilesActive)` will incorrectly treat inactive file lists as active.
-
-**Fix:** Store as proper boolean values or use `'true'`/`'false'` strings directly.
-
-```typescript
-// Current (broken)
-multipleFileSelections[`${listId}Active`] = [
-  String(isActive),
-] as unknown as string[];
-// Results in ['false'] which is truthy!
-
-// Fixed
-multipleFileSelections[`${listId}Active`] = isActive;
-```
-
-#### 5.9.3 Visibility State Not Saved After Removing Last File
-
-**Location:** `MainApp.ts:outputFilesActive assignment`
-
-**Problem:** In `handleRemoveFile`, when the last file is removed from a list, `multiFilesVisible` and `outputFilesActive` are updated to `false` after `updateMultiFiles` already called `saveState()`. These visibility changes are never persisted. After webview reload, the file list appears empty but the visibility toggle remains active.
-
-**Fix:** Call `saveState()` after updating visibility flags, or update flags before calling `updateMultiFiles`.
-
-#### 5.9.4 Send Correct fileType Casing for Multi-File Picker
-
-**Location:** `MainApp.ts:1205-1209`
-
-**Problem:** The webview sends `fileType` as `inputFiles`/`outputFiles` (lowercase) when requesting the multi-file picker. `FileManager.handleSelectMultipleFiles` builds the command name from this value and special-cases `OutputFiles` with a capital O. With lowercase, it generates `texra.selectinputFiles` (unregistered) and skips the output-files path.
-
-**Fix:** Map to expected `InputFiles`/`OutputFiles` casing or normalize in the message handler.
-
-```typescript
-// Current
-postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
-  fileType: listId, // 'inputFiles' - lowercase
-});
-
-// Fixed
-const fileTypeMap: Record<string, string> = {
-  inputFiles: 'InputFiles',
-  outputFiles: 'OutputFiles',
-};
-postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
-  fileType: fileTypeMap[listId] ?? listId,
-});
-```
-
-#### 5.9.5 Preserve Forced API-Key Banner When Model Lacks Key
-
-**Location:** `MainApp.ts:1345-1347`
-
-**Problem:** The banner is hidden whenever the selected model doesn't require a key, regardless of whether the extension explicitly asked to show it (e.g., missing global API key). Previously `SHOW_API_KEY_BANNER` forced the banner to stay visible; now `updateModelApiKeyBanner` clears it on any non-key model change.
-
-**Fix:** Track a `forced` state (or respect a server-sent flag) before auto-hiding.
-
-```typescript
-// Add forced tracking
-@state() private apiKeyBannerForced = false;
-
-private updateModelApiKeyBanner(): void {
-  if (this.apiKeyBannerForced) return; // Don't auto-hide if forced
-  if (!this.apiKeyBanner.requiresKey) {
-    this.apiKeyBanner = { visible: false };
-  }
-}
-
-// In SHOW_API_KEY_BANNER handler
-case MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER:
-  this.apiKeyBannerForced = true;
-  // ...
-```
-
-#### 5.9.6 Handle SET_SELECTED_AGENT Messages from Extension
-
-**Location:** `MainApp.ts:311-315` (missing case)
-
-**Problem:** The `handleMessage` switch does not handle `SET_SELECTED_AGENT`, but the extension still sends this command (e.g., `remoteAgentUtils.ts` selects a remote agent without restoring full state). With the handler removed, those messages are ignored and the agent dropdown never updates.
-
-**Fix:** Add a case to update the appropriate agent selector and session type.
-
-```typescript
-case MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT: {
-  const { agentId, sessionType } = message as { agentId?: string; sessionType?: string };
-  if (sessionType) this.sessionType = sessionType;
-  if (agentId) {
-    // Update appropriate dropdown based on sessionType
-    if (this.sessionType === 'toolUse') {
-      this.selectedToolUseAgent = agentId;
-    } else {
-      this.selectedWorkflowAgent = agentId;
-    }
-  }
-  break;
-}
-```
+6 bugs identified during code review (5.9.1-5.9.6) including state persistence, truthy array issues, and missing handlers.
 
 ---
 
 ## Risks
 
-### Medium: Component Interdependencies
-
-MainApp has complex state shared across file selection, agent config, and execution.
-
-**Mitigation:**
-
-- Extract leaf components first (FileItem, banners)
-- Use events to communicate back to MainApp
-- Keep shared state in MainApp until extraction stabilizes
-
-### Low: Regression During Extraction
-
-Breaking existing functionality while extracting components.
-
-**Mitigation:**
-
-- Extract one component at a time
-- Manual testing after each extraction
-- Keep original code commented until verified
-
-### Low: Over-Engineering
-
-Creating too many small components.
-
-**Mitigation:**
-
-- Only extract when there's clear benefit (reuse, readability, testability)
-- Follow established patterns from ProgressView
+➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#risks)**
 
 ---
 
