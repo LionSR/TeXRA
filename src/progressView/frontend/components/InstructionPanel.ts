@@ -85,7 +85,7 @@ export class InstructionPanel extends LitElement {
       .instruction-panel__text::part(control) {
         background-color: var(--vscode-editor-background);
         color: var(--vscode-editor-foreground);
-        border: 1px solid var(--vscode-input-border);
+        border: var(--border-thin) solid var(--vscode-input-border);
         padding: var(--spacing-small);
       }
     `,

@@ -12,15 +12,15 @@ This document catalogs UI regressions introduced when CSS files were deleted dur
 | --------------------------------- | ----- | ----- | ------- | ------- |
 | **Critical Regressions (1-6)**    | 6     | 6     | 0       | 0       |
 | **Medium Regressions (7-14, 26)** | 9     | 9     | 0       | 0       |
-| **Low Impact (12, 20-25)**        | 6     | 6     | 0       | 0       |
+| **Low Impact (12, 20-25, 27)**    | 7     | 7     | 0       | 0       |
 | **Shared Style Modules**          | 8     | 8     | 0       | 0       |
 | **Orphaned CSS Cleanup**          | 4     | 4     | 0       | 0       |
 
-**Overall: 28/28 items fixed (100%) ✅**
+**Overall: 29/29 items fixed (100%) ✅**
 
 ### Summary
 
-- **✅ ALL FIXED**: InstructionPanel (#1-3, #26), FileSelectGroup (#4), HistoryView (#5, #11), Light DOM styles (#6, #9), optional-label consistency (#7), FollowUpInput (#8), select-group codicon (#10), ProfileView (#12), groups.css spacing (#13), RunSelector (#14), tooltip border-radius (#20), status indicators consolidated (#21), statusIndicatorStyles is-ready (#24), copy button consolidated (#25), upward-opening dropdowns (#26), plus all 8 shared style modules and 4 orphaned CSS files cleaned up
+- **✅ ALL FIXED**: InstructionPanel (#1-3, #26), FileSelectGroup (#4), HistoryView (#5, #11), Light DOM styles (#6, #9), optional-label consistency (#7), FollowUpInput (#8), select-group codicon (#10), ProfileView (#12), groups.css spacing (#13), RunSelector (#14), tooltip border-radius (#20), status indicators consolidated (#21), statusIndicatorStyles is-ready (#24), copy button consolidated (#25), upward-opening dropdowns (#26), hardcoded pixel values (#27), plus all 8 shared style modules and 4 orphaned CSS files cleaned up
 
 ## Critical Regressions
 
@@ -1810,6 +1810,21 @@ vscode-single-select::part(listbox) {
   top: auto;
 }
 ```
+
+---
+
+### 27. Hardcoded Pixel Values in Components (LOW IMPACT) ✅ FIXED
+
+**Status**: ✅ **FIXED** - Replaced hardcoded pixel values with design tokens.
+
+**Files fixed**:
+
+- `FileList.ts`: `padding: 1px` → `padding: var(--spacing-tiny)`
+- `StreamHeader.ts`: `border-radius: 4px` → `border-radius: var(--border-radius)`
+- `QueuedFollowUps.ts`: `border: 1px` → `border: var(--border-thin)`
+- `InstructionPanel.ts` (progressView): `border: 1px` → `border: var(--border-thin)`
+
+**Note**: Some hardcoded values remain intentionally (min-width constraints, textarea heights) where design tokens would be too generic.
 
 ---
 
