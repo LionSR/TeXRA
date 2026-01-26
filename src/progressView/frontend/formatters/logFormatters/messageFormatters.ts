@@ -14,6 +14,7 @@ import {
   when,
   classMap,
   ifDefined,
+  styleMap,
   renderToElement,
 } from '../litTemplates';
 
@@ -131,7 +132,7 @@ export function formatError(message: LogMessageData): HTMLElement | null {
       <summary class="details-summary">
         <i
           class="${CHEVRON_RIGHT_CLASS} toggle-icon"
-          style=${hasDetails ? '' : 'visibility: hidden'}
+          style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}
         ></i>
         <i class="codicon icon codicon-error"></i>
         <span class="label" title=${tooltipTimestamp}
