@@ -213,6 +213,7 @@ export const profileViewStyles: CSSResult = css`
 
   .option-title {
     font-weight: 600;
+    color: var(--vscode-foreground);
   }
 
   .option-description {
