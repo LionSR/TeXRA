@@ -364,21 +364,13 @@ export class FollowupSection extends LitElement {
   private renderAgentSelect(): TemplateResult {
     const agentOptions =
       this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
-    return html`
-      <vscode-option value="" ?selected=${!this.selectedAgent}
-        >Select agent</vscode-option
-      >
-      ${renderAgentOptions(agentOptions, this.selectedAgent)}
-    `;
+    // renderAgentOptions includes placeholder, no need to add manually
+    return renderAgentOptions(agentOptions, this.selectedAgent);
   }
 
   private renderModelSelect(): TemplateResult {
-    return html`
-      <vscode-option value="" ?selected=${!this.selectedModel}
-        >Select model</vscode-option
-      >
-      ${renderModelOptions(this.modelOptions, this.selectedModel)}
-    `;
+    // renderModelOptions includes placeholder, no need to add manually
+    return renderModelOptions(this.modelOptions, this.selectedModel);
   }
 
   private emitSetup(): void {
@@ -432,18 +424,25 @@ export class FollowupSection extends LitElement {
       this.mode === 'merge'
         ? this.options.defaultMergeModel
         : this.streamModel || this.selectedModel;
-    if (preferredModel && this.modelOptions.some((m) => m.value === preferredModel)) {
+    const modelIsValid =
+      preferredModel && this.modelOptions.some((m) => m.value === preferredModel);
+    if (modelIsValid) {
       this.selectedModel = preferredModel;
-    } else if (this.modelOptions.length > 0 && !this.selectedModel) {
-      // Default to first available model if no selection
+    } else if (this.modelOptions.length > 0) {
+      // Reset to first available model if current selection is invalid
       this.selectedModel = this.modelOptions[0].value;
+    } else {
+      this.selectedModel = '';
     }
 
-    // Set default agent if not selected
+    // Set or reset agent based on current mode's options
     const agentOptions =
       this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
-    if (agentOptions.length > 0 && !this.selectedAgent) {
-      this.selectedAgent = agentOptions[0].value;
+    const agentIsValid =
+      this.selectedAgent && agentOptions.some((a) => a.value === this.selectedAgent);
+    if (!agentIsValid) {
+      // Reset to first available agent if current selection is invalid for this mode
+      this.selectedAgent = agentOptions.length > 0 ? agentOptions[0].value : '';
     }
   }
 }

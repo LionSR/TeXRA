@@ -118,7 +118,10 @@ export class FollowUpInput extends LitElement {
     // React to shouldFocus property change
     if (changedProperties.has('shouldFocus') && this.shouldFocus) {
       this.focusInput({ scrollIntoView: true }).then(() => {
-        this.dispatchEvent(new CustomEvent('focus-complete', { bubbles: true }));
+        // Guard against dispatching events after disconnection
+        if (this.isConnected) {
+          this.dispatchEvent(new CustomEvent('focus-complete', { bubbles: true }));
+        }
       });
     }
 
@@ -136,6 +139,8 @@ export class FollowUpInput extends LitElement {
     ) {
       // We need to wait for the element to be rendered before inserting text
       this.updateComplete.then(() => {
+        // Guard against operating on disconnected component
+        if (!this.isConnected) return;
         if (this.textAreaEl && this.transcribedText !== null) {
           const { textarea } = resolveTextareaTarget(this.textAreaEl);
           if (textarea) {
