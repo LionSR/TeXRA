@@ -220,6 +220,40 @@ export const SetSelectedAgentMessageSchema = z.object({
   sessionType: z.string().nullish(),
 });
 
+// =============================================================================
+// Frontend → Backend payload schemas (MainView actions)
+// =============================================================================
+
+export const RequestRecentCommitsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
+  notifyWhenEmpty: z.boolean().nullish(),
+});
+
+export const LatexdiffMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFF),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+
+export const LatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFFVC),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+});
+
+export const LatexdiffvcOperationMessageSchema = z.object({
+  command: z.enum([
+    MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
+    MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
+  ]),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+  clean: z.boolean().nullish(),
+});
+
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
@@ -266,3 +300,11 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
 ]);
 
 export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
+export type RequestRecentCommitsMessage = z.infer<
+  typeof RequestRecentCommitsMessageSchema
+>;
+export type LatexdiffMessage = z.infer<typeof LatexdiffMessageSchema>;
+export type LatexdiffvcMessage = z.infer<typeof LatexdiffvcMessageSchema>;
+export type LatexdiffvcOperationMessage = z.infer<
+  typeof LatexdiffvcOperationMessageSchema
+>;

@@ -41,7 +41,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetHistoryData(
-    _message: any,
+    _message: unknown,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.sendHistoryData(view.webview);

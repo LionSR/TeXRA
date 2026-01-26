@@ -1,9 +1,21 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import {
+  LatexdiffMessageSchema,
+  LatexdiffvcMessageSchema,
+  LatexdiffvcOperationMessageSchema,
+  RequestRecentCommitsMessageSchema,
+} from '@shared/schemas/mainViewMessages';
+
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+
+// Local imports - logging
 import * as logger from '@logger/logUtils';
+
+// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'DiffManager';
@@ -12,24 +24,45 @@ logger.initialize(CHANNEL);
 export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  handleLatexdiff(message: any): void {
-    this.runDiffCommand('latexdiff', message, [
+  handleLatexdiff(message: unknown): void {
+    const parsed = LatexdiffMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiff message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(parsed.data.command, parsed.data, [
       'inputFile',
       'baseFile',
       'editedFile',
     ]);
   }
 
-  handleLatexdiffvc(message: any): void {
-    this.runDiffCommand('latexdiffvc', message, [
+  handleLatexdiffvc(message: unknown): void {
+    const parsed = LatexdiffvcMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiffvc message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(parsed.data.command, parsed.data, [
       'inputFile',
       'baseFile',
       'commitHash',
     ]);
   }
 
-  handleLatexdiffvcOperation(message: any): void {
-    this.runDiffCommand(message.command, message, [
+  handleLatexdiffvcOperation(message: unknown): void {
+    const parsed = LatexdiffvcOperationMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid latexdiffvc operation message', {
+        data: parsed.error,
+      });
+      return;
+    }
+    this.runDiffCommand(parsed.data.command, parsed.data, [
       'inputFile',
       'baseFile',
       'commitHash',
@@ -39,7 +72,7 @@ export class DiffManager extends BaseWebviewManager {
 
   private runDiffCommand(
     command: string,
-    message: any,
+    message: Record<string, unknown>,
     paramKeys: string[],
   ): void {
     void vscode.commands.executeCommand(
@@ -64,12 +97,19 @@ export class DiffManager extends BaseWebviewManager {
     return { commits, isGitRepo: true };
   }
 
-  async handleRequestRecentCommits(message: any): Promise<void> {
+  async handleRequestRecentCommits(message: unknown): Promise<void> {
+    const parsed = RequestRecentCommitsMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.warn(CHANNEL, 'Invalid request recent commits message', {
+        data: parsed.error,
+      });
+      return;
+    }
     const result = await this._fetchRecentCommits();
 
     // Notify user when empty if requested
     const shouldNotify =
-      message?.notifyWhenEmpty &&
+      parsed.data.notifyWhenEmpty &&
       (result.commits.length === 0 || !result.isGitRepo);
     if (shouldNotify) {
       const infoMessage = result.isGitRepo
