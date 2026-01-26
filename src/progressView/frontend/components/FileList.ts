@@ -71,7 +71,7 @@ export class FileList extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--spacing-tiny);
-      padding: 1px 0;
+      padding: var(--spacing-tiny) 0;
       margin-bottom: 0;
     }
 
