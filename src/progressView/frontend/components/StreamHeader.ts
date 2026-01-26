@@ -257,7 +257,7 @@ export class StreamHeader extends LitElement {
           var(--color-error) 15%,
           transparent
         );
-        border-radius: 4px;
+        border-radius: var(--border-radius);
         box-shadow: 0 0 8px
           color-mix(in srgb, var(--color-error) 40%, transparent);
       }
