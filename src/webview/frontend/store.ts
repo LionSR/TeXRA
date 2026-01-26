@@ -112,18 +112,18 @@ export const FILE_SELECTED_COMMANDS: Record<string, string> = {
 export const PLACEHOLDER_ROTATION_MS = 12000;
 
 /** Onboarding placeholder texts by session type */
-export const ONBOARDING_PLACEHOLDERS: Record<SessionType, string[]> = {
-  [SESSION_TYPES.WORKFLOW]: [
+export const ONBOARDING_PLACEHOLDERS = {
+  workflow: [
     'Correct LaTeX errors, tighten language, and keep math notation intact.',
     'Convert this section into Beamer slides with bullet points.',
     'Derive the gradient of the loss function step by step.',
   ],
-  [SESSION_TYPES.TOOL_USE]: [
+  toolUse: [
     'Find missing citations, then suggest BibTeX entries.',
     'Scan for TODOs and draft fixes with file paths.',
     'Run LaTeX checks and report compilation warnings.',
   ],
-};
+} satisfies Record<SessionType, string[]>;
 
 /** Static configuration for each file selector type */
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
