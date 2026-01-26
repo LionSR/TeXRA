@@ -664,8 +664,7 @@ export class MainApp extends BaseWebviewApp {
     message: SetSingleFileOptionsMessage,
   ): void {
     const files = message.files ?? [];
-    const command = message.command;
-    const targetId = this.getSingleSelectId(command);
+    const targetId = this.singleSelectIdMap[message.command];
     if (!targetId) return;
 
     this.fileOptions = { ...this.fileOptions, [targetId]: files };
@@ -695,8 +694,7 @@ export class MainApp extends BaseWebviewApp {
 
   private handleSingleFileSelected(message: SingleFileSelectedMessage): void {
     const value = message.filePath;
-    const command = message.command;
-    const key = this.getSingleSelectKey(command);
+    const key = this.singleSelectKeyMap[message.command];
     if (!key) return;
     this.singleFiles = { ...this.singleFiles, [key]: value };
     this.saveState();
@@ -704,7 +702,7 @@ export class MainApp extends BaseWebviewApp {
 
   private handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
     const files = message.files ?? [];
-    const listId = this.getMultipleListId(message.command);
+    const listId = this.multipleListIdMap[message.command];
     if (!listId) return;
 
     const existing = this.multiFiles[listId] ?? [];
@@ -1108,66 +1106,32 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private getSingleSelectId(command: string): string | null {
-    switch (command) {
-      case MAIN_VIEW_COMMANDS.SET_INPUT_FILE:
-        return 'inputFile';
-      case MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE:
-        return 'referenceFile';
-      case MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE:
-        return 'auxiliaryFile';
-      case MAIN_VIEW_COMMANDS.SET_MEDIA_FILE:
-        return 'mediaFile';
-      case MAIN_VIEW_COMMANDS.SET_EDITED_FILE:
-        return 'editedFile';
-      default:
-        return null;
-    }
-  }
+  private readonly singleSelectIdMap: Record<string, string> = {
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: 'inputFile',
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: 'referenceFile',
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: 'auxiliaryFile',
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: 'mediaFile',
+    [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: 'editedFile',
+  };
 
-  private getSingleSelectKey(
-    command: string,
-  ): keyof typeof this.singleFiles | null {
-    switch (command) {
-      case MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED:
-        return 'inputFile';
-      case MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED:
-        return 'referenceFile';
-      case MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED:
-        return 'auxiliaryFile';
-      case MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED:
-        return 'mediaFile';
-      case MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED:
-        return 'editedFile';
-      default:
-        return null;
-    }
-  }
+  private readonly singleSelectKeyMap: Record<
+    string,
+    keyof typeof this.singleFiles
+  > = {
+    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: 'inputFile',
+    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: 'referenceFile',
+    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: 'auxiliaryFile',
+    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: 'mediaFile',
+    [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: 'editedFile',
+  };
 
-  private getMultipleListId(command: string): string | null {
-    switch (command) {
-      case MAIN_VIEW_COMMANDS.SET_INPUT_FILES:
-        return 'inputFiles';
-      case MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES:
-        return 'referenceFiles';
-      case MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES:
-        return 'auxiliaryFiles';
-      case MAIN_VIEW_COMMANDS.SET_MEDIA_FILES:
-        return 'mediaFiles';
-      case MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES:
-        return 'outputFiles';
-      default:
-        return null;
-    }
-  }
-
-  private handleCheckboxChange(
-    id: keyof typeof this.checkboxValues,
-    value: boolean,
-  ): void {
-    this.checkboxValues = { ...this.checkboxValues, [id]: value };
-    this.saveState();
-  }
+  private readonly multipleListIdMap: Record<string, string> = {
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: 'inputFiles',
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: 'referenceFiles',
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: 'auxiliaryFiles',
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: 'mediaFiles',
+    [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
+  };
 
   private toggleListVisibility(listId: string): void {
     const visible = !this.multiFilesVisible[listId];
@@ -1767,19 +1731,13 @@ export class MainApp extends BaseWebviewApp {
     e: CustomEvent<CheckboxChangeDetail>,
   ): void => {
     const { id, checked } = e.detail;
-    // Update the appropriate checkbox state
-    if (id === 'autoExtractFigure') {
-      this.autoExtractFigure = checked;
-    } else if (id === 'autoExtractTikzFigure') {
-      this.autoExtractTikzFigure = checked;
-    } else if (id === 'autoCompileInputPdf') {
-      this.autoCompileInputPdf = checked;
-    } else if (id === 'attachTeXCount') {
-      this.attachTeXCount = checked;
-    } else if (id === 'attachDiagnostics') {
-      this.attachDiagnostics = checked;
+    if (id in this.checkboxValues) {
+      this.checkboxValues = {
+        ...this.checkboxValues,
+        [id]: checked,
+      };
+      this.saveState();
     }
-    this.saveState();
   };
 
   private handleComponentFocusInstruction = (
@@ -1906,7 +1864,7 @@ export class MainApp extends BaseWebviewApp {
     const selectElement = this.renderRoot.querySelector(
       `#${selectId}`,
     ) as HTMLElement | null;
-    this.handleAgentChange(e.detail.sessionType, e.detail.value, selectElement);
+    this.handleAgentChange(e.detail.sessionType, e.detail.value, selectElement ?? undefined);
   };
 
   private handleComponentModelChange = (
