@@ -143,7 +143,16 @@ const webviewConfigs = [
         // Used for: import 'katex/dist/katex.min.css', import './styles/index.css'
         test: /\.css$/,
         resourceQuery: { not: [/inline/] },
-        use: ['style-loader', 'css-loader'],
+        use: [
+          'style-loader',
+          {
+            loader: 'css-loader',
+            options: {
+              // Don't resolve url() - fonts are loaded via VS Code webview URI
+              url: false,
+            },
+          },
+        ],
       },
     ],
   },
