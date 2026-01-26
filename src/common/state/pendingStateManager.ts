@@ -3,26 +3,26 @@
  * This is used to pass state from the restore command to the MainViewProvider
  * when the webview is not yet available.
  */
-
-import type { TaskState } from '@logger/TaskState';
+// Local imports - shared schemas
+import type { MainViewPersistedState } from '@shared/schemas/mainViewState';
 
 interface PendingStateData {
-  state: TaskState;
+  state: MainViewPersistedState;
   executeImmediately?: boolean;
 }
 
-let pendingStateData: PendingStateData | undefined = undefined;
+const pendingStateQueue: PendingStateData[] = [];
 
 /**
  * Store state for later restoration.
- * @param state - The TaskState to restore
+ * @param state - The MainView state to restore
  * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
 export function setPendingState(
-  state: TaskState,
+  state: MainViewPersistedState,
   executeImmediately?: boolean,
 ): void {
-  pendingStateData = { state, executeImmediately };
+  pendingStateQueue.push({ state, executeImmediately });
 }
 
 /**
@@ -30,7 +30,5 @@ export function setPendingState(
  * @returns The pending state data if any, undefined otherwise
  */
 export function consumePendingState(): PendingStateData | undefined {
-  const result = pendingStateData;
-  pendingStateData = undefined;
-  return result;
+  return pendingStateQueue.shift();
 }

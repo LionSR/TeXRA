@@ -5,6 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
+// Local imports - shared utils
+import { normalizeFilePath } from '@shared/utils/path';
+
 // Local imports - webview
 import { getAgent } from '@agent/index';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
@@ -15,13 +18,18 @@ import {
 } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
+
+// Local imports - logging
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
-import { uncapitalize } from '@utils/text/stringUtils';
+
+// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
@@ -47,20 +55,91 @@ type FileUpdateOptions = {
   additionalPayload?: Record<string, unknown>;
 };
 
+const FILE_SELECTION_COMMANDS = new Map<string, string>([
+  [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE, 'texra.selectInputFile'],
+  [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE, 'texra.selectReferenceFile'],
+  [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE, 'texra.selectAuxiliaryFile'],
+  [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE, 'texra.selectMediaFile'],
+]);
+
+const FILE_SELECTION_RESPONSES = new Map<string, string>([
+  [
+    MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
+    MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
+    MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
+    MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+  ],
+  [
+    MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
+    MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
+  ],
+]);
+
+const MULTIPLE_FILE_COMMANDS = new Map<
+  string,
+  { selectCommand: string; responseCommand: string }
+>([
+  [
+    'InputFiles',
+    {
+      selectCommand: 'texra.selectInputFiles',
+      responseCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+    },
+  ],
+  [
+    'ReferenceFiles',
+    {
+      selectCommand: 'texra.selectReferenceFiles',
+      responseCommand: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
+    },
+  ],
+  [
+    'AuxiliaryFiles',
+    {
+      selectCommand: 'texra.selectAuxiliaryFiles',
+      responseCommand: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
+    },
+  ],
+  [
+    'MediaFiles',
+    {
+      selectCommand: 'texra.selectMediaFiles',
+      responseCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+    },
+  ],
+  [
+    'OutputFiles',
+    {
+      selectCommand: 'texra.selectOutputFiles',
+      responseCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
+    },
+  ],
+]);
+
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
+    const executeCommand = FILE_SELECTION_COMMANDS.get(message.command);
+    const responseCommand = FILE_SELECTION_RESPONSES.get(message.command);
     const singleFileType = message.command.replace('select', '');
-    logger.debug(CHANNEL, `Selecting ${singleFileType}`);
+    if (!executeCommand || !responseCommand) {
+      logger.warn(CHANNEL, `Unsupported file command: ${message.command}`);
+      return;
+    }
 
-    const file = await vscode.commands.executeCommand<string>(
-      `texra.${message.command}`,
-    );
+    logger.debug(CHANNEL, `Selecting ${singleFileType}`);
+    const file = await vscode.commands.executeCommand<string>(executeCommand);
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       this.postMessage({
-        command: `${uncapitalize(singleFileType)}Selected`,
+        command: responseCommand,
         filePath: file,
       });
     }
@@ -174,17 +253,25 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
+    const commands = MULTIPLE_FILE_COMMANDS.get(fileType);
+    if (!commands) {
+      logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
+      return;
+    }
     try {
       const selectedFiles =
         fileType === 'OutputFiles'
           ? await this.selectOutputFiles(currentFile)
           : await vscode.commands.executeCommand<string[]>(
-              `texra.select${fileType.replace('Files', '')}Files`,
+              commands.selectCommand,
               currentFile,
             );
 
       if (selectedFiles) {
-        this.postMessage({ command: `set${fileType}`, files: selectedFiles });
+        this.postMessage({
+          command: commands.responseCommand,
+          files: selectedFiles,
+        });
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -478,7 +565,9 @@ export class FileManager extends BaseWebviewManager {
     // Convert to relative paths and deduplicate
     const relevantFiles = [
       ...new Set(
-        fileUris.map((uri) => workspace.asRelativePath(uri.fsPath, false)),
+        fileUris.map((uri) =>
+          normalizeFilePath(workspace.asRelativePath(uri.fsPath, false)),
+        ),
       ),
     ];
 
