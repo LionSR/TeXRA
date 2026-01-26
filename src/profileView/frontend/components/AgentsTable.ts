@@ -37,12 +37,14 @@ export class AgentsTable extends LitElement {
     const multiOutputIcon = agent.supportsMultipleOutput
       ? 'codicon-check'
       : 'codicon-close';
+    // Normalize category for CSS class (e.g., "toolUse" -> "tooluse")
+    const categoryClass = (agent.category || '').toLowerCase().replace('-', '');
 
     return html`
       <tr class="agent-row">
         <td class="agent-name">${agent.name}</td>
         <td class="agent-category">
-          <span class="badge badge--small category-badge"
+          <span class="badge badge--small category-badge ${categoryClass}"
             >${agent.category}</span
           >
         </td>
