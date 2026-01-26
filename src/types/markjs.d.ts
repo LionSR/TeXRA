@@ -56,11 +56,3 @@ declare module 'mark.js' {
 
   export default Mark;
 }
-
-// Also expose as global for legacy usage
-declare global {
-  interface Window {
-    Mark: typeof import('mark.js').default;
-  }
-  const Mark: typeof import('mark.js').default;
-}
