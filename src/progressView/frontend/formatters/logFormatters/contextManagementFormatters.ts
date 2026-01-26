@@ -3,17 +3,17 @@
  * Displays context management events (compaction, clearing, max_tokens reduction)
  * as native UI elements in the progress view.
  *
- * Uses Lit templates for declarative DOM construction.
+ * Uses Lit-native component.
  */
-
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
-
-// Local imports - Lit template utilities
-import { html, ifDefined, renderToElement } from '../litTemplates';
 
 // Local imports - formatter helpers
 import { formatTokens } from '../timestampUtils';
+
+// Local imports - component types
+import type {
+  ActionConfig,
+  ContextStatItem,
+} from '../../components/ContextManagement';
 
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
@@ -54,9 +54,7 @@ const ACTION_CONFIG: Record<
   },
 };
 
-type StatItem = { icon: string; label: string; value: string };
-
-/** Format context management event for display. */
+/** Format context management event using Lit-native component. */
 export function formatContextManagement(
   data: unknown,
   logId: string,
@@ -78,14 +76,14 @@ export function formatContextManagement(
   } = data as Record<string, unknown>;
 
   const actionValue = typeof action === 'string' ? action : '';
-  const config = ACTION_CONFIG[actionValue] || {
+  const config: ActionConfig = ACTION_CONFIG[actionValue] || {
     icon: 'codicon-history',
     label: actionValue || 'Context Management',
     color: 'var(--vscode-foreground)',
   };
 
   // Build stat items
-  const items: StatItem[] = [];
+  const items: ContextStatItem[] = [];
 
   // For max_tokens_reduced, show the reduction
   if (
@@ -147,15 +145,16 @@ export function formatContextManagement(
     });
   }
 
-  // prettier-ignore
-  return renderToElement(html`
-    <details class="banner-details context-management-details">
-      <summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${`codicon ${config.icon} context-management-icon`} style=${`color: ${config.color}`}></i> <span class="context-management-title" style=${`color: ${config.color}`}>${config.label}</span></summary>
-      <div class="context-management-content" data-log-id=${ifDefined(logId)}>
-        ${items.map(
-          (item) => html`<span class="stat-item detail-item" title=${item.label}><i class=${`codicon ${item.icon}`}></i> ${item.value}</span>`,
-        )}
-      </div>
-    </details>
-  `);
+  if (items.length === 0) return null;
+
+  const element = document.createElement('context-management');
+  element.setAttribute('logId', logId);
+  // Pass config and items as properties
+  const typedElement = element as HTMLElement & {
+    config: ActionConfig;
+    items: ContextStatItem[];
+  };
+  typedElement.config = config;
+  typedElement.items = items;
+  return element;
 }

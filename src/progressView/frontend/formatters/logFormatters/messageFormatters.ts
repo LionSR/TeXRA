@@ -25,18 +25,17 @@ import { EMOJI_BY_LEVEL } from '../constants';
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
 
-/** Format user message entry (Lit-native). */
+/** Format user message entry (Lit-native component). */
 export function formatUserMessage(
   text: string,
   logId: string,
   timestamp: number,
 ): HTMLElement | null {
-  const { timeDisplay, tooltipTimestamp } = formatTimestamp(
-    new Date(timestamp),
-  );
-
-  // prettier-ignore
-  return renderToElement(html`<div class="user-message-container"><div class="user-message"><div class="user-message-header"><i class="codicon codicon-comment user-message-icon"></i> <span class="user-message-timestamp" title=${tooltipTimestamp}>${timeDisplay}</span></div><div class="user-message-content" data-log-id=${ifDefined(logId)}>${text ?? ''}</div></div></div>`);
+  const element = document.createElement('user-message');
+  element.setAttribute('text', text ?? '');
+  element.setAttribute('logId', logId);
+  element.setAttribute('timestamp', String(timestamp));
+  return element;
 }
 
 /** Format progress status entry (Lit-native). */

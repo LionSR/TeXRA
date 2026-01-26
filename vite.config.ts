@@ -44,7 +44,9 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
     },
     resolve: { alias: aliases },
     define: {
-      'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
+      'process.env.NODE_ENV': JSON.stringify(
+        isDev ? 'development' : 'production',
+      ),
     },
     esbuild: { keepNames: true, target: 'es2022' },
   };
@@ -55,7 +57,9 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
  * Usage: VITE_WEBVIEW=progressView npm run vite:build
  * If not specified, defaults to building all webviews sequentially via npm script.
  */
-const targetWebview = process.env.VITE_WEBVIEW as (typeof webviews)[number] | undefined;
+const targetWebview = process.env.VITE_WEBVIEW as
+  | (typeof webviews)[number]
+  | undefined;
 
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
@@ -79,7 +83,9 @@ export default defineConfig(({ mode }) => {
 
     resolve: { alias: aliases },
     define: {
-      'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
+      'process.env.NODE_ENV': JSON.stringify(
+        isDev ? 'development' : 'production',
+      ),
     },
     css: { devSourcemap: isDev },
     esbuild: { keepNames: true, target: 'es2022' },

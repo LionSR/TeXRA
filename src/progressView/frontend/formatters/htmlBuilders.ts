@@ -205,7 +205,9 @@ export function buildFileLink(
   if (!filePath) {
     return html`<span>${displayName}</span>`;
   }
-  return html`<span class="file-link clickable-link" data-file=${filePath}>${displayName}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath}
+    >${displayName}</span
+  >`;
 }
 
 /** Get appropriate icon class for a tool. */

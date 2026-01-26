@@ -638,6 +638,7 @@ src/common/modules/
 ### Deleted (2026-01-26) - Zero External Imports
 
 **JS Constants (3 files)** - TS replacements exist in `@shared/schemas/`:
+
 ```
 src/common/constants/agentTypes.js    ✅ DELETED
 src/common/constants/streamStatus.js  ✅ DELETED
@@ -645,6 +646,7 @@ src/common/constants/todoStatus.js    ✅ DELETED
 ```
 
 **JS Dead Code (3 files)** - Never imported anywhere:
+
 ```
 src/common/modules/StreamScopedMap.js      ✅ DELETED
 src/common/modules/webviewContext.js       ✅ DELETED
@@ -652,6 +654,7 @@ src/common/modules/files/baseFileUtils.js  ✅ DELETED
 ```
 
 **CSS Duplicates (3 files)** - Replaced by Lit TypeScript styles:
+
 ```
 src/historyView/styles/index.css  ✅ DELETED → historyViewStyles.ts
 src/memoryView/styles/index.css   ✅ DELETED → Lit component styles
@@ -666,13 +669,13 @@ src/profileView/styles/index.css  ✅ DELETED → profileViewStyles.ts
 
 These files only import each other (no external TypeScript imports):
 
-| File | Imported By | Status |
-|------|-------------|--------|
-| `iconConstants.js` | domUtils.js | ⏳ Delete with chain |
-| `templateUtils.js` | RecordingButtonManager.js | ⏳ Delete with chain |
-| `domUtils.js` | BaseDomHandler.js, templateUtils.js | ⏳ Delete with chain |
-| `RecordingButtonManager.js` | (none - never instantiated) | ⏳ Delete with chain |
-| `BaseDomHandler.js` | (none - never imported) | ⏳ Delete with chain |
+| File                        | Imported By                         | Status               |
+| --------------------------- | ----------------------------------- | -------------------- |
+| `iconConstants.js`          | domUtils.js                         | ⏳ Delete with chain |
+| `templateUtils.js`          | RecordingButtonManager.js           | ⏳ Delete with chain |
+| `domUtils.js`               | BaseDomHandler.js, templateUtils.js | ⏳ Delete with chain |
+| `RecordingButtonManager.js` | (none - never instantiated)         | ⏳ Delete with chain |
+| `BaseDomHandler.js`         | (none - never imported)             | ⏳ Delete with chain |
 
 ```
 src/common/modules/
@@ -684,6 +687,7 @@ src/common/modules/
 ```
 
 **Why safe to delete:**
+
 - Main view migration (commit 12c8efc75) removed all import map references
 - Modern webviews use Lit components with webpack bundles
 - No TypeScript code imports these modules
@@ -691,12 +695,13 @@ src/common/modules/
 
 ### CSS Files to Keep
 
-| File | Reason |
-|------|--------|
-| `common/styles/common.css` | Light DOM baseline for all webviews |
-| `shared/styles/tokens.css` | Design tokens (consider dedup with litStyles.ts) |
-| `progressView/styles/*.css` | Formatter output + Light DOM layout (19 files) |
+| File                        | Reason                                           |
+| --------------------------- | ------------------------------------------------ |
+| `common/styles/common.css`  | Light DOM baseline for all webviews              |
+| `shared/styles/tokens.css`  | Design tokens (consider dedup with litStyles.ts) |
+| `progressView/styles/*.css` | Formatter output + Light DOM layout (19 files)   |
 
 **Note:** ProgressView CSS files must remain as Light DOM CSS because:
+
 - LogList, TaskGroupList are Light DOM components
 - Formatters generate HTML strings (not Lit templates) that need external CSS
