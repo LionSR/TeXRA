@@ -660,6 +660,10 @@ src/profileView/styles/index.css  ✅ DELETED → profileViewStyles.ts
 
 ### Remaining JS Files (5 files) - Internal Cross-References Only
 
+> **ACTION REQUIRED:** These 5 files form a closed dependency chain with **zero external consumers**.
+> They can be safely deleted together in a single cleanup pass. After deletion, also remove their
+> entries from `BaseViewContentProvider.ts` and type declarations from `common-modules.d.ts`.
+
 These files only import each other (no external TypeScript imports):
 
 | File | Imported By | Status |
@@ -670,7 +674,20 @@ These files only import each other (no external TypeScript imports):
 | `RecordingButtonManager.js` | (none - never instantiated) | ⏳ Delete with chain |
 | `BaseDomHandler.js` | (none - never imported) | ⏳ Delete with chain |
 
-**Recommendation:** Delete all 5 together since they form a closed dependency graph with no external consumers.
+```
+src/common/modules/
+├── iconConstants.js        # Chevron classes, agent decorators
+├── templateUtils.js        # createFromTemplate, createCodicon
+├── domUtils.js             # DOM utilities (40+ functions)
+├── RecordingButtonManager.js # Recording button class
+└── BaseDomHandler.js       # Base class for DOM handlers
+```
+
+**Why safe to delete:**
+- Main view migration (commit 12c8efc75) removed all import map references
+- Modern webviews use Lit components with webpack bundles
+- No TypeScript code imports these modules
+- All functionality replicated in Lit components or `@shared/` utilities
 
 ### CSS Files to Keep
 
