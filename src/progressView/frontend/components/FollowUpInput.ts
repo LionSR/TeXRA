@@ -137,14 +137,16 @@ export class FollowUpInput extends LitElement {
       changedProperties.has('transcribedText') &&
       this.transcribedText !== null
     ) {
+      // Capture value now - it may be reset by focus-complete before callback runs
+      const capturedText = this.transcribedText;
       // We need to wait for the element to be rendered before inserting text
       this.updateComplete.then(() => {
         // Guard against operating on disconnected component
         if (!this.isConnected) return;
-        if (this.textAreaEl && this.transcribedText !== null) {
+        if (this.textAreaEl) {
           const { textarea } = resolveTextareaTarget(this.textAreaEl);
           if (textarea) {
-            insertTextAtCursor(textarea, this.transcribedText);
+            insertTextAtCursor(textarea, capturedText);
             this.updateValue(textarea.value);
             this.focusInput({ scrollIntoView: true });
           }
