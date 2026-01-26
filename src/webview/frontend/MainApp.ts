@@ -52,6 +52,36 @@ import {
 import { mainViewStyles } from './styles';
 import { handleImagePaste } from './pasteHandler';
 
+// Local imports - main view components (side-effect imports to register custom elements)
+import './components/FileSelectGroup';
+import './components/BannerGroup';
+import './components/LatexDiffsSection';
+
+// Local imports - main view component types
+import type {
+  FileSelectConfig,
+  CheckboxValues,
+  ApiKeyBannerState,
+  AgentConfigBannerState,
+  DependencyBannerState,
+} from './components';
+import type {
+  FileSelectChangeDetail,
+  FileActionDetail,
+  MultipleFilesActionDetail,
+  MultipleFilesTypeActionDetail,
+  RemoveFileDetail,
+  CheckboxChangeDetail,
+  BannerActionDetail,
+  InstallGuideDetail,
+  LatexDiffsToggleDetail,
+  LatexDiffsActionDetail,
+  BaseFileChangeDetail,
+  EditedFileChangeDetail,
+  CommitChangeDetail,
+  FocusInstructionDetail,
+} from './events';
+
 // Type imports
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
@@ -1795,6 +1825,199 @@ export class MainApp extends BaseWebviewApp {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS);
   }
 
+  // =========================================================================
+  // Component Event Handlers
+  // These handlers receive custom events from child Lit components and
+  // delegate to the existing handler methods.
+  // =========================================================================
+
+  private handleComponentFileChange = (
+    e: CustomEvent<FileSelectChangeDetail>,
+  ): void => {
+    this.handleSingleFileChange(e.detail.type, e.detail.value);
+  };
+
+  private handleComponentRefreshFiles = (
+    e: CustomEvent<FileActionDetail>,
+  ): void => {
+    if (e.detail.type !== 'base' && e.detail.type !== 'edited') {
+      this.handleRefreshFiles(e.detail.type);
+    }
+  };
+
+  private handleComponentGetCurrentFile = (
+    e: CustomEvent<FileActionDetail>,
+  ): void => {
+    this.handleGetCurrentFile(e.detail.type);
+  };
+
+  private handleComponentEmptyFile = (
+    e: CustomEvent<FileActionDetail>,
+  ): void => {
+    this.handleEmptyFile(e.detail.type);
+  };
+
+  private handleComponentToggleList = (
+    e: CustomEvent<MultipleFilesActionDetail>,
+  ): void => {
+    this.toggleListVisibility(e.detail.listId);
+  };
+
+  private handleComponentAddOpenedFiles = (
+    e: CustomEvent<MultipleFilesTypeActionDetail>,
+  ): void => {
+    if (e.detail.type !== 'output') {
+      this.handleAddOpenedFiles(e.detail.type as FileType);
+    }
+  };
+
+  private handleComponentEmptyFiles = (
+    e: CustomEvent<MultipleFilesTypeActionDetail>,
+  ): void => {
+    this.handleEmptyFiles(e.detail.type as MultipleFileType);
+  };
+
+  private handleComponentSelectMultipleFiles = (
+    e: CustomEvent<MultipleFilesActionDetail>,
+  ): void => {
+    this.handleSelectMultipleFiles(e.detail.listId);
+  };
+
+  private handleComponentRemoveFile = (
+    e: CustomEvent<RemoveFileDetail>,
+  ): void => {
+    this.handleRemoveFile(e.detail.listId, e.detail.file);
+  };
+
+  private handleComponentCheckboxChange = (
+    e: CustomEvent<CheckboxChangeDetail>,
+  ): void => {
+    const { id, checked } = e.detail;
+    // Update the appropriate checkbox state
+    if (id === 'autoExtractFigure') {
+      this.autoExtractFigure = checked;
+    } else if (id === 'autoExtractTikzFigure') {
+      this.autoExtractTikzFigure = checked;
+    } else if (id === 'autoCompileInputPdf') {
+      this.autoCompileInputPdf = checked;
+    } else if (id === 'attachTeXCount') {
+      this.attachTeXCount = checked;
+    } else if (id === 'attachDiagnostics') {
+      this.attachDiagnostics = checked;
+    }
+    this.saveState();
+  };
+
+  private handleComponentFocusInstruction = (
+    e: CustomEvent<FocusInstructionDetail>,
+  ): void => {
+    postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
+      key: e.detail.key,
+      text: e.detail.text,
+    });
+  };
+
+  private handleComponentApiKeyAction = (
+    e: CustomEvent<BannerActionDetail>,
+  ): void => {
+    this.handleApiKeyBannerAction(e.detail.action as 'set' | 'guide');
+  };
+
+  private handleComponentAgentConfigAction = (
+    e: CustomEvent<BannerActionDetail>,
+  ): void => {
+    this.handleAgentConfigAction(e.detail.action as 'edit' | 'dir' | 'docs');
+  };
+
+  private handleComponentDependencyDismiss = (): void => {
+    this.handleDependencyDismiss();
+  };
+
+  private handleComponentRecheckDependencies = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES);
+  };
+
+  private handleComponentOpenInstallGuide = (
+    e: CustomEvent<InstallGuideDetail>,
+  ): void => {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, { tool: e.detail.tool });
+  };
+
+  private handleComponentSignIn = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
+  };
+
+  private handleComponentDismissLogin = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
+  };
+
+  private handleComponentLatexDiffsToggle = (
+    e: CustomEvent<LatexDiffsToggleDetail>,
+  ): void => {
+    this.latexdiffsVisible = e.detail.visible;
+    this.saveState();
+  };
+
+  private handleComponentLatexDiffsAction = (
+    e: CustomEvent<LatexDiffsActionDetail>,
+  ): void => {
+    switch (e.detail.action) {
+      case 'latexdiff':
+        this.handleLatexdiff();
+        break;
+      case 'latexdiffvc':
+        this.handleLatexdiffVC();
+        break;
+      case 'packLatexdiffvc':
+        this.handleLatexdiffVCPack('pack');
+        break;
+      case 'cleanLatexdiffvc':
+        this.handleLatexdiffVCPack('clean');
+        break;
+      case 'merge':
+        this.handleMerge();
+        break;
+      case 'compare':
+        this.handleCompare(MAIN_VIEW_COMMANDS.COMPARE);
+        break;
+      case 'accept':
+        this.handleCompare(MAIN_VIEW_COMMANDS.ACCEPT_EDITED);
+        break;
+    }
+  };
+
+  private handleComponentBaseFileChange = (
+    e: CustomEvent<BaseFileChangeDetail>,
+  ): void => {
+    this.handleBaseFileChange(e.detail.value);
+  };
+
+  private handleComponentEditedFileChange = (
+    e: CustomEvent<EditedFileChangeDetail>,
+  ): void => {
+    this.singleFiles = { ...this.singleFiles, editedFile: e.detail.value };
+    this.saveState();
+  };
+
+  private handleComponentCommitChange = (
+    e: CustomEvent<CommitChangeDetail>,
+  ): void => {
+    this.commit = e.detail.value;
+    this.saveState();
+  };
+
+  private handleComponentRefreshEditedFiles = (): void => {
+    this.handleRefreshEditedFiles();
+  };
+
+  private handleComponentRefreshCommits = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS);
+  };
+
+  // =========================================================================
+  // Existing Handler Methods
+  // =========================================================================
+
   private handleDependencyDismiss(): void {
     postMessage(MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING, {
       value: false,
@@ -2236,10 +2459,52 @@ export class MainApp extends BaseWebviewApp {
             </div>
           </div>
 
-          ${this.renderBanners()}
+          <banner-group
+            .apiKeyBanner=${{
+              visible: this.apiKeyBanner.visible,
+              provider: this.apiKeyBanner.provider,
+              requiresKey: this.apiKeyBanner.requiresKey,
+            } as ApiKeyBannerState}
+            .agentConfigBanner=${{
+              visible: this.agentConfigBanner.visible,
+              agentName: this.agentConfigBanner.agentName,
+              customDirSet: this.agentConfigBanner.customDirSet,
+            } as AgentConfigBannerState}
+            .dependencyBanner=${{
+              visible: this.dependencyBanner.visible,
+              missingTools: this.dependencyBanner.missingTools,
+            } as DependencyBannerState}
+            .gettingStartedVisible=${this.gettingStartedVisible}
+            .loginBannerVisible=${this.loginBannerVisible}
+            @api-key-action=${this.handleComponentApiKeyAction}
+            @agent-config-action=${this.handleComponentAgentConfigAction}
+            @dependency-dismiss=${this.handleComponentDependencyDismiss}
+            @recheck-dependencies=${this.handleComponentRecheckDependencies}
+            @open-install-guide=${this.handleComponentOpenInstallGuide}
+            @sign-in=${this.handleComponentSignIn}
+            @dismiss-login=${this.handleComponentDismissLogin}
+          ></banner-group>
         </div>
 
-        ${this.renderLatexdiffsSection()}
+        <latexdiffs-section
+          .visible=${this.latexdiffsVisible}
+          .baseFile=${this.singleFiles.baseFile}
+          .baseFileOptions=${this.fileOptions.baseFile ?? []}
+          .editedFile=${this.singleFiles.editedFile}
+          .editedFileOptions=${this.fileOptions.editedFile ?? []}
+          .commit=${this.commit}
+          .commitOptions=${this.fileOptions.commit ?? []}
+          .isGitRepo=${this.isGitRepo}
+          @latexdiffs-toggle=${this.handleComponentLatexDiffsToggle}
+          @latexdiffs-action=${this.handleComponentLatexDiffsAction}
+          @base-file-change=${this.handleComponentBaseFileChange}
+          @edited-file-change=${this.handleComponentEditedFileChange}
+          @get-current-file=${this.handleComponentGetCurrentFile}
+          @empty-file=${this.handleComponentEmptyFile}
+          @refresh-edited-files=${this.handleComponentRefreshEditedFiles}
+          @commit-change=${this.handleComponentCommitChange}
+          @refresh-commits=${this.handleComponentRefreshCommits}
+        ></latexdiffs-section>
       </div>
     `;
   }
@@ -2515,410 +2780,4 @@ export class MainApp extends BaseWebviewApp {
     `;
   }
 
-  private renderBanners(): TemplateResult {
-    const providerLabel = this.apiKeyBanner.provider
-      ? `${this.apiKeyBanner.provider.charAt(0).toUpperCase()}${this.apiKeyBanner.provider.slice(1)}`
-      : '';
-    return html`
-      <div
-        id="apiKeyBanner"
-        class="api-key-banner"
-        style=${this.apiKeyBanner.visible ? 'display: flex' : 'display: none'}
-      >
-        <span>
-          ${this.apiKeyBanner.provider
-            ? html`<strong>${providerLabel}</strong> API key missing.`
-            : 'TeXRA requires an API key to run.'}
-        </span>
-        <div class="actions">
-          <vscode-toolbar-button
-            id="apiKeyBannerButton"
-            icon="key"
-            @click=${() => this.handleApiKeyBannerAction('set')}
-          >
-            ${this.apiKeyBanner.provider ? 'Set Key' : 'Set API Key'}
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="apiKeyGuideButton"
-            icon="book"
-            @click=${() => this.handleApiKeyBannerAction('guide')}
-          >
-            ${this.apiKeyBanner.provider ? 'Get Key' : 'API Key Guide'}
-          </vscode-toolbar-button>
-        </div>
-      </div>
-
-      <div
-        id="agentConfigBanner"
-        class="agent-config-banner"
-        style=${this.agentConfigBanner.visible
-          ? 'display: flex'
-          : 'display: none'}
-        data-custom-dir-set=${this.agentConfigBanner.customDirSet
-          ? 'true'
-          : 'false'}
-      >
-        <span>
-          ${this.agentConfigBanner.agentName
-            ? `Agent file for "${this.agentConfigBanner.agentName}" is missing.`
-            : 'Agent configuration is missing.'}
-        </span>
-        <div class="actions">
-          <vscode-toolbar-button
-            id="agentConfigEditButton"
-            icon="edit"
-            @click=${() => this.handleAgentConfigAction('edit')}
-          >
-            Edit Agents
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="agentConfigDirButton"
-            icon="folder"
-            @click=${() => this.handleAgentConfigAction('dir')}
-          >
-            ${this.agentConfigBanner.customDirSet
-              ? 'Open Directory'
-              : 'Set Directory'}
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="agentConfigDocButton"
-            icon="book"
-            @click=${() => this.handleAgentConfigAction('docs')}
-          >
-            Docs
-          </vscode-toolbar-button>
-        </div>
-      </div>
-
-      <div
-        id="dependencyBanner"
-        class="dependency-banner"
-        style=${this.dependencyBanner.visible
-          ? 'display: flex'
-          : 'display: none'}
-      >
-        <span class="missing-tools"> ${this.renderDependencyContent()} </span>
-        <div class="actions">
-          <vscode-toolbar-button
-            id="dependencyRecheckButton"
-            icon="refresh"
-            @click=${() => postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES)}
-          >
-            Re-check
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="dependencyDismissButton"
-            class="btn-secondary"
-            title="Dismiss (can be re-enabled in settings)"
-            icon="close"
-            @click=${this.handleDependencyDismiss}
-          >
-            Dismiss
-          </vscode-toolbar-button>
-        </div>
-      </div>
-
-      <div
-        id="gettingStartedBanner"
-        class="getting-started-banner"
-        style=${this.gettingStartedVisible ? 'display: block' : 'display: none'}
-      >
-        <span class="getting-started-text">
-          No files found in workspace. Try
-          <a href="command:texra.openGettingStarted"
-            >opening the getting started walkthrough</a
-          >,
-          <a href="command:texra.createSampleProject"
-            >creating a sample project</a
-          >,
-          <a href="command:texra.cloneOverleafProject"
-            >cloning an Overleaf project</a
-          >, or
-          <a href="command:texra.downloadArXivSource"
-            >downloading an arXiv source</a
-          >.
-        </span>
-      </div>
-
-      <div
-        id="loginBanner"
-        class="login-banner"
-        style=${this.loginBannerVisible ? 'display: flex' : 'display: none'}
-      >
-        <div class="login-banner-content">
-          <span class="login-banner-icon"
-            ><i class="codicon codicon-sparkle"></i
-          ></span>
-          <div class="login-banner-text">
-            <span class="login-banner-title">Researcher Access Program</span>
-            <span class="login-banner-description">
-              Sign in to access AI models and remote agents without your own API
-              keys.
-            </span>
-          </div>
-        </div>
-        <div class="actions">
-          <vscode-button
-            id="loginBannerButton"
-            appearance="primary"
-            @click=${() => postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER)}
-          >
-            <span slot="start" class="codicon codicon-sign-in"></span>
-            Sign In
-          </vscode-button>
-          <vscode-toolbar-button
-            id="loginBannerDismissButton"
-            icon="close"
-            title="Dismiss (can be re-enabled in settings)"
-            aria-label="Dismiss login banner"
-            @click=${() => postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER)}
-          ></vscode-toolbar-button>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderDependencyContent(): TemplateResult {
-    const missing = this.dependencyBanner.missingTools ?? [];
-    if (missing.length === 0) {
-      return html`Missing dependencies: none`;
-    }
-
-    const tools = missing.flatMap((tool) =>
-      tool === 'gm/magick' ? ['gm', 'magick'] : [tool],
-    );
-
-    return html`${repeat(
-      tools,
-      (tool) => tool,
-      (tool) => {
-        const label =
-          tool === 'gm'
-            ? 'GraphicsMagick'
-            : tool === 'magick'
-              ? 'ImageMagick'
-              : tool;
-        return html`
-          <div class="dependency-item">
-            <span>${label}</span>
-            <vscode-toolbar-button
-              class="btn-secondary dependency-install-button"
-              icon="cloud-download"
-              @click=${() =>
-                postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, { tool })}
-            >
-              Install
-            </vscode-toolbar-button>
-          </div>
-        `;
-      },
-    )}`;
-  }
-
-  private renderLatexdiffsSection(): TemplateResult {
-    return html`
-      <div
-        class="latexdiffs-section"
-        data-expanded=${String(this.latexdiffsVisible)}
-      >
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <span
-              id="toggleLatexdiffs"
-              class="toggle-icon"
-              title="LaTeXDiffs"
-              @click=${() => {
-                this.latexdiffsVisible = !this.latexdiffsVisible;
-                this.saveState();
-              }}
-            >
-              <i
-                class="codicon ${this.latexdiffsVisible
-                  ? 'codicon-chevron-up'
-                  : 'codicon-chevron-down'}"
-              ></i>
-            </span>
-            <span class="optional-label"
-              ><i class="codicon codicon-source-control"></i> LaTeXDiffs</span
-            >
-          </div>
-        </div>
-        <div
-          id="latexdiffsContent"
-          style=${this.latexdiffsVisible ? 'display: block' : 'display: none'}
-        >
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="baseFile">Base</label>
-              </div>
-              <vscode-toolbar-container class="file-select-actions">
-                <vscode-toolbar-button
-                  id="currentBaseFileButton"
-                  icon="file-code"
-                  label="Set current file as base"
-                  title="Set current file as base"
-                  @click=${() => this.handleGetCurrentFile('base')}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="emptyBaseFileButton"
-                  icon="close"
-                  label="Clear base file"
-                  title="Clear base file"
-                  @click=${() => this.handleEmptyFile('base')}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
-            </div>
-            <vscode-single-select
-              id="baseFile"
-              .value=${this.singleFiles.baseFile}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.handleBaseFileChange(target.value);
-              }}
-            >
-              ${unsafeHTML(
-                this.buildOptionsHtml(
-                  this.fileOptions.baseFile ?? [],
-                  this.singleFiles.baseFile,
-                ),
-              )}
-            </vscode-single-select>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="editedFile">Edited</label>
-              </div>
-              <vscode-toolbar-container class="file-select-actions">
-                <vscode-toolbar-button
-                  id="refreshEditedFileButton"
-                  icon="edit"
-                  label="Refresh edited files"
-                  title="Refresh edited files"
-                  @click=${this.handleRefreshEditedFiles}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="currentEditedFileButton"
-                  icon="file-code"
-                  label="Set current file as edited"
-                  title="Set current file as edited"
-                  @click=${() => this.handleGetCurrentFile('edited')}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="emptyEditedFileButton"
-                  icon="close"
-                  label="Clear edited file"
-                  title="Clear edited file"
-                  @click=${() => this.handleEmptyFile('edited')}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
-            </div>
-            <vscode-single-select
-              id="editedFile"
-              .value=${this.singleFiles.editedFile}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.singleFiles = {
-                  ...this.singleFiles,
-                  editedFile: target.value,
-                };
-                this.saveState();
-              }}
-            >
-              ${unsafeHTML(
-                this.buildOptionsHtml(
-                  this.fileOptions.editedFile ?? [],
-                  this.singleFiles.editedFile,
-                ),
-              )}
-            </vscode-single-select>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="commit">
-                  <i class="codicon codicon-git-commit"></i> Commit
-                </label>
-              </div>
-              <vscode-toolbar-container class="file-select-actions">
-                <vscode-toolbar-button
-                  id="refreshCommitsButton"
-                  icon="refresh"
-                  label="Refresh commits"
-                  title="Refresh commits"
-                  @click=${() =>
-                    postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
-            </div>
-            <vscode-single-select
-              id="commit"
-              .value=${this.commit}
-              ?disabled=${!this.isGitRepo}
-              @change=${(event: Event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                this.commit = target.value;
-                this.saveState();
-              }}
-            >
-              ${unsafeHTML(this.buildCommitOptions())}
-            </vscode-single-select>
-          </div>
-          <div class="instruction-controls">
-            <vscode-toolbar-button
-              id="latexdiffButton"
-              icon="compare-changes"
-              label="Run LaTeXDiff"
-              title="Run LaTeXDiff"
-              @click=${this.handleLatexdiff}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="latexdiffvcButton"
-              icon="compare-changes"
-              label="Run LaTeXDiff with version control"
-              title="Run LaTeXDiff with version control"
-              @click=${this.handleLatexdiffVC}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="packLatexdiffvcButton"
-              icon="archive"
-              label="Pack LaTeXDiff VC"
-              title="Pack LaTeXDiff VC"
-              @click=${() => this.handleLatexdiffVCPack('pack')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="cleanLatexdiffvcButton"
-              icon="trash"
-              label="Clean LaTeXDiff VC"
-              title="Clean LaTeXDiff VC"
-              @click=${() => this.handleLatexdiffVCPack('clean')}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="mergeButton"
-              icon="merge"
-              label="Merge edits"
-              title="Merge edits"
-              @click=${this.handleMerge}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="compareButton"
-              icon="diff"
-              label="Compare"
-              title="Compare"
-              @click=${() => this.handleCompare(MAIN_VIEW_COMMANDS.COMPARE)}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="acceptButton"
-              icon="check"
-              label="Accept"
-              title="Accept"
-              @click=${() =>
-                this.handleCompare(MAIN_VIEW_COMMANDS.ACCEPT_EDITED)}
-            ></vscode-toolbar-button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
 }
