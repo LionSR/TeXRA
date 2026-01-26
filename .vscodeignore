@@ -38,6 +38,9 @@ CLAUDE.md
 !node_modules/split.js/**
 !node_modules/@vscode-elements/elements/dist/**
 
+# Exclude codicon font AFTER negations (loaded via VS Code webview URI, not bundled)
+**/codicon.ttf
+
 
 !resources/**
 !src/webview/*.js
