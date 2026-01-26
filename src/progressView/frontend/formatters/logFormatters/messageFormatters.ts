@@ -35,16 +35,8 @@ export function formatUserMessage(
     new Date(timestamp),
   );
 
-  return renderToElement(html`
-    <div class="user-message-container">
-      <div class="user-message">
-        <div class="user-message-header"><i class="codicon codicon-comment user-message-icon"></i> <span class="user-message-timestamp" title=${tooltipTimestamp}>${timeDisplay}</span></div>
-        <div class="user-message-content" data-log-id=${ifDefined(logId)}>
-          ${text ?? ''}
-        </div>
-      </div>
-    </div>
-  `);
+  // prettier-ignore
+  return renderToElement(html`<div class="user-message-container"><div class="user-message"><div class="user-message-header"><i class="codicon codicon-comment user-message-icon"></i> <span class="user-message-timestamp" title=${tooltipTimestamp}>${timeDisplay}</span></div><div class="user-message-content" data-log-id=${ifDefined(logId)}>${text ?? ''}</div></div></div>`);
 }
 
 /** Format progress status entry (Lit-native). */

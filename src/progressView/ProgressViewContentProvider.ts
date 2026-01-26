@@ -12,14 +12,18 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
   protected override getModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
+    const distPath = vscode.Uri.joinPath(
+      this.context.extensionUri,
+      'dist',
+      'progressView',
+    );
     return {
       progressBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'progressView',
-          'bundle.js',
-        ),
+        vscode.Uri.joinPath(distPath, 'bundle.js'),
+      ),
+      // Bundled CSS includes KaTeX styles and fonts
+      bundledStyleUri: webview.asWebviewUri(
+        vscode.Uri.joinPath(distPath, 'index.css'),
       ),
     };
   }

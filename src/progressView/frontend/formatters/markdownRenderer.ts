@@ -45,7 +45,8 @@ export const getMarkdownRenderer = (): MarkdownIt => {
       highlight: highlightCode,
     }).use(texmath, {
       engine: katex,
-      delimiters: ['dollars', 'brackets'],
+      // Include beg_end to catch \begin{...}...\end{...} environments directly
+      delimiters: ['dollars', 'brackets', 'beg_end'],
       katexOptions: {
         throwOnError: false,
         errorColor: '#cc0000',
