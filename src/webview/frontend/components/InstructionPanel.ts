@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -200,6 +200,10 @@ export class InstructionPanel extends LitElement {
   /** Whether debug mode is enabled */
   @property({ type: Boolean }) debugMode = false;
 
+  /** Reference to instruction textarea for paste handling */
+  @query('#instruction')
+  private instructionTextarea?: HTMLElement;
+
   private createEvent<T>(type: string, detail: T): CustomEvent<T> {
     return new CustomEvent(type, { detail, bubbles: true, composed: true });
   }
@@ -236,11 +240,8 @@ export class InstructionPanel extends LitElement {
   /** Handle paste event on instruction textarea (Lit-native) */
   private handleInstructionPaste = async (event: Event): Promise<void> => {
     if (!(event instanceof ClipboardEvent)) return;
-    const textarea = this.renderRoot.querySelector(
-      '#instruction',
-    ) as HTMLElement | null;
-    if (!textarea) return;
-    const handled = await handleImagePaste(event, textarea);
+    if (!this.instructionTextarea) return;
+    const handled = await handleImagePaste(event, this.instructionTextarea);
     if (handled) {
       // Get updated value from textarea after image paste
       const target = event.target as HTMLTextAreaElement;
