@@ -138,15 +138,11 @@ export class OutputFilesSection extends LitElement {
   @property({ type: Array }) files: string[] = [];
 
   private handleToggle(): void {
-    this.dispatchEvent(
-      MainViewEvents.toggleList({ listId: 'outputFiles' }),
-    );
+    this.dispatchEvent(MainViewEvents.toggleList({ listId: 'outputFiles' }));
   }
 
   private handleEmptyFiles(): void {
-    this.dispatchEvent(
-      MainViewEvents.emptyFiles({ type: 'output' }),
-    );
+    this.dispatchEvent(MainViewEvents.emptyFiles({ type: 'output' }));
   }
 
   private handleSelectFiles(): void {

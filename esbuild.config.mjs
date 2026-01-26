@@ -11,7 +11,7 @@ const watch = process.argv.includes('--watch');
 
 // Sort aliases by length (longest first) to avoid partial matches
 const sortedAliases = Object.entries(aliases).sort(
-  ([a], [b]) => b.length - a.length
+  ([a], [b]) => b.length - a.length,
 );
 
 /**
@@ -85,7 +85,9 @@ const progressPlugin = {
     build.onEnd((result) => {
       const duration = Date.now() - startTime;
       if (result.errors.length > 0) {
-        console.error(`[esbuild] Build failed with ${result.errors.length} errors`);
+        console.error(
+          `[esbuild] Build failed with ${result.errors.length} errors`,
+        );
       } else {
         console.log(`[esbuild] Extension built in ${duration}ms`);
       }
