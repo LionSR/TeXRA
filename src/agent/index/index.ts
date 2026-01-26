@@ -11,6 +11,8 @@ export {
   type ResolvedAgent,
   type RemoteVisibility,
   type AgentOptionsPayload,
+  type AgentOptionData,
+  type AgentOptionsDataPayload,
   // Core functions
   loadAgents,
   ensureAgentsLoaded,
@@ -24,10 +26,13 @@ export {
   getVisibleToolUseAgents,
   getAgentsBySource,
   refresh,
-  // HTML options
+  // HTML options (legacy)
   buildAgentOptions,
   computeAgentOptions,
   computeAgentOptionsSync,
+  // Typed data options (new)
+  buildAgentOptionsData,
+  computeAgentOptionsData,
   DEFAULT_WORKFLOW_AGENT,
   DEFAULT_TOOL_USE_AGENT,
   // Key helpers

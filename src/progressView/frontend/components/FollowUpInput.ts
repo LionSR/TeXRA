@@ -1,5 +1,12 @@
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -89,6 +96,12 @@ export class FollowUpInput extends LitElement {
   @property({ type: String }) value = '';
   @property({ type: Array }) queuedMessages: string[] = [];
 
+  // Reactive properties for Lit-native patterns (Phase 9e)
+  @property({ type: Boolean }) shouldFocus = false;
+  @property({ type: String }) polishedText: string | null = null;
+  @property({ type: String }) transcribedText: string | null = null;
+  @property({ type: Boolean }) recording = false;
+
   @state() private polishing = false;
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
@@ -101,7 +114,46 @@ export class FollowUpInput extends LitElement {
     stopTitle: 'Stop recording',
   });
 
-  updated(): void {
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    // React to shouldFocus property change
+    if (changedProperties.has('shouldFocus') && this.shouldFocus) {
+      this.focusInput({ scrollIntoView: true }).then(() => {
+        this.dispatchEvent(new CustomEvent('focus-complete', { bubbles: true }));
+      });
+    }
+
+    // React to polishedText property change
+    if (changedProperties.has('polishedText') && this.polishedText !== null) {
+      this.polishing = false;
+      this.updateValue(this.polishedText);
+      this.focusInput({ scrollIntoView: true });
+    }
+
+    // React to transcribedText property change
+    if (
+      changedProperties.has('transcribedText') &&
+      this.transcribedText !== null
+    ) {
+      // We need to wait for the element to be rendered before inserting text
+      this.updateComplete.then(() => {
+        if (this.textAreaEl && this.transcribedText !== null) {
+          const { textarea } = resolveTextareaTarget(this.textAreaEl);
+          if (textarea) {
+            insertTextAtCursor(textarea, this.transcribedText);
+            this.updateValue(textarea.value);
+            this.focusInput({ scrollIntoView: true });
+          }
+        }
+      });
+    }
+
+    // React to recording property change
+    if (changedProperties.has('recording')) {
+      this.recordingController.setRecording(this.recording);
+    }
+  }
+
+  protected override updated(): void {
     this.recordingController.attach(
       this.renderRoot.querySelector(
         `#${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}`,

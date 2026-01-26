@@ -8,13 +8,14 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
+import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
+
 import type {
   SelectOption,
   AgentOption,
   ModelOption,
   CommitOption,
 } from '@shared/types/selectOptions';
-import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 // =============================================================================
 // GENERIC SELECT OPTIONS
