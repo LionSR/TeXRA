@@ -19,7 +19,12 @@
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { guard } from 'lit/directives/guard.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
@@ -58,8 +63,21 @@ export class ToolUseStreamContent extends LitElement {
   private logListRef: Ref<LogList> = createRef();
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
+  /** Cached prompts filtered for the active stream */
+  private filteredPrompts: PromptState[] = [];
+
+  protected willUpdate(changedProperties: PropertyValues<this>): void {
+    if (
+      changedProperties.has('prompts') ||
+      changedProperties.has('streamInfo')
+    ) {
+      this.filteredPrompts = this.computeFilteredPrompts();
+    }
+  }
 
   render(): TemplateResult {
+    const hasPrompts = this.filteredPrompts.length > 0;
+    const activePrompt = this.filteredPrompts.at(0) ?? null;
     return html`
       <stream-header
         .stream=${this.streamInfo}
@@ -72,14 +90,8 @@ export class ToolUseStreamContent extends LitElement {
       ></stream-header>
 
       <prompt-overlay
-        ?hidden=${guard(
-          [this.prompts, this.streamInfo?.name],
-          () => this.computeFilteredPrompts().length === 0,
-        )}
-        .prompt=${guard(
-          [this.prompts, this.streamInfo?.name],
-          () => this.computeFilteredPrompts().at(0) ?? null,
-        )}
+        ?hidden=${!hasPrompts}
+        .prompt=${activePrompt}
       ></prompt-overlay>
 
       <todo-list .todos=${this.state.todos}></todo-list>

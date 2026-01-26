@@ -180,6 +180,70 @@ const ONBOARDING_PLACEHOLDERS: Record<SessionType, string[]> = {
   ],
 };
 
+const FILE_SELECT_CONFIGS = {
+  input: {
+    type: 'input',
+    label: 'Input',
+    icon: 'file-code',
+    refreshTitle: 'Refresh input files',
+    currentTitle: 'Set current file as input',
+    emptyTitle: 'Clear input file',
+    toggleTitle: 'Show or hide additional input files',
+    addOpenedLabel: 'Add opened files as input',
+    emptyListLabel: 'Clear all input files',
+    selectListLabel: 'Add input files',
+    tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
+    focusInstruction: {
+      key: 'inputFileSelect',
+      text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
+    },
+  },
+  reference: {
+    type: 'reference',
+    label: 'Reference',
+    icon: 'book',
+    refreshTitle: 'Refresh reference files',
+    currentTitle: 'Set current file as reference',
+    emptyTitle: 'Clear reference file',
+    toggleTitle: 'Show or hide additional reference files',
+    addOpenedLabel: 'Add opened files as reference',
+    emptyListLabel: 'Clear all reference files',
+    selectListLabel: 'Add reference files',
+    tooltip:
+      'Context files such as .bib/.bbl or other papers that guide output but will not be modified',
+  },
+  auxiliary: {
+    type: 'auxiliary',
+    label: 'Auxiliary',
+    icon: 'archive',
+    refreshTitle: 'Refresh auxiliary files',
+    currentTitle: 'Set current file as auxiliary',
+    emptyTitle: 'Clear auxiliary file',
+    toggleTitle: 'Show or hide additional auxiliary files',
+    addOpenedLabel: 'Add opened files as auxiliary',
+    emptyListLabel: 'Clear all auxiliary files',
+    selectListLabel: 'Add auxiliary files',
+    tooltip:
+      'Files such as .cls/.sty that define document structure and styles',
+  },
+  media: {
+    type: 'media',
+    label: 'Media',
+    icon: 'device-camera-video',
+    refreshTitle: 'Refresh media files',
+    currentTitle: 'Set current file as media',
+    emptyTitle: 'Clear media file',
+    toggleTitle: 'Show or hide additional media files',
+    addOpenedLabel: 'Add opened files as media',
+    emptyListLabel: 'Clear all media files',
+    selectListLabel: 'Add media files',
+    tooltip: 'Images, figures, and media assets used by the document',
+  },
+} satisfies Record<
+  'input' | 'reference' | 'auxiliary' | 'media',
+  FileSelectConfig
+>;
+
 type MainViewMessageHandler = (message: MainViewMessage) => void;
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
   MainViewMessage,
@@ -2167,24 +2231,7 @@ export class MainApp extends BaseWebviewApp {
         <div class="main-content">
           <div class=${fileSelectionClasses}>
             <file-select-group
-              .config=${{
-                type: 'input',
-                label: 'Input',
-                icon: 'file-code',
-                refreshTitle: 'Refresh input files',
-                currentTitle: 'Set current file as input',
-                emptyTitle: 'Clear input file',
-                toggleTitle: 'Show or hide additional input files',
-                addOpenedLabel: 'Add opened files as input',
-                emptyListLabel: 'Clear all input files',
-                selectListLabel: 'Add input files',
-                tooltip:
-                  'Primary files the agent processes, such as .tex, .txt, or .md',
-                focusInstruction: {
-                  key: 'inputFileSelect',
-                  text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-                },
-              } satisfies FileSelectConfig}
+              .config=${FILE_SELECT_CONFIGS.input}
               .selectedValue=${this.singleFiles.inputFile}
               .optionsHtml=${this.buildOptionsHtml(
                 this.fileOptions.inputFile ?? [],
@@ -2197,20 +2244,7 @@ export class MainApp extends BaseWebviewApp {
               @file-select-focus=${this.handleFileSelectFocusEvent}
             ></file-select-group>
             <file-select-group
-              .config=${{
-                type: 'reference',
-                label: 'Reference',
-                icon: 'book',
-                refreshTitle: 'Refresh reference files',
-                currentTitle: 'Set current file as reference',
-                emptyTitle: 'Clear reference file',
-                toggleTitle: 'Show or hide additional reference files',
-                addOpenedLabel: 'Add opened files as reference',
-                emptyListLabel: 'Clear all reference files',
-                selectListLabel: 'Add reference files',
-                tooltip:
-                  'Context files such as .bib/.bbl or other papers that guide output but will not be modified',
-              } satisfies FileSelectConfig}
+              .config=${FILE_SELECT_CONFIGS.reference}
               .selectedValue=${this.singleFiles.referenceFile}
               .optionsHtml=${this.buildOptionsHtml(
                 this.fileOptions.referenceFile ?? [],
@@ -2222,20 +2256,7 @@ export class MainApp extends BaseWebviewApp {
               @file-select-focus=${this.handleFileSelectFocusEvent}
             ></file-select-group>
             <file-select-group
-              .config=${{
-                type: 'auxiliary',
-                label: 'Auxiliary',
-                icon: 'archive',
-                refreshTitle: 'Refresh auxiliary files',
-                currentTitle: 'Set current file as auxiliary',
-                emptyTitle: 'Clear auxiliary file',
-                toggleTitle: 'Show or hide additional auxiliary files',
-                addOpenedLabel: 'Add opened files as auxiliary',
-                emptyListLabel: 'Clear all auxiliary files',
-                selectListLabel: 'Add auxiliary files',
-                tooltip:
-                  'Files such as .cls/.sty that define document structure and styles',
-              } satisfies FileSelectConfig}
+              .config=${FILE_SELECT_CONFIGS.auxiliary}
               .selectedValue=${this.singleFiles.auxiliaryFile}
               .optionsHtml=${this.buildOptionsHtml(
                 this.fileOptions.auxiliaryFile ?? [],
@@ -2247,20 +2268,7 @@ export class MainApp extends BaseWebviewApp {
               @file-select-focus=${this.handleFileSelectFocusEvent}
             ></file-select-group>
             <file-select-group
-              .config=${{
-                type: 'media',
-                label: 'Media',
-                icon: 'device-camera-video',
-                refreshTitle: 'Refresh media files',
-                currentTitle: 'Set current file as media',
-                emptyTitle: 'Clear media file',
-                toggleTitle: 'Show or hide additional media files',
-                addOpenedLabel: 'Add opened files as media',
-                emptyListLabel: 'Clear all media files',
-                selectListLabel: 'Add media files',
-                tooltip:
-                  'Images, figures, and media assets used by the document',
-              } satisfies FileSelectConfig}
+              .config=${FILE_SELECT_CONFIGS.media}
               .selectedValue=${this.singleFiles.mediaFile}
               .optionsHtml=${this.buildOptionsHtml(
                 this.fileOptions.mediaFile ?? [],

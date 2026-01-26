@@ -6,7 +6,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
 // Local imports - main view
-import { mainViewStyles } from '@webview/frontend/styles';
+import { bannerStyles } from '@webview/frontend/styles';
 
 export type LoginBannerAction = 'sign-in' | 'dismiss';
 
@@ -16,12 +16,7 @@ export interface LoginBannerActionDetail {
 
 @customElement('login-banner')
 export class LoginBanner extends LitElement {
-  static styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    mainViewStyles,
-  ];
+  static styles = [designTokens, commonViewStyles, codiconStyles, bannerStyles];
 
   @property({ type: Boolean }) visible = false;
 

@@ -7,7 +7,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
 // Local imports - main view
-import { mainViewStyles } from '@webview/frontend/styles';
+import { bannerStyles } from '@webview/frontend/styles';
 
 export type DependencyBannerAction = 'recheck' | 'dismiss' | 'install';
 
@@ -18,12 +18,7 @@ export interface DependencyBannerActionDetail {
 
 @customElement('dependency-banner')
 export class DependencyBanner extends LitElement {
-  static styles = [
-    designTokens,
-    commonViewStyles,
-    codiconStyles,
-    mainViewStyles,
-  ];
+  static styles = [designTokens, commonViewStyles, codiconStyles, bannerStyles];
 
   @property({ type: Boolean }) visible = false;
   @property({ type: Array }) missingTools: string[] = [];
