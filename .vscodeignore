@@ -23,6 +23,12 @@ eslint.config.mjs
 tsconfig.json
 **/*.map
 **/*.ts
+
+# Exclude fonts emitted by vite (loaded via VS Code webview URI, not bundled)
+**/KaTeX_*.ttf
+**/KaTeX_*.woff
+**/KaTeX_*.woff2
+**/codicon.ttf
 **/.vscode-test.*
 
 venv/**
