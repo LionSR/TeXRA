@@ -2,6 +2,7 @@
 
 > **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
 > **Prior phase:** [prd-mainview-phase7.md](./prd-mainview-phase7.md)
+> **Next phase:** [prd-taskgroup-phase9.md](./prd-taskgroup-phase9.md)
 > **Related:** [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md)
 
 ## Overview
