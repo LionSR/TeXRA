@@ -72,35 +72,35 @@ Phase 4 migrates the remaining webviews (HistoryView, ProfileView, MemoryView, M
 
 ### JS Files Migration Status (Updated 2026-01-26)
 
-| File                         | Status       | TS Replacement                            |
-| ---------------------------- | ------------ | ----------------------------------------- |
-| `htmlEncoding.js`            | ✅ Deleted   | `@shared/utils/html.ts`                   |
-| `stringUtils.js`             | ✅ Deleted   | `@shared/utils/string.ts`                 |
-| `pathUtils.js`               | ✅ Deleted   | `@shared/utils/path.ts`                   |
-| `clipboardUtils.js`          | ✅ Deleted   | `@shared/utils/clipboard.ts`              |
-| `ToggleStateStore.js`        | ✅ Deleted   | `@shared/state/ToggleStateStore.ts`       |
-| `webviewState.js`            | ✅ Deleted   | `@shared/state/WebviewStateManager.ts`    |
-| `textareaUtils.js`           | ✅ Deleted   | `@shared/utils/textarea.ts`               |
-| `dropdownUtils.js`           | ✅ Deleted   | `@shared/utils/dropdown.ts`               |
-| `debounce.js`                | ✅ Deleted   | `@utils/core` (perfect-debounce)          |
-| `BaseWebviewMessageHandler.js` | ✅ Deleted | `BaseViewMessageHandler.ts`               |
-| `iconConstants.js`           | ⏳ Blocked   | TS exists, but imported by domUtils.js    |
-| `domUtils.js`                | ⏳ Blocked   | Partial (10/27 functions in TS)           |
-| `templateUtils.js`           | ⏳ Blocked   | No TS replacement                         |
-| `webviewContext.js`          | ⏳ Blocked   | registerMessageHandlers missing in TS     |
-| `BaseDomHandler.js`          | ⏳ Infra     | Webview infrastructure, no migration      |
-| `StreamScopedMap.js`         | ⏳ Infra     | Webview infrastructure, no migration      |
-| `RecordingButtonManager.js`  | ⏳ In progress | TS controller exists, migration ongoing |
+| File                           | Status         | TS Replacement                          |
+| ------------------------------ | -------------- | --------------------------------------- |
+| `htmlEncoding.js`              | ✅ Deleted     | `@shared/utils/html.ts`                 |
+| `stringUtils.js`               | ✅ Deleted     | `@shared/utils/string.ts`               |
+| `pathUtils.js`                 | ✅ Deleted     | `@shared/utils/path.ts`                 |
+| `clipboardUtils.js`            | ✅ Deleted     | `@shared/utils/clipboard.ts`            |
+| `ToggleStateStore.js`          | ✅ Deleted     | `@shared/state/ToggleStateStore.ts`     |
+| `webviewState.js`              | ✅ Deleted     | `@shared/state/WebviewStateManager.ts`  |
+| `textareaUtils.js`             | ✅ Deleted     | `@shared/utils/textarea.ts`             |
+| `dropdownUtils.js`             | ✅ Deleted     | `@shared/utils/dropdown.ts`             |
+| `debounce.js`                  | ✅ Deleted     | `@utils/core` (perfect-debounce)        |
+| `BaseWebviewMessageHandler.js` | ✅ Deleted     | `BaseViewMessageHandler.ts`             |
+| `iconConstants.js`             | ⏳ Blocked     | TS exists, but imported by domUtils.js  |
+| `domUtils.js`                  | ⏳ Blocked     | Partial (10/27 functions in TS)         |
+| `templateUtils.js`             | ⏳ Blocked     | No TS replacement                       |
+| `webviewContext.js`            | ⏳ Blocked     | registerMessageHandlers missing in TS   |
+| `BaseDomHandler.js`            | ⏳ Infra       | Webview infrastructure, no migration    |
+| `StreamScopedMap.js`           | ⏳ Infra       | Webview infrastructure, no migration    |
+| `RecordingButtonManager.js`    | ⏳ In progress | TS controller exists, migration ongoing |
 
 ### Duplicate Constant Files to Delete
 
-| File                               | Lines | Status                            |
-| ---------------------------------- | ----- | --------------------------------- |
-| `common/webview/commands.js`       | 298   | ✅ Deleted (TS version exists)    |
-| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete)   |
-| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete)   |
-| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete)   |
-| `webview/modules/constants.js`     | 162   | ✅ Deleted (MainView migrated)    |
+| File                               | Lines | Status                          |
+| ---------------------------------- | ----- | ------------------------------- |
+| `common/webview/commands.js`       | 298   | ✅ Deleted (TS version exists)  |
+| `historyView/modules/constants.js` | 37    | ✅ Deleted (migration complete) |
+| `profileView/modules/constants.js` | 41    | ✅ Deleted (migration complete) |
+| `memoryView/modules/constants.js`  | 24    | ✅ Deleted (migration complete) |
+| `webview/modules/constants.js`     | 162   | ✅ Deleted (MainView migrated)  |
 
 ---
 
@@ -607,6 +607,7 @@ src/common/modules/
 ```
 
 Also cleaned up:
+
 - Removed 10 obsolete URI entries from `BaseViewContentProvider.ts`
 - Removed 8 obsolete type declarations from `common-modules.d.ts`
 - Updated `pathUtils.test.js` to import from `@shared/utils/path`
@@ -628,4 +629,57 @@ src/common/modules/
 
 - Phase 4 deleted: ~1,551 lines (memoryView + historyView + profileView modules)
 - Phase 4 shared utils deleted: 10 files (~800 lines)
-- Remaining: 7 JS files with blockers (~600 lines)
+- Remaining: 11 JS files, 3 CSS files to delete (see below)
+
+---
+
+## Final JS/CSS Cleanup (Audited 2026-01-26)
+
+### Deleted (2026-01-26) - Zero External Imports
+
+**JS Constants (3 files)** - TS replacements exist in `@shared/schemas/`:
+```
+src/common/constants/agentTypes.js    ✅ DELETED
+src/common/constants/streamStatus.js  ✅ DELETED
+src/common/constants/todoStatus.js    ✅ DELETED
+```
+
+**JS Dead Code (3 files)** - Never imported anywhere:
+```
+src/common/modules/StreamScopedMap.js      ✅ DELETED
+src/common/modules/webviewContext.js       ✅ DELETED
+src/common/modules/files/baseFileUtils.js  ✅ DELETED
+```
+
+**CSS Duplicates (3 files)** - Replaced by Lit TypeScript styles:
+```
+src/historyView/styles/index.css  ✅ DELETED → historyViewStyles.ts
+src/memoryView/styles/index.css   ✅ DELETED → Lit component styles
+src/profileView/styles/index.css  ✅ DELETED → profileViewStyles.ts
+```
+
+### Remaining JS Files (5 files) - Internal Cross-References Only
+
+These files only import each other (no external TypeScript imports):
+
+| File | Imported By | Status |
+|------|-------------|--------|
+| `iconConstants.js` | domUtils.js | ⏳ Delete with chain |
+| `templateUtils.js` | RecordingButtonManager.js | ⏳ Delete with chain |
+| `domUtils.js` | BaseDomHandler.js, templateUtils.js | ⏳ Delete with chain |
+| `RecordingButtonManager.js` | (none - never instantiated) | ⏳ Delete with chain |
+| `BaseDomHandler.js` | (none - never imported) | ⏳ Delete with chain |
+
+**Recommendation:** Delete all 5 together since they form a closed dependency graph with no external consumers.
+
+### CSS Files to Keep
+
+| File | Reason |
+|------|--------|
+| `common/styles/common.css` | Light DOM baseline for all webviews |
+| `shared/styles/tokens.css` | Design tokens (consider dedup with litStyles.ts) |
+| `progressView/styles/*.css` | Formatter output + Light DOM layout (19 files) |
+
+**Note:** ProgressView CSS files must remain as Light DOM CSS because:
+- LogList, TaskGroupList are Light DOM components
+- Formatters generate HTML strings (not Lit templates) that need external CSS
