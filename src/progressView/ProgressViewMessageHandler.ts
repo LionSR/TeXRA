@@ -1076,13 +1076,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     try {
       // Compute agent and model options in parallel
       // Send both HTML (legacy) and typed data (Lit-native)
-      const [agentOptions, agentOptionsData, modelOptionsHtml, modelOptionsData] =
-        await Promise.all([
-          computeAgentOptions(),
-          computeAgentOptionsData(),
-          computeModelOptions(),
-          computeModelOptionsData(),
-        ]);
+      const [
+        agentOptions,
+        agentOptionsData,
+        modelOptionsHtml,
+        modelOptionsData,
+      ] = await Promise.all([
+        computeAgentOptions(),
+        computeAgentOptionsData(),
+        computeModelOptions(),
+        computeModelOptionsData(),
+      ]);
 
       const defaultMergeModel = getConfig<string>(
         'texra.merge.defaultModel',

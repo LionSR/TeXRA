@@ -1,10 +1,20 @@
-// Local imports - model utilities
-import { getServerSideKeyService } from '@auth/serverKeys';
+// Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - auth
+import { getServerSideKeyService } from '@auth/serverKeys';
+
+// Local imports - frontend
+import { ApiProvider, SecretManager } from '@frontend/secretManager';
+
+// Local imports - model types
 import type { ModelConfig } from '@model/ModelConfig';
-import type { ModelOptionData } from '@shared/schemas';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
+
+// Local imports - shared schemas
+import type { ModelOptionData } from '@shared/schemas';
 
 /**
  * Get the list of visible models from user configuration.
@@ -201,7 +211,8 @@ async function buildModelOptionData(
   const contextStr = config.contextWindow
     ? formatContext(config.contextWindow)
     : undefined;
-  const costStr = formatCost(config.inputPrice, config.outputPrice) || undefined;
+  const costStr =
+    formatCost(config.inputPrice, config.outputPrice) || undefined;
 
   return {
     value: model,

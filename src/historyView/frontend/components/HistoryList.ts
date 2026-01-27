@@ -1,5 +1,10 @@
 // Third-party imports
-import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, queryAll, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -55,11 +60,17 @@ export class HistoryList extends LitElement {
    */
   protected willUpdate(changedProperties: PropertyValues<this>): void {
     // Handle clearSearchTrigger - clear search state
-    if (changedProperties.has('clearSearchTrigger') && this.clearSearchTrigger) {
+    if (
+      changedProperties.has('clearSearchTrigger') &&
+      this.clearSearchTrigger
+    ) {
       this.performClearSearch();
       // Dispatch event to reset the trigger
       this.dispatchEvent(
-        new CustomEvent('search-clear-complete', { bubbles: true, composed: true }),
+        new CustomEvent('search-clear-complete', {
+          bubbles: true,
+          composed: true,
+        }),
       );
     }
 
@@ -77,7 +88,10 @@ export class HistoryList extends LitElement {
       }
       // Dispatch event to reset the action
       this.dispatchEvent(
-        new CustomEvent('search-navigate-complete', { bubbles: true, composed: true }),
+        new CustomEvent('search-navigate-complete', {
+          bubbles: true,
+          composed: true,
+        }),
       );
     }
   }
@@ -155,7 +169,10 @@ export class HistoryList extends LitElement {
       const count = this.matchCounts.get(item.id) ?? 0;
       if (item.id === itemId) {
         // Check if the global index falls within this item's range
-        if (globalIndex >= cumulativeIndex && globalIndex < cumulativeIndex + count) {
+        if (
+          globalIndex >= cumulativeIndex &&
+          globalIndex < cumulativeIndex + count
+        ) {
           return globalIndex - cumulativeIndex;
         }
         return null;
@@ -168,7 +185,9 @@ export class HistoryList extends LitElement {
   private async applySearchToItems(term: string): Promise<void> {
     const historyItems = this.getHistoryItems();
     const counts = await Promise.all(
-      historyItems.map((item) => item.applySearch?.(term) ?? Promise.resolve(0)),
+      historyItems.map(
+        (item) => item.applySearch?.(term) ?? Promise.resolve(0),
+      ),
     );
 
     // Store match counts per item for computing highlighted indices

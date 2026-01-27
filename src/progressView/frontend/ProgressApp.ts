@@ -1,13 +1,21 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
+import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { WebviewStateManager } from '@shared/state';
+
+// Local imports - shared schemas
+import {
+  AGENT_CATEGORY,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
 // Local imports - webview commands
-import { WebviewStateManager } from '@shared/state';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view frontend
@@ -51,8 +59,16 @@ import {
 } from './eventHandlers';
 import { MESSAGE_HANDLERS } from './messageHandlerRegistry';
 import { getFilteredStreams } from './stateUtils';
+
+// Local imports - progress view contexts
+import {
+  promptsContext,
+  streamStateContext,
+  type StreamContextValue,
+} from './contexts/streamContexts';
+
+// Local imports - progress view message handlers
 import type { MessageHandlerContext } from './messageHandlers';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - progress view components
 import './components/StreamTabs';
@@ -73,6 +89,19 @@ import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 export class ProgressApp extends BaseWebviewApp {
   @state() private appState: ProgressState;
   @state() private prompts: PromptState[] = [];
+
+  @provide({ context: streamStateContext })
+  @state()
+  private streamContextValue: StreamContextValue = {
+    streamInfo: null,
+    streamState: null,
+    runId: null,
+    followupOptions: null,
+  };
+
+  @provide({ context: promptsContext })
+  @state()
+  private promptsContextValue: PromptState[] = [];
 
   // Container refs for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
@@ -100,6 +129,12 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected override get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
+  }
+
+  protected override willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('appState') || changed.has('prompts')) {
+      this.updateStreamContext();
+    }
   }
 
   render(): TemplateResult {
@@ -132,22 +167,17 @@ export class ProgressApp extends BaseWebviewApp {
    * Single branch point - delegates to typed container components.
    */
   private renderStreamContent(): TemplateResult {
-    const activeStream = this.getActiveStreamInfo();
-    if (!activeStream) {
+    const { streamInfo, streamState, runId } = this.streamContextValue;
+    if (!streamInfo || !streamState) {
       // No active stream - show empty log-list
       return html`<log-list></log-list>`;
     }
-
-    const streamState = getStreamState(this.appState, activeStream.name);
 
     // Single branch point: delegate to typed container component
     if (isToolUseState(streamState)) {
       return html`
         <tool-use-stream-content
           ${ref(this.toolUseContentRef)}
-          .state=${streamState}
-          .streamInfo=${activeStream}
-          .prompts=${this.prompts}
           @toolbar-command=${this.onToolbarCommand}
           @prompt-action=${this.onPromptAction}
           @followup-change=${this.onFollowUpChange}
@@ -160,14 +190,9 @@ export class ProgressApp extends BaseWebviewApp {
     }
 
     // Workflow stream (default for non-tool-use)
-    const runId = getEffectiveRunId(streamState);
     return html`
       <workflow-stream-content
         ${ref(this.workflowContentRef)}
-        .state=${streamState}
-        .streamInfo=${activeStream}
-        .runId=${runId}
-        .followupOptions=${this.appState.followupOptions}
         @toolbar-command=${this.onToolbarCommand}
         @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
@@ -201,6 +226,33 @@ export class ProgressApp extends BaseWebviewApp {
         (stream) => stream.name === this.appState.activeStreamId,
       ) ?? null
     );
+  }
+
+  private updateStreamContext(): void {
+    const activeStream = this.getActiveStreamInfo();
+    if (!activeStream) {
+      this.streamContextValue = {
+        streamInfo: null,
+        streamState: null,
+        runId: null,
+        followupOptions: null,
+      };
+      this.promptsContextValue = this.prompts;
+      return;
+    }
+
+    const streamState = getStreamState(this.appState, activeStream.name);
+    const runId = isToolUseState(streamState)
+      ? null
+      : getEffectiveRunId(streamState);
+
+    this.streamContextValue = {
+      streamInfo: activeStream,
+      streamState,
+      runId,
+      followupOptions: this.appState.followupOptions,
+    };
+    this.promptsContextValue = this.prompts;
   }
 
   private setStreamState(
@@ -284,7 +336,7 @@ export class ProgressApp extends BaseWebviewApp {
     if (!streamId) return;
 
     this.setStreamState(streamId, (prev) => {
-      if (prev.kind !== 'tool-use') return prev;
+      if (prev.kind !== AGENT_CATEGORY.TOOL_USE) return prev;
       return {
         ...prev,
         shouldFocusFollowUp: false,
