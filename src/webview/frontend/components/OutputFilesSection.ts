@@ -10,17 +10,14 @@ import { consume } from '@lit/context';
 import { customElement, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import Sortable from 'sortablejs';
 
 // Local imports - main view
+import { SortableController } from '@shared/controllers/SortableController';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
-
-// Local imports - shared types
-import type { SortableDragEvent } from '@shared/types/sortable';
 
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
@@ -151,19 +148,18 @@ export class OutputFilesSection extends LitElement {
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
 
-  private sortable: Sortable | null = null;
-
-  override disconnectedCallback(): void {
-    this.destroySortable();
-    super.disconnectedCallback();
-  }
-
-  protected override updated(changedProps: Map<string, unknown>): void {
-    if (changedProps.has('fileState')) {
-      this.destroySortable();
-    }
-    this.initializeSortable();
-  }
+  private sortableController = new SortableController(
+    this,
+    () => this.fileListElement,
+    () => this.currentFiles,
+    (result) =>
+      this.dispatchEvent(
+        MainViewEvents.filesReordered({
+          listId: 'outputFiles',
+          files: result.items,
+        }),
+      ),
+  );
 
   private get currentFiles(): string[] {
     return this.fileState?.multiFiles.outputFiles ?? [];
@@ -171,39 +167,6 @@ export class OutputFilesSection extends LitElement {
 
   private get currentExpanded(): boolean {
     return this.fileState?.outputFilesActive ?? false;
-  }
-
-  private initializeSortable(): void {
-    if (this.sortable || !this.fileListElement) return;
-    this.sortable = new Sortable(this.fileListElement, {
-      animation: 150,
-      onEnd: (event) => this.handleSortEnd(event),
-    });
-  }
-
-  private destroySortable(): void {
-    this.sortable?.destroy();
-    this.sortable = null;
-  }
-
-  private handleSortEnd(event: unknown): void {
-    const { oldIndex, newIndex } = (event ?? {}) as SortableDragEvent;
-    if (
-      oldIndex === null ||
-      oldIndex === undefined ||
-      newIndex === null ||
-      newIndex === undefined
-    ) {
-      return;
-    }
-
-    const current = [...this.currentFiles];
-    const [moved] = current.splice(oldIndex, 1);
-    current.splice(newIndex, 0, moved);
-
-    this.dispatchEvent(
-      MainViewEvents.filesReordered({ listId: 'outputFiles', files: current }),
-    );
   }
 
   private handleToggle(): void {
