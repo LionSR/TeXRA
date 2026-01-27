@@ -1,3 +1,7 @@
+/**
+ * SignInPrompt component - displays sign in button when user is not authenticated.
+ */
+
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -11,7 +15,7 @@ import { ProfileViewEvents } from '../events';
 
 @customElement('sign-in-prompt')
 export class SignInPrompt extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     profileViewStyles,
@@ -19,21 +23,14 @@ export class SignInPrompt extends LitElement {
       :host {
         display: block;
       }
-
-      .not-authenticated {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-medium);
-        align-items: flex-start;
-      }
     `,
   ];
 
-  private handleSignIn = (): void => {
+  private handleSignIn(): void {
     this.dispatchEvent(ProfileViewEvents.signIn());
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="not-authenticated">
         <p>You are not signed in to TeXRA.</p>
@@ -43,5 +40,11 @@ export class SignInPrompt extends LitElement {
         </vscode-button>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'sign-in-prompt': SignInPrompt;
   }
 }

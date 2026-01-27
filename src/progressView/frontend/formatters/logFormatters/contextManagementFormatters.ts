@@ -6,8 +6,14 @@
  * Uses Lit-native component.
  */
 
+// Local imports - shared schemas
+import {
+  ContextManagementDataSchema,
+  type LogMessageData,
+} from '@shared/schemas';
+
 // Local imports - Lit template utilities
-import { html, renderToElement } from '../litTemplates';
+import { html, type FormatResult } from '../litTemplates';
 
 // Local imports - formatter helpers
 import { formatTokens } from '../timestampUtils';
@@ -57,12 +63,12 @@ const ACTION_CONFIG: Record<
   },
 };
 
-/** Format context management event using Lit-native component. */
-export function formatContextManagement(
+/** Build context management items from data. */
+function buildContextManagementItems(
   data: unknown,
-  logId: string,
-): HTMLElement | null {
-  if (!data || typeof data !== 'object') {
+): { config: ActionConfig; items: ContextStatItem[] } | null {
+  const result = ContextManagementDataSchema.safeParse(data);
+  if (!result.success) {
     return null;
   }
 
@@ -76,12 +82,11 @@ export function formatContextManagement(
     originalMaxTokens,
     reducedMaxTokens,
     details,
-  } = data as Record<string, unknown>;
+  } = result.data;
 
-  const actionValue = typeof action === 'string' ? action : '';
-  const config: ActionConfig = ACTION_CONFIG[actionValue] || {
+  const config: ActionConfig = ACTION_CONFIG[action] || {
     icon: 'codicon-history',
-    label: actionValue || 'Context Management',
+    label: action || 'Context Management',
     color: 'var(--vscode-foreground)',
   };
 
@@ -90,9 +95,9 @@ export function formatContextManagement(
 
   // For max_tokens_reduced, show the reduction
   if (
-    actionValue === 'max_tokens_reduced' &&
-    typeof originalMaxTokens === 'number' &&
-    typeof reducedMaxTokens === 'number'
+    action === 'max_tokens_reduced' &&
+    originalMaxTokens !== undefined &&
+    reducedMaxTokens !== undefined
   ) {
     items.push({
       icon: 'codicon-arrow-down',
@@ -102,11 +107,7 @@ export function formatContextManagement(
   }
 
   // For clearing actions, show tokens freed
-  if (
-    TOKENS_FREED_ACTIONS.has(actionValue) &&
-    typeof tokensBefore === 'number' &&
-    typeof tokensAfter === 'number'
-  ) {
+  if (TOKENS_FREED_ACTIONS.has(action) && tokensAfter !== undefined) {
     const tokensFreed = tokensBefore - tokensAfter;
     if (tokensFreed > 0) {
       items.push({
@@ -118,29 +119,25 @@ export function formatContextManagement(
   }
 
   // Show context utilization
-  if (typeof utilizationBefore === 'number') {
-    const utilizationDisplay =
-      typeof utilizationAfter === 'number'
-        ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
-        : `${utilizationBefore.toFixed(1)}%`;
-    items.push({
-      icon: 'codicon-pie-chart',
-      label: 'Context utilization',
-      value: utilizationDisplay,
-    });
-  }
+  const utilizationDisplay =
+    utilizationAfter !== undefined
+      ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
+      : `${utilizationBefore.toFixed(1)}%`;
+  items.push({
+    icon: 'codicon-pie-chart',
+    label: 'Context utilization',
+    value: utilizationDisplay,
+  });
 
   // Show context window
-  if (typeof contextWindow === 'number') {
-    items.push({
-      icon: 'codicon-window',
-      label: 'Context window',
-      value: formatTokens(contextWindow),
-    });
-  }
+  items.push({
+    icon: 'codicon-window',
+    label: 'Context window',
+    value: formatTokens(contextWindow),
+  });
 
   // Show details if present
-  if (typeof details === 'string' && details) {
+  if (details) {
     items.push({
       icon: 'codicon-info',
       label: 'Details',
@@ -148,13 +145,25 @@ export function formatContextManagement(
     });
   }
 
-  if (items.length === 0) return null;
+  return { config, items };
+}
 
-  return renderToElement(html`
+/** Format context management event as TemplateResult. */
+export function formatContextManagementTemplate(
+  message: LogMessageData,
+  _options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, data } = message;
+  const result = buildContextManagementItems(data);
+  if (!result) return null;
+
+  const { config, items } = result;
+
+  return html`
     <context-management
-      .logId=${logId}
+      .logId=${id}
       .config=${config}
       .items=${items}
     ></context-management>
-  `);
+  `;
 }

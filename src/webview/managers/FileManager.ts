@@ -1,38 +1,26 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
-// Local imports - shared utils
-import { normalizeFilePath } from '@shared/utils/path';
-
-// Local imports - webview
 import { getAgent } from '@agent/index';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getIncludedExtensions,
   ExtensionCategory,
 } from '@common/files/fileTypeUtils';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
-
-// Local imports - logging
 import * as logger from '@logger/logUtils';
-
-// Local imports - utils
+import { normalizeFilePath } from '@shared/utils/path';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
 
-// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
-
-// Local imports - types
 import type {
   FileSelectionMessage,
   FileSelectedMessage,
@@ -291,9 +279,6 @@ export class FileManager extends BaseWebviewManager {
     ]);
     const refreshedFiles = { input, reference, auxiliary, media };
 
-    // Send all single file updates in a single batch message
-    // This allows the webview to wrap all updates in a single blockSave()
-    // preventing race conditions where change events fire between updates
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
       inputFiles: refreshedFiles.input,
@@ -319,13 +304,11 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
 
-    // Handle edited file type separately due to base file validation
     if (fileType === 'edited') {
       await this.handleGetCurrentEditedFile(currentOpenFile, message.baseFile);
       return;
     }
 
-    // Handle base and other file types
     const filePathToSelect = await this.resolveFilePathForType(
       currentOpenFile,
       fileType,
@@ -337,13 +320,9 @@ export class FileManager extends BaseWebviewManager {
       fileType,
     });
 
-    await this._maybeSelectCommitFromDiffFile(currentOpenFile);
+    await this.maybeSelectCommitFromDiffFile(currentOpenFile);
   }
 
-  /**
-   * Handle selection of current file as edited file.
-   * Validates that the file is a valid edited version of the base file.
-   */
   private async handleGetCurrentEditedFile(
     currentOpenFile: string,
     baseFile?: string,
@@ -376,12 +355,9 @@ export class FileManager extends BaseWebviewManager {
       fileType: 'edited',
     });
 
-    await this._maybeSelectCommitFromDiffFile(currentOpenFile);
+    await this.maybeSelectCommitFromDiffFile(currentOpenFile);
   }
 
-  /**
-   * Resolve file path for base file type, deriving from latex diff if applicable.
-   */
   private async resolveFilePathForType(
     currentOpenFile: string,
     fileType: string,
@@ -414,9 +390,7 @@ export class FileManager extends BaseWebviewManager {
     return derivedBaseFile;
   }
 
-  private async _maybeSelectCommitFromDiffFile(
-    filePath: string,
-  ): Promise<void> {
+  private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
     const fileName = path.basename(filePath);
     const latexDiffMetadata = parseLatexDiffMetadata(filePath);
     if (!latexDiffMetadata) {
@@ -448,10 +422,6 @@ export class FileManager extends BaseWebviewManager {
 
   async handleAddOpenedFiles(fileType: string): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
-
-    // Filter files by allowed extensions for the target file type
-    // Extensions from config have leading dots (e.g., '.tex'), strip them for comparison
-    // Lowercase both sides for case-insensitive matching
     const allowedExtensions = getIncludedExtensions(
       fileType as ExtensionCategory,
     ).map((ext) => ext.replace('.', '').toLowerCase());
@@ -550,7 +520,6 @@ export class FileManager extends BaseWebviewManager {
       return [];
     }
 
-    // Extract file URIs from all tabs (text files and custom editors like images/PDFs)
     const fileUris = vscode.window.tabGroups.all
       .flatMap((group) => group.tabs)
       .map((tab) => tab.input)
@@ -562,7 +531,6 @@ export class FileManager extends BaseWebviewManager {
       .map((input) => input.uri)
       .filter((uri) => uri.scheme === 'file');
 
-    // Convert to relative paths and deduplicate
     const relevantFiles = [
       ...new Set(
         fileUris.map((uri) =>

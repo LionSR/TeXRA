@@ -1,13 +1,17 @@
 /**
  * LogList component - declarative log rendering.
  *
- * Receives data via properties and delegates rendering to TaskGroupList.
+ * Consumes streamStateContext to get groups, messages, activeRunId, and isToolUse.
+ * Delegates rendering to TaskGroupList.
  * Handles event delegation for clicks, toggles, and file links.
+ *
+ * Uses Shadow DOM with modular styles for encapsulation.
  */
 
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, query, state } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
 import './TaskGroupList';
@@ -17,12 +21,29 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
-import { scrollToBottom } from '@shared/utils/dom';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
+// Local imports - shared styles
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+
 // Local imports - progress view constants
-import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { COMMANDS } from '../constants';
+
+// Local imports - progress view contexts
+import {
+  streamStateContext,
+  type StreamContextValue,
+} from '../contexts/streamContexts';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
+
+// Local imports - progress view formatters
+import { getCopyContent } from '../formatters/copyContentStore';
+
+// Local imports - progress view components (type-only for @query reference)
+import type { TaskGroupList } from './TaskGroupList';
 
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
@@ -34,11 +55,38 @@ type LogListState = {
 
 @customElement('log-list')
 export class LogList extends LitElement {
-  // Reactive properties - passed from parent
-  @property({ type: Array }) groups: TaskGroup[] = [];
-  @property({ type: Array }) messages: LogMessageData[] = [];
-  @property({ type: String }) activeRunId: string | null = null;
-  @property({ type: Boolean }) isToolUse = false;
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    ...logStyles,
+  ];
+
+  // Context consumption - state provided by ProgressApp
+  @consume({ context: streamStateContext, subscribe: true })
+  @state()
+  private streamContext?: StreamContextValue;
+
+  // Computed getters from context
+  private get groups(): TaskGroup[] {
+    return this.streamContext?.streamState?.taskGroups ?? [];
+  }
+
+  private get messages(): LogMessageData[] {
+    return this.streamContext?.streamState?.logs ?? [];
+  }
+
+  private get activeRunId(): string | null {
+    return this.streamContext?.runId ?? null;
+  }
+
+  private get isToolUse(): boolean {
+    return this.streamContext?.isToolUse ?? false;
+  }
+
+  /** Reference to child TaskGroupList for scroll operations */
+  @query('task-group-list')
+  private taskGroupList?: TaskGroupList;
 
   // Non-reactive state
   private stateManager: WebviewStateManager<LogListState>;
@@ -54,29 +102,18 @@ export class LogList extends LitElement {
     }
   }
 
-  protected override createRenderRoot(): HTMLElement {
-    // Use Light DOM for CSS compatibility with existing styles
-    return this;
-  }
-
   override connectedCallback(): void {
     super.connectedCallback();
     // Use component-level listeners instead of document-level
-    // Since LogList uses Light DOM, events bubble naturally to this element
+    // Events bubble to the host element for delegated handling
     // Note: Toggle icon rotation is handled by CSS via details[open] selector
-    this.addEventListener('click', this.handleClickEvent as EventListener);
-    this.addEventListener(
-      'file-click',
-      this.handleFileClickEvent as EventListener,
-    );
+    this.addEventListener('click', this.handleClickEvent);
+    this.addEventListener('file-click', this.handleFileClickEvent);
   }
 
   override disconnectedCallback(): void {
-    this.removeEventListener('click', this.handleClickEvent as EventListener);
-    this.removeEventListener(
-      'file-click',
-      this.handleFileClickEvent as EventListener,
-    );
+    this.removeEventListener('click', this.handleClickEvent);
+    this.removeEventListener('file-click', this.handleFileClickEvent);
     super.disconnectedCallback();
   }
 
@@ -93,11 +130,8 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render
-    const container = this.querySelector(`#${ELEMENT_IDS.LOG_CONTENT}`);
-    if (container instanceof HTMLElement) {
-      scrollToBottom(container);
-    }
+    // Scroll to bottom after render via public method on child component
+    this.taskGroupList?.scrollToBottom();
   }
 
   // ============================================================
@@ -115,11 +149,9 @@ export class LogList extends LitElement {
   }
 
   /** Handle click events for file links, copy buttons, etc. */
-  private handleClickEvent = async (event: MouseEvent): Promise<void> => {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    const fileLink = target.closest('.file-link') as HTMLElement | null;
+  private async handleClickEvent(event: Event): Promise<void> {
+    if (!(event instanceof MouseEvent)) return;
+    const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
       postMessage(COMMANDS.OPEN_FILE, {
         file: fileLink.dataset.file,
@@ -130,63 +162,63 @@ export class LogList extends LitElement {
       return;
     }
 
-    const latexRef = target.closest('.latex-ref') as HTMLElement | null;
+    const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
       postMessage(COMMANDS.OPEN_LABEL, { label: latexRef.dataset.label });
       return;
     }
 
-    const copyButton = target.closest(
-      '.banner-content-copy',
-    ) as HTMLElement | null;
+    // Handle copy buttons - content is stored in the copy registry
+    const copyButton = this.findTargetInPath<HTMLElement>(
+      event,
+      '[data-copy-id]',
+    );
     if (copyButton) {
       event.stopPropagation();
-      const contentElem = copyButton
-        .closest('.banner-details')
-        ?.querySelector('.banner-content') as HTMLElement | null;
-      if (!contentElem) return;
-      const textToCopy =
-        contentElem.dataset.rawContent ?? contentElem.textContent ?? '';
+      const copyId = copyButton.dataset.copyId ?? '';
+      const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
       if (!textToCopy.trim()) return;
 
+      const isCodeBlock = copyButton.dataset.copyType === 'code-block';
       await copyWithFeedback(copyButton, textToCopy, {
         defaultTitle:
           copyButton.dataset.defaultTitle ||
           copyButton.getAttribute('title') ||
-          'Copy content',
+          'Copy to clipboard',
         successTitle: copyButton.dataset.successTitle || 'Copied!',
+        successClass: isCodeBlock ? 'copied' : undefined,
       });
-      return;
     }
+  }
 
-    const codeBlockCopy = target.closest(
-      '.code-block-copy',
-    ) as HTMLElement | null;
-    if (codeBlockCopy) {
-      event.stopPropagation();
-      const codeBlock = codeBlockCopy.closest('.code-block');
-      const codeElem = codeBlock?.querySelector('code');
-      if (!codeElem) return;
-      const textToCopy = codeElem.textContent ?? '';
-      if (!textToCopy.trim()) return;
-      await copyWithFeedback(codeBlockCopy, textToCopy, {
-        defaultTitle: 'Copy to clipboard',
-        successTitle: 'Copied!',
-        successClass: 'copied',
-      });
+  private findTargetInPath<T extends Element>(
+    event: Event,
+    selector: string,
+  ): T | null {
+    for (const node of event.composedPath()) {
+      if (node instanceof Element && node.matches(selector)) {
+        return node as T;
+      }
     }
-  };
+    return null;
+  }
 
   /** Handle file-click events from Shadow DOM components. */
-  private handleFileClickEvent = (
-    event: CustomEvent<{ file: string; line?: number }>,
-  ): void => {
-    const { file, line } = event.detail;
+  private handleFileClickEvent(event: Event): void {
+    const { file, line } = (
+      event as CustomEvent<{ file: string; line?: number }>
+    ).detail;
     if (file) {
       postMessage(COMMANDS.OPEN_FILE, {
         file,
         ...(line !== undefined && { line }),
       });
     }
-  };
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'log-list': LogList;
+  }
 }

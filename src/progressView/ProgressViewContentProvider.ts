@@ -1,7 +1,5 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
 import { BaseViewContentProvider } from '@common/webview';
 
 export class ProgressViewContentProvider extends BaseViewContentProvider {
@@ -20,10 +18,6 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
     return {
       progressBundleUri: webview.asWebviewUri(
         vscode.Uri.joinPath(distPath, 'bundle.js'),
-      ),
-      // Bundled CSS includes KaTeX styles and fonts
-      bundledStyleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(distPath, 'index.css'),
       ),
     };
   }

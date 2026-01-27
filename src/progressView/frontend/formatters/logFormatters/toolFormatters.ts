@@ -1,6 +1,10 @@
 /**
  * Tool-style formatters for tool use and web search messages.
  * Uses Lit templates for declarative DOM construction.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Local imports - Lit template utilities
@@ -8,8 +12,8 @@ import {
   html,
   classMap,
   ifDefined,
-  renderToElement,
   type TemplateResult,
+  type FormatResult,
 } from '../litTemplates';
 
 // Local imports - shared schemas
@@ -35,7 +39,7 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
-import type { WebSearchPayload } from '@shared/schemas';
+import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
 
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
@@ -105,13 +109,12 @@ function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   return 'Tool Use';
 }
 
-/** Format tool use log entry. */
-export function formatToolUse(
-  data: unknown,
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-): HTMLElement | null {
+/** Format tool use log entry as TemplateResult. */
+export function formatToolUseTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
   if (!normalizedToolLog) return null;
 
@@ -290,44 +293,30 @@ export function formatToolUse(
       : joinWithSeparator(sections);
 
   const fullTimestamp = new Date(timestamp).toISOString();
+  const shouldOpen = options?.defaultOpen ?? false;
+  // prettier-ignore
+  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
-  const template = html`
-    <details
-      class=${classMap({
-        'banner-details': true,
-        'tool-use-details': true,
-        'tool-use-error': showAsError,
-        'tool-use-user-feedback': isUserFeedback,
-      })}
-    >
-      ${buildDetailsSummary({
-        iconClass,
-        label: titleText,
-        labelClass: 'tool-use-title',
-        includeIconClass: false,
-        expanded: false,
-      })}
-      <div
-        class="banner-content log-entry-content"
-        data-log-id=${ifDefined(logId)}
-        data-group-id=${ifDefined(groupId)}
-        data-timestamp=${ifDefined(fullTimestamp)}
-      >
-        ${contentTemplate}
-      </div>
-    </details>
-  `;
-
-  return renderToElement(template);
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': showAsError,
+    'tool-use-user-feedback': isUserFeedback,
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass,
+    label: titleText,
+    labelClass: 'tool-use-title',
+    includeIconClass: false,
+  })}${bannerContentTemplate}</details>`;
 }
 
-/** Format web search results from native provider tools. */
-export function formatWebSearch(
-  data: unknown,
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-): HTMLElement | null {
+/** Format web search results as TemplateResult. */
+export function formatWebSearchTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, data } = message;
   if (!data || typeof data !== 'object') return null;
 
   const { query, results, provider, status } = data as WebSearchPayload;
@@ -351,15 +340,12 @@ export function formatWebSearch(
   }
 
   if (resultCount > 0) {
-    const resultsTemplate = html`
-      <span class="file-list-summary">Results (${resultCount})</span>
-      <ul class="detail-list">
-        ${(results ?? []).map(
-          // prettier-ignore
-          (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
-        )}
-      </ul>
-    `;
+    // prettier-ignore
+    const resultItems = (results ?? []).map(
+      (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+    );
+    // prettier-ignore
+    const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
     sections.push(buildToolUseSection('Sources:', resultsTemplate));
   } else if (statusKey === 'completed') {
     sections.push(
@@ -376,32 +362,19 @@ export function formatWebSearch(
       : joinWithSeparator(sections);
 
   const fullTimestamp = new Date(timestamp).toISOString();
+  const shouldOpen = options?.defaultOpen ?? false;
+  // prettier-ignore
+  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
-  const template = html`
-    <details
-      class=${classMap({
-        'banner-details': true,
-        'tool-use-details': true,
-        'tool-use-error': statusKey === 'failed',
-      })}
-    >
-      ${buildDetailsSummary({
-        iconClass,
-        label: titleText,
-        labelClass: 'tool-use-title',
-        includeIconClass: false,
-        expanded: false,
-      })}
-      <div
-        class="banner-content log-entry-content"
-        data-log-id=${ifDefined(logId)}
-        data-group-id=${ifDefined(groupId)}
-        data-timestamp=${ifDefined(fullTimestamp)}
-      >
-        ${contentTemplate}
-      </div>
-    </details>
-  `;
-
-  return renderToElement(template);
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': statusKey === 'failed',
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass,
+    label: titleText,
+    labelClass: 'tool-use-title',
+    includeIconClass: false,
+  })}${bannerContentTemplate}</details>`;
 }

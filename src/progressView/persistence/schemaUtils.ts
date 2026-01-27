@@ -1,6 +1,51 @@
 // Third-party imports
 import { z } from 'zod';
 
+// =============================================================================
+// Generic Schema Factories for Persistence
+// =============================================================================
+
+/**
+ * Factory for creating schemas that transform Record<string, T> to Map<string, T>.
+ * Used for deserializing persisted map data with schema validation.
+ *
+ * @param itemSchema - Zod schema for individual values
+ * @returns Schema that parses Record and transforms to Map, or empty Map on failure
+ *
+ * @example
+ * const TaskGroupMapSchema = createRecordToMapSchema(TaskGroupSchema);
+ * const result = TaskGroupMapSchema.safeParse(data);
+ * // result.data is Map<string, TaskGroup>
+ */
+export function createRecordToMapSchema<T>(
+  itemSchema: z.ZodType<T>,
+): z.ZodType<Map<string, T>> {
+  return z
+    .record(z.string(), itemSchema)
+    .transform((record) => new Map(Object.entries(record)))
+    .catch(new Map());
+}
+
+/**
+ * Factory for creating schemas that validate arrays with fallback to empty array.
+ * Used for deserializing persisted array data with schema validation.
+ *
+ * @param itemSchema - Zod schema for individual items
+ * @returns Schema that parses array, or empty array on failure
+ *
+ * @example
+ * const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
+ * const result = LogMessagesSchema.safeParse(data);
+ * // result.data is LogMessageData[]
+ */
+export function createArraySchema<T>(itemSchema: z.ZodType<T>): z.ZodType<T[]> {
+  return z.array(itemSchema).catch([]);
+}
+
+// =============================================================================
+// Round/Run Map Schema Factories (for nested structures)
+// =============================================================================
+
 /**
  * Coerces and validates integer round keys from string record keys.
  */

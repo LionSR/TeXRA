@@ -1,35 +1,32 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import { XMLParser } from 'fast-xml-parser';
 
-// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
+import replacementEngine, {
   applyReplacements,
   getReplacementsByCategory,
 } from '@replacement/engine';
-import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, TaskRunFileService, getFileDirectory } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import {
-  DOCUMENT_NAME_REGEX,
+  AbsoluteFS,
+  getFileDirectory,
+  TaskRunFileService,
+  type FileLocation,
+} from '@utils/files';
+import {
   addCdataToTags,
   addCdataToTagsMultiple,
+  DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
   extractDocument,
   extractDocuments,
 } from '@utils/text/xmlUtils';
-
-// Local file imports
 import type { OutputFileInfo } from '@shared/schemas';
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
@@ -71,7 +68,6 @@ export class XmlOutputManager {
     return content;
   }
 
-  /** Mapping of extraction methods to their log messages */
   private static readonly EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
     named: 'from named document tag',
     simple: 'using fallback method',
@@ -127,20 +123,17 @@ export class XmlOutputManager {
     const { name } = path.parse(outputLocation.absolutePath);
     const texFilename = `${name}.tex`;
 
-    // Derive relative path for the tex file (same directory as output)
     const outputDir = getFileDirectory(outputLocation);
     const texRelativePath = outputDir
       ? path.join(outputDir, texFilename)
       : texFilename;
 
-    // Create FileLocation for tex file (run-storage aware)
     const texLocation = this.fileService.createLocation(texRelativePath);
 
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    // First, try to extract named document matching input file (prioritized)
     const namedDocumentContent = this.extractDocumentbyRegex(
       outputContent,
       documentTag,
@@ -163,22 +156,11 @@ export class XmlOutputManager {
     );
   }
 
-  /**
-   * Count the number of document tag occurrences with name attributes.
-   * Only counts documents that can be extracted (those with name="...").
-   *
-   * Note: Case-sensitive to match the primary extraction path (CDATA wrapping
-   * and XMLParser are both case-sensitive). This ensures the count reflects
-   * what can actually be extracted, avoiding false warnings.
-   */
+  /** Count document tag occurrences with name attributes (case-sensitive to match extraction). */
   private countDocumentTags(content: string): number {
     return content.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
   }
 
-  /**
-   * Log a warning when some or all documents failed to extract.
-   * Uses the existing missingOutputs message type to show the XML reminder.
-   */
   private warnPartialExtraction(
     outputLocation: FileLocation,
     expectedCount: number,
@@ -368,17 +350,15 @@ export class XmlOutputManager {
     const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
     let content = await this.processXmlContent(originalContent);
 
-    // Fix missing or misplaced closing tag
     const closeTag = `</${documentTag}>`;
     const openTag = `<${documentTag}>`;
     const hasOpenTag = content.includes(openTag);
     const hasCloseTag = content.includes(closeTag);
 
     if (hasOpenTag && !content.endsWith(closeTag)) {
-      // Remove any trailing content after close tag, or add missing close tag
-      content = hasCloseTag
-        ? content.replace(new RegExp(`${closeTag}.*$`, 's'), '')
-        : content;
+      if (hasCloseTag) {
+        content = content.replace(new RegExp(`${closeTag}.*$`, 's'), '');
+      }
       content += `\n${closeTag}`;
     }
 

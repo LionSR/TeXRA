@@ -10,78 +10,14 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
-import type {
-  SelectOption,
-  AgentOption,
-  ModelOption,
-  CommitOption,
-} from '@shared/types/selectOptions';
+import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // =============================================================================
-// GENERIC SELECT OPTIONS
+// PLACEHOLDER
 // =============================================================================
 
-/**
- * Render a placeholder option.
- */
-export function renderPlaceholder(
-  text = 'None',
-  value = '',
-): TemplateResult {
+function renderPlaceholder(text = 'None', value = ''): TemplateResult {
   return html`<vscode-option value=${value}>${text}</vscode-option>`;
-}
-
-/**
- * Render simple select options.
- */
-export function renderSelectOptions(
-  options: SelectOption[],
-  selectedValue: string,
-  placeholder?: string,
-): TemplateResult {
-  return html`
-    ${placeholder ? renderPlaceholder(placeholder) : nothing}
-    ${repeat(
-      options,
-      (opt) => opt.value,
-      (opt) => html`
-        <vscode-option
-          value=${opt.value}
-          ?selected=${opt.value === selectedValue}
-          ?disabled=${opt.disabled}
-        >
-          ${opt.label}
-        </vscode-option>
-      `,
-    )}
-  `;
-}
-
-// =============================================================================
-// FILE OPTIONS (sorted alphabetically)
-// =============================================================================
-
-/**
- * Render file path options sorted alphabetically.
- */
-export function renderFileOptions(
-  files: string[],
-  selectedValue: string,
-  placeholder = 'None',
-): TemplateResult {
-  const sorted = [...files].sort((a, b) => a.localeCompare(b));
-  return html`
-    ${renderPlaceholder(placeholder)}
-    ${repeat(
-      sorted,
-      (file) => file,
-      (file) => html`
-        <vscode-option value=${file} ?selected=${file === selectedValue}>
-          ${file}
-        </vscode-option>
-      `,
-    )}
-  `;
 }
 
 // =============================================================================
@@ -91,7 +27,7 @@ export function renderFileOptions(
 /**
  * Build tooltip text for an agent option.
  */
-function buildAgentTooltip(opt: AgentOption): string {
+function buildAgentTooltip(opt: AgentOptionData): string {
   const hints: string[] = [];
 
   if (opt.isRemote) {
@@ -116,8 +52,8 @@ function buildAgentTooltip(opt: AgentOption): string {
 /**
  * Render a single agent option with decorators.
  */
-export function renderAgentOption(
-  opt: AgentOption,
+function renderAgentOption(
+  opt: AgentOptionData,
   selectedValue: string,
 ): TemplateResult {
   const isSelected = opt.value === selectedValue;
@@ -127,7 +63,6 @@ export function renderAgentOption(
     <vscode-option
       value=${opt.value}
       ?selected=${isSelected}
-      ?disabled=${opt.disabled}
       title=${tooltip || nothing}
       data-label=${opt.label}
       data-multiple=${opt.isMultiple ? 'true' : nothing}
@@ -154,7 +89,7 @@ export function renderAgentOption(
  * Render agent options with decorators.
  */
 export function renderAgentOptions(
-  options: AgentOption[],
+  options: AgentOptionData[],
   selectedValue: string,
   placeholder = 'Select agent',
 ): TemplateResult {
@@ -175,8 +110,8 @@ export function renderAgentOptions(
 /**
  * Render a single model option with provider decoration.
  */
-export function renderModelOption(
-  opt: ModelOption,
+function renderModelOption(
+  opt: ModelOptionData,
   selectedValue: string,
 ): TemplateResult {
   const isSelected = opt.value === selectedValue;
@@ -206,7 +141,7 @@ export function renderModelOption(
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
     >
       ${display}${opt.requiresKey
-        ? html`<span class="api-key-missing"> \u2717</span>`
+        ? html`<span class="api-key-missing"> ✗</span>`
         : nothing}
     </vscode-option>
   `;
@@ -216,7 +151,7 @@ export function renderModelOption(
  * Render model options with provider decorations.
  */
 export function renderModelOptions(
-  options: ModelOption[],
+  options: ModelOptionData[],
   selectedValue: string,
   placeholder = 'Select model',
 ): TemplateResult {
@@ -226,42 +161,6 @@ export function renderModelOptions(
       options,
       (opt) => opt.value,
       (opt) => renderModelOption(opt, selectedValue),
-    )}
-  `;
-}
-
-// =============================================================================
-// COMMIT OPTIONS
-// =============================================================================
-
-/**
- * Render git commit options.
- */
-export function renderCommitOptions(
-  commits: CommitOption[],
-  selectedValue: string,
-  isGitRepo: boolean,
-): TemplateResult {
-  if (!isGitRepo) {
-    return html`<vscode-option value="">Not a Git repository</vscode-option>`;
-  }
-
-  // Ensure HEAD is included
-  const hasHead = commits.some((c) => c.hash === 'HEAD');
-  const entries = hasHead ? commits : [{ hash: 'HEAD', label: 'HEAD' }, ...commits];
-
-  return html`
-    ${repeat(
-      entries,
-      (commit) => commit.hash,
-      (commit) => html`
-        <vscode-option
-          value=${commit.hash}
-          ?selected=${commit.hash === selectedValue}
-        >
-          ${commit.label}
-        </vscode-option>
-      `,
     )}
   `;
 }

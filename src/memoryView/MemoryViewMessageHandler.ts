@@ -1,18 +1,15 @@
-// Standard library imports
+/**
+ * Schema-driven message handler for MemoryView.
+ *
+ * Uses discriminated union validation at dispatch point (single safeParse)
+ * with typed handler registry for type-safe message handling.
+ */
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { showLoggedErrorMessage } from '@common/errors';
-import {
-  BaseViewMessageHandler,
-  type MessageHandler,
-  MEMORY_VIEW_COMMANDS,
-} from '@common/webview';
-
-// Local imports - shared memory constants and utilities
+import { MEMORY_VIEW_COMMANDS } from '@common/webview';
+import * as logger from '@logger/logUtils';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PREVIEW_LINES,
@@ -23,51 +20,89 @@ import {
   relativeToDisplayPath,
   resolveMemoryStoragePath,
 } from '@tools/memory/memoryUtils';
-
-// Local imports - storage
 import { StorageFS } from '@utils/files';
-
-// Local imports - config
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
-
-// Local imports - schemas
 import {
-  MemoryPathMessageSchema,
-  MemoryDeleteMessageSchema,
-  MemoryEnabledMessageSchema,
-} from '@webview/types/messages';
+  dispatchMemoryViewInbound,
+  type MemoryViewInboundHandlerRegistry,
+  type MemoryViewInboundMessage,
+  type MemoryViewItem,
+} from '@shared/schemas/memoryViewMessages';
 
-// Local imports - shared schemas
-import type { MemoryViewItem } from '@shared/schemas';
+// Type helper for extracting specific message types
+type MessageFor<C extends MemoryViewInboundMessage['command']> = Extract<
+  MemoryViewInboundMessage,
+  { command: C }
+>;
 
-export class MemoryViewMessageHandler extends BaseViewMessageHandler<
-  vscode.WebviewView | vscode.WebviewPanel
-> {
+export class MemoryViewMessageHandler {
+  private readonly channel = 'MemoryViewMessageHandler';
+  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
+  private readonly handlers: MemoryViewInboundHandlerRegistry;
+
   constructor(_context: vscode.ExtensionContext) {
-    super('MemoryView');
+    logger.initialize(this.channel);
+    this.handlers = this.createHandlers();
   }
 
-  protected createHandlers(): Record<
-    string,
-    MessageHandler<vscode.WebviewView | vscode.WebviewPanel>
-  > {
+  private getActiveView():
+    | vscode.WebviewView
+    | vscode.WebviewPanel
+    | undefined {
+    return this._activeView;
+  }
+
+  private createHandlers(): MemoryViewInboundHandlerRegistry {
     return {
-      [MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA]:
-        this.handleGetMemoryData.bind(this),
-      [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE]:
-        this.handleOpenMemoryFile.bind(this),
-      [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
-        this.handleOpenMemoryFolder.bind(this),
-      [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
-      [MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED]:
-        this.handleGetMemoryEnabled.bind(this),
-      [MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
-        this.handleSetMemoryEnabled.bind(this),
+      [MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA]: () => this.handleGetMemoryData(),
+      [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (data) =>
+        this.handleOpenMemoryFile(data),
+      [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]: () =>
+        this.handleOpenMemoryFolder(),
+      [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]: (data) =>
+        this.handleDeleteMemory(data),
+      [MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED]: () =>
+        this.handleGetMemoryEnabled(),
+      [MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (data) =>
+        this.handleSetMemoryEnabled(data),
     };
   }
+
+  public async handleMessage(
+    message: unknown,
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    this._activeView = webviewView;
+
+    const handled = dispatchMemoryViewInbound(
+      message,
+      this.handlers,
+      (error) => {
+        logger.debug(this.channel, 'Message validation failed', {
+          data: error,
+        });
+      },
+    );
+
+    if (
+      !handled &&
+      message &&
+      typeof message === 'object' &&
+      'command' in message
+    ) {
+      logger.warn(
+        this.channel,
+        `Unhandled command: ${(message as { command: string }).command}`,
+      );
+    }
+  }
+
+  // ============================================================
+  // Public methods for external access
+  // ============================================================
 
   public async sendMemoryData(webview: vscode.Webview): Promise<void> {
     const items = await this.loadMemoryItems();
@@ -77,36 +112,40 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handleGetMemoryData(
-    _message: unknown,
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): Promise<void> {
-    await this.sendMemoryData(view.webview);
+  public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
+    const enabled = getToolUseMemoryEnabled();
+    await webview.postMessage({
+      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled,
+    });
+  }
+
+  // ============================================================
+  // Handler implementations
+  // ============================================================
+
+  private async handleGetMemoryData(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendMemoryData(view.webview);
+    }
   }
 
   private async handleOpenMemoryFile(
-    message: unknown,
-    _view: vscode.WebviewView | vscode.WebviewPanel,
+    data: MessageFor<typeof MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE>,
   ): Promise<void> {
-    await this.withValidatedMessage(
-      MemoryPathMessageSchema,
-      message,
-      'openMemoryFile',
-      async ({ storagePath }) => {
-        try {
-          const resolvedPath = resolveMemoryStoragePath(storagePath);
-          const absolutePath = StorageFS.fullPath(resolvedPath);
-          const doc = await vscode.workspace.openTextDocument(absolutePath);
-          await vscode.window.showTextDocument(doc, { preview: false });
-        } catch (error) {
-          await showLoggedErrorMessage(
-            this.channel,
-            'Failed to open memory file',
-            error,
-          );
-        }
-      },
-    );
+    try {
+      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+      const absolutePath = StorageFS.fullPath(resolvedPath);
+      const doc = await vscode.workspace.openTextDocument(absolutePath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open memory file',
+        error,
+      );
+    }
   }
 
   private async handleOpenMemoryFolder(): Promise<void> {
@@ -127,72 +166,59 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleDeleteMemory(
-    message: unknown,
-    view: vscode.WebviewView | vscode.WebviewPanel,
+    data: MessageFor<typeof MEMORY_VIEW_COMMANDS.DELETE_MEMORY>,
   ): Promise<void> {
-    await this.withValidatedMessage(
-      MemoryDeleteMessageSchema,
-      message,
-      'deleteMemory',
-      async ({ storagePath, displayPath }) => {
-        const confirm = await vscode.window.showWarningMessage(
-          `Delete "${displayPath}"?`,
-          { modal: true },
-          'Delete',
-        );
+    const view = this.getActiveView();
 
-        if (confirm !== 'Delete') {
-          return;
-        }
-
-        try {
-          const resolvedPath = resolveMemoryStoragePath(storagePath);
-          await StorageFS.delete(resolvedPath, { recursive: true });
-        } catch (error) {
-          await showLoggedErrorMessage(
-            this.channel,
-            'Failed to delete memory',
-            error,
-          );
-        } finally {
-          // Always refresh the memory list to reflect current state
-          await this.sendMemoryData(view.webview);
-        }
-      },
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete "${data.displayPath}"?`,
+      { modal: true },
+      'Delete',
     );
+
+    if (confirm !== 'Delete') {
+      return;
+    }
+
+    try {
+      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+      await StorageFS.delete(resolvedPath, { recursive: true });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to delete memory',
+        error,
+      );
+    } finally {
+      // Always refresh the memory list to reflect current state
+      if (view) {
+        await this.sendMemoryData(view.webview);
+      }
+    }
   }
 
-  public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = getToolUseMemoryEnabled();
-    await webview.postMessage({
-      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled,
-    });
-  }
-
-  private async handleGetMemoryEnabled(
-    _message: unknown,
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): Promise<void> {
-    await this.sendMemoryEnabled(view.webview);
+  private async handleGetMemoryEnabled(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.sendMemoryEnabled(view.webview);
+    }
   }
 
   private async handleSetMemoryEnabled(
-    message: unknown,
-    view: vscode.WebviewView | vscode.WebviewPanel,
+    data: MessageFor<typeof MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    await this.withValidatedMessage(
-      MemoryEnabledMessageSchema,
-      message,
-      'setMemoryEnabled',
-      async ({ enabled }) => {
-        await setToolUseMemoryEnabled(enabled);
+    const view = this.getActiveView();
+    await setToolUseMemoryEnabled(data.enabled);
 
-        // Confirm the update back to the webview
-        await this.sendMemoryEnabled(view.webview);
-      },
-    );
+    // Confirm the update back to the webview
+    if (view) {
+      await this.sendMemoryEnabled(view.webview);
+    }
   }
+
+  // ============================================================
+  // Helper methods
+  // ============================================================
 
   private async loadMemoryItems(): Promise<MemoryViewItem[]> {
     const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);

@@ -4,30 +4,32 @@
  */
 
 // Local imports - formatter helpers
-import {
-  applyOpenState,
-  safeFormat,
-  resolveOpenState,
-} from './baseLogFormatter';
+import { safeFormat, resolveOpenState } from './baseLogFormatter';
 import { getMarkdownRenderer } from './markdownRenderer';
 import {
-  formatBannerContent,
-  formatModelResponse,
+  formatBannerContentTemplate,
+  formatModelResponseTemplate,
 } from './logFormatters/bannerFormatters';
-import { formatToolUse, formatWebSearch } from './logFormatters/toolFormatters';
 import {
-  formatFileList,
-  formatMissingOutputs,
-  formatLatexdiff,
-  formatStatistics,
+  formatToolUseTemplate,
+  formatWebSearchTemplate,
+} from './logFormatters/toolFormatters';
+import {
+  formatFileListTemplate,
+  formatMissingOutputsTemplate,
+  formatLatexdiffTemplate,
+  formatStatisticsTemplate,
 } from './logFormatters/dataFormatters';
-import { formatContextManagement } from './logFormatters/contextManagementFormatters';
+import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
 import {
-  formatUserMessage,
-  formatProgressStatus,
-  formatError,
-  formatDefaultLogMessage,
+  formatUserMessageTemplate,
+  formatProgressStatusTemplate,
+  formatErrorTemplate,
+  formatDefaultLogMessageTemplate,
 } from './logFormatters/messageFormatters';
+
+// Local imports - Lit template utilities
+import { html, type TemplateResult, type FormatResult } from './litTemplates';
 
 // Local imports - shared schemas
 import type { LogMessageData, MessageType } from '@shared/schemas';
@@ -37,8 +39,14 @@ type LogFormatOptions = {
   defaultOpen?: boolean;
 };
 
-type FormatterFn = (message: LogMessageData) => HTMLElement | null;
-type FormatterMap = Record<string, FormatterFn | null | undefined>;
+type TemplateFormatterFn = (
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+) => FormatResult;
+type TemplateFormatterMap = Record<
+  string,
+  TemplateFormatterFn | null | undefined
+>;
 
 /**
  * Handles log entry formatting with markdown support.
@@ -46,13 +54,13 @@ type FormatterMap = Record<string, FormatterFn | null | undefined>;
  */
 export class LogEntryFormatter {
   private md: ReturnType<typeof getMarkdownRenderer> | null = null;
-  private _formatters: FormatterMap = {};
+  private _templateFormatters: TemplateFormatterMap = {};
   private _autoExpandedTypes: Set<MessageType> = new Set();
   private _nullableTypes: Set<MessageType> = new Set();
 
   constructor() {
     this._initializeMarkdown();
-    this._formatters = this._buildFormatterMap();
+    this._templateFormatters = this._buildTemplateFormatterMap();
     this._autoExpandedTypes = new Set(['thinking', 'scratchpad']);
     // Message types that return null when their formatter produces no result
     this._nullableTypes = new Set([
@@ -67,110 +75,82 @@ export class LogEntryFormatter {
     this.md = getMarkdownRenderer();
   }
 
-  _buildFormatterMap(): FormatterMap {
+  _buildTemplateFormatterMap(): TemplateFormatterMap {
     // Wrap formatter functions with error handling for graceful degradation
     const safe =
-      (fn: FormatterFn, label: string) =>
-      (m: LogMessageData): HTMLElement | null =>
-        safeFormat(() => fn(m), label);
+      (
+        fn: (
+          m: LogMessageData,
+          opts?: { defaultOpen?: boolean },
+        ) => FormatResult,
+        label: string,
+      ): TemplateFormatterFn =>
+      (m, opts): FormatResult =>
+        safeFormat(() => fn(m, opts), label);
 
     return {
-      // Collapsible content banners (use text directly)
-      thinking: safe(
-        (m) =>
-          formatBannerContent(m.text, 'Thinking', m.id, m.groupId, m.timestamp),
-        'thinking',
-      ),
-      scratchpad: safe(
-        (m) =>
-          formatBannerContent(
-            m.text,
-            'Scratchpad',
-            m.id,
-            m.groupId,
-            m.timestamp,
-          ),
-        'scratchpad',
-      ),
+      // Collapsible content banners
+      thinking: safe(formatBannerContentTemplate, 'thinking'),
+      scratchpad: safe(formatBannerContentTemplate, 'scratchpad'),
 
-      // Tool/search results (use data directly)
-      toolUse: safe(
-        (m) => formatToolUse(m.data, m.id, m.groupId, m.timestamp),
-        'tool use',
-      ),
-      webSearch: safe(
-        (m) => formatWebSearch(m.data, m.id, m.groupId, m.timestamp),
-        'web search',
-      ),
+      // Tool/search results
+      toolUse: safe(formatToolUseTemplate, 'tool use'),
+      webSearch: safe(formatWebSearchTemplate, 'web search'),
 
-      // Model response (use text directly)
-      modelResponse: safe(
-        (m) =>
-          formatModelResponse({
-            id: m.id,
-            groupId: m.groupId,
-            timestamp: m.timestamp,
-            verbose: m.verbose,
-            text: m.text,
-            level: m.level,
-          }),
-        'Assistant',
-      ),
+      // Model response
+      modelResponse: safe(formatModelResponseTemplate, 'Assistant'),
 
-      // Data formatters (use data directly)
-      fileList: safe((m) => formatFileList(m.data, m.text, m.id), 'file list'),
-      missingOutputs: safe(
-        (m) => formatMissingOutputs(m.data, m.id),
-        'missing outputs',
-      ),
-      latexdiff: safe((m) => formatLatexdiff(m.data, m.id), 'latexdiff'),
-      statistics: safe((m) => formatStatistics(m.data, m.id), 'statistics'),
+      // Data formatters
+      fileList: safe(formatFileListTemplate, 'file list'),
+      missingOutputs: safe(formatMissingOutputsTemplate, 'missing outputs'),
+      latexdiff: safe(formatLatexdiffTemplate, 'latexdiff'),
+      statistics: safe(formatStatisticsTemplate, 'statistics'),
       contextManagement: safe(
-        (m) => formatContextManagement(m.data, m.id),
+        formatContextManagementTemplate,
         'context management',
       ),
 
       // Special cases
       contextState: () => null, // Displayed in footer
-      userMessage: safe(
-        (m) => formatUserMessage(m.text, m.id, m.timestamp),
-        'user message',
-      ),
-      progressStatus: safe(formatProgressStatus, 'progress status'),
-      error: safe(formatError, 'error'),
+      userMessage: safe(formatUserMessageTemplate, 'user message'),
+      progressStatus: safe(formatProgressStatusTemplate, 'progress status'),
+      error: safe(formatErrorTemplate, 'error'),
     };
   }
 
-  /** Format a log entry with Markdown rendering for banner content. */
-  format(
+  /** Format a log entry as a TemplateResult for direct Lit rendering. */
+  formatTemplate(
     logMessage: LogMessageData,
     options: LogFormatOptions = {},
-  ): HTMLElement | null {
+  ): TemplateResult {
     const { messageType } = logMessage;
 
-    const formatter = messageType ? this._formatters[messageType] : null;
+    // Determine if details should be open
+    // Pass undefined (not false) so formatters can use their own defaults
+    const shouldBeOpen = resolveOpenState(
+      messageType ?? '',
+      options,
+      this._autoExpandedTypes,
+    );
+    const templateOptions = { defaultOpen: shouldBeOpen };
+
+    const formatter = messageType
+      ? this._templateFormatters[messageType]
+      : null;
 
     if (messageType && typeof formatter === 'function') {
-      const result = formatter(logMessage);
+      const result = formatter(logMessage, templateOptions);
       if (result) {
-        if (result instanceof HTMLElement) {
-          const openOverride = resolveOpenState(
-            messageType,
-            options,
-            this._autoExpandedTypes,
-          );
-          applyOpenState(result, openOverride);
-        }
         return result;
       }
 
       if (this._nullableTypes.has(messageType)) {
-        return null;
+        return html``;
       }
     }
 
     // Default formatting for regular log messages
-    return formatDefaultLogMessage(logMessage);
+    return formatDefaultLogMessageTemplate(logMessage) ?? html``;
   }
 }
 

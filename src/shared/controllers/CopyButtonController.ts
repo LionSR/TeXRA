@@ -6,7 +6,10 @@
  */
 
 // Local imports - shared utilities
-import { copyTextToClipboard, COPY_RESET_DELAY_MS } from '@shared/utils/clipboard';
+import {
+  copyTextToClipboard,
+  COPY_RESET_DELAY_MS,
+} from '@shared/utils/clipboard';
 
 // Third-party imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';

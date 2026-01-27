@@ -1,3 +1,8 @@
+/**
+ * SearchBar component - search input with navigation controls.
+ * Debounces input and dispatches search events to parent.
+ */
+
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -11,7 +16,7 @@ import { HistoryViewEvents } from '../events';
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {
-  static styles = [designTokens, codiconStyles, historyViewStyles];
+  static override styles = [designTokens, codiconStyles, historyViewStyles];
 
   @property({ type: String }) matchCount = '';
 
@@ -25,7 +30,7 @@ export class SearchBar extends LitElement {
     super.disconnectedCallback();
   }
 
-  private handleInput = (event: Event): void => {
+  private handleInput(event: Event): void {
     const target = event.target as HTMLInputElement | null;
     const term = target?.value?.trim() ?? '';
     if (this.searchTimeoutId) {
@@ -34,17 +39,17 @@ export class SearchBar extends LitElement {
     this.searchTimeoutId = setTimeout(() => {
       this.dispatchEvent(HistoryViewEvents.searchChange({ term }));
     }, 300);
-  };
+  }
 
-  private handleNext = (): void => {
+  private handleNext(): void {
     this.dispatchEvent(HistoryViewEvents.searchNext());
-  };
+  }
 
-  private handlePrev = (): void => {
+  private handlePrev(): void {
     this.dispatchEvent(HistoryViewEvents.searchPrev());
-  };
+  }
 
-  private handleKeydown = (event: KeyboardEvent): void => {
+  private handleKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (event.shiftKey) {
@@ -52,9 +57,9 @@ export class SearchBar extends LitElement {
     } else {
       this.handleNext();
     }
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="search-container">
         <vscode-textfield
@@ -83,5 +88,11 @@ export class SearchBar extends LitElement {
         </vscode-toolbar-container>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-search-bar': SearchBar;
   }
 }

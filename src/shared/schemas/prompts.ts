@@ -4,27 +4,23 @@ import { z } from 'zod';
 // Local imports
 import { AGENT_CATEGORY } from './agent';
 import {
-  BaseProposalFieldsSchema,
-  WorkflowSpecificFieldsSchema,
-} from './proposalFields';
-import {
   ProviderErrorPartialSchema,
   type ProviderErrorPartial,
 } from './errors';
 import { StreamTabIdSchema } from './identifiers';
+import {
+  BaseProposalFieldsSchema,
+  WorkflowSpecificFieldsSchema,
+} from './proposalFields';
 
-/**
- * Optional stream ID schema - allows empty string for cases where stream context
- * may not be available (e.g., approval requests during initialization).
- */
+/** Optional stream ID - allows empty string when stream context is unavailable */
 export const OptionalStreamIdSchema = z.union([
   StreamTabIdSchema,
   z.literal(''),
 ]);
 export type OptionalStreamId = z.infer<typeof OptionalStreamIdSchema>;
 
-/** Tool edit approval request prompt */
-export const ToolEditApprovalPromptSchema = z.strictObject({
+export const ToolEditPermissionSchema = z.strictObject({
   requestId: z.string(),
   path: z.string(),
   relativePath: z.string(),
@@ -35,33 +31,28 @@ export const ToolEditApprovalPromptSchema = z.strictObject({
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
 });
-export type ToolEditApprovalPrompt = z.infer<
-  typeof ToolEditApprovalPromptSchema
->;
+export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 
-/** Bash approval request prompt */
-export const BashApprovalPromptSchema = z.strictObject({
+export const BashPermissionSchema = z.strictObject({
   requestId: z.string(),
   command: z.string(),
   allowBypass: z.boolean(),
   streamId: OptionalStreamIdSchema,
 });
-export type BashApprovalPrompt = z.infer<typeof BashApprovalPromptSchema>;
+export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
-export const RetryRequestPromptSchema = z.strictObject({
+export const RetryPermissionSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
   errorDetails: ProviderErrorPartialSchema.optional(),
 });
-export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
+export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-/** Agent proposal actions */
 export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
 export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
 
-/** Message schema for agent proposal action from UI */
 export const AgentProposalActionMessageSchema = z.object({
   proposalId: z.string(),
   action: AgentProposalActionSchema,
@@ -71,62 +62,48 @@ export type AgentProposalActionMessage = z.infer<
   typeof AgentProposalActionMessageSchema
 >;
 
-/**
- * Workflow agent proposal - includes file fields for document processing.
- * Workflow agents receive files directly and process them.
- */
+/** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
   agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
   ...WorkflowSpecificFieldsSchema.shape,
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 
-/**
- * Tool-use agent proposal - no file fields.
- * Tool-use agents access files through their own tools (read_file, etc.).
- * File paths are mentioned in the instruction text.
- */
+/** Tool-use agent proposal - agents access files through their own tools */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
   agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
-/**
- * Discriminated union for agent proposals.
- * TypeScript will narrow the type based on agentCategory.
- */
 export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
 ]);
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
-/** Base prompt fields for UI display */
-const ProposalPromptBaseSchema = z.object({
+const ProposalPermissionBaseSchema = z.object({
   proposalId: z.string(),
   streamId: StreamTabIdSchema,
 });
 
-/** Workflow agent proposal prompt for UI display */
-export const WorkflowAgentProposalPromptSchema =
-  ProposalPromptBaseSchema.extend(WorkflowAgentProposalSchema.shape);
-export type WorkflowAgentProposalPrompt = z.infer<
-  typeof WorkflowAgentProposalPromptSchema
+export const WorkflowAgentProposalPermissionSchema =
+  ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
+export type WorkflowAgentProposalPermission = z.infer<
+  typeof WorkflowAgentProposalPermissionSchema
 >;
 
-/** Tool-use agent proposal prompt for UI display */
-export const ToolUseAgentProposalPromptSchema = ProposalPromptBaseSchema.extend(
-  ToolUseAgentProposalSchema.shape,
+export const ToolUseAgentProposalPermissionSchema =
+  ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
+export type ToolUseAgentProposalPermission = z.infer<
+  typeof ToolUseAgentProposalPermissionSchema
+>;
+
+export const AgentProposalPermissionSchema = z.discriminatedUnion(
+  'agentCategory',
+  [WorkflowAgentProposalPermissionSchema, ToolUseAgentProposalPermissionSchema],
 );
-export type ToolUseAgentProposalPrompt = z.infer<
-  typeof ToolUseAgentProposalPromptSchema
+export type AgentProposalPermission = z.infer<
+  typeof AgentProposalPermissionSchema
 >;
-
-/** Discriminated union for agent proposal prompts */
-export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
-  WorkflowAgentProposalPromptSchema,
-  ToolUseAgentProposalPromptSchema,
-]);
-export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
 
 export type { ProviderErrorPartial };
