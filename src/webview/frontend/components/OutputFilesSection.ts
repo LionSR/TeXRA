@@ -6,141 +6,70 @@
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
+import { SortableController } from '@shared/controllers/SortableController';
 import { MainViewEvents } from '../events';
+import {
+  fileStateContext,
+  type FileStateContextValue,
+} from '../contexts/mainViewContexts';
+import {
+  fileSelectLayoutStyles,
+  toggleStyles,
+  multiFilesStyles,
+} from '../styles/fileSelectStyles';
 
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
+  static override styles = [
+    fileSelectLayoutStyles,
+    toggleStyles,
+    multiFilesStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .file-select {
-      margin-bottom: var(--spacing-large);
-    }
+      .file-action-button {
+        width: var(--height-control);
+        height: var(--height-control);
+        min-width: var(--height-control);
+        min-height: var(--height-control);
+      }
+    `,
+  ];
 
-    .file-select-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: var(--spacing-small);
-      flex-wrap: nowrap;
-      line-height: 1.5;
-      gap: var(--spacing-small);
-    }
+  @consume({ context: fileStateContext, subscribe: true })
+  private fileState?: FileStateContextValue;
 
-    .file-select-label-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-small);
-      flex-wrap: nowrap;
-      flex: 1;
-      min-width: 0;
-      min-height: var(--height-control);
-    }
+  @query('.multiple-files-list')
+  private fileListElement?: HTMLElement;
 
-    .file-select-actions,
-    vscode-toolbar-container.file-select-actions {
-      flex-direction: column !important;
-      flex-wrap: nowrap;
-      margin-left: auto;
-    }
+  private sortableController = new SortableController(
+    this,
+    () => this.fileListElement,
+    () => this.currentFiles,
+    (result) =>
+      this.dispatchEvent(
+        MainViewEvents.filesReordered({
+          listId: 'outputFiles',
+          files: result.items,
+        }),
+      ),
+  );
 
-    .file-select-actions vscode-toolbar-button,
-    .file-action-button {
-      width: var(--height-control);
-      height: var(--height-control);
-      min-width: var(--height-control);
-      min-height: var(--height-control);
-    }
+  private get currentFiles(): string[] {
+    return this.fileState?.multiFiles.outputFiles ?? [];
+  }
 
-    .toggle-icon {
-      cursor: pointer;
-      user-select: none;
-      margin: 0;
-      position: relative;
-      padding: 0 var(--spacing-tiny);
-      color: var(--text-color);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .file-select[data-expanded='true'] .toggle-icon {
-      color: var(--vscode-foreground);
-    }
-
-    .optional-label {
-      color: var(--text-color);
-      font-weight: normal;
-      font-size: var(--font-size);
-      white-space: nowrap;
-      min-width: calc(var(--width-button-min) * 2);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .multiple-files-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-top: var(--spacing-small);
-      padding: 0;
-    }
-
-    .multiple-files-content {
-      width: 100%;
-      padding: 0;
-    }
-
-    .multiple-files-list {
-      background-color: var(--background-color);
-      border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
-      border-radius: var(--border-radius);
-      padding: var(--spacing-small);
-      font-size: var(--font-size);
-      max-height: var(--height-small);
-      overflow-y: auto;
-    }
-
-    .file-item {
-      padding: var(--spacing-tiny) var(--spacing-small);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .file-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-
-    .remove-button {
-      color: var(--vscode-errorForeground);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .file-list-placeholder {
-      color: var(--color-text-secondary);
-      font-style: italic;
-      padding: var(--spacing-tiny) var(--spacing-small);
-    }
-  `;
-
-  /** Whether the section is expanded */
-  @property({ type: Boolean }) expanded = false;
-
-  /** Output files list */
-  @property({ type: Array }) files: string[] = [];
+  private get currentExpanded(): boolean {
+    return this.fileState?.outputFilesActive ?? false;
+  }
 
   private handleToggle(): void {
     this.dispatchEvent(MainViewEvents.toggleList({ listId: 'outputFiles' }));
@@ -163,14 +92,14 @@ export class OutputFilesSection extends LitElement {
   }
 
   private renderFileList(): TemplateResult {
-    if (this.files.length === 0) {
+    if (this.currentFiles.length === 0) {
       return html`<div class="file-list-placeholder">
         No extra outputs selected. Click "Add" to choose files.
       </div>`;
     }
 
     return html`${repeat(
-      this.files,
+      this.currentFiles,
       (file) => file,
       (file) => html`
         <div class="file-item" data-path=${file}>
@@ -186,12 +115,12 @@ export class OutputFilesSection extends LitElement {
   }
 
   override render(): TemplateResult {
-    const chevronClass = this.expanded
+    const chevronClass = this.currentExpanded
       ? 'codicon-chevron-up'
       : 'codicon-chevron-down';
 
     return html`
-      <div class="file-select" data-expanded=${String(this.expanded)}>
+      <div class="file-select" data-expanded=${String(this.currentExpanded)}>
         <div class="file-select-header">
           <div class="file-select-label-group">
             <span
@@ -230,7 +159,9 @@ export class OutputFilesSection extends LitElement {
         <div
           id="outputFilesContainer"
           class="multiple-files-container"
-          style=${styleMap({ display: this.expanded ? 'block' : 'none' })}
+          style=${styleMap({
+            display: this.currentExpanded ? 'block' : 'none',
+          })}
         >
           <div class="multiple-files-content">
             <div id="outputFiles" class="multiple-files-list">

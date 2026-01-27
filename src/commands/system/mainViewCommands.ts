@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { computeAgentOptions, refresh } from '@agent/index';
+import { computeAgentOptionsData, refresh } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { computeModelOptions } from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -52,10 +52,10 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
       if (!webview) return;
 
       try {
-        const options = await computeModelOptions();
+        const optionsData = await computeModelOptionsData();
         webview.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          options,
+          optionsData,
         });
       } catch (error) {
         const message = toErrorMessage(error);
@@ -78,10 +78,10 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
 
       try {
         await refresh();
-        const options = await computeAgentOptions();
+        const optionsData = await computeAgentOptionsData();
         webview.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-          options,
+          optionsData,
         });
       } catch (error) {
         const message = toErrorMessage(error);
@@ -105,17 +105,17 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
 
       try {
         await refresh();
-        const [modelOptions, agentOptions] = await Promise.all([
-          computeModelOptions(),
-          computeAgentOptions(),
+        const [modelOptionsData, agentOptionsData] = await Promise.all([
+          computeModelOptionsData(),
+          computeAgentOptionsData(),
         ]);
         webview.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          options: modelOptions,
+          optionsData: modelOptionsData,
         });
         webview.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-          options: agentOptions,
+          optionsData: agentOptionsData,
         });
       } catch (error) {
         const message = toErrorMessage(error);

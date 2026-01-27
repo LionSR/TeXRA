@@ -1,12 +1,14 @@
 /**
  * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
  * Uses Lit templates for declarative DOM construction.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Third-party imports
 import { z } from 'zod';
-
-// Local imports - Lit template utilities
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
@@ -18,54 +20,43 @@ import {
   MissingOutputsPayloadSchema,
   parseDiffResultEntries,
   type ExtendedTokenUsageStats,
+  type LogMessageData,
 } from '@shared/schemas';
-import { html, ifDefined, renderToElement } from '../litTemplates';
+import { html, ifDefined, type FormatResult } from '../litTemplates';
 
 // Local imports - formatter helpers
 import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
-/** Format file list entry. */
-export function formatFileList(
-  data: unknown,
-  text: string,
-  logId: string,
-): HTMLElement | null {
+/** Format file list entry as TemplateResult. */
+export function formatFileListTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, data, text } = message;
   // Validate with Zod schema - renderer handles display field computation
   const parseResult = z.array(FileListEntrySchema).safeParse(data);
+  const shouldOpen = options?.defaultOpen ?? false;
 
   // Raw fallback when parsing fails
   if (!parseResult.success) {
-    return renderToElement(html`
-      <details class="banner-details file-list-details">
-        ${buildDetailsSummary({
-          iconClass: 'codicon-file',
-          label: 'Files (raw)',
-          labelClass: 'summary-text',
-          includeIconClass: false,
-        })}
-        <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
-          <pre>${text ?? ''}</pre>
-        </ul>
-      </details>
-    `);
+    // prettier-ignore
+    return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+      iconClass: 'codicon-file',
+      label: 'Files (raw)',
+      labelClass: 'summary-text',
+      includeIconClass: false,
+    })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></details>`;
   }
 
   const renderData = buildFileListRender(parseResult.data);
-
-  return renderToElement(html`
-    <details class="banner-details file-list-details">
-      ${buildDetailsSummary({
-        iconClass: 'codicon-file',
-        label: renderData?.summary ?? 'Files',
-        labelClass: 'summary-text',
-        includeIconClass: false,
-      })}
-      <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
-        ${renderData?.items ?? ''}
-      </ul>
-    </details>
-  `);
+  // prettier-ignore
+  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass: 'codicon-file',
+    label: renderData?.summary ?? 'Files',
+    labelClass: 'summary-text',
+    includeIconClass: false,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></details>`;
 }
 
 /** Render XML link template. */
@@ -75,11 +66,12 @@ function renderXmlLink(xmlFile: string, documentTag: string | null) {
   return html`<div class="xml-link-container"><i class="codicon codicon-file-code"></i> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile}>${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
 }
 
-/** Format missing outputs entry. */
-export function formatMissingOutputs(
-  data: unknown,
-  logId: string,
-): HTMLElement | null {
+/** Format missing outputs entry as TemplateResult. */
+export function formatMissingOutputsTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, data } = message;
   // Parse with Zod schema
   const parseResult = MissingOutputsPayloadSchema.safeParse(data);
   if (!parseResult.success) {
@@ -87,54 +79,44 @@ export function formatMissingOutputs(
   }
 
   const { missing, xmlFile, documentTag } = parseResult.data;
+  const shouldOpen = options?.defaultOpen ?? false;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
-    return renderToElement(renderXmlLink(xmlFile, documentTag));
+    return renderXmlLink(xmlFile, documentTag);
   }
 
-  return renderToElement(html`
-    <details class="banner-details file-list-details">
-      ${buildDetailsSummary({
-        iconClass: 'codicon-warning',
-        label: `Missing outputs (${missing.length})`,
-        labelClass: 'summary-text',
-        includeIconClass: false,
-      })}
-      <ul class="file-list-content" data-log-id=${ifDefined(logId)}>
-        ${missing.map((f) => {
-          const filePath = String(f);
-          const basename = getBasename(filePath);
-          // prettier-ignore
-          return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
-        })}
-      </ul>
-      ${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}
-    </details>
-  `);
+  // prettier-ignore
+  const listItems = missing.map((f) => {
+    const filePath = String(f);
+    const basename = getBasename(filePath);
+    return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
+  });
+  // prettier-ignore
+  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass: 'codicon-warning',
+    label: `Missing outputs (${missing.length})`,
+    labelClass: 'summary-text',
+    includeIconClass: false,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}</details>`;
 }
 
 // =============================================================================
 // Latexdiff Formatter
 // =============================================================================
 
-/** Format latexdiff entry using Lit-native component. */
-export function formatLatexdiff(
-  data: unknown,
-  logId: string,
-): HTMLElement | null {
+/** Format latexdiff entry as TemplateResult. */
+export function formatLatexdiffTemplate(
+  message: LogMessageData,
+  _options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, data } = message;
   const entries = parseDiffResultEntries(data);
   if (entries.length === 0) return null;
 
   const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
-
-  return renderToElement(html`
-    <latexdiff-results
-      .logId=${logId}
-      .runId=${ifDefined(aggregatedRunId || undefined)}
-      .entries=${entries}
-    ></latexdiff-results>
-  `);
+  // prettier-ignore
+  return html`<latexdiff-results .logId=${id} .runId=${ifDefined(aggregatedRunId || undefined)} .entries=${entries}></latexdiff-results>`;
 }
 
 // =============================================================================
@@ -172,11 +154,12 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
 ];
 
-/** Format statistics entry using Lit-native component. */
-export function formatStatistics(
-  data: unknown,
-  logId: string,
-): HTMLElement | null {
+/** Format statistics entry as TemplateResult. */
+export function formatStatisticsTemplate(
+  message: LogMessageData,
+  _options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, data } = message;
   // Use partial schema to allow missing optional fields
   const parseResult = ExtendedTokenUsageStatsSchema.partial().safeParse(data);
   if (!parseResult.success) return null;
@@ -191,8 +174,6 @@ export function formatStatistics(
   );
 
   if (items.length === 0) return null;
-
-  return renderToElement(html`
-    <statistics-panel .logId=${logId} .items=${items}></statistics-panel>
-  `);
+  // prettier-ignore
+  return html`<statistics-panel .logId=${id} .items=${items}></statistics-panel>`;
 }

@@ -1,5 +1,9 @@
+/**
+ * MemoryItem component - displays a single memory entry with metadata and preview.
+ */
+
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -18,7 +22,7 @@ import type { MemoryViewItem } from '@shared/schemas';
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     commonViewStyles,
@@ -57,14 +61,14 @@ export class MemoryItem extends LitElement {
 
   @property({ attribute: false }) item?: MemoryViewItem;
 
-  private handleOpen = (): void => {
+  private handleOpen(): void {
     if (!this.item) return;
     this.dispatchEvent(
       MemoryViewEvents.openItem({ storagePath: this.item.storagePath }),
     );
-  };
+  }
 
-  private handleDelete = (): void => {
+  private handleDelete(): void {
     if (!this.item) return;
     this.dispatchEvent(
       MemoryViewEvents.deleteItem({
@@ -72,7 +76,7 @@ export class MemoryItem extends LitElement {
         displayPath: this.item.displayPath,
       }),
     );
-  };
+  }
 
   private renderMeta(item: MemoryViewItem): string {
     const size = formatBytes(item.size ?? 0);
@@ -81,9 +85,9 @@ export class MemoryItem extends LitElement {
     return [size, lines, updated].filter(Boolean).join(' · ');
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (!this.item) {
-      return html``;
+      return nothing;
     }
 
     const previewText = this.item.preview?.trim()
@@ -119,5 +123,11 @@ export class MemoryItem extends LitElement {
         </vscode-collapsible>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'memory-item': MemoryItem;
   }
 }

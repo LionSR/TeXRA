@@ -1,3 +1,7 @@
+/**
+ * MemoryToolbar component - header with refresh and open folder actions.
+ */
+
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -10,7 +14,7 @@ import { MemoryViewEvents } from '../events';
 
 @customElement('memory-toolbar')
 export class MemoryToolbar extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     commonViewStyles,
@@ -25,15 +29,15 @@ export class MemoryToolbar extends LitElement {
     `,
   ];
 
-  private handleRefresh = (): void => {
+  private handleRefresh(): void {
     this.dispatchEvent(MemoryViewEvents.refresh());
-  };
+  }
 
-  private handleOpenFolder = (): void => {
+  private handleOpenFolder(): void {
     this.dispatchEvent(MemoryViewEvents.openFolder());
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <header class="view-header">
         <h2>Agent Memory</h2>
@@ -53,5 +57,11 @@ export class MemoryToolbar extends LitElement {
         </vscode-toolbar-container>
       </header>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'memory-toolbar': MemoryToolbar;
   }
 }

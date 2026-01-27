@@ -1,25 +1,24 @@
-// Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import { z } from 'zod';
 
-// Local imports - agent
 import {
   FileLocationSchema,
   MESSAGE_TYPES,
+  OutputFileInfoSchema,
+  OutputXmlSummarySchema,
   type FileLocation,
   type OutputFileInfo,
   type OutputXmlSummary,
   type RoundOutput,
-  OutputFileInfoSchema,
-  OutputXmlSummarySchema,
+  type StorageKey,
 } from '@shared/schemas';
-import type { DiffStats } from '@agent/types/DiffTypes';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { DiffStats } from '@agent/types/DiffTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -28,21 +27,19 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
   flexibleFS,
-  pathToLocation,
   getComparablePath,
+  pathToLocation,
 } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 import { bus } from '@eventBus/ProgressEventBus';
+
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
-import type { StorageKey } from '@shared/schemas';
-
 import type { IOutputHandler } from './IOutputHandler';
 import type { RoundFileMapping } from './types';
 
-/** Schema for internal round data storage */
 const RoundDataSchema = z.object({
   outputs: OutputFileInfoSchema.array().prefault(() => []),
   rawOutput: FileLocationSchema.nullable().prefault(null),
@@ -51,7 +48,6 @@ const RoundDataSchema = z.object({
 
 type RoundData = z.infer<typeof RoundDataSchema>;
 
-/** Create empty RoundData with schema defaults */
 function createEmptyRoundData(): RoundData {
   return RoundDataSchema.parse({});
 }
@@ -131,8 +127,6 @@ export class OutputHandler implements IOutputHandler {
   private collectRunSupportFiles(): FileLocation[] {
     const extras = new Map<string, FileLocation>();
     const cfg = this.agentConfig;
-
-    // Collect all file paths from config
     const allPaths = [
       cfg.referenceFile,
       ...cfg.referenceFiles,
@@ -144,7 +138,6 @@ export class OutputHandler implements IOutputHandler {
       ...cfg.inputFiles,
     ];
 
-    // Deduplicate by comparable path
     for (const value of allPaths) {
       if (!value) continue;
       const location =
@@ -257,9 +250,7 @@ export class OutputHandler implements IOutputHandler {
         }
       }
       return { added, removed };
-    } catch (_error) {
-      // File read errors are expected (e.g., file not found during processing)
-      // Return empty stats rather than propagating the error
+    } catch {
       return {};
     }
   }
@@ -279,8 +270,6 @@ export class OutputHandler implements IOutputHandler {
         const baseLocation = mapping.baseToOutput.get(locationPath) ?? null;
         const originalLocation =
           mapping.originByOutput.get(locationPath) ?? null;
-
-        // Use baseLocation for diff, or originalLocation if it's a different file
         const originalIsDifferentFile =
           originalLocation &&
           getComparablePath(originalLocation) !== locationPath;
@@ -461,9 +450,6 @@ export class OutputHandler implements IOutputHandler {
         data.rawOutput ??= outputLocation;
         const rawLocation = data.rawOutput;
 
-        // Route to multiple outputs only when explicitly enabled AND files are specified.
-        // This ensures agents without _multiple variants use single output processing
-        // even if output files were specified in the config.
         if (
           this.agentConfig.useMultipleOutputs &&
           Array.isArray(this.agentConfig.outputFiles) &&

@@ -1,4 +1,3 @@
-// Third-party imports
 import { z } from 'zod';
 
 export const AGENT_CATEGORY = {

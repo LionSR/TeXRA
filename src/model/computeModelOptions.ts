@@ -1,10 +1,20 @@
-// Local imports - model utilities
-import { getServerSideKeyService } from '@auth/serverKeys';
+// Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - auth
+import { getServerSideKeyService } from '@auth/serverKeys';
+
+// Local imports - frontend
+import { ApiProvider, SecretManager } from '@frontend/secretManager';
+
+// Local imports - model types
 import type { ModelConfig } from '@model/ModelConfig';
-import type { ModelOptionData } from '@shared/schemas';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
+
+// Local imports - shared schemas
+import type { ModelOptionData } from '@shared/schemas';
 
 /**
  * Get the list of visible models from user configuration.
@@ -107,78 +117,6 @@ async function isModelAvailable(
 
 /**
  * Compute model <vscode-option> tags based on available API keys.
- * Models missing a required key receive data-requires-key="true" so the
- * webview can handle API key setup prompts and display a red ✗ indicator.
- *
- * Server-side key access is tier-based:
- * - Ultra tier: All models available via relay (if provider enabled)
- * - Max tier: Only specific cheaper models available via relay (configured remotely)
- * - Free tier: Must bring own API keys
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
- */
-export async function computeModelOptions(): Promise<string> {
-  const models = getVisibleModels();
-
-  // Prime caches for availability checks
-  const serverSideKeyService = getServerSideKeyService();
-  const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    SecretManager.apiKeyExists('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-  ]);
-
-  const availabilityCtx: ModelAvailabilityContext = {
-    hasOpenRouter,
-    hasServerAccess,
-    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
-    serverSideKeyService,
-  };
-
-  const optionTags = await Promise.all(
-    models.map((model) => buildModelOption(model, availabilityCtx)),
-  );
-
-  return optionTags.join('\n');
-}
-
-/** Build a single model option tag. */
-async function buildModelOption(
-  model: string,
-  ctx: ModelAvailabilityContext,
-): Promise<string> {
-  const config = MODEL_CONFIGS[model];
-  if (!config) {
-    return `<vscode-option value="${model}">${model}</vscode-option>`;
-  }
-
-  const available = await isModelAvailable(model, config, ctx);
-  const contextStr = config.contextWindow
-    ? formatContext(config.contextWindow)
-    : '';
-  const costStr = formatCost(config.inputPrice, config.outputPrice);
-
-  // Build description attribute from context and cost info
-  const descParts: string[] = [];
-  if (contextStr) descParts.push(`Context: ${contextStr}`);
-  if (costStr) descParts.push(`Cost (in/out per 1M): ${costStr}`);
-  const description =
-    descParts.length > 0 ? `description="${descParts.join(' | ')}"` : '';
-
-  const attrs = [
-    `value="${model}"`,
-    !available &&
-      'data-requires-key="true" class="disabled-option disabled-model"',
-    config.provider && `data-provider="${config.provider}"`,
-    contextStr && `data-context="${contextStr}"`,
-    costStr && `data-cost="${costStr}"`,
-    description,
-  ].filter(Boolean);
-
-  return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
-}
-
 // =============================================================================
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
@@ -201,7 +139,8 @@ async function buildModelOptionData(
   const contextStr = config.contextWindow
     ? formatContext(config.contextWindow)
     : undefined;
-  const costStr = formatCost(config.inputPrice, config.outputPrice) || undefined;
+  const costStr =
+    formatCost(config.inputPrice, config.outputPrice) || undefined;
 
   return {
     value: model,

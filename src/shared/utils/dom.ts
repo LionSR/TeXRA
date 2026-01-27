@@ -1,12 +1,4 @@
 /**
- * DOM utilities for webview frontends.
- * Focused on VS Code web component helpers.
- */
-
-// Note: Toggle icon rotation is now CSS-only via details[open] selector.
-// See src/progressView/styles/logs.css for the CSS rules.
-
-/**
  * Scroll an element to its bottom.
  * Handles both VS Code webview elements (scrollPos/scrollMax) and standard DOM elements.
  */
@@ -35,12 +27,14 @@ export function scrollToBottom(element: HTMLElement | null): void {
 }
 
 /**
- * Determine if element is a VS Code select-like component.
+ * Check if element is a VS Code select-like component.
  */
 export function isSelectLikeElement(
   element: Element | null,
 ): element is HTMLElement & { value?: string } {
-  if (!element) return false;
+  if (!element) {
+    return false;
+  }
   const tagName = element.tagName.toLowerCase();
   return tagName === 'vscode-single-select' || tagName === 'vscode-dropdown';
 }
@@ -54,12 +48,11 @@ export function getSelectOptionElements(
   if (!isSelectLikeElement(element)) {
     return [];
   }
-  // eslint-disable-next-line unicorn/prefer-spread -- vscode-option typing lacks iterator support
   return Array.from(element.querySelectorAll('vscode-option')) as HTMLElement[];
 }
 
 /**
- * Get the currently selected option element for a select-like component.
+ * Get the currently selected option element from a select-like component.
  */
 export function getSelectedOptionElement(
   element: Element | null,
@@ -73,10 +66,10 @@ export function getSelectedOptionElement(
     return null;
   }
 
-  const currentValue = (element as HTMLElement & { value?: string }).value;
+  const currentValue = element.value;
   if (currentValue !== null && currentValue !== undefined) {
     const matchingOption = options.find(
-      (option) => option.getAttribute('value') === currentValue,
+      (opt) => opt.getAttribute('value') === currentValue,
     );
     if (matchingOption) {
       return matchingOption;
@@ -85,9 +78,8 @@ export function getSelectedOptionElement(
 
   return (
     options.find(
-      (option) =>
-        option.hasAttribute('selected') ||
-        (option as HTMLOptionElement).selected,
+      (opt) =>
+        opt.hasAttribute('selected') || (opt as HTMLOptionElement).selected,
     ) ?? options[0]
   );
 }

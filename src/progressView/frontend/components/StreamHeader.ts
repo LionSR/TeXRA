@@ -7,6 +7,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -105,6 +106,7 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   static styles = [
+    commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
     css`

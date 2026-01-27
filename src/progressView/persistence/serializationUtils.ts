@@ -36,17 +36,8 @@ export function mapToRecord<K extends string | number, V>(
   return mapsToRecords(map, 1) as Record<string, V>;
 }
 
-/**
- * Deserialize a plain Record object to a Map.
- * Handles null/undefined/non-object inputs gracefully by returning empty Map.
- * @example recordToMap({ a: 1 }) // Map([['a', 1]])
- */
-export function recordToMap<V>(data: unknown): Map<string, V> {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return new Map();
-  }
-  return new Map(Object.entries(data as Record<string, V>));
-}
+// NOTE: recordToMap was removed - use createRecordToMapSchema from schemaUtils.ts
+// for schema-validated deserialization instead.
 
 /**
  * Serialize a nested Map structure (outer → inner → value) to nested Records.

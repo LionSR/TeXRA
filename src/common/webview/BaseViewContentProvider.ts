@@ -1,34 +1,19 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
 
-/** Descriptor for a webview module resource. */
 export interface ModuleDescriptor {
   key: string;
   path: string;
 }
 
-/**
- * Base class for all webview content providers.
- * Eliminates code duplication and provides consistent patterns.
- */
 export abstract class BaseViewContentProvider {
   protected readonly logger: any;
   protected readonly channel: string;
   private readonly viewPath: string;
 
-  /**
-   * @param context - VS Code extension context
-   * @param viewName - Name of this view (used for logging)
-   * @param moduleDescriptors - Optional view-specific module descriptors.
-   *   If provided, getModuleUris() will automatically build URIs from these.
-   *   If not provided, subclasses must override getModuleUris().
-   * @param viewPath - Optional view folder path. Defaults to camelCase of viewName.
-   */
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
@@ -43,37 +28,21 @@ export abstract class BaseViewContentProvider {
     logger.initialize(this.channel);
   }
 
-  /**
-   * Returns the relative path to the view directory.
-   */
   protected getViewPath(): string {
     return this.viewPath;
   }
 
-  /**
-   * Returns view-specific module URIs. Default implementation uses
-   * moduleDescriptors passed to constructor. Subclasses can override
-   * for custom URI generation.
-   */
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
     return this.buildUriRecord(webview, this.moduleDescriptors);
   }
 
-  /**
-   * Optional: Override to provide additional template variables
-   */
   protected getTemplateVariables(): Record<string, any> {
     return {};
   }
 
-  /** Shared module descriptors available to all views (relative to view folder) */
-  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [
-    { key: 'styleUri', path: 'styles/index.css' },
-  ];
+  // Note: View-specific styles are handled via Lit CSS-in-JS, not external CSS files
+  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [];
 
-  /**
-   * Common method to get webview paths
-   */
   protected getWebviewPath(filePath: string): vscode.Uri {
     return vscode.Uri.joinPath(
       this.context.extensionUri,
@@ -102,7 +71,6 @@ export abstract class BaseViewContentProvider {
     );
   }
 
-  /** Convert an array of descriptors into a URI record */
   protected buildUriRecord(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
@@ -112,9 +80,6 @@ export abstract class BaseViewContentProvider {
     );
   }
 
-  /**
-   * Standard implementation that subclasses can override if needed
-   */
   public getHtmlContent(webview: vscode.Webview): string {
     try {
       const htmlPath = this.getWebviewPath('index.html');
@@ -146,11 +111,9 @@ export abstract class BaseViewContentProvider {
     }
   }
 
-  /** Common module descriptors from src/common */
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
-  /** Node module descriptors from node_modules */
   private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
       {
@@ -161,7 +124,6 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
-  /** Build URI record using a resolver function */
   private buildUrisWithResolver(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
@@ -175,7 +137,6 @@ export abstract class BaseViewContentProvider {
     );
   }
 
-  /** Common URIs used by all views (from src/common and node_modules) */
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
