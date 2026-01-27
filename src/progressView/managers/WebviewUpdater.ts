@@ -196,10 +196,10 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditPermission(prompt: ToolEditPermission): void {
+  showToolEditPermission(permission: ToolEditPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: prompt,
+      request: permission,
     });
   }
 
@@ -221,10 +221,10 @@ export class WebviewUpdater {
     });
   }
 
-  showBashPermission(prompt: BashPermission): void {
+  showBashPermission(permission: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
-      request: prompt,
+      request: permission,
     });
   }
 
