@@ -25,7 +25,7 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 // ============================================================================
 
 /** Base result type - subclasses extend with specific actions */
-export interface BaseResult {
+interface BaseResult {
   action: string;
   feedback?: string;
 }

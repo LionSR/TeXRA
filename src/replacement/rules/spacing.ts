@@ -9,11 +9,11 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
   isRegex: false,
   patterns: {
     // ===== Basic spacing fixes =====
-    // Remove unnecessary spacing commands
-    ' \\;': ' ',
-    ', \\;': ', ',
-    '\\;': ' ',
+    // Remove unnecessary spacing commands (order matters: longer patterns first)
     ' \\; ': ' ',
+    ', \\;': ', ',
+    ' \\;': ' ',
+    '\\;': ' ',
     '\\,\n': '\n',
     '\\!\\!': '',
 
@@ -122,5 +122,3 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '\\sum\\limits_': '\\sum_',
   },
 };
-
-export default LATEX_SPACING_REPLACEMENTS;

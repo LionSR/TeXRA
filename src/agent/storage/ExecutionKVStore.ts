@@ -53,7 +53,7 @@ export interface ExecutionKVStore {
  * Factory and registry for execution-scoped stores.
  * Manages lifecycle, cleanup, and multi-execution queries.
  */
-export interface ExecutionStorageRegistry {
+interface ExecutionStorageRegistry {
   // Store creation and retrieval
   getStore(executionId: ExecutionId): ExecutionKVStore;
 
@@ -69,6 +69,31 @@ export interface ExecutionStorageRegistry {
 const EXECUTIONS_DIR = 'executions';
 
 /**
+ * Executes an async operation, returning a fallback value if file/directory not found.
+ * Re-throws all other errors.
+ */
+async function withNotFoundFallback<T>(
+  operation: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Extracts key name from a JSON filename.
+ */
+function jsonFileToKey(filename: string): string {
+  return filename.replace(/\.json$/, '');
+}
+
+/**
  * StorageFS-backed implementation of ExecutionKVStore.
  * Stores data in executions/{executionId}/{key}.json
  */
@@ -82,14 +107,10 @@ class StorageFSKVStore implements ExecutionKVStore {
   }
 
   async read<T = unknown>(key: string): Promise<T | undefined> {
-    try {
-      return await StorageFS.readJson<T>(this.keyToPath(key));
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return undefined;
-      }
-      throw error;
-    }
+    return withNotFoundFallback(
+      () => StorageFS.readJson<T>(this.keyToPath(key)),
+      undefined,
+    );
   }
 
   async write<T = unknown>(key: string, value: T): Promise<void> {
@@ -99,14 +120,10 @@ class StorageFSKVStore implements ExecutionKVStore {
   }
 
   async delete(key: string): Promise<void> {
-    try {
-      await StorageFS.delete(this.keyToPath(key));
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return; // Already deleted, no-op
-      }
-      throw error;
-    }
+    await withNotFoundFallback(
+      () => StorageFS.delete(this.keyToPath(key)),
+      undefined,
+    );
   }
 
   async exists(key: string): Promise<boolean> {
@@ -115,33 +132,21 @@ class StorageFSKVStore implements ExecutionKVStore {
 
   async listKeys(prefix?: string): Promise<string[]> {
     const dir = path.join(EXECUTIONS_DIR, this.executionId);
-    try {
-      const entries = await StorageFS.readDir(dir);
-      return entries
-        .filter(([name, type]) => {
-          if (!isFile(type) || !name.endsWith('.json')) return false;
-          const key = name.replace(/\.json$/, '');
-          return !prefix || key.startsWith(prefix);
-        })
-        .map(([name]) => name.replace(/\.json$/, ''));
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return []; // Directory doesn't exist yet
-      }
-      throw error;
-    }
+    const entries = await withNotFoundFallback(
+      () => StorageFS.readDir(dir),
+      [],
+    );
+    return entries
+      .filter(([name, type]) => {
+        if (!isFile(type) || !name.endsWith('.json')) return false;
+        return !prefix || jsonFileToKey(name).startsWith(prefix);
+      })
+      .map(([name]) => jsonFileToKey(name));
   }
 
   async clear(): Promise<void> {
     const dir = path.join(EXECUTIONS_DIR, this.executionId);
-    try {
-      await StorageFS.delete(dir);
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return; // Already cleared
-      }
-      throw error;
-    }
+    await withNotFoundFallback(() => StorageFS.delete(dir), undefined);
   }
 
   getExecutionId(): ExecutionId {
@@ -172,29 +177,18 @@ class StorageFSRegistry implements ExecutionStorageRegistry {
     } else {
       // Still try to delete from disk even if not cached
       const dir = path.join(EXECUTIONS_DIR, executionId);
-      try {
-        await StorageFS.delete(dir);
-      } catch (error) {
-        if (isFileNotFoundError(error)) {
-          return;
-        }
-        throw error;
-      }
+      await withNotFoundFallback(() => StorageFS.delete(dir), undefined);
     }
   }
 
   async listExecutions(): Promise<ExecutionId[]> {
-    try {
-      const entries = await StorageFS.readDir(EXECUTIONS_DIR);
-      return entries
-        .filter(([, type]) => isDirectory(type))
-        .map(([name]) => name as ExecutionId);
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return [];
-      }
-      throw error;
-    }
+    const entries = await withNotFoundFallback(
+      () => StorageFS.readDir(EXECUTIONS_DIR),
+      [],
+    );
+    return entries
+      .filter(([, type]) => isDirectory(type))
+      .map(([name]) => name as ExecutionId);
   }
 
   async cleanupExpired(maxAgeMs: number): Promise<ExecutionId[]> {

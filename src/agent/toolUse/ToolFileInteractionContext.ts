@@ -4,7 +4,6 @@ import {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-// Internal imports
 
 export interface ToolFileInteractionContext {
   streamId?: StreamTabId;

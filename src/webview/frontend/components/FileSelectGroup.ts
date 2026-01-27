@@ -24,10 +24,10 @@ import {
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 
 // Local imports - shared schemas
+import { DEFAULT_CHECKBOX_VALUES } from '../store';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
 // Local imports - store (single source of truth for defaults)
-import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {

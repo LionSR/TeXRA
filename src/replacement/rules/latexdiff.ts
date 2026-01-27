@@ -15,5 +15,3 @@ export const LATEXDIFF_REPLACEMENTS: ReplacementCategory = {
     '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
   },
 };
-
-export default LATEXDIFF_REPLACEMENTS;

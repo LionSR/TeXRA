@@ -8,8 +8,8 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { GlobalStateKey, globalSM } from '@common/state/stateManager';
+import { toErrorMessage } from '@common/errors';
+import { GlobalStateKey, globalSM } from '@common/state';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';

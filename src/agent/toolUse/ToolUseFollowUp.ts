@@ -20,14 +20,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 
-// ============================================================================
-// Result Types
-// ============================================================================
-
 /**
  * Result of sending a follow-up message to a tool-use session.
- *
- * Pure result type - callers handle UI notifications based on status.
  */
 export type SendFollowUpResult =
   | { status: 'sent' }

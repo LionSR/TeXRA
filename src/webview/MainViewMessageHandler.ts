@@ -6,8 +6,8 @@ import {
 } from '@shared/schemas';
 import { computeAgentOptionsData } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
-import { RecordingManager } from '@common/managers/RecordingManager';
 import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
+import { RecordingManager } from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
