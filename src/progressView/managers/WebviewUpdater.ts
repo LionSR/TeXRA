@@ -1,35 +1,29 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Type imports
-import {
-  type AgentProposalPrompt,
-  type BashApprovalPrompt,
-  type ContextState,
-  type InstructionUpdate,
-  type LogMessageData,
-  type OutputFileInfo,
-  type ProgressViewOutboundMessage,
-  type RetryRequestPrompt,
-  type StreamState,
-  type StreamStatus,
-  type StreamTabId,
-  type StreamTabInfo,
-  type TaskGroup,
-  type TodoItem,
-  type TokenUsageStats,
-  type ToolEditApprovalPrompt,
-  type UpdateTaskGroupPayload,
-} from '@shared/schemas';
 import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
-
-// Shared schemas - message types for type-safe webview communication
-
-// Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type {
+  AgentProposalPrompt,
+  BashApprovalPrompt,
+  ContextState,
+  InstructionUpdate,
+  LogMessageData,
+  OutputFileInfo,
+  ProgressViewOutboundMessage,
+  RetryRequestPrompt,
+  StreamState,
+  StreamStatus,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+  TodoItem,
+  TokenUsageStats,
+  ToolEditApprovalPrompt,
+  UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
 /**
  * Extra content to include with log updates.

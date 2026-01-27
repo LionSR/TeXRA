@@ -53,6 +53,71 @@ export const commonViewStyles: CSSResult = css`
     max-height: var(--height-max);
   }
 
+  vscode-toolbar-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    flex-wrap: nowrap;
+  }
+
+  vscode-toolbar-button {
+    flex-shrink: 0;
+  }
+
+  .clickable-link {
+    cursor: pointer;
+    color: var(--color-text-link);
+    text-decoration: none;
+  }
+
+  .clickable-link:hover {
+    color: var(--color-text-link-active);
+    text-decoration: underline;
+  }
+
+  .detail-section {
+    margin: var(--spacing-small) 0;
+  }
+
+  .detail-content {
+    padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
+  }
+
+  .detail-list {
+    list-style: none;
+    margin: 0;
+  }
+
+  .detail-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .details-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-tiny) 0;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    opacity: var(--opacity-normal);
+  }
+
+  .details-summary:hover {
+    opacity: 1;
+  }
+
+  .details-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .details-summary .toggle-icon {
+    opacity: var(--opacity-subtle);
+    font-size: var(--font-size-sm);
+  }
+
   .text-secondary {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);

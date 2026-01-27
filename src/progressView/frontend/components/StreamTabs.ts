@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -39,6 +40,7 @@ function formatStatusLabel(status: string): string {
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
   static override styles = [
+    commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
     css`

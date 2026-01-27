@@ -161,12 +161,7 @@ export class WorkflowStreamContent extends LitElement {
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
-      <log-list
-        .groups=${state.taskGroups}
-        .messages=${state.logs}
-        .activeRunId=${runId}
-        .isToolUse=${false}
-      ></log-list>
+      <log-list></log-list>
 
       <usage-panel
         .usage=${usage}
