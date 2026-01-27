@@ -19,6 +19,7 @@ import type {
   LatexDiffsToggleDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
+  ReorderFilesDetail,
   RemoveFileDetail,
 } from '@shared/schemas';
 
@@ -67,6 +68,9 @@ export const MainViewEvents = {
     createEvent('select-multiple-files', detail),
 
   removeFile: (detail: RemoveFileDetail) => createEvent('remove-file', detail),
+
+  filesReordered: (detail: ReorderFilesDetail) =>
+    createEvent('files-reordered', detail),
 
   checkboxChange: (detail: CheckboxChangeDetail) =>
     createEvent('checkbox-change', detail),
