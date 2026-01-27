@@ -11,7 +11,7 @@ import type { z } from 'zod';
 
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
-> = (message: any, webviewView: T) => Promise<void> | void;
+> = (message: unknown, webviewView: T) => Promise<void> | void;
 
 /**
  * Configuration options for BaseViewMessageHandler.
@@ -38,7 +38,7 @@ export interface MessageHandlerOptions {
 export abstract class BaseViewMessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > {
-  protected readonly logger: any;
+  protected readonly logger: typeof logger;
   protected readonly channel: string;
   protected readonly handlers: Record<string, MessageHandler<T>>;
   private readonly _options: MessageHandlerOptions;
@@ -84,15 +84,18 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Subclasses must implement this to provide their specific handlers
+   * Provide command handlers for legacy dispatch pattern.
+   * Schema-driven handlers can skip this (default returns empty).
    */
-  protected abstract createHandlers(): Record<string, MessageHandler<T>>;
+  protected createHandlers(): Record<string, MessageHandler<T>> {
+    return {};
+  }
 
   /**
    * Standard message handling with consistent error handling and logging.
    * When trackActiveView is enabled, automatically updates the active view reference.
    */
-  public async handleMessage(message: any, webviewView: T): Promise<void> {
+  public async handleMessage(message: unknown, webviewView: T): Promise<void> {
     // Track active view when option is enabled
     if (this._options.trackActiveView) {
       this._activeView = webviewView;

@@ -98,11 +98,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  protected createHandlers(): Record<string, never> {
-    // Handler registry is created dynamically via createHandlerRegistry
-    return {};
-  }
-
   /**
    * Create the typed handler registry.
    * Each handler receives typed data - no casts or validation needed.
