@@ -126,11 +126,9 @@ export function transformDiffResultToDisplay(
 // ============================================================================
 
 /** Legacy location object with absolutePath */
-const LegacyLocationSchema = z
-  .object({
-    absolutePath: z.string().optional(),
-  })
-  .passthrough();
+const LegacyLocationSchema = z.looseObject({
+  absolutePath: z.string().optional(),
+});
 
 /** Legacy locations container */
 const LegacyLocationsSchema = z
