@@ -58,22 +58,11 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
 export const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
-  /** @deprecated Use optionsData for Lit-native rendering */
-  options: z.string().optional(),
-  /** Typed model options for Lit-native rendering */
   optionsData: z.array(ModelOptionDataSchema).optional(),
 });
 
 export const SetAgentOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS),
-  /** @deprecated Use optionsData for Lit-native rendering */
-  options: z
-    .object({
-      workflow: z.string().nullish(),
-      toolUse: z.string().nullish(),
-    })
-    .nullish(),
-  /** Typed agent options for Lit-native rendering */
   optionsData: z
     .object({
       workflow: z.array(AgentOptionDataSchema).optional(),

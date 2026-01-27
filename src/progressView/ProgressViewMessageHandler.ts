@@ -10,11 +10,7 @@ import { AgentProposalActionMessageSchema } from '@shared/schemas';
 // Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import {
-  getAgent,
-  computeAgentOptions,
-  computeAgentOptionsData,
-} from '@agent/index/agentRegistry';
+import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
@@ -38,10 +34,7 @@ import {
 } from '@logger/TaskState';
 
 // Local imports - model
-import {
-  computeModelOptions,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 
 // Local imports - progress view
 import {
@@ -1067,24 +1060,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Handle request for followup options (agents, models).
-   * Returns both pre-built HTML options (legacy) and typed data (Lit-native).
    */
   private async handleGetFollowupOptions(_message: unknown): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
     try {
-      // Compute agent and model options in parallel
-      // Send both HTML (legacy) and typed data (Lit-native)
-      const [
-        agentOptions,
-        agentOptionsData,
-        modelOptionsHtml,
-        modelOptionsData,
-      ] = await Promise.all([
-        computeAgentOptions(),
+      const [agentOptionsData, modelOptionsData] = await Promise.all([
         computeAgentOptionsData(),
-        computeModelOptions(),
         computeModelOptionsData(),
       ]);
 
@@ -1095,11 +1078,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        // Legacy HTML options
-        workflowAgentsHtml: agentOptions.workflow,
-        toolUseAgentsHtml: agentOptions.toolUse,
-        modelOptionsHtml,
-        // Typed data options (Lit-native)
         workflowAgentsData: agentOptionsData.workflow,
         toolUseAgentsData: agentOptionsData.toolUse,
         modelOptionsData,
