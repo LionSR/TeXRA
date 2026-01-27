@@ -65,8 +65,11 @@ const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 // Helper functions
 // ============================================================
 
-function addPrompt(ctx: MessageHandlerContext, prompt: PermissionState): void {
-  ctx.setPermissions([...ctx.getPermissions(), prompt]);
+function addPermission(
+  ctx: MessageHandlerContext,
+  permission: PermissionState,
+): void {
+  ctx.setPermissions([...ctx.getPermissions(), permission]);
 }
 
 function removePrompt(
@@ -425,7 +428,7 @@ const handlers: HandlerRegistry = {
 
   // Approval requests
   [PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: (data, ctx) => {
-    addPrompt(ctx, { kind: 'toolEdit', data: data.request });
+    addPermission(ctx, { kind: 'toolEdit', data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (data, ctx) => {
@@ -440,7 +443,7 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: (data, ctx) => {
-    addPrompt(ctx, { kind: 'bash', data: data.request });
+    addPermission(ctx, { kind: 'bash', data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL]: (data, ctx) => {
@@ -448,7 +451,7 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST]: (data, ctx) => {
-    addPrompt(ctx, { kind: 'retry', data: data.request });
+    addPermission(ctx, { kind: 'retry', data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST]: (data, ctx) => {
@@ -456,7 +459,7 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: (data, ctx) => {
-    addPrompt(ctx, { kind: 'proposal', data: data.proposal });
+    addPermission(ctx, { kind: 'proposal', data: data.proposal });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: (data, ctx) => {
