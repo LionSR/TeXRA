@@ -31,7 +31,7 @@ import type {
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
-import type { FollowUpInput } from './components/FollowUpInput';
+import type { FollowUpInput } from './components';
 
 /**
  * Context passed to frontend event handlers providing access to state and refs.

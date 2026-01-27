@@ -10,7 +10,7 @@ export interface ModuleDescriptor {
 }
 
 export abstract class BaseViewContentProvider {
-  protected readonly logger: any;
+  protected readonly logger: typeof logger;
   protected readonly channel: string;
   private readonly viewPath: string;
 
@@ -36,7 +36,7 @@ export abstract class BaseViewContentProvider {
     return this.buildUriRecord(webview, this.moduleDescriptors);
   }
 
-  protected getTemplateVariables(): Record<string, any> {
+  protected getTemplateVariables(): Record<string, string | vscode.Uri> {
     return {};
   }
 
