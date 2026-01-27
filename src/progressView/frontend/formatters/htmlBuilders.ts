@@ -7,19 +7,21 @@
 import hljs from '@shared/highlighting/hljs';
 
 // Local imports - Lit utilities
-
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
-import { getBasename } from '@shared/utils/path';
 import {
   html,
   unsafeHTML,
   classMap,
   ifDefined,
+  nothing,
   type TemplateResult,
 } from './litTemplates';
 
+// Local imports - shared utilities
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
+import { getBasename } from '@shared/utils/path';
+
 // Local imports - shared schemas
+import type { FileListEntry } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -28,7 +30,7 @@ import {
   DIFF_MARKER_THRESHOLD,
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
-import type { FileListEntry } from '@shared/schemas';
+import { registerCopyContent } from './copyContentStore';
 
 /** Build a tool-use section template. */
 export function buildToolUseSection(
@@ -80,15 +82,15 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
 
   // Apply diff highlighting
   const lines = text.split('\n');
-  return html`<pre class=${ifDefined(className || undefined)}>
-${lines.map((line, i) => {
-      const diffClass = getDiffLineClass(line);
-      const suffix = i < lines.length - 1 ? '\n' : '';
-      return diffClass
-        ? html`<span class=${diffClass}>${line}</span>${suffix}`
-        : html`${line}${suffix}`;
-    })}</pre
-  >`;
+  const content = lines.map((line, i) => {
+    const diffClass = getDiffLineClass(line);
+    const suffix = i < lines.length - 1 ? '\n' : '';
+    return diffClass
+      ? html`<span class=${diffClass}>${line}</span>${suffix}`
+      : html`${line}${suffix}`;
+  });
+  // prettier-ignore
+  return html`<pre class=${ifDefined(className || undefined)}>${content}</pre>`;
 }
 
 // Note: Toggle icons now use CSS-only rotation via details[open] selector.
@@ -97,9 +99,10 @@ ${lines.map((line, i) => {
 /** Build a copy button for banner content. */
 export function buildCopyButton(
   title: string,
-  options: { hidden?: boolean; content?: string } = {},
+  options: { hidden?: boolean; content?: string; contentId?: string } = {},
 ): TemplateResult {
-  const { hidden = false, content } = options;
+  const { hidden = false, content, contentId } = options;
+  const copyId = content != null ? registerCopyContent(content, contentId) : '';
   return html`
     <vscode-toolbar-button
       class="banner-content-copy"
@@ -108,7 +111,7 @@ export function buildCopyButton(
       aria-label=${title}
       data-default-title=${title}
       data-success-title="Copied!"
-      data-copy-content=${ifDefined(content)}
+      data-copy-id=${ifDefined(copyId || undefined)}
       data-copy-type="banner"
       ?hidden=${hidden}
     ></vscode-toolbar-button>
@@ -122,7 +125,12 @@ export interface DetailsSummaryOptions {
   labelClass?: string;
   includeIconClass?: boolean;
   timestamp?: { display: string; tooltip: string };
-  copyButton?: { title: string; hidden?: boolean; content?: string };
+  copyButton?: {
+    title: string;
+    hidden?: boolean;
+    content?: string;
+    contentId?: string;
+  };
 }
 
 /** Build a details summary element with icon, label, and optional extras. */
@@ -140,11 +148,21 @@ export function buildDetailsSummary(
   const iconClasses = includeIconClass
     ? `codicon icon ${iconClass}`
     : `codicon ${iconClass}`;
+  const timestampTemplate = timestamp
+    ? html` <span class="timestamp" title=${timestamp.tooltip}
+        >${timestamp.display}</span
+      >`
+    : nothing;
+  const copyTemplate = copyButton
+    ? buildCopyButton(copyButton.title, {
+        hidden: copyButton.hidden,
+        content: copyButton.content,
+        contentId: copyButton.contentId,
+      })
+    : nothing;
   // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
   // prettier-ignore
-  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestamp
-        ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
-        : ''}${copyButton ? buildCopyButton(copyButton.title, { hidden: copyButton.hidden, content: copyButton.content }) : ''}</summary>`;
+  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestampTemplate}${copyTemplate}</summary>`;
 }
 
 /** Build rendered templates for file list. */
@@ -214,8 +232,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
 };
 
 /** Get display label for a language. */
-const getLanguageLabel = (language: string): string =>
-  LANGUAGE_LABELS[language] ?? (language || 'Text');
+function getLanguageLabel(language: string): string {
+  return LANGUAGE_LABELS[language] ?? (language || 'Text');
+}
 
 /** Apply syntax highlighting to code if language is supported. Returns HTML string for unsafeHTML. */
 function highlightCode(text: string, language: string): string {
@@ -252,32 +271,34 @@ export function buildCodeBlock(
   const preClasses = { hljs: true, [className]: Boolean(className) };
   const highlighted = highlightCode(text, language);
   const isHighlighted = highlighted !== text;
+  const header = showLanguage || showCopy;
+  const languageBadge = showLanguage
+    ? html`<span class="code-block-language"
+        >${getLanguageLabel(language)}</span
+      >`
+    : nothing;
+  const copyButton = showCopy
+    ? html`<button
+        class="code-block-copy"
+        title="Copy to clipboard"
+        data-copy-id=${registerCopyContent(text)}
+        data-copy-type="code-block"
+      >
+        <i class="codicon codicon-copy"></i>
+      </button>`
+    : nothing;
+
+  // prettier-ignore
+  const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
 
   return html`
     <div class="code-block" data-language=${language}>
-      ${showLanguage || showCopy
+      ${header
         ? html`
-            <div class="code-block-header">
-              ${showLanguage
-                ? html`<span class="code-block-language"
-                    >${getLanguageLabel(language)}</span
-                  >`
-                : ''}
-              ${showCopy
-                ? html`<button
-                    class="code-block-copy"
-                    title="Copy to clipboard"
-                    data-copy-content=${text}
-                    data-copy-type="code-block"
-                  >
-                    <i class="codicon codicon-copy"></i>
-                  </button>`
-                : ''}
-            </div>
+            <div class="code-block-header">${languageBadge} ${copyButton}</div>
           `
-        : ''}
-      <pre class=${classMap(preClasses)}>
-<code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>
+        : nothing}
+      ${codeTemplate}
     </div>
   `;
 }
@@ -319,11 +340,7 @@ export function buildEditDiffSection(
   oldString: string,
   newString: string,
 ): TemplateResult {
-  return html`
-    <div class="edit-diff-container">
-      <pre class="diff-inline-view">
-${generateInlineDiff(oldString, newString)}</pre
-      >
-    </div>
-  `;
+  const diffContent = generateInlineDiff(oldString, newString);
+  // prettier-ignore
+  return html`<div class="edit-diff-container"><pre class="diff-inline-view">${diffContent}</pre></div>`;
 }

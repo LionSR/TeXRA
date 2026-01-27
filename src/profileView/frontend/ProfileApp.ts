@@ -61,7 +61,7 @@ export class ProfileApp extends BaseWebviewApp {
     postMessage(PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA);
   }
 
-  protected handleMessage(raw: unknown): void {
+  protected override handleMessage(raw: unknown): void {
     const result = UpdateProfileMessageSchema.safeParse(raw);
     if (!result.success) {
       this.logSchemaError(
@@ -83,75 +83,87 @@ export class ProfileApp extends BaseWebviewApp {
     this.accessExpiresAt = data.accessExpiresAt ?? null;
   }
 
-  private handleSignIn = (): void => {
+  private handleSignIn(): void {
     postMessage(PROFILE_VIEW_COMMANDS.SIGN_IN);
-  };
+  }
 
-  private handleSignOut = (): void => {
+  private handleSignOut(): void {
     postMessage(PROFILE_VIEW_COMMANDS.SIGN_OUT);
-  };
+  }
 
-  private handleSelectAgent = (
-    event: CustomEvent<{ agentName: string }>,
-  ): void => {
+  private handleSelectAgent(event: CustomEvent<{ agentName: string }>): void {
     postMessage(PROFILE_VIEW_COMMANDS.SELECT_AGENT, {
       agentName: event.detail.agentName,
     });
-  };
+  }
 
-  private handleApiAccessMode = (
+  private handleApiAccessMode(
     event: CustomEvent<{ mode: 'included' | 'personal' }>,
-  ): void => {
+  ): void {
     postMessage(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE, {
       mode: event.detail.mode,
     });
-  };
+  }
+
+  private renderRemoteAgentsSection(): TemplateResult {
+    if (this.remoteAgents.length) {
+      return html`
+        <agents-table
+          .agents=${this.remoteAgents}
+          @profile-select-agent=${this.handleSelectAgent}
+        ></agents-table>
+      `;
+    }
+
+    return html`
+      <p class="no-agents">
+        No remote agents available. Contact support@texra.ai for assistance.
+      </p>
+    `;
+  }
+
+  private renderAuthenticatedView(): TemplateResult {
+    return html`
+      <profile-info
+        .email=${this.userEmail}
+        .userId=${this.userId}
+        .tier=${this.tier}
+        .accessExpiresAt=${this.accessExpiresAt}
+        .showSignOut=${true}
+        @profile-sign-out=${this.handleSignOut}
+      ></profile-info>
+
+      <api-access-section
+        .mode=${this.apiAccessMode}
+        .enabledProviders=${this.enabledProviders}
+        .allowedModels=${this.allowedModels}
+        @profile-api-access-mode=${this.handleApiAccessMode}
+      ></api-access-section>
+
+      <section class="remote-agents-section">
+        <h2>Available Remote Agents</h2>
+        ${this.renderRemoteAgentsSection()}
+      </section>
+    `;
+  }
+
+  private renderSignedOutView(): TemplateResult {
+    return html`<sign-in-prompt
+      @profile-sign-in=${this.handleSignIn}
+    ></sign-in-prompt>`;
+  }
 
   override render(): TemplateResult {
+    const content = this.authenticated
+      ? this.renderAuthenticatedView()
+      : this.renderSignedOutView();
+
     return html`
       <div class="profile-container">
         <header class="view-header">
           <h1>TeXRA Account</h1>
         </header>
-
-        ${this.authenticated
-          ? html`
-              <profile-info
-                .email=${this.userEmail}
-                .userId=${this.userId}
-                .tier=${this.tier}
-                .accessExpiresAt=${this.accessExpiresAt}
-                .showSignOut=${true}
-                @profile-sign-out=${this.handleSignOut}
-              ></profile-info>
-
-              <api-access-section
-                .mode=${this.apiAccessMode}
-                .enabledProviders=${this.enabledProviders}
-                .allowedModels=${this.allowedModels}
-                @profile-api-access-mode=${this.handleApiAccessMode}
-              ></api-access-section>
-
-              <section class="remote-agents-section">
-                <h2>Available Remote Agents</h2>
-                ${this.remoteAgents.length
-                  ? html`
-                      <agents-table
-                        .agents=${this.remoteAgents}
-                        @profile-select-agent=${this.handleSelectAgent}
-                      ></agents-table>
-                    `
-                  : html`
-                      <p class="no-agents">
-                        No remote agents available. Contact support@texra.ai for
-                        assistance.
-                      </p>
-                    `}
-              </section>
-            `
-          : html`<sign-in-prompt
-              @profile-sign-in=${this.handleSignIn}
-            ></sign-in-prompt>`}
+        ${content}
       </div>
     `;
   }

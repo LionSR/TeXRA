@@ -30,7 +30,7 @@ export const logEntryStyles = css`
   }
 
   .log-entry-content {
-    padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
+    padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
     overflow: visible;
   }
 

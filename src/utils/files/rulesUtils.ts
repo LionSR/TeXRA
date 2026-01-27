@@ -7,7 +7,8 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { WorkspaceFS } from './workspaceFS';
+import { AbsoluteFS } from './absoluteFS';
 
 const CHANNEL = 'rulesUtils';
 logger.initialize(CHANNEL);

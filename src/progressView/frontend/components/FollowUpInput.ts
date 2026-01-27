@@ -163,12 +163,12 @@ export class FollowUpInput extends LitElement {
   }
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
-  private handleKeydown = (event: KeyboardEvent): void => {
+  private handleKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.emitSend();
     }
-  };
+  }
 
   render(): TemplateResult | typeof nothing {
     if (!this.visible) {

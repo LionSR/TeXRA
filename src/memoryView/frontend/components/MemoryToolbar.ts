@@ -29,13 +29,13 @@ export class MemoryToolbar extends LitElement {
     `,
   ];
 
-  private handleRefresh = (): void => {
+  private handleRefresh(): void {
     this.dispatchEvent(MemoryViewEvents.refresh());
-  };
+  }
 
-  private handleOpenFolder = (): void => {
+  private handleOpenFolder(): void {
     this.dispatchEvent(MemoryViewEvents.openFolder());
-  };
+  }
 
   override render(): TemplateResult {
     return html`
