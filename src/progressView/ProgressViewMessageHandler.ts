@@ -105,7 +105,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createHandlerRegistry(): ProgressViewInboundHandlerRegistry {
     return {
       // Common handlers - passthrough to webview
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReadySignal(),
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () =>
+        this.handleWebviewReadySignal(),
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.postToActiveView(data),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
         this.postToActiveView(data),
