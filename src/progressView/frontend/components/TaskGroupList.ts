@@ -1,16 +1,17 @@
 /**
  * Fully declarative task group list component.
  * Data flows in, DOM flows out. No imperative manipulation.
+ *
+ * Uses Shadow DOM with modular styles for encapsulation.
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
+import { LitElement, html, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { virtualize } from '@lit-labs/virtualizer/virtualize.js';
-import { flow } from '@lit-labs/virtualizer/layouts/flow.js';
 
 // Local imports - side effects: register components
+import '@lit-labs/virtualizer';
 import './TaskGroupItem';
 import './LogEntry';
 import './LogPlaceholder';
@@ -18,14 +19,14 @@ import './LogPlaceholder';
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
+// Local imports - shared styles
+import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+
 // Local imports - progress view constants
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { ELEMENT_IDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
-
-// Local imports - shared styles
 
 // Local imports - services
 import { AudioNotificationService } from '../services/AudioNotificationService';
@@ -56,17 +57,8 @@ export class TaskGroupList extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    codiconStyles,
     ...logStyles,
-    css`
-      /* Match global CSS layout expectations for task-group-list */
-      :host {
-        display: flex;
-        flex-direction: column;
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow: hidden;
-      }
-    `,
   ];
 
   /** All task groups to render */
@@ -203,23 +195,25 @@ export class TaskGroupList extends LitElement {
       return nothing;
     }
 
-    return html`<task-group-item
-      .group=${group}
-      ?expanded=${this.isExpanded(group.id)}
-      @group-toggle=${this.handleGroupToggle}
-      >${virtualize({
-        items: messages,
-        renderItem: (m: LogMessageData) =>
-          html`<log-entry .message=${m}></log-entry>`,
-        keyFunction: (m: LogMessageData) => m.id,
-        scroller: true,
-        layout: flow(),
-      })}${repeat(
-        children,
-        (c) => c.group.id,
-        (c) => this.renderGroupNode(c),
-      )}</task-group-item
-    >`;
+    return html`
+      <task-group-item
+        .group=${group}
+        ?expanded=${this.isExpanded(group.id)}
+        @group-toggle=${this.handleGroupToggle}
+      >
+        <lit-virtualizer
+          .items=${messages}
+          .renderItem=${(m: LogMessageData) =>
+            html`<log-entry .message=${m}></log-entry>`}
+          .keyFunction=${(m: LogMessageData) => m.id}
+        ></lit-virtualizer>
+        ${repeat(
+          children,
+          (c) => c.group.id,
+          (c) => this.renderGroupNode(c),
+        )}
+      </task-group-item>
+    `;
   }
 
   override render(): TemplateResult {
@@ -227,43 +221,45 @@ export class TaskGroupList extends LitElement {
 
     // Show placeholder if empty
     if (tree.length === 0 && this.messages.length === 0) {
-      return html`<vscode-scrollable
-        id=${ELEMENT_IDS.LOG_CONTENT}
-        class="log-container"
-        ><log-placeholder
-          id=${ELEMENT_IDS.LOG_PLACEHOLDER}
-          .content=${PLACEHOLDER_HTML}
-        ></log-placeholder
-      ></vscode-scrollable>`;
+      return html`
+        <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+          <log-placeholder
+            id=${ELEMENT_IDS.LOG_PLACEHOLDER}
+            .content=${PLACEHOLDER_HTML}
+          ></log-placeholder>
+        </vscode-scrollable>
+      `;
     }
 
-    return html`<vscode-scrollable
-      id=${ELEMENT_IDS.LOG_CONTENT}
-      class="log-container"
-      >${this.isToolUse
-        ? virtualize({
-            items: ungroupedMessages,
-            renderItem: (m: LogMessageData) =>
-              html`<log-entry .message=${m}></log-entry>`,
-            keyFunction: (m: LogMessageData) => m.id,
-            scroller: true,
-            layout: flow(),
-          })
-        : nothing}${repeat(
-        tree,
-        (t) => t.group.id,
-        (t) => this.renderGroupNode(t),
-      )}${!this.isToolUse
-        ? virtualize({
-            items: ungroupedMessages,
-            renderItem: (m: LogMessageData) =>
-              html`<log-entry .message=${m}></log-entry>`,
-            keyFunction: (m: LogMessageData) => m.id,
-            scroller: true,
-            layout: flow(),
-          })
-        : nothing}</vscode-scrollable
-    >`;
+    return html`
+      <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
+        ${this.isToolUse
+          ? html`
+              <lit-virtualizer
+                .items=${ungroupedMessages}
+                .renderItem=${(m: LogMessageData) =>
+                  html`<log-entry .message=${m}></log-entry>`}
+                .keyFunction=${(m: LogMessageData) => m.id}
+              ></lit-virtualizer>
+            `
+          : nothing}
+        ${repeat(
+          tree,
+          (t) => t.group.id,
+          (t) => this.renderGroupNode(t),
+        )}
+        ${!this.isToolUse
+          ? html`
+              <lit-virtualizer
+                .items=${ungroupedMessages}
+                .renderItem=${(m: LogMessageData) =>
+                  html`<log-entry .message=${m}></log-entry>`}
+                .keyFunction=${(m: LogMessageData) => m.id}
+              ></lit-virtualizer>
+            `
+          : nothing}
+      </vscode-scrollable>
+    `;
   }
 }
 

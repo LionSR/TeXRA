@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { LitElement, css, html, type TemplateResult } from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - formatters
@@ -26,12 +26,6 @@ export class LogEntry extends LitElement {
     commonViewStyles,
     codiconStyles,
     ...logStyles,
-    css`
-      /* Ensure log entries take full width for proper alignment of user messages */
-      :host {
-        display: block;
-      }
-    `,
   ];
 
   @property({ type: Object }) message!: LogMessageData;

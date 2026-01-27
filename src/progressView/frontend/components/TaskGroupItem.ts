@@ -4,15 +4,17 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - side effect: register component
 import './TaskGroupHeader';
 
+// Local imports - shared styles
+import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+
 // Local imports - progress view constants
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { GROUP_DOM_IDS } from '../constants';
 
 // Local imports - progress view styles
@@ -28,12 +30,8 @@ export class TaskGroupItem extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    codiconStyles,
     ...logStyles,
-    css`
-      :host {
-        display: contents;
-      }
-    `,
   ];
 
   @property({ type: Object }) group!: TaskGroup;
