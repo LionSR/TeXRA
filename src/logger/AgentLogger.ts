@@ -7,10 +7,10 @@ import {
   type ContextStateData,
   type EndGroupStatus,
   type ErrorContext,
+  type ExtendedTokenUsageStats,
   type FileListEntry,
   type MessageType,
 } from '@shared/schemas';
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { delay } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';

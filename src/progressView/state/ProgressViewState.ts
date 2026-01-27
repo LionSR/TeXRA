@@ -19,8 +19,8 @@ import {
 import { isPlainObject } from '@shared/utils/string';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { normalizeRunId } from '@common/constants/runIds';
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TaskState,

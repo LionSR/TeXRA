@@ -12,10 +12,10 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
+import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 import { MainViewEvents } from '../events';
 
 // Local imports - shared utilities
-import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 
 // Local imports - shared schemas
 import type {

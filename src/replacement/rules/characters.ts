@@ -13,5 +13,3 @@ export const CHARACTER_REPLACEMENTS: ReplacementCategory = {
     'Schr{\\\\`o}dingers': 'Schr{\\"o}dingers',
   },
 };
-
-export default CHARACTER_REPLACEMENTS;

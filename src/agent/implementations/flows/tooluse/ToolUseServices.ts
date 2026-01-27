@@ -12,12 +12,8 @@
  * - Eliminates closure indirection for cleaner call stacks
  */
 
-import type { AgentRunState } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type {
@@ -26,20 +22,6 @@ import type {
 } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-
-/**
- * Result of preparing initial state for a tool-use session.
- *
- * Returns individual state slices directly instead of wrapping in AgentSharedStore.
- * This eliminates the convert→pass→convert overhead pattern.
- */
-export interface PrepareStateResult {
-  messages: ProviderMessage[];
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
-  shouldSkipCycle: boolean;
-}
 
 /**
  * Services for tool-use flow nodes.

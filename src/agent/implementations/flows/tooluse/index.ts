@@ -5,11 +5,7 @@
  * The flow itself is in ToolUseRunFlow.ts (parent directory).
  */
 
-export type {
-  ToolUseServices,
-  ToolUseFlowParams,
-  PrepareStateResult,
-} from './ToolUseServices';
+export type { ToolUseServices, ToolUseFlowParams } from './ToolUseServices';
 
 export { type ToolUseFlowContextInit } from './ToolUseFlowContext';
 

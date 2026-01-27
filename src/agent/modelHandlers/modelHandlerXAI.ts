@@ -1,8 +1,8 @@
 // Third-party imports
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports
 import type { ExtractResponseResult } from './types/IModelHandler';

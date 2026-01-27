@@ -1,5 +1,5 @@
 // Local imports - common
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+import { globalSM, GlobalStateKey } from '@common/state';
 
 // Local imports - config utils
 import * as logger from '@logger/logUtils';
