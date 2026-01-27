@@ -33,11 +33,6 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  protected createHandlers(): Record<string, never> {
-    // Handler registry is created dynamically via createHandlerRegistry
-    return {};
-  }
-
   private createHandlerRegistry(): HistoryViewInboundHandlerRegistry {
     return {
       [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
