@@ -84,12 +84,10 @@ const SettingsMessages = [
 // --- Execution messages ---
 // EXECUTE carries full agent config - use passthrough to allow all fields
 const ExecutionMessages = [
-  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }).passthrough(),
-  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.MERGE) }).passthrough(),
-  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.COMPARE) }).passthrough(),
-  z
-    .object({ command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED) })
-    .passthrough(),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.MERGE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.COMPARE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED) }),
 ] as const;
 
 // --- File selection messages (command-only) ---
@@ -166,12 +164,10 @@ const FileOperationMessages = [
 // --- Instruction messages ---
 const InstructionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION),
-  z
-    .object({
-      command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
-      text: z.string(),
-    })
-    .passthrough(),
+  z.looseObject({
+    command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
+    text: z.string(),
+  }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE),
     base64: z.string(),
