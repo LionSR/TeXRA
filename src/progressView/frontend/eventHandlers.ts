@@ -16,12 +16,12 @@ import {
   type StreamState,
 } from './store';
 import type {
-  FileActionDetail,
   FilterEventDetail,
   FollowUpChangeDetail,
   FollowupCommandDetail,
   FollowupModeDetail,
   PermissionActionDetail,
+  ProgressFileActionDetail,
   RunSelectedDetail,
   SortEventDetail,
   StreamEventDetail,
@@ -118,7 +118,9 @@ export function handleRunSelected(
   });
 }
 
-export function handleFileAction(event: CustomEvent<FileActionDetail>): void {
+export function handleFileAction(
+  event: CustomEvent<ProgressFileActionDetail>,
+): void {
   const { command, file, base, prev } = event.detail;
   const payload: Record<string, string> = { file };
   if (base) payload.base = base;
