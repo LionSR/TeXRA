@@ -6,10 +6,15 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - progress view constants
+import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 import { STREAM_STATUS } from '../constants';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
+
+// Local imports - shared styles
 
 // Local imports - formatter helpers
 import {
@@ -30,11 +35,17 @@ const STATUS_ICONS: Record<string, string> = {
 
 @customElement('task-group-header')
 export class TaskGroupHeader extends LitElement {
-  static override styles = css`
-    :host {
-      display: contents;
-    }
-  `;
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    ...logStyles,
+    css`
+      :host {
+        display: contents;
+      }
+    `,
+  ];
 
   @property({ type: Object }) group!: TaskGroup;
 
