@@ -28,9 +28,10 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
-      // Keep default 4KB limit - fonts above this are emitted as files (not inlined as base64)
-      // KaTeX fonts are ~10-60KB each, so they will be emitted to dist/{webview}/
-      assetsInlineLimit: 4 * 1024,
+      // Disable asset inlining to ensure all fonts are emitted as files (not base64 data URIs)
+      // This is required because VS Code webview CSP font-src doesn't allow data: URIs
+      // Note: KaTeX_Size3-Regular.woff2 (3.6KB) would otherwise be inlined and blocked by CSP
+      assetsInlineLimit: 0,
       rollupOptions: {
         input: resolve(__dirname, `src/${webviewName}/frontend/index.ts`),
         output: {
@@ -78,7 +79,8 @@ export default defineConfig(({ mode }) => {
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
-      assetsInlineLimit: 4 * 1024,
+      // Disable asset inlining - CSP font-src doesn't allow data: URIs
+      assetsInlineLimit: 0,
     },
 
     resolve: { alias: aliases },
