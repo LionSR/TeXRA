@@ -8,6 +8,33 @@ import * as vscode from 'vscode';
 
 import { WorkspaceFS } from '@utils/files';
 
+/** Find an existing visible editor for the given URI. */
+function findExistingEditor(uri: vscode.Uri): vscode.TextEditor | undefined {
+  return vscode.window.visibleTextEditors.find(
+    (e) => e.document.uri.fsPath === uri.fsPath,
+  );
+}
+
+/** Show document in editor, reusing existing or opening new. */
+async function showDocument(
+  uri: vscode.Uri,
+  existingEditor: vscode.TextEditor | undefined,
+  options: { preserveFocus: boolean; preview: boolean },
+): Promise<vscode.TextEditor> {
+  if (existingEditor) {
+    return vscode.window.showTextDocument(existingEditor.document, {
+      viewColumn: existingEditor.viewColumn,
+      preserveFocus: options.preserveFocus,
+    });
+  }
+
+  const document = await vscode.workspace.openTextDocument(uri);
+  return vscode.window.showTextDocument(document, {
+    preview: options.preview,
+    preserveFocus: options.preserveFocus,
+  });
+}
+
 /**
  * Open a file in VS Code editor, optionally positioning cursor at a line.
  * Reuses existing editor if file is already open.
@@ -24,27 +51,12 @@ export async function openFileInEditor(
 ): Promise<string | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+    const existingEditor = findExistingEditor(uri);
 
-    // Check if file is already open in an editor
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
-    );
-
-    let editor: vscode.TextEditor;
-    if (existingEditor) {
-      // Reuse existing editor
-      editor = await vscode.window.showTextDocument(existingEditor.document, {
-        viewColumn: existingEditor.viewColumn,
-        preserveFocus: false,
-      });
-    } else {
-      // Open new editor
-      const document = await vscode.workspace.openTextDocument(uri);
-      editor = await vscode.window.showTextDocument(document, {
-        preserveFocus: false,
-        preview: false,
-      });
-    }
+    const editor = await showDocument(uri, existingEditor, {
+      preserveFocus: false,
+      preview: false,
+    });
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -78,28 +90,16 @@ export async function ensureFileOpen(
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+    const existingEditor = findExistingEditor(uri);
+    const preserveFocus = options.preserveFocus ?? !existingEditor;
 
-    // Check if file is already open
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
-    );
-
-    let editor: vscode.TextEditor;
-    if (existingEditor) {
-      editor = existingEditor;
-      if (!options.preserveFocus) {
-        editor = await vscode.window.showTextDocument(existingEditor.document, {
-          viewColumn: existingEditor.viewColumn,
-          preserveFocus: false,
-        });
-      }
-    } else {
-      const document = await vscode.workspace.openTextDocument(uri);
-      editor = await vscode.window.showTextDocument(document, {
-        preview: false,
-        preserveFocus: options.preserveFocus ?? true,
-      });
-    }
+    const editor =
+      existingEditor && preserveFocus
+        ? existingEditor
+        : await showDocument(uri, existingEditor, {
+            preserveFocus,
+            preview: false,
+          });
 
     if (options.save && editor.document.isDirty) {
       await editor.document.save();

@@ -24,8 +24,9 @@ const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
 /**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
+ * Internal helper used by extendEnvPath and findToolInCommonPaths.
  */
-export function getExtraDirs(): string[] {
+function getExtraDirs(): string[] {
   // Return cached value if available
   if (cachedExtraDirs !== null) {
     return cachedExtraDirs;

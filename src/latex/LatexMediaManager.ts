@@ -103,36 +103,35 @@ export class LatexMediaManager {
             outputDirectory: buildDir,
             compiler: 'latexmk',
           });
-          if (compiled) {
-            const pdfFile = path.join(
-              buildDir,
-              path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
-            );
-            const pdfLocation = pathToLocation(pdfFile);
-            if (await flexibleFS.exists(pdfLocation)) {
-              try {
-                const stats = await flexibleFS.stat(pdfLocation);
-                if (stats.size === 0) {
-                  this.logger.warn(
-                    `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-                  );
-                  return undefined;
-                }
-              } catch (err) {
-                const message = toErrorMessage(err);
-                this.logger.error(
-                  `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${message}`,
-                );
-                return undefined;
-              }
-
-              this.logger.info(
-                `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-              );
-              return pdfLocation;
-            }
+          if (!compiled) {
+            return undefined;
           }
-          return undefined;
+          const pdfFile = path.join(
+            buildDir,
+            path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
+          );
+          const pdfLocation = pathToLocation(pdfFile);
+          if (!(await flexibleFS.exists(pdfLocation))) {
+            return undefined;
+          }
+          try {
+            const stats = await flexibleFS.stat(pdfLocation);
+            if (stats.size === 0) {
+              this.logger.warn(
+                `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
+              );
+              return undefined;
+            }
+          } catch (err) {
+            this.logger.error(
+              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+            );
+            return undefined;
+          }
+          this.logger.info(
+            `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
+          );
+          return pdfLocation;
         } catch {
           // pMap with stopOnError: false continues on individual failures
           return undefined;
@@ -141,11 +140,11 @@ export class LatexMediaManager {
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
 
-    compileResults.forEach((result) => {
+    for (const result of compileResults) {
       if (result) {
         workspaceState.media.addMediaFiles([result]);
       }
-    });
+    }
   }
 
   private async extractFiguresFromFiles(
@@ -196,13 +195,13 @@ export class LatexMediaManager {
         })),
       );
 
-      existenceChecks
-        .filter(({ exists }) => !exists)
-        .forEach(({ loc }) =>
+      for (const { loc, exists } of existenceChecks) {
+        if (!exists) {
           this.logger.debug(
             `Extracted figure path does not exist: ${loc.absolutePath} (from ${file.absolutePath})`,
-          ),
-        );
+          );
+        }
+      }
 
       workspaceState.media.addMediaFiles(fileLocations);
       mirrorTasks.push(this.mirrorFigureDependencies(file, figures));
@@ -230,10 +229,12 @@ export class LatexMediaManager {
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
 
-    // Add successful TikZ compilation results (filter non-empty arrays)
-    tikzResults
-      .filter((r) => r.length > 0)
-      .forEach((r) => workspaceState.media.addMediaFiles(r));
+    // Add successful TikZ compilation results
+    for (const r of tikzResults) {
+      if (r.length > 0) {
+        workspaceState.media.addMediaFiles(r);
+      }
+    }
 
     if (logSummary) {
       const totalFigures = tikzResults.reduce((sum, r) => sum + r.length, 0);

@@ -46,15 +46,14 @@ function getMajorityChoice(choices: string[]): ConnectionResult {
   )[0];
 
   const connector = CASE_CONNECTORS[majorityChoice];
-  if (connector !== undefined) {
-    return { connector, choice: majorityChoice };
+  if (connector === undefined) {
+    logger.debug(
+      CHANNEL,
+      `Invalid choice: ${majorityChoice}. Defaulting to space.`,
+    );
+    return DEFAULT_RESULT;
   }
-
-  logger.debug(
-    CHANNEL,
-    `Invalid choice: ${majorityChoice}. Defaulting to space.`,
-  );
-  return DEFAULT_RESULT;
+  return { connector, choice: majorityChoice };
 }
 
 /**

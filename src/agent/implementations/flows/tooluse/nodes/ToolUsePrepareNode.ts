@@ -7,11 +7,15 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { type NodeExecResult } from '@agent/implementations/flows/common';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, PrepareResult } from './types';
+
+/** Result type for prepare node execution. */
+type PrepareExecResult =
+  | { kind: 'success'; result: PrepareResult }
+  | { kind: 'error'; error: unknown };
 
 export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
@@ -94,7 +98,7 @@ export class ToolUsePrepareNode<C> extends Node<
   async post(
     shared: ToolUseRunShared,
     _prepRes: void,
-    execRes: NodeExecResult<PrepareResult>,
+    execRes: PrepareExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
       if (execRes.error instanceof Error) {

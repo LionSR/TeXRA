@@ -66,17 +66,19 @@ export function extractTextFromTag(
 }
 
 /**
- * Extract LaTeX content from a markdown fenced code block
+ * Extract LaTeX content from a markdown fenced code block.
+ * Internal helper for extractDocument cascade.
  */
-export function extractLatexFromMarkdown(content: string): string | null {
+function extractLatexFromMarkdown(content: string): string | null {
   const match = content.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
   return match ? match[1] : null;
 }
 
 /**
- * Extract LaTeX document starting at \documentclass and ending at \end{document}
+ * Extract LaTeX document starting at \documentclass and ending at \end{document}.
+ * Internal helper for extractDocument cascade.
  */
-export function extractLatexBetweenDocumentClass(
+function extractLatexBetweenDocumentClass(
   content: string,
 ): string | null {
   const match = content.match(/\\documentclass[\s\S]*?\\end{document}/);
@@ -136,19 +138,6 @@ export function extractMultipleTextFromTag(
   return extractNamedDocuments(inputContent);
 }
 
-/**
- * Remove specified XML tags and their content from input string
- */
-export function filterTagsFromText(
-  content: string,
-  tags: string | string[],
-): string {
-  const tagArray = typeof tags === 'string' ? [tags] : tags;
-  return tagArray.reduce((result, tag) => {
-    const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
-    return result.replace(pattern, '');
-  }, content);
-}
 
 /**
  * Extract content from XML document element for single document case

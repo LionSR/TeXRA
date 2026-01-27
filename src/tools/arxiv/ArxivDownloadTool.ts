@@ -21,10 +21,6 @@ const ArxivDownloadInputSchema = z.strictObject({
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
-function validateArxivId(id: string): string | null {
-  return arxivProcessor.validateId(id);
-}
-
 export class ArxivDownloadTool extends defineTool({
   name: 'download_arxiv_source',
   description:
@@ -33,7 +29,7 @@ export class ArxivDownloadTool extends defineTool({
 }) {
   protected async execute(input: ArxivDownloadInput): Promise<ToolResult> {
     const arxivId = input.id.trim();
-    const validationError = validateArxivId(arxivId);
+    const validationError = arxivProcessor.validateId(arxivId);
     if (validationError) {
       throw new ToolError(validationError);
     }
