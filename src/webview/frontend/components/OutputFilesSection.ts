@@ -18,129 +18,31 @@ import {
   fileStateContext,
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
+import {
+  fileSelectLayoutStyles,
+  toggleStyles,
+  multiFilesStyles,
+} from '../styles/fileSelectStyles';
 
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
+  static override styles = [
+    fileSelectLayoutStyles,
+    toggleStyles,
+    multiFilesStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .file-select {
-      margin-bottom: var(--spacing-large);
-    }
-
-    .file-select-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: var(--spacing-small);
-      flex-wrap: nowrap;
-      line-height: 1.5;
-      gap: var(--spacing-small);
-    }
-
-    .file-select-label-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-small);
-      flex-wrap: nowrap;
-      flex: 1;
-      min-width: 0;
-      min-height: var(--height-control);
-    }
-
-    .file-select-actions,
-    vscode-toolbar-container.file-select-actions {
-      flex-direction: column !important;
-      flex-wrap: nowrap;
-      margin-left: auto;
-    }
-
-    .file-select-actions vscode-toolbar-button,
-    .file-action-button {
-      width: var(--height-control);
-      height: var(--height-control);
-      min-width: var(--height-control);
-      min-height: var(--height-control);
-    }
-
-    .toggle-icon {
-      cursor: pointer;
-      user-select: none;
-      margin: 0;
-      position: relative;
-      padding: 0 var(--spacing-tiny);
-      color: var(--text-color);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .file-select[data-expanded='true'] .toggle-icon {
-      color: var(--vscode-foreground);
-    }
-
-    .optional-label {
-      color: var(--text-color);
-      font-weight: normal;
-      font-size: var(--font-size);
-      white-space: nowrap;
-      min-width: calc(var(--width-button-min) * 2);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .multiple-files-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-top: var(--spacing-small);
-      padding: 0;
-    }
-
-    .multiple-files-content {
-      width: 100%;
-      padding: 0;
-    }
-
-    .multiple-files-list {
-      background-color: var(--background-color);
-      border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
-      border-radius: var(--border-radius);
-      padding: var(--spacing-small);
-      font-size: var(--font-size);
-      max-height: var(--height-small);
-      overflow-y: auto;
-    }
-
-    .file-item {
-      padding: var(--spacing-tiny) var(--spacing-small);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .file-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-
-    .remove-button {
-      color: var(--vscode-errorForeground);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .file-list-placeholder {
-      color: var(--color-text-secondary);
-      font-style: italic;
-      padding: var(--spacing-tiny) var(--spacing-small);
-    }
-  `;
+      .file-action-button {
+        width: var(--height-control);
+        height: var(--height-control);
+        min-width: var(--height-control);
+        min-height: var(--height-control);
+      }
+    `,
+  ];
 
   @consume({ context: fileStateContext, subscribe: true })
   private fileState?: FileStateContextValue;

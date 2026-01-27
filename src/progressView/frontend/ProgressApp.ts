@@ -1,5 +1,5 @@
 // Third-party imports
-import { html, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
@@ -87,6 +87,43 @@ import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
+  static override styles = css`
+    :host {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    vscode-split-layout {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+    }
+
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Stream content containers - pass-through for layout */
+    tool-use-stream-content,
+    workflow-stream-content {
+      display: contents;
+    }
+  `;
+
   @state() private appState: ProgressState;
   @state() private prompts: PromptState[] = [];
 
@@ -121,10 +158,6 @@ export class ProgressApp extends BaseWebviewApp {
       streamFilter: prefs.streamFilter,
       streamSort: prefs.streamSort,
     };
-  }
-
-  protected createRenderRoot(): HTMLElement {
-    return this;
   }
 
   protected override get readyCommand(): string | null {
