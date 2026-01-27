@@ -12,11 +12,11 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
-import Sortable from 'sortablejs';
 
 // Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
 
 // Local imports - main view
+import { SortableController } from '@shared/controllers/SortableController';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import {
@@ -26,9 +26,6 @@ import {
 
 // Local imports - shared schemas
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
-
-// Local imports - shared types
-import type { SortableDragEvent } from '@shared/types/sortable';
 
 const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoExtractFigure: false,
@@ -259,18 +256,23 @@ export class FileSelectGroup extends LitElement {
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
 
-  private sortable: Sortable | null = null;
-
-  override disconnectedCallback(): void {
-    this.destroySortable();
-    super.disconnectedCallback();
-  }
+  private sortableController = new SortableController(
+    this,
+    () => this.fileListElement,
+    () => this.currentFiles,
+    (result) =>
+      this.dispatchEvent(
+        MainViewEvents.filesReordered({
+          listId: this.listId,
+          files: result.items,
+        }),
+      ),
+  );
 
   protected override updated(changedProps: Map<string, unknown>): void {
     if (changedProps.has('config')) {
-      this.destroySortable();
+      this.sortableController.reinitialize();
     }
-    this.initializeSortable();
   }
 
   private get listId(): string {
@@ -394,39 +396,6 @@ export class FileSelectGroup extends LitElement {
       this.autoExtractMenuOpen = false;
       this.toolConfigMenuOpen = false;
     }
-  }
-
-  private initializeSortable(): void {
-    if (this.sortable || !this.fileListElement) return;
-    this.sortable = new Sortable(this.fileListElement, {
-      animation: 150,
-      onEnd: (event) => this.handleSortEnd(event),
-    });
-  }
-
-  private destroySortable(): void {
-    this.sortable?.destroy();
-    this.sortable = null;
-  }
-
-  private handleSortEnd(event: unknown): void {
-    const { oldIndex, newIndex } = (event ?? {}) as SortableDragEvent;
-    if (
-      oldIndex === null ||
-      oldIndex === undefined ||
-      newIndex === null ||
-      newIndex === undefined
-    ) {
-      return;
-    }
-
-    const current = [...this.currentFiles];
-    const [moved] = current.splice(oldIndex, 1);
-    current.splice(newIndex, 0, moved);
-
-    this.dispatchEvent(
-      MainViewEvents.filesReordered({ listId: this.listId, files: current }),
-    );
   }
 
   private renderFileOptions(): TemplateResult {
