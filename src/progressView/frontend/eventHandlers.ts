@@ -1,4 +1,5 @@
 // Local imports - shared webview
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
@@ -242,21 +243,21 @@ export function handlePermissionAction(
   const { permission, action, feedback } = event.detail;
 
   switch (permission.kind) {
-    case 'toolEdit':
+    case PERMISSION_KIND.TOOL_EDIT:
       postMessage(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
         requestId: permission.data.requestId,
         action,
         feedback,
       });
       break;
-    case 'bash':
+    case PERMISSION_KIND.BASH:
       postMessage(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
         requestId: permission.data.requestId,
         action,
         feedback,
       });
       break;
-    case 'retry':
+    case PERMISSION_KIND.RETRY:
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
           stream: permission.data.streamId,
@@ -268,7 +269,7 @@ export function handlePermissionAction(
         });
       }
       break;
-    case 'proposal':
+    case PERMISSION_KIND.PROPOSAL:
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
         proposalId: permission.data.proposalId,
         action,

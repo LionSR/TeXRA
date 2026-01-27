@@ -134,7 +134,7 @@ export class PersistedFlow<
       throw new Error('Missing shared state in flow record');
     }
 
-    cursor.setParams(params as any);
+    cursor.setParams(params);
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
 
