@@ -3,9 +3,13 @@ import { z } from 'zod';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MainViewPersistedStateSchema } from './mainViewState';
 
+/** Theme values - single source of truth for all theme schemas */
+export const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);
+export type Theme = z.infer<typeof ThemeSchema>;
+
 export const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
-  theme: z.enum(['dark', 'light', 'high-contrast']),
+  theme: ThemeSchema,
 });
 
 export const SetDebugModeMessageSchema = z.object({
