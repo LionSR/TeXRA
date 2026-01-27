@@ -50,11 +50,9 @@ import { formatContent } from '@utils/text/xmlUtils';
 import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,
-  type RetryState,
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type { ZodIssue } from 'zod';
 import type {
   ToolUseCycleOptions,
   ToolUseCycleServices,
@@ -86,14 +84,9 @@ function parseToolInput(
   }
 }
 
-/** Check if an error has Zod-like issues array (duck typing). */
-function hasZodIssues(error: unknown): error is { issues: ZodIssue[] } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'issues' in error &&
-    Array.isArray((error as { issues?: unknown }).issues)
-  );
+/** Check if an error is a Zod validation error. */
+function isZodError(error: unknown): error is z.ZodError {
+  return error instanceof z.ZodError;
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
@@ -101,7 +94,7 @@ function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!hasZodIssues(error)) {
+  if (!isZodError(error)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
@@ -196,7 +189,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleServices<C>
 > {
   async prep(
-    shared: ToolUseCycleShared,
+    _shared: ToolUseCycleShared,
   ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
     const interrupted = this.services.checkInterruption();
 
@@ -372,14 +365,12 @@ type ToolUseProcessExecResult =
       responseTimeMs?: number;
     };
 
-/** Schema for ToolUseProcessNode prep result - captures shared state snapshot for exec. */
-const ToolUseProcessPrepResultSchema = z.object({
-  shouldStop: z.boolean(),
-  response: z.unknown().optional(),
-  responseTimeMs: z.number().optional(),
-});
-
-type ToolUseProcessPrepResult = z.infer<typeof ToolUseProcessPrepResultSchema>;
+/** Prep result for ToolUseProcessNode - captures shared state snapshot for exec. */
+interface ToolUseProcessPrepResult {
+  shouldStop: boolean;
+  response?: unknown;
+  responseTimeMs?: number;
+}
 
 /** Processes the model response to extract tool calls and usage data. */
 class ToolUseProcessNode<C> extends BaseNode<
@@ -730,7 +721,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
    */
   async post(
     shared: ToolUseCycleShared,
-    toolCalls: SdkToolCall[],
+    _toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
     const services = this.services;
