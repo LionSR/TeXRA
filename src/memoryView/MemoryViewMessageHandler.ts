@@ -47,11 +47,6 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  protected createHandlers(): Record<string, never> {
-    // Handler registry is created dynamically via createHandlerRegistry
-    return {};
-  }
-
   private createHandlerRegistry(): MemoryViewInboundHandlerRegistry {
     return {
       [MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA]: () => this.handleGetMemoryData(),
