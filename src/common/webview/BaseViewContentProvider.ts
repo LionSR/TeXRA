@@ -40,9 +40,8 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
-  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [
-    { key: 'styleUri', path: 'styles/index.css' },
-  ];
+  // Note: View-specific styles are handled via Lit CSS-in-JS, not external CSS files
+  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [];
 
   protected getWebviewPath(filePath: string): vscode.Uri {
     return vscode.Uri.joinPath(
