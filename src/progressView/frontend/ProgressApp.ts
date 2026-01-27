@@ -47,14 +47,13 @@ import {
   handleFollowUpSend,
   handleFollowupModeChange,
   handleFollowupRequestOptions,
-  handleFollowupRun,
-  handleFollowupSetup,
   handlePermissionAction,
   handleRunSelected,
   handleSortChange,
   handleStreamDelete,
   handleStreamSwitch,
   handleToolbarCommand,
+  sendFollowupCommand,
   type FrontendEventHandlerContext,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
@@ -62,6 +61,7 @@ import { getFilteredStreams } from './stateUtils';
 
 // Local imports - progress view contexts
 import {
+  EMPTY_STREAM_CONTEXT,
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
@@ -129,13 +129,7 @@ export class ProgressApp extends BaseWebviewApp {
 
   @provide({ context: streamStateContext })
   @state()
-  private streamContextValue: StreamContextValue = {
-    streamInfo: null,
-    streamState: null,
-    runId: null,
-    followupOptions: null,
-    isToolUse: false,
-  };
+  private streamContextValue: StreamContextValue = EMPTY_STREAM_CONTEXT;
 
   @provide({ context: permissionsContext })
   @state()
@@ -260,13 +254,7 @@ export class ProgressApp extends BaseWebviewApp {
   private updateStreamContext(): void {
     const activeStream = this.getActiveStreamInfo();
     if (!activeStream) {
-      this.streamContextValue = {
-        streamInfo: null,
-        streamState: null,
-        runId: null,
-        followupOptions: null,
-        isToolUse: false,
-      };
+      this.streamContextValue = EMPTY_STREAM_CONTEXT;
       this.permissionsContextValue = this.permissions;
       return;
     }
@@ -384,11 +372,19 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   private onFollowupSetup(e: CustomEvent): void {
-    handleFollowupSetup(e, this.createEventHandlerContext());
+    sendFollowupCommand(
+      PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
+      e,
+      this.createEventHandlerContext(),
+    );
   }
 
   private onFollowupRun(e: CustomEvent): void {
-    handleFollowupRun(e, this.createEventHandlerContext());
+    sendFollowupCommand(
+      PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
+      e,
+      this.createEventHandlerContext(),
+    );
   }
 
   private onPermissionAction(e: CustomEvent): void {

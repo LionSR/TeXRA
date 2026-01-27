@@ -1,13 +1,14 @@
+/**
+ * Lit context definitions for ProgressView.
+ *
+ * Context values use types from the store and shared schemas.
+ */
+
 // Third-party imports
 import { createContext } from '@lit/context';
 
 // Local imports - progress view
-import type {
-  FollowupOptionsState,
-  StreamState,
-  ToolUseStreamState,
-  WorkflowStreamState,
-} from '../store';
+import type { FollowupOptionsState, StreamState } from '../store';
 
 // Local imports - progress view components
 import type { PermissionState } from '../components/PermissionCard';
@@ -15,6 +16,7 @@ import type { PermissionState } from '../components/PermissionCard';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
+/** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
   streamInfo: StreamTabInfo | null;
   streamState: StreamState | null;
@@ -24,31 +26,14 @@ export interface StreamContextValue {
   isToolUse: boolean;
 }
 
-/**
- * Get the typed tool-use state from context.
- * Only call this when you know the stream is tool-use type (isToolUse === true).
- */
-export function getToolUseState(
-  context: StreamContextValue,
-): ToolUseStreamState | null {
-  if (context.isToolUse && context.streamState) {
-    return context.streamState as ToolUseStreamState;
-  }
-  return null;
-}
-
-/**
- * Get the typed workflow state from context.
- * Only call this when you know the stream is workflow type (isToolUse === false).
- */
-export function getWorkflowState(
-  context: StreamContextValue,
-): WorkflowStreamState | null {
-  if (!context.isToolUse && context.streamState) {
-    return context.streamState as WorkflowStreamState;
-  }
-  return null;
-}
+/** Default empty stream context value. */
+export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
+  streamInfo: null,
+  streamState: null,
+  runId: null,
+  followupOptions: null,
+  isToolUse: false,
+};
 
 export const streamStateContext = createContext<StreamContextValue>(
   'progress-stream-state',

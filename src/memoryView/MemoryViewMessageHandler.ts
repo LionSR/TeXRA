@@ -14,8 +14,7 @@ import {
   type MemoryViewItem,
 } from '@shared/schemas/memoryViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
-import { MEMORY_VIEW_COMMANDS } from '@common/webview';
-import * as logger from '@logger/logUtils';
+import { BaseViewMessageHandler, MEMORY_VIEW_COMMANDS } from '@common/webview';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PREVIEW_LINES,
@@ -38,24 +37,22 @@ type MessageFor<C extends MemoryViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-export class MemoryViewMessageHandler {
-  private readonly channel = 'MemoryViewMessageHandler';
-  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
-  private readonly handlers: MemoryViewInboundHandlerRegistry;
+export class MemoryViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
+  private readonly handlerRegistry: MemoryViewInboundHandlerRegistry;
 
   constructor(_context: vscode.ExtensionContext) {
-    logger.initialize(this.channel);
-    this.handlers = this.createHandlers();
+    super('MemoryView', { trackActiveView: true });
+    this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  private getActiveView():
-    | vscode.WebviewView
-    | vscode.WebviewPanel
-    | undefined {
-    return this._activeView;
+  protected createHandlers(): Record<string, never> {
+    // Handler registry is created dynamically via createHandlerRegistry
+    return {};
   }
 
-  private createHandlers(): MemoryViewInboundHandlerRegistry {
+  private createHandlerRegistry(): MemoryViewInboundHandlerRegistry {
     return {
       [MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA]: () => this.handleGetMemoryData(),
       [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (data) =>
@@ -71,17 +68,18 @@ export class MemoryViewMessageHandler {
     };
   }
 
-  public async handleMessage(
+  public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    this._activeView = webviewView;
+    // Track active view for handlers that need webview access
+    (this as any)._activeView = webviewView;
 
     const handled = dispatchMemoryViewInbound(
       message,
-      this.handlers,
+      this.handlerRegistry,
       (error) => {
-        logger.debug(this.channel, 'Message validation failed', {
+        this.logger.debug(this.channel, 'Message validation failed', {
           data: error,
         });
       },
@@ -93,7 +91,7 @@ export class MemoryViewMessageHandler {
       typeof message === 'object' &&
       'command' in message
     ) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `Unhandled command: ${(message as { command: string }).command}`,
       );

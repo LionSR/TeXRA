@@ -10,7 +10,7 @@ export interface ProviderDecorator {
   hint: string;
 }
 
-export const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
+const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
   anthropic: {
     unicode: '\u{1D538}', // 𝔸 - Double-struck A
     label: 'Anthropic',
@@ -70,7 +70,7 @@ export function getModelProviderDecorator(provider: string): ProviderDecorator {
 /**
  * Agent decorator configuration - single source of truth for all agent indicators.
  */
-export interface AgentDecorator {
+interface AgentDecorator {
   icon: string;
   unicode: string;
   label: string;

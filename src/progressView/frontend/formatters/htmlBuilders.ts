@@ -10,11 +10,11 @@
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
 import hljs from '@shared/highlighting/hljs';
 
-// Local imports - Lit utilities
-
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { getBasename } from '@shared/utils/path';
+
+// Local imports - Lit template utilities
 import {
   html,
   unsafeHTML,
@@ -24,8 +24,6 @@ import {
   type TemplateResult,
 } from './litTemplates';
 
-// Local imports - shared schemas
-
 // Local imports - formatter helpers
 import {
   TOOL_ICON_MAP,
@@ -34,6 +32,8 @@ import {
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
 import { registerCopyContent } from './copyContentStore';
+
+// Local imports - shared schemas (types)
 import type { FileListEntry } from '@shared/schemas';
 
 /** Build a tool-use section template. */

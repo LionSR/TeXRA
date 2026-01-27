@@ -59,7 +59,7 @@ export class LogEntryFormatter {
   private _nullableTypes: Set<MessageType> = new Set();
 
   constructor() {
-    this._initializeMarkdown();
+    this.md = getMarkdownRenderer();
     this._templateFormatters = this._buildTemplateFormatterMap();
     this._autoExpandedTypes = new Set(['thinking', 'scratchpad']);
     // Message types that return null when their formatter produces no result
@@ -69,10 +69,6 @@ export class LogEntryFormatter {
       'modelResponse',
       'contextState',
     ]);
-  }
-
-  _initializeMarkdown(): void {
-    this.md = getMarkdownRenderer();
   }
 
   _buildTemplateFormatterMap(): TemplateFormatterMap {

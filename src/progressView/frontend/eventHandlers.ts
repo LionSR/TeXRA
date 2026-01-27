@@ -9,11 +9,13 @@ import {
   getStreamState,
   isToolUseState,
   isWorkflowState,
+  type ProgressState,
   type StreamFilter,
   type StreamSort,
   type StreamState,
 } from './store';
 import type {
+  FileActionDetail,
   FilterEventDetail,
   FollowUpChangeDetail,
   FollowupCommandDetail,
@@ -30,7 +32,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - component types
 import type { FollowUpInput } from './components/FollowUpInput';
-import type { ProgressState } from './store';
 
 /**
  * Context passed to frontend event handlers providing access to state and refs.
@@ -116,11 +117,11 @@ export function handleRunSelected(
   });
 }
 
-export function handleFileAction(
-  event: CustomEvent<Record<string, string>>,
-): void {
-  const { command, ...payload } = event.detail;
-  if (!command) return;
+export function handleFileAction(event: CustomEvent<FileActionDetail>): void {
+  const { command, file, base, prev } = event.detail;
+  const payload: Record<string, string> = { file };
+  if (base) payload.base = base;
+  if (prev) payload.prev = prev;
   postMessage(command, payload);
 }
 
@@ -207,21 +208,7 @@ export function handleFollowupModeChange(
   });
 }
 
-export function handleFollowupSetup(
-  event: CustomEvent<FollowupCommandDetail>,
-  ctx: FrontendEventHandlerContext,
-): void {
-  sendFollowupCommand(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP, event, ctx);
-}
-
-export function handleFollowupRun(
-  event: CustomEvent<FollowupCommandDetail>,
-  ctx: FrontendEventHandlerContext,
-): void {
-  sendFollowupCommand(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP, event, ctx);
-}
-
-function sendFollowupCommand(
+export function sendFollowupCommand(
   command: string,
   event: CustomEvent<FollowupCommandDetail>,
   ctx: FrontendEventHandlerContext,

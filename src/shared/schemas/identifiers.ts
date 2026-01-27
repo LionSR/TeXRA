@@ -22,9 +22,9 @@ export const StorageKeySchema = z
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
 /** Unified identity for an execution - computed once, used everywhere */
-export const ExecutionIdentitySchema = z.strictObject({
+const ExecutionIdentitySchema = z.strictObject({
   executionId: ExecutionIdSchema,
   storageKey: StorageKeySchema,
   streamTabId: StreamTabIdSchema,
 });
-export type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;
+type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;

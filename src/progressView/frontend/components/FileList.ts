@@ -294,12 +294,9 @@ export class FileList extends LitElement {
     const { command, file, base, prev } = actionEl.dataset;
     if (!command || !file) return;
 
-    // Build payload - include base/prev only if present
-    const payload: Record<string, string> = { file };
-    if (base) payload.base = base;
-    if (prev) payload.prev = prev;
-
-    this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
+    this.dispatchEvent(
+      ProgressEvents.fileAction({ command, file, base, prev }),
+    );
   }
 
   private getSortedRounds(): [number, OutputFileInfo[]][] {

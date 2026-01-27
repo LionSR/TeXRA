@@ -12,9 +12,8 @@ import {
   type HistoryViewInboundMessage,
 } from '@shared/schemas/historyViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
-import { HISTORY_VIEW_COMMANDS } from '@common/webview';
+import { BaseViewMessageHandler, HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
-import * as logger from '@logger/logUtils';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 
@@ -24,24 +23,22 @@ type MessageFor<C extends HistoryViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-export class HistoryViewMessageHandler {
-  private readonly channel = 'HistoryViewMessageHandler';
-  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
-  private readonly handlers: HistoryViewInboundHandlerRegistry;
+export class HistoryViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
+  private readonly handlerRegistry: HistoryViewInboundHandlerRegistry;
 
   constructor(_context: vscode.ExtensionContext) {
-    logger.initialize(this.channel);
-    this.handlers = this.createHandlers();
+    super('HistoryView', { trackActiveView: true });
+    this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  private getActiveView():
-    | vscode.WebviewView
-    | vscode.WebviewPanel
-    | undefined {
-    return this._activeView;
+  protected createHandlers(): Record<string, never> {
+    // Handler registry is created dynamically via createHandlerRegistry
+    return {};
   }
 
-  private createHandlers(): HistoryViewInboundHandlerRegistry {
+  private createHandlerRegistry(): HistoryViewInboundHandlerRegistry {
     return {
       [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
         this.handleGetHistoryData(),
@@ -55,17 +52,18 @@ export class HistoryViewMessageHandler {
     };
   }
 
-  public async handleMessage(
+  public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    this._activeView = webviewView;
+    // Track active view for handlers that need webview access
+    (this as any)._activeView = webviewView;
 
     const handled = dispatchHistoryViewInbound(
       message,
-      this.handlers,
+      this.handlerRegistry,
       (error) => {
-        logger.debug(this.channel, 'Message validation failed', {
+        this.logger.debug(this.channel, 'Message validation failed', {
           data: error,
         });
       },
@@ -77,7 +75,7 @@ export class HistoryViewMessageHandler {
       typeof message === 'object' &&
       'command' in message
     ) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `Unhandled command: ${(message as { command: string }).command}`,
       );
@@ -197,7 +195,9 @@ export class HistoryViewMessageHandler {
       }
       await action(historyItem);
     } catch (error) {
-      logger.error(this.channel, `${operationName} failed`, { data: error });
+      this.logger.error(this.channel, `${operationName} failed`, {
+        data: error,
+      });
       await showLoggedErrorMessage(this.channel, errorPrefix, error);
     }
   }

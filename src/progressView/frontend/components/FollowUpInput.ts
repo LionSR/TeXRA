@@ -16,7 +16,7 @@ import { commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
 import { insertTextAtCursor, resolveTextareaTarget } from '@shared/utils';
-import { RecordingButtonController } from '@shared/controllers/RecordingButtonController';
+import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
