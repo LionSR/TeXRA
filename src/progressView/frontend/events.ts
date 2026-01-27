@@ -5,6 +5,7 @@
 
 import { createEvent } from '@shared/utils/events';
 
+import type { StringValueDetail } from '@shared/schemas';
 import type { FollowupFormData } from './components/FollowupSection';
 import type { PermissionState } from './components/PermissionCard';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';
@@ -33,9 +34,8 @@ export interface RunSelectedDetail {
   runId: string | null;
 }
 
-export interface FollowUpChangeDetail {
-  value: string;
-}
+/** Alias for semantic clarity - uses shared StringValueDetail */
+export type FollowUpChangeDetail = StringValueDetail;
 
 export interface FollowupModeDetail {
   mode: FollowupMode;
@@ -59,7 +59,11 @@ export interface FileClickDetail {
   line?: number;
 }
 
-export interface FileActionDetail {
+/**
+ * Detail for file-related actions in ProgressView.
+ * Named to distinguish from mainView's FileActionDetail which has different fields.
+ */
+export interface ProgressFileActionDetail {
   command: string;
   file: string;
   base?: string;
@@ -90,7 +94,8 @@ export const ProgressEvents = {
   runSelected: (detail: RunSelectedDetail) =>
     createEvent('run-selected', detail),
 
-  fileAction: (detail: FileActionDetail) => createEvent('file-action', detail),
+  fileAction: (detail: ProgressFileActionDetail) =>
+    createEvent('file-action', detail),
 
   followupChange: (detail: FollowUpChangeDetail) =>
     createEvent('followup-change', detail),
