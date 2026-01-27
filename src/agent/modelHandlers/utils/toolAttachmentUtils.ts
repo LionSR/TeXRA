@@ -13,11 +13,11 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@tools/result';
 
-// Local imports - model handlers
-
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+
+// Local imports - model handlers
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';

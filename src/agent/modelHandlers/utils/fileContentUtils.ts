@@ -16,8 +16,6 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 // Local imports - xml
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
-// Local imports - logger
-
 /**
  * Result of preparing file content for a model handler.
  */

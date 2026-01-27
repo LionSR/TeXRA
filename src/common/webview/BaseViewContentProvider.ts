@@ -71,9 +71,14 @@ export abstract class BaseViewContentProvider {
   protected buildUriRecord(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
+    resolver: (webview: vscode.Webview, path: string) => vscode.Uri = this
+      .getWebviewUri,
   ): Record<string, vscode.Uri> {
     return Object.fromEntries(
-      descriptors.map((d) => [d.key, this.getWebviewUri(webview, d.path)]),
+      descriptors.map(({ key, path }) => [
+        key,
+        resolver.call(this, webview, path),
+      ]),
     );
   }
 
@@ -116,29 +121,16 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
-  private buildUrisWithResolver(
-    webview: vscode.Webview,
-    descriptors: readonly ModuleDescriptor[],
-    resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
-  ): Record<string, vscode.Uri> {
-    return Object.fromEntries(
-      descriptors.map(({ key, path }) => [
-        key,
-        resolver.call(this, webview, path),
-      ]),
-    );
-  }
-
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      ...this.buildUrisWithResolver(
+      ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
         this.getCommonUri,
       ),
-      ...this.buildUrisWithResolver(
+      ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
         this.getNodeModulesUri,

@@ -47,7 +47,6 @@ export class HistoryList extends LitElement {
   /** Trigger to clear search state (set true to clear, resets to false) */
   @property({ type: Boolean }) clearSearchTrigger = false;
 
-  @state() private hasSearchMatches = false;
   /** Match counts per item, keyed by item.id - used to compute highlighted index */
   @state() private matchCounts: Map<string, number> = new Map();
 
@@ -97,7 +96,6 @@ export class HistoryList extends LitElement {
   // === Internal search operations (called from willUpdate) ===
 
   private performClearSearch(): void {
-    this.hasSearchMatches = false;
     this.matchCounts = new Map();
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
@@ -107,15 +105,12 @@ export class HistoryList extends LitElement {
 
   private performSearch(term: string): void {
     if (!term) {
-      this.hasSearchMatches = false;
       this.state?.setSearchIndex(-1);
       this.state?.setTotalMatches(0);
       this.clearItemMarks();
       this.updateMatchCount();
       return;
     }
-
-    this.hasSearchMatches = true;
     void this.applySearchToItems(term);
   }
 
@@ -181,7 +176,6 @@ export class HistoryList extends LitElement {
     this.matchCounts = newMatchCounts;
 
     const total = counts.reduce((sum, count) => sum + count, 0);
-    this.hasSearchMatches = total > 0;
     this.state?.setTotalMatches(total);
     if (total > 0) {
       this.state?.setSearchIndex(0);
@@ -230,7 +224,8 @@ export class HistoryList extends LitElement {
       return html`<div class="empty-state">No history items found</div>`;
     }
 
-    const forceOpen = Boolean(this.searchTerm && this.hasSearchMatches);
+    const hasMatches = (this.state?.totalMatches ?? 0) > 0;
+    const forceOpen = Boolean(this.searchTerm && hasMatches);
 
     return html`
       <div class="clear-container">
