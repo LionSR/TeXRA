@@ -20,7 +20,11 @@ import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
 import { rejectPendingEntries } from './bashApproval';
-import { type LatexPreviewEntry, previewProposedLatex, runLatexdiff } from './latexPreview';
+import {
+  type LatexPreviewEntry,
+  previewProposedLatex,
+  runLatexdiff,
+} from './latexPreview';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface ToolEditApprovalRequest {
