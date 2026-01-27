@@ -1140,7 +1140,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add media if provided (images and native PDFs)
     if (mediaFiles && this.capabilities.supportsVision) {
-      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      const formattedMediaContent = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ContentBlockParam[];
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -1180,7 +1182,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.capabilities.supportsVision
     ) {
       try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+        const formattedMediaContent = (await this.createMediaMessage(
+          mediaFiles,
+        )) as ContentBlockParam[];
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.logError(
@@ -2117,7 +2121,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!lastUserMsg) return;
 
     try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      const formattedMedia = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ContentBlockParam[];
       if (typeof lastUserMsg.content === 'string') {
         lastUserMsg.content = [
           ...formattedMedia,
