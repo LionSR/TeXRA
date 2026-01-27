@@ -9,25 +9,10 @@ import {
 import type { OutputFileInfo } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
 
-/**
- * Calculates file lineage and mappings between base files, previous round outputs,
- * and current round outputs.
- *
- * This consolidates the file matching heuristics in one place, making them:
- * - Easier to test
- * - Easier to understand and modify
- * - Reusable across different contexts
- */
+/** Calculates file lineage and mappings between base files and round outputs. */
 export class FileLineageCalculator {
   constructor(private readonly baseFiles: FileLocation[]) {}
 
-  /**
-   * Calculate the complete round mapping for a given round's outputs.
-   *
-   * @param currentOutputs - Output files from the current round
-   * @param previousOutputs - Output files from the previous round (empty for round 0)
-   * @returns RoundFileMapping with baseToOutput, prevToOutput, and originByOutput maps
-   */
   calculateMapping(
     currentOutputs: OutputFileInfo[],
     previousOutputs: OutputFileInfo[],
@@ -45,11 +30,7 @@ export class FileLineageCalculator {
     return { baseToOutput, prevToOutput, originByOutput };
   }
 
-  /**
-   * Calculate mapping from current output paths to their base file origins.
-   * Uses 'contains' strategy - output filename should contain base filename.
-   * Returns a map from output path to base location.
-   */
+  /** Map output paths to base files using 'contains' strategy. */
   private calculateBaseToOutputMapping(
     currentLocations: FileLocation[],
   ): Map<string, FileLocation> {
@@ -59,7 +40,6 @@ export class FileLineageCalculator {
       'contains',
     );
 
-    // Invert: forward is basePath -> outputLoc, we need outputPath -> baseLoc
     const result = new Map<string, FileLocation>();
     const baseByPath = new Map(
       this.baseFiles.map((f) => [getComparablePath(f), f]),
@@ -75,11 +55,7 @@ export class FileLineageCalculator {
     return result;
   }
 
-  /**
-   * Calculate mapping from current output paths to their previous round counterparts.
-   * Uses 'basename' strategy with round number stripping for inter-round matching.
-   * Returns a map from output path to previous round location.
-   */
+  /** Map output paths to previous round files using 'basename' strategy with round number stripping. */
   private calculatePrevToOutputMapping(
     prevLocations: FileLocation[],
     currentLocations: FileLocation[],
@@ -92,10 +68,9 @@ export class FileLineageCalculator {
       prevLocations,
       currentLocations,
       'basename',
-      true, // Strip round numbers for matching
+      true,
     );
 
-    // Invert: forward is prevPath -> outputLoc, we need outputPath -> prevLoc
     const result = new Map<string, FileLocation>();
     const prevByPath = new Map(
       prevLocations.map((f) => [getComparablePath(f), f]),
@@ -111,10 +86,6 @@ export class FileLineageCalculator {
     return result;
   }
 
-  /**
-   * Calculate origin mapping using prioritized heuristics to match output files
-   * to their original base files.
-   */
   private calculateOriginMapping(
     currentOutputs: OutputFileInfo[],
   ): Map<string, FileLocation | undefined> {
@@ -130,12 +101,8 @@ export class FileLineageCalculator {
   }
 
   /**
-   * Find the base file that matches the given source name.
-   * Single-pass algorithm that checks all priority heuristics:
-   * 1. Exact match: basename === source (immediate return)
-   * 2. Names without extensions match
-   * 3. Base name (no ext) matches source
-   * 4. Source (no ext) matches base name
+   * Find base file matching source name using prioritized heuristics:
+   * 1. Exact match  2. Names without extensions  3. Base name matches source  4. Source matches base name
    */
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
@@ -147,12 +114,10 @@ export class FileLineageCalculator {
       const baseName = this.getBaseName(baseLoc);
       const baseNameNoExt = path.parse(baseName).name;
 
-      // Priority 1: Exact match - return immediately
       if (baseName === source) {
         return baseLoc;
       }
 
-      // Track lower priority matches (first match for each priority wins)
       if (!priority2Match && baseNameNoExt === sourceNoExt) {
         priority2Match = baseLoc;
       } else if (!priority3Match && baseNameNoExt === source) {
@@ -165,9 +130,6 @@ export class FileLineageCalculator {
     return priority2Match ?? priority3Match ?? priority4Match;
   }
 
-  /**
-   * Get the basename from a FileLocation, handling different location kinds.
-   */
   private getBaseName(location: FileLocation): string {
     return path.basename(
       location.kind !== 'external'

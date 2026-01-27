@@ -8,7 +8,7 @@ import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 import { HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
-import { HistoryIdMessageSchema } from '@webview/types/messages';
+import { HistoryIdMessageSchema } from '@shared/schemas/historyViewMessages';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<

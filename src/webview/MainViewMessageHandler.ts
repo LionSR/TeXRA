@@ -1,24 +1,21 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { computeAgentOptionsData } from '@agent/index';
+import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
+import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
-
-// Local imports - webview
-import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
-// @ts-ignore - Import JavaScript module
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+  MAIN_VIEW_COMMANDS,
+} from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
-import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
-import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
-// Local file imports
 import {
   RecordingManager,
   FileManager,
@@ -53,12 +50,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    // Attach webview to managers that need it for message posting
     this.fileManager.attachWebview(webviewView);
     this.instructionManager.attachWebview(webviewView);
     this.diffManager.attachWebview(webviewView);
-
-    // Base class handles activeView tracking when trackActiveView is enabled
     await super.handleMessage(message, webviewView);
   }
 
@@ -67,12 +61,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     MessageHandler<vscode.WebviewView>
   > {
     return {
-      // Common handlers
       [MAIN_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
       [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
       [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: this.handleWebviewReady.bind(this),
-
-      // Core functionality
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
         this.handleInfoMessage.bind(this),
       [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) =>
@@ -86,7 +77,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
         this.handleShowAgentHistory.bind(this),
 
-      // File selection commands - delegated to FileManager
       ...this.createDelegateHandlers(
         [
           MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
@@ -99,7 +89,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
 
-      // File selected commands
       [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
         this.fileManager.handleInputFileSelected(m),
       ...this.createDelegateHandlers(
@@ -112,7 +101,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         (m) => this.fileManager.handleGenericFileSelected(m),
       ),
 
-      // Request file commands
       [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
         this.fileManager.handleRequestInputFile(m),
       ...this.createDelegateHandlers(
@@ -130,7 +118,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (m) =>
         this.fileManager.handleRequestDefaultOutputFiles(m),
 
-      // Multiple file operations
       ...this.createDelegateHandlers(
         [
           MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
@@ -143,19 +130,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
         this.fileManager.handleSelectMultipleFiles(m),
 
-      // Other file operations
       [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
         this.fileManager.handleGetCurrentFile(m),
       [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
         this.fileManager.handleAddOpenedFiles(m.fileType),
 
-      // Execution commands
       ...this.createDelegateHandlers(
         [MAIN_VIEW_COMMANDS.MERGE, MAIN_VIEW_COMMANDS.COMPARE],
         (m) => this.executionManager.handleFileOperation(m),
       ),
 
-      // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
         safeExecuteCommand(
           'workbench.action.openSettings',
@@ -201,7 +185,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: async () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
-      // Instruction commands
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
         this.instructionManager.handlePolishInstructionText(m),
       [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: () =>
@@ -231,7 +214,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
 
-      // Banner handlers - simple forwarding to webview
       ...this.createBannerForwardHandlers([
         MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
         MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
@@ -295,13 +277,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         });
       },
 
-      // Recording commands
       [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
         this.recordingManager.start(w),
       [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
         this.recordingManager.stop(w),
 
-      // File refresh and update operations
       [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
         this.fileManager.handleRefreshAllFiles(),
       ...this.createDelegateHandlers(
@@ -315,7 +295,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         (m) => this.fileManager.handleUpdateFiles(m),
       ),
 
-      // Git/diff operations
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
       [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
@@ -332,7 +311,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         (m) => this.diffManager.handleLatexdiffvcOperation(m),
       ),
 
-      // Housekeeping operations
       ...this.createDelegateHandlers(
         [
           MAIN_VIEW_COMMANDS.CLEAN_OUTPUT,
@@ -350,7 +328,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         (m) => this.executionManager.handleMultipleOperation(m),
       ),
 
-      // Other operations
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
         this.executionManager.handleFileOperation(m),
     };

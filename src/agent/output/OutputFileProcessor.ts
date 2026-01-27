@@ -1,30 +1,29 @@
 import * as path from 'path';
 
-import { MESSAGE_TYPES } from '@shared/schemas';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import {
-  replaceInputCommands,
-  flexibleFS,
+  MESSAGE_TYPES,
   type FileLocation,
-} from '@utils/files';
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type StorageKey,
+} from '@shared/schemas';
+import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
 import {
+  cleanupLatexBackups,
   indentLatexFile,
   indentLatexFiles,
-  cleanupLatexBackups,
 } from './LatexOutputUtils';
-import type { StorageKey } from '@shared/schemas';
 import type { XmlOutputManager } from './XmlOutputManager';
-import type { OutputFileInfo, OutputXmlSummary } from '@shared/schemas';
 
-/** Pattern to detect scratchpad XML tags in prefills */
 const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 
 export interface ProcessingContext {
@@ -101,7 +100,6 @@ export class OutputFileProcessor {
     }
   }
 
-  /** Handle errors during output processing with consistent cleanup. */
   private async handleOutputProcessingError(
     err: unknown,
     currRound: number,
@@ -138,7 +136,6 @@ export class OutputFileProcessor {
         diff: null,
       };
 
-      // Determine XML processing based on xmlStructureMode setting
       const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       let shouldProcessXml = false;
       switch (xmlMode) {
@@ -257,7 +254,6 @@ export class OutputFileProcessor {
       );
       if (documentEntries.length > 0) {
         const trimmedDocuments = documentEntries.map((e) => e.content.trim());
-        // Store as single string if only one document, array otherwise
         if (trimmedDocuments.length === 1) {
           tagContents[documentTag] = trimmedDocuments[0];
         } else {

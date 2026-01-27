@@ -9,24 +9,18 @@
  * dispatchMessage(raw, ctx);
  */
 
+// External imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   ProgressViewOutboundMessageSchema,
+  type LogMessageData,
   type ProgressViewOutboundMessage,
+  type StreamTabInfo,
 } from '@shared/schemas';
 
+// Local imports - progress view
 import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { PromptState } from './components/PromptOverlay';
-
-/**
- * Context passed to message handlers. Extends FrontendEventHandlerContext with
- * prompt state accessors needed for handling approval/retry messages.
- */
-export interface MessageHandlerContext extends FrontendEventHandlerContext {
-  getPrompts(): PromptState[];
-  setPrompts(prompts: PromptState[]): void;
-}
-
 import {
   updateToolUseState,
   updateWorkflowState,
@@ -42,7 +36,19 @@ import {
   type ProgressState,
   type StreamState,
 } from './store';
-import type { LogMessageData, StreamTabInfo } from '@shared/schemas';
+
+// ============================================================
+// Types
+// ============================================================
+
+/**
+ * Context passed to message handlers. Extends FrontendEventHandlerContext with
+ * prompt state accessors needed for handling approval/retry messages.
+ */
+export interface MessageHandlerContext extends FrontendEventHandlerContext {
+  getPrompts(): PromptState[];
+  setPrompts(prompts: PromptState[]): void;
+}
 
 // ============================================================
 // Internal state for pending log updates
