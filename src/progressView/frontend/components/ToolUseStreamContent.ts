@@ -56,6 +56,7 @@ import './StreamHeader';
 import './PromptOverlay';
 import './TodoList';
 import './TaskGroupList';
+import './LogList';
 import './UsagePanel';
 import './FollowUpInput';
 
@@ -71,9 +72,11 @@ export class ToolUseStreamContent extends LitElement {
   `;
 
   @consume({ context: streamStateContext, subscribe: true })
+  @state()
   private streamContext?: StreamContextValue;
 
   @consume({ context: promptsContext, subscribe: true })
+  @state()
   private promptContext?: PromptState[];
 
   // Memoized derived values - updated in willUpdate when deps change
@@ -83,7 +86,7 @@ export class ToolUseStreamContent extends LitElement {
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
+  protected willUpdate(changedProperties: PropertyValues): void {
     if (
       changedProperties.has('streamContext') ||
       changedProperties.has('promptContext')
