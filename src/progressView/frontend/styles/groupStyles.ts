@@ -16,16 +16,18 @@ export const groupStyles = css`
     border-left: var(--border-medium) solid var(--color-border);
   }
 
-  .log-group-header.is-running {
-    border-left-color: var(--vscode-statusBarItem-warningBackground);
-  }
+  .log-group-header {
+    &.is-running {
+      border-left-color: var(--vscode-statusBarItem-warningBackground);
+    }
 
-  .log-group-header.is-error {
-    border-left-color: var(--vscode-errorForeground);
-  }
+    &.is-error {
+      border-left-color: var(--vscode-errorForeground);
+    }
 
-  .log-group-header.is-stopped {
-    border-left-color: var(--vscode-testing-iconPassed);
+    &.is-stopped {
+      border-left-color: var(--vscode-testing-iconPassed);
+    }
   }
 
   .log-group-content {
@@ -58,13 +60,8 @@ export const groupStyles = css`
     margin-left: var(--spacing-small);
   }
 
-  .group-start-time,
-  .group-duration {
+  :is(.group-start-time, .group-duration) {
     margin-right: var(--spacing-small);
-  }
-
-  .group-bullet {
-    margin: 0 var(--spacing-tiny);
   }
 
   .spin {

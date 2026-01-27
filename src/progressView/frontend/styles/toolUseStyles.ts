@@ -43,10 +43,9 @@ export const toolUseStyles = css`
     opacity: 0.3;
   }
 
-  .tool-use-error > .details-summary .tool-use-title,
-  .tool-use-error > .details-summary .codicon,
-  .banner-details--error > .details-summary .label,
-  .banner-details--error > .details-summary .codicon,
+  :is(.tool-use-error, .banner-details--error)
+    > .details-summary
+    :is(.tool-use-title, .label, .codicon),
   .banner-content--error {
     color: var(--color-error);
   }
@@ -111,7 +110,6 @@ export const toolUseStyles = css`
       rgba(255, 0, 0, 0.1)
     );
     border-left-color: var(--color-error);
-    color: var(--color-error);
   }
 
   .tool-output-full {

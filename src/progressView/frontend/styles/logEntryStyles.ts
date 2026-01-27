@@ -41,18 +41,23 @@ export const logEntryStyles = css`
     padding: 0;
   }
 
-  .file-list-content .file-var {
-    color: var(--color-text-secondary);
-    opacity: 0.8;
-    font-size: 0.9em;
-    margin-left: var(--spacing-tiny);
-  }
+  .file-list-content {
+    .file-var,
+    .file-source {
+      color: var(--color-text-secondary);
+    }
 
-  .file-list-content .file-source {
-    color: var(--color-text-secondary);
-    opacity: 0.6;
-    font-size: 0.85em;
-    font-style: italic;
+    .file-var {
+      opacity: 0.8;
+      font-size: 0.9em;
+      margin-left: var(--spacing-tiny);
+    }
+
+    .file-source {
+      opacity: 0.6;
+      font-size: 0.85em;
+      font-style: italic;
+    }
   }
 
   .xml-link-container {
@@ -100,13 +105,17 @@ export const logEntryStyles = css`
     gap: var(--spacing-small);
   }
 
-  .file-link {
+  :is(.file-link, .web-search-link) {
     color: var(--color-text-link);
     cursor: pointer;
   }
 
-  .file-link:hover {
+  :is(.file-link, .web-search-link):hover {
     text-decoration: underline;
+  }
+
+  .web-search-link {
+    text-decoration: none;
   }
 
   /* Web search result styles */
@@ -123,16 +132,6 @@ export const logEntryStyles = css`
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: 500;
-  }
-
-  .web-search-link {
-    color: var(--color-text-link);
-    text-decoration: none;
-    cursor: pointer;
-  }
-
-  .web-search-link:hover {
-    text-decoration: underline;
   }
 
   /* Toggle icon for collapsible details */

@@ -34,16 +34,11 @@ import { AudioNotificationService } from '../services/AudioNotificationService';
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
-type GroupTree = {
+interface GroupTree {
   group: TaskGroup;
   children: GroupTree[];
   messages: LogMessageData[];
-};
-
-type TreeBuildResult = {
-  tree: GroupTree[];
-  ungroupedMessages: LogMessageData[];
-};
+}
 
 const PLACEHOLDER_HTML =
   'No runs yet—use TeXRA commands to start. Try ' +
@@ -113,8 +108,11 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Build hierarchical tree from flat groups array */
-  private buildGroupTree(): TreeBuildResult {
+  /**
+   * Build hierarchical tree from flat groups array.
+   * Returns [tree, ungroupedMessages] tuple.
+   */
+  private buildGroupTree(): [GroupTree[], LogMessageData[]] {
     const groupMap = new Map<string, TaskGroup>();
     const childrenMap = new Map<string, TaskGroup[]>();
 
@@ -128,11 +126,14 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Index messages by groupId
+    // Sort messages by timestamp and index by groupId
+    const sortedMessages = [...this.messages].sort(
+      (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
+    );
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungroupedMessages: LogMessageData[] = [];
 
-    for (const msg of this.sortedMessages) {
+    for (const msg of sortedMessages) {
       if (msg.groupId && groupMap.has(msg.groupId)) {
         const bucket = messagesByGroup.get(msg.groupId) ?? [];
         bucket.push(msg);
@@ -143,42 +144,26 @@ export class TaskGroupList extends LitElement {
     }
 
     // Build tree recursively
-    const buildNode = (group: TaskGroup): GroupTree => {
-      const children = (childrenMap.get(group.id) ?? [])
+    const buildNode = (group: TaskGroup): GroupTree => ({
+      group,
+      children: (childrenMap.get(group.id) ?? [])
         .sort((a, b) => a.startTime - b.startTime)
-        .map(buildNode);
-      return {
-        group,
-        children,
-        messages: messagesByGroup.get(group.id) ?? [],
-      };
-    };
-
-    // Get root groups (no parent)
-    const rootGroups = this.groups
-      .filter((g) => !g.parentGroupId)
-      .sort((a, b) => a.startTime - b.startTime);
-
-    return {
-      tree: rootGroups.map(buildNode),
-      ungroupedMessages,
-    };
-  }
-
-  /** Get sorted messages */
-  private get sortedMessages(): LogMessageData[] {
-    return [...this.messages].sort((a, b) => {
-      const timeA = a.timestamp ?? 0;
-      const timeB = b.timestamp ?? 0;
-      return timeA - timeB;
+        .map(buildNode),
+      messages: messagesByGroup.get(group.id) ?? [],
     });
+
+    // Get root groups (no parent), sorted by start time
+    const tree = this.groups
+      .filter((g) => !g.parentGroupId)
+      .sort((a, b) => a.startTime - b.startTime)
+      .map(buildNode);
+
+    return [tree, ungroupedMessages];
   }
 
   /** Check if a root group should be visible */
   private isGroupVisible(groupId: string): boolean {
-    if (this.isToolUse) return true;
-    if (!this.activeRunId) return true;
-    return groupId === this.activeRunId;
+    return this.isToolUse || !this.activeRunId || groupId === this.activeRunId;
   }
 
   /** Check if a group is expanded */
@@ -239,7 +224,7 @@ export class TaskGroupList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const { tree, ungroupedMessages } = this.buildGroupTree();
+    const [tree, ungroupedMessages] = this.buildGroupTree();
 
     // Show placeholder if empty
     if (tree.length === 0 && this.messages.length === 0) {
@@ -255,8 +240,9 @@ export class TaskGroupList extends LitElement {
 
     // Tool-use: ungrouped messages first, then tree
     // Workflow: tree first, then ungrouped messages
-    const ungroupedBefore = this.isToolUse ? ungroupedMessages : [];
-    const ungroupedAfter = this.isToolUse ? [] : ungroupedMessages;
+    const [ungroupedBefore, ungroupedAfter] = this.isToolUse
+      ? [ungroupedMessages, []]
+      : [[], ungroupedMessages];
 
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">

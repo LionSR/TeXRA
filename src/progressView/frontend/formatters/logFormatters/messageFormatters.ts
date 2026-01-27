@@ -153,6 +153,8 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
           aria-label="Copy error details"
           data-default-title="Copy error details"
           data-success-title="Copied!"
+          data-copy-content=${rawContent}
+          data-copy-type="banner"
           ?hidden=${!hasDetails}
         ></vscode-toolbar-button>
       </summary>
