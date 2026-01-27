@@ -5,11 +5,7 @@ import * as vscode from 'vscode';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - agent
-import {
-  refresh,
-  computeAgentOptions,
-  computeAgentOptionsData,
-} from '@agent/index';
+import { refresh, computeAgentOptionsData } from '@agent/index';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
@@ -19,10 +15,7 @@ import { consumePendingState } from '@common/state';
 
 // Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
-import {
-  computeModelOptions,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   watchConfig,
   getConfig,
@@ -158,15 +151,10 @@ export class MainViewProvider
     // Refresh the agent index to pick up configuration changes
     await refresh();
 
-    // Send both HTML (legacy) and typed data (Lit-native)
-    const [agentOptions, agentOptionsData] = await Promise.all([
-      computeAgentOptions(),
-      computeAgentOptionsData(),
-    ]);
+    const optionsData = await computeAgentOptionsData();
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      options: agentOptions,
-      optionsData: agentOptionsData,
+      optionsData,
     });
   }
 
@@ -178,15 +166,10 @@ export class MainViewProvider
     if (!this._view) {
       return;
     }
-    // Send both HTML (legacy) and typed data (Lit-native)
-    const [modelOptions, modelOptionsData] = await Promise.all([
-      computeModelOptions(),
-      computeModelOptionsData(),
-    ]);
+    const optionsData = await computeModelOptionsData();
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      options: modelOptions,
-      optionsData: modelOptionsData,
+      optionsData,
     });
   }
 
