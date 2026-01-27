@@ -19,9 +19,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 const commandOnly = <T extends string>(command: T) =>
   z.object({ command: z.literal(command) });
 
-/** Create a message schema with optional file field */
-const withOptionalFile = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), file: z.string().optional() });
+/** Create a message schema with optional filePath field */
+const withOptionalFilePath = <T extends string>(command: T) =>
+  z.object({ command: z.literal(command), filePath: z.string().optional() });
 
 /** Create a message schema with files array */
 const withFilesArray = <T extends string>(command: T) =>
@@ -91,11 +91,14 @@ const SettingsMessages = [
 ] as const;
 
 // --- Execution messages ---
+// EXECUTE carries full agent config - use passthrough to allow all fields
 const ExecutionMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.EXECUTE),
-  commandOnly(MAIN_VIEW_COMMANDS.MERGE),
-  commandOnly(MAIN_VIEW_COMMANDS.COMPARE),
-  commandOnly(MAIN_VIEW_COMMANDS.ACCEPT_EDITED),
+  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }).passthrough(),
+  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.MERGE) }).passthrough(),
+  z.object({ command: z.literal(MAIN_VIEW_COMMANDS.COMPARE) }).passthrough(),
+  z
+    .object({ command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED) })
+    .passthrough(),
 ] as const;
 
 // --- File selection messages (command-only) ---
@@ -111,13 +114,13 @@ const FileSelectionMessages = [
   }),
 ] as const;
 
-// --- File selected messages (with optional file) ---
+// --- File selected messages (with optional filePath) ---
 const FileSelectedMessages = [
-  withOptionalFile(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
-  withOptionalFile(MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED),
-  withOptionalFile(MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED),
-  withOptionalFile(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
-  withOptionalFile(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
 ] as const;
 
 // --- Request file messages (command-only) ---
@@ -172,13 +175,17 @@ const FileOperationMessages = [
 // --- Instruction messages ---
 const InstructionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
-    text: z.string(),
-  }),
+  z
+    .object({
+      command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
+      text: z.string(),
+    })
+    .passthrough(),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE),
-    data: z.string(),
+    base64: z.string(),
+    mediaType: z.string(),
+    fileName: z.string(),
   }),
 ] as const;
 

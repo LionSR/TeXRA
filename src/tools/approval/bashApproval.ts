@@ -1,8 +1,8 @@
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { bus } from '@eventBus/ProgressEventBus';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
+import { bus } from '@eventBus/ProgressEventBus';
 
 import { isApprovalBypassedForStream } from './toolEditApproval';
 import type { StreamTabId } from '@shared/schemas';

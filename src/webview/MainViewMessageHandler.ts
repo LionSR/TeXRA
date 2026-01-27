@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
 
-import { computeAgentOptionsData } from '@agent/index';
-import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
-import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
-import { toErrorMessage } from '@common/errors';
 import {
-  BaseViewMessageHandler,
-  MessageHandler,
-  MAIN_VIEW_COMMANDS,
-} from '@common/webview';
+  dispatchMainViewInbound,
+  MainViewInboundHandlerRegistry,
+} from '@shared/schemas';
+import { computeAgentOptionsData } from '@agent/index';
+import { toErrorMessage } from '@common/errors';
+import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
+import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
+import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 import {
   RecordingManager,
@@ -47,108 +47,70 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   }
 
   public override async handleMessage(
-    message: any,
+    message: unknown,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     this.fileManager.attachWebview(webviewView);
     this.instructionManager.attachWebview(webviewView);
     this.diffManager.attachWebview(webviewView);
-    await super.handleMessage(message, webviewView);
+
+    // Track active view for handlers that need webview access
+    this.setActiveView(webviewView);
+
+    const handled = dispatchMainViewInbound(
+      message,
+      this.createHandlerRegistry(webviewView),
+      (error) => {
+        this.logger.error(
+          this.channel,
+          `Error handling message: ${toErrorMessage(error)}`,
+        );
+      },
+    );
+
+    if (!handled) {
+      // Fall back to base class for unhandled messages
+      await super.handleMessage(message, webviewView);
+    }
   }
 
-  protected createHandlers(): Record<
-    string,
-    MessageHandler<vscode.WebviewView>
-  > {
+  protected createHandlers(): Record<string, never> {
+    // Handler registry is created dynamically via createHandlerRegistry
+    return {};
+  }
+
+  private setActiveView(view: vscode.WebviewView): void {
+    // Access parent's private _activeView via type assertion
+    (this as any)._activeView = view;
+  }
+
+  private createHandlerRegistry(
+    webviewView: vscode.WebviewView,
+  ): MainViewInboundHandlerRegistry {
     return {
-      [MAIN_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
-      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: this.handleWebviewReady.bind(this),
-      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
-        this.handleInfoMessage.bind(this),
-      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) =>
+      // Common messages
+      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => this.handleTheme(m, webviewView),
+      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
+        this.handleDebugMode(m, webviewView),
+      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
+      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) =>
+        this.handleInfoMessage(m),
+      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: (m) =>
         showInstructionWithSuppress(m.key, m.text),
-      [MAIN_VIEW_COMMANDS.GET_THEME]: this.handleThemeRequest.bind(this),
-      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]:
-        this.handleDebugModeRequest.bind(this),
-      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: this.handleModelSelection.bind(this),
-      [MAIN_VIEW_COMMANDS.EXECUTE]: async (m) =>
-        this.executionManager.handleExecute(m),
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
-        this.handleShowAgentHistory.bind(this),
+      [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
+      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
 
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
-          MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
-          MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
-          MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
-        ],
-        (m) => this.fileManager.handleFileSelection(m),
-      ),
-      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
-        this.fileManager.handleEditedFileSelection(),
-
-      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
-        this.fileManager.handleInputFileSelected(m),
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-          MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
-          MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-          MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
-        ],
-        (m) => this.fileManager.handleGenericFileSelected(m),
-      ),
-
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
-        this.fileManager.handleRequestInputFile(m),
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
-          MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
-          MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
-        ],
-        (m) => this.fileManager.handleRequestFile(m),
-      ),
-      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
-        this.fileManager.handleRequestEditedFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
-        this.fileManager.handleRequestBaseFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (m) =>
-        this.fileManager.handleRequestDefaultOutputFiles(m),
-
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-          MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
-          MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
-          MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-        ],
-        (m) => this.fileManager.handleSetMultipleFiles(m),
-      ),
-      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
-        this.fileManager.handleSelectMultipleFiles(m),
-
-      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
-        this.fileManager.handleGetCurrentFile(m),
-      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
-        this.fileManager.handleAddOpenedFiles(m.fileType),
-
-      ...this.createDelegateHandlers(
-        [MAIN_VIEW_COMMANDS.MERGE, MAIN_VIEW_COMMANDS.COMPARE],
-        (m) => this.executionManager.handleFileOperation(m),
-      ),
-
-      [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
+      // Settings messages
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) => this.handleModelSelection(m),
+      [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
         safeExecuteCommand(
           'workbench.action.openSettings',
           [SETTINGS_QUERY.EXTENSION],
           this.viewName,
         ),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) => {
         const query =
-          m?.sessionType === 'toolUse'
+          m.sessionType === 'toolUse'
             ? SETTINGS_QUERY.TOOL_USE_AGENTS
             : SETTINGS_QUERY.WORKFLOW_AGENTS;
         return safeExecuteCommand(
@@ -157,14 +119,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           this.viewName,
         );
       },
-      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
+      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
         safeExecuteCommand(
           'workbench.action.openSettings',
           [SETTINGS_QUERY.MODELS],
           this.viewName,
         ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
-        if (m?.customDirSet) {
+        if (m.customDirSet) {
           const dir = await agentDirectories.custom();
           if (dir) {
             await vscode.commands.executeCommand(
@@ -180,26 +142,130 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           );
         }
       },
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: async () =>
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['agent-explorer'], this.viewName),
-      [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: async () =>
+      [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
+      // Execution messages (passthrough schemas preserve all fields)
+      [MAIN_VIEW_COMMANDS.EXECUTE]: (m) =>
+        this.executionManager.handleExecute(m as any),
+      [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
+        this.executionManager.handleFileOperation(m as any),
+      [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
+        this.executionManager.handleFileOperation(m as any),
+      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
+        this.executionManager.handleFileOperation(m as any),
+
+      // File selection messages
+      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
+        this.fileManager.handleEditedFileSelection(),
+      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
+        this.fileManager.handleSelectMultipleFiles(m),
+
+      // File selected messages
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
+        this.fileManager.handleInputFileSelected({
+          command: m.command,
+          filePath: m.filePath ?? '',
+        }),
+      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
+        this.fileManager.handleGenericFileSelected({
+          command: m.command,
+          filePath: m.filePath ?? '',
+        }),
+      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
+        this.fileManager.handleGenericFileSelected({
+          command: m.command,
+          filePath: m.filePath ?? '',
+        }),
+      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
+        this.fileManager.handleGenericFileSelected({
+          command: m.command,
+          filePath: m.filePath ?? '',
+        }),
+      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
+        this.fileManager.handleGenericFileSelected({
+          command: m.command,
+          filePath: m.filePath ?? '',
+        }),
+
+      // Request file messages
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
+        this.fileManager.handleRequestInputFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
+        this.fileManager.handleRequestEditedFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
+        this.fileManager.handleRequestBaseFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (m) =>
+        this.fileManager.handleRequestDefaultOutputFiles(m),
+
+      // Set files messages
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+
+      // Other file operation messages
+      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
+        this.fileManager.handleGetCurrentFile(m),
+      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
+        this.fileManager.handleRefreshAllFiles(),
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
+        this.fileManager.handleAddOpenedFiles(m.fileType),
+      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: (m) =>
+        this.fileManager.handleUpdateFiles(m),
+
+      // Instruction messages (passthrough schema preserves all fields)
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
-        this.instructionManager.handlePolishInstructionText(m),
+        this.instructionManager.handlePolishInstructionText(m as any),
       [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: () =>
         this.instructionManager.handleTranscribeInstruction(),
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
         this.instructionManager.handleClipboardImage(m),
-      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
+
+      // Recording messages
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: () =>
+        this.recordingManager.start(webviewView),
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () =>
+        this.recordingManager.stop(webviewView),
+
+      // API key messages
+      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: () =>
         safeExecuteCommand('texra.setApiKey'),
-      [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
-        if (m?.provider) {
-          await safeExecuteCommand('texra.setApiKey', [m.provider]);
+      [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: (m) => {
+        if (m.provider) {
+          return safeExecuteCommand('texra.setApiKey', [m.provider]);
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
-        if (m?.provider) {
+        if (m.provider) {
           const url = PROVIDER_URLS[m.provider as keyof typeof PROVIDER_URLS];
           if (url) {
             await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -214,25 +280,24 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
 
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
-          MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-          MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
-          MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-          MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
-        ],
-        (m) => this.postToActiveView(m),
-      ),
-      [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
-        await updateConfig('ui.showDependencyReminders', m.value);
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: async (m) => {
+      // Banner messages
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
+        this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (m) =>
+        this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
+        this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
+        this.postToActiveView(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: (m) =>
+        updateConfig('ui.showDependencyReminders', m.value),
+      [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
         const cmd = getToolDocsCommand(m.tool);
         if (cmd) {
           const [command, ...args] = cmd.split(',');
-          await safeExecuteCommand(command, args);
+          return safeExecuteCommand(command, args);
         }
       },
       [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async () => {
@@ -280,24 +345,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         });
       },
 
-      [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
-        this.recordingManager.start(w),
-      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
-        this.recordingManager.stop(w),
-
-      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
-        this.fileManager.handleRefreshAllFiles(),
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
-          MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
-          MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
-          MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
-          MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
-        ],
-        (m) => this.fileManager.handleUpdateFiles(m),
-      ),
-
+      // Git/diff messages
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
       [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
@@ -306,50 +354,39 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.diffManager.handleLatexdiff(m),
       [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvc(m),
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
-          MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
-        ],
-        (m) => this.diffManager.handleLatexdiffvcOperation(m),
-      ),
+      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: (m) =>
+        this.diffManager.handleLatexdiffvcOperation(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: (m) =>
+        this.diffManager.handleLatexdiffvcOperation(m),
 
-      ...this.createDelegateHandlers(
-        [
-          MAIN_VIEW_COMMANDS.CLEAN_OUTPUT,
-          MAIN_VIEW_COMMANDS.CLEAN_BUILD,
-          MAIN_VIEW_COMMANDS.INDENT_TEX,
-        ],
-        (m) => this.executionManager.handleHousekeeping(m),
-      ),
-      ...this.createDelegateHandlers(
-        [MAIN_VIEW_COMMANDS.PACK_SINGLE, MAIN_VIEW_COMMANDS.CLEAN_SINGLE],
-        (m) => this.executionManager.handleSingleOperation(m),
-      ),
-      ...this.createDelegateHandlers(
-        [MAIN_VIEW_COMMANDS.PACK_MULTIPLE, MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE],
-        (m) => this.executionManager.handleMultipleOperation(m),
-      ),
+      // Housekeeping messages
+      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
+        this.executionManager.handleSingleOperation(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
+        this.executionManager.handleSingleOperation(m),
+      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
+        this.executionManager.handleMultipleOperation(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
+        this.executionManager.handleMultipleOperation(m),
 
-      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        this.executionManager.handleFileOperation(m),
+      // Navigation messages
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
+        this.handleShowAgentHistory(),
     };
   }
 
-  /** Create handlers that delegate to the same handler function */
-  private createDelegateHandlers(
-    commands: string[],
-    handler: (m: any) => void | Promise<void>,
-  ): Record<string, MessageHandler<vscode.WebviewView>> {
-    return Object.fromEntries(commands.map((cmd) => [cmd, handler]));
-  }
-
-  private async handleInfoMessage(message: any): Promise<void> {
+  private handleInfoMessage(message: { text: string }): void {
     vscode.window.showInformationMessage(message.text);
     this.logger.debug(this.channel, `Information message: ${message.text}`);
   }
 
-  private async handleThemeRequest(_message: unknown): Promise<void> {
+  private handleThemeRequest(): void {
     const isDarkTheme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
     this.postToActiveView({
@@ -358,7 +395,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleDebugModeRequest(_message: unknown): Promise<void> {
+  private handleDebugModeRequest(): void {
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
     this.postToActiveView({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
@@ -366,30 +403,28 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleModelSelection(message: any): Promise<void> {
-    if (message.model) {
-      this.postToActiveView({
-        command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
-        model: message.model,
-      });
-    }
+  private handleModelSelection(message: { model: string }): void {
+    this.postToActiveView({
+      command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
+      model: message.model,
+    });
   }
 
   /** Post message to active view if available */
-  private postToActiveView(message: any): void {
+  private postToActiveView(message: unknown): void {
     this.getActiveView()?.webview.postMessage(message);
   }
 
-  private async handleShowAgentHistory(_message: unknown): Promise<void> {
+  private async handleShowAgentHistory(): Promise<void> {
     await safeExecuteCommand('texra.showAgentHistory', [], this.viewName);
   }
 
-  protected async handleWebviewReady(_message: any): Promise<void> {
+  protected async handleWebviewReady(): Promise<void> {
     const webviewView = this.getActiveView();
     if (!webviewView) {
       return;
     }
-    await super.handleWebviewReady(_message, webviewView);
+    await super.handleWebviewReady(undefined, webviewView);
     try {
       const [modelOptionsData, agentOptionsData, authStatus] =
         await Promise.all([

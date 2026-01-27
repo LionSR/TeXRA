@@ -6,6 +6,12 @@
  */
 import * as vscode from 'vscode';
 
+import {
+  dispatchProfileViewInbound,
+  type ProfileViewInboundHandlerRegistry,
+  type ProfileViewInboundMessage,
+  type RemoteAgent,
+} from '@shared/schemas/profileViewMessages';
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
@@ -15,12 +21,6 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
-import {
-  dispatchProfileViewInbound,
-  type ProfileViewInboundHandlerRegistry,
-  type ProfileViewInboundMessage,
-  type RemoteAgent,
-} from '@shared/schemas/profileViewMessages';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends ProfileViewInboundMessage['command']> = Extract<

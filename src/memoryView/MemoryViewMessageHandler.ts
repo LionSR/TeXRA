@@ -7,6 +7,12 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import {
+  dispatchMemoryViewInbound,
+  type MemoryViewInboundHandlerRegistry,
+  type MemoryViewInboundMessage,
+  type MemoryViewItem,
+} from '@shared/schemas/memoryViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
 import { MEMORY_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
@@ -25,12 +31,6 @@ import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
-import {
-  dispatchMemoryViewInbound,
-  type MemoryViewInboundHandlerRegistry,
-  type MemoryViewInboundMessage,
-  type MemoryViewItem,
-} from '@shared/schemas/memoryViewMessages';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends MemoryViewInboundMessage['command']> = Extract<

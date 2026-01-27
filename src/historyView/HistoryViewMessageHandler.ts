@@ -6,17 +6,17 @@
  */
 import * as vscode from 'vscode';
 
-import { showLoggedErrorMessage } from '@common/errors';
-import { HISTORY_VIEW_COMMANDS } from '@common/webview';
-import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
-import * as logger from '@logger/logUtils';
 import {
   dispatchHistoryViewInbound,
   type HistoryViewInboundHandlerRegistry,
   type HistoryViewInboundMessage,
 } from '@shared/schemas/historyViewMessages';
+import { showLoggedErrorMessage } from '@common/errors';
+import { HISTORY_VIEW_COMMANDS } from '@common/webview';
+import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
+import * as logger from '@logger/logUtils';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends HistoryViewInboundMessage['command']> = Extract<

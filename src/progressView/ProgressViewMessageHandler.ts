@@ -1,6 +1,11 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import {
+  dispatchProgressViewInbound,
+  type ProgressViewInboundHandlerRegistry,
+  type ProgressViewInboundMessage,
+} from '@shared/schemas/progressViewInboundMessages';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
@@ -23,12 +28,6 @@ import {
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
 import {
-  dispatchProgressViewInbound,
-  type ProgressViewInboundHandlerRegistry,
-  type ProgressViewInboundMessage,
-} from '@shared/schemas/progressViewInboundMessages';
-import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
-import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
@@ -50,6 +49,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
