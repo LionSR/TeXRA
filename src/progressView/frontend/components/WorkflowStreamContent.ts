@@ -177,6 +177,8 @@ export class WorkflowStreamContent extends LitElement {
     }
 
     return html`
+      <request-panels .prompts=${this.filteredPrompts}></request-panels>
+
       <stream-header
         .stream=${streamInfo}
         .streamState=${state}
@@ -184,8 +186,6 @@ export class WorkflowStreamContent extends LitElement {
         .runs=${this.runGroups}
         .yoloActive=${false}
       ></stream-header>
-
-      <request-panels .prompts=${this.filteredPrompts}></request-panels>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
