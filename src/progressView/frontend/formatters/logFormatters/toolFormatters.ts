@@ -16,8 +16,6 @@ import {
   type FormatResult,
 } from '../litTemplates';
 
-// Local imports - shared schemas
-
 // Local imports - formatter helpers
 import {
   buildToolUseSection,

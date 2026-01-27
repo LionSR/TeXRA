@@ -1,10 +1,6 @@
-// Local imports - agent
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 /**
  * Utility functions for working with message objects in agent conversations.
  */
-
-// Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
@@ -15,15 +11,7 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * @returns A simplified message object with truncated content
  */
 export function messageToSkeleton(
-  message: ProviderMessage | ProviderMessage[],
-  maxContentLength?: number,
-): unknown;
-export function messageToSkeleton(
-  message: Record<string, unknown>,
-  maxContentLength?: number,
-): unknown;
-export function messageToSkeleton(
-  message: ProviderMessage | ProviderMessage[] | Record<string, unknown>,
+  message: unknown,
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
 ): unknown {
   if (!message) {
@@ -110,11 +98,8 @@ export function messageToSkeleton(
       // Truncate large data strings
       result[key] = `[data: ${value.length} chars]`;
     } else if (typeof value === 'object' && value !== null) {
-      // Recursively process nested objects using Record<string, unknown> overload
-      result[key] = messageToSkeleton(
-        value as Record<string, unknown>,
-        maxContentLength,
-      );
+      // Recursively process nested objects
+      result[key] = messageToSkeleton(value, maxContentLength);
     } else {
       // Pass through primitive values
       result[key] = value;

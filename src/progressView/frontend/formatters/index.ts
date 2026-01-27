@@ -5,7 +5,6 @@
 
 // Local imports - formatter helpers
 import { safeFormat, resolveOpenState } from './baseLogFormatter';
-import { getMarkdownRenderer } from './markdownRenderer';
 import {
   formatBannerContentTemplate,
   formatContextManagementTemplate,
@@ -47,13 +46,11 @@ type TemplateFormatterMap = Record<
  * This class composes specialized formatters for different message types.
  */
 export class LogEntryFormatter {
-  private md: ReturnType<typeof getMarkdownRenderer> | null = null;
   private _templateFormatters: TemplateFormatterMap = {};
   private _autoExpandedTypes: Set<MessageType> = new Set();
   private _nullableTypes: Set<MessageType> = new Set();
 
   constructor() {
-    this.md = getMarkdownRenderer();
     this._templateFormatters = this._buildTemplateFormatterMap();
     this._autoExpandedTypes = new Set(['thinking', 'scratchpad']);
     // Message types that return null when their formatter produces no result

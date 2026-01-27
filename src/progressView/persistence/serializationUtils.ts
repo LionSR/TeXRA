@@ -36,9 +36,6 @@ export function mapToRecord<K extends string | number, V>(
   return mapsToRecords(map, 1) as Record<string, V>;
 }
 
-// NOTE: recordToMap was removed - use createRecordToMapSchema from schemaUtils.ts
-// for schema-validated deserialization instead.
-
 /**
  * Serialize a nested Map structure (outer → inner → value) to nested Records.
  * Used for run-scoped data like output files by round, usage stats.

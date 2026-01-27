@@ -32,8 +32,9 @@ import { ELEMENT_IDS } from '../constants';
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
-// Local imports - services
-import { AudioNotificationService } from '../services/AudioNotificationService';
+// Local imports - progress view utils
+import { playCompletionSound } from '../utils/audioNotification';
+
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 interface GroupTree {
@@ -101,7 +102,7 @@ export class TaskGroupList extends LitElement {
         group.status === STREAM_STATUS.STOPPED;
 
       if (isRunGroup && wasRunning && isNowComplete) {
-        AudioNotificationService.playCompletionSound();
+        playCompletionSound();
       }
 
       this.previousStatuses.set(group.id, group.status);

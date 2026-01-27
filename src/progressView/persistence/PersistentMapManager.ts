@@ -59,6 +59,19 @@ export abstract class PersistentMapManager<K extends string, V> {
     return this.items.has(key);
   }
 
+  /**
+   * Get or create an entry with lazy initialization.
+   * Returns existing value or creates new one using factory function.
+   */
+  protected getOrCreate(key: K, factory: () => V): V {
+    let value = this.items.get(key);
+    if (!value) {
+      value = factory();
+      this.items.set(key, value);
+    }
+    return value;
+  }
+
   /** Get all keys */
   keys(): K[] {
     return [...this.items.keys()];
