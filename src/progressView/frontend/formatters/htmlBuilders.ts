@@ -72,6 +72,15 @@ function isDiffContent(text: string): boolean {
   return diffMarkers >= DIFF_MARKER_THRESHOLD;
 }
 
+/** Build line info suffix for file links. */
+function buildLineInfo(startLine?: number, endLine?: number): string {
+  if (!startLine) return '';
+  if (endLine && endLine !== startLine) {
+    return `:${startLine}-${endLine}`;
+  }
+  return `:${startLine}`;
+}
+
 /** Wrap text in a pre element with optional class and diff highlighting. */
 export function wrapInPre(text: string, className = ''): TemplateResult {
   if (!isDiffContent(text)) {
@@ -287,15 +296,7 @@ export function buildFileLinkWithLines(
 
   const { startLine, endLine } = options;
   const fileName = getBasename(filePath) || filePath;
-
-  // Build line info string
-  let lineInfo = '';
-  if (startLine && endLine && startLine !== endLine) {
-    lineInfo = `:${startLine}-${endLine}`;
-  } else if (startLine) {
-    lineInfo = `:${startLine}`;
-  }
-
+  const lineInfo = buildLineInfo(startLine, endLine);
   const displayText = fileName + lineInfo;
 
   // prettier-ignore

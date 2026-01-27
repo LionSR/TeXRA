@@ -10,6 +10,9 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 import { WebviewStateManager } from '@shared/state';
 
+// Local imports - shared utilities
+import { capitalize } from '@shared/utils/string';
+
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
@@ -1003,13 +1006,18 @@ export class MainApp extends BaseWebviewApp {
     const inputFile = this.singleFiles.inputFile;
     if (!inputFile) return;
 
-    const initialFiles =
-      this.multiFiles.outputFiles.length > 0
-        ? this.multiFiles.outputFiles
-        : this.defaultOutputFiles.length > 0
-          ? this.defaultOutputFiles
-          : [inputFile];
+    const initialFiles = this.resolveInitialOutputFiles(inputFile);
     this.multiFiles = { ...this.multiFiles, outputFiles: initialFiles };
+  }
+
+  private resolveInitialOutputFiles(inputFile: string): string[] {
+    if (this.multiFiles.outputFiles.length > 0) {
+      return this.multiFiles.outputFiles;
+    }
+    if (this.defaultOutputFiles.length > 0) {
+      return this.defaultOutputFiles;
+    }
+    return [inputFile];
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
@@ -1029,10 +1037,7 @@ export class MainApp extends BaseWebviewApp {
     const currentFileKey = listId.replace('Files', 'File');
     const currentFile =
       this.singleFiles[currentFileKey as keyof typeof this.singleFiles];
-    const fileType =
-      listId.length > 0
-        ? `${listId[0].toUpperCase()}${listId.slice(1)}`
-        : listId;
+    const fileType = capitalize(listId);
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
       fileType,
       currentFile,

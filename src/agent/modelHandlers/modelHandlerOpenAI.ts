@@ -505,8 +505,8 @@ export class ModelHandlerOpenAI<
     userRequest: string,
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
-  ): Promise<any[]> {
-    const messages: any[] = [];
+  ): Promise<ChatCompletionMessageParam[]> {
+    const messages: ChatCompletionMessageParam[] = [];
 
     // Handle system prompt differently for O1 models
     if (systemPrompt) {
@@ -573,10 +573,10 @@ export class ModelHandlerOpenAI<
 
   /** Adds user message content for subsequent rounds. */
   async createRoundMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
     mediaFiles?: FileLocation[],
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     const roundContent: ChatCompletionContentPart[] = [];
     // OpenAI API: system role does not support images/audio
     // Error: 400 Invalid 'messages[N]'. Image URLs are only allowed for messages with role 'user'
@@ -605,9 +605,9 @@ export class ModelHandlerOpenAI<
   }
 
   async createUserFollowUpMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessage }],
@@ -701,7 +701,10 @@ export class ModelHandlerOpenAI<
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
+  extractResponse(
+    responseObject: ChatCompletion,
+    endTag: string,
+  ): ExtractResponseResult {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
@@ -793,7 +796,7 @@ export class ModelHandlerOpenAI<
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    _messages: any[],
+    _messages: ChatCompletionMessageParam[],
     _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
@@ -804,7 +807,7 @@ export class ModelHandlerOpenAI<
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
@@ -830,11 +833,11 @@ export class ModelHandlerOpenAI<
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
@@ -991,7 +994,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models with prefill support. */
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1030,7 +1033,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models without prefill support. */
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1301,7 +1304,7 @@ export class ModelHandlerOpenAI<
    * @throws Error if token calculation fails.
    */
   private _calculateApproximateTokens(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     systemPrompt?: string,
   ): number {
     // Note: This is a simplified token count. A more accurate count would
@@ -1315,8 +1318,9 @@ export class ModelHandlerOpenAI<
     // For now, concatenate text content.
     let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
     messages.forEach((msg) => {
-      if (Array.isArray(msg.content)) {
-        msg.content.forEach((part: any) => {
+      const content = 'content' in msg ? msg.content : null;
+      if (Array.isArray(content)) {
+        content.forEach((part) => {
           if (part.type === 'text') {
             textToCount += `${msg.role}: ${part.text}\n`;
           }
@@ -1328,8 +1332,8 @@ export class ModelHandlerOpenAI<
             textToCount += `${msg.role}: [Audio]\n`;
           }
         });
-      } else if (typeof msg.content === 'string') {
-        textToCount += `${msg.role}: ${msg.content}\n`;
+      } else if (typeof content === 'string') {
+        textToCount += `${msg.role}: ${content}\n`;
       }
     });
     // Use the appropriate encoding based on the model, defaulting to cl100k_base
