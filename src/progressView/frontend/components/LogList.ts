@@ -3,10 +3,12 @@
  *
  * Receives data via properties and delegates rendering to TaskGroupList.
  * Handles event delegation for clicks, toggles, and file links.
+ *
+ * Uses Shadow DOM with modular styles for encapsulation.
  */
 
 // Third-party imports
-import { LitElement, css, html, type TemplateResult } from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
@@ -45,16 +47,6 @@ export class LogList extends LitElement {
     commonViewStyles,
     codiconStyles,
     ...logStyles,
-    css`
-      /* Match global CSS layout expectations for log-list */
-      :host {
-        display: flex;
-        flex-direction: column;
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow: hidden;
-      }
-    `,
   ];
 
   // Reactive properties - passed from parent
@@ -108,9 +100,13 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render
-    if (this.logContainer) {
-      scrollToBottom(this.logContainer);
+    // Scroll to bottom after render - need to query through shadow DOM
+    const taskGroupList = this.shadowRoot?.querySelector('task-group-list');
+    const container = taskGroupList?.shadowRoot?.querySelector(
+      `#${ELEMENT_IDS.LOG_CONTENT}`,
+    );
+    if (container instanceof HTMLElement) {
+      scrollToBottom(container);
     }
   }
 
@@ -215,4 +211,10 @@ export class LogList extends LitElement {
       });
     }
   };
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'log-list': LogList;
+  }
 }
