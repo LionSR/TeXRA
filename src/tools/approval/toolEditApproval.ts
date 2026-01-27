@@ -198,7 +198,7 @@ async function showProgressViewApprovalPrompt(
   await safeExecuteCommand('texra.showProgressView');
   const streamId = request.streamId;
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
-  bus.emit('showToolEditApprovalPrompt', {
+  bus.emit('showToolEditPermission', {
     requestId,
     path: request.path,
     relativePath,
@@ -212,7 +212,7 @@ async function showProgressViewApprovalPrompt(
 }
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
-  bus.emit('resolveToolEditApprovalPrompt', { requestId });
+  bus.emit('resolveToolEditPermission', { requestId });
 }
 
 function createSemanticDiffs(
