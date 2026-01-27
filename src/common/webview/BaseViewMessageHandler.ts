@@ -9,6 +9,18 @@ import * as logger from '@logger/logUtils';
 import { COMMON_COMMANDS } from './commands';
 import type { z } from 'zod';
 
+/** Type guard to check if a message has a command field */
+function isCommandMessage(
+  message: unknown,
+): message is { command: string; [key: string]: unknown } {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'command' in message &&
+    typeof (message as Record<string, unknown>).command === 'string'
+  );
+}
+
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > = (message: unknown, webviewView: T) => Promise<void> | void;
@@ -101,7 +113,7 @@ export abstract class BaseViewMessageHandler<
       this._activeView = webviewView;
     }
 
-    if (!message?.command) {
+    if (!isCommandMessage(message)) {
       this.logger.warn(
         this.channel,
         `Received message without command. Message: ${JSON.stringify(message)}`,
@@ -136,7 +148,10 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common theme handling
    */
-  protected async handleTheme(message: any, webviewView: T): Promise<void> {
+  protected async handleTheme(
+    message: { theme?: string },
+    webviewView: T,
+  ): Promise<void> {
     if (!message?.theme) {
       this.logger.warn(this.channel, 'Invalid theme message', {
         data: message,
@@ -153,7 +168,10 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common debug mode handling
    */
-  protected async handleDebugMode(message: any, webviewView: T): Promise<void> {
+  protected async handleDebugMode(
+    message: { debugMode?: boolean },
+    webviewView: T,
+  ): Promise<void> {
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
       debugMode: message.debugMode,

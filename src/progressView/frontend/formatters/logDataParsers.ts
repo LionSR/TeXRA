@@ -54,7 +54,7 @@ function extractOutputContent(candidate: unknown): unknown {
     userInstruction: _userInstruction,
     ...rest
   } = candidate;
-  return output !== undefined ? output : rest;
+  return output ?? rest;
 }
 
 /** Format output content as display string. */

@@ -14,6 +14,9 @@ import { when } from 'lit/directives/when.js';
 // Local imports - main view
 import { MainViewEvents } from '../events';
 
+// Local imports - shared utilities
+import { COMMAND_LINKS } from '@shared/utils/uiConstants';
+
 // Local imports - shared schemas
 import type {
   AgentConfigBannerState,
@@ -348,17 +351,15 @@ export class BannerGroup extends LitElement {
       <div id="gettingStartedBanner" class="getting-started-banner">
         <span class="getting-started-text">
           No files found in workspace. Try
-          <a href="command:texra.openGettingStarted"
+          <a href=${COMMAND_LINKS.GETTING_STARTED}
             >opening the getting started walkthrough</a
           >,
-          <a href="command:texra.createSampleProject"
+          <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
             >creating a sample project</a
           >,
-          <a href="command:texra.cloneOverleafProject"
-            >cloning an Overleaf project</a
+          <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>cloning an Overleaf project</a
           >, or
-          <a href="command:texra.downloadArXivSource"
-            >downloading an arXiv source</a
+          <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>downloading an arXiv source</a
           >.
         </span>
       </div>

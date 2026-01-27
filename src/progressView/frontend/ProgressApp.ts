@@ -79,11 +79,13 @@ import './components/StatisticsPanel';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
 
-// Local imports - progress view modules
-import type { FollowUpInput } from './components/FollowUpInput';
-import type { PermissionState } from './components/PermissionCard';
-import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
-import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
+// Local imports - progress view component types
+import type {
+  FollowUpInput,
+  PermissionState,
+  ToolUseStreamContent,
+  WorkflowStreamContent,
+} from './components';
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {

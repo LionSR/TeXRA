@@ -26,7 +26,7 @@ export abstract class BaseWebviewProvider {
   };
   protected abstract messageHandler: {
     handleMessage(
-      message: any,
+      message: unknown,
       webviewView: vscode.WebviewView | vscode.WebviewPanel,
     ): Promise<void> | void;
   };
