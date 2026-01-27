@@ -104,12 +104,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private createHandlerRegistry(): ProgressViewInboundHandlerRegistry {
     return {
-      // Common handlers
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: (_data) =>
-        this.handleWebviewReadySignal(),
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.handleThemeSet(data),
+      // Common handlers - passthrough to webview
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReadySignal(),
+      [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.postToActiveView(data),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
-        this.handleDebugModeSet(data),
+        this.postToActiveView(data),
 
       // Stream management
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
@@ -237,28 +236,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private handleThemeSet(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.THEME_SET>,
-  ): void {
-    const view = this.getActiveView();
-    if (view) {
-      view.webview.postMessage({
-        command: PROGRESS_VIEW_COMMANDS.THEME_SET,
-        theme: data.theme,
-      });
-    }
-  }
-
-  private handleDebugModeSet(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET>,
-  ): void {
-    const view = this.getActiveView();
-    if (view) {
-      view.webview.postMessage({
-        command: PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
-        debugMode: data.debugMode,
-      });
-    }
+  private postToActiveView(message: unknown): void {
+    this.getActiveView()?.webview.postMessage(message);
   }
 
   // ============================================================

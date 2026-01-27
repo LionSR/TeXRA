@@ -54,7 +54,10 @@ export class RunSelector extends LitElement {
           sortedRuns,
           (run) => run.id,
           (run) => html`
-            <vscode-option value=${run.id}>
+            <vscode-option
+              value=${run.id}
+              ?selected=${run.id === this.activeRunId}
+            >
               ${this.formatRunLabel(run)}
             </vscode-option>
           `,

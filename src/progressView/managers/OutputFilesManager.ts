@@ -79,10 +79,8 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /**
-   * Get or create a nested map entry.
-   */
-  private getOrCreate<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
+  /** Get or create a nested map entry */
+  private getOrCreateNested<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
     let inner = map.get(key);
     if (!inner) {
       inner = factory();
@@ -104,8 +102,8 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
     // storageKey is already branded - use directly, no normalization needed
-    const streamRuns = this.getOrCreate(this.items, stream, () => new Map());
-    const runRounds = this.getOrCreate(streamRuns, storageKey, () => new Map());
+    const streamRuns = this.getOrCreateNested(this.items, stream, () => new Map());
+    const runRounds = this.getOrCreateNested(streamRuns, storageKey, () => new Map());
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);
@@ -143,12 +141,12 @@ export class OutputFilesManager extends PersistentMapManager<
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
     // storageKey is already branded - use directly, no normalization needed
-    const streamMissing = this.getOrCreate(
+    const streamMissing = this.getOrCreateNested(
       this._missingOutputs,
       stream,
       () => new Map(),
     );
-    const runMissing = this.getOrCreate(
+    const runMissing = this.getOrCreateNested(
       streamMissing,
       storageKey,
       () => new Map(),
@@ -381,7 +379,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
-    _streamId: StreamTabId,
+    _key: StreamTabId,
   ): Promise<Map<string, Map<number, OutputFileInfo[]>>> {
     return OutputFilesDataSchema.parse(data);
   }

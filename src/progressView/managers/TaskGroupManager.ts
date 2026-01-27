@@ -32,20 +32,13 @@ export class TaskGroupManager extends PersistentMapManager<
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
-  /**
-   * Add a task group to a stream
-   */
+  /** Add a task group to a stream */
   async addGroup(
     stream: StreamTabId,
     groupId: string,
     group: TaskGroup,
   ): Promise<void> {
-    let streamGroups = this.get(stream);
-    if (!streamGroups) {
-      streamGroups = new Map();
-      this.items.set(stream, streamGroups);
-    }
-
+    const streamGroups = this.getOrCreate(stream, () => new Map());
     streamGroups.set(groupId, { ...group });
     await this.save();
   }

@@ -16,8 +16,16 @@ import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 // PLACEHOLDER
 // =============================================================================
 
-function renderPlaceholder(text = 'None', value = ''): TemplateResult {
-  return html`<vscode-option value=${value}>${text}</vscode-option>`;
+function renderPlaceholder(
+  text: string,
+  selectedValue: string,
+  placeholderValue = '',
+): TemplateResult {
+  return html`<vscode-option
+    value=${placeholderValue}
+    ?selected=${selectedValue === placeholderValue}
+    >${text}</vscode-option
+  >`;
 }
 
 // =============================================================================
@@ -94,7 +102,7 @@ export function renderAgentOptions(
   placeholder = 'Select agent',
 ): TemplateResult {
   return html`
-    ${renderPlaceholder(placeholder)}
+    ${renderPlaceholder(placeholder, selectedValue)}
     ${repeat(
       options,
       (opt) => opt.value,
@@ -115,9 +123,7 @@ function renderModelOption(
   selectedValue: string,
 ): TemplateResult {
   const isSelected = opt.value === selectedValue;
-  const decorator = opt.provider
-    ? getModelProviderDecorator(opt.provider)
-    : { unicode: '', label: '', hint: '' };
+  const decorator = getModelProviderDecorator(opt.provider ?? '');
 
   const display = decorator.unicode
     ? `${decorator.unicode} ${opt.label}`
@@ -156,7 +162,7 @@ export function renderModelOptions(
   placeholder = 'Select model',
 ): TemplateResult {
   return html`
-    ${renderPlaceholder(placeholder)}
+    ${renderPlaceholder(placeholder, selectedValue)}
     ${repeat(
       options,
       (opt) => opt.value,

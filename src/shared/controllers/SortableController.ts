@@ -9,9 +9,6 @@
 import Sortable from 'sortablejs';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-// Local imports - shared types
-import type { SortableDragEvent } from '@shared/types/sortable';
-
 export interface SortableControllerConfig {
   /** Animation duration in ms (default: 150) */
   animation?: number;
@@ -106,7 +103,10 @@ export class SortableController implements ReactiveController {
   }
 
   private handleSortEnd(event: unknown): void {
-    const { oldIndex, newIndex } = (event ?? {}) as SortableDragEvent;
+    const { oldIndex, newIndex } = (event ?? {}) as {
+      oldIndex?: number | null;
+      newIndex?: number | null;
+    };
     if (
       oldIndex === null ||
       oldIndex === undefined ||

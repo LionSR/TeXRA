@@ -86,7 +86,7 @@ export class RunInstructionManager extends PersistentMapManager<
 
   protected override deserialize(
     data: unknown,
-    _stream: StreamTabId,
+    _key: StreamTabId,
   ): InstructionMap {
     return InstructionsMapSchema.parse(data);
   }

@@ -40,6 +40,18 @@ export function getIncludedExtensions(
 }
 
 /**
+ * Retrieve included extensions without the leading dot (for VS Code file filters).
+ */
+export function getFilterExtensions(
+  category: ExtensionCategory,
+  defaultExtensions: string[] = [],
+): string[] {
+  return getIncludedExtensions(category, defaultExtensions).map((ext) =>
+    ext.replace('.', ''),
+  );
+}
+
+/**
  * Returns true if the file has a .tex extension.
  */
 export function isTexFile(filePath: string): boolean {

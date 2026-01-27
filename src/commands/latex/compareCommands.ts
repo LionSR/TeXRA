@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { extractAgentSuffix } from '@agent/utils';
+import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';

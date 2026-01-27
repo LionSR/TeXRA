@@ -302,17 +302,20 @@ export class WebviewUpdater {
   /**
    * Update or clear instruction panel content.
    * Pass null for instruction to clear the panel.
+   * @param runId - When provided, frontend uses this directly instead of resolving from state.
    */
   updateInstruction(
     stream: StreamTabId | '',
     instruction: InstructionUpdate | null,
     agentCategory?: string,
+    runId?: string | null,
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
       agentCategory,
+      runId,
     });
   }
 

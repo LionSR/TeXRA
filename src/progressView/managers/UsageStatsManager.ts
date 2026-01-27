@@ -6,7 +6,6 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -159,49 +158,6 @@ export class UsageStatsManager extends PersistentMapManager<
    */
   getRunUsage(stream: StreamTabId): RunUsageMap {
     return new Map(this.items.get(stream) ?? []);
-  }
-
-  /**
-   * Set all usage statistics (used during loading).
-   * Handles both RunUsageMap entries and legacy single TokenUsageStats entries.
-   */
-  setAll(
-    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
-  ): void {
-    const normalized: Map<StreamTabId, RunUsageMap> = new Map();
-
-    for (const [stream, value] of stats.entries()) {
-      const runMap = this.normalizeToRunMap(value);
-      if (runMap) {
-        normalized.set(stream, runMap);
-      }
-    }
-
-    super.setAll(normalized);
-  }
-
-  /**
-   * Normalize a value to RunUsageMap format.
-   * Returns null for invalid or empty values.
-   */
-  private normalizeToRunMap(value: unknown): RunUsageMap | null {
-    // Already a map - make a copy
-    if (value instanceof Map) {
-      return new Map(value as RunUsageMap);
-    }
-
-    // Validate object
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    // Parse as legacy single TokenUsageStats
-    const usage = TokenUsageStatsParsingSchema.parse(value);
-    if (isEmptyUsage(usage)) {
-      return null;
-    }
-
-    return new Map([[normalizeRunId(null), usage]]);
   }
 
   /**
