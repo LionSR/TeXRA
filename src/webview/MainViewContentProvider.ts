@@ -1,7 +1,5 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Internal imports
 import { BaseViewContentProvider } from '@common/webview';
 
 export class MainViewContentProvider extends BaseViewContentProvider {

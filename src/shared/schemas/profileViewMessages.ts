@@ -40,3 +40,21 @@ export const UpdateProfileMessageSchema = z.object({
   accessExpiresAt: z.string().nullish(),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
+
+// ============================================================
+// Inbound message schemas (frontend → backend)
+// ============================================================
+
+/** Agent selection message (inbound) */
+export const SelectAgentMessageSchema = z.object({
+  agentName: z.string().min(1),
+});
+export type SelectAgentMessage = z.infer<typeof SelectAgentMessageSchema>;
+
+/** API access mode message (inbound) */
+export const SetApiAccessModeMessageSchema = z.object({
+  mode: ApiAccessModeSchema,
+});
+export type SetApiAccessModeMessage = z.infer<
+  typeof SetApiAccessModeMessageSchema
+>;

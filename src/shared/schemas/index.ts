@@ -29,6 +29,7 @@ export * from './mainViewEvents';
 
 // Layer 5: View message schemas
 export * from './progressViewMessages';
+export * from './progressViewInboundMessages';
 export * from './progressViewData';
 export * from './memoryViewMessages';
 export * from './historyViewMessages';

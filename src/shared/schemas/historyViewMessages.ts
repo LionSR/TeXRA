@@ -36,3 +36,13 @@ export const HistoryClearedMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.HISTORY_CLEARED),
 });
 export type HistoryClearedMessage = z.infer<typeof HistoryClearedMessageSchema>;
+
+// ============================================================
+// Inbound message schemas (frontend → backend)
+// ============================================================
+
+/** History ID message for history operations (inbound) */
+export const HistoryIdMessageSchema = z.object({
+  historyId: z.string().min(1),
+});
+export type HistoryIdMessage = z.infer<typeof HistoryIdMessageSchema>;
