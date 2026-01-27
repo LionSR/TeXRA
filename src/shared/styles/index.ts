@@ -13,3 +13,12 @@ export { designTokens, utilityStyles, animationStyles } from './litStyles';
 export { selectStyles } from './selectStyles';
 export { statusIndicatorStyles } from './statusIndicatorStyles';
 export { promptOverlayStyles } from './promptOverlayStyles';
+
+// Badge and category styles
+export {
+  badgeStyles,
+  baseBadgeStyles,
+  categoryBadgeStyles,
+  emptyStateStyles,
+  searchHighlightStyles,
+} from './badgeStyles';

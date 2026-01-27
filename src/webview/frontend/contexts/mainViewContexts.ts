@@ -1,66 +1,20 @@
+/**
+ * Lit context definitions for MainView.
+ *
+ * Context values use Zod-derived types from shared schemas for type safety.
+ */
+
 // Third-party imports
 import { createContext } from '@lit/context';
 
-// Local imports - main view
-import type { SessionType } from '../constants';
-
-// Local imports - shared schemas
+// Local imports - shared schemas (Zod-derived types)
 import type {
-  AgentOptionData,
-  CheckboxValues,
-  ModelOptionData,
+  FileStateContextValue,
+  SessionContextValue,
 } from '@shared/schemas';
 
-export interface FileStateContextValue {
-  sessionType: SessionType;
-  checkboxValues: CheckboxValues;
-  singleFiles: {
-    inputFile: string;
-    referenceFile: string;
-    auxiliaryFile: string;
-    mediaFile: string;
-    baseFile: string;
-    editedFile: string;
-  };
-  fileOptions: {
-    inputFile: string[];
-    referenceFile: string[];
-    auxiliaryFile: string[];
-    mediaFile: string[];
-    baseFile: string[];
-    editedFile: string[];
-  };
-  multiFiles: {
-    inputFiles: string[];
-    referenceFiles: string[];
-    auxiliaryFiles: string[];
-    mediaFiles: string[];
-    outputFiles: string[];
-  };
-  multiFilesVisible: {
-    inputFiles: boolean;
-    referenceFiles: boolean;
-    auxiliaryFiles: boolean;
-    mediaFiles: boolean;
-    outputFiles: boolean;
-  };
-  outputFilesActive: boolean;
-}
-
-export interface SessionContextValue {
-  sessionType: SessionType;
-  instruction: string;
-  placeholder: string;
-  workflowAgent: string;
-  toolUseAgent: string;
-  model: string;
-  workflowAgentOptions: AgentOptionData[];
-  toolUseAgentOptions: AgentOptionData[];
-  modelOptions: ModelOptionData[];
-  isRecording: boolean;
-  isPolishing: boolean;
-  debugMode: boolean;
-}
+// Re-export types for consumers
+export type { FileStateContextValue, SessionContextValue };
 
 export const fileStateContext = createContext<FileStateContextValue>(
   'main-view-file-state',

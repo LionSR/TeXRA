@@ -35,14 +35,17 @@ import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
 import { getRunGroups } from '../stateUtils';
-import { isToolUseState, type ToolUseStreamState } from '../store';
 
 // Local imports - progress view contexts
 import {
+  getToolUseState,
   promptsContext,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
+
+// Local imports - progress view store (type-only)
+import type { ToolUseStreamState } from '../store';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
@@ -105,11 +108,8 @@ export class ToolUseStreamContent extends LitElement {
   }
 
   private get currentState(): ToolUseStreamState | null {
-    const contextState = this.streamContext?.streamState;
-    if (contextState && isToolUseState(contextState)) {
-      return contextState;
-    }
-    return null;
+    if (!this.streamContext) return null;
+    return getToolUseState(this.streamContext);
   }
 
   private get currentPrompts(): PromptState[] {

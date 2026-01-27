@@ -15,11 +15,6 @@ import { when } from 'lit/directives/when.js';
 /** Result type for formatters that return Lit templates directly. */
 export type FormatResult = TemplateResult | null;
 
-/** Options for template formatting. */
-export type FormatTemplateOptions = {
-  defaultOpen?: boolean;
-};
-
 // Re-export directives for use in formatter templates
 export { html, nothing, classMap, ifDefined, styleMap, unsafeHTML, when };
 export type { TemplateResult };

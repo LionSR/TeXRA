@@ -5,6 +5,13 @@
  * Uses Lit templates for declarative DOM construction.
  */
 
+// Local imports - shared schemas
+import {
+  ErrorLogDataSchema,
+  type ErrorLogData,
+  type LogMessageData,
+} from '@shared/schemas';
+
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
@@ -22,13 +29,6 @@ import {
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatTimestamp } from '../timestampUtils';
 import { EMOJI_BY_LEVEL } from '../constants';
-
-// Local imports - shared schemas
-import {
-  ErrorLogDataSchema,
-  type ErrorLogData,
-  type LogMessageData,
-} from '@shared/schemas';
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(

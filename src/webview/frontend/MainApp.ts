@@ -13,7 +13,7 @@ import { WebviewStateManager } from '@shared/state';
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
-// Local imports - shared schemas
+// Local imports - shared schemas (Zod-derived types)
 import {
   mainViewMessages,
   MainViewPersistedStateSchema,
@@ -24,6 +24,11 @@ import {
   type DependencyBannerState,
   type ModelOptionData,
   type AgentOptionData,
+  type SingleFiles,
+  type FileOptions,
+  type MultiFiles,
+  type MultiFilesVisible,
+  type CheckboxValues,
 } from '@shared/schemas';
 
 // Local imports - webview commands
@@ -57,9 +62,14 @@ import {
   type SessionContextValue,
 } from './contexts/mainViewContexts';
 
-// Local imports - main view store
+// Local imports - main view store (typed defaults)
 import {
   DEFAULT_STATE,
+  DEFAULT_SINGLE_FILES,
+  DEFAULT_FILE_OPTIONS,
+  DEFAULT_MULTI_FILES,
+  DEFAULT_MULTI_FILES_VISIBLE,
+  DEFAULT_CHECKBOX_VALUES,
   FILE_UPDATE_COMMANDS,
   FILE_REFRESH_COMMANDS,
   FILE_SELECTED_COMMANDS,
@@ -74,7 +84,6 @@ import type {
   AgentChangeDetail,
   BannerActionDetail,
   BaseFileChangeDetail,
-  CheckboxValues,
   CheckboxChangeDetail,
   CommitChangeDetail,
   EditedFileChangeDetail,
@@ -135,44 +144,16 @@ export class MainApp extends BaseWebviewApp {
   @state() private model = DEFAULT_STATE.model;
   @state() private commit = DEFAULT_STATE.commit;
   @state() private instruction = DEFAULT_STATE.instruction;
-  @state() private singleFiles = {
-    inputFile: DEFAULT_STATE.inputFile,
-    referenceFile: DEFAULT_STATE.referenceFile,
-    auxiliaryFile: DEFAULT_STATE.auxiliaryFile,
-    mediaFile: DEFAULT_STATE.mediaFile,
-    baseFile: DEFAULT_STATE.baseFile,
-    editedFile: DEFAULT_STATE.editedFile,
-  };
-  @state() private fileOptions: Record<string, string[]> = {
-    inputFile: [],
-    referenceFile: [],
-    auxiliaryFile: [],
-    mediaFile: [],
-    editedFile: [],
-    baseFile: [],
-  };
-  @state() private multiFiles: Record<string, string[]> = {
-    inputFiles: [],
-    referenceFiles: [],
-    auxiliaryFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-  };
-  @state() private multiFilesVisible: Record<string, boolean> = {
-    inputFiles: false,
-    referenceFiles: false,
-    auxiliaryFiles: false,
-    mediaFiles: false,
-    outputFiles: false,
+  @state() private singleFiles: SingleFiles = { ...DEFAULT_SINGLE_FILES };
+  @state() private fileOptions: FileOptions = { ...DEFAULT_FILE_OPTIONS };
+  @state() private multiFiles: MultiFiles = { ...DEFAULT_MULTI_FILES };
+  @state() private multiFilesVisible: MultiFilesVisible = {
+    ...DEFAULT_MULTI_FILES_VISIBLE,
   };
   @state() private outputFilesActive = DEFAULT_STATE.outputFilesActive;
   @state() private latexdiffsVisible = DEFAULT_STATE.latexdiffsVisible;
-  @state() private checkboxValues = {
-    autoExtractFigure: DEFAULT_STATE.autoExtractFigure,
-    autoExtractTikzFigure: DEFAULT_STATE.autoExtractTikzFigure,
-    autoCompileInputPdf: DEFAULT_STATE.autoCompileInputPdf,
-    attachTeXCount: DEFAULT_STATE.attachTeXCount,
-    attachDiagnostics: DEFAULT_STATE.attachDiagnostics,
+  @state() private checkboxValues: CheckboxValues = {
+    ...DEFAULT_CHECKBOX_VALUES,
   };
   @state() private isRecording = false;
   @state() private isPolishing = false;

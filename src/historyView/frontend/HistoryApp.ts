@@ -7,7 +7,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import {
@@ -34,7 +34,12 @@ import type { SearchAction } from './components/HistoryList';
 
 @customElement('history-app')
 export class HistoryApp extends BaseWebviewApp {
-  static styles = [designTokens, commonViewStyles, historyViewStyles];
+  static styles = [
+    designTokens,
+    commonViewStyles,
+    ...badgeStyles,
+    historyViewStyles,
+  ];
 
   @state() private items: HistoryItem[] = [];
   @state() private matchCount = '';

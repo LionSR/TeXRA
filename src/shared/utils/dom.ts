@@ -3,8 +3,7 @@
  * Focused on VS Code web component helpers.
  */
 
-// Note: Toggle icon rotation is now CSS-only via details[open] selector.
-// See src/progressView/styles/logs.css for the CSS rules.
+// Note: Toggle icon rotation is CSS-only via details[open] selector in Shadow DOM styles.
 
 /**
  * Scroll an element to its bottom.
