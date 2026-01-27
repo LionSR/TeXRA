@@ -1,10 +1,14 @@
+/**
+ * AgentsTable component - displays table of available remote agents with selection buttons.
+ */
+
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles } from '@shared/styles';
+import { badgeStyles, codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - profile view styles
 import { profileViewStyles } from '../styles';
@@ -17,13 +21,21 @@ import type { RemoteAgent } from '@shared/schemas';
 
 @customElement('agents-table')
 export class AgentsTable extends LitElement {
-  static styles = [designTokens, codiconStyles, profileViewStyles];
+  static override styles = [
+    designTokens,
+    codiconStyles,
+    ...badgeStyles,
+    profileViewStyles,
+  ];
 
   @property({ attribute: false }) agents: RemoteAgent[] = [];
 
-  private handleSelect = (agentName: string): void => {
+  private handleSelect(event: Event): void {
+    const target = event.currentTarget as HTMLElement | null;
+    const agentName = target?.dataset.agent;
+    if (!agentName) return;
     this.dispatchEvent(ProfileViewEvents.selectAgent({ agentName }));
-  };
+  }
 
   private renderAgentRow(agent: RemoteAgent): TemplateResult {
     const visibilityArray = Array.isArray(agent.visibility)
@@ -68,7 +80,8 @@ export class AgentsTable extends LitElement {
           <vscode-button
             class="select-btn"
             appearance="primary"
-            @click=${() => this.handleSelect(agent.name)}
+            data-agent=${agent.name}
+            @click=${this.handleSelect}
           >
             <span slot="start" class="codicon codicon-arrow-right"></span>
             Select
@@ -78,7 +91,7 @@ export class AgentsTable extends LitElement {
     `;
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <table class="agents-table">
         <thead>
@@ -100,5 +113,11 @@ export class AgentsTable extends LitElement {
         </tbody>
       </table>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'agents-table': AgentsTable;
   }
 }

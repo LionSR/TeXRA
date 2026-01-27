@@ -3,7 +3,7 @@
  * Both dispatch and handler sides use these types.
  */
 
-import type { PromptState } from './components/PromptOverlay';
+import type { PermissionState } from './components/PermissionCard';
 import type { FollowupFormData } from './components/FollowupSection';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';
 
@@ -41,8 +41,8 @@ export interface FollowupModeDetail {
 
 export type FollowupCommandDetail = FollowupFormData & { mode: string };
 
-export interface PromptActionDetail {
-  prompt: PromptState;
+export interface PermissionActionDetail {
+  permission: PermissionState;
   action: string;
   feedback?: string;
 }
@@ -99,6 +99,6 @@ export const ProgressEvents = {
   followupRun: (detail: FollowupCommandDetail) =>
     createEvent('followup-run', detail),
 
-  promptAction: (detail: PromptActionDetail) =>
-    createEvent('prompt-action', detail),
+  permissionAction: (detail: PermissionActionDetail) =>
+    createEvent('permission-action', detail),
 } as const;

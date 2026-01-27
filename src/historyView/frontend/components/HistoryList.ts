@@ -1,5 +1,15 @@
+/**
+ * HistoryList component - renders list of history items with search functionality.
+ * Receives search state via reactive properties and handles navigation.
+ */
+
 // Third-party imports
-import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, queryAll, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -7,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { historyViewStyles } from '../styles';
 
-// Local imports - history view components
+// Local imports - history view components (side-effect: register)
 import './HistoryItem';
 
 // Local imports - history view events
@@ -24,7 +34,7 @@ export type SearchAction = 'next' | 'prev' | null;
 
 @customElement('history-list')
 export class HistoryList extends LitElement {
-  static styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyViewStyles];
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
@@ -55,11 +65,17 @@ export class HistoryList extends LitElement {
    */
   protected willUpdate(changedProperties: PropertyValues<this>): void {
     // Handle clearSearchTrigger - clear search state
-    if (changedProperties.has('clearSearchTrigger') && this.clearSearchTrigger) {
+    if (
+      changedProperties.has('clearSearchTrigger') &&
+      this.clearSearchTrigger
+    ) {
       this.performClearSearch();
       // Dispatch event to reset the trigger
       this.dispatchEvent(
-        new CustomEvent('search-clear-complete', { bubbles: true, composed: true }),
+        new CustomEvent('search-clear-complete', {
+          bubbles: true,
+          composed: true,
+        }),
       );
     }
 
@@ -77,7 +93,10 @@ export class HistoryList extends LitElement {
       }
       // Dispatch event to reset the action
       this.dispatchEvent(
-        new CustomEvent('search-navigate-complete', { bubbles: true, composed: true }),
+        new CustomEvent('search-navigate-complete', {
+          bubbles: true,
+          composed: true,
+        }),
       );
     }
   }
@@ -155,7 +174,10 @@ export class HistoryList extends LitElement {
       const count = this.matchCounts.get(item.id) ?? 0;
       if (item.id === itemId) {
         // Check if the global index falls within this item's range
-        if (globalIndex >= cumulativeIndex && globalIndex < cumulativeIndex + count) {
+        if (
+          globalIndex >= cumulativeIndex &&
+          globalIndex < cumulativeIndex + count
+        ) {
           return globalIndex - cumulativeIndex;
         }
         return null;
@@ -168,7 +190,9 @@ export class HistoryList extends LitElement {
   private async applySearchToItems(term: string): Promise<void> {
     const historyItems = this.getHistoryItems();
     const counts = await Promise.all(
-      historyItems.map((item) => item.applySearch?.(term) ?? Promise.resolve(0)),
+      historyItems.map(
+        (item) => item.applySearch?.(term) ?? Promise.resolve(0),
+      ),
     );
 
     // Store match counts per item for computing highlighted indices
@@ -208,25 +232,27 @@ export class HistoryList extends LitElement {
     return this.historyItemElements ?? [];
   }
 
-  private handleToggle = (
+  private handleToggle(
     event: CustomEvent<{ historyId: string; open: boolean }>,
-  ): void => {
+  ): void {
     if (!this.state) return;
     // Ignore toggle when searching (items are auto-expanded during search)
     if (this.searchTerm) {
       return;
     }
     this.state.toggleStates.set(event.detail.historyId, event.detail.open);
-  };
+  }
 
-  private handleClear = (): void => {
+  private handleClear(): void {
     this.dispatchEvent(HistoryViewEvents.clearHistory());
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">No history items found</div>`;
     }
+
+    const forceOpen = Boolean(this.searchTerm && this.hasSearchMatches);
 
     return html`
       <div class="clear-container">
@@ -241,9 +267,8 @@ export class HistoryList extends LitElement {
           (item) => html`
             <history-item
               .item=${item}
-              .open=${this.searchTerm && this.hasSearchMatches
-                ? true
-                : Boolean(this.state?.toggleStates.get(item.id))}
+              .open=${forceOpen ||
+              Boolean(this.state?.toggleStates.get(item.id))}
               .highlightedMatchIndex=${this.getHighlightedMatchIndex(item.id)}
               @history-toggle=${this.handleToggle}
             ></history-item>
@@ -251,5 +276,11 @@ export class HistoryList extends LitElement {
         )}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-list': HistoryList;
   }
 }

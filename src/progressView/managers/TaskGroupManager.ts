@@ -1,26 +1,21 @@
-// Local imports - shared schemas
 import {
   STREAM_STATUS,
+  TaskGroupSchema,
   type StreamTabId,
   type TaskGroup,
   type UpdateTaskGroupPayload,
 } from '@shared/schemas';
-
-// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import {
-  mapToRecord,
-  recordToMap,
-} from '@progressView/persistence/serializationUtils';
+import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+
+/** Schema for deserializing persisted task groups */
+const TaskGroupsMapSchema = createRecordToMapSchema(TaskGroupSchema);
 
 /**
  * Manages task groups collection with persistence.
@@ -144,11 +139,11 @@ export class TaskGroupManager extends PersistentMapManager<
     return mapToRecord(value);
   }
 
-  /** Normalize loaded groups */
+  /** Normalize loaded groups with schema validation */
   protected override deserialize(
     data: unknown,
     _key: StreamTabId,
   ): Map<string, TaskGroup> {
-    return recordToMap<TaskGroup>(data);
+    return TaskGroupsMapSchema.parse(data);
   }
 }

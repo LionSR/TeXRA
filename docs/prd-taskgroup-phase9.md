@@ -34,6 +34,7 @@ Task groups are used as a **semantic timeline**, but the meaning shifts across a
   of “run selection,” and ordering is more fluid.
 
 This mismatch currently leaks into UI and persistence:
+
 - The UI assumes “runs” are root groups but hides the ability to collapse them.
 - Run selection and active run state exist only for workflow, but task groups are shared across both.
 - Collapsed state is stored globally without the stream or agent type context.
@@ -41,16 +42,19 @@ This mismatch currently leaks into UI and persistence:
 ### Current Architecture (As-Is)
 
 **Backend state**
+
 - `TaskGroupManager` persists task groups per stream via workspace storage.
 - `ProgressViewState` replays groups on load and marks running groups as error on reload.
 
 **Frontend state**
+
 - `StreamState.taskGroups` holds group arrays (no view-state or UI preferences).
 - `TaskGroupList` rebuilds the tree on every render and uses a local `previousStatuses` map.
 - `LogList` stores collapse state in `WebviewStateManager` under `groupToggleStates` (global, not
   stream-scoped, no cleanup when streams are deleted).
 
 **UI limitations**
+
 - Root run groups are not collapsible; only child groups can toggle.
 - Group header lacks a dedicated disclosure affordance; toggle state is subtle.
 - No run-level summary (duration, count, status, errors), making long runs hard to scan.
@@ -66,6 +70,7 @@ This mismatch currently leaks into UI and persistence:
 ### UX Gaps in Long Sessions
 
 When runs contain 100+ log entries and nested groups:
+
 - Users lose their place after a stream switch or reload.
 - No “unread” signal exists to indicate what changed since last view.
 - The list lacks anchors; scanning for the latest relevant group requires manual scrolling.
@@ -112,18 +117,21 @@ export type TaskGroupViewState = z.infer<typeof TaskGroupViewStateSchema>;
 ```
 
 **Key behaviors:**
+
 - Keys are **stream-scoped**: `collapsed[streamId:groupId:startTime]`.
 - `lastSeenAt` stores timestamps per group to enable unread markers.
 - `scrollAnchors` stores the last focused group ID per stream.
 - `runPin` optionally pins a run group for quick access.
 
 **Deep design considerations:**
+
 - **Keying strategy**: include `startTime` to avoid reusing stale collapse state when `r1` restarts.
 - **State ownership**: view state must remain **frontend-only** (never sent by backend).
 - **Local pruning**: cap per-stream entries (LRU) to avoid state bloat in `vscode.setState`.
 - **Legacy migration**: read `groupToggleStates` once, convert to stream-scoped keys, then delete.
 
 **Integration points:**
+
 - `LogList` becomes a thin presenter; view state lives in a new `TaskGroupViewStateManager`.
 - Clear view state when streams are deleted (`DELETE_STREAM`, `CLEAR_ALL`).
 
@@ -134,6 +142,7 @@ export type TaskGroupViewState = z.infer<typeof TaskGroupViewStateSchema>;
 Replace ad-hoc logic with Lit `ReactiveController`s to keep state concerns isolated and testable.
 
 **Current ad-hoc listeners (to eliminate):**
+
 - `LogList.ts` attaches `document`-level `toggle`, `click`, and `file-click` handlers; these are
   global, not scoped to the component, and make state ownership unclear.
 - `TaskGroupList.ts` maintains a local `previousStatuses` map and directly triggers
@@ -141,19 +150,20 @@ Replace ad-hoc logic with Lit `ReactiveController`s to keep state concerns isola
 
 **Controller set (expanded):**
 
-| Controller                       | Responsibility                                            | Used By            |
-| -------------------------------- | --------------------------------------------------------- | ------------------ |
-| `TaskGroupViewStateController`   | Collapse state + persistence + cleanup                    | LogList, TaskGroup |
-| `ScrollAnchorController`         | Restore scroll anchor per stream + pin logic              | LogList            |
-| `AudioNotificationController`    | Completion sound, de-dupe per stream/group                | TaskGroupList      |
-| `ResizeObserverController`       | Container resize signals for virtualizer + auto height    | TaskGroupList      |
-| `IntersectionObserverController` | Unread markers when headers enter viewport                | TaskGroupHeader    |
+| Controller                       | Responsibility                                         | Used By            |
+| -------------------------------- | ------------------------------------------------------ | ------------------ |
+| `TaskGroupViewStateController`   | Collapse state + persistence + cleanup                 | LogList, TaskGroup |
+| `ScrollAnchorController`         | Restore scroll anchor per stream + pin logic           | LogList            |
+| `AudioNotificationController`    | Completion sound, de-dupe per stream/group             | TaskGroupList      |
+| `ResizeObserverController`       | Container resize signals for virtualizer + auto height | TaskGroupList      |
+| `IntersectionObserverController` | Unread markers when headers enter viewport             | TaskGroupHeader    |
 
 **Lit-native pattern:** each controller registers `hostConnected()` and `hostUpdated()` for
 component-scoped side effects (no document-level listeners). Controllers own persistent state and
 expose tiny APIs to the host component.
 
 **Example controller responsibilities (deep dive):**
+
 - `TaskGroupViewStateController`
   - Wraps `WebviewStateManager` with stream-scoped keys (streamId + groupId + startTime).
   - Provides `getCollapsed(group)` / `setCollapsed(group, value)` and handles LRU pruning.
@@ -189,6 +199,7 @@ running → error (reload auto-end)
 ```
 
 **Rules:**
+
 - Audio fires only on `running → stopped/error` and only once per group per stream.
 - UI badges update immediately but do not re-announce on re-render.
 - “Unread” markers trigger when a group receives new logs after it was last seen.
@@ -208,6 +219,7 @@ Upgrade task group readability while keeping the existing visual language.
 5. **Sticky run headers** when scrolling long runs (CSS `position: sticky`).
 
 **Optional power features:**
+
 - Collapse/Expand all actions in StreamHeader toolbar.
 - Jump-to-run menu (uses `scrollAnchors` and `runPin`).
 
@@ -220,6 +232,7 @@ with memoized tree and flattened row generation so virtualization and unread tra
 straightforward.
 
 **Inputs:**
+
 - `groups[]` (TaskGroup)
 - `messages[]` (LogMessageData)
 - `activeRunId` (workflow)
@@ -242,6 +255,7 @@ type Row =
 ```
 
 **Why rows matter:**
+
 - Virtualizer needs a flat list.
 - Sticky headers can be applied to `group-header` rows only.
 - Unread tracking becomes “has any row of group been viewed?”
@@ -275,11 +289,13 @@ responsibility boundaries** so each part is independently testable and replaceab
   - Must not own: direct data mutations
 
 **Why this matters:**
+
 - Prevents UI state from leaking into backend persistence.
 - Avoids data merges in render, which makes virtualization unstable.
 - Eliminates document-level listeners that bypass component lifecycles.
 
 **Concrete moves (from current code):**
+
 - `LogList` stops owning `ToggleStateStore`; view state moves to controller + manager.
 - `TaskGroupList` stops tracking `previousStatuses`; audio moves to controller.
 - `TaskGroupList` becomes a pure “data → rows → render” component.
@@ -292,25 +308,29 @@ Task groups are shared across both agent types, but **rendering and interaction 
 This phase clarifies responsibility boundaries so each mode can evolve without coupling.
 
 **Workflow (run-centric) owns:**
+
 - **Run selection context** (selectedRunId / activeRunId).
 - **Run summaries** (duration, usage, outputs, missing outputs).
 - **Collapsible root groups** (runs) with explicit disclosure + persistence.
 - **Run-based filters** (only show the active run).
 
 **Tool-use (turn-centric) owns:**
+
 - **No run selection** (all groups visible by default).
 - **Prompt-driven highlights** (pending approvals or tool results).
 - **Chronological continuity** (no run filters).
 - **Session-scoped unread markers** (entire stream, not per run).
 
 **Shared (mode-agnostic) responsibilities:**
+
 - Group tree + row model transformation.
 - Virtualizer rendering pipeline.
 - View state persistence (collapse, unread, scroll anchors).
 - Audio notifications on completion.
 
 **Implementation boundary (target):**
-- `WorkflowStreamContent` decides *which* groups are visible and passes an explicit filter
+
+- `WorkflowStreamContent` decides _which_ groups are visible and passes an explicit filter
   (`activeRunId`) into `LogList/TaskGroupList`.
 - `ToolUseStreamContent` passes `isToolUse` + `activeRunId = null` and does not participate in
   run filtering or run-summary UI.
@@ -318,6 +338,7 @@ This phase clarifies responsibility boundaries so each mode can evolve without c
   specified by props.
 
 **Why this matters:**
+
 - Prevents future features (e.g., run-level controls) from leaking into tool-use streams.
 - Makes virtualizer and view-state logic reusable with minimal conditional logic.
 
@@ -338,6 +359,7 @@ TaskGroupStore (groups + messages)
 ```
 
 **Row types:**
+
 - `group-header`
 - `group-content` (slot)
 - `log-entry`
@@ -361,12 +383,14 @@ groups + messages + viewState
 ```
 
 **What changes vs DOM manager patterns:**
+
 - **No manual `appendChild()` / `insertBefore()`**: row order is derived and stable.
 - **No DOM querying for state**: collapse/unread/scroll are stored in view state controllers.
 - **No imperative “insert chronologically”**: sorting happens in the tree builder.
 - **No external mutation of elements**: all UI changes are via Lit re-render.
 
 **Concrete refactor moves:**
+
 - Replace `TaskGroupDomManager`‑style helpers with **pure functions**:
   - `buildGroupTree(groups, messages)`
   - `flattenGroupRows(tree, viewState)`
@@ -376,18 +400,19 @@ groups + messages + viewState
 - Keep `TaskGroupList` focused on `renderRow()` only.
 
 **Transitional pattern (if needed):**
+
 - Keep `LogEntry` as Light DOM and render it via `<log-entry .message=${...}>`.
 - Avoid direct DOM mutations inside `LogEntry`; if needed, convert formatter output to templates.
 
 **Detailed decomposition (from imperative → declarative):**
 
-| Imperative Responsibility | Declarative Replacement |
-| --- | --- |
-| Insert rows chronologically | Sort in `buildGroupTree()` based on timestamps |
-| Track expanded/collapsed DOM state | `TaskGroupViewStateController` (stream-scoped) |
-| Track completion + play audio | `AudioNotificationController` (state transitions) |
-| Manually hide/show groups | `getGroupVisibility()` in row pipeline |
-| DOM query for scroll & toggle icons | `ScrollAnchorController` + Lit template |
+| Imperative Responsibility           | Declarative Replacement                           |
+| ----------------------------------- | ------------------------------------------------- |
+| Insert rows chronologically         | Sort in `buildGroupTree()` based on timestamps    |
+| Track expanded/collapsed DOM state  | `TaskGroupViewStateController` (stream-scoped)    |
+| Track completion + play audio       | `AudioNotificationController` (state transitions) |
+| Manually hide/show groups           | `getGroupVisibility()` in row pipeline            |
+| DOM query for scroll & toggle icons | `ScrollAnchorController` + Lit template           |
 
 **Row generation details:**
 
@@ -410,17 +435,20 @@ groups + messages + viewState
    - Collapsed groups: emit header only, no children/messages.
 
 **Key invariants (must hold):**
+
 - Row order is deterministic for a given `(groups, messages, viewState)` input.
 - No DOM reads to determine state; render is fully derived from inputs.
 - Collapsed state is persisted and restored per stream.
 - Audio notifications never fire from render or re-render; only from state transitions.
 
 **Event flow (new pattern):**
+
 - User toggles group → `TaskGroupViewStateController.setCollapsed()` → state update → re-render.
 - New log message arrives → message handler updates `streamState.logs` → re-render.
 - Group status update arrives → state update → `AudioNotificationController` evaluates transition.
 
 **Edge cases to account for:**
+
 - **Out-of-order messages**: pending updates should merge into message array without forcing re-sort
   each time; sorting should be stable and incremental where possible.
 - **Missing group**: messages with unknown `groupId` should render in “ungrouped” section.
@@ -428,6 +456,7 @@ groups + messages + viewState
 - **Repeated group IDs**: include `startTime` in view-state key.
 
 **Performance considerations:**
+
 - Cache tree results when `(groups, messages)` identity is unchanged.
 - Use `guard()` around `renderRow(row)` for expensive rows (markdown/KaTeX).
 - Avoid per-render `Array.sort()` by storing sorted arrays once in memoized helpers.
@@ -439,10 +468,12 @@ groups + messages + viewState
 Integrate `@lit-labs/virtualizer` for log rendering at scale.
 
 **Targets:**
+
 - `TaskGroupList` renders flattened rows via virtualizer.
 - `LogEntry` remains Light DOM until formatter conversion is complete.
 
 **Fallback behavior:**
+
 - Feature flag in `ProgressView` settings to disable virtualization for debugging.
 
 ---
@@ -465,6 +496,7 @@ that can arrive late or be canceled (model options, relay tier config, profile d
 these states explicit and avoids race conditions from overlapping requests.
 
 **Target use cases (deep dive):**
+
 - **Model options**: In `MainApp`, the model list is updated by messages but also needs fallback
   refreshes. A `Task` can fetch or reconcile options and render loading/error states cleanly.
 - **Relay tier config**: In Profile or Settings, fetch `/relay/tier-config` and display tier
@@ -492,6 +524,7 @@ render() {
 ```
 
 **Benefits:**
+
 - Built-in cancellation on arg changes
 - Standardized loading/error UI
 - Removes manual `isLoading`/`try/catch` boilerplate
@@ -506,17 +539,20 @@ Use `@lit/context` to eliminate prop drilling and centralize state access for re
 Context is a better fit than long argument lists or brittle event chains.
 
 **Context candidates (deep dive):**
+
 - **SessionContext**: session type, agent category, model selection, provider config.
 - **FileStateContext**: selected files, checkbox states, and file list visibility.
 - **StreamStateContext**: current stream state for ProgressView (run selection, logs, groups).
 - **PromptStateContext**: active approvals/prompts, pending follow-ups.
 
 **Integration points:**
+
 - MainView: `MainApp → FileSelectGroup` currently passes 10+ props; replace with context providers.
 - ProgressView: `ProgressApp → StreamHeader / TaskGroupList / UsagePanel` can consume stream context
   without relaying via intermediate containers.
 
 **Benefits:**
+
 - Fewer render-triggering prop changes
 - Clear state ownership boundaries
 - Easier component reuse across views
@@ -563,34 +599,34 @@ Context is a better fit than long argument lists or brittle event chains.
 
 ## File Impact
 
-| Area                          | Files (expected)                                                            |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| View state                    | `src/progressView/frontend/taskGroupState.ts` (new)                          |
-| Controllers                   | `src/progressView/frontend/controllers/TaskGroup*.ts` (new)                 |
-| Controllers                   | `src/progressView/frontend/controllers/ScrollAnchorController.ts` (new)     |
-| Controllers                   | `src/progressView/frontend/controllers/AudioNotificationController.ts` (new)|
-| Controllers                   | `src/progressView/frontend/controllers/ResizeObserverController.ts` (new)   |
-| Controllers                   | `src/progressView/frontend/controllers/IntersectionObserverController.ts` (new) |
-| Components                    | `src/progressView/frontend/components/TaskGroupList.ts`                     |
-| Components                    | `src/progressView/frontend/components/TaskGroupItem.ts`                     |
-| Components                    | `src/progressView/frontend/components/TaskGroupHeader.ts`                   |
-| Components                    | `src/progressView/frontend/components/LogList.ts`                           |
-| Styles                        | `src/progressView/styles/groups.css`, `src/progressView/styles/logs.css`    |
-| Settings (feature flag)       | `src/shared/schemas/progressViewMessages.ts` (optional)                     |
-| Async tasks                   | `src/webview/frontend/*` (task usage in MainApp/Profile)                    |
-| Context providers             | `src/webview/frontend/context/*` (new)                                      |
-| Context providers             | `src/progressView/frontend/context/*` (new)                                 |
+| Area                    | Files (expected)                                                                |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| View state              | `src/progressView/frontend/taskGroupState.ts` (new)                             |
+| Controllers             | `src/progressView/frontend/controllers/TaskGroup*.ts` (new)                     |
+| Controllers             | `src/progressView/frontend/controllers/ScrollAnchorController.ts` (new)         |
+| Controllers             | `src/progressView/frontend/controllers/AudioNotificationController.ts` (new)    |
+| Controllers             | `src/progressView/frontend/controllers/ResizeObserverController.ts` (new)       |
+| Controllers             | `src/progressView/frontend/controllers/IntersectionObserverController.ts` (new) |
+| Components              | `src/progressView/frontend/components/TaskGroupList.ts`                         |
+| Components              | `src/progressView/frontend/components/TaskGroupItem.ts`                         |
+| Components              | `src/progressView/frontend/components/TaskGroupHeader.ts`                       |
+| Components              | `src/progressView/frontend/components/LogList.ts`                               |
+| Styles                  | `src/progressView/styles/groups.css`, `src/progressView/styles/logs.css`        |
+| Settings (feature flag) | `src/shared/schemas/progressViewMessages.ts` (optional)                         |
+| Async tasks             | `src/webview/frontend/*` (task usage in MainApp/Profile)                        |
+| Context providers       | `src/webview/frontend/context/*` (new)                                          |
+| Context providers       | `src/progressView/frontend/context/*` (new)                                     |
 
 ---
 
 ## Success Metrics
 
-| Metric                              | Target                                |
-| ----------------------------------- | ------------------------------------- |
-| Collapse state persistence          | Restores accurately across reloads    |
-| Group key collisions                | 0 observed (stream-scoped + startTime)|
-| Large log performance               | Smooth scroll at 10k entries          |
-| Task group UI scan time             | 30% fewer clicks to find a run        |
+| Metric                     | Target                                 |
+| -------------------------- | -------------------------------------- |
+| Collapse state persistence | Restores accurately across reloads     |
+| Group key collisions       | 0 observed (stream-scoped + startTime) |
+| Large log performance      | Smooth scroll at 10k entries           |
+| Task group UI scan time    | 30% fewer clicks to find a run         |
 
 ---
 
@@ -607,12 +643,12 @@ Context is a better fit than long argument lists or brittle event chains.
 
 ## Risks & Mitigations
 
-| Risk                                     | Mitigation                                                |
-| ---------------------------------------- | --------------------------------------------------------- |
-| Virtualizer conflicts with details tags  | Render custom group rows without `<details>` in virtual   |
-| Shadow DOM CSS regressions               | Keep Light DOM until formatter styles are migrated        |
-| State bloat in webview storage           | LRU cap + cleanup on stream deletion                      |
-| Audio notifications double-fire          | Controller tracks per-stream status transitions           |
+| Risk                                    | Mitigation                                              |
+| --------------------------------------- | ------------------------------------------------------- |
+| Virtualizer conflicts with details tags | Render custom group rows without `<details>` in virtual |
+| Shadow DOM CSS regressions              | Keep Light DOM until formatter styles are migrated      |
+| State bloat in webview storage          | LRU cap + cleanup on stream deletion                    |
+| Audio notifications double-fire         | Controller tracks per-stream status transitions         |
 
 ---
 

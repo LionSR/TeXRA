@@ -1,17 +1,13 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - model types
 import * as logger from '@logger/logUtils';
 import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 
 const CHANNEL = 'AgentDataclass';
 
-/** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
 
-/** Where the agent definition comes from. */
 export const AgentSource = z.enum([
   'custom',
   'builtIn',
@@ -37,7 +33,6 @@ export enum AgentCategory {
   ToolUse = 'toolUse',
 }
 
-/** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
     .string()
@@ -62,63 +57,37 @@ export const AgentSettingBaseSchema = z.strictObject({
       }),
     )
     .prefault([]),
-
-  // ToolDefinition extends SerializableToolDefinition (schema output)
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
-/** XML structure enforcement modes for workflow agents. */
-export const XmlStructureMode = z.enum([
-  'never', // Never ensure XML structure
-  'scratchpadOnly', // Only when useScratchpad is true (runtime default)
-  'always', // Always ensure XML structure
-]);
+export const XmlStructureMode = z.enum(['never', 'scratchpadOnly', 'always']);
 export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
 
-/** Workflow agents: document processing with fixed rounds. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
-  /** Minimum rounds (default 2). Actual rounds = max(rounds, userRequest.length) */
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
-
-  /**
-   * XML structure enforcement mode.
-   * - 'scratchpadOnly': Only when prefills include scratchpad (default)
-   * - 'always': Always ensure XML structure
-   * - 'never': Don't ensure XML structure
-   */
   xmlStructureMode: XmlStructureMode.optional(),
 });
 
-/** Tool-use agents: interactive agents with tool-calling capabilities. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
 });
 
-/**
- * Normalize input to ensure agentCategory discriminator is present.
- * Handles backward compatibility for legacy fields:
- * - agentType: mapped to agentCategory, then stripped
- * - maxRounds: mapped to rounds, then stripped
- * Strips legacy fields before strictObject validation.
- * Defaults to Workflow when not specified.
- */
+/** Normalize input to ensure agentCategory discriminator is present. */
 function normalizeAgentSettingInput(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  // Strip legacy fields via destructuring
   const { agentType, maxRounds, ...rest } = input as Record<string, unknown>;
 
-  // Migrate maxRounds to rounds (if rounds not already set)
   if (maxRounds !== undefined && rest.rounds === undefined) {
     logger.debug(
       CHANNEL,
@@ -127,7 +96,6 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     rest.rounds = maxRounds;
   }
 
-  // If agentCategory already present, we're done
   if (rest.agentCategory !== undefined) {
     if (agentType !== undefined) {
       logger.debug(CHANNEL, `Stripping legacy agentType: ${agentType}`);
@@ -135,7 +103,6 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     return rest;
   }
 
-  // Backward compatibility: map legacy agentType: 'toolUse' to agentCategory
   if (agentType === 'toolUse') {
     logger.debug(
       CHANNEL,
@@ -151,14 +118,9 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     );
   }
 
-  // Default to Workflow
   return { ...rest, agentCategory: AgentCategory.Workflow };
 }
 
-/**
- * Union schema with preprocessing to normalize discriminator.
- * Uses discriminatedUnion for O(1) lookup and better error messages.
- */
 export const AgentSettingSchema = z.preprocess(
   normalizeAgentSettingInput,
   z.discriminatedUnion('agentCategory', [
@@ -177,14 +139,12 @@ export type AgentToolUseSetting = Extract<
   { agentCategory: AgentCategory.ToolUse }
 >;
 
-/** Type guard for workflow settings. */
 export function isWorkflowSetting(
   setting: AgentSetting,
 ): setting is AgentWorkflowSetting {
   return setting.agentCategory === AgentCategory.Workflow;
 }
 
-/** Narrow to workflow setting or throw. */
 export function requireWorkflowSetting(
   setting: AgentSetting,
 ): AgentWorkflowSetting {
@@ -196,9 +156,6 @@ export function requireWorkflowSetting(
   return setting;
 }
 
-/**
- * Checks if content contains a valid end marker.
- */
 export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
@@ -210,7 +167,6 @@ export function hasEndTag(
   return Boolean(closingTag && fileContent.includes(closingTag));
 }
 
-/** Zod schema for AgentPrompt validation */
 const promptEntrySchema = z.union([z.string(), z.array(z.string())]);
 
 export const AgentPromptSchema = z.strictObject({

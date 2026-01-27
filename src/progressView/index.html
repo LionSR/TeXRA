@@ -9,14 +9,17 @@
     />
     <link rel="stylesheet" href="${tokensStyleUri}" />
     <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <!-- Bundled CSS includes KaTeX styles with font paths -->
-    <link rel="stylesheet" href="${bundledStyleUri}" />
     <style nonce="${nonce}">
       @font-face {
         font-family: 'codicon';
         font-display: block;
         src: url('${codiconsFontUri}') format('truetype');
+      }
+      body {
+        padding: 0;
+        display: flex;
+        height: 100vh;
+        background-color: var(--background-color);
       }
     </style>
     <link

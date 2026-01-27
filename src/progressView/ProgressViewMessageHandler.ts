@@ -1,56 +1,33 @@
-// Standard library imports
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - shared schemas
-import { AgentProposalActionMessageSchema } from '@shared/schemas';
-
-// Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import {
-  getAgent,
-  computeAgentOptions,
-  computeAgentOptionsData,
-} from '@agent/index/agentRegistry';
+import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
-import {
-  BaseViewMessageHandler,
-  MessageHandler,
-  PROGRESS_VIEW_COMMANDS,
-} from '@common/webview';
-
-// Local imports - frontend
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-
-// Local imports - logger
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-
-// Local imports - model
-import {
-  computeModelOptions,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
-
-// Local imports - progress view
+import * as logger from '@logger/logUtils';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
-
-// Local imports - tools
+import {
+  dispatchProgressViewInbound,
+  type ProgressViewInboundHandlerRegistry,
+  type ProgressViewInboundMessage,
+} from '@shared/schemas/progressViewInboundMessages';
+import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -58,8 +35,6 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-
-// Local imports - utils
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -76,54 +51,44 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
-// Local imports - webview
-import {
-  ApprovalActionMessageSchema,
-  BaseFileCommandMessageSchema,
-  BashApprovalActionMessageSchema,
-  CompareMessageSchema,
-  FileCommandMessageSchema,
-  FilterStreamsMessageSchema,
-  FollowupTaskMessageSchema,
-  InfoMessageSchema,
-  OpenLabelMessageSchema,
-  PolishFollowUpMessageSchema,
-  RetryStreamMessageSchema,
-  SendFollowUpMessageSchema,
-  SortStreamsMessageSchema,
-  StreamMessageSchema,
-} from '@webview/types/messages';
-
-// Type imports
-import type {
-  ExecutionId,
-  OutputFileInfo,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
-export class ProgressViewMessageHandler extends BaseViewMessageHandler<
-  vscode.WebviewView | vscode.WebviewPanel
-> {
-  private readonly recordingManager: RecordingManager;
+// Type helper for extracting specific message types
+type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
+  ProgressViewInboundMessage,
+  { command: C }
+>;
 
-  /**
-   * Stores model's original output when compare view is opened.
-   * Key: edited file path, Value: { content, streamId }
-   * Used to detect user modifications and inform the model via follow-up.
-   */
+/**
+ * Schema-driven message handler for ProgressView.
+ *
+ * Uses discriminated union validation at dispatch point (single safeParse)
+ * with typed handler registry for type-safe message handling.
+ */
+export class ProgressViewMessageHandler {
+  private readonly channel = 'ProgressViewMessageHandler';
+  private readonly recordingManager: RecordingManager;
   private readonly modelOutputBackups = new Map<
     string,
     { content: string; streamId: StreamTabId }
   >();
 
+  /**
+   * Active webview reference for handlers that need webview access.
+   */
+  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
+
+  /**
+   * Type-safe handler registry - handlers receive typed data.
+   */
+  private readonly handlers: ProgressViewInboundHandlerRegistry;
+
   constructor(
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
   ) {
-    // Enable activeView tracking - getActiveView() is inherited from base class
-    super('ProgressView', { trackActiveView: true });
+    logger.initialize(this.channel);
+
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
@@ -131,143 +96,213 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing follow-up message',
     });
+
+    this.handlers = this.createHandlers();
   }
 
-  protected createHandlers(): Record<
-    string,
-    MessageHandler<vscode.WebviewView | vscode.WebviewPanel>
-  > {
+  /**
+   * Get the currently active webview.
+   */
+  private getActiveView():
+    | vscode.WebviewView
+    | vscode.WebviewPanel
+    | undefined {
+    return this._activeView;
+  }
+
+  /**
+   * Create the typed handler registry.
+   * Each handler receives typed data - no casts or validation needed.
+   */
+  private createHandlers(): ProgressViewInboundHandlerRegistry {
     return {
       // Common handlers
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]:
-        this.handleWebviewReady.bind(this),
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
+      [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.handleTheme(data),
+      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
+        this.handleDebugMode(data),
 
       // Stream management
-      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]:
-        this.handleSwitchStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]:
-        this.handleDeleteStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
+        this.handleSwitchStream(data),
+      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
+        this.handleDeleteStream(data),
+      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
+        this.handleStopStream(data),
 
       // Actions
-      [PROGRESS_VIEW_COMMANDS.RESUME]: this.handleResume.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: this.handleRunNew.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
-      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
-        this.handleFilterStreams.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]:
-        this.handleRetryStreamRequest.bind(this),
-      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]:
-        this.handleCancelRetryRequest.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
-        this.handleRestoreState.bind(this),
-      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
-        this.handleSendFollowUp.bind(this),
-      [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
-        this.handleOpenTaskStorage.bind(this),
-      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]:
-        this.handlePolishFollowUp.bind(this),
-      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
-        this.recordingManager.start(w),
-      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
-        this.recordingManager.stop(w),
-      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
-        this.handleShowInformationMessage.bind(this),
-      [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]:
-        this.handleToolEditApprovalAction.bind(this),
-      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]:
-        this.handleToggleToolEditApprovalBypass.bind(this),
-      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]:
-        this.handleAgentProposalAction.bind(this),
-      [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]:
-        this.handleBashApprovalAction.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => this.handleResume(data),
+      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) => this.handleRunNew(data),
+      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
+        this.handleDiffStream(data),
+      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
+        this.handlePackStream(data),
+      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: (data) =>
+        this.handleCleanStream(data),
+      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) =>
+        this.handleSortStreams(data),
+      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) =>
+        this.handleFilterStreams(data),
+      [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
+        this.handleRetryStreamRequest(data),
+      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) =>
+        this.handleCancelRetryRequest(data),
+      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: (data) =>
+        this.handleRestoreState(data),
+      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (data) =>
+        this.handleSendFollowUp(data),
+      [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
+        this.handleOpenTaskStorage(data),
+      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
+        this.handlePolishFollowUp(data),
+      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: () =>
+        this.handleStartRecording(),
+      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: () => this.handleStopRecording(),
+      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (data) =>
+        this.handleShowInformationMessage(data),
+      [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) =>
+        this.handleToolEditApprovalAction(data),
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
+        this.handleToggleToolEditApprovalBypass(data),
+      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
+        this.handleAgentProposalAction(data),
+      [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
+        this.handleBashApprovalAction(data),
 
       // Profile
-      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: () => this.handleOpenProfile(),
 
       // Memory
-      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]:
-        this.handleOpenMemoryView.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: () =>
+        this.handleOpenMemoryView(),
 
       // Followup task
-      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]:
-        this.handleGetFollowupOptions.bind(this),
-      [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]:
-        this.handleSetupFollowup.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: this.handleRunFollowup.bind(this),
+      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: () =>
+        this.handleGetFollowupOptions(),
+      [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]: (data) =>
+        this.handleSetupFollowup(data),
+      [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: (data) =>
+        this.handleRunFollowup(data),
 
       // File operations
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]:
-        this.handleOpenFileCompile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]:
-        this.handleCompareOriginal.bind(this),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]:
-        this.handleComparePrevious.bind(this),
-      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: this.handleAcceptFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: this.handleMergeFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]:
-        this.handleLatexdiffFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: this.handleOpenLabel.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) => this.handleOpenFile(data),
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (data) =>
+        this.handleOpenFileCompile(data),
+      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
+        this.handleCompareOriginal(data),
+      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (data) =>
+        this.handleComparePrevious(data),
+      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (data) =>
+        this.handleAcceptFile(data),
+      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) => this.handleMergeFile(data),
+      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (data) =>
+        this.handleLatexdiffFile(data),
+      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) => this.handleOpenLabel(data),
     };
   }
 
-  // Handler implementations
   /**
-   * Override to notify the provider when webview is ready.
-   * This allows the provider to process any pending updates that
-   * were queued while the webview was initializing.
+   * Main message handler - uses schema-driven dispatch.
+   * Single safeParse at entry, routes to typed handlers.
    */
-  protected override async handleWebviewReady(message: unknown): Promise<void> {
-    const webviewView = this.getActiveView();
-    if (webviewView) {
-      await super.handleWebviewReady(message, webviewView);
-      this.provider.markWebviewReady(webviewView);
+  public async handleMessage(
+    message: unknown,
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    // Track active view for handlers that need webview access
+    this._activeView = webviewView;
+
+    const handled = dispatchProgressViewInbound(
+      message,
+      this.handlers,
+      (error) => {
+        logger.debug(this.channel, 'Message validation failed', {
+          data: error,
+        });
+      },
+    );
+
+    if (
+      !handled &&
+      message &&
+      typeof message === 'object' &&
+      'command' in message
+    ) {
+      logger.warn(
+        this.channel,
+        `Unhandled command: ${(message as { command: string }).command}`,
+      );
     }
   }
 
-  private async handleSwitchStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'switchStream',
-      async ({ stream: streamId }) => {
-        this.provider.setActiveStream(streamId);
-      },
-    );
+  // ============================================================
+  // Common handlers
+  // ============================================================
+
+  private handleWebviewReady(): void {
+    logger.debug(this.channel, 'Webview ready signal received');
+    const view = this.getActiveView();
+    if (view) {
+      this.provider.markWebviewReady(view);
+    }
   }
 
-  private async handleDeleteStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'deleteStream',
-      async ({ stream: streamId }) => {
-        const hasStream =
-          this.provider.state.streamTabs.has(streamId) ||
-          Boolean(this.provider.state.getTaskState(streamId));
-
-        if (!hasStream) {
-          return;
-        }
-
-        // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
-        this.provider.eventHandler.clearPendingTaskGroups(streamId);
-        cleanupApprovalsForStream(streamId);
-        await this.provider.state.clearStream(streamId);
-        // Force rebuild since we deleted a stream
-        this.provider.updateWebview({ forceRebuild: true });
-      },
-    );
+  private handleTheme(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.THEME_SET>,
+  ): void {
+    const view = this.getActiveView();
+    if (view) {
+      view.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.THEME_SET,
+        theme: data.theme,
+      });
+    }
   }
 
-  private async handleDeleteAll(_message: unknown): Promise<void> {
+  private handleDebugMode(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET>,
+  ): void {
+    const view = this.getActiveView();
+    if (view) {
+      view.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
+        debugMode: data.debugMode,
+      });
+    }
+  }
+
+  // ============================================================
+  // Stream management handlers
+  // ============================================================
+
+  private handleSwitchStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SWITCH_STREAM>,
+  ): void {
+    this.provider.setActiveStream(data.stream);
+  }
+
+  private async handleDeleteStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DELETE_STREAM>,
+  ): Promise<void> {
+    const streamId = data.stream;
+    const hasStream =
+      this.provider.state.streamTabs.has(streamId) ||
+      Boolean(this.provider.state.getTaskState(streamId));
+
+    if (!hasStream) {
+      return;
+    }
+
+    // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
+    this.provider.eventHandler.clearPendingTaskGroups(streamId);
+    cleanupApprovalsForStream(streamId);
+    await this.provider.state.clearStream(streamId);
+    // Force rebuild since we deleted a stream
+    this.provider.updateWebview({ forceRebuild: true });
+  }
+
+  private async handleDeleteAll(): Promise<void> {
     // Show confirmation dialog
     const confirmation = await vscode.window.showWarningMessage(
       'Are you sure you want to delete all streams? This action cannot be undone.',
@@ -288,368 +323,279 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.provider.updateWebview({ forceRebuild: true });
   }
 
-  private async handleStopStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'stopStream',
-      async ({ stream: streamId }) => {
-        await vscode.commands.executeCommand('texra.stopAgent', streamId);
-      },
-    );
+  private async handleStopStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.STOP_STREAM>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.stopAgent', data.stream);
   }
 
-  /**
-   * Resume a paused workflow/reflection session.
-   * Reuses the executionId so the flow picks up persisted state.
-   * Tool-use agents use the follow-up mechanism instead.
-   */
-  private async handleResume(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'resumeStream',
-      async ({ stream: streamId }) => {
-        const taskState = this.provider.state.getTaskState(streamId);
-        if (!taskState) {
-          return;
-        }
+  // ============================================================
+  // Action handlers
+  // ============================================================
 
-        // For workflow agents, resume by passing the same executionId
-        if (isWorkflowTaskState(taskState)) {
-          const executionId = this.provider.state.getExecutionId(streamId);
-          if (executionId) {
-            // Pass executionId to resume from persisted flow state
-            await safeExecuteCommand('texra.execute', [
-              { config: taskState.agentConfig, executionId },
-            ]);
-            return;
+  private async handleResume(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESUME>,
+  ): Promise<void> {
+    const streamId = data.stream;
+    const taskState = this.provider.state.getTaskState(streamId);
+    if (!taskState) {
+      return;
+    }
+
+    if (isWorkflowTaskState(taskState)) {
+      const executionId = this.provider.state.getExecutionId(streamId);
+      if (executionId) {
+        await safeExecuteCommand('texra.execute', [
+          { config: taskState.agentConfig, executionId },
+        ]);
+        return;
+      }
+    }
+
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+  }
+
+  private async handleRunNew(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_NEW>,
+  ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(data.stream);
+    if (!taskState) {
+      return;
+    }
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+  }
+
+  private async handleRetryStreamRequest(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
+  ): Promise<void> {
+    const success = retryCoordinator.triggerRetry(data.stream, data.feedback);
+    if (!success) {
+      await vscode.window.showInformationMessage(
+        'No retryable request is available for this stream yet.',
+      );
+    }
+  }
+
+  private handleCancelRetryRequest(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
+  ): void {
+    retryCoordinator.cancelRetry(data.stream);
+  }
+
+  private async handleDiffStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DIFF_STREAM>,
+  ): Promise<void> {
+    const streamId = data.stream;
+    await this.withToolbarTaskState(streamId, async (taskState) => {
+      const executionId = this.provider.state.getExecutionId(streamId);
+      const activeRunId = this.provider.state.getActiveRunId(streamId);
+      const storageKey = (activeRunId ??
+        executionId ??
+        null) as StorageKey | null;
+      const runOutputs = storageKey
+        ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+        : undefined;
+      const outputsByRound = runOutputs
+        ? Object.fromEntries(runOutputs.entries())
+        : undefined;
+
+      await vscode.commands.executeCommand('texra.runLatexdiff', {
+        agent: taskState.agentConfig.agent,
+        model: taskState.agentConfig.model,
+        inputFile: taskState.agentConfig.inputFile,
+        outputFiles: taskState.agentConfig.outputFiles,
+        outputFilesActive: taskState.activeFiles.output,
+        streamId,
+        runId: executionId,
+        outputsByRound,
+      });
+    });
+  }
+
+  private async handlePackStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PACK_STREAM>,
+  ): Promise<void> {
+    await this.withToolbarTaskState(data.stream, async (taskState) => {
+      await this.handleFileOperation(data.stream, taskState, 'texra.pack');
+    });
+  }
+
+  private async handleCleanStream(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CLEAN_STREAM>,
+  ): Promise<void> {
+    await this.withToolbarTaskState(data.stream, async (taskState) => {
+      await this.handleFileOperation(data.stream, taskState, 'texra.clean');
+    });
+  }
+
+  private handleSortStreams(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SORT_STREAMS>,
+  ): void {
+    this.provider.state.streamSortOrder = data.sortBy;
+    this.provider.updateWebview();
+  }
+
+  private handleFilterStreams(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.FILTER_STREAMS>,
+  ): void {
+    this.provider.state.agentCategoryFilter = data.filter;
+    this.provider.updateWebview();
+  }
+
+  private async handleRestoreState(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESTORE_STATE>,
+  ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(data.stream);
+    if (taskState) {
+      await vscode.commands.executeCommand('texra.restoreState', taskState);
+    }
+  }
+
+  private async handleSendFollowUp(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.sendFollowUp', {
+      stream: data.stream,
+      text: data.text,
+    });
+  }
+
+  private async handlePolishFollowUp(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
+  ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(data.stream);
+    if (!taskState) return;
+
+    const fileContext = buildFileContextFromTaskState(taskState);
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Polishing follow-up message',
+        cancellable: false,
+      },
+      async (progress) => {
+        try {
+          progress.report({
+            message: 'Sending to AI for polishing...',
+            increment: 30,
+          });
+          const result = await polishTextWithAI(data.text, fileContext);
+          progress.report({
+            message: 'Applying changes...',
+            increment: 60,
+          });
+
+          if (result.success) {
+            const view = this.getActiveView();
+            view?.webview.postMessage({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              text: result.text,
+            });
+          } else if (result.error) {
+            await vscode.window.showErrorMessage(result.error);
           }
-        }
-
-        // Defensive fallback: start fresh if no executionId available.
-        // Tool-use agents shouldn't reach here (Resume button not in their toolbar).
-        await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
-      },
-    );
-  }
-
-  private async handleRunNew(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'runNew',
-      async ({ stream: streamId }) => {
-        const taskState = this.provider.state.getTaskState(streamId);
-        if (!taskState) {
-          return;
-        }
-        await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
-      },
-    );
-  }
-
-  private async handleRetryStreamRequest(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      RetryStreamMessageSchema,
-      message,
-      'retryStreamRequest',
-      async ({ stream: streamId, feedback }) => {
-        // triggerRetry is synchronous, no await needed
-        // Pass optional feedback from the UI
-        const success = retryCoordinator.triggerRetry(streamId, feedback);
-        if (!success) {
-          await vscode.window.showInformationMessage(
-            'No retryable request is available for this stream yet.',
+        } catch (error) {
+          const messageText = toErrorMessage(error);
+          await vscode.window.showErrorMessage(
+            `Error polishing follow-up: ${messageText}`,
+          );
+          logger.error(
+            this.channel,
+            `Error polishing follow-up: ${messageText}`,
+            {
+              data: error instanceof Error ? error : undefined,
+            },
           );
         }
       },
     );
   }
 
-  private async handleCancelRetryRequest(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'cancelRetryRequest',
-      ({ stream: streamId }) => {
-        retryCoordinator.cancelRetry(streamId);
-      },
-    );
+  private async handleStartRecording(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.recordingManager.start(view);
+    }
   }
 
-  private async handleDiffStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'diffStream',
-      async ({ stream: streamId }) => {
-        await this.withToolbarTaskState(streamId, async (taskState) => {
-          const executionId = this.provider.state.getExecutionId(streamId);
-          const activeRunId = this.provider.state.getActiveRunId(streamId);
-          // storageKey is for logical indexing (finding file metadata in progress view state).
-          // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
-          // Note: Physical file paths use executionId (see runId below), not storageKey.
-          const storageKey = (activeRunId ??
-            executionId ??
-            null) as StorageKey | null;
-          const runOutputs = storageKey
-            ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
-            : undefined;
-          const outputsByRound = runOutputs
-            ? Object.fromEntries(runOutputs.entries())
-            : undefined;
-
-          await vscode.commands.executeCommand('texra.runLatexdiff', {
-            agent: taskState.agentConfig.agent,
-            model: taskState.agentConfig.model,
-            inputFile: taskState.agentConfig.inputFile,
-            outputFiles: taskState.agentConfig.outputFiles,
-            outputFilesActive: taskState.activeFiles.output,
-            streamId,
-            // executionId is for file system paths (taskRuns/<executionId>/...)
-            // storageKey is for logical storage indexing - different concepts
-            runId: executionId,
-            outputsByRound,
-          });
-        });
-      },
-    );
+  private async handleStopRecording(): Promise<void> {
+    const view = this.getActiveView();
+    if (view) {
+      await this.recordingManager.stop(view);
+    }
   }
 
-  private async handlePackStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'packStream',
-      async ({ stream: streamId }) => {
-        await this.withToolbarTaskState(streamId, async (taskState) => {
-          await this.handleFileOperation(streamId, taskState, 'texra.pack');
-        });
-      },
-    );
+  private async handleShowInformationMessage(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE>,
+  ): Promise<void> {
+    await vscode.window.showInformationMessage(data.text);
   }
 
-  private async handleCleanStream(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'cleanStream',
-      async ({ stream: streamId }) => {
-        await this.withToolbarTaskState(streamId, async (taskState) => {
-          await this.handleFileOperation(streamId, taskState, 'texra.clean');
-        });
-      },
-    );
-  }
-
-  private async handleSortStreams(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      SortStreamsMessageSchema,
-      message,
-      'sortStreams',
-      async ({ sortBy }) => {
-        this.provider.state.streamSortOrder = sortBy;
-        this.provider.updateWebview();
-      },
-    );
-  }
-
-  private async handleFilterStreams(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      FilterStreamsMessageSchema,
-      message,
-      'filterStreams',
-      async ({ filter }) => {
-        this.provider.state.agentCategoryFilter = filter;
-        this.provider.updateWebview();
-      },
-    );
-  }
-
-  private async handleRestoreState(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'restoreState',
-      async ({ stream: streamId }) => {
-        const taskState = this.provider.state.getTaskState(streamId);
-        if (taskState) {
-          await vscode.commands.executeCommand('texra.restoreState', taskState);
-        }
-      },
-    );
-  }
-
-  private async handleSendFollowUp(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      SendFollowUpMessageSchema,
-      message,
-      'sendFollowUp',
-      async ({ stream: streamId, text }) => {
-        await vscode.commands.executeCommand('texra.sendFollowUp', {
-          stream: streamId,
-          text,
-        });
-      },
-    );
-  }
-
-  private async handlePolishFollowUp(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      PolishFollowUpMessageSchema,
-      message,
-      'polishFollowUp',
-      async ({ stream: streamId, text }) => {
-        const taskState = this.provider.state.getTaskState(streamId);
-        if (!taskState) return;
-
-        const fileContext = buildFileContextFromTaskState(taskState);
-
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Polishing follow-up message',
-            cancellable: false,
-          },
-          async (progress) => {
-            try {
-              progress.report({
-                message: 'Sending to AI for polishing...',
-                increment: 30,
-              });
-              const result = await polishTextWithAI(text, fileContext);
-              progress.report({
-                message: 'Applying changes...',
-                increment: 60,
-              });
-
-              if (result.success) {
-                const view = this.getActiveView();
-                view?.webview.postMessage({
-                  command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
-                  text: result.text,
-                });
-              } else if (result.error) {
-                await vscode.window.showErrorMessage(result.error);
-              }
-            } catch (error) {
-              const messageText = toErrorMessage(error);
-              await vscode.window.showErrorMessage(
-                `Error polishing follow-up: ${messageText}`,
-              );
-              this.logger.error(
-                this.channel,
-                `Error polishing follow-up: ${messageText}`,
-                { data: error instanceof Error ? error : undefined },
-              );
-            }
-          },
-        );
-      },
-    );
-  }
-
-  private async handleShowInformationMessage(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      InfoMessageSchema,
-      message,
-      'infoMessage',
-      async (data) => {
-        await vscode.window.showInformationMessage(data.text);
-      },
-    );
-  }
-
-  private async handleToolEditApprovalAction(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      ApprovalActionMessageSchema,
-      message,
-      'approvalAction',
-      handleProgressViewToolEditApprovalAction,
-    );
+  private async handleToolEditApprovalAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION>,
+  ): Promise<void> {
+    await handleProgressViewToolEditApprovalAction(data);
   }
 
   private async handleToggleToolEditApprovalBypass(
-    message: unknown,
+    data: MessageFor<
+      typeof PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS
+    >,
   ): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'toggleToolEditApprovalBypass',
-      async ({ stream: streamId }) => {
-        const isNowEnabled = toggleToolEditApprovalSessionBypass(streamId);
-        const infoMessage = isNowEnabled
-          ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
-          : 'YOLO mode disabled: Tool actions will prompt for approval.';
-        await vscode.window.showInformationMessage(infoMessage);
-      },
-    );
+    const isNowEnabled = toggleToolEditApprovalSessionBypass(data.stream);
+    const infoMessage = isNowEnabled
+      ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
+      : 'YOLO mode disabled: Tool actions will prompt for approval.';
+    await vscode.window.showInformationMessage(infoMessage);
   }
 
-  private async handleBashApprovalAction(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      BashApprovalActionMessageSchema,
-      message,
-      'bashApprovalAction',
-      handleProgressViewBashApprovalAction,
-    );
+  private async handleBashApprovalAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
+  ): Promise<void> {
+    await handleProgressViewBashApprovalAction(data);
   }
 
-  private async handleAgentProposalAction(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      AgentProposalActionMessageSchema,
-      message,
-      'agentProposalAction',
-      async ({ proposalId, action, feedback }) => {
-        switch (action) {
-          case 'approve':
-            proposalCoordinator.resolveRequest(proposalId, {
-              action: 'approve',
-            });
-            break;
-          case 'reject':
-            proposalCoordinator.resolveRequest(proposalId, {
-              action: 'reject',
-              feedback,
-            });
-            break;
-          case 'setup':
-            await this.handleAgentProposalSetup(proposalId);
-            break;
-        }
-      },
-    );
+  private async handleAgentProposalAction(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION>,
+  ): Promise<void> {
+    const { proposalId, action, feedback } = data;
+    switch (action) {
+      case 'approve':
+        proposalCoordinator.resolveRequest(proposalId, {
+          action: 'approve',
+        });
+        break;
+      case 'reject':
+        proposalCoordinator.resolveRequest(proposalId, {
+          action: 'reject',
+          feedback,
+        });
+        break;
+      case 'setup':
+        await this.handleAgentProposalSetup(proposalId);
+        break;
+    }
   }
 
-  /**
-   * Handle the "setup" action for an agent proposal.
-   * Opens the proposal in the main view for editing before execution.
-   */
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {
     const proposal = this.provider.getPendingAgentProposal(proposalId);
     if (!proposal) {
-      this.logger.warn(
+      logger.warn(
         this.channel,
         `No pending agent proposal found for setup: ${proposalId}`,
       );
       return;
     }
 
-    // Map proposal category string to AgentCategory enum
     const agentCategory =
       proposal.agentCategory === 'toolUse'
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    // Build the agentConfig based on proposal type
-    // Workflow proposals have file fields; tool-use proposals don't
     const isWorkflow = proposal.agentCategory === 'workflow';
-
-    // Helper to check if a file array has content
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
-    // Build activeFiles - only relevant for workflow agents
     const activeFiles = {
       input: isWorkflow && hasFiles(proposal.inputFiles),
       reference: isWorkflow && hasFiles(proposal.referenceFiles),
@@ -658,14 +604,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       output: isWorkflow && hasFiles(proposal.outputFiles),
     };
 
-    // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
-    // For tool-use agents, file fields will get default values from AgentConfigSchema
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
       agentCategory,
-      // File fields only present for workflow agents
       ...(isWorkflow && {
         inputFile: proposal.inputFile,
         inputFiles: proposal.inputFiles,
@@ -677,7 +620,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         mediaFiles: proposal.mediaFiles,
         outputFiles: proposal.outputFiles,
         useMultipleOutputs: proposal.useMultipleOutputs,
-        // Set visibility flags for file arrays that have content
         inputFilesActive: activeFiles.input,
         referenceFilesActive: activeFiles.reference,
         auxiliaryFilesActive: activeFiles.auxiliary,
@@ -686,282 +628,77 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }),
     });
 
-    // Build the appropriate TaskState variant based on agent category
-    // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
-    // Cast needed because agentConfig.agentCategory is typed as the general
-    // AgentCategory enum, not the specific literal type that TaskState requires
     const taskState = (
       isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
     ) as TaskState;
 
-    // Resolve the proposal with 'setup' action to dismiss it from the UI
-    // (user will manually execute from the main view after editing)
     proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
 
-    // Open the main view with the proposal details
     await vscode.commands.executeCommand('texra.mainView.focus');
     await vscode.commands.executeCommand('texra.restoreState', taskState);
 
-    this.logger.info(
+    logger.info(
       this.channel,
       `Agent proposal ${proposalId} set up in main view`,
-      { data: { agent: proposal.agent } },
-    );
-  }
-
-  private async handleOpenTaskStorage(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      StreamMessageSchema,
-      message,
-      'openTaskStorage',
-      async ({ stream: streamId }) => {
-        // Use cached activeRunId (set by event handlers when data arrives)
-        const storageKey = this.provider.state.getActiveRunId(streamId);
-        const runOutputs = storageKey
-          ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
-          : undefined;
-
-        // executionId is the physical directory name: taskRuns/<executionId>/
-        // For workflow agents, storageKey (task group ID) differs from executionId,
-        // but files are always written to the executionId directory.
-        const executionId = this.provider.state.getExecutionId(streamId);
-
-        try {
-          let directoryToReveal: string | undefined;
-
-          if (executionId) {
-            await ensureRunDir(executionId);
-            directoryToReveal = getRunDir(executionId);
-          } else if (runOutputs) {
-            // Defensive fallback: executionId and outputFiles are persisted independently,
-            // so edge cases (data migration, partial state) could leave files without executionId.
-            // Extract directory from actual file paths.
-            directoryToReveal = this.findOutputDirectory(runOutputs);
-          }
-
-          if (!directoryToReveal) {
-            await vscode.window.showInformationMessage(
-              'No workspace storage folder is available for this run yet.',
-            );
-            return;
-          }
-
-          await safeExecuteCommand('revealFileInOS', [
-            vscode.Uri.file(directoryToReveal),
-          ]);
-        } catch (error) {
-          const errorMessage = toErrorMessage(error);
-          this.logger.error(
-            this.channel,
-            `Failed to open task storage for stream ${streamId}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
-            {
-              data: {
-                error: error instanceof Error ? error : undefined,
-                stream: streamId,
-                executionId,
-              },
-            },
-          );
-          await vscode.window.showErrorMessage(
-            'Unable to open the workspace storage folder for this run.',
-          );
-        }
+      {
+        data: { agent: proposal.agent },
       },
     );
   }
 
-  private async handleOpenFile(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      FileCommandMessageSchema,
-      message,
-      'openFile',
-      async ({ file, line }) => {
-        await vscode.commands.executeCommand('texra.openFile', file, line);
-      },
-    );
-  }
+  private async handleOpenTaskStorage(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE>,
+  ): Promise<void> {
+    const streamId = data.stream;
+    const storageKey = this.provider.state.getActiveRunId(streamId);
+    const runOutputs = storageKey
+      ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
+      : undefined;
 
-  private async handleOpenFileCompile(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      FileCommandMessageSchema,
-      message,
-      'openFileCompile',
-      async ({ file }) => {
-        await vscode.commands.executeCommand('texra.openFileCompile', file);
-      },
-    );
-  }
+    const executionId = this.provider.state.getExecutionId(streamId);
 
-  private async handleCompareOriginal(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      BaseFileCommandMessageSchema,
-      message,
-      'compareOriginal',
-      async ({ file, base }) => {
-        // Backup model's original output before user can modify it in the diff view
-        const streamId = this.provider.state.activeStream;
-        if (streamId && file) {
-          try {
-            const fileLocation = createExternalLocation(file);
-            const content = await flexibleFS.read(fileLocation);
-            this.modelOutputBackups.set(file, { content, streamId });
-          } catch {
-            // Ignore backup errors - don't block the compare operation
-          }
-        }
+    try {
+      let directoryToReveal: string | undefined;
 
-        await this.executeWithBaseFile(
-          file,
-          base,
-          'Compare original',
-          (targetFile, baseFile) =>
-            vscode.commands.executeCommand(
-              'texra.compare',
-              pathToLocation(''), // inputFile unused
-              pathToLocation(baseFile),
-              pathToLocation(targetFile),
-            ),
+      if (executionId) {
+        await ensureRunDir(executionId);
+        directoryToReveal = getRunDir(executionId);
+      } else if (runOutputs) {
+        directoryToReveal = this.findOutputDirectory(runOutputs);
+      }
+
+      if (!directoryToReveal) {
+        await vscode.window.showInformationMessage(
+          'No workspace storage folder is available for this run yet.',
         );
-      },
-    );
+        return;
+      }
+
+      await safeExecuteCommand('revealFileInOS', [
+        vscode.Uri.file(directoryToReveal),
+      ]);
+    } catch (error) {
+      const errorMessage = toErrorMessage(error);
+      logger.error(
+        this.channel,
+        `Failed to open task storage for stream ${streamId}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
+        {
+          data: {
+            error: error instanceof Error ? error : undefined,
+            stream: streamId,
+            executionId,
+          },
+        },
+      );
+      await vscode.window.showErrorMessage(
+        'Unable to open the workspace storage folder for this run.',
+      );
+    }
   }
 
-  private async handleComparePrevious(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      CompareMessageSchema,
-      message,
-      'comparePrevious',
-      async ({ file, base, prev }) => {
-        const previousFile = prev ?? base;
-
-        if (previousFile) {
-          await vscode.commands.executeCommand(
-            'texra.latexdiff',
-            undefined,
-            previousFile,
-            file,
-          );
-        }
-
-        await vscode.commands.executeCommand(
-          'texra.compare',
-          pathToLocation(''), // inputFile unused
-          pathToLocation(previousFile || ''),
-          pathToLocation(file),
-        );
-      },
-    );
-  }
-
-  private async handleAcceptFile(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      BaseFileCommandMessageSchema,
-      message,
-      'acceptFile',
-      async ({ file, base }) => {
-        // Check if user modified the model's output before accepting
-        const backup = file ? this.modelOutputBackups.get(file) : null;
-        let currentContent: string | null = null;
-
-        if (backup) {
-          try {
-            const fileLocation = createExternalLocation(file);
-            currentContent = await flexibleFS.read(fileLocation);
-          } catch {
-            // Ignore read errors
-          }
-        }
-
-        await this.executeWithBaseFile(
-          file,
-          base,
-          'Accept',
-          (targetFile, baseFile) =>
-            vscode.commands.executeCommand(
-              'texra.acceptEdited',
-              pathToLocation(''), // inputFile unused
-              pathToLocation(baseFile),
-              pathToLocation(targetFile),
-            ),
-        );
-
-        // Inform the model about user modifications via follow-up
-        if (
-          backup &&
-          currentContent !== null &&
-          currentContent !== backup.content
-        ) {
-          const fileName = path.basename(file);
-          const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
-
-          await vscode.commands.executeCommand('texra.sendFollowUp', {
-            stream: backup.streamId,
-            text: followUpText,
-          });
-        }
-
-        // Clean up backup
-        if (file) {
-          this.modelOutputBackups.delete(file);
-        }
-      },
-    );
-  }
-
-  private async handleMergeFile(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      BaseFileCommandMessageSchema,
-      message,
-      'mergeFile',
-      async ({ file, base }) => {
-        await this.executeWithBaseFile(
-          file,
-          base,
-          'Merge',
-          (targetFile, baseFile) =>
-            vscode.commands.executeCommand(
-              'texra.merge',
-              undefined,
-              baseFile,
-              targetFile,
-            ),
-        );
-      },
-    );
-  }
-
-  private async handleLatexdiffFile(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      BaseFileCommandMessageSchema,
-      message,
-      'latexdiffFile',
-      async ({ file, base }) => {
-        await this.executeWithBaseFile(
-          file,
-          base,
-          'Latexdiff',
-          (targetFile, baseFile) =>
-            vscode.commands.executeCommand(
-              'texra.latexdiff',
-              undefined,
-              baseFile,
-              targetFile,
-            ),
-        );
-      },
-    );
-  }
-
-  private async handleOpenLabel(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      OpenLabelMessageSchema,
-      message,
-      'openLabel',
-      async ({ label }) => {
-        await vscode.commands.executeCommand('texra.openLabel', label);
-      },
-    );
-  }
+  // ============================================================
+  // Navigation handlers
+  // ============================================================
 
   private async handleOpenProfile(): Promise<void> {
     await vscode.commands.executeCommand('texra.auth.viewProfile');
@@ -970,6 +707,217 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleOpenMemoryView(): Promise<void> {
     await vscode.commands.executeCommand('texra.showMemory');
   }
+
+  // ============================================================
+  // File operation handlers
+  // ============================================================
+
+  private async handleOpenFile(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_FILE>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.openFile',
+      data.file,
+      data.line,
+    );
+  }
+
+  private async handleOpenFileCompile(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.openFileCompile', data.file);
+  }
+
+  private async handleCompareOriginal(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
+  ): Promise<void> {
+    const { file, base } = data;
+    const streamId = this.provider.state.activeStream;
+    if (streamId && file) {
+      try {
+        const fileLocation = createExternalLocation(file);
+        const content = await flexibleFS.read(fileLocation);
+        this.modelOutputBackups.set(file, { content, streamId });
+      } catch {
+        // Ignore backup errors
+      }
+    }
+
+    await this.executeWithBaseFile(
+      file,
+      base,
+      'Compare original',
+      (targetFile, baseFile) =>
+        vscode.commands.executeCommand(
+          'texra.compare',
+          pathToLocation(''), // inputFile unused
+          pathToLocation(baseFile),
+          pathToLocation(targetFile),
+        ),
+    );
+  }
+
+  private async handleComparePrevious(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS>,
+  ): Promise<void> {
+    const { file, base, prev } = data;
+    const previousFile = prev ?? base;
+
+    if (previousFile) {
+      await vscode.commands.executeCommand(
+        'texra.latexdiff',
+        undefined,
+        previousFile,
+        file,
+      );
+    }
+
+    await vscode.commands.executeCommand(
+      'texra.compare',
+      pathToLocation(''), // inputFile unused
+      pathToLocation(previousFile || ''),
+      pathToLocation(file),
+    );
+  }
+
+  private async handleAcceptFile(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.ACCEPT_FILE>,
+  ): Promise<void> {
+    const { file, base } = data;
+    const backup = file ? this.modelOutputBackups.get(file) : null;
+    let currentContent: string | null = null;
+
+    if (backup) {
+      try {
+        const fileLocation = createExternalLocation(file);
+        currentContent = await flexibleFS.read(fileLocation);
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    await this.executeWithBaseFile(
+      file,
+      base,
+      'Accept',
+      (targetFile, baseFile) =>
+        vscode.commands.executeCommand(
+          'texra.acceptEdited',
+          pathToLocation(''), // inputFile unused
+          pathToLocation(baseFile),
+          pathToLocation(targetFile),
+        ),
+    );
+
+    // Inform the model about user modifications via follow-up
+    if (
+      backup &&
+      currentContent !== null &&
+      currentContent !== backup.content
+    ) {
+      const fileName = path.basename(file);
+      const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
+
+      await vscode.commands.executeCommand('texra.sendFollowUp', {
+        stream: backup.streamId,
+        text: followUpText,
+      });
+    }
+
+    if (file) {
+      this.modelOutputBackups.delete(file);
+    }
+  }
+
+  private async handleMergeFile(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.MERGE_FILE>,
+  ): Promise<void> {
+    await this.executeWithBaseFile(
+      data.file,
+      data.base,
+      'Merge',
+      (targetFile, baseFile) =>
+        vscode.commands.executeCommand(
+          'texra.merge',
+          undefined,
+          baseFile,
+          targetFile,
+        ),
+    );
+  }
+
+  private async handleLatexdiffFile(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE>,
+  ): Promise<void> {
+    await this.executeWithBaseFile(
+      data.file,
+      data.base,
+      'Latexdiff',
+      (targetFile, baseFile) =>
+        vscode.commands.executeCommand(
+          'texra.latexdiff',
+          undefined,
+          baseFile,
+          targetFile,
+        ),
+    );
+  }
+
+  private async handleOpenLabel(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_LABEL>,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.openLabel', data.label);
+  }
+
+  // ============================================================
+  // Followup task handlers
+  // ============================================================
+
+  private async handleGetFollowupOptions(): Promise<void> {
+    const view = this.getActiveView();
+    if (!view) return;
+
+    try {
+      const [agentOptionsData, modelOptionsData] = await Promise.all([
+        computeAgentOptionsData(),
+        computeModelOptionsData(),
+      ]);
+
+      const defaultMergeModel = getConfig<string>(
+        'texra.merge.defaultModel',
+        'gemini3f',
+      );
+
+      view.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+        workflowAgentsData: agentOptionsData.workflow,
+        toolUseAgentsData: agentOptionsData.toolUse,
+        modelOptionsData,
+        defaultMergeModel,
+      });
+    } catch (error) {
+      logger.error(
+        this.channel,
+        `Failed to get followup options: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async handleSetupFollowup(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP>,
+  ): Promise<void> {
+    await this.processFollowup(data, false);
+  }
+
+  private async handleRunFollowup(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP>,
+  ): Promise<void> {
+    await this.processFollowup(data, true);
+  }
+
+  // ============================================================
+  // Helper methods
+  // ============================================================
 
   private async handleFileOperation(
     streamId: StreamTabId,
@@ -1007,11 +955,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  /**
-   * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
-   * @param streamId - The stream identifier whose task state should be fetched.
-   * @param action - The callback to execute when a valid workflow task state is available.
-   */
   private async withToolbarTaskState(
     streamId: StreamTabId,
     action: (taskState: WorkflowTaskState) => Promise<void>,
@@ -1024,10 +967,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await action(taskState);
   }
 
-  /**
-   * Executes a file operation command with base file validation.
-   * Returns early with a warning if base file is missing.
-   */
   private async executeWithBaseFile(
     file: string,
     base: string | undefined,
@@ -1035,20 +974,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     execute: (file: string, base: string) => Thenable<unknown>,
   ): Promise<void> {
     if (!base) {
-      this.logger.warn(
+      logger.warn(
         this.channel,
         `${actionName} requested without a base path.`,
-        { data: { file } },
+        {
+          data: { file },
+        },
       );
       return;
     }
     await execute(file, base);
   }
 
-  /**
-   * Find the directory of the first valid output file from run outputs.
-   * Returns undefined if no suitable file location is found.
-   */
   private findOutputDirectory(
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string | undefined {
@@ -1063,83 +1000,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return undefined;
   }
 
-  // ===== Followup Task Handlers =====
-
-  /**
-   * Handle request for followup options (agents, models).
-   * Returns both pre-built HTML options (legacy) and typed data (Lit-native).
-   */
-  private async handleGetFollowupOptions(_message: unknown): Promise<void> {
-    const view = this.getActiveView();
-    if (!view) return;
-
-    try {
-      // Compute agent and model options in parallel
-      // Send both HTML (legacy) and typed data (Lit-native)
-      const [agentOptions, agentOptionsData, modelOptionsHtml, modelOptionsData] =
-        await Promise.all([
-          computeAgentOptions(),
-          computeAgentOptionsData(),
-          computeModelOptions(),
-          computeModelOptionsData(),
-        ]);
-
-      const defaultMergeModel = getConfig<string>(
-        'texra.merge.defaultModel',
-        'gemini3f',
-      );
-
-      view.webview.postMessage({
-        command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        // Legacy HTML options
-        workflowAgentsHtml: agentOptions.workflow,
-        toolUseAgentsHtml: agentOptions.toolUse,
-        modelOptionsHtml,
-        // Typed data options (Lit-native)
-        workflowAgentsData: agentOptionsData.workflow,
-        toolUseAgentsData: agentOptionsData.toolUse,
-        modelOptionsData,
-        defaultMergeModel,
-      });
-    } catch (error) {
-      this.logger.error(
-        this.channel,
-        'Failed to get followup options',
-        toErrorMessage(error),
-      );
-    }
-  }
-
-  /**
-   * Handle setup followup task request.
-   * Sends the followup configuration to the main view for review.
-   */
-  private async handleSetupFollowup(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      FollowupTaskMessageSchema,
-      message,
-      'setupFollowup',
-      async (data) => this.processFollowup(data, false),
-    );
-  }
-
-  /**
-   * Handle run followup task request.
-   * Sets up and immediately executes the followup task.
-   */
-  private async handleRunFollowup(message: unknown): Promise<void> {
-    await this.withValidatedMessage(
-      FollowupTaskMessageSchema,
-      message,
-      'runFollowup',
-      async (data) => this.processFollowup(data, true),
-    );
-  }
-
-  /**
-   * Process a followup request (setup or run).
-   * Builds a TaskState directly and sends via restoreState for code reuse.
-   */
   private async processFollowup(
     data: {
       stream: StreamTabId;
@@ -1162,7 +1022,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       initialQuestion,
     } = data;
 
-    // Validate prerequisites
     const prereq = await this.validateFollowupPrerequisites(streamId, agent);
     if (!prereq) return;
 
@@ -1173,13 +1032,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ...originalConfig.inputFiles,
     ].filter(Boolean);
 
-    // Build file mapping: original inputs → output files
     const fileMapping = this.buildFollowupFileMapping(
       originalInputs,
       outputFiles,
     );
     if (fileMapping.size === 0) {
-      this.logger.warn(this.channel, 'Followup: No file mappings found', {
+      logger.warn(this.channel, 'Followup: No file mappings found', {
         data: {
           streamId,
           originalInputs: originalInputs.length,
@@ -1192,13 +1050,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Handle merge mode directly (bypasses main view)
     if (mode === 'merge') {
       await this.executeMergeDirectly(originalInputs, fileMapping, model);
       return;
     }
 
-    // For workflow/chat mode, build TaskState and use restoreState
     try {
       const newTaskState = await this.buildFollowupTaskState(
         taskState,
@@ -1221,15 +1077,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         executeImmediately,
       );
 
-      this.logger.info(
-        this.channel,
-        'Followup task configured via restoreState',
-      );
+      logger.info(this.channel, 'Followup task configured via restoreState');
     } catch (error) {
-      this.logger.error(
+      logger.error(
         this.channel,
-        'Failed to set up followup task',
-        toErrorMessage(error),
+        `Failed to set up followup task: ${toErrorMessage(error)}`,
       );
       await vscode.window.showErrorMessage(
         `Failed to set up followup task: ${toErrorMessage(error)}`,
@@ -1237,17 +1089,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Validate followup prerequisites: task state, agent, and output files.
-   * Returns null if validation fails (with user notification).
-   */
   private async validateFollowupPrerequisites(
     streamId: StreamTabId,
     agent: string,
   ): Promise<{ taskState: WorkflowTaskState; outputFiles: string[] } | null> {
     const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
-      this.logger.warn(this.channel, 'Followup: No task state found', {
+      logger.warn(this.channel, 'Followup: No task state found', {
         data: { stream: streamId },
       });
       await vscode.window.showWarningMessage(
@@ -1258,7 +1106,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const agentEntry = getAgent(agent);
     if (!agentEntry) {
-      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
+      logger.warn(this.channel, 'Followup: Agent not found in registry', {
         data: { agent },
       });
       await vscode.window.showWarningMessage(
@@ -1274,7 +1122,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const outputFiles = this.extractOutputFilePaths(runOutputs);
 
     if (outputFiles.length === 0) {
-      this.logger.warn(this.channel, 'Followup: No output files found', {
+      logger.warn(this.channel, 'Followup: No output files found', {
         data: { stream: streamId },
       });
       await vscode.window.showWarningMessage(
@@ -1286,9 +1134,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return { taskState, outputFiles };
   }
 
-  /**
-   * Build a mapping from original input paths to output file paths.
-   */
   private buildFollowupFileMapping(
     originalInputs: string[],
     outputFiles: string[],
@@ -1317,10 +1162,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return fileMapping;
   }
 
-  /**
-   * Build a TaskState for followup by mapping output files to inputs.
-   * Returns WorkflowTaskState for workflow mode, ToolUseTaskState for chat mode.
-   */
   private async buildFollowupTaskState(
     originalTaskState: WorkflowTaskState,
     originalConfig: AgentConfig,
@@ -1344,8 +1185,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     } = options;
     const isChat = mode === 'chat';
 
-    // Map input files: by default, outputs become new inputs
-    // When attachAgentOutputs is enabled, keep originals as inputs and add outputs as reference
     const mapOutputToRelative = (p: string): string =>
       WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
     const keepOriginalRelative = (p: string): string =>
@@ -1358,13 +1197,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? originalConfig.inputFiles.map(keepOriginalRelative)
       : originalConfig.inputFiles.map(mapOutputToRelative);
 
-    // When attachAgentOutputs is enabled, add agent outputs as reference
-    // This allows agents like 'apply' to see the annotated output while modifying the original
     const outputsAsReference = attachAgentOutputs
       ? [...fileMapping.values()].map((p) => WorkspaceFS.relativePath(p))
       : [];
 
-    // Build instruction from template
     const template = isChat
       ? CHAT_INSTRUCTION_TEMPLATE
       : WORKFLOW_CONTEXT_TEMPLATE;
@@ -1377,29 +1213,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       isChat ? initialQuestion : undefined,
     );
 
-    // Workflow mode can optionally append original instruction
     const shouldAppendOriginal =
       !isChat && includeInstruction && originalConfig.instruction;
     const instruction = shouldAppendOriginal
       ? `${context}\n\n${originalConfig.instruction}`
       : context;
 
-    // Determine category based on mode
-    const newAgentEntry = getAgent(agent);
     const agentCategory = isChat
       ? AgentCategory.ToolUse
       : AgentCategory.Workflow;
 
-    // Build config preserving toolConfig, reference/auxiliary files
-    // When attachAgentOutputs is enabled, merge agent outputs into reference files
     const mergedReferenceFiles = [
       ...(originalConfig.referenceFiles ?? []),
       ...outputsAsReference,
     ];
 
-    // When attachAgentOutputs is enabled, output to original input locations
-    // This allows apply agents to write changes back to the original files
-    // Note: outputFiles includes all unique files (inputFile + inputFiles), preserving insertion order
     const outputFiles = attachAgentOutputs
       ? [
           ...new Set(
@@ -1410,7 +1238,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ]
       : originalConfig.outputFiles;
 
-    // Set useMultipleOutputs when we have multiple output files
     const useMultipleOutputs =
       (attachAgentOutputs && outputFiles.length > 1) ||
       originalConfig.useMultipleOutputs;
@@ -1428,12 +1255,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentCategory,
     } as AgentConfig;
 
-    // Chat mode returns minimal TaskState, workflow preserves activeFiles
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;
     }
 
-    // Update activeFiles visibility when reference/output files are added
     const activeFiles = {
       ...originalTaskState.activeFiles,
       ...(outputsAsReference.length > 0 && { reference: true }),
@@ -1446,10 +1271,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     } as TaskState;
   }
 
-  /**
-   * Render a followup instruction using a Nunjucks template.
-   * Unifies buildWorkflowContext and buildChatInstruction into one method.
-   */
   private async renderFollowupInstruction(
     template: string,
     originalConfig: AgentConfig,
@@ -1487,15 +1308,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return renderPrompt(template, vars as Record<string, unknown>);
   }
 
-  /**
-   * Execute merge directly without going to main view.
-   */
   private async executeMergeDirectly(
     originalInputs: string[],
     fileMapping: Map<string, string>,
     model: string,
   ): Promise<void> {
-    // Build file pairs for merge
     const filePairs: { baseFile: string; editedFile: string }[] = [];
     for (const inputFile of originalInputs) {
       const outputFile = fileMapping.get(inputFile);
@@ -1514,10 +1331,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    this.logger.info(this.channel, 'Executing merge directly');
+    logger.info(this.channel, 'Executing merge directly');
 
     if (filePairs.length === 1) {
-      // Single file merge - pass model as 4th parameter
       await safeExecuteCommand('texra.merge', [
         undefined,
         filePairs[0].baseFile,
@@ -1525,7 +1341,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         model,
       ]);
     } else {
-      // Multiple file merge
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
@@ -1547,9 +1362,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Extract absolute file paths from run output files.
-   */
   private extractOutputFilePaths(
     runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
   ): string[] {

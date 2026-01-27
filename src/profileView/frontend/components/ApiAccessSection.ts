@@ -1,9 +1,14 @@
+/**
+ * ApiAccessSection component - radio buttons to choose between included API access or personal keys.
+ * Shows provider and model summary when using included access.
+ */
+
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { badgeStyles, designTokens } from '@shared/styles';
 
 // Local imports - profile view styles
 import { profileViewStyles } from '../styles';
@@ -13,23 +18,23 @@ import { ProfileViewEvents } from '../events';
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {
-  static styles = [designTokens, profileViewStyles];
+  static override styles = [designTokens, ...badgeStyles, profileViewStyles];
 
   @property({ type: String }) mode: 'included' | 'personal' = 'personal';
   @property({ attribute: false }) enabledProviders: string[] = [];
   @property({ attribute: false }) allowedModels: string[] | null = [];
 
-  private handleModeChange = (event: Event): void => {
+  private handleModeChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
-    const value = target?.value === 'included' ? 'included' : 'personal';
-    if (value !== this.mode) {
-      this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode: value }));
+    const mode = target?.value === 'included' ? 'included' : 'personal';
+    if (mode !== this.mode) {
+      this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode }));
     }
-  };
+  }
 
-  private renderModelSummary(): TemplateResult {
+  private renderModelSummary(): TemplateResult | typeof nothing {
     if (this.mode !== 'included') {
-      return html``;
+      return nothing;
     }
 
     const providerCount = this.enabledProviders.length;
@@ -44,16 +49,9 @@ export class ApiAccessSection extends LitElement {
       `;
     }
 
-    const providerLabel = `${providerCount} provider${
-      providerCount !== 1 ? 's' : ''
-    }`;
-
-    let allowedModelsText = 'none';
-    if (this.allowedModels === null) {
-      allowedModelsText = 'all models';
-    } else if (this.allowedModels.length > 0) {
-      allowedModelsText = `${this.allowedModels.length} models`;
-    }
+    const providerLabel = this.getProviderLabel(providerCount);
+    const allowedModelsText = this.getAllowedModelsLabel();
+    const allowedModelsList = this.renderAllowedModelsList();
 
     return html`
       <details class="model-access-info">
@@ -62,21 +60,40 @@ export class ApiAccessSection extends LitElement {
           <span class="separator">·</span>
           <span>${allowedModelsText}</span>
         </summary>
-        ${this.allowedModels && this.allowedModels.length > 0
-          ? html`
-              <div class="models-list-container">
-                ${this.allowedModels.map(
-                  (model) =>
-                    html`<span class="badge badge--small">${model}</span>`,
-                )}
-              </div>
-            `
-          : ''}
+        ${allowedModelsList}
       </details>
     `;
   }
 
-  render(): TemplateResult {
+  private getProviderLabel(providerCount: number): string {
+    return `${providerCount} provider${providerCount === 1 ? '' : 's'}`;
+  }
+
+  private getAllowedModelsLabel(): string {
+    if (this.allowedModels === null) {
+      return 'all models';
+    }
+    if (this.allowedModels.length > 0) {
+      return `${this.allowedModels.length} models`;
+    }
+    return 'none';
+  }
+
+  private renderAllowedModelsList(): TemplateResult | typeof nothing {
+    if (!this.allowedModels || this.allowedModels.length === 0) {
+      return nothing;
+    }
+
+    return html`
+      <div class="models-list-container">
+        ${this.allowedModels.map(
+          (model) => html`<span class="badge badge--small">${model}</span>`,
+        )}
+      </div>
+    `;
+  }
+
+  override render(): TemplateResult {
     return html`
       <div class="api-access-section">
         <h2>Model Access</h2>
@@ -119,5 +136,11 @@ export class ApiAccessSection extends LitElement {
         ${this.renderModelSummary()}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'api-access-section': ApiAccessSection;
   }
 }

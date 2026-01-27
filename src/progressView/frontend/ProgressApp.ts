@@ -1,13 +1,21 @@
 // Third-party imports
-import { html, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
+import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { WebviewStateManager } from '@shared/state';
+
+// Local imports - shared schemas
+import {
+  AGENT_CATEGORY,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
 // Local imports - webview commands
-import { WebviewStateManager } from '@shared/state';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view frontend
@@ -41,7 +49,7 @@ import {
   handleFollowupRequestOptions,
   handleFollowupRun,
   handleFollowupSetup,
-  handlePromptAction,
+  handlePermissionAction,
   handleRunSelected,
   handleSortChange,
   handleStreamDelete,
@@ -49,10 +57,18 @@ import {
   handleToolbarCommand,
   type FrontendEventHandlerContext,
 } from './eventHandlers';
-import { MESSAGE_HANDLERS } from './messageHandlerRegistry';
+import { dispatchMessage } from './messageDispatcher';
 import { getFilteredStreams } from './stateUtils';
-import type { MessageHandlerContext } from './messageHandlers';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+
+// Local imports - progress view contexts
+import {
+  permissionsContext,
+  streamStateContext,
+  type StreamContextValue,
+} from './contexts/streamContexts';
+
+// Local imports - progress view message handlers
+import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - progress view components
 import './components/StreamTabs';
@@ -65,14 +81,65 @@ import './components/ContextManagement';
 
 // Local imports - progress view modules
 import type { FollowUpInput } from './components/FollowUpInput';
-import type { PromptState } from './components/PromptOverlay';
+import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
+  static override styles = css`
+    :host {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    vscode-split-layout {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+    }
+
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Stream content containers - pass-through for layout */
+    tool-use-stream-content,
+    workflow-stream-content {
+      display: contents;
+    }
+  `;
+
   @state() private appState: ProgressState;
-  @state() private prompts: PromptState[] = [];
+  @state() private permissions: PermissionState[] = [];
+
+  @provide({ context: streamStateContext })
+  @state()
+  private streamContextValue: StreamContextValue = {
+    streamInfo: null,
+    streamState: null,
+    runId: null,
+    followupOptions: null,
+    isToolUse: false,
+  };
+
+  @provide({ context: permissionsContext })
+  @state()
+  private permissionsContextValue: PermissionState[] = [];
 
   // Container refs for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
@@ -94,12 +161,14 @@ export class ProgressApp extends BaseWebviewApp {
     };
   }
 
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
-
   protected override get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
+  }
+
+  protected override willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('appState') || changed.has('permissions')) {
+      this.updateStreamContext();
+    }
   }
 
   render(): TemplateResult {
@@ -132,24 +201,19 @@ export class ProgressApp extends BaseWebviewApp {
    * Single branch point - delegates to typed container components.
    */
   private renderStreamContent(): TemplateResult {
-    const activeStream = this.getActiveStreamInfo();
-    if (!activeStream) {
+    const { streamInfo, streamState, isToolUse } = this.streamContextValue;
+    if (!streamInfo || !streamState) {
       // No active stream - show empty log-list
       return html`<log-list></log-list>`;
     }
 
-    const streamState = getStreamState(this.appState, activeStream.name);
-
     // Single branch point: delegate to typed container component
-    if (isToolUseState(streamState)) {
+    if (isToolUse) {
       return html`
         <tool-use-stream-content
           ${ref(this.toolUseContentRef)}
-          .state=${streamState}
-          .streamInfo=${activeStream}
-          .prompts=${this.prompts}
           @toolbar-command=${this.onToolbarCommand}
-          @prompt-action=${this.onPromptAction}
+          @permission-action=${this.onPermissionAction}
           @followup-change=${this.onFollowUpChange}
           @followup-send=${this.onFollowUpSend}
           @followup-polish=${this.onFollowUpPolish}
@@ -160,15 +224,11 @@ export class ProgressApp extends BaseWebviewApp {
     }
 
     // Workflow stream (default for non-tool-use)
-    const runId = getEffectiveRunId(streamState);
     return html`
       <workflow-stream-content
         ${ref(this.workflowContentRef)}
-        .state=${streamState}
-        .streamInfo=${activeStream}
-        .runId=${runId}
-        .followupOptions=${this.appState.followupOptions}
         @toolbar-command=${this.onToolbarCommand}
+        @permission-action=${this.onPermissionAction}
         @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
         @followup-request-options=${this.onFollowupRequestOptions}
@@ -180,15 +240,9 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected handleMessage(raw: unknown): void {
-    if (!raw || typeof raw !== 'object') return;
-    if (!('command' in raw) || typeof raw.command !== 'string') return;
-    const command = raw.command;
-
-    // Look up and invoke the appropriate message handler
-    const handler = MESSAGE_HANDLERS[command];
-    if (handler) {
-      handler(raw, this.createMessageHandlerContext());
-    }
+    // Schema-driven dispatch - parses once with discriminated union,
+    // then routes to typed handler
+    dispatchMessage(raw, this.createMessageHandlerContext());
   }
 
   private getActiveStreamInfo(): StreamTabInfo | null {
@@ -201,6 +255,34 @@ export class ProgressApp extends BaseWebviewApp {
         (stream) => stream.name === this.appState.activeStreamId,
       ) ?? null
     );
+  }
+
+  private updateStreamContext(): void {
+    const activeStream = this.getActiveStreamInfo();
+    if (!activeStream) {
+      this.streamContextValue = {
+        streamInfo: null,
+        streamState: null,
+        runId: null,
+        followupOptions: null,
+        isToolUse: false,
+      };
+      this.permissionsContextValue = this.permissions;
+      return;
+    }
+
+    const streamState = getStreamState(this.appState, activeStream.name);
+    const isToolUse = isToolUseState(streamState);
+    const runId = isToolUse ? null : getEffectiveRunId(streamState);
+
+    this.streamContextValue = {
+      streamInfo: activeStream,
+      streamState,
+      runId,
+      followupOptions: this.appState.followupOptions,
+      isToolUse,
+    };
+    this.permissionsContextValue = this.permissions;
   }
 
   private setStreamState(
@@ -237,54 +319,92 @@ export class ProgressApp extends BaseWebviewApp {
   private createMessageHandlerContext(): MessageHandlerContext {
     return {
       ...this.createEventHandlerContext(),
-      getPrompts: () => this.prompts,
-      setPrompts: (prompts) => {
-        this.prompts = prompts;
+      getPermissions: () => this.permissions,
+      setPermissions: (permissions) => {
+        this.permissions = permissions;
       },
     };
   }
 
   // Event handler wrappers - delegate to extracted handlers
-  private onStreamSwitch = (e: CustomEvent): void => handleStreamSwitch(e);
-  private onStreamDelete = (e: CustomEvent): void => handleStreamDelete(e);
-  private onFilterChange = (e: CustomEvent): void =>
+  private onStreamSwitch(e: CustomEvent): void {
+    handleStreamSwitch(e);
+  }
+
+  private onStreamDelete(e: CustomEvent): void {
+    handleStreamDelete(e);
+  }
+
+  private onFilterChange(e: CustomEvent): void {
     handleFilterChange(e, this.createEventHandlerContext());
-  private onSortChange = (e: CustomEvent): void =>
+  }
+
+  private onSortChange(e: CustomEvent): void {
     handleSortChange(e, this.createEventHandlerContext());
-  private onDeleteAll = (): void => handleDeleteAll();
-  private onToolbarCommand = (e: CustomEvent): void =>
+  }
+
+  private onDeleteAll(): void {
+    handleDeleteAll();
+  }
+
+  private onToolbarCommand(e: CustomEvent): void {
     handleToolbarCommand(e, this.createEventHandlerContext());
-  private onRunSelected = (e: CustomEvent): void =>
+  }
+
+  private onRunSelected(e: CustomEvent): void {
     handleRunSelected(e, this.createEventHandlerContext());
-  private onFileAction = (e: CustomEvent): void => handleFileAction(e);
-  private onFollowUpChange = (e: CustomEvent): void =>
+  }
+
+  private onFileAction(e: CustomEvent): void {
+    handleFileAction(e);
+  }
+
+  private onFollowUpChange(e: CustomEvent): void {
     handleFollowUpChange(e, this.createEventHandlerContext());
-  private onFollowUpSend = (): void =>
+  }
+
+  private onFollowUpSend(): void {
     handleFollowUpSend(this.createEventHandlerContext());
-  private onFollowUpPolish = (): void =>
+  }
+
+  private onFollowUpPolish(): void {
     handleFollowUpPolish(this.createEventHandlerContext());
-  private onFollowUpClear = (): void =>
+  }
+
+  private onFollowUpClear(): void {
     handleFollowUpClear(this.createEventHandlerContext());
-  private onFollowupRequestOptions = (): void =>
+  }
+
+  private onFollowupRequestOptions(): void {
     handleFollowupRequestOptions(this.createEventHandlerContext());
-  private onFollowupModeChange = (e: CustomEvent): void =>
+  }
+
+  private onFollowupModeChange(e: CustomEvent): void {
     handleFollowupModeChange(e, this.createEventHandlerContext());
-  private onFollowupSetup = (e: CustomEvent): void =>
+  }
+
+  private onFollowupSetup(e: CustomEvent): void {
     handleFollowupSetup(e, this.createEventHandlerContext());
-  private onFollowupRun = (e: CustomEvent): void =>
+  }
+
+  private onFollowupRun(e: CustomEvent): void {
     handleFollowupRun(e, this.createEventHandlerContext());
-  private onPromptAction = (e: CustomEvent): void => handlePromptAction(e);
+  }
+
+  private onPermissionAction(e: CustomEvent): void {
+    handlePermissionAction(e);
+  }
 
   /**
    * Reset focus/polish/transcription triggers after they've been consumed.
    * Part of Lit-native Phase 9e reactive property pattern.
    */
-  private onFollowUpFocusComplete = (): void => {
+  private onFollowUpFocusComplete(): void {
     const streamId = this.appState.activeStreamId;
     if (!streamId) return;
 
     this.setStreamState(streamId, (prev) => {
-      if (prev.kind !== 'tool-use') return prev;
+      if (prev.kind !== AGENT_CATEGORY.TOOL_USE) return prev;
       return {
         ...prev,
         shouldFocusFollowUp: false,
@@ -292,5 +412,5 @@ export class ProgressApp extends BaseWebviewApp {
         transcribedText: null,
       };
     });
-  };
+  }
 }

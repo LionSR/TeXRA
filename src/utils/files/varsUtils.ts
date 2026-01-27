@@ -1,23 +1,19 @@
-// Local imports - utilities
-import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import type { AgentLogger } from '@logger/AgentLogger';
+
+import { AbsoluteFS } from './absoluteFS';
+import { WorkspaceFS } from './workspaceFS';
 
 /**
  * Reads a file and populates user variable fields with its path and content.
- * Logs informative messages on success or warnings on failure.
+ * Sets `${varName}_FILE` and `${varName}_CONTENT` in the provided userVars object.
  *
- * @param filePath - Path to the file
- * @param varName - Variable name prefix (without _FILE or _CONTENT)
- * @param userVars - Object to store the populated variables
- * @param logger - Logger instance used for logging
- * @param source - String describing the origin of the file (for log messages)
- * @param absolute - Interpret filePath as absolute rather than workspace-relative
- * @returns True if the file was read successfully, false otherwise
+ * Note: Logger and source parameters are accepted for API compatibility but
+ * logging is aggregated by callers in buildUserVars.
  */
 export async function setVarFromFile(
   filePath: string,
   varName: string,
-  userVars: Record<string, any>,
+  userVars: Record<string, unknown>,
   _logger: AgentLogger,
   _source: string,
   absolute: boolean = false,
@@ -28,10 +24,8 @@ export async function setVarFromFile(
       : await WorkspaceFS.read(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
-    // No logging here - will be aggregated in buildUserVars
     return true;
-  } catch (err) {
-    // No logging here - will be aggregated in buildUserVars
+  } catch {
     return false;
   }
 }

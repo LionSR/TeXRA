@@ -1,15 +1,19 @@
-/**
- * Shared styles barrel export.
- *
- * Exports Lit-compatible styles for use in shadow DOM components.
- */
-
 // Core styles
 export { codiconStyles, codiconIconClasses } from './codiconStyles';
 export { commonViewStyles } from './commonViewStyles';
 export { designTokens, utilityStyles, animationStyles } from './litStyles';
 
-// Component-specific shared styles
+// Component styles
 export { selectStyles } from './selectStyles';
 export { statusIndicatorStyles } from './statusIndicatorStyles';
-export { promptOverlayStyles } from './promptOverlayStyles';
+export { permissionCardStyles } from './permissionCardStyles';
+export { requestPanelStyles } from './requestPanelStyles';
+
+// Badge styles
+export {
+  badgeStyles,
+  baseBadgeStyles,
+  categoryBadgeStyles,
+  emptyStateStyles,
+  searchHighlightStyles,
+} from './badgeStyles';

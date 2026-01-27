@@ -1,11 +1,13 @@
 /**
  * Fully declarative task group list component.
  * Data flows in, DOM flows out. No imperative manipulation.
+ *
+ * Uses Shadow DOM with modular styles for encapsulation.
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, html, type TemplateResult, nothing } from 'lit';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
@@ -15,9 +17,16 @@ import './LogPlaceholder';
 
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { scrollToBottom } from '@shared/utils/dom';
+
+// Local imports - shared styles
+import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
 
 // Local imports - services
 import { AudioNotificationService } from '../services/AudioNotificationService';
@@ -25,16 +34,11 @@ import { AudioNotificationService } from '../services/AudioNotificationService';
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
-type GroupTree = {
+interface GroupTree {
   group: TaskGroup;
   children: GroupTree[];
   messages: LogMessageData[];
-};
-
-type TreeBuildResult = {
-  tree: GroupTree[];
-  ungroupedMessages: LogMessageData[];
-};
+}
 
 const PLACEHOLDER_HTML =
   'No runs yet—use TeXRA commands to start. Try ' +
@@ -45,11 +49,12 @@ const PLACEHOLDER_HTML =
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
-  `;
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    ...logStyles,
+  ];
 
   /** All task groups to render */
   @property({ type: Array }) groups: TaskGroup[] = [];
@@ -69,9 +74,15 @@ export class TaskGroupList extends LitElement {
   /** Track previous group statuses to detect completion */
   @state() private previousStatuses = new Map<string, string>();
 
-  protected override createRenderRoot(): HTMLElement {
-    // Use Light DOM for CSS compatibility
-    return this;
+  /** Reference to the scroll container */
+  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
+  private scrollContainer?: HTMLElement;
+
+  /** Public method to scroll to bottom - called by parent LogList */
+  scrollToBottom(): void {
+    if (this.scrollContainer) {
+      scrollToBottom(this.scrollContainer);
+    }
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
@@ -97,8 +108,11 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Build hierarchical tree from flat groups array */
-  private buildGroupTree(): TreeBuildResult {
+  /**
+   * Build hierarchical tree from flat groups array.
+   * Returns [tree, ungroupedMessages] tuple.
+   */
+  private buildGroupTree(): [GroupTree[], LogMessageData[]] {
     const groupMap = new Map<string, TaskGroup>();
     const childrenMap = new Map<string, TaskGroup[]>();
 
@@ -112,11 +126,14 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Index messages by groupId
+    // Sort messages by timestamp and index by groupId
+    const sortedMessages = [...this.messages].sort(
+      (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
+    );
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungroupedMessages: LogMessageData[] = [];
 
-    for (const msg of this.sortedMessages) {
+    for (const msg of sortedMessages) {
       if (msg.groupId && groupMap.has(msg.groupId)) {
         const bucket = messagesByGroup.get(msg.groupId) ?? [];
         bucket.push(msg);
@@ -127,42 +144,28 @@ export class TaskGroupList extends LitElement {
     }
 
     // Build tree recursively
-    const buildNode = (group: TaskGroup): GroupTree => {
-      const children = (childrenMap.get(group.id) ?? [])
-        .sort((a, b) => a.startTime - b.startTime)
-        .map(buildNode);
+    function buildNode(group: TaskGroup): GroupTree {
       return {
         group,
-        children,
+        children: (childrenMap.get(group.id) ?? [])
+          .sort((a, b) => a.startTime - b.startTime)
+          .map(buildNode),
         messages: messagesByGroup.get(group.id) ?? [],
       };
-    };
+    }
 
-    // Get root groups (no parent)
-    const rootGroups = this.groups
+    // Get root groups (no parent), sorted by start time
+    const tree = this.groups
       .filter((g) => !g.parentGroupId)
-      .sort((a, b) => a.startTime - b.startTime);
+      .sort((a, b) => a.startTime - b.startTime)
+      .map(buildNode);
 
-    return {
-      tree: rootGroups.map(buildNode),
-      ungroupedMessages,
-    };
-  }
-
-  /** Get sorted messages */
-  private get sortedMessages(): LogMessageData[] {
-    return [...this.messages].sort((a, b) => {
-      const timeA = a.timestamp ?? 0;
-      const timeB = b.timestamp ?? 0;
-      return timeA - timeB;
-    });
+    return [tree, ungroupedMessages];
   }
 
   /** Check if a root group should be visible */
   private isGroupVisible(groupId: string): boolean {
-    if (this.isToolUse) return true;
-    if (!this.activeRunId) return true;
-    return groupId === this.activeRunId;
+    return this.isToolUse || !this.activeRunId || groupId === this.activeRunId;
   }
 
   /** Check if a group is expanded */
@@ -179,6 +182,16 @@ export class TaskGroupList extends LitElement {
     if (this.toggleStates) {
       this.toggleStates.set(groupId, !expanded);
     }
+  }
+
+  /** Render ungrouped messages as log entries */
+  private renderUngroupedMessages(messages: LogMessageData[]) {
+    if (messages.length === 0) return nothing;
+    return repeat(
+      messages,
+      (m) => m.id,
+      (m) => html`<log-entry .message=${m}></log-entry>`,
+    );
   }
 
   /** Render a group node and its children recursively */
@@ -211,7 +224,7 @@ export class TaskGroupList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const { tree, ungroupedMessages } = this.buildGroupTree();
+    const [tree, ungroupedMessages] = this.buildGroupTree();
 
     // Show placeholder if empty
     if (tree.length === 0 && this.messages.length === 0) {
@@ -225,27 +238,21 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
+    // Tool-use: ungrouped messages first, then tree
+    // Workflow: tree first, then ungrouped messages
+    const [ungroupedBefore, ungroupedAfter] = this.isToolUse
+      ? [ungroupedMessages, []]
+      : [[], ungroupedMessages];
+
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
-        ${this.isToolUse
-          ? html`${repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )}`
-          : nothing}
+        ${this.renderUngroupedMessages(ungroupedBefore)}
         ${repeat(
           tree,
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}
-        ${!this.isToolUse
-          ? html`${repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )}`
-          : nothing}
+        ${this.renderUngroupedMessages(ungroupedAfter)}
       </vscode-scrollable>
     `;
   }

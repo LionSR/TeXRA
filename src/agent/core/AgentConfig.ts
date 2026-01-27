@@ -1,19 +1,12 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent components
 import { AgentCategory } from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
-/** Zod schema for validating AgentConfig objects */
 const stringArrayField = () => z.array(z.string()).prefault([]);
 
-/**
- * Pure object schema without refinements.
- * Used for .partial() since Zod v4 doesn't allow .partial() on refined schemas.
- */
+/** Pure object schema without refinements for use with .partial(). */
 const AgentConfigFieldsSchema = z.object({
-  // Core workflow fields with defaults
   agent: z.string().prefault('correct'),
   model: z.string().prefault('gemini3p'),
   instruction: z.string().prefault(''),
@@ -27,34 +20,21 @@ const AgentConfigFieldsSchema = z.object({
   mediaFile: z.string().nullable().prefault(null),
   mediaFiles: stringArrayField(),
   outputFiles: stringArrayField(),
-
-  // AgentConfig-specific fields
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFile: z.string().nullable().prefault(null),
   editedFiles: stringArrayField(),
-
-  // Defaults to all-false for tool-use agents; workflow agents populate from UI
   toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
 });
 
-/**
- * Lift legacy session.agentCategory to top level for backward compatibility.
- * Persisted data may have { session: { agentCategory } } format.
- *
- * Exported for reuse in TaskState.ts to maintain single source of truth.
- */
+/** Lift legacy session.agentCategory to top level for backward compatibility. */
 export function liftLegacyAgentCategory(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
 
-  // If agentCategory already exists at top level, no migration needed
   if ('agentCategory' in obj && obj.agentCategory !== undefined) {
     return input;
   }
 
-  // Lift from session.agentCategory if present (legacy format)
-  // Note: The `session` field is left in place but is ignored by the schema.
-  // AgentConfigFieldsSchema uses z.object() which strips unknown fields.
   const session = obj.session as Record<string, unknown> | undefined;
   if (session && 'agentCategory' in session) {
     return { ...obj, agentCategory: session.agentCategory };
@@ -63,10 +43,7 @@ export function liftLegacyAgentCategory(input: unknown): unknown {
   return input;
 }
 
-/**
- * Agent configuration schema with output file count validation.
- * Includes backward compatibility for legacy { session: { agentCategory } } format.
- */
+/** Agent configuration schema with output file count validation. */
 export const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
   AgentConfigFieldsSchema.superRefine((config, ctx) => {
@@ -86,19 +63,9 @@ export const AgentConfigSchema = z.preprocess(
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
-// Use AgentConfigFieldsSchema for input type since preprocess makes input `unknown`
 export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
 
-/**
- * Schema for agent configuration payload passed to executeAgent.
- *
- * Only `agent` and `model` are required - all other fields have defaults.
- * This replaces ambiguous `Partial<AgentConfig>` usage with explicit requirements.
- *
- * Uses AgentConfigFieldsSchema (without refinement) since Zod v4 doesn't
- * allow .partial() on schemas with refinements. The output file count
- * validation is applied later when parsing with AgentConfigSchema.
- */
+/** Agent configuration payload with required agent and model fields. */
 export const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial()
   .required({
     agent: true,

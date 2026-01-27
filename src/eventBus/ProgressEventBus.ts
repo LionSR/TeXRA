@@ -1,13 +1,18 @@
-// Standard library imports
 import { EventEmitter } from 'events';
 
-// Type imports
 import type { ContextStateData } from '@logger/AgentLogger';
-import type { OutputFileInfo } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
-import type { TokenUsageStats } from '@shared/schemas';
-import type { StreamStatus } from '@shared/schemas';
-import type { LogMessageData, LogMessageUpdate } from '@shared/schemas';
+import type {
+  AgentProposalPermission,
+  BashPermission,
+  LogMessageData,
+  LogMessageUpdate,
+  OutputFileInfo,
+  RetryPermission,
+  StreamStatus,
+  StreamTabId,
+  TokenUsageStats,
+  ToolEditPermission,
+} from '@shared/schemas';
 import type {
   AddTaskGroupPayload,
   RunScopedPayload,
@@ -16,14 +21,7 @@ import type {
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@shared/schemas';
 
-// Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
 export interface ProgressEventPayloads {
@@ -53,17 +51,17 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     contextState: ContextStateData;
   };
-  showRetryRequest: RetryRequestPrompt;
+  showRetryRequest: RetryPermission;
   resolveRetryRequest: { streamId: StreamTabId };
-  showToolEditApprovalPrompt: ToolEditApprovalPrompt;
-  resolveToolEditApprovalPrompt: { requestId: string };
+  showToolEditPermission: ToolEditPermission;
+  resolveToolEditPermission: { requestId: string };
   updateToolEditApprovalBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
-  showBashApprovalPrompt: BashApprovalPrompt;
-  resolveBashApprovalPrompt: { requestId: string };
-  showAgentProposal: AgentProposalPrompt;
+  showBashPermission: BashPermission;
+  resolveBashPermission: { requestId: string };
+  showAgentProposal: AgentProposalPermission;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   updateQueuedFollowUps: { streamId: StreamTabId };

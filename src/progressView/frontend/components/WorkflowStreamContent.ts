@@ -25,14 +25,29 @@
 // Third-party imports
 import {
   LitElement,
+  css,
   html,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, state } from 'lit/decorators.js';
+
+// Local imports - progress view utilities
+import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
+
+// Local imports - progress view contexts
+import {
+  getWorkflowState,
+  permissionsContext,
+  streamStateContext,
+  type StreamContextValue,
+} from '../contexts/streamContexts';
+
+// Local imports - progress view store (type-only)
+import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - shared schemas
-import { getRunGroups, hasOutputFiles } from '../stateUtils';
 import type {
   InstructionUpdate,
   OutputFileInfo,
@@ -40,19 +55,18 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 
-// Local imports - progress view
-import type { FollowupOptionsState, WorkflowStreamState } from '../store';
+// Local imports - progress view component types
+import type { PermissionState } from './PermissionCard';
 
 // Local imports - sibling components
 import './StreamHeader';
 import './InstructionPanel';
 import './TaskGroupList';
+import './LogList';
 import './UsagePanel';
 import './FileList';
 import './FollowupSection';
-
-/** Run group info for the run selector */
-type RunGroup = { id: string; name: string; startTime: number };
+import './RequestPanels';
 
 /** Derived values for the currently selected run */
 interface RunDerivedValues {
@@ -64,17 +78,19 @@ interface RunDerivedValues {
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends LitElement {
-  // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
-  // can style the task-group-list and its content
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
+  static override styles = css`
+    :host {
+      display: contents;
+    }
+  `;
 
-  @property({ type: Object }) state!: WorkflowStreamState;
-  @property({ type: Object }) streamInfo!: StreamTabInfo;
-  @property({ type: String }) runId: string | null = null;
-  @property({ type: Object }) followupOptions: FollowupOptionsState | null =
-    null;
+  @consume({ context: streamStateContext, subscribe: true })
+  @state()
+  private streamContext?: StreamContextValue;
+
+  @consume({ context: permissionsContext, subscribe: true })
+  @state()
+  private permissionContext?: PermissionState[];
 
   // Memoized derived values - updated in willUpdate when deps change
   @state() private runGroups: RunGroup[] = [];
@@ -84,17 +100,51 @@ export class WorkflowStreamContent extends LitElement {
     files: {},
     hasFiles: false,
   };
+  @state() private filteredPermissions: PermissionState[] = [];
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Recompute run groups when state changes (taskGroups is inside state)
-    if (changedProperties.has('state')) {
-      this.runGroups = getRunGroups(this.state?.taskGroups ?? []);
-    }
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('streamContext')) {
+      const currentState = this.currentState;
+      // Recompute run groups when state changes (taskGroups is inside state)
+      this.runGroups = getRunGroups(currentState?.taskGroups ?? []);
 
-    // Recompute run-specific values when runId or state changes
-    if (changedProperties.has('runId') || changedProperties.has('state')) {
+      // Recompute run-specific values when runId or state changes
       this.runValues = this.computeRunValues();
     }
+
+    if (
+      changedProperties.has('streamContext') ||
+      changedProperties.has('permissionContext')
+    ) {
+      this.filteredPermissions = this.computeFilteredPermissions();
+    }
+  }
+
+  private get currentStreamInfo(): StreamTabInfo | null {
+    return this.streamContext?.streamInfo ?? null;
+  }
+
+  private get currentState(): WorkflowStreamState | null {
+    if (!this.streamContext) return null;
+    return getWorkflowState(this.streamContext);
+  }
+
+  private get currentRunId(): string | null {
+    return this.streamContext?.runId ?? null;
+  }
+
+  private get currentFollowupOptions(): FollowupOptionsState | null {
+    return this.streamContext?.followupOptions ?? null;
+  }
+
+  private computeFilteredPermissions(): PermissionState[] {
+    const streamId = this.currentStreamInfo?.name;
+    if (!streamId) return [];
+    const permissions = this.permissionContext ?? [];
+    return permissions.filter(
+      (permission) =>
+        !permission.data.streamId || permission.data.streamId === streamId,
+    );
   }
 
   /**
@@ -102,50 +152,60 @@ export class WorkflowStreamContent extends LitElement {
    * This avoids multiple object lookups during render.
    */
   private computeRunValues(): RunDerivedValues {
-    const runKey = this.runId ?? 'default';
-    const instruction = this.state.runInstructions[runKey] ?? null;
-    const usage = this.runId ? (this.state.runUsage[this.runId] ?? null) : null;
-    const files = this.runId ? (this.state.runFiles[this.runId] ?? {}) : {};
+    const state = this.currentState;
+    if (!state) {
+      return { instruction: null, usage: null, files: {}, hasFiles: false };
+    }
+
+    const runId = this.currentRunId;
+    const runKey = runId ?? 'default';
+    const instruction = state.runInstructions[runKey] ?? null;
+    const usage = runId ? (state.runUsage[runId] ?? null) : null;
+    const files = runId ? (state.runFiles[runId] ?? {}) : {};
     const hasFiles = hasOutputFiles(files);
 
     return { instruction, usage, files, hasFiles };
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const { instruction, usage, files, hasFiles } = this.runValues;
+    const streamInfo = this.currentStreamInfo;
+    const state = this.currentState;
+    const runId = this.currentRunId;
+
+    if (!streamInfo || !state) {
+      return html``;
+    }
 
     return html`
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
+
       <stream-header
-        .stream=${this.streamInfo}
-        .streamState=${this.state}
-        .runId=${this.runId}
+        .stream=${streamInfo}
+        .streamState=${state}
+        .runId=${runId}
         .runs=${this.runGroups}
         .yoloActive=${false}
       ></stream-header>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
-      <log-list
-        .groups=${this.state.taskGroups}
-        .messages=${this.state.logs}
-        .activeRunId=${this.runId}
-        .isToolUse=${false}
-      ></log-list>
+      <log-list></log-list>
 
       <usage-panel
         .usage=${usage}
-        .contextState=${this.state.contextState ?? null}
+        .contextState=${state.contextState ?? null}
       ></usage-panel>
 
       <file-list .filesByRound=${files} .showRoundHeaders=${true}></file-list>
 
       <followup-section
-        .agentCategory=${this.streamInfo.agentCategory}
-        .status=${this.state.status ?? this.streamInfo.status ?? ''}
+        .agentCategory=${streamInfo.agentCategory}
+        .status=${state.status ?? streamInfo.status ?? ''}
         .hasOutputFiles=${hasFiles}
-        .options=${this.followupOptions}
-        .mode=${this.state.followupMode}
-        .streamModel=${this.streamInfo.model ?? null}
+        .options=${this.currentFollowupOptions}
+        .mode=${state.followupMode}
+        .streamModel=${streamInfo.model ?? null}
       ></followup-section>
     `;
   }

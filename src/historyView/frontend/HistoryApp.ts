@@ -1,3 +1,8 @@
+/**
+ * HistoryApp component - main container for the agent execution history view.
+ * Manages search state and delegates to SearchBar and HistoryList components.
+ */
+
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -7,7 +12,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import {
@@ -22,7 +27,7 @@ import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
 
-// Local imports - history view components
+// Local imports - history view components (side-effect: register)
 import './components/SearchBar';
 import './components/HistoryList';
 
@@ -32,9 +37,20 @@ import { HistoryViewState } from './state';
 // Local imports - history view types
 import type { SearchAction } from './components/HistoryList';
 
+const HISTORY_ACTION_COMMANDS: Record<string, string> = {
+  delete: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
+  restore: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
+  rerun: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
+};
+
 @customElement('history-app')
 export class HistoryApp extends BaseWebviewApp {
-  static styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    ...badgeStyles,
+    historyViewStyles,
+  ];
 
   @state() private items: HistoryItem[] = [];
   @state() private matchCount = '';
@@ -56,7 +72,7 @@ export class HistoryApp extends BaseWebviewApp {
     postMessage(HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA);
   }
 
-  protected handleMessage(raw: unknown): void {
+  protected override handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object' || !('command' in raw)) {
       return;
     }
@@ -94,57 +110,50 @@ export class HistoryApp extends BaseWebviewApp {
     }
   }
 
-  private handleSearchChange = (event: CustomEvent<{ term: string }>): void => {
+  private handleSearchChange(event: CustomEvent<{ term: string }>): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchTerm = event.detail.term;
-  };
+  }
 
-  private handleSearchNext = (): void => {
+  private handleSearchNext(): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchAction = 'next';
-  };
+  }
 
-  private handleSearchPrev = (): void => {
+  private handleSearchPrev(): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchAction = 'prev';
-  };
+  }
 
   // === Reactive property reset handlers (Lit-native Phase 9) ===
 
-  private handleSearchNavigateComplete = (): void => {
+  private handleSearchNavigateComplete(): void {
     // Reset action after child processes it
     this.searchAction = null;
-  };
+  }
 
-  private handleSearchClearComplete = (): void => {
+  private handleSearchClearComplete(): void {
     // Reset trigger after child processes it
     this.clearSearchTrigger = false;
-  };
+  }
 
-  private handleMatchCount = (
-    event: CustomEvent<{ display: string }>,
-  ): void => {
+  private handleMatchCount(event: CustomEvent<{ display: string }>): void {
     this.matchCount = event.detail.display;
-  };
+  }
 
-  private handleHistoryAction = (
+  private handleHistoryAction(
     event: CustomEvent<{ action: string; historyId: string }>,
-  ): void => {
-    const actionMap: Record<string, string> = {
-      delete: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
-      restore: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
-      rerun: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
-    };
-    const command = actionMap[event.detail.action];
+  ): void {
+    const command = HISTORY_ACTION_COMMANDS[event.detail.action];
     if (!command) return;
     postMessage(command, { historyId: event.detail.historyId });
-  };
+  }
 
-  private handleClearHistory = (): void => {
+  private handleClearHistory(): void {
     postMessage(HISTORY_VIEW_COMMANDS.CLEAR_HISTORY);
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <header class="view-header">
         <h2>Agent Execution History</h2>
@@ -170,5 +179,11 @@ export class HistoryApp extends BaseWebviewApp {
         @search-clear-complete=${this.handleSearchClearComplete}
       ></history-list>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-app': HistoryApp;
   }
 }

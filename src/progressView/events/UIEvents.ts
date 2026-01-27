@@ -28,10 +28,10 @@ interface RetryCallbacks {
 
 /** Callbacks for approval event handling. */
 interface ApprovalCallbacks {
-  showToolEditApprovalPrompt: (
-    payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
+  showToolEditPermission: (
+    payload: ProgressEventPayloads['showToolEditPermission'],
   ) => void;
-  resolveToolEditApprovalPrompt: (requestId: string) => void;
+  resolveToolEditPermission: (requestId: string) => void;
   updateToolEditApprovalBypassState: (
     streamId: string,
     bypassActive: boolean,
@@ -40,10 +40,10 @@ interface ApprovalCallbacks {
 
 /** Callbacks for bash approval event handling. */
 interface BashApprovalCallbacks {
-  showBashApprovalPrompt: (
-    payload: ProgressEventPayloads['showBashApprovalPrompt'],
+  showBashPermission: (
+    payload: ProgressEventPayloads['showBashPermission'],
   ) => void;
-  resolveBashApprovalPrompt: (requestId: string) => void;
+  resolveBashPermission: (requestId: string) => void;
 }
 
 /** Callbacks for agent proposal handling (workflow or tool-use). */
@@ -104,15 +104,15 @@ export function registerUIEvents(
   // Approval events
   registerEvent(
     bus,
-    'showToolEditApprovalPrompt',
-    callbacks.showToolEditApprovalPrompt,
+    'showToolEditPermission',
+    callbacks.showToolEditPermission,
     'failed to show approval prompt',
     signal,
   );
   registerEvent(
     bus,
-    'resolveToolEditApprovalPrompt',
-    (p) => callbacks.resolveToolEditApprovalPrompt(p.requestId),
+    'resolveToolEditPermission',
+    (p) => callbacks.resolveToolEditPermission(p.requestId),
     'failed to resolve approval prompt',
     signal,
   );
@@ -128,15 +128,15 @@ export function registerUIEvents(
   // Bash approval events
   registerEvent(
     bus,
-    'showBashApprovalPrompt',
-    callbacks.showBashApprovalPrompt,
+    'showBashPermission',
+    callbacks.showBashPermission,
     'failed to show bash approval prompt',
     signal,
   );
   registerEvent(
     bus,
-    'resolveBashApprovalPrompt',
-    (p) => callbacks.resolveBashApprovalPrompt(p.requestId),
+    'resolveBashPermission',
+    (p) => callbacks.resolveBashPermission(p.requestId),
     'failed to resolve bash approval prompt',
     signal,
   );
