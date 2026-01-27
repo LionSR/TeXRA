@@ -14,7 +14,7 @@
  * dependencies change.
  *
  * @fires toolbar-command - When toolbar actions are triggered
- * @fires prompt-action - When user responds to a prompt overlay
+ * @fires permission-action - When user responds to a permission card
  * @fires followup-change - When follow-up text changes
  * @fires followup-send - When follow-up is submitted
  * @fires followup-polish - When polish button is clicked
@@ -39,7 +39,7 @@ import { getRunGroups, type RunGroup } from '../stateUtils';
 // Local imports - progress view contexts
 import {
   getToolUseState,
-  promptsContext,
+  permissionsContext,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
@@ -51,7 +51,7 @@ import type { ToolUseStreamState } from '../store';
 import type { StreamTabInfo } from '@shared/schemas';
 
 // Local imports - progress view component types
-import type { PromptState } from './PromptOverlay';
+import type { PermissionState } from './PermissionCard';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Local imports - sibling components
@@ -75,12 +75,12 @@ export class ToolUseStreamContent extends LitElement {
   @state()
   private streamContext?: StreamContextValue;
 
-  @consume({ context: promptsContext, subscribe: true })
+  @consume({ context: permissionsContext, subscribe: true })
   @state()
-  private promptContext?: PromptState[];
+  private permissionContext?: PermissionState[];
 
   // Memoized derived values - updated in willUpdate when deps change
-  @state() private filteredPrompts: PromptState[] = [];
+  @state() private filteredPermissions: PermissionState[] = [];
   @state() private runGroups: RunGroup[] = [];
 
   /** Ref for FollowUpInput - exposed for parent access */
@@ -89,9 +89,9 @@ export class ToolUseStreamContent extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (
       changedProperties.has('streamContext') ||
-      changedProperties.has('promptContext')
+      changedProperties.has('permissionContext')
     ) {
-      this.filteredPrompts = this.computeFilteredPrompts();
+      this.filteredPermissions = this.computeFilteredPermissions();
       this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
     }
   }
@@ -109,12 +109,13 @@ export class ToolUseStreamContent extends LitElement {
     return getToolUseState(this.streamContext);
   }
 
-  private computeFilteredPrompts(): PromptState[] {
+  private computeFilteredPermissions(): PermissionState[] {
     const streamId = this.currentStreamInfo?.name;
     if (!streamId) return [];
-    const prompts = this.promptContext ?? [];
-    return prompts.filter(
-      (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
+    const permissions = this.permissionContext ?? [];
+    return permissions.filter(
+      (permission) =>
+        !permission.data.streamId || permission.data.streamId === streamId,
     );
   }
 
@@ -126,7 +127,7 @@ export class ToolUseStreamContent extends LitElement {
     }
 
     return html`
-      <request-panels .prompts=${this.filteredPrompts}></request-panels>
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <stream-header
         .stream=${streamInfo}

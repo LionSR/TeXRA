@@ -212,9 +212,9 @@ export class HistoryItem extends LitElement {
     if (outputSection) extraDetails.push(outputSection);
 
     if (config.toolConfig && !isToolUse) {
-      const toolEntries: Array<[string, ConfigValue]> = Object.entries(
-        config.toolConfig,
-      ).filter(([, value]) => this.hasValue(value as ConfigValue));
+      const toolEntries = (
+        Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
+      ).filter(([, value]) => this.hasValue(value));
       const toolSection = this.renderConfigSection(
         html`<i class="codicon codicon-tools"></i> Config`,
         toolEntries,

@@ -39,7 +39,7 @@ import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
 // Local imports - progress view contexts
 import {
   getWorkflowState,
-  promptsContext,
+  permissionsContext,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
@@ -56,7 +56,7 @@ import type {
 } from '@shared/schemas';
 
 // Local imports - progress view component types
-import type { PromptState } from './PromptOverlay';
+import type { PermissionState } from './PermissionCard';
 
 // Local imports - sibling components
 import './StreamHeader';
@@ -88,9 +88,9 @@ export class WorkflowStreamContent extends LitElement {
   @state()
   private streamContext?: StreamContextValue;
 
-  @consume({ context: promptsContext, subscribe: true })
+  @consume({ context: permissionsContext, subscribe: true })
   @state()
-  private promptContext?: PromptState[];
+  private permissionContext?: PermissionState[];
 
   // Memoized derived values - updated in willUpdate when deps change
   @state() private runGroups: RunGroup[] = [];
@@ -100,7 +100,7 @@ export class WorkflowStreamContent extends LitElement {
     files: {},
     hasFiles: false,
   };
-  @state() private filteredPrompts: PromptState[] = [];
+  @state() private filteredPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {
@@ -114,9 +114,9 @@ export class WorkflowStreamContent extends LitElement {
 
     if (
       changedProperties.has('streamContext') ||
-      changedProperties.has('promptContext')
+      changedProperties.has('permissionContext')
     ) {
-      this.filteredPrompts = this.computeFilteredPrompts();
+      this.filteredPermissions = this.computeFilteredPermissions();
     }
   }
 
@@ -137,12 +137,13 @@ export class WorkflowStreamContent extends LitElement {
     return this.streamContext?.followupOptions ?? null;
   }
 
-  private computeFilteredPrompts(): PromptState[] {
+  private computeFilteredPermissions(): PermissionState[] {
     const streamId = this.currentStreamInfo?.name;
     if (!streamId) return [];
-    const prompts = this.promptContext ?? [];
-    return prompts.filter(
-      (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
+    const permissions = this.permissionContext ?? [];
+    return permissions.filter(
+      (permission) =>
+        !permission.data.streamId || permission.data.streamId === streamId,
     );
   }
 
@@ -177,7 +178,7 @@ export class WorkflowStreamContent extends LitElement {
     }
 
     return html`
-      <request-panels .prompts=${this.filteredPrompts}></request-panels>
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <stream-header
         .stream=${streamInfo}

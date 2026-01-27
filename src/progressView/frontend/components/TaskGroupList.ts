@@ -185,9 +185,7 @@ export class TaskGroupList extends LitElement {
   }
 
   /** Render ungrouped messages as log entries */
-  private renderUngroupedMessages(
-    messages: LogMessageData[],
-  ): TemplateResult | typeof nothing {
+  private renderUngroupedMessages(messages: LogMessageData[]) {
     if (messages.length === 0) return nothing;
     return repeat(
       messages,

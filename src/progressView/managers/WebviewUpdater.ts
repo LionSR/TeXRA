@@ -1,19 +1,19 @@
 import * as vscode from 'vscode';
 
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
+  AgentCategoryFilter,
+  AgentProposalPermission,
+  BashPermission,
   ContextState,
   InstructionUpdate,
   LogMessageData,
   OutputFileInfo,
   ProgressViewOutboundMessage,
-  RetryRequestPrompt,
+  RetryPermission,
   StreamState,
   StreamStatus,
   StreamTabId,
@@ -21,7 +21,7 @@ import type {
   TaskGroup,
   TodoItem,
   TokenUsageStats,
-  ToolEditApprovalPrompt,
+  ToolEditPermission,
   UpdateTaskGroupPayload,
 } from '@shared/schemas';
 
@@ -196,14 +196,14 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
+  showToolEditPermission(prompt: ToolEditPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
       request: prompt,
     });
   }
 
-  resolveToolEditApprovalPrompt(requestId: string): void {
+  resolveToolEditPermission(requestId: string): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
       requestId,
@@ -221,21 +221,21 @@ export class WebviewUpdater {
     });
   }
 
-  showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
+  showBashPermission(prompt: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
       request: prompt,
     });
   }
 
-  resolveBashApprovalPrompt(requestId: string): void {
+  resolveBashPermission(requestId: string): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
       requestId,
     });
   }
 
-  showRetryRequest(request: RetryRequestPrompt): void {
+  showRetryRequest(request: RetryPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
       request,
@@ -249,7 +249,7 @@ export class WebviewUpdater {
     });
   }
 
-  showAgentProposal(proposal: AgentProposalPrompt): void {
+  showAgentProposal(proposal: AgentProposalPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,

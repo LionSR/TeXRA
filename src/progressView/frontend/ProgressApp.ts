@@ -49,7 +49,7 @@ import {
   handleFollowupRequestOptions,
   handleFollowupRun,
   handleFollowupSetup,
-  handlePromptAction,
+  handlePermissionAction,
   handleRunSelected,
   handleSortChange,
   handleStreamDelete,
@@ -62,7 +62,7 @@ import { getFilteredStreams } from './stateUtils';
 
 // Local imports - progress view contexts
 import {
-  promptsContext,
+  permissionsContext,
   streamStateContext,
   type StreamContextValue,
 } from './contexts/streamContexts';
@@ -81,7 +81,7 @@ import './components/ContextManagement';
 
 // Local imports - progress view modules
 import type { FollowUpInput } from './components/FollowUpInput';
-import type { PromptState } from './components/PromptOverlay';
+import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
 import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
@@ -125,7 +125,7 @@ export class ProgressApp extends BaseWebviewApp {
   `;
 
   @state() private appState: ProgressState;
-  @state() private prompts: PromptState[] = [];
+  @state() private permissions: PermissionState[] = [];
 
   @provide({ context: streamStateContext })
   @state()
@@ -137,9 +137,9 @@ export class ProgressApp extends BaseWebviewApp {
     isToolUse: false,
   };
 
-  @provide({ context: promptsContext })
+  @provide({ context: permissionsContext })
   @state()
-  private promptsContextValue: PromptState[] = [];
+  private permissionsContextValue: PermissionState[] = [];
 
   // Container refs for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
@@ -166,7 +166,7 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('appState') || changed.has('prompts')) {
+    if (changed.has('appState') || changed.has('permissions')) {
       this.updateStreamContext();
     }
   }
@@ -213,7 +213,7 @@ export class ProgressApp extends BaseWebviewApp {
         <tool-use-stream-content
           ${ref(this.toolUseContentRef)}
           @toolbar-command=${this.onToolbarCommand}
-          @prompt-action=${this.onPromptAction}
+          @permission-action=${this.onPermissionAction}
           @followup-change=${this.onFollowUpChange}
           @followup-send=${this.onFollowUpSend}
           @followup-polish=${this.onFollowUpPolish}
@@ -228,7 +228,7 @@ export class ProgressApp extends BaseWebviewApp {
       <workflow-stream-content
         ${ref(this.workflowContentRef)}
         @toolbar-command=${this.onToolbarCommand}
-        @prompt-action=${this.onPromptAction}
+        @permission-action=${this.onPermissionAction}
         @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
         @followup-request-options=${this.onFollowupRequestOptions}
@@ -267,7 +267,7 @@ export class ProgressApp extends BaseWebviewApp {
         followupOptions: null,
         isToolUse: false,
       };
-      this.promptsContextValue = this.prompts;
+      this.permissionsContextValue = this.permissions;
       return;
     }
 
@@ -282,7 +282,7 @@ export class ProgressApp extends BaseWebviewApp {
       followupOptions: this.appState.followupOptions,
       isToolUse,
     };
-    this.promptsContextValue = this.prompts;
+    this.permissionsContextValue = this.permissions;
   }
 
   private setStreamState(
@@ -319,9 +319,9 @@ export class ProgressApp extends BaseWebviewApp {
   private createMessageHandlerContext(): MessageHandlerContext {
     return {
       ...this.createEventHandlerContext(),
-      getPrompts: () => this.prompts,
-      setPrompts: (prompts) => {
-        this.prompts = prompts;
+      getPermissions: () => this.permissions,
+      setPermissions: (permissions) => {
+        this.permissions = permissions;
       },
     };
   }
@@ -391,8 +391,8 @@ export class ProgressApp extends BaseWebviewApp {
     handleFollowupRun(e, this.createEventHandlerContext());
   }
 
-  private onPromptAction(e: CustomEvent): void {
-    handlePromptAction(e);
+  private onPermissionAction(e: CustomEvent): void {
+    handlePermissionAction(e);
   }
 
   /**

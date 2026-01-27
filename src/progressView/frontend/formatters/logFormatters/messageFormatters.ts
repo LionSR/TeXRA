@@ -3,6 +3,10 @@
  * These formatters use logMessage.text and logMessage.data directly.
  *
  * Uses Lit templates for declarative DOM construction.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Local imports - shared schemas
@@ -36,13 +40,8 @@ export function formatUserMessageTemplate(
   message: LogMessageData,
 ): FormatResult {
   const { id, text, timestamp } = message;
-  return html`
-    <user-message
-      .text=${text ?? ''}
-      .logId=${id}
-      .timestamp=${timestamp}
-    ></user-message>
-  `;
+  // prettier-ignore
+  return html`<user-message .text=${text ?? ''} .logId=${id} .timestamp=${timestamp}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
@@ -126,51 +125,30 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const detailText = detailLines.join('\n');
   const hasDetails = Boolean(detailText);
   const rawContent = detailText || summaryText;
-  const detailTemplate = when(
-    hasDetails,
-    () => html`<pre class="error-details">${detailText}</pre>`,
+  const copyId = registerCopyContent(
+    rawContent,
+    id ? `error:${id}` : undefined,
   );
+
+  // Build modular template parts to avoid overly long single-line templates
+  // prettier-ignore
+  const detailTemplate = when(hasDetails, () => html`<pre class="error-details">${detailText}</pre>`);
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
-
-  return html`
-    <details
-      class=${classMap({
-        'banner-details': true,
-        'banner-details--error': true,
-        'banner-details--relay-error': isRelayError,
-      })}
-      data-log-id=${ifDefined(id)}
-      data-group-id=${ifDefined(groupId)}
-      data-timestamp=${ifDefined(fullTimestamp)}
-    >
-      <summary class="details-summary">
-        <i
-          class="${CHEVRON_RIGHT_CLASS} toggle-icon"
-          style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}
-        ></i>
-        <i class="codicon icon codicon-error"></i>
-        <span class="label" title=${tooltipTimestamp}
-          >[${timeDisplay}] ${summaryText}</span
-        >
-        <vscode-toolbar-button
-          class="banner-content-copy"
-          icon="copy"
-          title="Copy error details"
-          aria-label="Copy error details"
-          data-default-title="Copy error details"
-          data-success-title="Copied!"
-          data-copy-id=${registerCopyContent(
-            rawContent,
-            id ? `error:${id}` : undefined,
-          )}
-          data-copy-type="banner"
-          ?hidden=${!hasDetails}
-        ></vscode-toolbar-button>
-      </summary>
-      ${contentTemplate}
-    </details>
-  `;
+  // prettier-ignore
+  const toggleIcon = html`<i class="${CHEVRON_RIGHT_CLASS} toggle-icon" style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}></i>`;
+  // prettier-ignore
+  const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
+  // prettier-ignore
+  const copyButton = html`<vscode-toolbar-button class="banner-content-copy" icon="copy" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}></vscode-toolbar-button>`;
+  // prettier-ignore
+  const summaryTemplate = html`<summary class="details-summary">${toggleIcon}<i class="codicon icon codicon-error"></i>${labelSpan}${copyButton}</summary>`;
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'banner-details--error': true,
+    'banner-details--relay-error': isRelayError,
+  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</details>`;
 }
 
 /** Format default log message as TemplateResult. */
