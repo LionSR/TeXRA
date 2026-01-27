@@ -1,6 +1,10 @@
 /**
  * Lit template utilities for progress view formatters.
  * These functions create reusable Lit templates from normalized data.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
@@ -37,14 +41,8 @@ export function buildToolUseSection(
   label: string,
   content: TemplateResult,
 ): TemplateResult {
-  return html`
-    <div class="tool-use-section">
-      <div class="tool-use-subsection">
-        <span class="tool-use-sublabel">${label}</span>
-        ${content}
-      </div>
-    </div>
-  `;
+  // prettier-ignore
+  return html`<div class="tool-use-section"><div class="tool-use-subsection"><span class="tool-use-sublabel">${label}</span>${content}</div></div>`;
 }
 
 // Diff line prefix patterns (longer prefixes first for correct matching)
@@ -103,19 +101,8 @@ export function buildCopyButton(
 ): TemplateResult {
   const { hidden = false, content, contentId } = options;
   const copyId = content != null ? registerCopyContent(content, contentId) : '';
-  return html`
-    <vscode-toolbar-button
-      class="banner-content-copy"
-      icon="copy"
-      title=${title}
-      aria-label=${title}
-      data-default-title=${title}
-      data-success-title="Copied!"
-      data-copy-id=${ifDefined(copyId || undefined)}
-      data-copy-type="banner"
-      ?hidden=${hidden}
-    ></vscode-toolbar-button>
-  `;
+  // prettier-ignore
+  return html`<vscode-toolbar-button class="banner-content-copy" icon="copy" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}></vscode-toolbar-button>`;
 }
 
 /** Options for building a details summary header. */
@@ -148,10 +135,9 @@ export function buildDetailsSummary(
   const iconClasses = includeIconClass
     ? `codicon icon ${iconClass}`
     : `codicon ${iconClass}`;
+  // prettier-ignore
   const timestampTemplate = timestamp
-    ? html` <span class="timestamp" title=${timestamp.tooltip}
-        >${timestamp.display}</span
-      >`
+    ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
     : nothing;
   const copyTemplate = copyButton
     ? buildCopyButton(copyButton.title, {
@@ -271,36 +257,21 @@ export function buildCodeBlock(
   const preClasses = { hljs: true, [className]: Boolean(className) };
   const highlighted = highlightCode(text, language);
   const isHighlighted = highlighted !== text;
-  const header = showLanguage || showCopy;
-  const languageBadge = showLanguage
-    ? html`<span class="code-block-language"
-        >${getLanguageLabel(language)}</span
-      >`
-    : nothing;
-  const copyButton = showCopy
-    ? html`<button
-        class="code-block-copy"
-        title="Copy to clipboard"
-        data-copy-id=${registerCopyContent(text)}
-        data-copy-type="code-block"
-      >
-        <i class="codicon codicon-copy"></i>
-      </button>`
-    : nothing;
+  const showHeader = showLanguage || showCopy;
 
+  // IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates cause
+  // unwanted spaces in rendered output. Use single-line templates with prettier-ignore.
+  // Build modular template parts to keep individual lines readable.
+  // prettier-ignore
+  const languageBadge = showLanguage ? html`<span class="code-block-language">${getLanguageLabel(language)}</span>` : nothing;
+  // prettier-ignore
+  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><i class="codicon codicon-copy"></i></button>` : nothing;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
-
-  return html`
-    <div class="code-block" data-language=${language}>
-      ${header
-        ? html`
-            <div class="code-block-header">${languageBadge} ${copyButton}</div>
-          `
-        : nothing}
-      ${codeTemplate}
-    </div>
-  `;
+  // prettier-ignore
+  const headerTemplate = showHeader ? html`<div class="code-block-header">${languageBadge}${copyButton}</div>` : nothing;
+  // prettier-ignore
+  return html`<div class="code-block" data-language=${language}>${headerTemplate}${codeTemplate}</div>`;
 }
 
 // ============================================================================

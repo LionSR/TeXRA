@@ -196,7 +196,11 @@ export class FileSelectGroup extends LitElement {
 
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
-    if (!nextTarget || !this.contains(nextTarget)) {
+    // Check both light DOM and shadow DOM for focus containment
+    const containsFocus =
+      nextTarget &&
+      (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
+    if (!containsFocus) {
       this.autoExtractMenuOpen = false;
       this.toolConfigMenuOpen = false;
     }

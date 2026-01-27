@@ -20,7 +20,7 @@ import {
 
 // Local imports - progress view
 import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { PromptState } from './components/PromptOverlay';
+import type { PermissionState } from './components/PermissionCard';
 import {
   updateToolUseState,
   updateWorkflowState,
@@ -46,8 +46,8 @@ import {
  * prompt state accessors needed for handling approval/retry messages.
  */
 export interface MessageHandlerContext extends FrontendEventHandlerContext {
-  getPrompts(): PromptState[];
-  setPrompts(prompts: PromptState[]): void;
+  getPermissions(): PermissionState[];
+  setPermissions(permissions: PermissionState[]): void;
 }
 
 // ============================================================
@@ -65,18 +65,18 @@ const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 // Helper functions
 // ============================================================
 
-function addPrompt(ctx: MessageHandlerContext, prompt: PromptState): void {
-  ctx.setPrompts([...ctx.getPrompts(), prompt]);
+function addPrompt(ctx: MessageHandlerContext, prompt: PermissionState): void {
+  ctx.setPermissions([...ctx.getPermissions(), prompt]);
 }
 
 function removePrompt(
   ctx: MessageHandlerContext,
-  kind: PromptState['kind'],
+  kind: PermissionState['kind'],
   idField: string,
   idValue: string,
 ): void {
-  ctx.setPrompts(
-    ctx.getPrompts().filter((p) => {
+  ctx.setPermissions(
+    ctx.getPermissions().filter((p) => {
       if (p.kind !== kind) return true;
       const data = p.data as Record<string, unknown>;
       return data[idField] !== idValue;
@@ -562,6 +562,3 @@ export function dispatchMessage(
 
   return false;
 }
-
-// Re-export types for consumers
-export type { MessageHandlerContext };
