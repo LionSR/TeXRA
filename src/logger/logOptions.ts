@@ -1,4 +1,3 @@
-// Type imports
 import type { MessageType } from '@shared/schemas';
 
 /**

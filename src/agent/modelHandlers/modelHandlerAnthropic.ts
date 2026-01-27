@@ -9,32 +9,8 @@ import {
   toFile,
 } from '@anthropic-ai/sdk';
 
-/** Supported image media types from SDK's Base64ImageSource definition */
-const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
-
-const isSupportedImageMediaType = (
-  mediaType: string,
-): mediaType is Base64ImageSource['media_type'] =>
-  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
-
-interface UploadedAnthropicAttachment {
-  attachment: ToolFileAttachment;
-  fileId: string;
-  blockType: 'image' | 'document';
-  base64Data?: string;
-  mediaType?: string;
-}
-
 // Local imports - agent
-
-// Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import {
   AgentCategory,
   type AgentSetting,
@@ -54,31 +30,41 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+// Local imports - common
 import {
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
 } from '@common/errors/sdkErrorUtils';
 
-// Internal imports
+// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
-// Type imports
+// Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
-// Internal imports
+// Local imports - utils
 import { getConfig } from '@utils/config';
-import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import {
-  computeCachePercentage,
-  nonZeroOrUndefined,
-} from './utils/usageNormalization';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
+import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
+import { toAnthropicTools } from './toolConversion';
+import { ANTHROPIC_STOP } from './types/StopReasonTypes';
+import {
+  extractAnthropicWebSearchResults,
+  isAnthropicServerToolContent,
+  type ServerToolExtractionResult,
+} from './types/ServerToolTypes';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
@@ -86,19 +72,10 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { ANTHROPIC_STOP } from './types/StopReasonTypes';
-import { toAnthropicTools } from './toolConversion';
 import {
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  computeReducedMaxTokens,
-  TOKEN_SAFETY_BUFFER,
-} from './contextManagementConstants';
-import {
-  extractAnthropicWebSearchResults,
-  isAnthropicServerToolContent,
-  type ServerToolExtractionResult,
-} from './types/ServerToolTypes';
-import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -137,6 +114,27 @@ import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+
+/** Supported image media types from SDK's Base64ImageSource definition */
+const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+const isSupportedImageMediaType = (
+  mediaType: string,
+): mediaType is Base64ImageSource['media_type'] =>
+  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
+
+interface UploadedAnthropicAttachment {
+  attachment: ToolFileAttachment;
+  fileId: string;
+  blockType: 'image' | 'document';
+  base64Data?: string;
+  mediaType?: string;
+}
 
 /**
  * Union type for thinking content blocks from Anthropic Beta API responses.

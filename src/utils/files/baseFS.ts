@@ -298,7 +298,3 @@ export abstract class BaseFS {
     return this.preparePath(target);
   }
 }
-
-export function joinPath(base: string, relative: string): string {
-  return path.join(base, relative);
-}

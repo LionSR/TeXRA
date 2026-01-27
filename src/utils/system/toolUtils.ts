@@ -18,8 +18,8 @@ import { executeCommand } from './execUtils';
 const CHANNEL = 'toolUtils';
 logger.initialize(CHANNEL);
 
-// Interface for tool configuration
-export interface ToolConfig {
+// Interface for tool configuration (internal to this module)
+interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
   openDocsCommand?: string; // Optional command to open documentation
@@ -381,9 +381,9 @@ export async function checkToolInstalled(
 }
 
 /**
- * Options for runToolWithCheck function
+ * Options for runToolWithCheck function (internal to this module)
  */
-export type RunToolOptions = {
+type RunToolOptions = {
   /** Whether to show error messages for missing tools */
   showError?: boolean;
 } & Parameters<typeof executeCommand>[1];

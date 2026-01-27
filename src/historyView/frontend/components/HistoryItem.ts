@@ -173,9 +173,10 @@ export class HistoryItem extends LitElement {
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
     const isToolUse = config.agentCategory === 'toolUse';
-    const categoryName = isToolUse ? 'toolUse' : 'workflow';
     const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
-    const decorator = getAgentCategoryDecorator(categoryName);
+    const decorator = getAgentCategoryDecorator(
+      isToolUse ? 'toolUse' : 'workflow',
+    );
     const instructionText = config.instruction?.trim()
       ? config.instruction
       : null;

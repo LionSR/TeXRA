@@ -8,9 +8,11 @@ import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { refresh, computeAgentOptionsData } from '@agent/index';
 
 // Local imports - common
-import { BaseWebviewProvider } from '@common/webview';
-import { getSharedLocalResourceRoots } from '@common/webview';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseWebviewProvider,
+  getSharedLocalResourceRoots,
+  MAIN_VIEW_COMMANDS,
+} from '@common/webview';
 import { consumePendingState } from '@common/state';
 
 // Local imports - frontend
