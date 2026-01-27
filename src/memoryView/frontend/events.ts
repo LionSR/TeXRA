@@ -1,8 +1,5 @@
-// Local types
-export interface MemoryItemActionDetail {
-  storagePath: string;
-  displayPath?: string;
-}
+// Local imports - shared schemas
+import type { MemoryItemActionDetail } from '@shared/schemas';
 
 function createEvent<T>(type: string, detail: T): CustomEvent<T> {
   return new CustomEvent(type, { detail, bubbles: true, composed: true });
@@ -17,4 +14,4 @@ export const MemoryViewEvents = {
     createEvent('memory-open-item', detail),
   deleteItem: (detail: MemoryItemActionDetail) =>
     createEvent('memory-delete-item', detail),
-};
+} as const;

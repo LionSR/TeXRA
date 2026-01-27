@@ -6,6 +6,8 @@
 
 // Local imports - shared schemas
 import type {
+  ActionDetail,
+  AgentChangeDetail,
   BaseFileChangeDetail,
   BannerActionDetail,
   CheckboxChangeDetail,
@@ -15,12 +17,15 @@ import type {
   FileSelectChangeDetail,
   FocusInstructionDetail,
   InstallGuideDetail,
+  InstructionChangeDetail,
   LatexDiffsActionDetail,
   LatexDiffsToggleDetail,
+  ModelChangeDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
   ReorderFilesDetail,
   RemoveFileDetail,
+  SessionTypeChangeDetail,
 } from '@shared/schemas';
 
 // =============================================================================
@@ -109,4 +114,27 @@ export const MainViewEvents = {
 
   latexDiffsAction: (detail: LatexDiffsActionDetail) =>
     createEvent('latexdiffs-action', detail),
+
+  // InstructionPanel events
+  sessionTypeChange: (detail: SessionTypeChangeDetail) =>
+    createEvent('session-type-change', detail),
+
+  agentChange: (detail: AgentChangeDetail) =>
+    createEvent('agent-change', detail),
+
+  modelChange: (detail: ModelChangeDetail) =>
+    createEvent('model-change', detail),
+
+  instructionInput: (detail: InstructionChangeDetail) =>
+    createEvent('instruction-input', detail),
+
+  panelAction: (detail: ActionDetail) => createEvent('panel-action', detail),
+
+  execute: () => createEvent('execute', {}),
+
+  agentSettings: () => createEvent('agent-settings', {}),
+
+  modelSettings: () => createEvent('model-settings', {}),
+
+  instructionPaste: () => createEvent('instruction-paste', {}),
 } as const;

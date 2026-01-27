@@ -21,8 +21,4 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       ),
     };
   }
-
-  protected getViewPath(): string {
-    return 'progressView';
-  }
 }

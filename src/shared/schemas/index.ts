@@ -31,6 +31,7 @@ export * from './mainViewEvents';
 export * from './progressViewMessages';
 export * from './progressViewInboundMessages';
 export * from './progressViewData';
+export * from './mainViewInboundMessages';
 export * from './memoryViewMessages';
 export * from './historyViewMessages';
 export * from './profileViewMessages';

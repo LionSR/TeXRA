@@ -37,6 +37,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { isPlainObject } from '@shared/utils';
 import { getConfig } from '@utils/config';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
@@ -524,9 +525,6 @@ export class ProgressViewState {
   private extractTaskStateEntries(
     raw: Record<string, unknown>,
   ): [string, unknown][] {
-    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
-      v !== null && typeof v === 'object' && !Array.isArray(v);
-
     const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
     if (legacyBuckets.length > 0) {
       return legacyBuckets.flatMap((bucket) =>

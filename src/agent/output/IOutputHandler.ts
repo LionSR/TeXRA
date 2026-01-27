@@ -1,15 +1,15 @@
 // Local imports - agent
 import type { AgentLogStage } from '@logger/AgentLogger';
-import type { FileLocation } from '@utils/files';
-import type { StorageKey } from '@shared/schemas';
-
-// Local file imports
-import type { LatexDiffManager } from './LatexDiffManager';
 import type {
+  FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
   RoundOutput,
+  StorageKey,
 } from '@shared/schemas';
+
+// Local file imports
+import type { LatexDiffManager } from './LatexDiffManager';
 import type { RoundFileMapping } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
