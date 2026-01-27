@@ -63,9 +63,10 @@ export type AgentProposalActionMessage = z.infer<
 >;
 
 /** Workflow agent proposal - includes file fields for document processing */
-export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend({
+export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.merge(
+  WorkflowSpecificFieldsSchema,
+).extend({
   agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
-  ...WorkflowSpecificFieldsSchema.shape,
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 
@@ -87,13 +88,13 @@ const ProposalPermissionBaseSchema = z.object({
 });
 
 export const WorkflowAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
+  ProposalPermissionBaseSchema.merge(WorkflowAgentProposalSchema);
 export type WorkflowAgentProposalPermission = z.infer<
   typeof WorkflowAgentProposalPermissionSchema
 >;
 
 export const ToolUseAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
+  ProposalPermissionBaseSchema.merge(ToolUseAgentProposalSchema);
 export type ToolUseAgentProposalPermission = z.infer<
   typeof ToolUseAgentProposalPermissionSchema
 >;

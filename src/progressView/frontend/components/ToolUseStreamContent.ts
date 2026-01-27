@@ -44,6 +44,9 @@ import {
   type StreamContextValue,
 } from '../contexts/streamContexts';
 
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
 // Local imports - progress view store (type-only)
 import type { ToolUseStreamState } from '../store';
 
@@ -173,11 +176,6 @@ export class ToolUseStreamContent extends LitElement {
    * Dispatches event to reset the shouldFocusFollowUp state.
    */
   private handleFocusComplete(): void {
-    this.dispatchEvent(
-      new CustomEvent('followup-focus-complete', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }
 }

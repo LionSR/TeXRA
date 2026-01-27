@@ -1,6 +1,4 @@
-function createEvent<T>(type: string, detail: T): CustomEvent<T> {
-  return new CustomEvent(type, { detail, bubbles: true, composed: true });
-}
+import { createEvent } from '@shared/utils/events';
 
 export const ProfileViewEvents = {
   signIn: () => createEvent('profile-sign-in', undefined),

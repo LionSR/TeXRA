@@ -1,8 +1,8 @@
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 import { withEventErrorHandling } from './errorHandling';
 import {

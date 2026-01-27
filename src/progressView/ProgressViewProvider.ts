@@ -6,9 +6,15 @@ import {
   BaseWebviewProvider,
   getSharedLocalResourceRoots,
 } from '@common/webview';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ApprovalRequestHandler, WebviewUpdater } from '@progressView/managers';
+import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
+import { ProgressEventHandler } from './events/ProgressEventHandler';
+import { ProgressViewContentProvider } from './ProgressViewContentProvider';
+import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+import { ProgressViewState } from './state/ProgressViewState';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -17,12 +23,6 @@ import type {
   StreamTabId,
   ToolEditPermission,
 } from '@shared/schemas';
-import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
-
-import { ProgressEventHandler } from './events/ProgressEventHandler';
-import { ProgressViewContentProvider } from './ProgressViewContentProvider';
-import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { ProgressViewState } from './state/ProgressViewState';
 
 /**
  * Orchestrates the progress view webview (sidebar and panel).

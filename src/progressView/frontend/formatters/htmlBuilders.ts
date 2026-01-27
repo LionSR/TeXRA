@@ -11,6 +11,10 @@
 import hljs from '@shared/highlighting/hljs';
 
 // Local imports - Lit utilities
+
+// Local imports - shared utilities
+import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
+import { getBasename } from '@shared/utils/path';
 import {
   html,
   unsafeHTML,
@@ -20,12 +24,7 @@ import {
   type TemplateResult,
 } from './litTemplates';
 
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
-import { getBasename } from '@shared/utils/path';
-
 // Local imports - shared schemas
-import type { FileListEntry } from '@shared/schemas';
 
 // Local imports - formatter helpers
 import {
@@ -35,6 +34,7 @@ import {
 } from './constants';
 import { generateInlineDiff } from './wordDiff';
 import { registerCopyContent } from './copyContentStore';
+import type { FileListEntry } from '@shared/schemas';
 
 /** Build a tool-use section template. */
 export function buildToolUseSection(

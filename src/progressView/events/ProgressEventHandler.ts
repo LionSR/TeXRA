@@ -1,16 +1,5 @@
 import * as vscode from 'vscode';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
-import { WebviewUpdater } from '@progressView/managers';
-import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
-import {
-  ProgressViewState,
-  type ActiveStreamId,
-} from '@progressView/state/ProgressViewState';
 import {
   STREAM_STATUS,
   type StorageKey,
@@ -19,6 +8,17 @@ import {
   type TaskGroup,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { AgentLogger } from '@logger/AgentLogger';
+import { WebviewUpdater } from '@progressView/managers';
+import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
+import {
+  ProgressViewState,
+  type ActiveStreamId,
+} from '@progressView/state/ProgressViewState';
+import { bus } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import {
   canUpdateWebview,
