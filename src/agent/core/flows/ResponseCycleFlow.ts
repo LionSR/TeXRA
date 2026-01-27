@@ -21,6 +21,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { ProviderUsage } from '@agent/core/ResponseUsage';
 
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
@@ -376,7 +377,7 @@ interface ProcessResult {
   bestConnector?: string;
   thinkingContent?: string | null;
   useStreaming: boolean;
-  responseUsage: any;
+  responseUsage: ProviderUsage;
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
   responseTimeMs?: number;
