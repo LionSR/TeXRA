@@ -20,4 +20,3 @@ export const StorageKeySchema = z
   )
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
-

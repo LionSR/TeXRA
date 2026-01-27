@@ -151,7 +151,11 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
 
 @customElement('permission-card')
 export class PermissionCard extends LitElement {
-  static override styles = [designTokens, codiconIconClasses, permissionCardStyles];
+  static override styles = [
+    designTokens,
+    codiconIconClasses,
+    permissionCardStyles,
+  ];
 
   @property({ type: Object }) permission: PermissionState | null = null;
   @state() private showFeedback = false;

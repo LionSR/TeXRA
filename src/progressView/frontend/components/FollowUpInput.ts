@@ -15,7 +15,10 @@ import { live } from 'lit/directives/live.js';
 import { commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
-import { insertTextAtCursor, resolveTextareaTarget } from '@shared/utils/textarea';
+import {
+  insertTextAtCursor,
+  resolveTextareaTarget,
+} from '@shared/utils/textarea';
 import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
