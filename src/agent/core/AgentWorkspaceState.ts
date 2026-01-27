@@ -195,15 +195,15 @@ export const ReasoningCacheStateSchema = z.object({
 
 export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-export interface ServerToolContentState {
-  contentBlocks: ServerToolContentBlock[];
-  lastAssistantContent: unknown[];
-}
-
 export const ServerToolContentStateSchema = z.object({
   contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
   lastAssistantContent: z.array(z.unknown()).prefault(() => []),
 });
+
+/** Derived from ServerToolContentStateSchema - schema is single source of truth. */
+export type ServerToolContentState = z.output<
+  typeof ServerToolContentStateSchema
+>;
 
 export const TodoStateSnapshotSchema = z.object({
   todos: z.array(TodoItemSchema).prefault([]),

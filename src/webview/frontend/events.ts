@@ -27,15 +27,11 @@ import type {
   RemoveFileDetail,
   SessionTypeChangeDetail,
 } from '@shared/schemas';
+import { createEvent } from '@shared/utils/events';
 
 // =============================================================================
 // Event Creators - use these to dispatch typed events
 // =============================================================================
-
-/** Create a bubbling composed custom event with typed detail. */
-function createEvent<T>(type: string, detail: T): CustomEvent<T> {
-  return new CustomEvent(type, { detail, bubbles: true, composed: true });
-}
 
 /**
  * MainView event creators.

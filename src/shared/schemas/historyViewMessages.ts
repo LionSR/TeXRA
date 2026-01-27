@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 
+import { AgentCategorySchema } from './agent';
+
 // ============================================================
 // Data schemas
 // ============================================================
@@ -16,7 +18,7 @@ const AgentConfigSummarySchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
-  agentCategory: z.enum(['workflow', 'toolUse']).optional(),
+  agentCategory: AgentCategorySchema.optional(),
   inputFile: z.string().optional(),
   inputFiles: z.array(z.string()).optional(),
   mediaFile: z.string().nullish(),

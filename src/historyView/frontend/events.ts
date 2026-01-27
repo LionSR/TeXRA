@@ -1,6 +1,4 @@
-function createEvent<T>(type: string, detail: T): CustomEvent<T> {
-  return new CustomEvent(type, { detail, bubbles: true, composed: true });
-}
+import { createEvent } from '@shared/utils/events';
 
 export const HistoryViewEvents = {
   searchChange: (detail: { term: string }) =>
@@ -14,4 +12,7 @@ export const HistoryViewEvents = {
   clearHistory: () => createEvent('history-clear', undefined),
   matchCount: (detail: { display: string }) =>
     createEvent('history-match-count', detail),
+  searchClearComplete: () => createEvent('search-clear-complete', undefined),
+  searchNavigateComplete: () =>
+    createEvent('search-navigate-complete', undefined),
 } as const;

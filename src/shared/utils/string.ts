@@ -9,10 +9,6 @@ export function isPlainObject(
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function uncapitalize(str: string): string {
-  return str.charAt(0).toLowerCase() + str.slice(1);
-}
-
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
