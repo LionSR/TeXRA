@@ -12,8 +12,6 @@ export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
-  type RemoteVisibility,
-  type AgentOptionsDataPayload,
   // Core functions
   loadAgents,
   ensureAgentsLoaded,
