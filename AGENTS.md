@@ -20,6 +20,32 @@ When updating CHANGELOG.md:
    - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 3. Commit only when `npm run lint` completes without errors.
 
+### Build systems: Vite vs Webpack
+
+The project has two build systems with different trade-offs:
+
+| Build                             | Type checking | Speed          | Use case        |
+| --------------------------------- | ------------- | -------------- | --------------- |
+| **Vite/esbuild** (`compile:fast`) | No            | Fast (10-100x) | Quick iteration |
+| **Webpack** (`compile`)           | Yes           | Slow           | Full validation |
+
+**Why Vite doesn't catch type errors**: Vite uses esbuild for TypeScript transpilation, which only strips types without checking them. It treats TypeScript as "JavaScript with type annotations to remove."
+
+**Safe build scripts** run `tsc --noEmit` before building to catch type errors:
+
+| Script                 | Description              |
+| ---------------------- | ------------------------ |
+| `npm run typecheck`    | Standalone type checking |
+| `npm run compile:safe` | typecheck + compile:fast |
+| `npm run package:safe` | typecheck + package:fast |
+| `npm run build:safe`   | typecheck + build:fast   |
+
+**Recommended workflow**:
+
+- Use `compile:fast` during development for speed
+- Use `compile:safe` before committing to catch type errors
+- CI should always run `typecheck` or use safe variants
+
 ## Commit messages
 
 - Use the [Conventional Commits](https://www.conventionalcommits.org) style such as `fix:`, `feat:`, or `docs:`.

@@ -7,17 +7,6 @@ type FormatOptions = {
   defaultOpen?: boolean;
 };
 
-/** Apply open/closed state to a details element. */
-export function applyOpenState(
-  element: HTMLElement,
-  shouldOpen?: boolean,
-): void {
-  if (element instanceof HTMLDetailsElement && shouldOpen !== undefined) {
-    element.open = shouldOpen;
-    // Note: Toggle icon rotation is handled by CSS via details[open] selector
-  }
-}
-
 /** Safely execute a formatting function with error handling. */
 export function safeFormat<T>(
   formatter: () => T,

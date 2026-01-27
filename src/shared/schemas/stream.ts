@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema } from './identifiers';
 
@@ -26,10 +24,7 @@ export const StreamStatusSchema = z.enum([
 ]);
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
-/**
- * Task group status - subset of StreamStatus used for task groups.
- * Single source of truth for TaskGroup.status.
- */
+/** Subset of StreamStatus used for task groups */
 export const TaskGroupStatusSchema = z.enum([
   STREAM_STATUS.RUNNING,
   STREAM_STATUS.ERROR,
@@ -37,10 +32,6 @@ export const TaskGroupStatusSchema = z.enum([
   STREAM_STATUS.READY,
 ]);
 export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
-
-// ============================================================================
-// Execution Status - Flow-Level Completion Status
-// ============================================================================
 
 export const EXECUTION_STATUS = {
   COMPLETED: 'completed',
@@ -54,10 +45,6 @@ export const ExecutionStatusSchema = z.enum([
   EXECUTION_STATUS.ERROR,
 ]);
 export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
-
-// ============================================================================
-// Progress view stream metadata
-// ============================================================================
 
 export const StreamTabInfoSchema = z.object({
   name: z.string(),
@@ -83,7 +70,6 @@ export type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
 export const InstructionUpdateSchema = z.object({
   text: z.string(),
   metadata: InstructionMetadataSchema.optional(),
-  /** Timestamp when the instruction was submitted (epoch milliseconds) */
   timestamp: z.number().optional(),
 });
 export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;

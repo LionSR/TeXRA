@@ -63,12 +63,12 @@ export class RunSelector extends LitElement {
     `;
   }
 
-  /** Handle select change - arrow function for correct `this` binding in Lit */
-  private handleChange = (event: Event): void => {
+  /** Handle select change from the run selector. */
+  private handleChange(event: Event): void {
     const target = event.target as HTMLSelectElement | null;
     const runId = target?.value ?? '';
     this.dispatchEvent(ProgressEvents.runSelected({ runId: runId || null }));
-  };
+  }
 
   private formatRunLabel(run: {
     id: string;

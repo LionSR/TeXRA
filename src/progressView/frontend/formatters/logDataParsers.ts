@@ -11,9 +11,8 @@
 import yaml from 'yaml';
 
 // Local imports - shared schemas
-import { ToolUseLogSchema } from '@shared/schemas';
+import { ToolUseLogSchema, type NormalizedToolUse } from '@shared/schemas';
 import { isPlainObject } from '@shared/utils/string';
-import type { NormalizedToolUse } from '@shared/schemas';
 
 // Local imports - shared utilities
 
@@ -81,35 +80,39 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     return null;
   }
 
-  // Need to access the raw object for additional fields
-  if (!isPlainObject(data)) {
-    return null;
-  }
+  // Use validated data from schema
+  const validated = parseResult.data;
 
-  const structured = data as Record<string, unknown>;
-  const nested = isPlainObject(structured.output) ? structured.output : {};
+  // Extract nested fields from output (may contain summary, error, etc.)
+  const nested = isPlainObject(validated.output) ? validated.output : {};
 
-  const summaryText = firstTrimmed(structured.summary, nested.summary);
-  const errorText = firstTrimmed(structured.error, nested.error);
+  const summaryText = firstTrimmed(validated.summary, nested.summary);
+  const errorText = firstTrimmed(validated.error, nested.error);
   const userInstructionText = firstTrimmed(
-    structured.userInstruction,
+    validated.userInstruction,
     nested.userInstruction,
   );
 
-  const outputContent = extractOutputContent(structured.output);
+  const outputContent = extractOutputContent(validated.output);
   const outputText = formatOutputText(outputContent);
 
-  const toolName = trimmedOrNull(structured.toolName ?? structured.tool) ?? '';
+  const toolName = trimmedOrNull(validated.toolName ?? validated.tool) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
 
+  // Build parsed record for fallback rendering
+  // Use original data (not validated) to preserve unknown fields that Zod strips
+  const parsed: Record<string, unknown> = isPlainObject(data)
+    ? { ...data }
+    : { ...validated };
+
   return {
-    parsed: structured,
+    parsed,
     toolName,
     errorText,
     outputText,
     userInstructionText,
-    input: structured.input,
-    isError: Boolean(structured.isError || nested.isError || errorText),
+    input: validated.input,
+    isError: Boolean(validated.isError || nested.isError || errorText),
     isUserFeedback,
     headerSummary: summaryText || (isUserFeedback ? '' : errorText),
   };

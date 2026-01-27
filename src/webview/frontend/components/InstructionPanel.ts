@@ -6,27 +6,29 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { LitElement, html, css, type TemplateResult } from 'lit';
+import { consume } from '@lit/context';
+import { customElement, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared styles
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
-import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
 import {
   renderAgentOptions,
   renderModelOptions,
-  renderPlaceholder,
 } from '@shared/utils/selectTemplates';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
 import { handleImagePaste } from '../pasteHandler';
 import { SESSION_TYPES, type SessionType } from '../constants';
+import {
+  sessionContext,
+  type SessionContextValue,
+} from '../contexts/mainViewContexts';
 
 // Local imports - shared schemas
 import type {
@@ -35,8 +37,6 @@ import type {
   InstructionChangeDetail,
   ModelChangeDetail,
   SessionTypeChangeDetail,
-  AgentOptionData,
-  ModelOptionData,
 } from '@shared/schemas';
 
 @customElement('instruction-panel')
@@ -51,6 +51,7 @@ export class InstructionPanel extends LitElement {
       .instruction-box {
         display: flex;
         flex-direction: column;
+        position: relative;
         padding: var(--spacing-medium);
         background-color: var(--background-color);
         border-radius: var(--border-radius);
@@ -63,13 +64,15 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
-        height: var(--height-control);
+        line-height: 1.5;
+        flex-wrap: wrap;
       }
 
       .instruction-header-leading {
         display: flex;
         gap: var(--spacing-medium);
         align-items: center;
+        flex-wrap: wrap;
       }
 
       .instruction-header-actions {
@@ -94,8 +97,14 @@ export class InstructionPanel extends LitElement {
 
       vscode-textarea#instruction {
         width: 100%;
+        margin: var(--spacing-medium) 0;
         font-family: var(--vscode-editor-font-family);
         font-size: var(--font-size);
+      }
+
+      vscode-textarea#instruction::part(control) {
+        max-height: var(--height-xlarge);
+        transition: height 0.1s ease-out;
       }
 
       .instruction-controls {
@@ -103,33 +112,63 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        flex-wrap: wrap;
+        width: 100%;
       }
 
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
-        flex: 1;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
       }
 
-      /* Select styles from shared selectStyles module */
-      /* Component-specific overrides only */
-      .agent-select-group {
-        flex: 1;
-        min-width: 0;
+      .model-selection-footer .select-group,
+      .model-selection-footer .agent-select-group {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
       }
 
+      .model-selection-footer .codicon {
+        display: flex;
+        align-items: center;
+        line-height: 1;
+      }
+
+      .agent-select-controls,
+      .agent-select-dropdowns {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
+        min-width: 10rem;
+        max-width: 14rem;
+        position: relative;
+      }
+
+      .agent-select-dropdowns select,
+      .agent-select-dropdowns vscode-single-select,
       .agent-select {
         width: 100%;
       }
 
+      .model-selection-footer .select-group select,
+      .model-selection-footer .select-group vscode-single-select {
+        min-width: 6rem;
+        max-width: 10rem;
+      }
+
       .agent-select--hidden {
-        display: none;
+        position: absolute;
+        inset: 0;
+        visibility: hidden;
+        pointer-events: none;
       }
 
       .agent-select--active {
-        display: block;
+        position: relative;
       }
 
       /* Dropdowns in footer open upward */
@@ -155,50 +194,8 @@ export class InstructionPanel extends LitElement {
     `,
   ];
 
-  /** Current session type */
-  @property({ type: String }) sessionType: SessionType = SESSION_TYPES.TOOL_USE;
-
-  /** Current instruction text */
-  @property({ type: String }) instruction = '';
-
-  /** Instruction placeholder */
-  @property({ type: String }) placeholder = '';
-
-  /** Current workflow agent */
-  @property({ type: String }) workflowAgent = '';
-
-  /** Current tool-use agent */
-  @property({ type: String }) toolUseAgent = '';
-
-  /** Current model */
-  @property({ type: String }) model = '';
-
-  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
-  @property({ type: String }) workflowAgentOptionsHtml = '';
-
-  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
-  @property({ type: String }) toolUseAgentOptionsHtml = '';
-
-  /** @deprecated Use modelOptions for Lit-native rendering */
-  @property({ type: String }) modelOptionsHtml = '';
-
-  /** Typed workflow agent options for Lit-native rendering */
-  @property({ type: Array }) workflowAgentOptions: AgentOptionData[] = [];
-
-  /** Typed tool-use agent options for Lit-native rendering */
-  @property({ type: Array }) toolUseAgentOptions: AgentOptionData[] = [];
-
-  /** Typed model options for Lit-native rendering */
-  @property({ type: Array }) modelOptions: ModelOptionData[] = [];
-
-  /** Whether recording is active */
-  @property({ type: Boolean }) isRecording = false;
-
-  /** Whether polishing is active */
-  @property({ type: Boolean }) isPolishing = false;
-
-  /** Whether debug mode is enabled */
-  @property({ type: Boolean }) debugMode = false;
+  @consume({ context: sessionContext, subscribe: true })
+  private sessionData?: SessionContextValue;
 
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
@@ -286,70 +283,47 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
-  /**
-   * Render workflow agent options - prefer typed data, fall back to HTML string.
-   */
   private renderWorkflowAgentOptions(): TemplateResult {
-    if (this.workflowAgentOptions.length > 0) {
-      return renderAgentOptions(
-        this.workflowAgentOptions,
-        this.workflowAgent,
-        'Select agent',
-      );
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
     }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.workflowAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
-      this.workflowAgent,
+    return renderAgentOptions(
+      session.workflowAgentOptions,
+      session.workflowAgent,
+      'Select agent',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
-  /**
-   * Render tool-use agent options - prefer typed data, fall back to HTML string.
-   */
   private renderToolUseAgentOptions(): TemplateResult {
-    if (this.toolUseAgentOptions.length > 0) {
-      return renderAgentOptions(
-        this.toolUseAgentOptions,
-        this.toolUseAgent,
-        'Select agent',
-      );
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
     }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.toolUseAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
-      this.toolUseAgent,
+    return renderAgentOptions(
+      session.toolUseAgentOptions,
+      session.toolUseAgent,
+      'Select agent',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
-  /**
-   * Render model options - prefer typed data, fall back to HTML string.
-   */
   private renderModelOptionsTemplate(): TemplateResult {
-    if (this.modelOptions.length > 0) {
-      return renderModelOptions(this.modelOptions, this.model, 'Select model');
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
     }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        this.modelOptionsHtml,
-        '<vscode-option value="">Select model</vscode-option>',
-      ),
-      this.model,
+    return renderModelOptions(
+      session.modelOptions,
+      session.model,
+      'Select model',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
   override render(): TemplateResult {
-
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
+    }
     return html`
       <div class="instruction-box">
         <div class="instruction-header">
@@ -358,13 +332,13 @@ export class InstructionPanel extends LitElement {
               <input
                 type="hidden"
                 id="sessionType"
-                .value=${this.sessionType}
+                .value=${session.sessionType}
               />
               <vscode-radio-group
                 id="sessionTypeToggle"
                 aria-label="Choose the session type"
                 orientation="horizontal"
-                .value=${this.sessionType}
+                .value=${session.sessionType}
                 @change=${(event: Event) => {
                   const target = event.target as HTMLInputElement | null;
                   const nextValue =
@@ -377,7 +351,7 @@ export class InstructionPanel extends LitElement {
                 <vscode-radio
                   value="toolUse"
                   data-session-type="toolUse"
-                  ?checked=${this.sessionType === SESSION_TYPES.TOOL_USE}
+                  ?checked=${session.sessionType === SESSION_TYPES.TOOL_USE}
                   title="Chat agents execute commands and scripts"
                 >
                   Chat
@@ -385,7 +359,7 @@ export class InstructionPanel extends LitElement {
                 <vscode-radio
                   value="workflow"
                   data-session-type="workflow"
-                  ?checked=${this.sessionType === SESSION_TYPES.WORKFLOW}
+                  ?checked=${session.sessionType === SESSION_TYPES.WORKFLOW}
                   title="Workflow agents automate document editing tasks"
                 >
                   Workflow
@@ -399,7 +373,7 @@ export class InstructionPanel extends LitElement {
               icon="archive"
               label="Pack output to History"
               title="Pack the output for this agent into the History folder"
-              style=${styleMap({ display: this.debugMode ? '' : 'none' })}
+              style=${styleMap({ display: session.debugMode ? '' : 'none' })}
               @click=${() => this.handleAction('pack')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
@@ -407,7 +381,7 @@ export class InstructionPanel extends LitElement {
               icon="trash"
               label="Clean output"
               title="Clean the output for this agent"
-              style=${styleMap({ display: this.debugMode ? '' : 'none' })}
+              style=${styleMap({ display: session.debugMode ? '' : 'none' })}
               @click=${() => this.handleAction('clean')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
@@ -420,16 +394,16 @@ export class InstructionPanel extends LitElement {
             <vscode-progress-ring
               id="polishProgressContainer"
               style=${styleMap({
-                display: this.isPolishing ? 'block' : 'none',
-                ...(this.isPolishing && { width: '16px', height: '16px' }),
+                display: session.isPolishing ? 'block' : 'none',
+                ...(session.isPolishing && { width: '16px', height: '16px' }),
               })}
             ></vscode-progress-ring>
             <vscode-toolbar-button
               id="recordInstructionButton"
-              icon=${this.isRecording ? 'stop-circle' : 'mic'}
-              class=${this.isRecording ? 'recording' : ''}
+              icon=${session.isRecording ? 'stop-circle' : 'mic'}
+              class=${session.isRecording ? 'recording' : ''}
               label="Record instruction"
-              title=${this.isRecording
+              title=${session.isRecording
                 ? 'Stop recording'
                 : 'Record instruction with microphone'}
               @click=${() => this.handleAction('record')}
@@ -447,8 +421,8 @@ export class InstructionPanel extends LitElement {
           id="instruction"
           rows="10"
           resize="none"
-          placeholder=${this.placeholder}
-          .value=${this.instruction}
+          placeholder=${session.placeholder}
+          .value=${session.instruction}
           @input=${(event: Event) => {
             const target = event.target as HTMLTextAreaElement;
             this.handleInstructionInput(target.value);
@@ -471,20 +445,20 @@ export class InstructionPanel extends LitElement {
                     class=${classMap({
                       'agent-select': true,
                       'agent-select--hidden':
-                        this.sessionType !== SESSION_TYPES.WORKFLOW,
+                        session.sessionType !== SESSION_TYPES.WORKFLOW,
                       'agent-select--active':
-                        this.sessionType === SESSION_TYPES.WORKFLOW,
+                        session.sessionType === SESSION_TYPES.WORKFLOW,
                     })}
                     data-session-type="workflow"
                     aria-label="Workflow agent"
-                    tabindex=${this.sessionType === SESSION_TYPES.WORKFLOW
+                    tabindex=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 0
                       : -1}
-                    aria-hidden=${this.sessionType === SESSION_TYPES.WORKFLOW
+                    aria-hidden=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 'false'
                       : 'true'}
                     position="above"
-                    .value=${this.workflowAgent}
+                    .value=${session.workflowAgent}
                     @focus=${() =>
                       this.handleFocus(
                         'agentPicker',
@@ -505,14 +479,14 @@ export class InstructionPanel extends LitElement {
                     class=${classMap({
                       'agent-select': true,
                       'agent-select--hidden':
-                        this.sessionType !== SESSION_TYPES.TOOL_USE,
+                        session.sessionType !== SESSION_TYPES.TOOL_USE,
                       'agent-select--active':
-                        this.sessionType === SESSION_TYPES.TOOL_USE,
+                        session.sessionType === SESSION_TYPES.TOOL_USE,
                     })}
                     data-session-type="toolUse"
                     aria-label="Tool-use agent"
                     position="above"
-                    .value=${this.toolUseAgent}
+                    .value=${session.toolUseAgent}
                     @focus=${() =>
                       this.handleFocus(
                         'agentPicker',
@@ -542,7 +516,7 @@ export class InstructionPanel extends LitElement {
                 id="model"
                 position="above"
                 aria-label="Model"
-                .value=${this.model}
+                .value=${session.model}
                 @focus=${() =>
                   this.handleFocus(
                     'modelPicker',

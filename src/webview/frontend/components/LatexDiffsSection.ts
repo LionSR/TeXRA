@@ -11,130 +11,73 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
-// Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
-
 // Local imports - main view
 import { MainViewEvents } from '../events';
+import {
+  fileSelectLayoutStyles,
+  toggleStyles,
+} from '../styles/fileSelectStyles';
 
 @customElement('latexdiffs-section')
 export class LatexDiffsSection extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
+  static override styles = [
+    fileSelectLayoutStyles,
+    toggleStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .latexdiffs-section {
-      margin-top: auto;
-      padding: var(--spacing-large) 0 0;
-      background-color: transparent;
-      border: none;
-      margin-bottom: var(--spacing-large);
-    }
+      .latexdiffs-section {
+        margin-top: auto;
+        padding: var(--spacing-large) 0 0;
+        background-color: transparent;
+        border: none;
+        margin-bottom: var(--spacing-large);
+      }
 
-    .latexdiffs-section[data-expanded='true'] {
-      background-color: var(--background-color);
-      border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
-      border-radius: var(--border-radius);
-      padding: var(--spacing-medium);
-      overflow: visible;
-    }
+      .latexdiffs-section[data-expanded='true'] {
+        background-color: var(--background-color);
+        border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+        border-radius: var(--border-radius);
+        padding: var(--spacing-medium);
+        overflow: visible;
+      }
 
-    .file-select {
-      margin-bottom: var(--spacing-large);
-    }
+      .latexdiffs-section .file-select-header {
+        margin-bottom: 0;
+      }
 
-    .file-select-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: var(--spacing-small);
-      flex-wrap: nowrap;
-      line-height: 1.5;
-      gap: var(--spacing-small);
-    }
+      .latexdiffs-section vscode-toolbar-button {
+        width: var(--height-control);
+        height: var(--height-control);
+        min-width: var(--height-control);
+        min-height: var(--height-control);
+      }
 
-    .latexdiffs-section .file-select-header {
-      margin-bottom: 0;
-    }
+      .latexdiffs-section[data-expanded='true'] .optional-label,
+      .latexdiffs-section[data-expanded='true'] .toggle-icon {
+        color: var(--vscode-foreground);
+      }
 
-    .file-select-label-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-small);
-      flex-wrap: nowrap;
-      flex: 1;
-      min-width: 0;
-      min-height: var(--height-control);
-    }
+      #latexdiffsContent {
+        overflow: visible;
+      }
 
-    .file-select-label-group label {
-      margin-right: var(--spacing-small);
-    }
+      #commit::part(listbox) {
+        max-height: var(--height-large);
+      }
 
-    .file-select-actions,
-    vscode-toolbar-container.file-select-actions {
-      flex-direction: column !important;
-      flex-wrap: nowrap;
-      margin-left: auto;
-    }
-
-    .file-select-actions vscode-toolbar-button,
-    .latexdiffs-section vscode-toolbar-button {
-      width: var(--height-control);
-      height: var(--height-control);
-      min-width: var(--height-control);
-      min-height: var(--height-control);
-    }
-
-    .file-select vscode-single-select {
-      width: 100%;
-    }
-
-    .optional-label {
-      color: var(--text-color);
-      font-weight: normal;
-      font-size: var(--font-size);
-      white-space: nowrap;
-      min-width: calc(var(--width-button-min) * 2);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .toggle-icon {
-      cursor: pointer;
-      user-select: none;
-      margin: 0;
-      position: relative;
-      padding: 0 var(--spacing-tiny);
-      color: var(--text-color);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .latexdiffs-section[data-expanded='true'] .optional-label,
-    .latexdiffs-section[data-expanded='true'] .toggle-icon {
-      color: var(--vscode-foreground);
-    }
-
-    #latexdiffsContent {
-      overflow: visible;
-    }
-
-    #commit::part(listbox) {
-      max-height: var(--height-large);
-    }
-
-    .instruction-controls {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: var(--spacing-small);
-      flex-wrap: wrap;
-      width: 100%;
-    }
-  `;
+      .instruction-controls {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: var(--spacing-small);
+        flex-wrap: wrap;
+        width: 100%;
+      }
+    `,
+  ];
 
   /** Whether the section is expanded */
   @property({ type: Boolean }) visible = false;
@@ -349,10 +292,7 @@ export class LatexDiffsSection extends LitElement {
                 this.handleEditedFileChange(target.value);
               }}
             >
-              ${this.renderFileOptions(
-                this.editedFileOptions,
-                this.editedFile,
-              )}
+              ${this.renderFileOptions(this.editedFileOptions, this.editedFile)}
             </vscode-single-select>
           </div>
           <div class="file-select">

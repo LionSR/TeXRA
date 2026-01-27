@@ -1,16 +1,16 @@
 /**
- * Memory view message schemas.
+ * Schema definitions for MemoryView messages.
+ *
+ * Outbound: Backend → Frontend (UPDATE_MEMORY, UPDATE_MEMORY_ENABLED)
+ * Inbound: Frontend → Backend (GET_MEMORY_DATA, OPEN_MEMORY_FILE, etc.)
  */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - webview commands
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
 
-// =============================================================================
-// Data Schemas
-// =============================================================================
+// ============================================================
+// Data schemas
+// ============================================================
 
 export const MemoryViewItemSchema = z.object({
   displayPath: z.string(),
@@ -22,9 +22,9 @@ export const MemoryViewItemSchema = z.object({
 });
 export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
 
-// =============================================================================
-// Backend → Frontend Messages
-// =============================================================================
+// ============================================================
+// Outbound message schemas (backend → frontend)
+// ============================================================
 
 export const UpdateMemoryMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY),
@@ -39,3 +39,116 @@ export const UpdateMemoryEnabledMessageSchema = z.object({
 export type UpdateMemoryEnabledMessage = z.infer<
   typeof UpdateMemoryEnabledMessageSchema
 >;
+
+// ============================================================
+// Inbound message schemas (frontend → backend)
+// ============================================================
+
+/** Memory path message for file operations (reusable field schema) */
+export const MemoryPathMessageSchema = z.object({
+  storagePath: z.string().min(1),
+});
+export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
+
+/** Memory delete message with display path for confirmation (reusable field schema) */
+export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
+  displayPath: z.string().min(1),
+});
+export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;
+
+/** Memory enabled toggle message (reusable field schema) */
+export const MemoryEnabledMessageSchema = z.object({
+  enabled: z.boolean(),
+});
+export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
+
+// Inbound messages with command literals
+const GetMemoryDataMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA),
+});
+
+const OpenMemoryFileMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE),
+  storagePath: z.string().min(1),
+});
+
+const OpenMemoryFolderMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
+});
+
+const DeleteMemoryMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
+  storagePath: z.string().min(1),
+  displayPath: z.string().min(1),
+});
+
+const GetMemoryEnabledMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED),
+});
+
+const SetMemoryEnabledMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
+  enabled: z.boolean(),
+});
+
+// ============================================================
+// Discriminated union of all inbound messages
+// ============================================================
+
+export const MemoryViewInboundMessageSchema = z.discriminatedUnion('command', [
+  GetMemoryDataMessageSchema,
+  OpenMemoryFileMessageSchema,
+  OpenMemoryFolderMessageSchema,
+  DeleteMemoryMessageSchema,
+  GetMemoryEnabledMessageSchema,
+  SetMemoryEnabledMessageSchema,
+]);
+
+export type MemoryViewInboundMessage = z.infer<
+  typeof MemoryViewInboundMessageSchema
+>;
+
+// ============================================================
+// Type-safe handler registry
+// ============================================================
+
+type TypedInboundHandler<T extends MemoryViewInboundMessage> = (
+  data: T,
+) => Promise<void> | void;
+
+export type MemoryViewInboundHandlerRegistry = {
+  [K in MemoryViewInboundMessage['command']]?: TypedInboundHandler<
+    Extract<MemoryViewInboundMessage, { command: K }>
+  >;
+};
+
+// ============================================================
+// Dispatcher function
+// ============================================================
+
+export function dispatchMemoryViewInbound(
+  raw: unknown,
+  handlers: MemoryViewInboundHandlerRegistry,
+  onError?: (error: unknown) => void,
+): boolean {
+  const result = MemoryViewInboundMessageSchema.safeParse(raw);
+  if (!result.success) {
+    onError?.(result.error);
+    return false;
+  }
+
+  const message = result.data;
+  const handler = handlers[message.command] as
+    | TypedInboundHandler<typeof message>
+    | undefined;
+
+  if (handler) {
+    const maybePromise = handler(message);
+    if (maybePromise instanceof Promise) {
+      maybePromise.catch((error) => onError?.(error));
+    }
+    return true;
+  }
+
+  return false;
+}
