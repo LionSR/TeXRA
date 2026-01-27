@@ -120,7 +120,8 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       include_reasoning?: boolean;
       stop?: string[];
     } = {
-      model: this.config.openrouterFullName, // Use OpenRouter model name
+      // OpenRouter model name is required for this handler
+      model: this.config.openrouterFullName ?? this.config.name,
       messages,
       max_tokens: this.config.maxOutputTokens,
       temperature,
@@ -193,7 +194,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       return response;
     }
 
-    return client.chat.completions.create(kwargs, { signal });
+    return client.chat.completions.create(kwargs, {
+      signal,
+    }) as Promise<ChatCompletion>;
   }
 
   /**
