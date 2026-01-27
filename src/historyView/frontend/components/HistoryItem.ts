@@ -50,14 +50,14 @@ export class HistoryItem extends LitElement {
   @queryAll('mark')
   private markElements!: HTMLElement[];
 
-  private handleAction = (action: string): void => {
+  private handleAction(action: string): void {
     if (!this.item) return;
     this.dispatchEvent(
       HistoryViewEvents.historyAction({ action, historyId: this.item.id }),
     );
-  };
+  }
 
-  private handleToggle = (event: CustomEvent<{ open?: boolean }>): void => {
+  private handleToggle(event: CustomEvent<{ open?: boolean }>): void {
     if (!this.item) return;
     const open = event.detail?.open ?? this.open;
     this.dispatchEvent(
@@ -66,7 +66,19 @@ export class HistoryItem extends LitElement {
         open: Boolean(open),
       }),
     );
-  };
+  }
+
+  private handleDeleteClick(): void {
+    this.handleAction('delete');
+  }
+
+  private handleRestoreClick(): void {
+    this.handleAction('restore');
+  }
+
+  private handleRerunClick(): void {
+    this.handleAction('rerun');
+  }
 
   /**
    * React to highlightedMatchIndex changes - apply current match attribute.
@@ -225,19 +237,19 @@ export class HistoryItem extends LitElement {
               icon="trash"
               label="Delete"
               title="Delete"
-              @click=${() => this.handleAction('delete')}
+              @click=${this.handleDeleteClick}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="reply"
               label="Restore"
               title="Restore"
-              @click=${() => this.handleAction('restore')}
+              @click=${this.handleRestoreClick}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="debug-rerun"
               label="Rerun"
               title="Rerun"
-              @click=${() => this.handleAction('rerun')}
+              @click=${this.handleRerunClick}
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>

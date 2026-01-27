@@ -30,9 +30,12 @@ export class AgentsTable extends LitElement {
 
   @property({ attribute: false }) agents: RemoteAgent[] = [];
 
-  private handleSelect = (agentName: string): void => {
+  private handleSelect(event: Event): void {
+    const target = event.currentTarget as HTMLElement | null;
+    const agentName = target?.dataset.agent;
+    if (!agentName) return;
     this.dispatchEvent(ProfileViewEvents.selectAgent({ agentName }));
-  };
+  }
 
   private renderAgentRow(agent: RemoteAgent): TemplateResult {
     const visibilityArray = Array.isArray(agent.visibility)
@@ -77,7 +80,8 @@ export class AgentsTable extends LitElement {
           <vscode-button
             class="select-btn"
             appearance="primary"
-            @click=${() => this.handleSelect(agent.name)}
+            data-agent=${agent.name}
+            @click=${this.handleSelect}
           >
             <span slot="start" class="codicon codicon-arrow-right"></span>
             Select

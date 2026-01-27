@@ -25,9 +25,9 @@ export class ProfileInfo extends LitElement {
   @property({ type: String }) accessExpiresAt: string | null = null;
   @property({ type: Boolean }) showSignOut = false;
 
-  private handleSignOut = (): void => {
+  private handleSignOut(): void {
     this.dispatchEvent(ProfileViewEvents.signOut());
-  };
+  }
 
   private formatExpiration(): string | null {
     if (!this.accessExpiresAt) return null;

@@ -119,27 +119,56 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
-        flex: 1;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
       }
 
-      /* Select styles from shared selectStyles module */
-      /* Component-specific overrides only */
-      .agent-select-group {
-        flex: 1;
-        min-width: 0;
+      .model-selection-footer .select-group,
+      .model-selection-footer .agent-select-group {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
       }
 
+      .model-selection-footer .codicon {
+        display: flex;
+        align-items: center;
+        line-height: 1;
+      }
+
+      .agent-select-controls,
+      .agent-select-dropdowns {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex: 0 1 auto;
+        min-width: 10rem;
+        max-width: 14rem;
+        position: relative;
+      }
+
+      .agent-select-dropdowns select,
+      .agent-select-dropdowns vscode-single-select,
       .agent-select {
         width: 100%;
       }
 
+      .model-selection-footer .select-group select,
+      .model-selection-footer .select-group vscode-single-select {
+        min-width: 6rem;
+        max-width: 10rem;
+      }
+
       .agent-select--hidden {
-        display: none;
+        position: absolute;
+        inset: 0;
+        visibility: hidden;
+        pointer-events: none;
       }
 
       .agent-select--active {
-        display: block;
+        position: relative;
       }
 
       /* Dropdowns in footer open upward */

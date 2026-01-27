@@ -63,18 +63,28 @@ export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
   return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
+function compareByAgent(a: StreamTabInfo, b: StreamTabInfo): number {
+  return (a.agent ?? '').localeCompare(b.agent ?? '');
+}
+
+function compareByInputFile(a: StreamTabInfo, b: StreamTabInfo): number {
+  return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
+}
+
+function compareByTime(a: StreamTabInfo, b: StreamTabInfo): number {
+  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
+  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
+  return bTime - aTime;
+}
+
 // Comparator functions for stream sorting - avoid creating functions on each sort call
 const streamComparators: Record<
   StreamSort,
   (a: StreamTabInfo, b: StreamTabInfo) => number
 > = {
-  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
-  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  time: (a, b) => {
-    const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
-    const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
-    return bTime - aTime;
-  },
+  agent: compareByAgent,
+  inputFile: compareByInputFile,
+  time: compareByTime,
 };
 
 /**
@@ -124,7 +134,7 @@ export function hasOutputFiles(
 ): boolean {
   if (!runFiles) return false;
   for (const key in runFiles) {
-    if (Object.prototype.hasOwnProperty.call(runFiles, key)) {
+    if (Object.hasOwn(runFiles, key)) {
       const files = runFiles[key];
       if (files && files.length > 0) return true;
     }

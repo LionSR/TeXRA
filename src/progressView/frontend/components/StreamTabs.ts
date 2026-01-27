@@ -31,8 +31,6 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-// Local imports - progress view utils
-
 /** Format status string for display (capitalize first letter) */
 function formatStatusLabel(status: string): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
@@ -40,7 +38,7 @@ function formatStatusLabel(status: string): string {
 
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
-  static styles = [
+  static override styles = [
     codiconIconClasses,
     statusIndicatorStyles,
     css`
@@ -214,7 +212,7 @@ export class StreamTabs extends LitElement {
   @property({ type: String }) filter: StreamFilter = 'all';
   @property({ type: String }) sort: StreamSort = 'time';
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="tabs">
         <div class="tabs-content">
@@ -351,7 +349,7 @@ export class StreamTabs extends LitElement {
     `;
   }
 
-  private handleTabClick(event: MouseEvent) {
+  private handleTabClick(event: MouseEvent): void {
     const target = event.target as Element | null;
     if (!target) return;
 
@@ -362,20 +360,25 @@ export class StreamTabs extends LitElement {
     const { stream: streamId, action } = actionElement.dataset;
     if (!streamId) return;
 
-    if (action === 'select') {
-      this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
-    } else if (action === 'delete') {
-      this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
+    switch (action) {
+      case 'select':
+        this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
+        break;
+      case 'delete':
+        this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
+        break;
+      default:
+        break;
     }
   }
 
-  private handleFilterChange(event: Event) {
+  private handleFilterChange(event: Event): void {
     const filter = getRadioValue<StreamFilter>(event);
     if (!filter) return;
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));
   }
 
-  private handleSortClick(event: MouseEvent) {
+  private handleSortClick(event: MouseEvent): void {
     const target = event.target as Element | null;
     if (!target) return;
 
@@ -388,7 +391,7 @@ export class StreamTabs extends LitElement {
     );
   }
 
-  private handleDeleteAll() {
+  private handleDeleteAll(): void {
     this.dispatchEvent(ProgressEvents.deleteAll());
   }
 
