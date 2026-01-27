@@ -169,7 +169,7 @@ export const historyViewStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
-  mark.current-match {
+  mark[data-current='true'] {
     background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
     outline: var(--border-thin) solid var(--vscode-focusBorder);
   }

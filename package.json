@@ -1726,6 +1726,8 @@
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.38.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
+    "@lit-labs/virtualizer": "^2.1.1",
+    "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@openrouter/sdk": "^0.4.0",
     "@supabase/supabase-js": "^2.91.1",

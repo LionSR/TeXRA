@@ -58,7 +58,7 @@ export class HistoryItem extends LitElement {
   };
 
   /**
-   * React to highlightedMatchIndex changes - apply current-match class.
+   * React to highlightedMatchIndex changes - apply current match attribute.
    * Uses direct DOM manipulation since mark.js creates marks dynamically.
    */
   protected override updated(): void {
@@ -74,12 +74,15 @@ export class HistoryItem extends LitElement {
       this.previousHighlightedIndex !== null &&
       marks[this.previousHighlightedIndex]
     ) {
-      marks[this.previousHighlightedIndex].classList.remove('current-match');
+      marks[this.previousHighlightedIndex].removeAttribute('data-current');
     }
 
     // Add current-match to new and scroll
-    if (this.highlightedMatchIndex !== null && marks[this.highlightedMatchIndex]) {
-      marks[this.highlightedMatchIndex].classList.add('current-match');
+    if (
+      this.highlightedMatchIndex !== null &&
+      marks[this.highlightedMatchIndex]
+    ) {
+      marks[this.highlightedMatchIndex].setAttribute('data-current', 'true');
       marks[this.highlightedMatchIndex].scrollIntoView({
         behavior: 'smooth',
         block: 'center',

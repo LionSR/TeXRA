@@ -70,7 +70,6 @@ export function formatBannerContent(
         iconClass: config.iconClass,
         label: config.labelText,
         copyButton: { title: config.copyTitle },
-        expanded: false,
       })}
       <div
         class="banner-content markdown-content log-entry-content ${config.contentClass}"
@@ -123,7 +122,6 @@ export function formatModelResponse({
           ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
           : undefined,
         copyButton: { title: 'Copy model output' },
-        expanded: true,
       })}
       <div
         class=${classMap({

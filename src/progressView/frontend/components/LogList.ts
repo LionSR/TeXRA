@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
 import './TaskGroupList';
@@ -21,8 +21,14 @@ import { scrollToBottom } from '@shared/utils/dom';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
+// Local imports - shared styles
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
 
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
@@ -34,11 +40,21 @@ type LogListState = {
 
 @customElement('log-list')
 export class LogList extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    logStyles,
+  ];
+
   // Reactive properties - passed from parent
   @property({ type: Array }) groups: TaskGroup[] = [];
   @property({ type: Array }) messages: LogMessageData[] = [];
   @property({ type: String }) activeRunId: string | null = null;
   @property({ type: Boolean }) isToolUse = false;
+
+  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
+  private logContainer?: HTMLElement;
 
   // Non-reactive state
   private stateManager: WebviewStateManager<LogListState>;
@@ -54,29 +70,18 @@ export class LogList extends LitElement {
     }
   }
 
-  protected override createRenderRoot(): HTMLElement {
-    // Use Light DOM for CSS compatibility with existing styles
-    return this;
-  }
-
   override connectedCallback(): void {
     super.connectedCallback();
     // Use component-level listeners instead of document-level
-    // Since LogList uses Light DOM, events bubble naturally to this element
+    // Events bubble to the host element for delegated handling
     // Note: Toggle icon rotation is handled by CSS via details[open] selector
-    this.addEventListener('click', this.handleClickEvent as EventListener);
-    this.addEventListener(
-      'file-click',
-      this.handleFileClickEvent as EventListener,
-    );
+    this.addEventListener('click', this.handleClickEvent);
+    this.addEventListener('file-click', this.handleFileClickEvent);
   }
 
   override disconnectedCallback(): void {
-    this.removeEventListener('click', this.handleClickEvent as EventListener);
-    this.removeEventListener(
-      'file-click',
-      this.handleFileClickEvent as EventListener,
-    );
+    this.removeEventListener('click', this.handleClickEvent);
+    this.removeEventListener('file-click', this.handleFileClickEvent);
     super.disconnectedCallback();
   }
 
@@ -94,9 +99,8 @@ export class LogList extends LitElement {
 
   override updated(): void {
     // Scroll to bottom after render
-    const container = this.querySelector(`#${ELEMENT_IDS.LOG_CONTENT}`);
-    if (container instanceof HTMLElement) {
-      scrollToBottom(container);
+    if (this.logContainer) {
+      scrollToBottom(this.logContainer);
     }
   }
 
@@ -115,7 +119,8 @@ export class LogList extends LitElement {
   }
 
   /** Handle click events for file links, copy buttons, etc. */
-  private handleClickEvent = async (event: MouseEvent): Promise<void> => {
+  private handleClickEvent = async (event: Event): Promise<void> => {
+    if (!(event instanceof MouseEvent)) return;
     const target = event.target as Element | null;
     if (!target) return;
 
@@ -178,10 +183,10 @@ export class LogList extends LitElement {
   };
 
   /** Handle file-click events from Shadow DOM components. */
-  private handleFileClickEvent = (
-    event: CustomEvent<{ file: string; line?: number }>,
-  ): void => {
-    const { file, line } = event.detail;
+  private handleFileClickEvent = (event: Event): void => {
+    const { file, line } = (
+      event as CustomEvent<{ file: string; line?: number }>
+    ).detail;
     if (file) {
       postMessage(COMMANDS.OPEN_FILE, {
         file,

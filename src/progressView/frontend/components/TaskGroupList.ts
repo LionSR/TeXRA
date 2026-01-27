@@ -9,6 +9,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
+import '@lit-labs/virtualizer';
 import './TaskGroupItem';
 import './LogEntry';
 import './LogPlaceholder';
@@ -196,11 +197,12 @@ export class TaskGroupList extends LitElement {
         ?expanded=${this.isExpanded(group.id)}
         @group-toggle=${this.handleGroupToggle}
       >
-        ${repeat(
-          messages,
-          (m) => m.id,
-          (m) => html`<log-entry .message=${m}></log-entry>`,
-        )}
+        <lit-virtualizer
+          .items=${messages}
+          .renderItem=${(m: LogMessageData) =>
+            html`<log-entry .message=${m}></log-entry>`}
+          .keyFunction=${(m: LogMessageData) => m.id}
+        ></lit-virtualizer>
         ${repeat(
           children,
           (c) => c.group.id,
@@ -228,11 +230,14 @@ export class TaskGroupList extends LitElement {
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
         ${this.isToolUse
-          ? html`${repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )}`
+          ? html`
+              <lit-virtualizer
+                .items=${ungroupedMessages}
+                .renderItem=${(m: LogMessageData) =>
+                  html`<log-entry .message=${m}></log-entry>`}
+                .keyFunction=${(m: LogMessageData) => m.id}
+              ></lit-virtualizer>
+            `
           : nothing}
         ${repeat(
           tree,
@@ -240,11 +245,14 @@ export class TaskGroupList extends LitElement {
           (t) => this.renderGroupNode(t),
         )}
         ${!this.isToolUse
-          ? html`${repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )}`
+          ? html`
+              <lit-virtualizer
+                .items=${ungroupedMessages}
+                .renderItem=${(m: LogMessageData) =>
+                  html`<log-entry .message=${m}></log-entry>`}
+                .keyFunction=${(m: LogMessageData) => m.id}
+              ></lit-virtualizer>
+            `
           : nothing}
       </vscode-scrollable>
     `;

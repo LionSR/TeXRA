@@ -1,8 +1,13 @@
 // Third-party imports
 import { LitElement } from 'lit';
+import { provide } from '@lit/context';
+import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
 import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';
+
+// Local imports - shared contexts
+import { themeContext } from '@shared/contexts/themeContext';
 
 // Local imports - webview commands
 import { postMessage } from '@shared/vscode';
@@ -17,6 +22,10 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
  * Handles VS Code message wiring and emits a ready signal on connect.
  */
 export abstract class BaseWebviewApp extends LitElement {
+  @provide({ context: themeContext })
+  @state()
+  protected theme = '';
+
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
@@ -55,6 +64,7 @@ export abstract class BaseWebviewApp extends LitElement {
    * Handle theme updates from the extension host.
    */
   protected onThemeChange(theme: string): void {
+    this.theme = theme;
     document.body.className = theme;
   }
 

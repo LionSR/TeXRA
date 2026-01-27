@@ -305,7 +305,6 @@ export function formatToolUse(
         label: titleText,
         labelClass: 'tool-use-title',
         includeIconClass: false,
-        expanded: false,
       })}
       <div
         class="banner-content log-entry-content"
@@ -390,7 +389,6 @@ export function formatWebSearch(
         label: titleText,
         labelClass: 'tool-use-title',
         includeIconClass: false,
-        expanded: false,
       })}
       <div
         class="banner-content log-entry-content"
