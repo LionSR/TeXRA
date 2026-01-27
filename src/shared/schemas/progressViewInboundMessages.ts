@@ -180,7 +180,7 @@ const RetryStreamRequestMessageSchema = z.object({
 
 const SortStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SORT_STREAMS),
-  sortBy: z.enum(['time', 'inputFile', 'agent']).default('time'),
+  sortBy: z.enum(['time', 'inputFile', 'agent']).prefault('time'),
 });
 
 const FilterStreamsMessageSchema = z.object({
@@ -229,7 +229,7 @@ const AgentProposalActionMessageSchema = z.object({
 const OpenFileMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE),
   file: z.string().min(1),
-  line: z.number().int().nonnegative().optional(),
+  line: z.int().nonnegative().optional(),
 });
 
 const OpenFileCompileMessageSchema = z.object({

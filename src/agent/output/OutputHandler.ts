@@ -1,19 +1,6 @@
 import { diff_match_patch } from 'diff-match-patch';
 import { z } from 'zod';
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentWorkflowSetting,
-  requireWorkflowSetting,
-} from '@agent/core/AgentDataclass';
-import type { DiffStats } from '@agent/types/DiffTypes';
-import { normalizeRunId } from '@common/constants/runIds';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { bus } from '@eventBus/ProgressEventBus';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   FileLocationSchema,
   MESSAGE_TYPES,
@@ -25,6 +12,18 @@ import {
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import {
+  AgentSetting,
+  AgentWorkflowSetting,
+  requireWorkflowSetting,
+} from '@agent/core/AgentDataclass';
+import type { DiffStats } from '@agent/types/DiffTypes';
+import { normalizeRunId } from '@common/constants/runIds';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
   flexibleFS,
@@ -32,13 +31,14 @@ import {
   pathToLocation,
 } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 import { FileLineageCalculator } from './FileLineageCalculator';
-import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
-import type { RoundFileMapping } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
+import type { IOutputHandler } from './IOutputHandler';
+import type { RoundFileMapping } from './types';
 
 const RoundDataSchema = z.object({
   outputs: OutputFileInfoSchema.array().prefault(() => []),

@@ -16,6 +16,7 @@ import {
 // Local imports - shared schemas
 import type {
   AgentProposalPrompt,
+  BashApprovalPrompt,
   ProviderErrorPartial,
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
@@ -56,10 +57,12 @@ export class RequestPanels extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    this.addEventListener('click', this.handleActionClick);
     document.addEventListener('click', this.handleOutsideClick, true);
   }
 
   override disconnectedCallback(): void {
+    this.removeEventListener('click', this.handleActionClick);
     document.removeEventListener('click', this.handleOutsideClick, true);
     super.disconnectedCallback();
   }
@@ -289,7 +292,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderBashRequest(prompt: PromptState): TemplateResult {
-    const data = prompt.data as PromptState['data'] & { command?: string };
+    const data = prompt.data as BashApprovalPrompt;
     return html`
       <div class="bash-approval-request">
         <div class="bash-approval-request__details">
@@ -561,10 +564,6 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
   // Event handlers
   // ===========================================================================
-
-  override firstUpdated(): void {
-    this.addEventListener('click', this.handleActionClick);
-  }
 
   private handleActionClick = (event: MouseEvent): void => {
     const target = event.target as Element | null;
