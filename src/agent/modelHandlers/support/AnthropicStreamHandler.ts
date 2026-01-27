@@ -22,8 +22,6 @@ import type {
   WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-// Local imports - agent
-
 /**
  * Duck-typed interface for Anthropic message streams.
  * Allows us to work with the stream without importing SDK-internal types.

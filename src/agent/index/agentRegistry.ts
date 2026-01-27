@@ -37,18 +37,9 @@ logger.initialize(CHANNEL);
 
 /**
  * Remote agent visibility levels.
- *
  * Visibility is an array of group names that can access the agent.
- * User can access the agent if their permissions overlap with visibility.
- *
- * Common values:
- * - ['public']: Available to all authenticated users
- * - ['researcher']: Requires 'researcher' in user's permissions
- * - ['math', 'cs']: Available to users with 'math' OR 'cs' permission
- *
- * New visibility levels can be added in the database without code changes.
  */
-export type RemoteVisibility = string[];
+type RemoteVisibility = string[];
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.
@@ -86,7 +77,19 @@ export interface ResolvedAgent {
 // =============================================================================
 
 /** Suffix for multiple-output agent variants. */
-export const MULTIPLE_SUFFIX = '_multiple';
+const MULTIPLE_SUFFIX = '_multiple';
+
+/** Source priority for lookups (higher priority first). */
+const LOOKUP_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+  'remote',
+];
+
+/** Default agents for dropdowns. */
+const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 // =============================================================================
 // STATE
@@ -121,18 +124,10 @@ export async function loadAgents(): Promise<void> {
 }
 
 /**
- * Check if the agent cache has been initialized.
- * Use this to avoid redundant loadAgents() calls.
- */
-export function isAgentCacheInitialized(): boolean {
-  return initialized;
-}
-
-/**
  * Ensure agents are loaded, without triggering a re-scan if already loaded.
  * Prefer this over loadAgents() when you just need to access the cache.
  */
-export async function ensureAgentsLoaded(): Promise<void> {
+async function ensureAgentsLoaded(): Promise<void> {
   if (initialized) {
     return;
   }
@@ -187,14 +182,6 @@ async function doLoad(): Promise<void> {
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
 }
-
-/** Source priority for lookups (higher priority first). */
-const LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-  'remote',
-];
 
 /**
  * Get an agent by identifier.
@@ -276,7 +263,7 @@ export function getWorkflowAgents(): AgentEntry[] {
 }
 
 /** Get all tool-use agents. */
-export function getToolUseAgents(): AgentEntry[] {
+function getToolUseAgents(): AgentEntry[] {
   return [...cache.values()].filter(
     (e) => e.category === AgentCategory.ToolUse,
   );
@@ -467,7 +454,7 @@ export function createKey(source: AgentSource, name: string): string {
 }
 
 /** Parse source:name key. */
-export function parseKey(
+function parseKey(
   key: string,
 ): { source: AgentSource; name: string } | undefined {
   const colonIdx = key.indexOf(':');
@@ -493,7 +480,7 @@ export function getCleanAgentName(agentIdentifier: string): string {
 // =============================================================================
 
 /** Check if agent name is a _multiple variant. */
-export function isMultipleVariant(name: string): boolean {
+function isMultipleVariant(name: string): boolean {
   return name.endsWith(MULTIPLE_SUFFIX);
 }
 
@@ -520,17 +507,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
   return entry?.source === 'remote';
 }
 
-/** Check if source should show an indicator in UI. */
-export function shouldShowSourceIndicator(source: AgentSource): boolean {
-  return source === 'custom' || source === 'remote';
-}
-
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
 // =============================================================================
-
-export const DEFAULT_WORKFLOW_AGENT = 'correct';
-export const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 /**
  * Get visible workflow agents (filtered and deduplicated).
@@ -607,7 +586,7 @@ function filterVisible(
 
 // AgentOptionData type is imported from @shared/schemas (single source of truth)
 
-export interface AgentOptionsDataPayload {
+interface AgentOptionsDataPayload {
   workflow: AgentOptionData[];
   toolUse: AgentOptionData[];
 }
@@ -646,7 +625,7 @@ function sortAgentEntries(
 /**
  * Build typed agent options data for Lit-native rendering.
  */
-export function buildAgentOptionsData(): AgentOptionsDataPayload {
+function buildAgentOptionsData(): AgentOptionsDataPayload {
   const visibleWorkflow = getVisibleWorkflowAgents();
   const visibleToolUse = getVisibleToolUseAgents();
 

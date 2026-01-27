@@ -54,5 +54,3 @@ export class GlobalStorageFS extends RelativeFS {
     return StorageFS.getGlobalPath();
   }
 }
-
-export default StorageFS;

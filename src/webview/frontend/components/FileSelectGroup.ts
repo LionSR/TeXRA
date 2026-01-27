@@ -27,8 +27,6 @@ import { fileSelectStyles } from '../styles/fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
-// Local imports - store (single source of truth for defaults)
-
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [
