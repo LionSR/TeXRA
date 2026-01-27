@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
@@ -44,7 +44,17 @@ export class LogList extends LitElement {
     designTokens,
     commonViewStyles,
     codiconStyles,
-    logStyles,
+    ...logStyles,
+    css`
+      /* Match global CSS layout expectations for log-list */
+      :host {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+      }
+    `,
   ];
 
   // Reactive properties - passed from parent

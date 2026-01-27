@@ -22,6 +22,10 @@ export class UserMessage extends LitElement {
     codiconIconClasses,
     css`
       :host {
+        display: block;
+      }
+
+      .user-message-container {
         display: flex;
         justify-content: flex-end;
         margin: var(--spacing-small) 0;
@@ -79,15 +83,17 @@ export class UserMessage extends LitElement {
     );
 
     return html`
-      <div class="user-message">
-        <div class="user-message-header">
-          <i class="codicon codicon-comment user-message-icon"></i>
-          <span class="user-message-timestamp" title=${tooltipTimestamp}
-            >${timeDisplay}</span
-          >
-        </div>
-        <div class="user-message-content" data-log-id=${this.logId}>
-          ${this.text}
+      <div class="user-message-container">
+        <div class="user-message">
+          <div class="user-message-header">
+            <i class="codicon codicon-comment user-message-icon"></i>
+            <span class="user-message-timestamp" title=${tooltipTimestamp}
+              >${timeDisplay}</span
+            >
+          </div>
+          <div class="user-message-content" data-log-id=${this.logId}>
+            ${this.text}
+          </div>
         </div>
       </div>
     `;
