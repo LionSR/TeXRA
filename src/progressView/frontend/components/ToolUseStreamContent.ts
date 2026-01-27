@@ -4,7 +4,7 @@
  * This component receives a narrowed `ToolUseStreamState` type, eliminating
  * the need for type guards inside the component. It renders:
  * - Stream header with toolbar controls
- * - Prompt overlay for approval requests (bash, tool edit, etc.)
+ * - Request panels for approvals and retry prompts (bash, tool edit, etc.)
  * - Todo list for task tracking
  * - Task group list for log display
  * - Usage panel for context window stats
