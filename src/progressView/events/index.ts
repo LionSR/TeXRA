@@ -2,7 +2,6 @@
 export { withEventErrorHandling } from './errorHandling';
 export { ProgressEventHandler, type UICallbacks } from './ProgressEventHandler';
 export { registerUIEvents } from './UIEvents';
-export { type ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 
 // Domain-specific event handlers (modular, focused files)
 export {

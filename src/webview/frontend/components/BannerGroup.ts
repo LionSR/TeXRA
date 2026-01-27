@@ -15,8 +15,6 @@ import { when } from 'lit/directives/when.js';
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 import { MainViewEvents } from '../events';
 
-// Local imports - shared utilities
-
 // Local imports - shared schemas
 import type {
   AgentConfigBannerState,

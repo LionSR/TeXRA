@@ -242,7 +242,11 @@ export class StreamTabs extends LitElement {
               FILTER_BUTTONS,
               (btn) => btn.id,
               (btn) => html`
-                <vscode-radio id=${btn.id} value=${btn.filter}>
+                <vscode-radio
+                  id=${btn.id}
+                  value=${btn.filter}
+                  ?checked=${this.filter === btn.filter}
+                >
                   ${btn.label}
                 </vscode-radio>
               `,

@@ -34,13 +34,6 @@ export class OutputFilesSection extends LitElement {
       :host {
         display: block;
       }
-
-      .file-action-button {
-        width: var(--height-control);
-        height: var(--height-control);
-        min-width: var(--height-control);
-        min-height: var(--height-control);
-      }
     `,
   ];
 
@@ -140,7 +133,6 @@ export class OutputFilesSection extends LitElement {
           <vscode-toolbar-container class="file-select-actions">
             <vscode-toolbar-button
               id="emptyOutputFilesButton"
-              class="file-action-button"
               icon="trash"
               label="Clear all output files"
               title="Clear all output files"
@@ -148,7 +140,6 @@ export class OutputFilesSection extends LitElement {
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               id="selectOutputFilesButton"
-              class="file-action-button"
               icon="add"
               label="Add output files"
               title="Add output files"

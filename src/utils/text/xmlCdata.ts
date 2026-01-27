@@ -3,12 +3,6 @@
  * Single source of truth for CDATA operations in XML content.
  */
 
-// Local imports - logger
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'xmlCdata';
-logger.initialize(CHANNEL);
-
 /**
  * CDATA section pattern for removal.
  * Single source of truth for CDATA handling.

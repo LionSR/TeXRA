@@ -1,34 +1,42 @@
 // Third-party imports
 import { FinishReason } from '@google/genai';
 
-// Local imports - agent components
+// Shared schemas
+import { MESSAGE_TYPES } from '@shared/schemas';
+
+// Local imports - auth
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { MESSAGE_TYPES } from '@shared/schemas';
+
+// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+
+// Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Internal imports
+// Local imports - model
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
   ReasoningEffort,
 } from '@model/ModelConfig';
-import type { ToolFileAttachment } from '@tools/result';
-import { getConfig } from '@utils/config';
 
-// Local file imports
+// Local imports - tools
+import type { ToolFileAttachment } from '@tools/result';
+
+// Local imports - utils
+import { getConfig, K_SLICE } from '@utils/config';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE } from '@utils/config';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,

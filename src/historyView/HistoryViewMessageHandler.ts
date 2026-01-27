@@ -108,14 +108,13 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await this.withHistoryItem(
       data.historyId,
-      'rerunAgent',
+      'Failed to rerun agent',
       async (historyItem) => {
         await vscode.window.showInformationMessage(
           'Rerunning agent from history',
         );
         await runExecuteCommand(historyItem.agentConfig);
       },
-      'Failed to rerun agent',
     );
   }
 
@@ -124,12 +123,11 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await this.withHistoryItem(
       data.historyId,
-      'restoreAgent',
+      'Failed to restore configuration',
       async (historyItem) => {
         const taskState = agentConfigToTaskState(historyItem.agentConfig);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       },
-      'Failed to restore configuration',
     );
   }
 
@@ -180,9 +178,8 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
 
   private async withHistoryItem(
     historyId: string,
-    operationName: string,
-    action: (historyItem: AgentHistoryItem) => Promise<void>,
     errorPrefix: string,
+    action: (historyItem: AgentHistoryItem) => Promise<void>,
   ): Promise<void> {
     try {
       const historyItem =
@@ -193,9 +190,6 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       }
       await action(historyItem);
     } catch (error) {
-      this.logger.error(this.channel, `${operationName} failed`, {
-        data: error,
-      });
       await showLoggedErrorMessage(this.channel, errorPrefix, error);
     }
   }
