@@ -88,15 +88,20 @@ function sortStreams(
   return [...streams].sort(streamComparators[sort] ?? streamComparators.time);
 }
 
+/** Run group info for the run selector */
+export interface RunGroup {
+  id: string;
+  name: string;
+  startTime: number;
+}
+
 /**
  * Extract run groups from task groups for the run selector.
  * Returns root groups (runs) with their metadata.
  * Uses a single pass to avoid extra array allocations from filter().map().
  */
-export function getRunGroups(
-  groups: TaskGroup[],
-): { id: string; name: string; startTime: number }[] {
-  const result: { id: string; name: string; startTime: number }[] = [];
+export function getRunGroups(groups: TaskGroup[]): RunGroup[] {
+  const result: RunGroup[] = [];
   for (const group of groups) {
     if (!group.parentGroupId) {
       result.push({

@@ -141,45 +141,24 @@ export class LogList extends LitElement {
       return;
     }
 
+    // Handle copy buttons - content is stored directly on button via data-copy-content
     const copyButton = this.findTargetInPath<HTMLElement>(
       event,
-      '.banner-content-copy',
+      '[data-copy-content]',
     );
     if (copyButton) {
       event.stopPropagation();
-      const contentElem = copyButton
-        .closest('.banner-details')
-        ?.querySelector('.banner-content') as HTMLElement | null;
-      if (!contentElem) return;
-      const textToCopy =
-        contentElem.dataset.rawContent ?? contentElem.textContent ?? '';
+      const textToCopy = copyButton.dataset.copyContent ?? '';
       if (!textToCopy.trim()) return;
 
+      const isCodeBlock = copyButton.dataset.copyType === 'code-block';
       await copyWithFeedback(copyButton, textToCopy, {
         defaultTitle:
           copyButton.dataset.defaultTitle ||
           copyButton.getAttribute('title') ||
-          'Copy content',
+          'Copy to clipboard',
         successTitle: copyButton.dataset.successTitle || 'Copied!',
-      });
-      return;
-    }
-
-    const codeBlockCopy = this.findTargetInPath<HTMLElement>(
-      event,
-      '.code-block-copy',
-    );
-    if (codeBlockCopy) {
-      event.stopPropagation();
-      const codeBlock = codeBlockCopy.closest('.code-block');
-      const codeElem = codeBlock?.querySelector('code');
-      if (!codeElem) return;
-      const textToCopy = codeElem.textContent ?? '';
-      if (!textToCopy.trim()) return;
-      await copyWithFeedback(codeBlockCopy, textToCopy, {
-        defaultTitle: 'Copy to clipboard',
-        successTitle: 'Copied!',
-        successClass: 'copied',
+        successClass: isCodeBlock ? 'copied' : undefined,
       });
     }
   };

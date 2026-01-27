@@ -1,5 +1,9 @@
+/**
+ * ProfileInfo component - displays user email, ID, tier, and sign out button.
+ */
+
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -13,7 +17,7 @@ import { ProfileViewEvents } from '../events';
 
 @customElement('profile-info')
 export class ProfileInfo extends LitElement {
-  static styles = [designTokens, ...badgeStyles, profileViewStyles];
+  static override styles = [designTokens, ...badgeStyles, profileViewStyles];
 
   @property({ type: String }) email = '';
   @property({ type: String }) userId = '';
@@ -35,7 +39,7 @@ export class ProfileInfo extends LitElement {
     });
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const expiration = this.formatExpiration();
     return html`
       <div class="profile-info">
@@ -60,7 +64,7 @@ export class ProfileInfo extends LitElement {
                 <span class="value">${expiration}</span>
               </div>
             `
-          : ''}
+          : nothing}
         ${this.showSignOut
           ? html`
               <div class="profile-actions">
@@ -69,8 +73,14 @@ export class ProfileInfo extends LitElement {
                 </vscode-button>
               </div>
             `
-          : ''}
+          : nothing}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'profile-info': ProfileInfo;
   }
 }

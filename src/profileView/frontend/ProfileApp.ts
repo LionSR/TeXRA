@@ -1,3 +1,8 @@
+/**
+ * ProfileApp component - main container for the TeXRA account view.
+ * Manages authentication state and displays profile info, API access settings, and remote agents.
+ */
+
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -15,7 +20,7 @@ import { UpdateProfileMessageSchema, type RemoteAgent } from '@shared/schemas';
 // Local imports - profile view commands
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands';
 
-// Local imports - profile view components
+// Local imports - profile view components (side-effect: register)
 import './components/ProfileInfo';
 import './components/ApiAccessSection';
 import './components/AgentsTable';
@@ -26,7 +31,7 @@ import { profileViewStyles } from './styles';
 
 @customElement('profile-app')
 export class ProfileApp extends BaseWebviewApp {
-  static styles = [
+  static override styles = [
     designTokens,
     commonViewStyles,
     profileViewStyles,
@@ -102,7 +107,7 @@ export class ProfileApp extends BaseWebviewApp {
     });
   };
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="profile-container">
         <header class="view-header">
@@ -149,5 +154,11 @@ export class ProfileApp extends BaseWebviewApp {
             ></sign-in-prompt>`}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'profile-app': ProfileApp;
   }
 }

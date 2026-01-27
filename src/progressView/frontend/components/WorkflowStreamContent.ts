@@ -34,7 +34,7 @@ import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - progress view utilities
-import { getRunGroups, hasOutputFiles } from '../stateUtils';
+import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
@@ -62,9 +62,6 @@ import './LogList';
 import './UsagePanel';
 import './FileList';
 import './FollowupSection';
-
-/** Run group info for the run selector */
-type RunGroup = { id: string; name: string; startTime: number };
 
 /** Derived values for the currently selected run */
 interface RunDerivedValues {

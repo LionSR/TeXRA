@@ -35,10 +35,6 @@ export class TaskGroupItem extends LitElement {
   @property({ type: Object }) group!: TaskGroup;
   @property({ type: Boolean }) expanded = true;
 
-  private get isRoot(): boolean {
-    return !this.group.parentGroupId;
-  }
-
   private handleToggle(event: Event): void {
     const details = event.target as HTMLDetailsElement;
     this.dispatchEvent(
@@ -51,14 +47,15 @@ export class TaskGroupItem extends LitElement {
   }
 
   override render(): TemplateResult {
-    const { group } = this;
-    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
-    const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+    const { group, expanded } = this;
+    const { id, parentGroupId, status } = group;
+    const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${id}`;
+    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${id}`;
 
     // Root groups: simple container (no collapsible)
-    if (this.isRoot) {
+    if (!parentGroupId) {
       return html`
-        <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
+        <div id=${detailsId} class="log-group log-run" data-run-id=${id}>
           <div id=${contentId} class="log-group-content">
             <slot></slot>
           </div>
@@ -67,20 +64,20 @@ export class TaskGroupItem extends LitElement {
     }
 
     // Child groups: collapsible details element
-    const headerId = `${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}`;
-    const headerClasses = {
-      'log-group-header': true,
-      [`is-${group.status}`]: true,
-    };
-
     return html`
       <details
         id=${detailsId}
         class="log-group"
-        ?open=${this.expanded}
+        ?open=${expanded}
         @toggle=${this.handleToggle}
       >
-        <summary id=${headerId} class=${classMap(headerClasses)}>
+        <summary
+          id="${GROUP_DOM_IDS.HEADER_PREFIX}${id}"
+          class=${classMap({
+            'log-group-header': true,
+            [`is-${status}`]: true,
+          })}
+        >
           <task-group-header .group=${group}></task-group-header>
         </summary>
         <div id=${contentId} class="log-group-content">
