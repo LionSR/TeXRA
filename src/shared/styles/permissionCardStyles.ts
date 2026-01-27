@@ -41,9 +41,9 @@ export const permissionCardStyles: CSSResult = css`
 
   .permission-card {
     background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 6px;
-    padding: 16px;
+    border: var(--border-thin) solid var(--vscode-panel-border);
+    border-radius: var(--border-radius-large);
+    padding: var(--spacing-xlarge);
     max-width: 600px;
     width: min(92vw, 600px);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
@@ -52,24 +52,24 @@ export const permissionCardStyles: CSSResult = css`
   .permission-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--spacing-small);
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: var(--spacing-medium);
   }
 
   .permission-body {
-    font-size: 13px;
+    font-size: var(--font-size);
     line-height: 1.5;
   }
 
   .code-block {
     display: block;
-    padding: 8px;
+    padding: var(--spacing-medium);
     background: var(--vscode-textCodeBlock-background);
-    border-radius: 4px;
+    border-radius: var(--border-radius);
     color: var(--vscode-terminal-foreground);
     font-family: var(--vscode-editor-font-family);
-    font-size: 13px;
+    font-size: var(--font-size);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -77,8 +77,8 @@ export const permissionCardStyles: CSSResult = css`
   .permission-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
+    gap: var(--spacing-medium);
+    margin-top: var(--spacing-xlarge);
     justify-content: flex-end;
   }
 
@@ -86,7 +86,7 @@ export const permissionCardStyles: CSSResult = css`
   .primary-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--spacing-medium);
   }
 
   .primary-actions {
@@ -96,14 +96,14 @@ export const permissionCardStyles: CSSResult = css`
   .action-button {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
-    border: 1px solid var(--vscode-button-border, transparent);
-    border-radius: 4px;
+    border: var(--border-thin) solid var(--vscode-button-border, transparent);
+    border-radius: var(--border-radius);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--font-size);
   }
 
   .action-button--secondary {
@@ -113,7 +113,7 @@ export const permissionCardStyles: CSSResult = css`
 
   .file-path {
     font-family: var(--vscode-editor-font-family);
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     color: var(--vscode-textLink-foreground);
     word-break: break-word;
   }
@@ -121,8 +121,8 @@ export const permissionCardStyles: CSSResult = css`
   .diff-info {
     display: inline-flex;
     align-items: baseline;
-    gap: 4px;
-    font-size: 12px;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
     font-family: var(--vscode-editor-font-family);
   }
 
@@ -138,16 +138,16 @@ export const permissionCardStyles: CSSResult = css`
 
   .meta-text {
     color: var(--vscode-descriptionForeground);
-    margin-left: 4px;
+    margin-left: var(--spacing-small);
   }
 
   .file-list {
-    margin: 4px 0;
+    margin: var(--spacing-small) 0;
   }
 
   .file-list-label {
     color: var(--vscode-descriptionForeground);
-    margin-right: 4px;
+    margin-right: var(--spacing-small);
   }
 
   .file-link {
@@ -161,31 +161,31 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .feedback-section {
-    margin-top: 12px;
+    margin-top: var(--spacing-large);
   }
 
   .feedback-label {
     display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
+    margin-bottom: var(--spacing-small);
+    font-size: var(--font-size-sm);
     color: var(--vscode-descriptionForeground);
   }
 
   .feedback-input {
     width: 100%;
     min-height: 60px;
-    padding: 8px;
-    border: 1px solid var(--vscode-input-border);
+    padding: var(--spacing-medium);
+    border: var(--border-thin) solid var(--vscode-input-border);
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
-    border-radius: 4px;
+    border-radius: var(--border-radius);
     font-family: inherit;
-    font-size: 13px;
+    font-size: var(--font-size);
     resize: vertical;
     box-sizing: border-box;
   }
 
   .feedback-input:focus {
-    outline: 1px solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
   }
 `;

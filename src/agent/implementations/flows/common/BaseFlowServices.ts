@@ -33,7 +33,7 @@ export type NodeExecResult<T> =
 // Service Interfaces
 // ============================================================================
 
-import type { IModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';

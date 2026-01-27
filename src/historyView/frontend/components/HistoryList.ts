@@ -81,11 +81,7 @@ export class HistoryList extends LitElement {
 
     // Handle searchAction - navigate to next/prev match
     if (changedProperties.has('searchAction') && this.searchAction) {
-      if (this.searchAction === 'next') {
-        this.performNavigateNext();
-      } else if (this.searchAction === 'prev') {
-        this.performNavigatePrev();
-      }
+      this.performNavigate(this.searchAction);
       // Dispatch event to reset the action
       this.dispatchEvent(HistoryViewEvents.searchNavigateComplete());
     }
@@ -123,19 +119,11 @@ export class HistoryList extends LitElement {
     void this.applySearchToItems(term);
   }
 
-  private performNavigateNext(): void {
+  private performNavigate(direction: 'next' | 'prev'): void {
     if (!this.state || this.state.totalMatches === 0) return;
-    const nextIndex = (this.state.searchIndex + 1) % this.state.totalMatches;
-    this.state.setSearchIndex(nextIndex);
-    this.updateMatchCount();
-    // Trigger re-render to update highlightedMatchIndex props
-    this.requestUpdate();
-  }
-
-  private performNavigatePrev(): void {
-    if (!this.state || this.state.totalMatches === 0) return;
+    const delta = direction === 'next' ? 1 : -1;
     const nextIndex =
-      (this.state.searchIndex - 1 + this.state.totalMatches) %
+      (this.state.searchIndex + delta + this.state.totalMatches) %
       this.state.totalMatches;
     this.state.setSearchIndex(nextIndex);
     this.updateMatchCount();

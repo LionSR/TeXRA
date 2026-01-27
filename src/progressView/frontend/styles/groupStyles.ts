@@ -64,18 +64,7 @@ export const groupStyles = css`
     margin-right: var(--spacing-small);
   }
 
-  .spin {
-    animation: spin 2s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
+  /* Note: .spin class and @keyframes spin are in @shared/styles/litStyles.ts */
 
   :is(.log-line, .banner-details)[data-group-id] {
     border-left: var(--border-medium) solid transparent;

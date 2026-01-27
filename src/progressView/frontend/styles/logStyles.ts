@@ -5,6 +5,9 @@
 // Third-party imports
 import { css } from 'lit';
 
+// Shared styles
+import { animationStyles } from '@shared/styles/litStyles';
+
 // Import and re-export individual style modules
 import { logEntryStyles } from './logEntryStyles';
 import { groupStyles } from './groupStyles';
@@ -53,6 +56,7 @@ export const layoutStyles = css`
  * Use this for components that need the full set of log styles.
  */
 export const logStyles = [
+  animationStyles,
   layoutStyles,
   logEntryStyles,
   groupStyles,

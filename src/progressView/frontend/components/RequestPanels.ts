@@ -597,14 +597,14 @@ export class RequestPanels extends LitElement {
     if (!actionEl) return;
 
     const action = actionEl.dataset.action;
-    const kind = actionEl.dataset.promptKind as
+    const kind = actionEl.dataset.permissionKind as
       | PermissionState['kind']
       | undefined;
-    const promptId = actionEl.dataset.promptId;
-    if (!action || !kind || !promptId) return;
+    const permissionId = actionEl.dataset.permissionId;
+    if (!action || !kind || !permissionId) return;
 
     const permission = this.permissions.find(
-      (item) => item.kind === kind && this.getPermissionId(item) === promptId,
+      (item) => item.kind === kind && this.getPermissionId(item) === permissionId,
     );
     if (!permission) return;
 

@@ -13,7 +13,10 @@ import {
 } from '@shared/schemas/historyViewMessages';
 import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, HISTORY_VIEW_COMMANDS } from '@common/webview';
-import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
+import {
+  AgentHistoryManager,
+  type AgentHistoryItem,
+} from '@common/history/AgentHistoryManager';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 

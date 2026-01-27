@@ -1,38 +1,24 @@
-// Third-party imports
 import { randomUUID } from 'crypto';
 
-// Local imports - events
-import { type ErrorContext } from '@shared/schemas';
-import { END_GROUP_STATUS, MESSAGE_TYPES } from '@shared/schemas';
+import {
+  END_GROUP_STATUS,
+  MESSAGE_TYPES,
+  type ContextManagementData,
+  type ContextStateData,
+  type EndGroupStatus,
+  type ErrorContext,
+  type FileListEntry,
+  type MessageType,
+} from '@shared/schemas';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-
-// Internal imports
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { delay } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Local imports - log
-import * as logger from './logUtils';
 import { getEmitFilter } from './filterUtils';
-
-// Type imports
-import type {
-  EndGroupStatus,
-  FileListEntry,
-  MessageType,
-  ContextManagementData,
-  ContextStateData,
-} from '@shared/schemas';
+import * as logger from './logUtils';
 import type { LogOptions } from './logOptions';
-
-// Re-export context schemas for backward compatibility
-export {
-  ContextManagementAction,
-  ContextManagementDataSchema,
-  ContextStateDataSchema,
-} from '@shared/schemas';
-export type { ContextManagementData, ContextStateData } from '@shared/schemas';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;

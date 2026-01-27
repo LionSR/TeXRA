@@ -11,9 +11,6 @@ export { AgentLogger, type AgentLogStage } from './AgentLogger';
 // Log utility functions (namespace import pattern - very common)
 export * as logUtils from './logUtils';
 
-// Message types - commonly used constants
-export { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
-
 // Task state - commonly used for type checking
 export {
   type TaskState,
