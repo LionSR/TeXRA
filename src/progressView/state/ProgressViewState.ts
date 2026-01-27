@@ -416,6 +416,11 @@ export class ProgressViewState {
   }
 
   async clearAll(): Promise<void> {
+    this.logger.warn(
+      '[Persistence] clearAll() called - this will delete all persisted data!',
+      { data: { stack: new Error().stack } },
+    );
+
     await Promise.all([
       this._streamTabs.clear(),
       this._taskGroups.clear(),
@@ -436,6 +441,8 @@ export class ProgressViewState {
   }
 
   async load(): Promise<void> {
+    this.logger.info('[Persistence] Starting state load from workspace storage');
+
     await Promise.all([
       this._streamTabs.load(),
       this._taskGroups.load(),
@@ -444,12 +451,18 @@ export class ProgressViewState {
       this._runInstructions.load(),
     ]);
 
+    this.logger.info('[Persistence] Managers loaded');
+
     this.loadActiveStream();
     this.loadTaskStates();
     this.loadExecutionIds();
     this.loadStreamSortOrder();
     this.loadAgentCategoryFilter();
     this.loadActiveRunIds();
+
+    this.logger.info(
+      `[Persistence] State load complete - taskStates: ${this.taskStates.size}, executionIds: ${this._executionIds.size}`,
+    );
   }
 
   private loadActiveStream(): void {
@@ -468,21 +481,32 @@ export class ProgressViewState {
     const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
     this.taskStates.clear();
 
-    if (Object.keys(raw).length === 0) {
+    const rawKeys = Object.keys(raw);
+    this.logger.info(
+      `[Persistence] Loading task states - found ${rawKeys.length} keys: ${rawKeys.slice(0, 5).join(', ')}${rawKeys.length > 5 ? '...' : ''}`,
+    );
+
+    if (rawKeys.length === 0) {
+      this.logger.info('[Persistence] No task states found in storage');
       this.cleanupToolUseAgentRegistry();
       return;
     }
 
     // Collect entries from legacy format (workflow/toolUse sub-objects) or flat format
     const entries = this.extractTaskStateEntries(raw);
+    this.logger.info(
+      `[Persistence] Extracted ${entries.length} task state entries (legacy format: ${rawKeys.includes('workflow') || rawKeys.includes('toolUse')})`,
+    );
 
     let loaded = 0;
+    let skipped = 0;
     for (const [stream, rawState] of entries) {
       const parseResult = TaskStateSchema.safeParse(rawState);
       if (!parseResult.success) {
-        this.logger.debug(
-          `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
+        this.logger.warn(
+          `[Persistence] Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
         );
+        skipped += 1;
         continue;
       }
 
@@ -490,9 +514,9 @@ export class ProgressViewState {
       loaded += 1;
     }
 
-    if (loaded > 0) {
-      this.logger.debug(`Loaded task states for ${loaded} streams`);
-    }
+    this.logger.info(
+      `[Persistence] Task states loaded: ${loaded} successful, ${skipped} skipped`,
+    );
 
     this.cleanupToolUseAgentRegistry();
   }
