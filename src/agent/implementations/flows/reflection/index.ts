@@ -46,5 +46,4 @@ export {
 export {
   type RoundContext,
   ReflectionFlowStateSchema,
-  RoundContextSchema,
 } from './ReflectionFlowState';

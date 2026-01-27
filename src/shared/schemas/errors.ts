@@ -35,7 +35,7 @@ const ErrorContextSchema = z.object({
   operation: z.string().optional(),
   model: z.string().optional(),
 });
-type ErrorContext = z.infer<typeof ErrorContextSchema>;
+export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
 /** Complete error log data - combines provider error with context */
 export const ErrorLogDataSchema = ProviderErrorSchema.extend({
