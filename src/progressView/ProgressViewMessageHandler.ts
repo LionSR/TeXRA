@@ -12,7 +12,7 @@ import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
-import { RecordingManager } from '@common/managers';
+import { RecordingManager } from '@common/managers/RecordingManager';
 import {
   BaseViewMessageHandler,
   PROGRESS_VIEW_COMMANDS,

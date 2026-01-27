@@ -46,7 +46,7 @@ export const codeBlockStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 6px;
+    padding: var(--spacing-tiny) var(--spacing-small);
     border: none;
     background: transparent;
     color: var(--vscode-descriptionForeground, #888);

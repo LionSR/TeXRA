@@ -6,6 +6,10 @@
  */
 import { z } from 'zod';
 
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
 
 // ============================================================
@@ -120,11 +124,6 @@ export type MemoryViewInboundMessage = z.infer<
 // ============================================================
 // Type-safe handler registry and dispatcher
 // ============================================================
-
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 
 export type MemoryViewInboundHandlerRegistry =
   HandlerRegistry<MemoryViewInboundMessage>;

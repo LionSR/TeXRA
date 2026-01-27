@@ -10,7 +10,7 @@
  * dependencies (output handler, prompt builder, LaTeX media, etc.)
  */
 
-import type { IOutputHandler } from '@agent/output';
+import type { IOutputHandler } from '@agent/output/IOutputHandler';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentLogStage } from '@logger/AgentLogger';

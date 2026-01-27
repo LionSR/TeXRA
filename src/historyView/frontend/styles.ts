@@ -123,24 +123,5 @@ export const historyViewStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .history-none {
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
-
-  /* Search highlight styles for mark.js */
-  mark {
-    background-color: var(
-      --vscode-editor-findMatchHighlightBackground,
-      #ffef0b80
-    );
-    color: var(--vscode-editor-findMatchHighlightForeground, inherit);
-    padding: 0;
-    border-radius: var(--border-radius-small);
-  }
-
-  mark[data-current='true'] {
-    background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
-  }
+  /* Note: .history-none and mark styles are provided by badgeStyles from @shared/styles */
 `;

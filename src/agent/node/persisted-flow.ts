@@ -1,9 +1,9 @@
 // Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
 // Enhanced to use ExecutionKVStore as first-citizen interface
 
-import type { ExecutionKVStore } from '@agent/storage';
+import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
-import { BaseNode, Flow, type Action } from './index';
+import { BaseNode, Flow, type Action } from './node';
 
 interface NodeRecord {
   action?: string;

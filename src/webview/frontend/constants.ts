@@ -21,17 +21,6 @@ export type { SessionType, FileType, MultipleFileType };
 export const FILE_TYPES = FileTypeSchema.options;
 export const MULTIPLE_FILE_TYPES = MultipleFileTypeSchema.options;
 
-export const CHECK_BOXES_AUTO_EXTRACT = [
-  'autoExtractFigure',
-  'autoExtractTikzFigure',
-  'autoCompileInputPdf',
-] as const;
-
-export const CHECK_BOXES_TOOL_USE = [
-  'attachTeXCount',
-  'attachDiagnostics',
-] as const;
-
 export const ELEMENT_IDS = {
   INSTRUCTION: 'instruction',
   SESSION_TYPE_TOGGLE: 'sessionTypeToggle',

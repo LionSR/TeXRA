@@ -18,7 +18,7 @@
  */
 
 // Local imports - progress view
-import type { WebviewUpdater } from '@progressView/managers';
+import type { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports - shared schemas

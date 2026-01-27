@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { FileTypeSchema, SessionTypeSchema } from './mainViewState';
+import {
+  FileTypeSchema,
+  MultipleFileTypeSchema,
+  SessionTypeSchema,
+} from './mainViewState';
 
 export const FileSelectChangeDetailSchema = z.object({
   type: FileTypeSchema,
@@ -15,13 +19,9 @@ export const StringValueDetailSchema = z.object({
 });
 export type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
 
-export const BaseFileChangeDetailSchema = StringValueDetailSchema;
-export type BaseFileChangeDetail = z.infer<typeof BaseFileChangeDetailSchema>;
-
-export const EditedFileChangeDetailSchema = StringValueDetailSchema;
-export type EditedFileChangeDetail = z.infer<
-  typeof EditedFileChangeDetailSchema
->;
+/** Alias types for semantic clarity - all share the same { value: string } structure */
+export type BaseFileChangeDetail = StringValueDetail;
+export type EditedFileChangeDetail = StringValueDetail;
 
 export const FileActionDetailSchema = z.object({
   type: z.union([FileTypeSchema, z.enum(['base', 'edited'])]),
@@ -36,7 +36,7 @@ export type MultipleFilesActionDetail = z.infer<
 >;
 
 export const MultipleFilesTypeActionDetailSchema = z.object({
-  type: z.enum(['input', 'reference', 'auxiliary', 'media', 'output']),
+  type: MultipleFileTypeSchema,
 });
 export type MultipleFilesTypeActionDetail = z.infer<
   typeof MultipleFilesTypeActionDetailSchema
@@ -94,8 +94,7 @@ export type LatexDiffsActionDetail = z.infer<
   typeof LatexDiffsActionDetailSchema
 >;
 
-export const CommitChangeDetailSchema = StringValueDetailSchema;
-export type CommitChangeDetail = z.infer<typeof CommitChangeDetailSchema>;
+export type CommitChangeDetail = StringValueDetail;
 
 export const FocusInstructionDetailSchema = z.object({
   key: z.string(),
@@ -118,13 +117,8 @@ export const AgentChangeDetailSchema = z.object({
 });
 export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
 
-export const ModelChangeDetailSchema = StringValueDetailSchema;
-export type ModelChangeDetail = z.infer<typeof ModelChangeDetailSchema>;
-
-export const InstructionChangeDetailSchema = StringValueDetailSchema;
-export type InstructionChangeDetail = z.infer<
-  typeof InstructionChangeDetailSchema
->;
+export type ModelChangeDetail = StringValueDetail;
+export type InstructionChangeDetail = StringValueDetail;
 
 export const ActionDetailSchema = z.object({
   action: z.string(),

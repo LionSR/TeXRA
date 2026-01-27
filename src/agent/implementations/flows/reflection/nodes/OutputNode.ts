@@ -6,7 +6,7 @@
  */
 
 import { Node } from '@agent/node';
-import type { RoundFileMapping } from '@agent/output';
+import type { RoundFileMapping } from '@agent/output/types';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';

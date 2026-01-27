@@ -23,7 +23,7 @@ const STATUS_ICONS: Record<string, string> = {
 
 @customElement('todo-list')
 export class TodoList extends LitElement {
-  static styles = [
+  static override styles = [
     codiconIconClasses,
     animationStyles,
     css`
@@ -113,7 +113,7 @@ export class TodoList extends LitElement {
 
   @property({ type: Array }) todos: TodoItem[] = [];
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {
       return nothing;
     }

@@ -287,12 +287,3 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
 
-// Combined commands object for convenience (not exported - use individual exports)
-const WEBVIEW_COMMANDS = {
-  COMMON: COMMON_COMMANDS,
-  MAIN_VIEW: MAIN_VIEW_COMMANDS,
-  PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
-  HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
-  PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
-  MEMORY_VIEW: MEMORY_VIEW_COMMANDS,
-} as const;

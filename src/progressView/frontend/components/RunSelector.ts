@@ -10,7 +10,7 @@ import { ProgressEvents } from '../events';
 
 @customElement('run-selector')
 export class RunSelector extends LitElement {
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
       min-width: 180px;
@@ -35,7 +35,7 @@ export class RunSelector extends LitElement {
   }> = [];
   @property({ type: String }) activeRunId: string | null = null;
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const sortedRuns = [...this.runs].sort((a, b) => {
       const aTime = this.toTime(a.startTime);
       const bTime = this.toTime(b.startTime);

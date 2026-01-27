@@ -6,6 +6,10 @@
  */
 import { z } from 'zod';
 
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 
 import { AgentCategorySchema } from './agent';
@@ -105,11 +109,6 @@ export type HistoryViewInboundMessage = z.infer<
 // ============================================================
 // Type-safe handler registry and dispatcher
 // ============================================================
-
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 
 export type HistoryViewInboundHandlerRegistry =
   HandlerRegistry<HistoryViewInboundMessage>;

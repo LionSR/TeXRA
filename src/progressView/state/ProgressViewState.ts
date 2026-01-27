@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 import {
   AgentCategoryFilterSchema,
+  ContextStateDataSchema,
   createStreamState,
   StorageKeySchema,
   TodoItemSchema,
   type AgentCategoryFilter,
+  type ContextStateData,
   type ExecutionId,
   type InstructionUpdate,
   type OutputFileInfo,
@@ -14,28 +16,22 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils';
+import { isPlainObject } from '@shared/utils/string';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import {
-  AgentLogger,
-  ContextStateDataSchema,
-  type ContextStateData,
-} from '@logger/AgentLogger';
+import { AgentLogger } from '@logger/AgentLogger';
 import {
   TaskState,
   TaskStateSchema,
   isToolUseTaskState,
 } from '@logger/TaskState';
-import {
-  OutputFilesManager,
-  RunInstructionManager,
-  StreamTabsManager,
-  TaskGroupManager,
-  UsageStatsManager,
-} from '@progressView/managers';
+import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
+import { RunInstructionManager } from '@progressView/managers/RunInstructionManager';
+import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
+import { TaskGroupManager } from '@progressView/managers/TaskGroupManager';
+import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getConfig } from '@utils/config';

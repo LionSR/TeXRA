@@ -40,9 +40,6 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
-  // Note: View-specific styles are handled via Lit CSS-in-JS, not external CSS files
-  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [];
-
   protected getWebviewPath(filePath: string): vscode.Uri {
     return vscode.Uri.joinPath(
       this.context.extensionUri,
@@ -84,10 +81,6 @@ export abstract class BaseViewContentProvider {
     try {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
-      const sharedUris = this.buildUriRecord(
-        webview,
-        this.sharedModuleDescriptors,
-      );
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
 
@@ -98,7 +91,6 @@ export abstract class BaseViewContentProvider {
 
       return buildWebviewHtml(webview, htmlPath, {
         ...commonUris,
-        ...sharedUris,
         ...specificUris,
         ...templateVariables,
       });

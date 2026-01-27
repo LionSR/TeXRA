@@ -19,7 +19,7 @@ import type { InstructionUpdate } from '@shared/schemas';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
-  static styles = [
+  static override styles = [
     commonViewStyles,
     codiconIconClasses,
     css`
@@ -106,7 +106,7 @@ export class InstructionPanel extends LitElement {
     this.visible = Boolean(this.instruction?.text?.trim());
   }
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     const text = this.instruction?.text ?? '';
     if (!text.trim()) {
       return nothing;

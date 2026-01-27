@@ -202,6 +202,17 @@ export class BannerGroup extends LitElement {
     this.dispatchEvent(MainViewEvents.dismissLogin());
   }
 
+  private getToolLabel(tool: string): string {
+    switch (tool) {
+      case 'gm':
+        return 'GraphicsMagick';
+      case 'magick':
+        return 'ImageMagick';
+      default:
+        return tool;
+    }
+  }
+
   private renderApiKeyBanner(): TemplateResult | typeof nothing {
     if (!this.apiKeyBanner.visible) return nothing;
 
@@ -300,12 +311,7 @@ export class BannerGroup extends LitElement {
                 tools,
                 (tool) => tool,
                 (tool) => {
-                  const label =
-                    tool === 'gm'
-                      ? 'GraphicsMagick'
-                      : tool === 'magick'
-                        ? 'ImageMagick'
-                        : tool;
+                  const label = this.getToolLabel(tool);
                   return html`
                     <div class="dependency-item">
                       <span>${label}</span>
