@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
 // Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -31,8 +32,6 @@ import type { StreamFilter, StreamSort } from '../store';
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-// Local imports - progress view utils
-
 /** Format status string for display (capitalize first letter) */
 function formatStatusLabel(status: string): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
@@ -40,7 +39,8 @@ function formatStatusLabel(status: string): string {
 
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
-  static styles = [
+  static override styles = [
+    commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
     css`
@@ -214,7 +214,7 @@ export class StreamTabs extends LitElement {
   @property({ type: String }) filter: StreamFilter = 'all';
   @property({ type: String }) sort: StreamSort = 'time';
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="tabs">
         <div class="tabs-content">
@@ -294,7 +294,12 @@ export class StreamTabs extends LitElement {
           'is-active': isActive,
         })}
       >
-        <button class="tab" data-stream=${stream.name} title=${tooltip}>
+        <button
+          class="tab"
+          data-stream=${stream.name}
+          data-action="select"
+          title=${tooltip}
+        >
           <div class="tab-header">
             <span
               class=${classMap({
@@ -340,50 +345,55 @@ export class StreamTabs extends LitElement {
           title="Delete stream"
           aria-label="Delete stream"
           data-stream=${stream.name}
+          data-action="delete"
         ></vscode-toolbar-button>
       </div>
     `;
   }
 
-  private handleTabClick(event: MouseEvent) {
+  private handleTabClick(event: MouseEvent): void {
     const target = event.target as Element | null;
     if (!target) return;
 
-    const tabButton = target.closest('.tab');
-    if (tabButton instanceof HTMLElement && tabButton.dataset.stream) {
-      this.dispatchEvent(
-        ProgressEvents.streamSwitch({ streamId: tabButton.dataset.stream }),
-      );
-      return;
-    }
+    // Find element with data-stream and data-action (unified delegation)
+    const actionElement = target.closest('[data-stream][data-action]');
+    if (!(actionElement instanceof HTMLElement)) return;
 
-    const deleteButton = target.closest('.tab-delete');
-    if (deleteButton instanceof HTMLElement && deleteButton.dataset.stream) {
-      this.dispatchEvent(
-        ProgressEvents.streamDelete({ streamId: deleteButton.dataset.stream }),
-      );
+    const { stream: streamId, action } = actionElement.dataset;
+    if (!streamId) return;
+
+    switch (action) {
+      case 'select':
+        this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
+        break;
+      case 'delete':
+        this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
+        break;
+      default:
+        break;
     }
   }
 
-  private handleFilterChange(event: Event) {
+  private handleFilterChange(event: Event): void {
     const filter = getRadioValue<StreamFilter>(event);
     if (!filter) return;
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));
   }
 
-  private handleSortClick(event: MouseEvent) {
+  private handleSortClick(event: MouseEvent): void {
     const target = event.target as Element | null;
     if (!target) return;
 
-    const button = target.closest('.sort-btn') as HTMLElement | null;
-    if (!button?.dataset.sort) return;
+    // Find element with data-sort attribute (unified delegation)
+    const button = target.closest('[data-sort]');
+    if (!(button instanceof HTMLElement) || !button.dataset.sort) return;
 
     this.dispatchEvent(
       ProgressEvents.sortChange({ sort: button.dataset.sort as StreamSort }),
     );
   }
 
-  private handleDeleteAll() {
+  private handleDeleteAll(): void {
     this.dispatchEvent(ProgressEvents.deleteAll());
   }
 

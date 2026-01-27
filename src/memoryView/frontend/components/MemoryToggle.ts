@@ -1,3 +1,7 @@
+/**
+ * MemoryToggle component - checkbox to enable/disable memory for chat agents.
+ */
+
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -10,7 +14,7 @@ import { MemoryViewEvents } from '../events';
 
 @customElement('memory-toggle')
 export class MemoryToggle extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     css`
       :host {
@@ -29,14 +33,14 @@ export class MemoryToggle extends LitElement {
   @property({ type: Boolean }) enabled = false;
   @property({ type: Boolean }) disabled = false;
 
-  private handleChange = (event: Event): void => {
+  private handleChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
       MemoryViewEvents.toggleEnabled(Boolean(target?.checked)),
     );
-  };
+  }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="memory-settings">
         <vscode-checkbox
@@ -48,5 +52,11 @@ export class MemoryToggle extends LitElement {
         </vscode-checkbox>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'memory-toggle': MemoryToggle;
   }
 }

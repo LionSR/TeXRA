@@ -1,6 +1,9 @@
 // Third-party imports
 import { css, type CSSResult } from 'lit';
 
+// Shared badge/category styles are imported in HistoryApp.ts from @shared/styles
+// This file contains only history-view-specific styles
+
 export const historyViewStyles: CSSResult = css`
   .search-container {
     display: flex;
@@ -43,17 +46,16 @@ export const historyViewStyles: CSSResult = css`
   }
 
   .clear-container {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--spacing-xlarge);
   }
 
   .button-clear {
-    margin-bottom: var(--spacing-small);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--spacing-medium) var(--spacing-large);
   }
 
   .history-details {
     display: grid;
-    grid-template-columns: var(--width-button-min, 100px) 1fr;
+    grid-template-columns: 100px 1fr;
     gap: var(--spacing-small);
     margin-top: var(--spacing-medium);
   }
@@ -92,11 +94,6 @@ export const historyViewStyles: CSSResult = css`
     margin-bottom: var(--spacing-small);
   }
 
-  .history-none {
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
-
   .config-section {
     display: flex;
     flex-direction: column;
@@ -126,50 +123,23 @@ export const historyViewStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .badge {
-    display: inline-block;
-    padding: var(--spacing-tiny) var(--spacing-small);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
+  .history-none {
+    color: var(--color-text-secondary);
+    font-style: italic;
   }
 
-  .agent-category-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-small);
-  }
-
-  .agent-category-badge .codicon {
-    font-size: var(--font-size-sm);
-  }
-
-  .category-workflow {
-    background-color: var(
-      --vscode-editorInfo-background,
-      rgba(0, 127, 212, 0.15)
-    );
-    color: var(--vscode-editorInfo-foreground, #3794ff);
-  }
-
-  .category-tool-use {
-    background-color: var(
-      --vscode-editorWarning-background,
-      rgba(255, 204, 0, 0.15)
-    );
-    color: var(--vscode-editorWarning-foreground, #cca700);
-  }
-
+  /* Search highlight styles for mark.js */
   mark {
     background-color: var(
       --vscode-editor-findMatchHighlightBackground,
       #ffef0b80
     );
+    color: var(--vscode-editor-findMatchHighlightForeground, inherit);
     padding: 0;
     border-radius: var(--border-radius-small);
   }
 
-  mark.current-match {
+  mark[data-current='true'] {
     background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
     outline: var(--border-thin) solid var(--vscode-focusBorder);
   }

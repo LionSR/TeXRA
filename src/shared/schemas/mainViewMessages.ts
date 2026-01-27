@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const FileListSchema = z.array(z.string());
@@ -18,13 +16,6 @@ const BaseFileOptionsSchema = z.object({
   preserveBaseFile: z.boolean().nullish(),
 });
 
-// =============================================================================
-// TYPED OPTION SCHEMAS (Lit-native)
-// =============================================================================
-
-/**
- * Typed model option for Lit-native rendering.
- */
 export const ModelOptionDataSchema = z.object({
   value: z.string(),
   label: z.string(),
@@ -37,9 +28,6 @@ export const ModelOptionDataSchema = z.object({
 
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
-/**
- * Typed agent option for Lit-native rendering.
- */
 export const AgentOptionDataSchema = z.object({
   value: z.string(),
   label: z.string(),
@@ -52,28 +40,13 @@ export const AgentOptionDataSchema = z.object({
 
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
-// =============================================================================
-// MESSAGE SCHEMAS
-// =============================================================================
-
 export const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
-  /** @deprecated Use optionsData for Lit-native rendering */
-  options: z.string().optional(),
-  /** Typed model options for Lit-native rendering */
   optionsData: z.array(ModelOptionDataSchema).optional(),
 });
 
 export const SetAgentOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS),
-  /** @deprecated Use optionsData for Lit-native rendering */
-  options: z
-    .object({
-      workflow: z.string().nullish(),
-      toolUse: z.string().nullish(),
-    })
-    .nullish(),
-  /** Typed agent options for Lit-native rendering */
   optionsData: z
     .object({
       workflow: z.array(AgentOptionDataSchema).optional(),
@@ -268,10 +241,6 @@ export const SetSelectedAgentMessageSchema = z.object({
   agentId: z.string().nullish(),
   sessionType: z.string().nullish(),
 });
-
-// =============================================================================
-// Frontend → Backend payload schemas (MainView actions)
-// =============================================================================
 
 export const RequestRecentCommitsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),

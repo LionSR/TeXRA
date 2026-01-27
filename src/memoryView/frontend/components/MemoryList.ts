@@ -1,3 +1,7 @@
+/**
+ * MemoryList component - renders list of saved memory items.
+ */
+
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -6,7 +10,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 
-// Local imports - memory view components
+// Local imports - memory view components (side-effect: register)
 import './MemoryItem';
 
 // Local imports - shared schemas
@@ -14,7 +18,7 @@ import type { MemoryViewItem } from '@shared/schemas';
 
 @customElement('memory-list')
 export class MemoryList extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     commonViewStyles,
     css`
@@ -32,7 +36,7 @@ export class MemoryList extends LitElement {
 
   @property({ attribute: false }) items: MemoryViewItem[] = [];
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
         No saved memories yet. The assistant will create notes here when it
@@ -49,5 +53,11 @@ export class MemoryList extends LitElement {
         )}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'memory-list': MemoryList;
   }
 }

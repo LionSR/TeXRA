@@ -1,11 +1,5 @@
-/**
- * Main view event detail schemas.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - main view state
 import { FileTypeSchema, SessionTypeSchema } from './mainViewState';
 
 export const FileSelectChangeDetailSchema = z.object({
@@ -53,6 +47,12 @@ export const RemoveFileDetailSchema = z.object({
   file: z.string(),
 });
 export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
+
+export const ReorderFilesDetailSchema = z.object({
+  listId: z.string(),
+  files: z.array(z.string()),
+});
+export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;
 
 export const CheckboxChangeDetailSchema = z.object({
   id: z.string(),

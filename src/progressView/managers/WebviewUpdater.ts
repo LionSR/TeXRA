@@ -1,35 +1,29 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Type imports
-import {
-  type AgentProposalPrompt,
-  type BashApprovalPrompt,
-  type ContextState,
-  type InstructionUpdate,
-  type LogMessageData,
-  type OutputFileInfo,
-  type ProgressViewOutboundMessage,
-  type RetryRequestPrompt,
-  type StreamState,
-  type StreamStatus,
-  type StreamTabId,
-  type StreamTabInfo,
-  type TaskGroup,
-  type TodoItem,
-  type TokenUsageStats,
-  type ToolEditApprovalPrompt,
-  type UpdateTaskGroupPayload,
-} from '@shared/schemas';
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
-
-// Shared schemas - message types for type-safe webview communication
-
-// Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type {
+  AgentCategoryFilter,
+  AgentProposalPermission,
+  BashPermission,
+  ContextState,
+  InstructionUpdate,
+  LogMessageData,
+  OutputFileInfo,
+  ProgressViewOutboundMessage,
+  RetryPermission,
+  StreamState,
+  StreamStatus,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+  TodoItem,
+  TokenUsageStats,
+  ToolEditPermission,
+  UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
 /**
  * Extra content to include with log updates.
@@ -202,14 +196,14 @@ export class WebviewUpdater {
     });
   }
 
-  showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
+  showToolEditPermission(permission: ToolEditPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: prompt,
+      request: permission,
     });
   }
 
-  resolveToolEditApprovalPrompt(requestId: string): void {
+  resolveToolEditPermission(requestId: string): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
       requestId,
@@ -227,21 +221,21 @@ export class WebviewUpdater {
     });
   }
 
-  showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
+  showBashPermission(permission: BashPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
-      request: prompt,
+      request: permission,
     });
   }
 
-  resolveBashApprovalPrompt(requestId: string): void {
+  resolveBashPermission(requestId: string): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
       requestId,
     });
   }
 
-  showRetryRequest(request: RetryRequestPrompt): void {
+  showRetryRequest(request: RetryPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
       request,
@@ -255,7 +249,7 @@ export class WebviewUpdater {
     });
   }
 
-  showAgentProposal(proposal: AgentProposalPrompt): void {
+  showAgentProposal(proposal: AgentProposalPermission): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,

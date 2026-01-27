@@ -1,13 +1,9 @@
-/**
- * Main view state and UI schema definitions.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// =============================================================================
-// Core enums
-// =============================================================================
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from './mainViewMessages';
 
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
@@ -28,10 +24,6 @@ export const MultipleFileTypeSchema = z.enum([
   'output',
 ]);
 export type MultipleFileType = z.infer<typeof MultipleFileTypeSchema>;
-
-// =============================================================================
-// Persisted state schema
-// =============================================================================
 
 export const MainViewPersistedStateSchema = z.object({
   sessionType: SessionTypeSchema.prefault('toolUse'),
@@ -72,10 +64,6 @@ export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;
 
-// =============================================================================
-// Banner UI schemas
-// =============================================================================
-
 export const BannerStateSchema = z.object({
   visible: z.boolean(),
 });
@@ -99,10 +87,6 @@ export const DependencyBannerStateSchema = BannerStateSchema.extend({
   missingTools: z.array(z.string()).nullish(),
 });
 export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
-
-// =============================================================================
-// UI configuration schemas
-// =============================================================================
 
 export const FileSelectConfigSchema = z.object({
   type: FileTypeSchema,
@@ -134,3 +118,69 @@ export const CheckboxValuesSchema = MainViewPersistedStateSchema.pick({
   attachDiagnostics: true,
 });
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
+
+export const SingleFilesSchema = z.object({
+  inputFile: z.string(),
+  referenceFile: z.string(),
+  auxiliaryFile: z.string(),
+  mediaFile: z.string(),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+export type SingleFiles = z.infer<typeof SingleFilesSchema>;
+
+export const FileOptionsSchema = z.object({
+  inputFile: z.array(z.string()),
+  referenceFile: z.array(z.string()),
+  auxiliaryFile: z.array(z.string()),
+  mediaFile: z.array(z.string()),
+  baseFile: z.array(z.string()),
+  editedFile: z.array(z.string()),
+  commit: z.array(z.string()).optional(),
+});
+export type FileOptions = z.infer<typeof FileOptionsSchema>;
+
+export const MultiFilesSchema = z.object({
+  inputFiles: z.array(z.string()),
+  referenceFiles: z.array(z.string()),
+  auxiliaryFiles: z.array(z.string()),
+  mediaFiles: z.array(z.string()),
+  outputFiles: z.array(z.string()),
+});
+export type MultiFiles = z.infer<typeof MultiFilesSchema>;
+
+export const MultiFilesVisibleSchema = z.object({
+  inputFiles: z.boolean(),
+  referenceFiles: z.boolean(),
+  auxiliaryFiles: z.boolean(),
+  mediaFiles: z.boolean(),
+  outputFiles: z.boolean(),
+});
+export type MultiFilesVisible = z.infer<typeof MultiFilesVisibleSchema>;
+
+export const FileStateContextSchema = z.object({
+  sessionType: SessionTypeSchema,
+  checkboxValues: CheckboxValuesSchema,
+  singleFiles: SingleFilesSchema,
+  fileOptions: FileOptionsSchema,
+  multiFiles: MultiFilesSchema,
+  multiFilesVisible: MultiFilesVisibleSchema,
+  outputFilesActive: z.boolean(),
+});
+export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
+
+export const SessionContextSchema = z.object({
+  sessionType: SessionTypeSchema,
+  instruction: z.string(),
+  placeholder: z.string(),
+  workflowAgent: z.string(),
+  toolUseAgent: z.string(),
+  model: z.string(),
+  workflowAgentOptions: z.array(AgentOptionDataSchema),
+  toolUseAgentOptions: z.array(AgentOptionDataSchema),
+  modelOptions: z.array(ModelOptionDataSchema),
+  isRecording: z.boolean(),
+  isPolishing: z.boolean(),
+  debugMode: z.boolean(),
+});
+export type SessionContextValue = z.infer<typeof SessionContextSchema>;

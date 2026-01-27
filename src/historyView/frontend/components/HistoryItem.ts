@@ -1,3 +1,8 @@
+/**
+ * HistoryItem component - displays a single history entry with collapsible details.
+ * Uses mark.js for search highlighting.
+ */
+
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
@@ -5,7 +10,12 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import Mark from 'mark.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import {
+  badgeStyles,
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+} from '@shared/styles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 
 // Local imports - history view styles
@@ -21,10 +31,11 @@ type ConfigValue = string | number | boolean | string[] | null | undefined;
 
 @customElement('history-item')
 export class HistoryItem extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     commonViewStyles,
+    ...badgeStyles,
     historyViewStyles,
   ];
 
@@ -39,14 +50,14 @@ export class HistoryItem extends LitElement {
   @queryAll('mark')
   private markElements!: HTMLElement[];
 
-  private handleAction = (action: string): void => {
+  private handleAction(action: string): void {
     if (!this.item) return;
     this.dispatchEvent(
       HistoryViewEvents.historyAction({ action, historyId: this.item.id }),
     );
-  };
+  }
 
-  private handleToggle = (event: CustomEvent<{ open?: boolean }>): void => {
+  private handleToggle(event: CustomEvent<{ open?: boolean }>): void {
     if (!this.item) return;
     const open = event.detail?.open ?? this.open;
     this.dispatchEvent(
@@ -55,35 +66,44 @@ export class HistoryItem extends LitElement {
         open: Boolean(open),
       }),
     );
-  };
+  }
+
+  private handleDeleteClick(): void {
+    this.handleAction('delete');
+  }
+
+  private handleRestoreClick(): void {
+    this.handleAction('restore');
+  }
+
+  private handleRerunClick(): void {
+    this.handleAction('rerun');
+  }
 
   /**
-   * React to highlightedMatchIndex changes - apply current-match class.
+   * React to highlightedMatchIndex changes - apply current match attribute.
    * Uses direct DOM manipulation since mark.js creates marks dynamically.
    */
   protected override updated(): void {
-    // Only update if highlightedMatchIndex changed
     if (this.highlightedMatchIndex === this.previousHighlightedIndex) {
       return;
     }
 
     const marks = this.getMarks();
+    const prevMark =
+      this.previousHighlightedIndex !== null
+        ? marks[this.previousHighlightedIndex]
+        : null;
+    const currMark =
+      this.highlightedMatchIndex !== null
+        ? marks[this.highlightedMatchIndex]
+        : null;
 
-    // Remove current-match from previous
-    if (
-      this.previousHighlightedIndex !== null &&
-      marks[this.previousHighlightedIndex]
-    ) {
-      marks[this.previousHighlightedIndex].classList.remove('current-match');
-    }
+    prevMark?.removeAttribute('data-current');
 
-    // Add current-match to new and scroll
-    if (this.highlightedMatchIndex !== null && marks[this.highlightedMatchIndex]) {
-      marks[this.highlightedMatchIndex].classList.add('current-match');
-      marks[this.highlightedMatchIndex].scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+    if (currMark) {
+      currMark.setAttribute('data-current', 'true');
+      currMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     this.previousHighlightedIndex = this.highlightedMatchIndex;
@@ -130,15 +150,16 @@ export class HistoryItem extends LitElement {
     return html`${value ?? ''}`;
   }
 
+  private hasValue(value: ConfigValue): boolean {
+    if (value === null || value === undefined) return false;
+    return !Array.isArray(value) || value.length > 0;
+  }
+
   private renderConfigSection(
-    label: string,
+    label: string | TemplateResult,
     entries: Array<[string, ConfigValue]>,
   ): TemplateResult | null {
-    const filtered = entries.filter(([, value]) => {
-      if (value === null || value === undefined) return false;
-      if (Array.isArray(value) && value.length === 0) return false;
-      return true;
-    });
+    const filtered = entries.filter(([, value]) => this.hasValue(value));
     if (!filtered.length) return null;
 
     return html`
@@ -156,19 +177,16 @@ export class HistoryItem extends LitElement {
     `;
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (!this.item) {
-      return html``;
+      return nothing;
     }
 
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
-    const categoryName =
-      config.agentCategory === 'toolUse' ? 'toolUse' : 'workflow';
-    const categoryClass =
-      config.agentCategory === 'toolUse'
-        ? 'category-tool-use'
-        : 'category-workflow';
+    const isToolUse = config.agentCategory === 'toolUse';
+    const categoryName = isToolUse ? 'toolUse' : 'workflow';
+    const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
     const decorator = getAgentCategoryDecorator(categoryName);
     const instructionText = config.instruction?.trim()
       ? config.instruction
@@ -193,29 +211,15 @@ export class HistoryItem extends LitElement {
     ]);
     if (outputSection) extraDetails.push(outputSection);
 
-    if (config.toolConfig && config.agentCategory !== 'toolUse') {
-      const toolEntries = Object.entries(config.toolConfig).filter(
-        ([, value]) => value !== null && value !== undefined,
+    if (config.toolConfig && !isToolUse) {
+      const toolEntries = (
+        Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
+      ).filter(([, value]) => this.hasValue(value));
+      const toolSection = this.renderConfigSection(
+        html`<i class="codicon codicon-tools"></i> Config`,
+        toolEntries,
       );
-      if (toolEntries.length > 0) {
-        extraDetails.push(html`
-          <span class="history-label">
-            <i class="codicon codicon-tools"></i> Config:
-          </span>
-          <div class="history-value config-section">
-            ${toolEntries.map(([key, value]) => {
-              return html`
-                <div class="config-item">
-                  <span class="config-key">${key}:</span>
-                  <span class="config-value">
-                    ${this.renderValue(value as ConfigValue)}
-                  </span>
-                </div>
-              `;
-            })}
-          </div>
-        `);
-      }
+      if (toolSection) extraDetails.push(toolSection);
     }
 
     return html`
@@ -227,19 +231,19 @@ export class HistoryItem extends LitElement {
               icon="trash"
               label="Delete"
               title="Delete"
-              @click=${() => this.handleAction('delete')}
+              @click=${this.handleDeleteClick}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="reply"
               label="Restore"
               title="Restore"
-              @click=${() => this.handleAction('restore')}
+              @click=${this.handleRestoreClick}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="debug-rerun"
               label="Rerun"
               title="Rerun"
-              @click=${() => this.handleAction('rerun')}
+              @click=${this.handleRerunClick}
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
@@ -307,5 +311,11 @@ export class HistoryItem extends LitElement {
           : nothing}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-item': HistoryItem;
   }
 }

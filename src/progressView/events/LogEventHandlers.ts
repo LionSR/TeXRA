@@ -1,13 +1,9 @@
-/**
- * Log event handlers for progress view.
- *
- * Handles log message events: addLogMessage, updateLogMessage.
- */
-import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import { MESSAGE_TYPES } from '@shared/schemas';
+
 import { withEventErrorHandling } from './errorHandling';
 import {
   canUpdateWebview,
@@ -15,9 +11,6 @@ import {
   type EventHandlerContext,
 } from './EventHandlerContext';
 
-/**
- * Register log event handlers on the event bus.
- */
 export function registerLogEventHandlers(
   bus: ProgressEventBusLike,
   ctx: EventHandlerContext,

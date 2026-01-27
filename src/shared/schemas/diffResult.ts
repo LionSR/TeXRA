@@ -1,31 +1,14 @@
-/**
- * Diff result schemas for latexdiff operations.
- *
- * Supports both new format (DiffResult from backend) and legacy format
- * with automatic transformation to a canonical display structure.
- *
- * Following CLAUDE.md: "Handle legacy at entry point using safeParse,
- * not scattered fallbacks in consumers."
- */
+// Third-party imports
 import { z } from 'zod';
+
+// Local imports
 import { FileLocationSchema, OutputFileInfoSchema } from './output';
 import { getBasename } from '../utils/path';
-
-// ============================================================================
-// Status Schema
-// ============================================================================
 
 export const DiffStatusSchema = z.enum(['success', 'error']);
 export type DiffStatus = z.infer<typeof DiffStatusSchema>;
 
-// ============================================================================
-// New Format (canonical)
-// ============================================================================
-
-/**
- * New DiffResult format from backend.
- * This is the canonical format that legacy data transforms into.
- */
+/** Canonical DiffResult format from backend */
 export const DiffResultSchema = z.object({
   baseLocation: FileLocationSchema.nullable(),
   baseRound: z.number().nullable(),
@@ -38,14 +21,7 @@ export const DiffResultSchema = z.object({
 
 export type DiffResult = z.infer<typeof DiffResultSchema>;
 
-// ============================================================================
-// Display Data (what formatters need)
-// ============================================================================
-
-/**
- * Flattened display data for rendering latexdiff entries.
- * Both new and legacy formats transform to this structure.
- */
+/** Flattened display data for rendering latexdiff entries */
 export const DiffResultDisplaySchema = z.object({
   baseFile: z.string(),
   revisedFile: z.string(),
@@ -60,18 +36,12 @@ export const DiffResultDisplaySchema = z.object({
 
 export type DiffResultDisplay = z.infer<typeof DiffResultDisplaySchema>;
 
-// ============================================================================
-// Extraction Helpers
-// ============================================================================
-
-/** Extract absolutePath from a FileLocation or return empty string */
 function getAbsolutePath(
   location: z.infer<typeof FileLocationSchema> | null,
 ): string {
   return location?.absolutePath ?? '';
 }
 
-/** Extract display name from output file info */
 function getDisplayName(
   revised: z.infer<typeof OutputFileInfoSchema>,
   baseLocation: z.infer<typeof FileLocationSchema> | null,
@@ -98,13 +68,6 @@ function getDisplayName(
   return 'unknown';
 }
 
-// ============================================================================
-// Transform: New Format -> Display
-// ============================================================================
-
-/**
- * Transform new DiffResult to display format.
- */
 export function transformDiffResultToDisplay(
   entry: DiffResult,
 ): DiffResultDisplay {
@@ -121,16 +84,9 @@ export function transformDiffResultToDisplay(
   };
 }
 
-// ============================================================================
-// Legacy Format Schema
-// ============================================================================
-
-/** Legacy location object with absolutePath */
-const LegacyLocationSchema = z
-  .object({
-    absolutePath: z.string().optional(),
-  })
-  .passthrough();
+const LegacyLocationSchema = z.looseObject({
+  absolutePath: z.string().optional(),
+});
 
 /** Legacy locations container */
 const LegacyLocationsSchema = z
@@ -141,17 +97,13 @@ const LegacyLocationsSchema = z
   })
   .optional();
 
-/** Extract round from label like "[r1]" or "file.tex [r2]" */
 function parseRoundFromLabel(label: string | undefined): number | null {
   if (typeof label !== 'string') return null;
   const match = label.match(/\[r(\d+)\]/);
   return match ? parseInt(match[1], 10) : null;
 }
 
-/**
- * Legacy DiffResult format (locations + labels).
- * Transforms to DiffResultDisplay on parse.
- */
+/** Legacy DiffResult format - transforms to DiffResultDisplay on parse */
 export const LegacyDiffResultSchema = z
   .object({
     locations: LegacyLocationsSchema,
@@ -210,20 +162,7 @@ export const LegacyDiffResultSchema = z
     };
   });
 
-// ============================================================================
-// Entry Point: Parse Any Format
-// ============================================================================
-
-/**
- * Parse a diff result entry from either new or legacy format.
- * Returns validated DiffResultDisplay ready for rendering.
- *
- * Usage:
- *   const result = parseDiffResultEntry(rawData);
- *   if (result.success) {
- *     // result.data is DiffResultDisplay
- *   }
- */
+/** Parse a diff result entry from either new or legacy format */
 export function parseDiffResultEntry(
   data: unknown,
 ):
@@ -247,10 +186,7 @@ export function parseDiffResultEntry(
   return { success: false, error: 'Invalid diff result format' };
 }
 
-/**
- * Parse an array of diff result entries.
- * Returns array of validated display data, skipping invalid entries.
- */
+/** Parse an array of diff result entries, skipping invalid ones */
 export function parseDiffResultEntries(data: unknown): DiffResultDisplay[] {
   if (!Array.isArray(data)) return [];
 

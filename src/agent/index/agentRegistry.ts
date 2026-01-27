@@ -15,7 +15,6 @@ import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 import { z } from 'zod';
-import { encode as encodeHtml } from 'he';
 
 import {
   AgentCategory,
@@ -25,9 +24,9 @@ import {
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
-import type { AgentOptionData } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -527,24 +526,12 @@ export function shouldShowSourceIndicator(source: AgentSource): boolean {
 }
 
 // =============================================================================
-// HTML OPTIONS BUILDER (for webview dropdowns)
+// VISIBLE AGENTS (for dropdowns)
 // =============================================================================
 
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 export const DEFAULT_TOOL_USE_AGENT = 'chat';
 
-export interface AgentOptionsPayload {
-  workflow: string;
-  toolUse: string;
-}
-
-/**
- * Build dropdown HTML options from cached agents.
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
- */
 /**
  * Get visible workflow agents (filtered and deduplicated).
  * Returns the same agents shown in the main webview dropdown.
@@ -563,24 +550,6 @@ export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
   const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
   return deduplicateByName(filterVisible(entries, configured));
-}
-
-export function buildAgentOptions(): AgentOptionsPayload {
-  const visibleWorkflow = getVisibleWorkflowAgents();
-  const visibleToolUse = getVisibleToolUseAgents();
-
-  return {
-    workflow: renderOptions(
-      visibleWorkflow,
-      DEFAULT_WORKFLOW_AGENT,
-      'No workflow agents',
-    ),
-    toolUse: renderOptions(
-      visibleToolUse,
-      DEFAULT_TOOL_USE_AGENT,
-      'No tool-use agents',
-    ),
-  };
 }
 
 /**
@@ -630,86 +599,6 @@ function filterVisible(
       configured.has(createKey(entry.source, entry.name)) ||
       configured.has(entry.name),
   );
-}
-
-function renderOptions(
-  entries: AgentEntry[],
-  defaultName: string,
-  emptyMsg: string,
-): string {
-  if (entries.length === 0) {
-    return `<vscode-option value="">${emptyMsg}</vscode-option>`;
-  }
-
-  // Sort: default agent first (by reference), then alphabetically
-  const defaultEntry = entries.find((e) => e.name === defaultName);
-  const sorted = [...entries].sort((a, b) => {
-    if (a === defaultEntry) return -1;
-    if (b === defaultEntry) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  return sorted.map(renderOption).join('\n');
-}
-
-function renderOption(entry: AgentEntry): string {
-  const key = `${entry.source}:${entry.name}`;
-  const attrs = [
-    `value="${encodeHtml(key)}"`,
-    `data-label="${encodeHtml(entry.name)}"`,
-    `data-source="${encodeHtml(entry.source)}"`,
-    entry.multiplePath && 'data-multiple="true"',
-    entry.category === AgentCategory.ToolUse && 'data-tool-use="true"',
-    entry.source === 'remote' && 'data-remote="true"',
-    entry.source === 'custom' && 'data-custom="true"',
-    entry.description && `data-description="${encodeHtml(entry.description)}"`,
-  ].filter(Boolean);
-
-  return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;
-}
-
-/**
- * Async version - ensures cache is loaded first.
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
- */
-export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
-  await ensureAgentsLoaded();
-  return buildAgentOptions();
-}
-
-/** Build placeholder options from config when cache isn't ready. */
-function buildPlaceholderOptions(
-  configKey: string,
-  defaultAgent: string,
-): string {
-  const agents = getConfig<string[]>(configKey, []);
-  const names = agents.length > 0 ? agents : [defaultAgent];
-  return names
-    .map(
-      (name) =>
-        `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
-    )
-    .join('\n');
-}
-
-/**
- * Sync version - returns placeholders from config if not loaded.
- */
-export function computeAgentOptionsSync(): AgentOptionsPayload {
-  if (initialized) {
-    return buildAgentOptions();
-  }
-
-  return {
-    workflow: buildPlaceholderOptions('texra.agents', DEFAULT_WORKFLOW_AGENT),
-    toolUse: buildPlaceholderOptions(
-      'texra.toolUseAgents',
-      DEFAULT_TOOL_USE_AGENT,
-    ),
-  };
 }
 
 // =============================================================================
