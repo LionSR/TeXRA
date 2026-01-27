@@ -16,7 +16,6 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
-  type ProviderError,
   type RetryErrorInfo,
 } from '@shared/schemas';
 import { Node, type NonIterableObject } from '@agent/node';
@@ -56,25 +55,14 @@ export interface RetryState {
 // ============================================================================
 
 /**
- * Configuration for PocketFlow Node retry behavior.
- * Used internally by RetryableInvocationNode.
- */
-interface NodeRetryConfig {
-  /**
-   * Total number of attempts, NOT the number of retries.
-   * For example, maxRetries=3 means: 1 initial attempt + 2 retries.
-   * Pass directly to Node constructor as maxRetries.
-   */
-  maxRetries: number;
-  /** Wait time between retries in seconds. Pass to Node constructor as wait. */
-  wait: number;
-}
-
-/**
  * Gets PocketFlow Node retry configuration from user settings.
  * Used internally by RetryableInvocationNode constructor.
+ *
+ * Returns { maxRetries, wait } where:
+ * - maxRetries: Total attempts (1 initial + N auto-retries)
+ * - wait: Seconds between retries
  */
-function getNodeRetryConfig(): NodeRetryConfig {
+function getNodeRetryConfig(): { maxRetries: number; wait: number } {
   const maxAutoAttempts = getModelRetryMaxAttempts() ?? 0;
   const backoffMs = getModelRetryBackoffMs() ?? 1000;
 
