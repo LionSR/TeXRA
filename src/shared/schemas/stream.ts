@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { AgentCategorySchema } from './agent.js';
-import { ExecutionIdSchema } from './identifiers.js';
+import { AgentCategorySchema } from './agent';
+import { ExecutionIdSchema } from './identifiers';
 
 export const STREAM_STATUS = {
   RUNNING: 'running',
