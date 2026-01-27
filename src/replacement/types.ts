@@ -1,6 +1,6 @@
 export type ReplacementFunction = (
   match: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   ...args: any[]
 ) => string;
 
