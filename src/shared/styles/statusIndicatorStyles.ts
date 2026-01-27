@@ -8,11 +8,14 @@
  *
  * Used by: StreamTabs, StreamHeader
  *
+ * Note: Components using statusIndicatorStyles must also include animationStyles
+ * from '@shared/styles' for the pulse-scale animation to work.
+ *
  * @example
- * import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
+ * import { animationStyles, statusIndicatorStyles } from '@shared/styles';
  *
  * class MyComponent extends LitElement {
- *   static styles = [designTokens, statusIndicatorStyles, css`...`];
+ *   static styles = [animationStyles, statusIndicatorStyles, css`...`];
  * }
  */
 
@@ -81,18 +84,7 @@ export const statusIndicatorStyles: CSSResult = css`
     opacity: var(--opacity-disabled, 0.5);
   }
 
-  /* Pulse scale animation */
-  @keyframes pulse-scale {
-    0%,
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.15);
-      opacity: 0.8;
-    }
-  }
+  /* Note: pulse-scale animation is defined in animationStyles from '@shared/styles/litStyles' */
 
   /* Alternative status text styling */
   .status-text {

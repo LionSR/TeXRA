@@ -178,8 +178,6 @@ export class WorkflowStreamContent extends LitElement {
     }
 
     return html`
-      <request-panels .permissions=${this.filteredPermissions}></request-panels>
-
       <stream-header
         .stream=${streamInfo}
         .streamState=${state}
@@ -189,6 +187,8 @@ export class WorkflowStreamContent extends LitElement {
       ></stream-header>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
+
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <log-list></log-list>
 

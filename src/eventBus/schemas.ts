@@ -8,8 +8,8 @@ import {
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
-// Import payload types from shared schemas for use in local schemas
-import type {
+// Re-export payload types from shared schemas for ProgressEventBus
+export type {
   AddTaskGroupPayload,
   UpdateTaskGroupPayload,
   UpdateTodosPayload,

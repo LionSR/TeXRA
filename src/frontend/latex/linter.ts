@@ -16,50 +16,25 @@ const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 
 /**
- * Trigger a LaTeX build for a specific file
- * @param filePath Path to the file (relative to workspace)
- * @returns Promise resolving when build is triggered
+ * Trigger a LaTeX build for a specific file.
+ * Internal helper - waits for diagnostics to update after build.
  */
-export async function triggerLaTeXBuild(filePath: string): Promise<void> {
-  if (!isTexFile(filePath)) {
-    return;
-  }
-
-  try {
-    const fullPath = WorkspaceFS.fullPath(filePath);
-    const fileUri = vscode.Uri.file(fullPath);
-
-    // Ensure file is open and saved
-    await ensureFileOpen(filePath, { preserveFocus: true, save: true });
-
-    // Start listening for diagnostics updates before triggering the build
-    const diagnosticsWait = waitForDiagnosticsChange(
-      fileUri,
-      DIAGNOSTIC_UPDATE_TIMEOUT_MS,
-    );
-
-    try {
-      await vscode.commands.executeCommand('latex-workshop.build', fileUri);
-    } finally {
-      await diagnosticsWait;
-    }
-  } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to trigger LaTeX build: ${toErrorMessage(err)}`,
-    );
-  }
-}
-
-/**
- * Get linter diagnostics for a specific file
- * @param filePath Path to the file (relative to workspace)
- * @returns Array of diagnostic information
- */
-export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
+async function triggerLaTeXBuild(filePath: string): Promise<void> {
   const fullPath = WorkspaceFS.fullPath(filePath);
   const fileUri = vscode.Uri.file(fullPath);
-  return vscode.languages.getDiagnostics(fileUri);
+
+  await ensureFileOpen(filePath, { preserveFocus: true, save: true });
+
+  const diagnosticsWait = waitForDiagnosticsChange(
+    fileUri,
+    DIAGNOSTIC_UPDATE_TIMEOUT_MS,
+  );
+
+  try {
+    await vscode.commands.executeCommand('latex-workshop.build', fileUri);
+  } finally {
+    await diagnosticsWait;
+  }
 }
 
 /**
@@ -70,7 +45,17 @@ export async function getLinterMessages(
   filePath: string,
 ): Promise<vscode.Diagnostic[]> {
   if (isTexFile(filePath)) {
-    await triggerLaTeXBuild(filePath);
+    try {
+      await triggerLaTeXBuild(filePath);
+    } catch (err) {
+      logger.warn(
+        CHANNEL,
+        `Failed to trigger LaTeX build: ${toErrorMessage(err)}`,
+      );
+    }
   }
-  return getDiagnostics(filePath);
+
+  const fullPath = WorkspaceFS.fullPath(filePath);
+  const fileUri = vscode.Uri.file(fullPath);
+  return vscode.languages.getDiagnostics(fileUri);
 }
