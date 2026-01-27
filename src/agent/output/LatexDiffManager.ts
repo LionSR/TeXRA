@@ -1,30 +1,28 @@
-// Standard library imports
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
-// Local imports - agent
-import { MESSAGE_TYPES } from '@shared/schemas';
+import {
+  type DiffResult,
+  MESSAGE_TYPES,
+  type OutputFileInfo,
+} from '@shared/schemas';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
-import { checkToolInstalled } from '@utils/system';
 import {
-  TaskRunFileService,
   flexibleFS,
+  TaskRunFileService,
   type FileLocation,
 } from '@utils/files';
-
-// Internal imports
+import { checkToolInstalled } from '@utils/system';
 import {
   getComparablePath,
   getFileDirectory,
 } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
+import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 
-// Local imports - types
-import type { OutputFileInfo, DiffResult } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
 
 interface LatexDiffDependencies {
@@ -54,17 +52,10 @@ export class LatexDiffManager {
     this.latexdiffService = new LaTeXdiffService(streamId);
   }
 
-  /**
-   * Resolve symlinks for latexdiff compatibility.
-   * (latexdiff may have issues with symlinks in some configurations)
-   */
   private resolveSymlinks(target: string): Promise<string> {
     return fs.realpath(target).catch(() => target);
   }
 
-  /**
-   * Get working directory for latexdiff - use file's directory so relative includes work.
-   */
   private async getWorkingDirectory(location: FileLocation): Promise<string> {
     const resolved = await this.resolveSymlinks(location.absolutePath);
     return path.dirname(resolved);
@@ -93,9 +84,6 @@ export class LatexDiffManager {
     });
   }
 
-  /**
-   * Get display label (basename) from FileLocation for UI/logging.
-   */
   private getDisplayLabel(location: FileLocation): string {
     return path.basename(getComparablePath(location));
   }
@@ -161,7 +149,6 @@ export class LatexDiffManager {
       return;
     }
 
-    // O(1) lookup map instead of O(n) find in loop
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
     );
@@ -175,7 +162,6 @@ export class LatexDiffManager {
 
     const aggregated: DiffResult[] = [];
 
-    // Round-based diffs (original → r0)
     if (this.agentSetting.isRewrite) {
       const basePairs = [...mapping.baseToOutput.entries()];
       this.logPairMatches(basePairs, 'base files to output files');
@@ -201,7 +187,6 @@ export class LatexDiffManager {
       }
     }
 
-    // Between-round diffs (r0 → r1)
     const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
