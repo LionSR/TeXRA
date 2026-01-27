@@ -1,10 +1,6 @@
-// Local imports - agent types
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Local imports - logger
 import { AgentLogger } from './AgentLogger';
 import type {
   ExtendedTokenUsageStats,

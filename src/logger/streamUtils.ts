@@ -1,11 +1,7 @@
-// Standard library imports
 import { randomUUID } from 'crypto';
 
-// Local imports
 import { getCleanAgentName, getMultipleName } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-// Type imports
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 interface StreamTabIdOptions {

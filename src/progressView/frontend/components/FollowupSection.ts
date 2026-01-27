@@ -234,16 +234,25 @@ export class FollowupSection extends LitElement {
               .value=${this.mode}
               @change=${this.handleModeChange}
             >
-              <vscode-radio id=${ELEMENT_IDS.FOLLOWUP_MODE_CHAT} value="chat">
+              <vscode-radio
+                id=${ELEMENT_IDS.FOLLOWUP_MODE_CHAT}
+                value="chat"
+                ?checked=${this.mode === 'chat'}
+              >
                 Chat
               </vscode-radio>
               <vscode-radio
                 id=${ELEMENT_IDS.FOLLOWUP_MODE_WORKFLOW}
                 value="workflow"
+                ?checked=${this.mode === 'workflow'}
               >
                 Workflow
               </vscode-radio>
-              <vscode-radio id=${ELEMENT_IDS.FOLLOWUP_MODE_MERGE} value="merge">
+              <vscode-radio
+                id=${ELEMENT_IDS.FOLLOWUP_MODE_MERGE}
+                value="merge"
+                ?checked=${this.mode === 'merge'}
+              >
                 Merge
               </vscode-radio>
             </vscode-radio-group>

@@ -71,10 +71,6 @@ export const historyViewStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .history-item:hover {
-    background-color: var(--vscode-list-hoverBackground);
-  }
-
   .history-item.selected {
     background-color: var(--vscode-list-activeSelectionBackground);
     color: var(--vscode-list-activeSelectionForeground);

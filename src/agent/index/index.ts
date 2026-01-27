@@ -1,8 +1,5 @@
 /**
- * Agent index module - exports from the simplified agent registry.
- *
- * For internal helpers (getVisibleWorkflowAgents, updateAgentDescription, etc.),
- * import directly from @agent/index/agentRegistry.
+ * Agent index module - public API for the agent registry.
  */
 
 // AgentSource is defined in @agent/core/AgentDataclass (value + type with same name)
@@ -10,6 +7,7 @@ export { AgentSource } from '@agent/core/AgentDataclass';
 
 export {
   // Types
+  type AgentEntry,
   type ResolvedAgent,
   // Core functions
   loadAgents,
@@ -28,4 +26,9 @@ export {
   getMultipleName,
   // Source helpers
   isRemoteAgent,
+  // Visible agents (for dropdowns and tools)
+  getVisibleWorkflowAgents,
+  getVisibleToolUseAgents,
+  // Description update (for remote agent loading)
+  updateAgentDescription,
 } from './agentRegistry';
