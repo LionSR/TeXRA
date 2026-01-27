@@ -613,13 +613,7 @@ export class RequestPanels extends LitElement {
 
   private handleActionClick = (event: MouseEvent): void => {
     // Use composedPath to get the actual clicked element inside shadow DOM
-    const path = event.composedPath();
-    const target = path[0] as Element | null;
-    if (!target) return;
-
-    const actionEl = target.closest<HTMLElement>(
-      '[data-action][data-permission-kind][data-permission-id]',
-    );
+    const actionEl = this.getActionElement(event.composedPath());
     if (!actionEl) return;
 
     const action = actionEl.dataset.action;
@@ -662,21 +656,26 @@ export class RequestPanels extends LitElement {
    */
   private handleKeydown = (event: KeyboardEvent): void => {
     // Use composedPath to get the actual element inside shadow DOM
-    const path = event.composedPath();
-    const target = path[0] as Element | null;
-    if (!target) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
 
-    // Handle Enter/Space on buttons
-    if (event.key === 'Enter' || event.key === ' ') {
-      const actionEl = target.closest<HTMLElement>(
-        '[data-action][data-permission-kind][data-permission-id]',
-      );
-      if (actionEl) {
-        event.preventDefault();
-        actionEl.click();
+    const actionEl = this.getActionElement(event.composedPath());
+    if (!actionEl) return;
+
+    event.preventDefault();
+    actionEl.click();
+  };
+
+  private getActionElement(path: EventTarget[]): HTMLElement | null {
+    for (const entry of path) {
+      if (!(entry instanceof HTMLElement)) continue;
+      if (
+        entry.matches('[data-action][data-permission-kind][data-permission-id]')
+      ) {
+        return entry;
       }
     }
-  };
+    return null;
+  }
 
   /**
    * Handle global keyboard shortcuts for permission actions.
