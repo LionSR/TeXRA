@@ -632,7 +632,7 @@ export abstract class ModelHandler<
    * Formats image content into provider-specific message format.
    * @returns Array of formatted image/document content objects
    */
-  abstract createMediaContent(mediaMessage: MediaEntry[]): unknown[];
+  abstract createMediaContent(mediaMessage: MediaEntry[]): any[];
 
   /**
    * Extracts the response text and metadata from the model's response object
@@ -641,7 +641,7 @@ export abstract class ModelHandler<
    * @returns Object containing response text, usage info, and stop reason
    */
   abstract extractResponse(
-    responseObject: Resp,
+    responseObject: any,
     endTag: string,
   ): ExtractResponseResult;
 
@@ -739,7 +739,7 @@ export abstract class ModelHandler<
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
-    responseObject: Resp,
+    responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
