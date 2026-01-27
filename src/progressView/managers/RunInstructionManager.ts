@@ -37,7 +37,7 @@ export class RunInstructionManager extends PersistentMapManager<
     storageKey: StorageKey,
     instruction: InstructionUpdate | null,
   ): Promise<void> {
-    const existing = this.items.get(stream) ?? new Map();
+    const existing = this.getOrCreate(stream, () => new Map());
 
     if (instruction) {
       existing.set(storageKey, instruction);
@@ -45,7 +45,11 @@ export class RunInstructionManager extends PersistentMapManager<
       existing.delete(storageKey);
     }
 
-    this.setOrDeleteIfEmpty(stream, existing);
+    // Clean up empty map
+    if (existing.size === 0) {
+      this.items.delete(stream);
+    }
+
     await this.save();
   }
 
@@ -56,17 +60,11 @@ export class RunInstructionManager extends PersistentMapManager<
     }
 
     existing.delete(storageKey);
-    this.setOrDeleteIfEmpty(stream, existing);
-    await this.save();
-  }
-
-  /** Sets the map if non-empty, otherwise deletes the stream entry */
-  private setOrDeleteIfEmpty(stream: StreamTabId, map: InstructionMap): void {
-    if (map.size > 0) {
-      this.items.set(stream, map);
-    } else {
+    if (existing.size === 0) {
       this.items.delete(stream);
     }
+
+    await this.save();
   }
 
   async clearStream(stream: StreamTabId): Promise<void> {

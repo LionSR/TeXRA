@@ -128,12 +128,7 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
-    let messages = this.items.get(stream);
-    if (!messages) {
-      messages = [];
-      this.items.set(stream, messages);
-    }
-    return messages;
+    return this.getOrCreate(stream, () => []);
   }
 
   /**
