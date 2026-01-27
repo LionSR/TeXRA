@@ -1,3 +1,7 @@
+/**
+ * AgentsTable component - displays table of available remote agents with selection buttons.
+ */
+
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -17,7 +21,7 @@ import type { RemoteAgent } from '@shared/schemas';
 
 @customElement('agents-table')
 export class AgentsTable extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     ...badgeStyles,
@@ -83,7 +87,7 @@ export class AgentsTable extends LitElement {
     `;
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <table class="agents-table">
         <thead>
@@ -105,5 +109,11 @@ export class AgentsTable extends LitElement {
         </tbody>
       </table>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'agents-table': AgentsTable;
   }
 }

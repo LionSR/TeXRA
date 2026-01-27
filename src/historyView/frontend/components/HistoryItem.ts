@@ -1,3 +1,8 @@
+/**
+ * HistoryItem component - displays a single history entry with collapsible details.
+ * Uses mark.js for search highlighting.
+ */
+
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
@@ -26,7 +31,7 @@ type ConfigValue = string | number | boolean | string[] | null | undefined;
 
 @customElement('history-item')
 export class HistoryItem extends LitElement {
-  static styles = [
+  static override styles = [
     designTokens,
     codiconStyles,
     commonViewStyles,
@@ -139,15 +144,16 @@ export class HistoryItem extends LitElement {
     return html`${value ?? ''}`;
   }
 
+  private hasValue(value: ConfigValue): boolean {
+    if (value === null || value === undefined) return false;
+    return !Array.isArray(value) || value.length > 0;
+  }
+
   private renderConfigSection(
-    label: string,
+    label: string | TemplateResult,
     entries: Array<[string, ConfigValue]>,
   ): TemplateResult | null {
-    const filtered = entries.filter(([, value]) => {
-      if (value === null || value === undefined) return false;
-      if (Array.isArray(value) && value.length === 0) return false;
-      return true;
-    });
+    const filtered = entries.filter(([, value]) => this.hasValue(value));
     if (!filtered.length) return null;
 
     return html`
@@ -165,19 +171,16 @@ export class HistoryItem extends LitElement {
     `;
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult | typeof nothing {
     if (!this.item) {
-      return html``;
+      return nothing;
     }
 
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
-    const categoryName =
-      config.agentCategory === 'toolUse' ? 'toolUse' : 'workflow';
-    const categoryClass =
-      config.agentCategory === 'toolUse'
-        ? 'category-tool-use'
-        : 'category-workflow';
+    const isToolUse = config.agentCategory === 'toolUse';
+    const categoryName = isToolUse ? 'toolUse' : 'workflow';
+    const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
     const decorator = getAgentCategoryDecorator(categoryName);
     const instructionText = config.instruction?.trim()
       ? config.instruction
@@ -202,29 +205,15 @@ export class HistoryItem extends LitElement {
     ]);
     if (outputSection) extraDetails.push(outputSection);
 
-    if (config.toolConfig && config.agentCategory !== 'toolUse') {
-      const toolEntries = Object.entries(config.toolConfig).filter(
-        ([, value]) => value !== null && value !== undefined,
+    if (config.toolConfig && !isToolUse) {
+      const toolEntries: Array<[string, ConfigValue]> = Object.entries(
+        config.toolConfig,
+      ).filter(([, value]) => this.hasValue(value as ConfigValue));
+      const toolSection = this.renderConfigSection(
+        html`<i class="codicon codicon-tools"></i> Config`,
+        toolEntries,
       );
-      if (toolEntries.length > 0) {
-        extraDetails.push(html`
-          <span class="history-label">
-            <i class="codicon codicon-tools"></i> Config:
-          </span>
-          <div class="history-value config-section">
-            ${toolEntries.map(([key, value]) => {
-              return html`
-                <div class="config-item">
-                  <span class="config-key">${key}:</span>
-                  <span class="config-value">
-                    ${this.renderValue(value as ConfigValue)}
-                  </span>
-                </div>
-              `;
-            })}
-          </div>
-        `);
-      }
+      if (toolSection) extraDetails.push(toolSection);
     }
 
     return html`
@@ -316,5 +305,11 @@ export class HistoryItem extends LitElement {
           : nothing}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-item': HistoryItem;
   }
 }

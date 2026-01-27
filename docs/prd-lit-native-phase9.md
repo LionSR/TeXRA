@@ -483,25 +483,39 @@ private sortableController = new SortableController(
 
 ## Success Metrics
 
-| Metric                                | Before | Current   | Target           |
-| ------------------------------------- | ------ | --------- | ---------------- |
-| Document-level listeners              | 5      | 2\*       | 0                |
-| querySelector calls in Lit components | 11     | 4\*\*     | 0                |
-| classList manipulation calls          | 4      | 2\*\*\*   | 0                |
-| unsafeHTML for dropdowns              | 7      | 0 ✅      | 0                |
-| Imperative child method calls         | 7      | 0\*\*\*\* | 0                |
-| Sortable.js jQuery patterns           | 3      | 0 ✅      | 0                |
-| Dropdown HTML utilities               | 1      | 0 ✅      | 0 (deleted)      |
-| Dual data flow patterns               | 6      | 0 ✅      | 0 (consolidated) |
+| Metric                                | Before | Current | Target           |
+| ------------------------------------- | ------ | ------- | ---------------- |
+| Document-level listeners              | 5      | 0 ✅    | 0                |
+| querySelector calls in Lit components | 11     | 0 ✅    | 0                |
+| classList manipulation calls          | 4      | 1\*     | 0                |
+| unsafeHTML for dropdowns              | 7      | 0 ✅    | 0                |
+| Imperative child method calls         | 7      | 0 ✅    | 0                |
+| Sortable.js jQuery patterns           | 3      | 0 ✅    | 0                |
+| Dropdown HTML utilities               | 1      | 0 ✅    | 0 (deleted)      |
+| Dual data flow patterns               | 6      | 0 ✅    | 0 (consolidated) |
 
-\* FileSelectGroup now lazy-attaches, LogList uses component-level
-\*\* MainApp dead code removed, Sortable moved to controller, some remain in child component event handlers (acceptable)
-\*\*\* mark.js boundary (acceptable), icons.ts deprecated
-\*\*\*\* FollowUpInput and HistoryList use reactive properties (mark.js child calls remain - acceptable boundary)
+\* Remaining classList usage is limited to `src/shared/utils/clipboard.ts` for copy feedback.
 
 ---
 
 ## Progress Log
+
+### 2026-01-27 - Log Copy Delegation Cleanup
+
+**Completed:**
+
+- Added `data-copy-content` to banner and code block copy buttons so LogList can read copy text directly.
+- Consolidated banner/code copy handling into a single delegated handler without DOM traversal.
+- Moved ProgressView delegated actions to store data on command elements (StreamTabs, FileList).
+
+**Files Modified:**
+
+- `src/progressView/frontend/components/LogList.ts`
+- `src/progressView/frontend/components/FileList.ts`
+- `src/progressView/frontend/components/StreamTabs.ts`
+- `src/progressView/frontend/formatters/htmlBuilders.ts`
+- `src/progressView/frontend/formatters/logFormatters/bannerFormatters.ts`
+- `src/progressView/frontend/formatters/logFormatters/messageFormatters.ts`
 
 ### 2026-01-26 - Phase 9a-9c Partial Complete
 
@@ -632,25 +646,17 @@ private sortableController = new SortableController(
 **Remaining Anti-patterns (for future phases):**
 These patterns exist in shared utilities and are lower priority since they're helper functions, not Lit components:
 
-1. **src/shared/utils/dropdown.ts** - innerHTML assignment, createElement, setAttribute
-   - Legacy dropdown string manipulation utilities
-   - Will be fully deprecated when all consumers use Lit templates
-
-2. **src/shared/utils/dom.ts** - querySelector, createElement, setAttribute
+1. **src/shared/utils/dom.ts** - querySelector, createElement, setAttribute
    - General DOM utility functions for VS Code web components
    - Some patterns necessary for external library integration
 
-3. **src/shared/utils/clipboard.ts** - classList, setAttribute
+2. **src/shared/utils/clipboard.ts** - classList, setAttribute
    - Copy button feedback utilities
    - Could be converted to Lit reactive controller pattern
 
-4. **src/shared/controllers/RecordingButtonController.ts** - classList, setAttribute, innerHTML
+3. **src/shared/controllers/RecordingButtonController.ts** - classList, setAttribute, innerHTML
    - Reactive controller managing external button element
    - Could be refactored to property-based approach
-
-5. **src/progressView/frontend/components/LogList.ts** - querySelector in event handlers
-   - Light DOM component with event delegation
-   - Acceptable for Light DOM event handling pattern
 
 ---
 
@@ -665,23 +671,16 @@ These patterns exist in shared utilities and are lower priority since they're he
 - All `*OptionsHtml` fields removed from schemas and contexts
 - All `unsafeHTML` fallback branches removed from components
 
-### 9.2a querySelector in Event Handlers (LOW Priority)
+### ~~9.2a querySelector in Event Handlers~~ ✅ RESOLVED
 
-**Problem:** LogList uses `@query` decorator for container but uses `querySelector` in event handlers for nested elements.
+**Resolution:** Copy buttons now carry `data-copy-content` values, and LogList reads copy text directly from the event target dataset. This preserves Light DOM event delegation without DOM traversal.
 
-**Location:** `src/progressView/frontend/components/LogList.ts:147-181`
+**Files Modified:**
 
-```typescript
-// Event handler uses querySelector
-const contentElem = copyButton
-  .closest('.banner-details')
-  ?.querySelector('.banner-content') as HTMLElement | null;
-
-const codeBlock = codeBlockCopy.closest('.code-block');
-const codeElem = codeBlock?.querySelector('code');
-```
-
-**Resolution:** This is acceptable for event delegation in Light DOM components. The pattern finds elements relative to event target, which is idiomatic for delegated handlers.
+- `src/progressView/frontend/components/LogList.ts`
+- `src/progressView/frontend/formatters/htmlBuilders.ts`
+- `src/progressView/frontend/formatters/logFormatters/bannerFormatters.ts`
+- `src/progressView/frontend/formatters/logFormatters/messageFormatters.ts`
 
 ---
 

@@ -657,6 +657,23 @@ private streamContext?: StreamContextValue;
 
 ---
 
+### 2026-01-27 - Lit Component Typing and Style Cleanup
+
+**Completed:**
+
+- Added JSDoc summaries, `override` annotations, and custom-element tag maps for History, Memory, and Profile view components to align with Lit/TS patterns.
+- Standardized empty render branches to return `nothing` instead of empty strings in History/Memory/Profile components.
+- Refined ProgressView modular CSS styles for file links, markdown spacing, group header states, and code block copy button states.
+
+**Files Modified:**
+
+- History view components: `src/historyView/frontend/HistoryApp.ts`, `src/historyView/frontend/components/HistoryItem.ts`, `src/historyView/frontend/components/HistoryList.ts`, `src/historyView/frontend/components/SearchBar.ts`
+- Memory view components: `src/memoryView/frontend/MemoryApp.ts`, `src/memoryView/frontend/components/MemoryItem.ts`, `src/memoryView/frontend/components/MemoryList.ts`, `src/memoryView/frontend/components/MemoryToggle.ts`, `src/memoryView/frontend/components/MemoryToolbar.ts`
+- Profile view components: `src/profileView/frontend/ProfileApp.ts`, `src/profileView/frontend/components/AgentsTable.ts`, `src/profileView/frontend/components/ApiAccessSection.ts`, `src/profileView/frontend/components/ProfileInfo.ts`, `src/profileView/frontend/components/SignInPrompt.ts`
+- ProgressView style modules: `src/progressView/frontend/styles/*.ts`
+
+---
+
 ## References
 
 - [Lit Directives Documentation](https://lit.dev/docs/templates/directives/)

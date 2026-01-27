@@ -1,3 +1,8 @@
+/**
+ * HistoryList component - renders list of history items with search functionality.
+ * Receives search state via reactive properties and handles navigation.
+ */
+
 // Third-party imports
 import {
   LitElement,
@@ -12,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { historyViewStyles } from '../styles';
 
-// Local imports - history view components
+// Local imports - history view components (side-effect: register)
 import './HistoryItem';
 
 // Local imports - history view events
@@ -29,7 +34,7 @@ export type SearchAction = 'next' | 'prev' | null;
 
 @customElement('history-list')
 export class HistoryList extends LitElement {
-  static styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyViewStyles];
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
@@ -242,7 +247,7 @@ export class HistoryList extends LitElement {
     this.dispatchEvent(HistoryViewEvents.clearHistory());
   };
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">No history items found</div>`;
     }
@@ -270,5 +275,11 @@ export class HistoryList extends LitElement {
         )}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-list': HistoryList;
   }
 }

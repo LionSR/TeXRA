@@ -34,7 +34,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
-import { getRunGroups } from '../stateUtils';
+import { getRunGroups, type RunGroup } from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
@@ -62,9 +62,6 @@ import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
 import './FollowUpInput';
-
-/** Run group info for the run selector */
-type RunGroup = { id: string; name: string; startTime: number };
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
@@ -112,14 +109,11 @@ export class ToolUseStreamContent extends LitElement {
     return getToolUseState(this.streamContext);
   }
 
-  private get currentPrompts(): PromptState[] {
-    return this.promptContext ?? [];
-  }
-
   private computeFilteredPrompts(): PromptState[] {
     const streamId = this.currentStreamInfo?.name;
     if (!streamId) return [];
-    return this.currentPrompts.filter(
+    const prompts = this.promptContext ?? [];
+    return prompts.filter(
       (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
     );
   }
