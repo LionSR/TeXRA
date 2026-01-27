@@ -7,6 +7,7 @@ export { designTokens, utilityStyles, animationStyles } from './litStyles.js';
 export { selectStyles } from './selectStyles.js';
 export { statusIndicatorStyles } from './statusIndicatorStyles.js';
 export { promptOverlayStyles } from './promptOverlayStyles.js';
+export { requestPanelStyles } from './requestPanelStyles.js';
 
 // Badge styles
 export {

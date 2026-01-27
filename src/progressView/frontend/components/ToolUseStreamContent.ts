@@ -56,7 +56,7 @@ import type { FollowUpInput } from './FollowUpInput';
 
 // Local imports - sibling components
 import './StreamHeader';
-import './PromptOverlay';
+import './RequestPanels';
 import './TodoList';
 import './TaskGroupList';
 import './LogList';
@@ -134,10 +134,7 @@ export class ToolUseStreamContent extends LitElement {
         .yoloActive=${Boolean(currentState.toolEditBypass)}
       ></stream-header>
 
-      <prompt-overlay
-        ?hidden=${this.filteredPrompts.length === 0}
-        .prompt=${this.filteredPrompts.at(0) ?? null}
-      ></prompt-overlay>
+      <request-panels .prompts=${this.filteredPrompts}></request-panels>
 
       <todo-list .todos=${currentState.todos}></todo-list>
 

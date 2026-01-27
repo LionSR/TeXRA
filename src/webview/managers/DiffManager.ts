@@ -1,16 +1,9 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - shared schemas
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import * as logger from '@logger/logUtils';
 import { mainViewMessages } from '@shared/schemas';
 
-// Local imports - webview commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
-
-// Local imports - logging
-import * as logger from '@logger/logUtils';
-
-// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'DiffManager';
@@ -77,7 +70,7 @@ export class DiffManager extends BaseWebviewManager {
     );
   }
 
-  private async _fetchRecentCommits(): Promise<{
+  private async fetchRecentCommits(): Promise<{
     commits: string[];
     isGitRepo: boolean;
   }> {
@@ -102,9 +95,8 @@ export class DiffManager extends BaseWebviewManager {
       });
       return;
     }
-    const result = await this._fetchRecentCommits();
+    const result = await this.fetchRecentCommits();
 
-    // Notify user when empty if requested
     const shouldNotify =
       parsed.data.notifyWhenEmpty &&
       (result.commits.length === 0 || !result.isGitRepo);
@@ -123,7 +115,7 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   async handleRefreshCommits(): Promise<void> {
-    const result = await this._fetchRecentCommits();
+    const result = await this.fetchRecentCommits();
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       ...result,

@@ -39,6 +39,7 @@ import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
 // Local imports - progress view contexts
 import {
   getWorkflowState,
+  promptsContext,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
@@ -54,6 +55,9 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 
+// Local imports - progress view component types
+import type { PromptState } from './PromptOverlay';
+
 // Local imports - sibling components
 import './StreamHeader';
 import './InstructionPanel';
@@ -62,6 +66,7 @@ import './LogList';
 import './UsagePanel';
 import './FileList';
 import './FollowupSection';
+import './RequestPanels';
 
 /** Derived values for the currently selected run */
 interface RunDerivedValues {
@@ -83,6 +88,10 @@ export class WorkflowStreamContent extends LitElement {
   @state()
   private streamContext?: StreamContextValue;
 
+  @consume({ context: promptsContext, subscribe: true })
+  @state()
+  private promptContext?: PromptState[];
+
   // Memoized derived values - updated in willUpdate when deps change
   @state() private runGroups: RunGroup[] = [];
   @state() private runValues: RunDerivedValues = {
@@ -91,6 +100,7 @@ export class WorkflowStreamContent extends LitElement {
     files: {},
     hasFiles: false,
   };
+  @state() private filteredPrompts: PromptState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {
@@ -100,6 +110,13 @@ export class WorkflowStreamContent extends LitElement {
 
       // Recompute run-specific values when runId or state changes
       this.runValues = this.computeRunValues();
+    }
+
+    if (
+      changedProperties.has('streamContext') ||
+      changedProperties.has('promptContext')
+    ) {
+      this.filteredPrompts = this.computeFilteredPrompts();
     }
   }
 
@@ -118,6 +135,15 @@ export class WorkflowStreamContent extends LitElement {
 
   private get currentFollowupOptions(): FollowupOptionsState | null {
     return this.streamContext?.followupOptions ?? null;
+  }
+
+  private computeFilteredPrompts(): PromptState[] {
+    const streamId = this.currentStreamInfo?.name;
+    if (!streamId) return [];
+    const prompts = this.promptContext ?? [];
+    return prompts.filter(
+      (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
+    );
   }
 
   /**
@@ -158,6 +184,8 @@ export class WorkflowStreamContent extends LitElement {
         .runs=${this.runGroups}
         .yoloActive=${false}
       ></stream-header>
+
+      <request-panels .prompts=${this.filteredPrompts}></request-panels>
 
       <instruction-panel .instruction=${instruction}></instruction-panel>
 

@@ -14,11 +14,11 @@ import {
   PROFILE_VIEW_COMMANDS,
 } from '@common/webview';
 
-// Local imports - auth
+// Local imports - shared schemas
 import {
   SelectAgentMessageSchema,
   SetApiAccessModeMessageSchema,
-} from '@webview/types/messages';
+} from '@shared/schemas/profileViewMessages';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
