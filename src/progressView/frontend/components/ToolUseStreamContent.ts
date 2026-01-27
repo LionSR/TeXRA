@@ -141,11 +141,7 @@ export class ToolUseStreamContent extends LitElement {
 
       <todo-list .todos=${currentState.todos}></todo-list>
 
-      <log-list
-        .groups=${currentState.taskGroups}
-        .messages=${currentState.logs}
-        .isToolUse=${true}
-      ></log-list>
+      <log-list></log-list>
 
       <usage-panel
         .contextState=${currentState.contextState ?? null}

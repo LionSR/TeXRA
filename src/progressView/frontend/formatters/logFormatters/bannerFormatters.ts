@@ -58,7 +58,7 @@ export function formatBannerContentTemplate(
   const markdownHtml = processMarkdownContent(trimmedContent);
   const shouldOpen = options?.defaultOpen ?? false;
   // prettier-ignore
-  const contentTemplate = html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}" data-raw-content=${trimmedContent}>${unsafeHTML(markdownHtml)}</div>`;
+  const contentTemplate = html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(markdownHtml)}</div>`;
 
   return html`
     <details
@@ -104,7 +104,7 @@ export function formatModelResponseTemplate(
     'log-entry-content': true,
     'banner-content--model': true,
     [`message-${level}`]: true,
-  })} data-raw-content=${trimmedContent}>${unsafeHTML(markdownHtml)}</div>`;
+  })}>${unsafeHTML(markdownHtml)}</div>`;
 
   return html`
     <details

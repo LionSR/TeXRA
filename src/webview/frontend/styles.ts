@@ -14,7 +14,7 @@ export const mainViewStyles: CSSResult = css`
     color: var(--text-color);
     font-weight: var(--font-weight);
     min-height: 100vh;
-    padding: var(--spacing-medium);
+    padding: 0;
     display: flex;
     flex-direction: column;
   }

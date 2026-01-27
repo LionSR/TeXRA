@@ -46,17 +46,16 @@ export const historyViewStyles: CSSResult = css`
   }
 
   .clear-container {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--spacing-xlarge);
   }
 
   .button-clear {
-    margin-bottom: var(--spacing-small);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--spacing-medium) var(--spacing-large);
   }
 
   .history-details {
     display: grid;
-    grid-template-columns: var(--width-button-min, 100px) 1fr;
+    grid-template-columns: 100px 1fr;
     gap: var(--spacing-small);
     margin-top: var(--spacing-medium);
   }

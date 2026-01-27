@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const FileListSchema = z.array(z.string());
@@ -18,13 +16,6 @@ const BaseFileOptionsSchema = z.object({
   preserveBaseFile: z.boolean().nullish(),
 });
 
-// =============================================================================
-// TYPED OPTION SCHEMAS (Lit-native)
-// =============================================================================
-
-/**
- * Typed model option for Lit-native rendering.
- */
 export const ModelOptionDataSchema = z.object({
   value: z.string(),
   label: z.string(),
@@ -37,9 +28,6 @@ export const ModelOptionDataSchema = z.object({
 
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
-/**
- * Typed agent option for Lit-native rendering.
- */
 export const AgentOptionDataSchema = z.object({
   value: z.string(),
   label: z.string(),
@@ -51,10 +39,6 @@ export const AgentOptionDataSchema = z.object({
 });
 
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
-
-// =============================================================================
-// MESSAGE SCHEMAS
-// =============================================================================
 
 export const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
@@ -257,10 +241,6 @@ export const SetSelectedAgentMessageSchema = z.object({
   agentId: z.string().nullish(),
   sessionType: z.string().nullish(),
 });
-
-// =============================================================================
-// Frontend → Backend payload schemas (MainView actions)
-// =============================================================================
 
 export const RequestRecentCommitsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
