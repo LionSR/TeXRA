@@ -249,14 +249,14 @@ export class PermissionCard extends LitElement {
   }
 
   private renderProposalBody(data: AgentProposalPermission): TemplateResult {
-    const isWorkflow = prompt.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
 
     return html`
-      <p><strong>Agent:</strong> ${prompt.agent}</p>
-      <p><strong>Model:</strong> ${prompt.model}</p>
-      <p><strong>Instruction:</strong> ${prompt.instruction}</p>
+      <p><strong>Agent:</strong> ${data.agent}</p>
+      <p><strong>Model:</strong> ${data.model}</p>
+      <p><strong>Instruction:</strong> ${data.instruction}</p>
       ${isWorkflow
-        ? this.renderWorkflowFiles(prompt as WorkflowAgentProposalPermission)
+        ? this.renderWorkflowFiles(data as WorkflowAgentProposalPermission)
         : nothing}
       ${this.renderFeedbackSection()}
     `;
@@ -278,23 +278,23 @@ export class PermissionCard extends LitElement {
   }
 
   private renderWorkflowFiles(
-    prompt: WorkflowAgentProposalPermission,
+    data: WorkflowAgentProposalPermission,
   ): TemplateResult {
     const combine = (single: string | null | undefined, arr: string[] = []) =>
       [single, ...arr].filter((f): f is string => Boolean(f));
 
     const fileLists = [
-      { label: 'Input', files: combine(prompt.inputFile, prompt.inputFiles) },
+      { label: 'Input', files: combine(data.inputFile, data.inputFiles) },
       {
         label: 'Reference',
-        files: combine(prompt.referenceFile, prompt.referenceFiles),
+        files: combine(data.referenceFile, data.referenceFiles),
       },
       {
         label: 'Auxiliary',
-        files: combine(prompt.auxiliaryFile, prompt.auxiliaryFiles),
+        files: combine(data.auxiliaryFile, data.auxiliaryFiles),
       },
-      { label: 'Media', files: combine(prompt.mediaFile, prompt.mediaFiles) },
-      { label: 'Output', files: prompt.outputFiles ?? [] },
+      { label: 'Media', files: combine(data.mediaFile, data.mediaFiles) },
+      { label: 'Output', files: data.outputFiles ?? [] },
     ];
 
     return html`${repeat(
@@ -439,7 +439,7 @@ export class PermissionCard extends LitElement {
     if (!this.permission) return;
     this.dispatchEvent(
       ProgressEvents.permissionAction({
-        prompt: this.permission,
+        permission: this.permission,
         action,
         feedback,
       }),
