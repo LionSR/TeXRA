@@ -244,19 +244,17 @@ export class FileList extends LitElement {
       '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
-    // Store paths in data attributes for event delegation
+    // Store paths directly on command elements for unified event delegation
+    const filePath = location.absolutePath;
+
     return html`
-      <div
-        class="file-item"
-        data-file=${location.absolutePath}
-        data-base=${ifDefined(effectiveBase || undefined)}
-        data-prev=${ifDefined(diffBase)}
-      >
+      <div class="file-item">
         <span class="file-name">
           <span
             class="file-path clickable-link"
             title=${tooltipPath}
             data-command=${COMMANDS.OPEN_FILE}
+            data-file=${filePath}
           >
             <span class="file-dir">${dir}</span>
             <span class="file-basename">${basename}</span>
@@ -284,6 +282,8 @@ export class FileList extends LitElement {
                 label="Compare with base"
                 title="Compare with base"
                 data-command=${COMMANDS.COMPARE_ORIGINAL}
+                data-file=${filePath}
+                data-base=${effectiveBase}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="accept-btn"
@@ -291,6 +291,8 @@ export class FileList extends LitElement {
                 label="Accept edits"
                 title="Accept edits"
                 data-command=${COMMANDS.ACCEPT_FILE}
+                data-file=${filePath}
+                data-base=${effectiveBase}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="merge-btn"
@@ -298,6 +300,8 @@ export class FileList extends LitElement {
                 label="Merge edits"
                 title="Merge edits"
                 data-command=${COMMANDS.MERGE_FILE}
+                data-file=${filePath}
+                data-base=${effectiveBase}
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="diff-btn"
@@ -305,6 +309,8 @@ export class FileList extends LitElement {
                 label="LaTeXdiff"
                 title="LaTeXdiff"
                 data-command=${COMMANDS.LATEXDIFF_FILE}
+                data-file=${filePath}
+                data-base=${effectiveBase}
               ></vscode-toolbar-button>
             `,
           )}
@@ -317,6 +323,9 @@ export class FileList extends LitElement {
                 label="Compare with previous round"
                 title="Compare with previous round"
                 data-command=${COMMANDS.COMPARE_PREVIOUS}
+                data-file=${filePath}
+                data-base=${effectiveBase}
+                data-prev=${diffBase}
               ></vscode-toolbar-button>
             `,
           )}
@@ -327,43 +336,23 @@ export class FileList extends LitElement {
 
   /**
    * Event delegation handler for file actions.
-   * Uses data-command on clickable elements and data-file/data-base/data-prev on file-item.
+   * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick = (event: MouseEvent): void => {
     const target = event.target as Element | null;
     if (!target) return;
 
-    // Find element with data-command
-    const actionEl = target.closest('[data-command]') as HTMLElement | null;
-    if (!actionEl) return;
+    // Find element with data-command (all needed data is on this element)
+    const actionEl = target.closest('[data-command]');
+    if (!(actionEl instanceof HTMLElement)) return;
 
-    const command = actionEl.dataset.command;
-    if (!command) return;
+    const { command, file, base, prev } = actionEl.dataset;
+    if (!command || !file) return;
 
-    // Find parent file-item for file paths
-    const fileItem = target.closest('.file-item') as HTMLElement | null;
-    if (!fileItem) return;
-
-    const file = fileItem.dataset.file;
-    if (!file) return;
-
-    // Build payload based on command
+    // Build payload - include base/prev only if present
     const payload: Record<string, string> = { file };
-
-    if (command === COMMANDS.COMPARE_PREVIOUS) {
-      const prev = fileItem.dataset.prev;
-      if (prev) payload.prev = prev;
-      const base = fileItem.dataset.base;
-      if (base) payload.base = base;
-    } else if (
-      command === COMMANDS.COMPARE_ORIGINAL ||
-      command === COMMANDS.ACCEPT_FILE ||
-      command === COMMANDS.MERGE_FILE ||
-      command === COMMANDS.LATEXDIFF_FILE
-    ) {
-      const base = fileItem.dataset.base;
-      if (base) payload.base = base;
-    }
+    if (base) payload.base = base;
+    if (prev) payload.prev = prev;
 
     this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
   };

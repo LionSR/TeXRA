@@ -1,5 +1,10 @@
+/**
+ * ApiAccessSection component - radio buttons to choose between included API access or personal keys.
+ * Shows provider and model summary when using included access.
+ */
+
 // Third-party imports
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -13,7 +18,7 @@ import { ProfileViewEvents } from '../events';
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {
-  static styles = [designTokens, ...badgeStyles, profileViewStyles];
+  static override styles = [designTokens, ...badgeStyles, profileViewStyles];
 
   @property({ type: String }) mode: 'included' | 'personal' = 'personal';
   @property({ attribute: false }) enabledProviders: string[] = [];
@@ -27,9 +32,9 @@ export class ApiAccessSection extends LitElement {
     }
   };
 
-  private renderModelSummary(): TemplateResult {
+  private renderModelSummary(): TemplateResult | typeof nothing {
     if (this.mode !== 'included') {
-      return html``;
+      return nothing;
     }
 
     const providerCount = this.enabledProviders.length;
@@ -71,12 +76,12 @@ export class ApiAccessSection extends LitElement {
                 )}
               </div>
             `
-          : ''}
+          : nothing}
       </details>
     `;
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="api-access-section">
         <h2>Model Access</h2>
@@ -119,5 +124,11 @@ export class ApiAccessSection extends LitElement {
         ${this.renderModelSummary()}
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'api-access-section': ApiAccessSection;
   }
 }

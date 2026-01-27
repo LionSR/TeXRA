@@ -95,7 +95,11 @@ ${lines.map((line, i) => {
 // Always render with CHEVRON_RIGHT_CLASS and CSS will rotate when open.
 
 /** Build a copy button for banner content. */
-export function buildCopyButton(title: string, hidden = false): TemplateResult {
+export function buildCopyButton(
+  title: string,
+  options: { hidden?: boolean; content?: string } = {},
+): TemplateResult {
+  const { hidden = false, content } = options;
   return html`
     <vscode-toolbar-button
       class="banner-content-copy"
@@ -104,6 +108,8 @@ export function buildCopyButton(title: string, hidden = false): TemplateResult {
       aria-label=${title}
       data-default-title=${title}
       data-success-title="Copied!"
+      data-copy-content=${ifDefined(content)}
+      data-copy-type="banner"
       ?hidden=${hidden}
     ></vscode-toolbar-button>
   `;
@@ -116,7 +122,7 @@ export interface DetailsSummaryOptions {
   labelClass?: string;
   includeIconClass?: boolean;
   timestamp?: { display: string; tooltip: string };
-  copyButton?: { title: string; hidden?: boolean };
+  copyButton?: { title: string; hidden?: boolean; content?: string };
 }
 
 /** Build a details summary element with icon, label, and optional extras. */
@@ -138,7 +144,7 @@ export function buildDetailsSummary(
   // prettier-ignore
   return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${timestamp
         ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
-        : ''}${copyButton ? buildCopyButton(copyButton.title, copyButton.hidden) : ''}</summary>`;
+        : ''}${copyButton ? buildCopyButton(copyButton.title, { hidden: copyButton.hidden, content: copyButton.content }) : ''}</summary>`;
 }
 
 /** Build rendered templates for file list. */
@@ -261,6 +267,8 @@ export function buildCodeBlock(
                 ? html`<button
                     class="code-block-copy"
                     title="Copy to clipboard"
+                    data-copy-content=${text}
+                    data-copy-type="code-block"
                   >
                     <i class="codicon codicon-copy"></i>
                   </button>`

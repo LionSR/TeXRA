@@ -1,3 +1,8 @@
+/**
+ * SearchBar component - search input with navigation controls.
+ * Debounces input and dispatches search events to parent.
+ */
+
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -11,7 +16,7 @@ import { HistoryViewEvents } from '../events';
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {
-  static styles = [designTokens, codiconStyles, historyViewStyles];
+  static override styles = [designTokens, codiconStyles, historyViewStyles];
 
   @property({ type: String }) matchCount = '';
 
@@ -54,7 +59,7 @@ export class SearchBar extends LitElement {
     }
   };
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="search-container">
         <vscode-textfield
@@ -83,5 +88,11 @@ export class SearchBar extends LitElement {
         </vscode-toolbar-container>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-search-bar': SearchBar;
   }
 }

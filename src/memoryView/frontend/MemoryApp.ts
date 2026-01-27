@@ -1,3 +1,8 @@
+/**
+ * MemoryApp component - main container for the agent memory view.
+ * Displays saved memories that help the assistant provide contextual help.
+ */
+
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -19,14 +24,14 @@ import {
 // Local imports - memory view commands
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
 
-// Local imports - memory view components
+// Local imports - memory view components (side-effect: register)
 import './components/MemoryToolbar';
 import './components/MemoryToggle';
 import './components/MemoryList';
 
 @customElement('memory-app')
 export class MemoryApp extends BaseWebviewApp {
-  static styles = [
+  static override styles = [
     designTokens,
     commonViewStyles,
     css`
@@ -126,7 +131,7 @@ export class MemoryApp extends BaseWebviewApp {
     });
   };
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <div class="memory-view-container">
         <memory-toolbar
@@ -153,5 +158,11 @@ export class MemoryApp extends BaseWebviewApp {
         ></memory-list>
       </div>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'memory-app': MemoryApp;
   }
 }
