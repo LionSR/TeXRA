@@ -9,7 +9,7 @@
 
 Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting Lit directives, reactive patterns, and modern component architecture. This phase addresses technical debt from the initial Lit migration where imperative patterns were preserved for expediency.
 
-> **Status: Complete** (8.1 and 8.3 fully implemented)
+> **Status: Complete** (8.1, 8.3, 8.7 fully implemented; 8.4 partial)
 
 ## Prerequisites
 
@@ -24,9 +24,10 @@ Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting
 | 8.1 styleMap directive adoption         | **Complete** | Consistency, type safety   |
 | 8.2 @lit-labs/virtualizer for LogList   | Deferred     | Performance for 1000+ logs |
 | 8.3 TaskGroupDomManager → Declarative   | **Complete** | Architecture cleanup       |
-| 8.4 @lit/context for state distribution | Deferred     | Eliminate prop drilling    |
+| 8.4 @lit/context for state distribution | **Partial**  | Eliminate prop drilling    |
 | 8.5 Light DOM → Shadow DOM migration    | Deferred     | Style encapsulation        |
 | 8.6 Additional directive opportunities  | Deferred     | Code quality               |
+| 8.7 Modular CSS-in-JS styles            | **Complete** | Maintainability            |
 
 ---
 
@@ -177,7 +178,9 @@ All concerns from TaskGroupDomManager have been addressed:
 
 ---
 
-## 8.4 @lit/context for State Distribution (MEDIUM Priority)
+## 8.4 @lit/context for State Distribution (MEDIUM Priority) - PARTIAL
+
+> **Completed:** FileStateContext implemented for MainView. SessionContext defined but not yet consumed.
 
 **Problem:** Prop drilling through multiple component levels creates verbose, fragile code.
 
@@ -221,15 +224,46 @@ export const sessionContext = createContext<SessionInfo>('session');
 @consume({ context: sessionContext }) session!: SessionInfo;
 ```
 
-### Context Candidates
+### Implemented Contexts
 
-| Context              | Provider       | Consumers                                      |
-| -------------------- | -------------- | ---------------------------------------------- |
-| `FileStateContext`   | MainApp        | FileSelectGroup, OutputFilesSection            |
-| `SessionContext`     | MainApp        | InstructionPanel, FileSelectGroup, BannerGroup |
-| `StreamStateContext` | ProgressApp    | ToolUseStreamContent, WorkflowStreamContent    |
-| `PromptsContext`     | ProgressApp    | PromptOverlay                                  |
-| `ThemeContext`       | BaseWebviewApp | All components                                 |
+| Context            | Provider | Consumers                           | Status       |
+| ------------------ | -------- | ----------------------------------- | ------------ |
+| `fileStateContext` | MainApp  | FileSelectGroup, OutputFilesSection | **Complete** |
+| `sessionContext`   | —        | InstructionPanel (planned)          | Defined only |
+
+**Implementation Details:**
+
+Location: `src/webview/frontend/contexts/mainViewContexts.ts`
+
+```typescript
+// FileStateContextValue includes all file selection state
+export interface FileStateContextValue {
+  sessionType: SessionType;
+  checkboxValues: CheckboxValues;
+  singleFiles: { inputFile, referenceFile, ... };
+  fileOptions: { inputFile: string[], ... };
+  multiFiles: { inputFiles: string[], ... };
+  multiFilesVisible: { inputFiles: boolean, ... };
+  outputFilesActive: boolean;
+}
+
+// Provider in MainApp
+@provide({ context: fileStateContext })
+private fileStateContextValue: FileStateContextValue = { ... };
+
+// Consumer in FileSelectGroup
+@consume({ context: fileStateContext, subscribe: true })
+private fileState!: FileStateContextValue;
+```
+
+### Remaining Context Candidates
+
+| Context              | Provider       | Consumers                                   | Priority |
+| -------------------- | -------------- | ------------------------------------------- | -------- |
+| `sessionContext`     | MainApp        | InstructionPanel, BannerGroup               | Medium   |
+| `StreamStateContext` | ProgressApp    | ToolUseStreamContent, WorkflowStreamContent | Low      |
+| `PromptsContext`     | ProgressApp    | PromptOverlay                               | Low      |
+| `ThemeContext`       | BaseWebviewApp | All components                              | Low      |
 
 **Effort:** Medium (2-3 hours per context)
 
@@ -357,6 +391,68 @@ render() {
 
 ---
 
+## 8.7 Modular CSS-in-JS Styles (COMPLETE)
+
+> **Completed:** All log styles refactored into 5 modular TypeScript style files.
+
+**Problem:** Monolithic CSS files in `src/progressView/styles/` were hard to maintain and didn't benefit from Shadow DOM encapsulation.
+
+**Solution:** Created modular Lit `css` tagged template styles in `src/progressView/frontend/styles/`:
+
+| Module               | Purpose                                           |
+| -------------------- | ------------------------------------------------- |
+| `logEntryStyles.ts`  | Base log entry, banner, file list, copy buttons   |
+| `groupStyles.ts`     | Task group headers, collapsible details, status   |
+| `codeBlockStyles.ts` | Syntax highlighted code blocks with copy button   |
+| `toolUseStyles.ts`   | Tool sections, diffs, errors, inline diff styling |
+| `markdownStyles.ts`  | Headings, lists, tables, blockquotes, KaTeX       |
+| `logStyles.ts`       | Composition - exports all modules as single array |
+
+**Usage Pattern:**
+
+```typescript
+// Import composed styles for full set
+import { logStyles } from '../styles/logStyles';
+
+@customElement('log-list')
+export class LogList extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    ...logStyles, // Spread the composed array
+  ];
+}
+
+// Or import individual modules for selective use
+import { codeBlockStyles, markdownStyles } from '../styles/logStyles';
+```
+
+**Benefits:**
+
+- Type-safe CSS via Lit's `css` tagged templates
+- Modular organization by concern
+- Selective import for components needing only specific styles
+- Shadow DOM encapsulation prevents style leakage
+
+**Deprecated CSS Files:**
+
+The following files in `src/progressView/styles/` are now deprecated (kept for backward compatibility):
+
+- `logs.css` → `logEntryStyles.ts`
+- `groups.css` → `groupStyles.ts`
+- `code-block.css` → `codeBlockStyles.ts`
+- `scratchpad.css` → `toolUseStyles.ts`
+- `markdown.css` → `markdownStyles.ts`
+
+**Still Required:**
+
+- `base.css` - Core layout (body, main-container)
+- `utilities.css` - Simple utility classes
+- `hljs-vscode.css` - Syntax highlighting (global, applied to Light DOM)
+
+---
+
 ## Implementation Plan
 
 ### Phase 8a: Quick Wins (1-2 hours)
@@ -394,14 +490,16 @@ render() {
 
 ## Success Metrics
 
-| Metric                                 | Before | Target                       |
-| -------------------------------------- | ------ | ---------------------------- |
-| Inline style strings                   | 6+     | 0                            |
-| Imperative DOM files                   | 2      | 0                            |
-| Props passed MainApp → FileSelectGroup | 11     | 3 (config only)              |
-| Light DOM components                   | 3      | 0 (or documented exceptions) |
-| LogList render time (1000 items)       | ~500ms | <50ms                        |
-| TaskGroupDomManager lines              | ~400   | 0 (deleted)                  |
+| Metric                                 | Before | Current        | Target                       |
+| -------------------------------------- | ------ | -------------- | ---------------------------- |
+| Inline style strings                   | 6+     | 0 ✅           | 0                            |
+| Imperative DOM files                   | 2      | 0 ✅           | 0                            |
+| Props passed MainApp → FileSelectGroup | 11     | ~5 (via ctx)   | 3 (config only)              |
+| Light DOM components                   | 3      | 3              | 0 (or documented exceptions) |
+| LogList render time (1000 items)       | ~500ms | ~500ms         | <50ms                        |
+| TaskGroupDomManager lines              | ~400   | 0 ✅           | 0 (deleted)                  |
+| CSS files → TypeScript style modules   | 0      | 5 ✅           | 5                            |
+| Context providers implemented          | 0      | 1 (partial) ✅ | 2+                           |
 
 ---
 
@@ -436,6 +534,41 @@ Moving to Shadow DOM requires CSS restructuring.
 - Formatters already use Lit templates
 - Incremental migration (one component at a time)
 - Keep external CSS for truly global styles
+
+---
+
+## Progress Log
+
+### 2026-01-27 - Phase 8.4 and 8.7 Updates
+
+**Completed:**
+
+- FileStateContext implemented with `@lit/context`:
+  - Context defined in `src/webview/frontend/contexts/mainViewContexts.ts`
+  - MainApp provides context via `@provide({ context: fileStateContext })`
+  - FileSelectGroup, OutputFilesSection consume via `@consume()`
+  - Eliminates prop drilling for file selection state
+
+- Modular CSS-in-JS styles created:
+  - 5 style modules in `src/progressView/frontend/styles/`
+  - `logStyles.ts` composes all modules for easy import
+  - Shadow DOM encapsulation for type-safe, maintainable styles
+
+**Files Created:**
+
+- `src/progressView/frontend/styles/logEntryStyles.ts`
+- `src/progressView/frontend/styles/groupStyles.ts`
+- `src/progressView/frontend/styles/codeBlockStyles.ts`
+- `src/progressView/frontend/styles/toolUseStyles.ts`
+- `src/progressView/frontend/styles/markdownStyles.ts`
+- `src/progressView/frontend/styles/logStyles.ts`
+- `src/webview/frontend/contexts/mainViewContexts.ts`
+
+**Remaining:**
+
+- SessionContext implementation (defined but not consumed)
+- Virtualizer integration (8.2)
+- Light DOM → Shadow DOM migration (8.5)
 
 ---
 
