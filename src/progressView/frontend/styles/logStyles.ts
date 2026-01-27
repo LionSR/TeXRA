@@ -1,0 +1,384 @@
+// Third-party imports
+import { css } from 'lit';
+
+export const logStyles = css`
+  /**
+   * Log entry styles for ProgressView (shadow-friendly).
+   */
+
+  :host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  task-group-list {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  task-group-list > vscode-scrollable {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  lit-virtualizer {
+    display: block;
+  }
+
+  .log-container {
+    flex: 1 1 auto;
+    padding: var(--spacing-tiny) var(--spacing-medium);
+    min-width: 0;
+    min-height: 0;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    position: relative;
+    overflow-y: auto;
+  }
+
+  .log-line {
+    line-height: 1.4;
+    margin: 0;
+    padding: calc(var(--spacing-tiny) / 2) 0;
+    display: block;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-all;
+  }
+
+  .log-entry-content {
+    padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
+    overflow: visible;
+  }
+
+  /* Light DOM formatter styles */
+  .file-list-content {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .file-list-content .file-var {
+    color: var(--color-text-secondary);
+    opacity: 0.8;
+    font-size: 0.9em;
+    margin-left: var(--spacing-tiny);
+  }
+
+  .file-list-content .file-source {
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+    font-size: 0.85em;
+    font-style: italic;
+  }
+
+  .xml-link-container {
+    margin-top: var(--spacing-small);
+    padding-top: var(--spacing-small);
+    border-top: var(--border-thin) solid var(--vscode-widget-border);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .xml-link-container .codicon {
+    opacity: var(--opacity-subtle);
+  }
+
+  .xml-link-container .document-tag {
+    color: var(--color-text-secondary);
+    opacity: 0.8;
+    font-style: italic;
+  }
+
+  .xml-link-container .xml-fix-hint {
+    flex-basis: 100%;
+    margin-top: var(--spacing-tiny);
+    color: var(--color-text-secondary);
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+  }
+
+  .xml-link-container .xml-fix-hint .codicon {
+    opacity: 1;
+    color: var(--color-text-link);
+  }
+
+  .xml-link-container .xml-fix-hint strong {
+    color: var(--color-text-link);
+  }
+
+  .detail-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .file-link {
+    color: var(--color-text-link);
+    cursor: pointer;
+  }
+
+  .file-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Web search result styles */
+  .detail-list {
+    list-style: none;
+    margin: var(--spacing-small) 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+  }
+
+  .file-list-summary {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+  }
+
+  .web-search-link {
+    color: var(--color-text-link);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .web-search-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Toggle icon for collapsible details (Light DOM) */
+  .toggle-icon {
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }
+
+  details[open] > summary .toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  /* File list details styling */
+  .file-list-details {
+    margin: var(--spacing-small) 0;
+  }
+
+  .details-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .banner-content-copy {
+    min-width: 0;
+    padding: 0 var(--spacing-tiny);
+    opacity: 0;
+    margin-left: auto;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+  }
+
+  .details-summary:hover .banner-content-copy,
+  .banner-details:focus-within .banner-content-copy,
+  .banner-content-copy:focus-visible {
+    opacity: 1;
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+  }
+
+  .banner-content-copy.copy-success {
+    opacity: 1;
+    color: var(--color-success);
+  }
+
+  .timestamp {
+    color: var(--color-text-secondary);
+  }
+
+  /* Log level badges */
+  :is(.level-debug, .level-info, .level-warn, .level-error) {
+    font-weight: bold;
+  }
+
+  .level-debug {
+    color: var(--vscode-debugTokenExpression-name, #4b9ef9);
+  }
+
+  .level-info {
+    color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
+  }
+
+  /* Shared warning/error colors for level and message */
+  .level-warn,
+  .message-warn {
+    color: var(--color-warning);
+  }
+
+  .level-error,
+  .message-error {
+    color: var(--color-error);
+  }
+
+  .message-debug {
+    color: var(--vscode-textPreformat-foreground, #a9b7c6);
+  }
+
+  .message-info {
+    color: var(--vscode-foreground);
+  }
+
+  .code-block {
+    position: relative;
+  }
+
+  .code-block pre {
+    padding: var(--spacing-small);
+    background-color: var(--background-code);
+    border: var(--border-thin) solid var(--vscode-editorWidget-border);
+    border-radius: var(--border-radius-small);
+    overflow-x: auto;
+  }
+
+  .code-block-copy {
+    position: absolute;
+    top: var(--spacing-tiny);
+    right: var(--spacing-tiny);
+    cursor: pointer;
+    opacity: var(--opacity-subtle);
+  }
+
+  .code-block-copy.copied {
+    opacity: 1;
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .code-block-copy:hover {
+    opacity: 1;
+  }
+
+  .banner-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size);
+    font-weight: 600;
+  }
+
+  .banner-details {
+    padding: var(--spacing-small) 0 var(--spacing-small) var(--spacing-large);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .banner-content {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .banner-details:not([open]) .banner-content {
+    display: none;
+  }
+
+  .log-group-header {
+    padding: var(--spacing-tiny) var(--spacing-medium);
+    margin: var(--spacing-tiny) 0;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    background-color: transparent;
+    border-left: var(--border-medium) solid var(--color-border);
+  }
+
+  .log-group-header.is-running {
+    border-left-color: var(--vscode-statusBarItem-warningBackground);
+  }
+
+  .log-group-header.is-error {
+    border-left-color: var(--vscode-errorForeground);
+  }
+
+  .log-group-header.is-stopped {
+    border-left-color: var(--vscode-testing-iconPassed);
+  }
+
+  .log-group-content {
+    padding-left: var(--spacing-small);
+    border-left: var(--border-thin) dashed
+      var(--vscode-editorGroupHeader-tabsBorder);
+  }
+
+  .log-run {
+    border: none;
+  }
+
+  .log-run > .log-group-content {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .group-status-icon {
+    margin-right: var(--spacing-small);
+  }
+
+  .group-title {
+    font-weight: bold;
+    flex-grow: 1;
+  }
+
+  .group-time {
+    font-size: var(--font-size-sm);
+    opacity: var(--opacity-subtle);
+    margin-left: var(--spacing-small);
+  }
+
+  .group-start-time,
+  .group-duration {
+    margin-right: var(--spacing-small);
+  }
+
+  .group-bullet {
+    margin: 0 var(--spacing-tiny);
+  }
+
+  .spin {
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  :is(.log-line, .banner-details)[data-group-id] {
+    border-left: var(--border-medium) solid transparent;
+  }
+
+  .log-group-content
+    > :is(.log-group-header, .log-group-content, .log-line, .banner-details) {
+    margin-left: var(--spacing-small);
+  }
+
+  .log-group-content .log-group-header {
+    border-left-width: var(--border-thin);
+  }
+
+  .log-group-content .log-group-content :is(.log-line, .banner-details) {
+    margin-left: 0;
+  }
+`;

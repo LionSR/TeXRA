@@ -337,8 +337,7 @@ export class FollowupSection extends LitElement {
 
   private getFormData(): FollowupFormData | null {
     // All form data now from reactive state (Lit-native)
-    const agent =
-      this.mode === 'merge' ? MERGE_AGENT_NAME : this.selectedAgent;
+    const agent = this.mode === 'merge' ? MERGE_AGENT_NAME : this.selectedAgent;
     const model = this.selectedModel;
     if (!agent || !model) return null;
 
@@ -363,7 +362,9 @@ export class FollowupSection extends LitElement {
 
   private renderAgentSelect(): TemplateResult {
     const agentOptions =
-      this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
+      this.mode === 'chat'
+        ? this.toolUseAgentOptions
+        : this.workflowAgentOptions;
     // renderAgentOptions includes placeholder, no need to add manually
     return renderAgentOptions(agentOptions, this.selectedAgent);
   }
@@ -425,7 +426,8 @@ export class FollowupSection extends LitElement {
         ? this.options.defaultMergeModel
         : this.streamModel || this.selectedModel;
     const modelIsValid =
-      preferredModel && this.modelOptions.some((m) => m.value === preferredModel);
+      preferredModel &&
+      this.modelOptions.some((m) => m.value === preferredModel);
     if (modelIsValid) {
       this.selectedModel = preferredModel;
     } else if (this.modelOptions.length > 0) {
@@ -437,9 +439,12 @@ export class FollowupSection extends LitElement {
 
     // Set or reset agent based on current mode's options
     const agentOptions =
-      this.mode === 'chat' ? this.toolUseAgentOptions : this.workflowAgentOptions;
+      this.mode === 'chat'
+        ? this.toolUseAgentOptions
+        : this.workflowAgentOptions;
     const agentIsValid =
-      this.selectedAgent && agentOptions.some((a) => a.value === this.selectedAgent);
+      this.selectedAgent &&
+      agentOptions.some((a) => a.value === this.selectedAgent);
     if (!agentIsValid) {
       // Reset to first available agent if current selection is invalid for this mode
       this.selectedAgent = agentOptions.length > 0 ? agentOptions[0].value : '';

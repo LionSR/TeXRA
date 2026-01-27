@@ -7,18 +7,30 @@
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
+import Sortable from 'sortablejs';
 
 // Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
+import { SESSION_TYPES } from '../constants';
+import {
+  fileStateContext,
+  type FileStateContextValue,
+} from '../contexts/mainViewContexts';
 
 // Local imports - shared schemas
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
+
+type SortableDragEvent = {
+  oldIndex?: number | null;
+  newIndex?: number | null;
+};
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -229,6 +241,9 @@ export class FileSelectGroup extends LitElement {
   /** File type configuration */
   @property({ type: Object }) config!: FileSelectConfig;
 
+  @consume({ context: fileStateContext, subscribe: true })
+  private fileState?: FileStateContextValue;
+
   /** Currently selected value */
   @property({ type: String }) selectedValue = '';
 
@@ -259,56 +274,21 @@ export class FileSelectGroup extends LitElement {
   /** Tool config menu open state */
   @state() private toolConfigMenuOpen = false;
 
-  /** Document click handler bound to this instance */
-  private readonly boundDocumentClickHandler =
-    this.handleDocumentClick.bind(this);
+  @query('.multiple-files-list')
+  private fileListElement?: HTMLElement;
 
-  /** Track if listener is currently attached */
-  private documentListenerAttached = false;
+  private sortable: Sortable | null = null;
 
   override disconnectedCallback(): void {
-    this.removeDocumentListener();
+    this.destroySortable();
     super.disconnectedCallback();
   }
 
   protected override updated(changedProps: Map<string, unknown>): void {
-    // Manage document listener based on menu state
-    const menuOpen = this.autoExtractMenuOpen || this.toolConfigMenuOpen;
-    if (menuOpen && !this.documentListenerAttached) {
-      this.addDocumentListener();
-    } else if (!menuOpen && this.documentListenerAttached) {
-      this.removeDocumentListener();
+    if (changedProps.has('config')) {
+      this.destroySortable();
     }
-  }
-
-  private addDocumentListener(): void {
-    if (this.documentListenerAttached) return;
-    // Use capture phase to detect clicks before they're handled
-    document.addEventListener('click', this.boundDocumentClickHandler, {
-      capture: true,
-    });
-    this.documentListenerAttached = true;
-  }
-
-  private removeDocumentListener(): void {
-    if (!this.documentListenerAttached) return;
-    document.removeEventListener('click', this.boundDocumentClickHandler, {
-      capture: true,
-    });
-    this.documentListenerAttached = false;
-  }
-
-  private handleDocumentClick(event: MouseEvent): void {
-    const path = event.composedPath();
-    const clickedInside = path.some(
-      (el) => el instanceof HTMLElement && el.getRootNode() === this.shadowRoot,
-    );
-
-    // If clicked outside this component, close all menus
-    if (!clickedInside) {
-      this.autoExtractMenuOpen = false;
-      this.toolConfigMenuOpen = false;
-    }
+    this.initializeSortable();
   }
 
   private get listId(): string {
@@ -394,17 +374,98 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
+  private get currentCheckboxValues(): CheckboxValues {
+    return this.fileState?.checkboxValues ?? this.checkboxValues;
+  }
+
+  private get currentSelectedValue(): string {
+    const key =
+      `${this.config.type}File` as keyof FileStateContextValue['singleFiles'];
+    return this.fileState?.singleFiles[key] ?? this.selectedValue;
+  }
+
+  private get currentOptions(): string[] {
+    const key =
+      `${this.config.type}File` as keyof FileStateContextValue['fileOptions'];
+    return this.fileState?.fileOptions[key] ?? this.options;
+  }
+
+  private get currentFiles(): string[] {
+    const key =
+      `${this.config.type}Files` as keyof FileStateContextValue['multiFiles'];
+    return this.fileState?.multiFiles[key] ?? this.files;
+  }
+
+  private get currentListVisible(): boolean {
+    const key =
+      `${this.config.type}Files` as keyof FileStateContextValue['multiFilesVisible'];
+    return this.fileState?.multiFilesVisible[key] ?? this.listVisible;
+  }
+
+  private get isToolUseSession(): boolean {
+    if (this.fileState) {
+      return this.fileState.sessionType === SESSION_TYPES.TOOL_USE;
+    }
+    return this.isToolUse;
+  }
+
+  private handleFocusOut(event: FocusEvent): void {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (!nextTarget || !this.contains(nextTarget)) {
+      this.autoExtractMenuOpen = false;
+      this.toolConfigMenuOpen = false;
+    }
+  }
+
+  private initializeSortable(): void {
+    if (this.sortable || !this.fileListElement) return;
+    this.sortable = new Sortable(this.fileListElement, {
+      animation: 150,
+      onEnd: (event) => this.handleSortEnd(event),
+    });
+  }
+
+  private destroySortable(): void {
+    this.sortable?.destroy();
+    this.sortable = null;
+  }
+
+  private handleSortEnd(event: unknown): void {
+    const { oldIndex, newIndex } = (event ?? {}) as SortableDragEvent;
+    if (
+      oldIndex === null ||
+      oldIndex === undefined ||
+      newIndex === null ||
+      newIndex === undefined
+    ) {
+      return;
+    }
+
+    const current = [...this.currentFiles];
+    const [moved] = current.splice(oldIndex, 1);
+    current.splice(newIndex, 0, moved);
+
+    this.dispatchEvent(
+      MainViewEvents.filesReordered({ listId: this.listId, files: current }),
+    );
+  }
+
   private renderFileOptions(): TemplateResult {
-    const sortedOptions = [...this.options].sort((a, b) => a.localeCompare(b));
+    const sortedOptions = [...this.currentOptions].sort((a, b) =>
+      a.localeCompare(b),
+    );
     return html`
-      <vscode-option value="" ?selected=${this.selectedValue === ''}
+      <vscode-option value="" ?selected=${this.currentSelectedValue === ''}
         >None</vscode-option
       >
       ${repeat(
         sortedOptions,
         (opt) => opt,
         (opt) => html`
-          <vscode-option value=${opt} ?selected=${opt === this.selectedValue}>
+          <vscode-option
+            value=${opt}
+            ?selected=${opt === this.currentSelectedValue}
+          >
             ${opt}
           </vscode-option>
         `,
@@ -414,8 +475,8 @@ export class FileSelectGroup extends LitElement {
 
   private renderToolConfigMenu(): TemplateResult {
     const hasChecked =
-      this.checkboxValues.attachTeXCount ||
-      this.checkboxValues.attachDiagnostics;
+      this.currentCheckboxValues.attachTeXCount ||
+      this.currentCheckboxValues.attachDiagnostics;
     const chevronClass = this.toolConfigMenuOpen
       ? 'codicon-chevron-up'
       : 'codicon-chevron-down';
@@ -442,8 +503,8 @@ export class FileSelectGroup extends LitElement {
           <div class="dropdown-menu-content">
             <vscode-checkbox
               id="attachTeXCount"
-              ?checked=${this.checkboxValues.attachTeXCount}
-              ?disabled=${this.isToolUse}
+              ?checked=${this.currentCheckboxValues.attachTeXCount}
+              ?disabled=${this.isToolUseSession}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachTeXCount',
@@ -454,8 +515,8 @@ export class FileSelectGroup extends LitElement {
             </vscode-checkbox>
             <vscode-checkbox
               id="attachDiagnostics"
-              ?checked=${this.checkboxValues.attachDiagnostics}
-              ?disabled=${this.isToolUse}
+              ?checked=${this.currentCheckboxValues.attachDiagnostics}
+              ?disabled=${this.isToolUseSession}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachDiagnostics',
@@ -472,9 +533,9 @@ export class FileSelectGroup extends LitElement {
 
   private renderAutoExtractMenu(): TemplateResult {
     const hasChecked =
-      this.checkboxValues.autoExtractFigure ||
-      this.checkboxValues.autoExtractTikzFigure ||
-      this.checkboxValues.autoCompileInputPdf;
+      this.currentCheckboxValues.autoExtractFigure ||
+      this.currentCheckboxValues.autoExtractTikzFigure ||
+      this.currentCheckboxValues.autoCompileInputPdf;
     const chevronClass = this.autoExtractMenuOpen
       ? 'codicon-chevron-up'
       : 'codicon-chevron-down';
@@ -501,7 +562,7 @@ export class FileSelectGroup extends LitElement {
           <div class="dropdown-menu-content">
             <vscode-checkbox
               id="autoExtractFigure"
-              ?checked=${this.checkboxValues.autoExtractFigure}
+              ?checked=${this.currentCheckboxValues.autoExtractFigure}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoExtractFigure',
@@ -512,7 +573,7 @@ export class FileSelectGroup extends LitElement {
             </vscode-checkbox>
             <vscode-checkbox
               id="autoExtractTikzFigure"
-              ?checked=${this.checkboxValues.autoExtractTikzFigure}
+              ?checked=${this.currentCheckboxValues.autoExtractTikzFigure}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoExtractTikzFigure',
@@ -523,7 +584,7 @@ export class FileSelectGroup extends LitElement {
             </vscode-checkbox>
             <vscode-checkbox
               id="autoCompileInputPdf"
-              ?checked=${this.checkboxValues.autoCompileInputPdf}
+              ?checked=${this.currentCheckboxValues.autoCompileInputPdf}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoCompileInputPdf',
@@ -539,12 +600,12 @@ export class FileSelectGroup extends LitElement {
   }
 
   private renderFileList(): TemplateResult {
-    if (this.files.length === 0) {
+    if (this.currentFiles.length === 0) {
       return html`<div class="file-list-placeholder">No files selected.</div>`;
     }
 
     return html`${repeat(
-      this.files,
+      this.currentFiles,
       (file) => file,
       (file) => html`
         <div class="file-item" data-path=${file}>
@@ -562,12 +623,16 @@ export class FileSelectGroup extends LitElement {
   override render(): TemplateResult {
     const { config } = this;
     const toggleId = `toggle${config.type[0].toUpperCase()}${config.type.slice(1)}Files`;
-    const chevronClass = this.listVisible
+    const chevronClass = this.currentListVisible
       ? 'codicon-chevron-up'
       : 'codicon-chevron-down';
 
     return html`
-      <div class="file-select" data-expanded=${String(this.listVisible)}>
+      <div
+        class="file-select"
+        data-expanded=${String(this.currentListVisible)}
+        @focusout=${this.handleFocusOut}
+      >
         <div class="file-select-header">
           <div class="file-select-label-group">
             <vscode-toolbar-button
@@ -650,7 +715,7 @@ export class FileSelectGroup extends LitElement {
         </div>
         <vscode-single-select
           id=${this.selectId}
-          .value=${this.selectedValue}
+          .value=${this.currentSelectedValue}
           @focus=${this.handleFocus}
           @change=${(event: Event) => {
             const target = event.currentTarget as HTMLInputElement;
@@ -662,7 +727,9 @@ export class FileSelectGroup extends LitElement {
         <div
           id="${this.listId}Container"
           class="multiple-files-container"
-          style=${styleMap({ display: this.listVisible ? 'block' : 'none' })}
+          style=${styleMap({
+            display: this.currentListVisible ? 'block' : 'none',
+          })}
         >
           <div class="multiple-files-content">
             <div id=${this.listId} class="multiple-files-list">
