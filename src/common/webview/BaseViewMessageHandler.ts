@@ -76,6 +76,14 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
+   * Set the active webview reference.
+   * For subclasses that override handleMessage and need to track the view.
+   */
+  protected setActiveView(view: T): void {
+    this._activeView = view;
+  }
+
+  /**
    * Subclasses must implement this to provide their specific handlers
    */
   protected abstract createHandlers(): Record<string, MessageHandler<T>>;
