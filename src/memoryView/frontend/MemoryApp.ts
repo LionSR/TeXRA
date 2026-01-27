@@ -65,7 +65,7 @@ export class MemoryApp extends BaseWebviewApp {
     postMessage(MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED);
   }
 
-  protected handleMessage(raw: unknown): void {
+  protected override handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object' || !('command' in raw)) {
       return;
     }
@@ -98,38 +98,34 @@ export class MemoryApp extends BaseWebviewApp {
     }
   }
 
-  private handleRefresh = (): void => {
+  private handleRefresh(): void {
     postMessage(MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA);
-  };
+  }
 
-  private handleOpenFolder = (): void => {
+  private handleOpenFolder(): void {
     postMessage(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER);
-  };
+  }
 
-  private handleToggleEnabled = (
-    event: CustomEvent<{ enabled: boolean }>,
-  ): void => {
+  private handleToggleEnabled(event: CustomEvent<{ enabled: boolean }>): void {
     postMessage(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED, {
       enabled: event.detail.enabled,
     });
-  };
+  }
 
-  private handleOpenItem = (
-    event: CustomEvent<{ storagePath: string }>,
-  ): void => {
+  private handleOpenItem(event: CustomEvent<{ storagePath: string }>): void {
     postMessage(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE, {
       storagePath: event.detail.storagePath,
     });
-  };
+  }
 
-  private handleDeleteItem = (
+  private handleDeleteItem(
     event: CustomEvent<{ storagePath: string; displayPath?: string }>,
-  ): void => {
+  ): void {
     postMessage(MEMORY_VIEW_COMMANDS.DELETE_MEMORY, {
       storagePath: event.detail.storagePath,
       displayPath: event.detail.displayPath ?? event.detail.storagePath,
     });
-  };
+  }
 
   override render(): TemplateResult {
     return html`

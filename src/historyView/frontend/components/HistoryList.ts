@@ -232,25 +232,27 @@ export class HistoryList extends LitElement {
     return this.historyItemElements ?? [];
   }
 
-  private handleToggle = (
+  private handleToggle(
     event: CustomEvent<{ historyId: string; open: boolean }>,
-  ): void => {
+  ): void {
     if (!this.state) return;
     // Ignore toggle when searching (items are auto-expanded during search)
     if (this.searchTerm) {
       return;
     }
     this.state.toggleStates.set(event.detail.historyId, event.detail.open);
-  };
+  }
 
-  private handleClear = (): void => {
+  private handleClear(): void {
     this.dispatchEvent(HistoryViewEvents.clearHistory());
-  };
+  }
 
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">No history items found</div>`;
     }
+
+    const forceOpen = Boolean(this.searchTerm && this.hasSearchMatches);
 
     return html`
       <div class="clear-container">
@@ -265,9 +267,8 @@ export class HistoryList extends LitElement {
           (item) => html`
             <history-item
               .item=${item}
-              .open=${this.searchTerm && this.hasSearchMatches
-                ? true
-                : Boolean(this.state?.toggleStates.get(item.id))}
+              .open=${forceOpen ||
+              Boolean(this.state?.toggleStates.get(item.id))}
               .highlightedMatchIndex=${this.getHighlightedMatchIndex(item.id)}
               @history-toggle=${this.handleToggle}
             ></history-item>

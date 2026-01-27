@@ -1,9 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { when } from 'lit/directives/when.js';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
@@ -32,7 +30,7 @@ function parsePath(path: string): ParsedPath {
 
 @customElement('file-list')
 export class FileList extends LitElement {
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
     }
@@ -83,6 +81,17 @@ export class FileList extends LitElement {
       min-width: 200px;
     }
 
+    .clickable-link {
+      cursor: pointer;
+      color: var(--color-text-link);
+      text-decoration: none;
+    }
+
+    .clickable-link:hover {
+      color: var(--color-text-link-active);
+      text-decoration: underline;
+    }
+
     .file-path {
       cursor: pointer;
     }
@@ -93,6 +102,7 @@ export class FileList extends LitElement {
 
     .file-dir {
       opacity: var(--opacity-subtle);
+      font-size: var(--font-size-sm);
     }
 
     .file-basename {
@@ -112,13 +122,15 @@ export class FileList extends LitElement {
     }
 
     .added {
-      color: var(--color-success);
+      color: var(--vscode-charts-green, green);
       margin-left: var(--spacing-small);
+      font-size: var(--font-size-sm);
     }
 
     .removed {
-      color: var(--color-error);
-      margin-left: var(--spacing-tiny);
+      color: var(--vscode-charts-red, red);
+      margin-left: var(--spacing-small);
+      font-size: var(--font-size-sm);
     }
 
     .file-actions {
@@ -126,6 +138,7 @@ export class FileList extends LitElement {
       gap: var(--spacing-tiny);
       flex-shrink: 0;
       flex-wrap: nowrap;
+      align-items: center;
     }
 
     .file-actions :is(vscode-button, vscode-toolbar-button) {
@@ -172,7 +185,7 @@ export class FileList extends LitElement {
     {};
   @property({ type: Boolean }) showRoundHeaders = true;
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();
     if (rounds.length === 0) {
       return nothing;
@@ -232,10 +245,7 @@ export class FileList extends LitElement {
     if (!file?.location) return nothing;
 
     const location = file.location;
-    const displayPath =
-      (file.lineage?.original
-        ? this.getDisplayPath(file.lineage.original)
-        : null) ?? this.getDisplayPath(location);
+    const displayPath = this.getDisplayPath(file.lineage?.original ?? location);
     const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
     const effectiveBase =
@@ -244,8 +254,14 @@ export class FileList extends LitElement {
       '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
-    // Store paths directly on command elements for unified event delegation
     const filePath = location.absolutePath;
+    const diffStats = this.renderDiffStats(file);
+    const baseActions = this.renderBaseActions(filePath, effectiveBase);
+    const previousAction = this.renderPreviousAction(
+      filePath,
+      effectiveBase,
+      diffBase,
+    );
 
     return html`
       <div class="file-item">
@@ -260,75 +276,9 @@ export class FileList extends LitElement {
             <span class="file-basename">${basename}</span>
           </span>
         </span>
-        ${when(
-          file.diff?.added !== undefined,
-          () => html`
-            <span class="file-stats">
-              <span class="added">+${file.diff!.added}</span>
-              ${when(
-                file.diff!.removed !== undefined,
-                () => html`<span class="removed">-${file.diff!.removed}</span>`,
-              )}
-            </span>
-          `,
-        )}
+        ${diffStats}
         <vscode-toolbar-container class="file-actions">
-          ${when(
-            effectiveBase,
-            () => html`
-              <vscode-toolbar-button
-                class="compare-btn"
-                icon="diff"
-                label="Compare with base"
-                title="Compare with base"
-                data-command=${COMMANDS.COMPARE_ORIGINAL}
-                data-file=${filePath}
-                data-base=${effectiveBase}
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                class="accept-btn"
-                icon="check"
-                label="Accept edits"
-                title="Accept edits"
-                data-command=${COMMANDS.ACCEPT_FILE}
-                data-file=${filePath}
-                data-base=${effectiveBase}
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                class="merge-btn"
-                icon="git-merge"
-                label="Merge edits"
-                title="Merge edits"
-                data-command=${COMMANDS.MERGE_FILE}
-                data-file=${filePath}
-                data-base=${effectiveBase}
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                class="diff-btn"
-                icon="diff-single"
-                label="LaTeXdiff"
-                title="LaTeXdiff"
-                data-command=${COMMANDS.LATEXDIFF_FILE}
-                data-file=${filePath}
-                data-base=${effectiveBase}
-              ></vscode-toolbar-button>
-            `,
-          )}
-          ${when(
-            diffBase,
-            () => html`
-              <vscode-toolbar-button
-                class="prev-btn"
-                icon="diff-added"
-                label="Compare with previous round"
-                title="Compare with previous round"
-                data-command=${COMMANDS.COMPARE_PREVIOUS}
-                data-file=${filePath}
-                data-base=${effectiveBase}
-                data-prev=${diffBase}
-              ></vscode-toolbar-button>
-            `,
-          )}
+          ${baseActions} ${previousAction}
         </vscode-toolbar-container>
       </div>
     `;
@@ -338,7 +288,7 @@ export class FileList extends LitElement {
    * Event delegation handler for file actions.
    * All data is stored directly on command elements for unified delegation.
    */
-  private handleFileClick = (event: MouseEvent): void => {
+  private handleFileClick(event: MouseEvent): void {
     const target = event.target as Element | null;
     if (!target) return;
 
@@ -355,7 +305,7 @@ export class FileList extends LitElement {
     if (prev) payload.prev = prev;
 
     this.dispatchEvent(ProgressEvents.fileAction({ command, ...payload }));
-  };
+  }
 
   private getSortedRounds(): [number, OutputFileInfo[]][] {
     return Object.entries(this.filesByRound)
@@ -375,5 +325,93 @@ export class FileList extends LitElement {
     return loc.kind === 'workspace' || loc.kind === 'runStorage'
       ? loc.relativePath
       : loc.absolutePath;
+  }
+
+  private renderDiffStats(
+    file: OutputFileInfo,
+  ): TemplateResult | typeof nothing {
+    const diff = file.diff;
+    if (!diff || diff.added === undefined) {
+      return nothing;
+    }
+
+    const removed =
+      diff.removed !== undefined
+        ? html`<span class="removed">-${diff.removed}</span>`
+        : nothing;
+
+    return html`
+      <span class="file-stats">
+        <span class="added">+${diff.added}</span>
+        ${removed}
+      </span>
+    `;
+  }
+
+  private renderBaseActions(
+    filePath: string,
+    basePath: string,
+  ): TemplateResult | typeof nothing {
+    if (!basePath) return nothing;
+
+    return html`
+      <vscode-toolbar-button
+        class="compare-btn"
+        icon="diff"
+        label="Compare with base"
+        title="Compare with base"
+        data-command=${COMMANDS.COMPARE_ORIGINAL}
+        data-file=${filePath}
+        data-base=${basePath}
+      ></vscode-toolbar-button>
+      <vscode-toolbar-button
+        class="accept-btn"
+        icon="check"
+        label="Accept edits"
+        title="Accept edits"
+        data-command=${COMMANDS.ACCEPT_FILE}
+        data-file=${filePath}
+        data-base=${basePath}
+      ></vscode-toolbar-button>
+      <vscode-toolbar-button
+        class="merge-btn"
+        icon="git-merge"
+        label="Merge edits"
+        title="Merge edits"
+        data-command=${COMMANDS.MERGE_FILE}
+        data-file=${filePath}
+        data-base=${basePath}
+      ></vscode-toolbar-button>
+      <vscode-toolbar-button
+        class="diff-btn"
+        icon="diff-single"
+        label="LaTeXdiff"
+        title="LaTeXdiff"
+        data-command=${COMMANDS.LATEXDIFF_FILE}
+        data-file=${filePath}
+        data-base=${basePath}
+      ></vscode-toolbar-button>
+    `;
+  }
+
+  private renderPreviousAction(
+    filePath: string,
+    basePath: string,
+    previousPath: string | undefined,
+  ): TemplateResult | typeof nothing {
+    if (!previousPath) return nothing;
+
+    return html`
+      <vscode-toolbar-button
+        class="prev-btn"
+        icon="diff-added"
+        label="Compare with previous round"
+        title="Compare with previous round"
+        data-command=${COMMANDS.COMPARE_PREVIOUS}
+        data-file=${filePath}
+        data-base=${basePath}
+        data-prev=${previousPath}
+      ></vscode-toolbar-button>
+    `;
   }
 }

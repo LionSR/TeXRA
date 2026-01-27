@@ -110,6 +110,7 @@ export const toolUseStyles = css`
       rgba(255, 0, 0, 0.1)
     );
     border-left-color: var(--color-error);
+    color: var(--color-error);
   }
 
   .tool-output-full {

@@ -91,9 +91,11 @@ export class UserMessage extends LitElement {
               >${timeDisplay}</span
             >
           </div>
-          <div class="user-message-content" data-log-id=${this.logId}>
-            ${this.text}
-          </div>
+          <div
+            class="user-message-content"
+            data-log-id=${this.logId}
+            .textContent=${this.text}
+          ></div>
         </div>
       </div>
     `;

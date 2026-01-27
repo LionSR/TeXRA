@@ -86,7 +86,7 @@ export class ToolUseStreamContent extends LitElement {
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
-  protected willUpdate(changedProperties: PropertyValues): void {
+  protected override willUpdate(changedProperties: PropertyValues): void {
     if (
       changedProperties.has('streamContext') ||
       changedProperties.has('promptContext')
@@ -118,7 +118,7 @@ export class ToolUseStreamContent extends LitElement {
     );
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const currentState = this.currentState;
     const streamInfo = this.currentStreamInfo;
     if (!currentState || !streamInfo) {
