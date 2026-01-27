@@ -74,11 +74,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
   }
 
-  protected createHandlers(): Record<string, never> {
-    // Handler registry is created dynamically via createHandlerRegistry
-    return {};
-  }
-
   private createHandlerRegistry(
     webviewView: vscode.WebviewView,
   ): MainViewInboundHandlerRegistry {

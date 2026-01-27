@@ -37,11 +37,6 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  protected createHandlers(): Record<string, never> {
-    // Handler registry is created dynamically via createHandlerRegistry
-    return {};
-  }
-
   private createHandlerRegistry(): ProfileViewInboundHandlerRegistry {
     return {
       [PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
