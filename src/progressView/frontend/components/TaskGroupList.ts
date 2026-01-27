@@ -17,7 +17,6 @@ import './LogPlaceholder';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
@@ -35,6 +34,7 @@ import { logStyles } from '../styles/logStyles';
 
 // Local imports - services
 import { AudioNotificationService } from '../services/AudioNotificationService';
+import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 interface GroupTree {
   group: TaskGroup;

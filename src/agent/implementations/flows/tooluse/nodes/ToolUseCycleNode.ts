@@ -20,8 +20,8 @@ import {
   type CycleExecResult,
   assertPreparedShared,
 } from './types';
-import type { TodoItem } from '@shared/schemas';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
+import type { TodoItem } from '@shared/schemas';
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,

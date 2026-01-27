@@ -24,5 +24,3 @@ export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
     return patterns;
   })(),
 };
-
-export default FONT_COMMAND_REPLACEMENTS;

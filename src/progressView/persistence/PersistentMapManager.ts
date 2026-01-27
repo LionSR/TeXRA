@@ -1,5 +1,5 @@
 // Local imports
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 
 export interface StateStorage {
   get<T>(key: string): T | undefined;

@@ -85,5 +85,3 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     return patterns;
   })(),
 };
-
-export default LATEX_XML_REPLACEMENTS;

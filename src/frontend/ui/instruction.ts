@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { INSTRUCTION_PREFIX, globalSM } from '@common/state/stateManager';
+import { INSTRUCTION_PREFIX, globalSM } from '@common/state';
 
 /**
  * Show an instruction message that can be permanently dismissed.
