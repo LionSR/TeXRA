@@ -226,16 +226,8 @@ export class RequestPanels extends LitElement {
             ${diffMeta}
           </div>
         </div>
-        <div class="approval-request__actions">
+        <vscode-toolbar-container class="approval-request__actions">
           ${this.renderToolEditDiffActions(permission)}
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-          ></vscode-toolbar-button>
           <vscode-toolbar-button
             icon="check"
             data-action="approve"
@@ -243,8 +235,18 @@ export class RequestPanels extends LitElement {
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Approve (y)"
-          ></vscode-toolbar-button>
-        </div>
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
+            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
           'approval-request__feedback',
@@ -271,9 +273,10 @@ export class RequestPanels extends LitElement {
           data-action="openDiff"
           data-permission-kind=${permission.kind}
           data-permission-id=${this.getPermissionId(permission)}
-          label="Diff"
-          title="View diff (d)"
-        ></vscode-toolbar-button>
+          label="Open diff"
+          title="Open diff (d)"
+          >Open diff</vscode-toolbar-button
+        >
         ${showDropdown
           ? html`
               <vscode-toolbar-button
@@ -321,15 +324,7 @@ export class RequestPanels extends LitElement {
             <code>${data.command ?? ''}</code>
           </div>
         </div>
-        <div class="bash-approval-request__actions">
-          <vscode-toolbar-button
-            icon="close"
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label="Reject"
-            title="Reject this command (n)"
-          ></vscode-toolbar-button>
+        <vscode-toolbar-container class="bash-approval-request__actions">
           <vscode-toolbar-button
             icon="check"
             data-action="approve"
@@ -337,8 +332,18 @@ export class RequestPanels extends LitElement {
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Allow this command to execute (y)"
-          ></vscode-toolbar-button>
-        </div>
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon="close"
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Reject"
+            title="Reject this command (n)"
+            >Reject</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
       </div>
     `;
   }
@@ -387,7 +392,7 @@ export class RequestPanels extends LitElement {
               `
             : nothing}
         </div>
-        <div class="retry-request__actions">
+        <vscode-toolbar-container class="retry-request__actions">
           <vscode-toolbar-button
             icon="refresh"
             data-action="retry"
@@ -395,7 +400,8 @@ export class RequestPanels extends LitElement {
             data-permission-id=${this.getPermissionId(permission)}
             label="Retry"
             title="Retry (r)"
-          ></vscode-toolbar-button>
+            >Retry</vscode-toolbar-button
+          >
           <vscode-toolbar-button
             icon="close"
             data-action="dismiss"
@@ -403,8 +409,9 @@ export class RequestPanels extends LitElement {
             data-permission-id=${this.getPermissionId(permission)}
             label="Dismiss"
             title="Dismiss (Esc)"
-          ></vscode-toolbar-button>
-        </div>
+            >Dismiss</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
       </div>
     `;
   }
@@ -446,23 +453,7 @@ export class RequestPanels extends LitElement {
               </div>`
             : nothing}
         </div>
-        <div class="workflow-proposal__actions">
-          <vscode-toolbar-button
-            icon=${isFeedbackOpen ? 'check' : 'close'}
-            data-action="reject"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
-            icon="settings-gear"
-            data-action="setup"
-            data-permission-kind=${permission.kind}
-            data-permission-id=${this.getPermissionId(permission)}
-            label="Setup"
-            title="Setup (s)"
-          ></vscode-toolbar-button>
+        <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
             icon="check"
             data-action="approve"
@@ -470,8 +461,27 @@ export class RequestPanels extends LitElement {
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Approve (y)"
-          ></vscode-toolbar-button>
-        </div>
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
+            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon="settings-gear"
+            data-action="setup"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Setup"
+            title="Setup (s)"
+            >Setup</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
         ${this.renderFeedbackSection(
           permission,
           'workflow-proposal__feedback',
@@ -602,7 +612,9 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
 
   private handleActionClick = (event: MouseEvent): void => {
-    const target = event.target as Element | null;
+    // Use composedPath to get the actual clicked element inside shadow DOM
+    const path = event.composedPath();
+    const target = path[0] as Element | null;
     if (!target) return;
 
     const actionEl = target.closest<HTMLElement>(
@@ -649,7 +661,9 @@ export class RequestPanels extends LitElement {
    * Allows Enter/Space to activate buttons.
    */
   private handleKeydown = (event: KeyboardEvent): void => {
-    const target = event.target as Element | null;
+    // Use composedPath to get the actual element inside shadow DOM
+    const path = event.composedPath();
+    const target = path[0] as Element | null;
     if (!target) return;
 
     // Handle Enter/Space on buttons
