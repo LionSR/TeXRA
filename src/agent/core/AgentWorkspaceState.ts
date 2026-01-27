@@ -28,11 +28,6 @@ export type ResponseAssemblyState = z.output<
   typeof ResponseAssemblyStateSchema
 >;
 
-const RESPONSE_ASSEMBLY_DEFAULTS: ResponseAssemblyState = {
-  lastResponse: '',
-  accumulatedOutput: '',
-};
-
 export const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
   edits: z.array(FlattenedEditRecordSchema).prefault([]),
@@ -200,20 +195,15 @@ export const ReasoningCacheStateSchema = z.object({
 
 export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-const REASONING_CACHE_DEFAULTS: ReasoningCacheState = {
-  thinkingBlocks: [],
-  thinkingAdded: false,
-};
-
 export interface ServerToolContentState {
   contentBlocks: ServerToolContentBlock[];
   lastAssistantContent: unknown[];
 }
 
-const SERVER_TOOL_CONTENT_DEFAULTS: ServerToolContentState = {
-  contentBlocks: [],
-  lastAssistantContent: [],
-};
+export const ServerToolContentStateSchema = z.object({
+  contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
+  lastAssistantContent: z.array(z.unknown()).prefault(() => []),
+});
 
 export const TodoStateSnapshotSchema = z.object({
   todos: z.array(TodoItemSchema).prefault([]),
@@ -323,11 +313,11 @@ export class AgentWorkspaceState {
 
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(
-      { ...RESPONSE_ASSEMBLY_DEFAULTS },
+      ResponseAssemblyStateSchema.parse({}),
       new MediaAttachmentState(),
-      { ...REASONING_CACHE_DEFAULTS },
+      ReasoningCacheStateSchema.parse({}),
       new FileInteractionState(),
-      { ...SERVER_TOOL_CONTENT_DEFAULTS },
+      ServerToolContentStateSchema.parse({}),
       new TodoState(),
     );
   }
@@ -339,7 +329,7 @@ export class AgentWorkspaceState {
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning,
       FileInteractionState.fromSnapshot(parsed.interactions),
-      { ...SERVER_TOOL_CONTENT_DEFAULTS },
+      ServerToolContentStateSchema.parse({}),
       TodoState.fromSnapshot(parsed.todos),
     );
   }
