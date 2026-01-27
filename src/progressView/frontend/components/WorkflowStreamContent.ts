@@ -31,7 +31,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - progress view utilities
 import { getRunGroups, hasOutputFiles } from '../stateUtils';
@@ -84,12 +84,6 @@ export class WorkflowStreamContent extends LitElement {
     }
   `;
 
-  @property({ type: Object }) state!: WorkflowStreamState;
-  @property({ type: Object }) streamInfo!: StreamTabInfo;
-  @property({ type: String }) runId: string | null = null;
-  @property({ type: Object }) followupOptions: FollowupOptionsState | null =
-    null;
-
   @consume({ context: streamStateContext, subscribe: true })
   private streamContext?: StreamContextValue;
 
@@ -102,17 +96,19 @@ export class WorkflowStreamContent extends LitElement {
     hasFiles: false,
   };
 
-  protected willUpdate(_changedProperties: PropertyValues<this>): void {
-    const currentState = this.currentState;
-    // Recompute run groups when state changes (taskGroups is inside state)
-    this.runGroups = getRunGroups(currentState?.taskGroups ?? []);
+  protected willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('streamContext')) {
+      const currentState = this.currentState;
+      // Recompute run groups when state changes (taskGroups is inside state)
+      this.runGroups = getRunGroups(currentState?.taskGroups ?? []);
 
-    // Recompute run-specific values when runId or state changes
-    this.runValues = this.computeRunValues();
+      // Recompute run-specific values when runId or state changes
+      this.runValues = this.computeRunValues();
+    }
   }
 
   private get currentStreamInfo(): StreamTabInfo | null {
-    return this.streamContext?.streamInfo ?? this.streamInfo ?? null;
+    return this.streamContext?.streamInfo ?? null;
   }
 
   private get currentState(): WorkflowStreamState | null {
@@ -120,15 +116,15 @@ export class WorkflowStreamContent extends LitElement {
     if (contextState && !isToolUseState(contextState)) {
       return contextState as WorkflowStreamState;
     }
-    return this.state ?? null;
+    return null;
   }
 
   private get currentRunId(): string | null {
-    return this.streamContext?.runId ?? this.runId ?? null;
+    return this.streamContext?.runId ?? null;
   }
 
   private get currentFollowupOptions(): FollowupOptionsState | null {
-    return this.streamContext?.followupOptions ?? this.followupOptions ?? null;
+    return this.streamContext?.followupOptions ?? null;
   }
 
   /**
