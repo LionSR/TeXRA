@@ -58,34 +58,24 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
-  hostConnected(): void {
-    // No setup needed
-  }
-
-  hostDisconnected(): void {
-    // No cleanup needed
-  }
-
   /**
    * Get computed state for use in templates (Lit-native approach).
    * The host component should use these values in its template bindings.
    */
   get state(): RecordingButtonState {
+    const recording = this._recording;
+    const icon = recording
+      ? (this.config.stopIcon ?? 'stop-circle')
+      : (this.config.startIcon ?? 'mic');
+    const title = recording
+      ? (this.config.stopTitle ?? 'Stop recording')
+      : (this.config.startTitle ?? 'Record with microphone');
     return {
-      icon: this._recording
-        ? (this.config.stopIcon ?? 'stop-circle')
-        : (this.config.startIcon ?? 'mic'),
-      title: this._recording
-        ? (this.config.stopTitle ?? 'Stop recording')
-        : (this.config.startTitle ?? 'Record with microphone'),
-      recording: this._recording,
+      icon,
+      title,
+      recording,
       recordingClass: this.config.recordingClass ?? 'recording',
     };
-  }
-
-  /** Whether currently recording */
-  get recording(): boolean {
-    return this._recording;
   }
 
   /**

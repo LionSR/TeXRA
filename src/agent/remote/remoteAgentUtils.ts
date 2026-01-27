@@ -23,7 +23,7 @@ logger.initialize(CHANNEL);
 /**
  * Result of selecting an agent in the main view.
  */
-export interface SelectAgentResult {
+interface SelectAgentResult {
   success: boolean;
   message: string;
   fallbackAction?: 'clipboard' | 'manual';
