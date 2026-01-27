@@ -27,7 +27,7 @@ import {
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import type { AgentCore } from '@agent/implementations/flows/common';
+import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
   type AgentConfig,

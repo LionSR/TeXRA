@@ -34,7 +34,7 @@ import {
   unregisterInterruptible,
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 

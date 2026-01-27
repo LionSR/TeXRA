@@ -1,28 +1,22 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
+// Local imports
 import { showLoggedErrorMessage } from '@common/errors';
 import { setPendingState } from '@common/state';
 import { buildMainViewState } from '@common/state/mainViewStateUtils';
 import { COMMON_COMMANDS } from '@common/webview/commands';
-
-// Local imports - frontend
 import { getMainWebview } from '@frontend/system/commandUtils';
-
-// Local imports - logging
 import * as logger from '@logger/logUtils';
-
-// Local imports - task state
 import type { TaskState } from '@logger/TaskState';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
 
 /**
- * Register state restore command with VS Code
+ * Register state restore command with VS Code.
  */
-export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
+export function registerStateRestoreCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.restoreState', restoreState),
   );
@@ -35,7 +29,7 @@ export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
  * @param state - The TaskState to restore
  * @param executeImmediately - If true, execute the agent after restoring state (for followup)
  */
-async function restoreState(state: TaskState, executeImmediately?: boolean) {
+async function restoreState(state: TaskState, executeImmediately?: boolean): Promise<void> {
   logger.debug(CHANNEL, 'Restoring main webview state', {
     data: { executeImmediately },
   });

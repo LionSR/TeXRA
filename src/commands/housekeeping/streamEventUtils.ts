@@ -2,8 +2,6 @@ import type { StreamConfig } from '@common/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 import { getStreamTabId } from '@/logger/streamUtils';
 
-// Local imports - common
-
 export interface ClearMissingOutputsOptions {
   /** Stream configuration (agent/model/file) */
   streamConfig: StreamConfig;

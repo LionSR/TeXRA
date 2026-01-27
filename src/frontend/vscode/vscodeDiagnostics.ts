@@ -23,9 +23,8 @@ export interface SeverityCounts {
   hints: number;
 }
 
-// Re-export vscode types for convenience
+// Re-export DiagnosticSeverity for tool implementations
 export { DiagnosticSeverity } from 'vscode';
-export type { Diagnostic } from 'vscode';
 
 // ============================================================================
 // Waiting

@@ -19,11 +19,9 @@ export const mainViewCommands = {
 };
 
 /**
- * Registers main view commands for the extension
- * @param context - The VS Code extension context
- * @returns Object containing the registered commands
+ * Registers main view commands for the extension.
  */
-export function registerMainViewCommands(context: vscode.ExtensionContext) {
+export function registerMainViewCommands(context: vscode.ExtensionContext): void {
   const resetCommand = vscode.commands.registerCommand(
     mainViewCommands.reset,
     async () => {

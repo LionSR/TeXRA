@@ -21,7 +21,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
 
     const result = await runToolWithCheck('tex-fmt', args, {
       channel: CHANNEL,
-      showError: true, // Consistent with default behavior
+      showError: true,
     });
     if (!result || !result.success) {
       return false;

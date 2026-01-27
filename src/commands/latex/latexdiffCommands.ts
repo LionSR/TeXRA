@@ -4,9 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-
-// Internal imports
+// Local imports
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -39,10 +37,6 @@ import {
 } from '@housekeeping';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import type { OutputFileInfo } from '@shared/schemas';
-
-// Local imports - agent types
-
-// Local imports - errors
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

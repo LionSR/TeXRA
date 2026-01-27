@@ -1,9 +1,6 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as nunjucks from 'nunjucks';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { renderPrompt } from '@utils/prompt';
@@ -30,9 +27,6 @@ function getLocationPath(location: FileLocation): string {
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
-
-// Configure nunjucks
-nunjucks.configure({ autoescape: false });
 
 export class TikzPictureManager {
   constructor(

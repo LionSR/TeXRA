@@ -45,6 +45,12 @@ The project supports fast builds using esbuild (for the extension host) and Vite
 
 These commands are significantly faster and do not require increased memory allocation.
 
+**Important:** Fast builds do NOT perform TypeScript type checking. To verify there are no type errors, run:
+
+```bash
+npx tsc --noEmit
+```
+
 ### Legacy Webpack Builds
 
 The original webpack-based commands are still available but require increased memory:

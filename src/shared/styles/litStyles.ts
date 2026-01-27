@@ -79,55 +79,6 @@ export const designTokens: CSSResult = css`
 `;
 
 /**
- * Common utility classes for shadow DOM components.
- */
-export const utilityStyles: CSSResult = css`
-  [hidden] {
-    display: none !important;
-  }
-
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .flex {
-    display: flex;
-  }
-  .flex-col {
-    flex-direction: column;
-  }
-  .flex-1 {
-    flex: 1;
-  }
-  .items-center {
-    align-items: center;
-  }
-  .justify-between {
-    justify-content: space-between;
-  }
-  .gap-small {
-    gap: var(--spacing-small);
-  }
-  .gap-medium {
-    gap: var(--spacing-medium);
-  }
-`;
-
-/**
  * Shared animation keyframes.
  */
 export const animationStyles: CSSResult = css`

@@ -20,7 +20,10 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
-import type { BaseFlowContextInit } from '../common/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  FlowParams,
+} from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
@@ -85,4 +88,4 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
  * Flow params type for tool-use flows.
  * Alias for base FlowParams - reserved for future use.
  */
-export type { FlowParams as ToolUseFlowParams } from '../common';
+export type { FlowParams as ToolUseFlowParams };

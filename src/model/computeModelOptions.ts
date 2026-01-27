@@ -116,14 +116,6 @@ async function isModelAvailable(
 }
 
 /**
- * Compute model <vscode-option> tags based on available API keys.
-// =============================================================================
-// TYPED OPTIONS BUILDER (Lit-native)
-// =============================================================================
-
-// ModelOptionData type is imported from @shared/schemas (single source of truth)
-
-/**
  * Build typed model option data for a single model.
  */
 async function buildModelOptionData(

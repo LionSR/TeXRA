@@ -92,16 +92,14 @@ async function detectChineseMode(
   fileLocation: FileLocation,
   channel: string,
 ): Promise<boolean> {
-  const filePath = fileLocation.absolutePath;
-  if (await hasChinesePackages(fileLocation)) {
+  const hasChinese = await hasChinesePackages(fileLocation);
+  if (hasChinese) {
     logger.debug(
       channel,
-      `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+      `Chinese packages detected in ${fileLocation.absolutePath}, enabling Chinese character counting`,
     );
-    return true;
   }
-
-  return false;
+  return hasChinese;
 }
 
 async function runTexcount(
