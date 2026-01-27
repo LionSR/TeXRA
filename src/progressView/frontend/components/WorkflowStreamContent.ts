@@ -61,6 +61,7 @@ import type {
 import './StreamHeader';
 import './InstructionPanel';
 import './TaskGroupList';
+import './LogList';
 import './UsagePanel';
 import './FileList';
 import './FollowupSection';
@@ -85,6 +86,7 @@ export class WorkflowStreamContent extends LitElement {
   `;
 
   @consume({ context: streamStateContext, subscribe: true })
+  @state()
   private streamContext?: StreamContextValue;
 
   // Memoized derived values - updated in willUpdate when deps change
@@ -96,7 +98,7 @@ export class WorkflowStreamContent extends LitElement {
     hasFiles: false,
   };
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
+  protected willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {
       const currentState = this.currentState;
       // Recompute run groups when state changes (taskGroups is inside state)

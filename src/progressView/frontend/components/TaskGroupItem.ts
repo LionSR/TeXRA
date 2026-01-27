@@ -12,26 +12,32 @@ import { classMap } from 'lit/directives/class-map.js';
 import './TaskGroupHeader';
 
 // Local imports - progress view constants
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { GROUP_DOM_IDS } from '../constants';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
+
+// Local imports - shared styles
 
 // Local imports - shared schemas
 import type { TaskGroup } from '@shared/schemas';
 
 @customElement('task-group-item')
 export class TaskGroupItem extends LitElement {
-  static override styles = css`
-    :host {
-      display: contents;
-    }
-  `;
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    ...logStyles,
+    css`
+      :host {
+        display: contents;
+      }
+    `,
+  ];
 
   @property({ type: Object }) group!: TaskGroup;
   @property({ type: Boolean }) expanded = true;
-
-  protected override createRenderRoot(): HTMLElement {
-    // Use Light DOM for CSS compatibility with existing styles
-    return this;
-  }
 
   private get isRoot(): boolean {
     return !this.group.parentGroupId;
