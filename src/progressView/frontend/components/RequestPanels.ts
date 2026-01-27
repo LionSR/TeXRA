@@ -231,7 +231,7 @@ export class RequestPanels extends LitElement {
           ></vscode-toolbar-button>
         </div>
         ${this.renderFeedbackSection(
-          prompt,
+          permission,
           'approval-request__feedback',
           'approval-request__feedback-input',
           'Why are you rejecting?',
@@ -450,7 +450,7 @@ export class RequestPanels extends LitElement {
           ></vscode-toolbar-button>
         </div>
         ${this.renderFeedbackSection(
-          prompt,
+          permission,
           'workflow-proposal__feedback',
           'workflow-proposal__feedback-input',
           'Why are you rejecting?',
@@ -466,17 +466,23 @@ export class RequestPanels extends LitElement {
       [single, ...arr].filter((f): f is string => Boolean(f));
 
     const fileLists = [
-      { label: 'Input', files: combine(prompt.inputFile, prompt.inputFiles) },
+      {
+        label: 'Input',
+        files: combine(permission.inputFile, permission.inputFiles),
+      },
       {
         label: 'Reference',
-        files: combine(prompt.referenceFile, prompt.referenceFiles),
+        files: combine(permission.referenceFile, permission.referenceFiles),
       },
       {
         label: 'Auxiliary',
-        files: combine(prompt.auxiliaryFile, prompt.auxiliaryFiles),
+        files: combine(permission.auxiliaryFile, permission.auxiliaryFiles),
       },
-      { label: 'Media', files: combine(prompt.mediaFile, prompt.mediaFiles) },
-      { label: 'Output', files: prompt.outputFiles ?? [] },
+      {
+        label: 'Media',
+        files: combine(permission.mediaFile, permission.mediaFiles),
+      },
+      { label: 'Output', files: permission.outputFiles ?? [] },
     ];
 
     return html`${repeat(
@@ -605,16 +611,16 @@ export class RequestPanels extends LitElement {
 
       const feedback = this.getFeedbackValue(key);
       this.closeFeedback(key);
-      this.emitAction(prompt, action, feedback);
+      this.emitAction(permission, action, feedback);
       return;
     }
 
     if (action === 'dismiss') {
-      this.emitAction(prompt, 'cancel');
+      this.emitAction(permission, 'cancel');
       return;
     }
 
-    this.emitAction(prompt, action);
+    this.emitAction(permission, action);
   };
 
   private handleMenuClick = (event: CustomEvent): void => {
@@ -624,20 +630,21 @@ export class RequestPanels extends LitElement {
     const menuItem = target.closest('vscode-context-menu-item');
     if (!menuItem) return;
 
-    const kind = menuItem.dataset.promptKind as
+    const kind = menuItem.dataset.permissionKind as
       | PermissionState['kind']
       | undefined;
-    const promptId = menuItem.dataset.promptId;
+    const permissionId = menuItem.dataset.permissionId;
     const action = event.detail?.value ?? menuItem.getAttribute('value') ?? '';
-    if (!kind || !promptId || !action) return;
+    if (!kind || !permissionId || !action) return;
 
     const permission = this.permissions.find(
-      (item) => item.kind === kind && this.getPermissionId(item) === promptId,
+      (item) =>
+        item.kind === kind && this.getPermissionId(item) === permissionId,
     );
     if (!permission) return;
 
     this.openDiffMenuKey = null;
-    this.emitAction(prompt, action);
+    this.emitAction(permission, action);
   };
 
   private handleOutsideClick = (event: MouseEvent): void => {
@@ -717,7 +724,7 @@ export class RequestPanels extends LitElement {
     feedback?: string,
   ): void {
     this.dispatchEvent(
-      ProgressEvents.permissionAction({ prompt, action, feedback }),
+      ProgressEvents.permissionAction({ permission, action, feedback }),
     );
   }
 

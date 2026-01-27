@@ -115,14 +115,8 @@ export function formatLatexdiffTemplate(
   if (entries.length === 0) return null;
 
   const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
-
-  return html`
-    <latexdiff-results
-      .logId=${id}
-      .runId=${ifDefined(aggregatedRunId || undefined)}
-      .entries=${entries}
-    ></latexdiff-results>
-  `;
+  // prettier-ignore
+  return html`<latexdiff-results .logId=${id} .runId=${ifDefined(aggregatedRunId || undefined)} .entries=${entries}></latexdiff-results>`;
 }
 
 // =============================================================================
@@ -180,8 +174,6 @@ export function formatStatisticsTemplate(
   );
 
   if (items.length === 0) return null;
-
-  return html`
-    <statistics-panel .logId=${id} .items=${items}></statistics-panel>
-  `;
+  // prettier-ignore
+  return html`<statistics-panel .logId=${id} .items=${items}></statistics-panel>`;
 }

@@ -252,19 +252,19 @@ function sendFollowupCommand(
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
 ): void {
-  const { prompt, action, feedback } = event.detail;
+  const { permission, action, feedback } = event.detail;
 
-  switch (prompt.kind) {
+  switch (permission.kind) {
     case 'toolEdit':
       postMessage(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
-        requestId: prompt.data.requestId,
+        requestId: permission.data.requestId,
         action,
         feedback,
       });
       break;
     case 'bash':
       postMessage(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
-        requestId: prompt.data.requestId,
+        requestId: permission.data.requestId,
         action,
         feedback,
       });
@@ -272,18 +272,18 @@ export function handlePermissionAction(
     case 'retry':
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
-          stream: prompt.data.streamId,
+          stream: permission.data.streamId,
           feedback,
         });
       } else {
         postMessage(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST, {
-          stream: prompt.data.streamId,
+          stream: permission.data.streamId,
         });
       }
       break;
     case 'proposal':
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
-        proposalId: prompt.data.proposalId,
+        proposalId: permission.data.proposalId,
         action,
         feedback,
       });
