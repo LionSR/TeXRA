@@ -41,11 +41,7 @@ export async function copyWithFeedback(
   text: string,
   options: CopyFeedbackOptions = {},
 ): Promise<boolean> {
-  if (!(button instanceof HTMLElement)) {
-    return false;
-  }
-
-  const trimmed = typeof text === 'string' ? text.trim() : '';
+  const trimmed = text.trim();
   if (!trimmed) {
     return false;
   }
@@ -58,10 +54,7 @@ export async function copyWithFeedback(
   const successTitle =
     options.successTitle ?? button.dataset.successTitle ?? 'Copied!';
   const successClass = options.successClass ?? 'copy-success';
-  const resetDelay =
-    typeof options.resetDelay === 'number'
-      ? options.resetDelay
-      : COPY_RESET_DELAY_MS;
+  const resetDelay = options.resetDelay ?? COPY_RESET_DELAY_MS;
 
   // Clear any pending reset timers so we can restart the feedback window.
   const existingTimeoutId = button.dataset.copyResetTimeoutId;

@@ -7,14 +7,12 @@
  * directly in formatters or compute display fields inline in renderers.
  */
 
-// Third-party imports
-import yaml from 'yaml';
-
 // Local imports - shared schemas
 import { ToolUseLogSchema, type NormalizedToolUse } from '@shared/schemas';
 import { isPlainObject } from '@shared/utils/string';
 
-// Local imports - shared utilities
+// Local imports - formatter helpers
+import { stringifyWithLanguage } from './parseUtils';
 
 /** Return trimmed string if non-empty, null otherwise. */
 function trimmedOrNull(value: unknown): string | null {
@@ -26,18 +24,6 @@ function trimmedOrNull(value: unknown): string | null {
 /** Get first non-empty trimmed string from primary or fallback. */
 function firstTrimmed(primary: unknown, fallback: unknown): string {
   return trimmedOrNull(primary) ?? trimmedOrNull(fallback) ?? '';
-}
-
-/** Convert a value to a display-friendly string. */
-function stringifyValue(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'string') return value;
-  try {
-    const yamlString = yaml.stringify(value);
-    return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
-  } catch {
-    return String(value);
-  }
 }
 
 /** Extract output content from possibly nested structure, stripping metadata. */
@@ -63,7 +49,7 @@ function formatOutputText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (content === undefined) return '';
   if (isPlainObject(content) && Object.keys(content).length === 0) return '';
-  return stringifyValue(content);
+  return stringifyWithLanguage(content).text;
 }
 
 /**

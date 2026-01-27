@@ -2,9 +2,6 @@
  * Structured representation of media data used when constructing
  * multi-modal messages before provider-specific formatting.
  */
-// Type imports
-import type { Buffer } from 'buffer';
-
 export interface MediaEntry {
   /** File name for reference, typically without directory */
   file_name: string;
