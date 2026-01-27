@@ -290,6 +290,8 @@ export function formatToolUseTemplate(
 
   const fullTimestamp = new Date(timestamp).toISOString();
   const shouldOpen = options?.defaultOpen ?? false;
+  // prettier-ignore
+  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
   return html`
     <details
@@ -307,14 +309,7 @@ export function formatToolUseTemplate(
         labelClass: 'tool-use-title',
         includeIconClass: false,
       })}
-      <div
-        class="banner-content log-entry-content"
-        data-log-id=${ifDefined(id)}
-        data-group-id=${ifDefined(groupId)}
-        data-timestamp=${ifDefined(fullTimestamp)}
-      >
-        ${contentTemplate}
-      </div>
+      ${bannerContentTemplate}
     </details>
   `;
 }
@@ -374,6 +369,8 @@ export function formatWebSearchTemplate(
 
   const fullTimestamp = new Date(timestamp).toISOString();
   const shouldOpen = options?.defaultOpen ?? false;
+  // prettier-ignore
+  const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
   return html`
     <details
@@ -390,14 +387,7 @@ export function formatWebSearchTemplate(
         labelClass: 'tool-use-title',
         includeIconClass: false,
       })}
-      <div
-        class="banner-content log-entry-content"
-        data-log-id=${ifDefined(id)}
-        data-group-id=${ifDefined(groupId)}
-        data-timestamp=${ifDefined(fullTimestamp)}
-      >
-        ${contentTemplate}
-      </div>
+      ${bannerContentTemplate}
     </details>
   `;
 }

@@ -24,13 +24,13 @@ export class ApiAccessSection extends LitElement {
   @property({ attribute: false }) enabledProviders: string[] = [];
   @property({ attribute: false }) allowedModels: string[] | null = [];
 
-  private handleModeChange = (event: Event): void => {
+  private handleModeChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
-    const value = target?.value === 'included' ? 'included' : 'personal';
-    if (value !== this.mode) {
-      this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode: value }));
+    const mode = target?.value === 'included' ? 'included' : 'personal';
+    if (mode !== this.mode) {
+      this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode }));
     }
-  };
+  }
 
   private renderModelSummary(): TemplateResult | typeof nothing {
     if (this.mode !== 'included') {
@@ -49,16 +49,9 @@ export class ApiAccessSection extends LitElement {
       `;
     }
 
-    const providerLabel = `${providerCount} provider${
-      providerCount !== 1 ? 's' : ''
-    }`;
-
-    let allowedModelsText = 'none';
-    if (this.allowedModels === null) {
-      allowedModelsText = 'all models';
-    } else if (this.allowedModels.length > 0) {
-      allowedModelsText = `${this.allowedModels.length} models`;
-    }
+    const providerLabel = this.getProviderLabel(providerCount);
+    const allowedModelsText = this.getAllowedModelsLabel();
+    const allowedModelsList = this.renderAllowedModelsList();
 
     return html`
       <details class="model-access-info">
@@ -67,17 +60,36 @@ export class ApiAccessSection extends LitElement {
           <span class="separator">·</span>
           <span>${allowedModelsText}</span>
         </summary>
-        ${this.allowedModels && this.allowedModels.length > 0
-          ? html`
-              <div class="models-list-container">
-                ${this.allowedModels.map(
-                  (model) =>
-                    html`<span class="badge badge--small">${model}</span>`,
-                )}
-              </div>
-            `
-          : nothing}
+        ${allowedModelsList}
       </details>
+    `;
+  }
+
+  private getProviderLabel(providerCount: number): string {
+    return `${providerCount} provider${providerCount === 1 ? '' : 's'}`;
+  }
+
+  private getAllowedModelsLabel(): string {
+    if (this.allowedModels === null) {
+      return 'all models';
+    }
+    if (this.allowedModels.length > 0) {
+      return `${this.allowedModels.length} models`;
+    }
+    return 'none';
+  }
+
+  private renderAllowedModelsList(): TemplateResult | typeof nothing {
+    if (!this.allowedModels || this.allowedModels.length === 0) {
+      return nothing;
+    }
+
+    return html`
+      <div class="models-list-container">
+        ${this.allowedModels.map(
+          (model) => html`<span class="badge badge--small">${model}</span>`,
+        )}
+      </div>
     `;
   }
 

@@ -37,6 +37,12 @@ import { HistoryViewState } from './state';
 // Local imports - history view types
 import type { SearchAction } from './components/HistoryList';
 
+const HISTORY_ACTION_COMMANDS: Record<string, string> = {
+  delete: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
+  restore: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
+  rerun: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
+};
+
 @customElement('history-app')
 export class HistoryApp extends BaseWebviewApp {
   static override styles = [
@@ -66,7 +72,7 @@ export class HistoryApp extends BaseWebviewApp {
     postMessage(HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA);
   }
 
-  protected handleMessage(raw: unknown): void {
+  protected override handleMessage(raw: unknown): void {
     if (!raw || typeof raw !== 'object' || !('command' in raw)) {
       return;
     }
@@ -104,55 +110,48 @@ export class HistoryApp extends BaseWebviewApp {
     }
   }
 
-  private handleSearchChange = (event: CustomEvent<{ term: string }>): void => {
+  private handleSearchChange(event: CustomEvent<{ term: string }>): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchTerm = event.detail.term;
-  };
+  }
 
-  private handleSearchNext = (): void => {
+  private handleSearchNext(): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchAction = 'next';
-  };
+  }
 
-  private handleSearchPrev = (): void => {
+  private handleSearchPrev(): void {
     // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchAction = 'prev';
-  };
+  }
 
   // === Reactive property reset handlers (Lit-native Phase 9) ===
 
-  private handleSearchNavigateComplete = (): void => {
+  private handleSearchNavigateComplete(): void {
     // Reset action after child processes it
     this.searchAction = null;
-  };
+  }
 
-  private handleSearchClearComplete = (): void => {
+  private handleSearchClearComplete(): void {
     // Reset trigger after child processes it
     this.clearSearchTrigger = false;
-  };
+  }
 
-  private handleMatchCount = (
-    event: CustomEvent<{ display: string }>,
-  ): void => {
+  private handleMatchCount(event: CustomEvent<{ display: string }>): void {
     this.matchCount = event.detail.display;
-  };
+  }
 
-  private handleHistoryAction = (
+  private handleHistoryAction(
     event: CustomEvent<{ action: string; historyId: string }>,
-  ): void => {
-    const actionMap: Record<string, string> = {
-      delete: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
-      restore: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
-      rerun: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
-    };
-    const command = actionMap[event.detail.action];
+  ): void {
+    const command = HISTORY_ACTION_COMMANDS[event.detail.action];
     if (!command) return;
     postMessage(command, { historyId: event.detail.historyId });
-  };
+  }
 
-  private handleClearHistory = (): void => {
+  private handleClearHistory(): void {
     postMessage(HISTORY_VIEW_COMMANDS.CLEAR_HISTORY);
-  };
+  }
 
   override render(): TemplateResult {
     return html`

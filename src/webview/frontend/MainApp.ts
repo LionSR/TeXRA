@@ -1099,12 +1099,12 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private handleRefreshEditedFiles = (): void => {
+  private handleRefreshEditedFiles(): void {
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, {
       baseFile: this.singleFiles.baseFile,
       notifyWhenEmpty: true,
     });
-  };
+  }
 
   private handleEmptyFiles(type: MultipleFileType): void {
     const listId = `${type}Files`;
@@ -1242,9 +1242,9 @@ export class MainApp extends BaseWebviewApp {
   // Image paste is handled by @instruction-paste from InstructionPanel (Lit-native pattern).
 
   /** Handle image paste in instruction - save state after paste completes */
-  private handleComponentInstructionPaste = (): void => {
+  private handleComponentInstructionPaste(): void {
     this.saveState();
-  };
+  }
 
   private scheduleInstructionSave(): void {
     if (this.instructionSaveTimer) {
@@ -1374,14 +1374,16 @@ export class MainApp extends BaseWebviewApp {
   private handlePackClean(action: 'pack' | 'clean'): void {
     const outputFiles = this.multiFiles.outputFiles ?? [];
     const useMultiple = this.outputFilesActive && outputFiles.length > 0;
-    const command =
-      action === 'pack'
-        ? useMultiple
-          ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-          : MAIN_VIEW_COMMANDS.PACK_SINGLE
-        : useMultiple
-          ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
-          : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+    let command: string;
+    if (action === 'pack') {
+      command = useMultiple
+        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+        : MAIN_VIEW_COMMANDS.PACK_SINGLE;
+    } else {
+      command = useMultiple
+        ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
+        : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+    }
 
     if (!this.singleFiles.inputFile || !this.model) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
@@ -1511,73 +1513,67 @@ export class MainApp extends BaseWebviewApp {
   // delegate to the existing handler methods.
   // =========================================================================
 
-  private handleComponentFileChange = (
+  private handleComponentFileChange(
     e: CustomEvent<FileSelectChangeDetail>,
-  ): void => {
+  ): void {
     this.handleSingleFileChange(e.detail.type, e.detail.value);
-  };
+  }
 
-  private handleComponentRefreshFiles = (
-    e: CustomEvent<FileActionDetail>,
-  ): void => {
+  private handleComponentRefreshFiles(e: CustomEvent<FileActionDetail>): void {
     if (e.detail.type !== 'base' && e.detail.type !== 'edited') {
       this.handleRefreshFiles(e.detail.type);
     }
-  };
+  }
 
-  private handleComponentGetCurrentFile = (
+  private handleComponentGetCurrentFile(
     e: CustomEvent<FileActionDetail>,
-  ): void => {
+  ): void {
     this.handleGetCurrentFile(e.detail.type);
-  };
+  }
 
-  private handleComponentEmptyFile = (
-    e: CustomEvent<FileActionDetail>,
-  ): void => {
+  private handleComponentEmptyFile(e: CustomEvent<FileActionDetail>): void {
     this.handleEmptyFile(e.detail.type);
-  };
+  }
 
-  private handleComponentToggleList = (
+  private handleComponentToggleList(
     e: CustomEvent<MultipleFilesActionDetail>,
-  ): void => {
+  ): void {
     this.toggleListVisibility(e.detail.listId);
-  };
+  }
 
-  private handleComponentAddOpenedFiles = (
+  private handleComponentAddOpenedFiles(
     e: CustomEvent<MultipleFilesTypeActionDetail>,
-  ): void => {
+  ): void {
     if (e.detail.type !== 'output') {
       this.handleAddOpenedFiles(e.detail.type as FileType);
     }
-  };
+  }
 
-  private handleComponentEmptyFiles = (
+  private handleComponentEmptyFiles(
     e: CustomEvent<MultipleFilesTypeActionDetail>,
-  ): void => {
+  ): void {
     this.handleEmptyFiles(e.detail.type as MultipleFileType);
-  };
+  }
 
-  private handleComponentSelectMultipleFiles = (
+  private handleComponentSelectMultipleFiles(
     e: CustomEvent<MultipleFilesActionDetail>,
-  ): void => {
+  ): void {
     this.handleSelectMultipleFiles(e.detail.listId);
-  };
+  }
 
-  private handleComponentRemoveFile = (
-    e: CustomEvent<RemoveFileDetail>,
-  ): void => {
+  private handleComponentRemoveFile(e: CustomEvent<RemoveFileDetail>): void {
     this.handleRemoveFile(e.detail.listId, e.detail.file);
-  };
+  }
 
-  private handleComponentFilesReordered = (
+  private handleComponentFilesReordered(
     e: CustomEvent<ReorderFilesDetail>,
-  ): void => {
+  ): void {
     this.updateMultiFiles(e.detail.listId, e.detail.files);
-  };
+  }
 
-  private handleComponentCheckboxChange = (
+  private handleComponentCheckboxChange(
     e: CustomEvent<CheckboxChangeDetail>,
-  ): void => {
+  ): void {
     const { id, checked } = e.detail;
     if (id in this.checkboxValues) {
       this.checkboxValues = {
@@ -1586,61 +1582,61 @@ export class MainApp extends BaseWebviewApp {
       };
       this.saveState();
     }
-  };
+  }
 
-  private handleComponentFocusInstruction = (
+  private handleComponentFocusInstruction(
     e: CustomEvent<FocusInstructionDetail>,
-  ): void => {
+  ): void {
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
       key: e.detail.key,
       text: e.detail.text,
     });
-  };
+  }
 
-  private handleComponentApiKeyAction = (
+  private handleComponentApiKeyAction(
     e: CustomEvent<BannerActionDetail>,
-  ): void => {
+  ): void {
     this.handleApiKeyBannerAction(e.detail.action as 'set' | 'guide');
-  };
+  }
 
-  private handleComponentAgentConfigAction = (
+  private handleComponentAgentConfigAction(
     e: CustomEvent<BannerActionDetail>,
-  ): void => {
+  ): void {
     this.handleAgentConfigAction(e.detail.action as 'edit' | 'dir' | 'docs');
-  };
+  }
 
-  private handleComponentDependencyDismiss = (): void => {
+  private handleComponentDependencyDismiss(): void {
     this.handleDependencyDismiss();
-  };
+  }
 
-  private handleComponentRecheckDependencies = (): void => {
+  private handleComponentRecheckDependencies(): void {
     postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES);
-  };
+  }
 
-  private handleComponentOpenInstallGuide = (
+  private handleComponentOpenInstallGuide(
     e: CustomEvent<InstallGuideDetail>,
-  ): void => {
+  ): void {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, { tool: e.detail.tool });
-  };
+  }
 
-  private handleComponentSignIn = (): void => {
+  private handleComponentSignIn(): void {
     postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
-  };
+  }
 
-  private handleComponentDismissLogin = (): void => {
+  private handleComponentDismissLogin(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
-  };
+  }
 
-  private handleComponentLatexDiffsToggle = (
+  private handleComponentLatexDiffsToggle(
     e: CustomEvent<LatexDiffsToggleDetail>,
-  ): void => {
+  ): void {
     this.latexdiffsVisible = e.detail.visible;
     this.saveState();
-  };
+  }
 
-  private handleComponentLatexDiffsAction = (
+  private handleComponentLatexDiffsAction(
     e: CustomEvent<LatexDiffsActionDetail>,
-  ): void => {
+  ): void {
     switch (e.detail.action) {
       case 'latexdiff':
         this.handleLatexdiff();
@@ -1664,67 +1660,63 @@ export class MainApp extends BaseWebviewApp {
         this.handleCompare(MAIN_VIEW_COMMANDS.ACCEPT_EDITED);
         break;
     }
-  };
+  }
 
-  private handleComponentBaseFileChange = (
+  private handleComponentBaseFileChange(
     e: CustomEvent<BaseFileChangeDetail>,
-  ): void => {
+  ): void {
     this.handleBaseFileChange(e.detail.value);
-  };
+  }
 
-  private handleComponentEditedFileChange = (
+  private handleComponentEditedFileChange(
     e: CustomEvent<EditedFileChangeDetail>,
-  ): void => {
+  ): void {
     this.singleFiles = { ...this.singleFiles, editedFile: e.detail.value };
     this.saveState();
-  };
+  }
 
-  private handleComponentCommitChange = (
+  private handleComponentCommitChange(
     e: CustomEvent<CommitChangeDetail>,
-  ): void => {
+  ): void {
     this.commit = e.detail.value;
     this.saveState();
-  };
+  }
 
-  private handleComponentRefreshEditedFiles = (): void => {
+  private handleComponentRefreshEditedFiles(): void {
     this.handleRefreshEditedFiles();
-  };
+  }
 
-  private handleComponentRefreshCommits = (): void => {
+  private handleComponentRefreshCommits(): void {
     postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS);
-  };
+  }
 
   // InstructionPanel component handlers
-  private handleComponentSessionTypeChange = (
+  private handleComponentSessionTypeChange(
     e: CustomEvent<SessionTypeChangeDetail>,
-  ): void => {
+  ): void {
     this.handleSessionTypeChange(e.detail.value);
-  };
+  }
 
-  private handleComponentAgentChange = (
-    e: CustomEvent<AgentChangeDetail>,
-  ): void => {
+  private handleComponentAgentChange(e: CustomEvent<AgentChangeDetail>): void {
     // Note: Select element is inside InstructionPanel's shadow DOM and
     // cannot be queried from here. The disabled-option check in
     // handleAgentChange will be skipped. This should be handled by
     // InstructionPanel emitting additional event data when needed.
     this.handleAgentChange(e.detail.sessionType, e.detail.value);
-  };
+  }
 
-  private handleComponentModelChange = (
-    e: CustomEvent<ModelChangeDetail>,
-  ): void => {
+  private handleComponentModelChange(e: CustomEvent<ModelChangeDetail>): void {
     this.handleModelChange(e.detail.value);
-  };
+  }
 
-  private handleComponentInstructionInput = (
+  private handleComponentInstructionInput(
     e: CustomEvent<InstructionChangeDetail>,
-  ): void => {
+  ): void {
     this.instruction = e.detail.value;
     this.scheduleInstructionSave();
-  };
+  }
 
-  private handleComponentPanelAction = (e: CustomEvent<ActionDetail>): void => {
+  private handleComponentPanelAction(e: CustomEvent<ActionDetail>): void {
     switch (e.detail.action) {
       case 'pack':
         this.handlePackClean('pack');
@@ -1743,19 +1735,19 @@ export class MainApp extends BaseWebviewApp {
         this.saveState();
         break;
     }
-  };
+  }
 
-  private handleComponentExecute = (): void => {
+  private handleComponentExecute(): void {
     this.executeAgent();
-  };
+  }
 
-  private handleComponentAgentSettings = (): void => {
+  private handleComponentAgentSettings(): void {
     this.handleAgentConfigAction('edit');
-  };
+  }
 
-  private handleComponentModelSettings = (): void => {
+  private handleComponentModelSettings(): void {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
-  };
+  }
 
   // =========================================================================
   // Existing Handler Methods

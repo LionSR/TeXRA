@@ -144,13 +144,15 @@ export class TaskGroupList extends LitElement {
     }
 
     // Build tree recursively
-    const buildNode = (group: TaskGroup): GroupTree => ({
-      group,
-      children: (childrenMap.get(group.id) ?? [])
-        .sort((a, b) => a.startTime - b.startTime)
-        .map(buildNode),
-      messages: messagesByGroup.get(group.id) ?? [],
-    });
+    function buildNode(group: TaskGroup): GroupTree {
+      return {
+        group,
+        children: (childrenMap.get(group.id) ?? [])
+          .sort((a, b) => a.startTime - b.startTime)
+          .map(buildNode),
+        messages: messagesByGroup.get(group.id) ?? [],
+      };
+    }
 
     // Get root groups (no parent), sorted by start time
     const tree = this.groups

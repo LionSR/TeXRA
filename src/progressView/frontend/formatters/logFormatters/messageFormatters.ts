@@ -29,6 +29,7 @@ import {
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatTimestamp } from '../timestampUtils';
 import { EMOJI_BY_LEVEL } from '../constants';
+import { registerCopyContent } from '../copyContentStore';
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(
@@ -125,6 +126,12 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const detailText = detailLines.join('\n');
   const hasDetails = Boolean(detailText);
   const rawContent = detailText || summaryText;
+  const detailTemplate = when(
+    hasDetails,
+    () => html`<pre class="error-details">${detailText}</pre>`,
+  );
+  // prettier-ignore
+  const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error" data-raw-content=${rawContent}>${detailTemplate}</div>`;
 
   return html`
     <details
@@ -153,20 +160,15 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
           aria-label="Copy error details"
           data-default-title="Copy error details"
           data-success-title="Copied!"
-          data-copy-content=${rawContent}
+          data-copy-id=${registerCopyContent(
+            rawContent,
+            id ? `error:${id}` : undefined,
+          )}
           data-copy-type="banner"
           ?hidden=${!hasDetails}
         ></vscode-toolbar-button>
       </summary>
-      <div
-        class="banner-content log-entry-content banner-content--error"
-        data-raw-content=${rawContent}
-      >
-        ${when(
-          hasDetails,
-          () => html`<pre class="error-details">${detailText}</pre>`,
-        )}
-      </div>
+      ${contentTemplate}
     </details>
   `;
 }

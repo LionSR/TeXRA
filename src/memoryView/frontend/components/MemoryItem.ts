@@ -61,14 +61,14 @@ export class MemoryItem extends LitElement {
 
   @property({ attribute: false }) item?: MemoryViewItem;
 
-  private handleOpen = (): void => {
+  private handleOpen(): void {
     if (!this.item) return;
     this.dispatchEvent(
       MemoryViewEvents.openItem({ storagePath: this.item.storagePath }),
     );
-  };
+  }
 
-  private handleDelete = (): void => {
+  private handleDelete(): void {
     if (!this.item) return;
     this.dispatchEvent(
       MemoryViewEvents.deleteItem({
@@ -76,7 +76,7 @@ export class MemoryItem extends LitElement {
         displayPath: this.item.displayPath,
       }),
     );
-  };
+  }
 
   private renderMeta(item: MemoryViewItem): string {
     const size = formatBytes(item.size ?? 0);

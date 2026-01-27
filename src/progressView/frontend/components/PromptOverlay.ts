@@ -63,6 +63,13 @@ const PROMPT_TITLES: Record<PromptState['kind'], string> = {
   proposal: 'Agent proposal',
 };
 
+/** Prompt kinds that support rejection feedback */
+const FEEDBACK_ELIGIBLE_PROMPTS = new Set<PromptState['kind']>([
+  'toolEdit',
+  'bash',
+  'proposal',
+]);
+
 /** Primary actions (approve/reject) for each prompt type */
 const PRIMARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
   toolEdit: [
@@ -257,7 +264,7 @@ export class PromptOverlay extends LitElement {
 
   /** Render feedback section (shared across all prompt types) */
   private renderFeedbackSection(): TemplateResult | typeof nothing {
-    if (!this.showFeedback) return nothing;
+    if (!this.showFeedback || !this.canCollectFeedback()) return nothing;
 
     return html`
       <div class="feedback-section">
@@ -332,11 +339,13 @@ export class PromptOverlay extends LitElement {
     const secondaryActions = SECONDARY_ACTIONS[this.prompt.kind];
 
     return html`
-      ${repeat(
-        primaryActions,
-        (config) => config.action,
-        (config) => this.renderActionButton(config),
-      )}
+      <div class="primary-actions">
+        ${repeat(
+          primaryActions,
+          (config) => config.action,
+          (config) => this.renderActionButton(config),
+        )}
+      </div>
       ${secondaryActions.length > 0
         ? html`
             <div class="secondary-actions">
@@ -356,7 +365,10 @@ export class PromptOverlay extends LitElement {
 
     // Show "Submit" for reject/cancel when feedback is active
     const isRejectAction = action === 'reject' || action === 'cancel';
-    const displayLabel = isRejectAction && this.showFeedback ? 'Submit' : label;
+    const displayLabel =
+      isRejectAction && this.showFeedback && this.canCollectFeedback()
+        ? 'Submit'
+        : label;
 
     return html`
       <button
@@ -374,21 +386,29 @@ export class PromptOverlay extends LitElement {
   // Event handlers
   // ===========================================================================
 
-  private handleActionClick = (event: MouseEvent): void => {
+  private handleActionClick(event: MouseEvent): void {
     const target = event.currentTarget as HTMLElement | null;
     const action = target?.dataset.action;
     if (!action) return;
 
     // Special handling for reject/cancel actions (show feedback first)
-    if (action === 'reject' || action === 'cancel') {
+    if (
+      (action === 'reject' || action === 'cancel') &&
+      this.canCollectFeedback()
+    ) {
       this.handleRejectClick(action);
       return;
     }
 
     this.emitAction(action);
-  };
+  }
 
   private handleRejectClick(action: string): void {
+    if (!this.canCollectFeedback()) {
+      this.emitAction(action);
+      return;
+    }
+
     if (!this.showFeedback) {
       // First click: show feedback form
       this.showFeedback = true;
@@ -406,6 +426,12 @@ export class PromptOverlay extends LitElement {
 
   private openFile(filePath: string): void {
     postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
+  }
+
+  private canCollectFeedback(): boolean {
+    return Boolean(
+      this.prompt && FEEDBACK_ELIGIBLE_PROMPTS.has(this.prompt.kind),
+    );
   }
 
   private emitAction(action: string, feedback?: string) {
