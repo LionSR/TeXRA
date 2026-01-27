@@ -349,10 +349,7 @@ export class LatexDiffsSection extends LitElement {
                 this.handleEditedFileChange(target.value);
               }}
             >
-              ${this.renderFileOptions(
-                this.editedFileOptions,
-                this.editedFile,
-              )}
+              ${this.renderFileOptions(this.editedFileOptions, this.editedFile)}
             </vscode-single-select>
           </div>
           <div class="file-select">

@@ -1,10 +1,9 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
-import { customElement, state, query } from 'lit/decorators.js';
+import { provide } from '@lit/context';
+import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import Sortable from 'sortablejs';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -32,7 +31,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - main view
 import {
-  AGENT_SELECT_LIST,
   ELEMENT_IDS,
   FILE_TYPES,
   MULTIPLE_FILE_TYPES,
@@ -50,6 +48,14 @@ import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
 import './components/OutputFilesSection';
+
+// Local imports - main view contexts
+import {
+  fileStateContext,
+  sessionContext,
+  type FileStateContextValue,
+  type SessionContextValue,
+} from './contexts/mainViewContexts';
 
 // Local imports - main view store
 import {
@@ -81,6 +87,7 @@ import type {
   ModelChangeDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
+  ReorderFilesDetail,
   RemoveFileDetail,
   SessionTypeChangeDetail,
 } from '@shared/schemas';
@@ -197,6 +204,15 @@ export class MainApp extends BaseWebviewApp {
   private apiKeyBannerForced = false;
   private instructionSaveTimer: number | null = null;
 
+  @provide({ context: fileStateContext })
+  @state()
+  private fileStateContextValue: FileStateContextValue =
+    this.buildFileStateContext();
+
+  @provide({ context: sessionContext })
+  @state()
+  private sessionContextValue: SessionContextValue = this.buildSessionContext();
+
   // Note: model/agent selects are inside InstructionPanel's shadow DOM.
   // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
 
@@ -207,7 +223,6 @@ export class MainApp extends BaseWebviewApp {
     );
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
-  private sortables: Sortable[] = [];
   private readonly messageHandlers: Record<string, MainViewMessageHandler> = {
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) =>
       this.handleSetModelOptions(
@@ -376,8 +391,6 @@ export class MainApp extends BaseWebviewApp {
   }
 
   override disconnectedCallback(): void {
-    this.sortables.forEach((sortable) => sortable.destroy());
-    this.sortables = [];
     this.stopPlaceholderRotation();
     if (this.instructionSaveTimer) {
       window.clearTimeout(this.instructionSaveTimer);
@@ -405,8 +418,41 @@ export class MainApp extends BaseWebviewApp {
 
   protected override firstUpdated(): void {
     this.requestInitialData();
-    this.initializeSortables();
     this.refreshInstructionPlaceholder(false);
+  }
+
+  protected override willUpdate(changed: Map<string, unknown>): void {
+    if (
+      changed.has('sessionType') ||
+      changed.has('singleFiles') ||
+      changed.has('fileOptions') ||
+      changed.has('multiFiles') ||
+      changed.has('multiFilesVisible') ||
+      changed.has('checkboxValues') ||
+      changed.has('outputFilesActive')
+    ) {
+      this.fileStateContextValue = this.buildFileStateContext();
+    }
+
+    if (
+      changed.has('sessionType') ||
+      changed.has('instruction') ||
+      changed.has('instructionPlaceholder') ||
+      changed.has('workflowAgent') ||
+      changed.has('toolUseAgent') ||
+      changed.has('model') ||
+      changed.has('workflowAgentOptionsHtml') ||
+      changed.has('toolUseAgentOptionsHtml') ||
+      changed.has('modelOptionsHtml') ||
+      changed.has('workflowAgentOptions') ||
+      changed.has('toolUseAgentOptions') ||
+      changed.has('modelOptions') ||
+      changed.has('isRecording') ||
+      changed.has('isPolishing') ||
+      changed.has('debugMode')
+    ) {
+      this.sessionContextValue = this.buildSessionContext();
+    }
   }
 
   protected override updated(changed: Map<string, unknown>): void {
@@ -534,48 +580,6 @@ export class MainApp extends BaseWebviewApp {
     if (agent) {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, { agent });
     }
-  }
-
-  /**
-   * Initialize Sortable.js for file lists.
-   * Note: This queries into child component shadow DOMs which doesn't work.
-   * TODO: Phase 9 - Move Sortable initialization to FileSelectGroup and
-   * OutputFilesSection components, have them emit 'files-reordered' events.
-   * @deprecated Sortable integration needs to be moved to child components
-   */
-  private initializeSortables(): void {
-    // File lists are now inside shadow DOM of child components.
-    // This code is preserved for backward compatibility but Sortable
-    // will not initialize since elements can't be found.
-    const listIds = MULTIPLE_FILE_TYPES.map((type) => `${type}Files`);
-    listIds.forEach((listId) => {
-      const element = this.renderRoot.querySelector(
-        `#${listId}`,
-      ) as HTMLElement | null;
-      if (!element) return;
-      const sortable = new Sortable(element, {
-        animation: 150,
-        onEnd: (event) => this.handleSortEnd(listId, event),
-      });
-      this.sortables.push(sortable);
-    });
-  }
-
-  /**
-   * Handle Sortable drag end - update state from event indices.
-   * @deprecated Will be replaced by handling events from child components
-   */
-  private handleSortEnd(listId: string, event: Sortable.SortableEvent): void {
-    // Use Sortable event indices instead of querying DOM
-    const oldIndex = event.oldIndex;
-    const newIndex = event.newIndex;
-    if (oldIndex === undefined || newIndex === undefined) return;
-
-    const current = [...(this.multiFiles[listId] ?? [])];
-    const [moved] = current.splice(oldIndex, 1);
-    current.splice(newIndex, 0, moved);
-
-    this.updateMultiFiles(listId, current);
   }
 
   private updateMultiFiles(listId: string, files: string[]): void {
@@ -1599,6 +1603,12 @@ export class MainApp extends BaseWebviewApp {
     this.handleRemoveFile(e.detail.listId, e.detail.file);
   };
 
+  private handleComponentFilesReordered = (
+    e: CustomEvent<ReorderFilesDetail>,
+  ): void => {
+    this.updateMultiFiles(e.detail.listId, e.detail.files);
+  };
+
   private handleComponentCheckboxChange = (
     e: CustomEvent<CheckboxChangeDetail>,
   ): void => {
@@ -1805,28 +1815,71 @@ export class MainApp extends BaseWebviewApp {
     });
   }
 
-  /** Get single file value for a file type */
-  private getFileValue(type: FileType): string {
-    const key = `${type}File` as keyof typeof this.singleFiles;
-    return this.singleFiles[key] ?? '';
+  /** Check if an options HTML string contains a value. */
+  private hasOptionValue(optionsHtml: string, value: string): boolean {
+    if (!value || !optionsHtml) return false;
+    return (
+      optionsHtml.includes(`value="${value}"`) ||
+      optionsHtml.includes(`value='${value}'`)
+    );
   }
 
-  /** Get file options for a file type */
-  private getFileOptions(type: FileType): string[] {
-    const key = `${type}File` as keyof typeof this.fileOptions;
-    return (this.fileOptions[key] as string[] | undefined) ?? [];
+  private buildFileStateContext(): FileStateContextValue {
+    return {
+      sessionType: this.sessionType,
+      checkboxValues: this.checkboxValues,
+      singleFiles: {
+        inputFile: this.singleFiles.inputFile,
+        referenceFile: this.singleFiles.referenceFile,
+        auxiliaryFile: this.singleFiles.auxiliaryFile,
+        mediaFile: this.singleFiles.mediaFile,
+        baseFile: this.singleFiles.baseFile,
+        editedFile: this.singleFiles.editedFile,
+      },
+      fileOptions: {
+        inputFile: this.fileOptions.inputFile ?? [],
+        referenceFile: this.fileOptions.referenceFile ?? [],
+        auxiliaryFile: this.fileOptions.auxiliaryFile ?? [],
+        mediaFile: this.fileOptions.mediaFile ?? [],
+        baseFile: this.fileOptions.baseFile ?? [],
+        editedFile: this.fileOptions.editedFile ?? [],
+      },
+      multiFiles: {
+        inputFiles: this.multiFiles.inputFiles ?? [],
+        referenceFiles: this.multiFiles.referenceFiles ?? [],
+        auxiliaryFiles: this.multiFiles.auxiliaryFiles ?? [],
+        mediaFiles: this.multiFiles.mediaFiles ?? [],
+        outputFiles: this.multiFiles.outputFiles ?? [],
+      },
+      multiFilesVisible: {
+        inputFiles: this.multiFilesVisible.inputFiles ?? false,
+        referenceFiles: this.multiFilesVisible.referenceFiles ?? false,
+        auxiliaryFiles: this.multiFilesVisible.auxiliaryFiles ?? false,
+        mediaFiles: this.multiFilesVisible.mediaFiles ?? false,
+        outputFiles: this.multiFilesVisible.outputFiles ?? false,
+      },
+      outputFilesActive: this.outputFilesActive,
+    };
   }
 
-  /** Get multi-files visibility for a file type */
-  private getFilesVisible(type: FileType): boolean {
-    const key = `${type}Files` as keyof typeof this.multiFilesVisible;
-    return this.multiFilesVisible[key] ?? false;
-  }
-
-  /** Get multi-files array for a file type */
-  private getFiles(type: FileType): string[] {
-    const key = `${type}Files` as keyof typeof this.multiFiles;
-    return (this.multiFiles[key] as string[] | undefined) ?? [];
+  private buildSessionContext(): SessionContextValue {
+    return {
+      sessionType: this.sessionType,
+      instruction: this.instruction,
+      placeholder: this.instructionPlaceholder,
+      workflowAgent: this.workflowAgent,
+      toolUseAgent: this.toolUseAgent,
+      model: this.model,
+      workflowAgentOptionsHtml: this.workflowAgentOptionsHtml,
+      toolUseAgentOptionsHtml: this.toolUseAgentOptionsHtml,
+      modelOptionsHtml: this.modelOptionsHtml,
+      workflowAgentOptions: this.workflowAgentOptions,
+      toolUseAgentOptions: this.toolUseAgentOptions,
+      modelOptions: this.modelOptions,
+      isRecording: this.isRecording,
+      isPolishing: this.isPolishing,
+      debugMode: this.debugMode,
+    };
   }
 
   render(): TemplateResult {
@@ -1846,12 +1899,6 @@ export class MainApp extends BaseWebviewApp {
               (config) => html`
                 <file-select-group
                   .config=${config}
-                  .selectedValue=${this.getFileValue(config.type)}
-                  .options=${this.getFileOptions(config.type)}
-                  .listVisible=${this.getFilesVisible(config.type)}
-                  .files=${this.getFiles(config.type)}
-                  .checkboxValues=${this.checkboxValues}
-                  .isToolUse=${isToolUse}
                   @file-change=${this.handleComponentFileChange}
                   @refresh-files=${this.handleComponentRefreshFiles}
                   @get-current-file=${this.handleComponentGetCurrentFile}
@@ -1862,37 +1909,22 @@ export class MainApp extends BaseWebviewApp {
                   @select-multiple-files=${this
                     .handleComponentSelectMultipleFiles}
                   @remove-file=${this.handleComponentRemoveFile}
+                  @files-reordered=${this.handleComponentFilesReordered}
                   @checkbox-change=${this.handleComponentCheckboxChange}
                   @focus-instruction=${this.handleComponentFocusInstruction}
                 ></file-select-group>
               `,
             )}
             <output-files-section
-              .expanded=${this.outputFilesActive}
-              .files=${this.multiFiles.outputFiles ?? []}
               @toggle-list=${this.handleComponentToggleList}
               @empty-files=${this.handleComponentEmptyFiles}
               @select-multiple-files=${this.handleComponentSelectMultipleFiles}
               @remove-file=${this.handleComponentRemoveFile}
+              @files-reordered=${this.handleComponentFilesReordered}
             ></output-files-section>
           </div>
 
           <instruction-panel
-            .sessionType=${this.sessionType}
-            .instruction=${this.instruction}
-            .placeholder=${this.instructionPlaceholder}
-            .workflowAgent=${this.workflowAgent}
-            .toolUseAgent=${this.toolUseAgent}
-            .model=${this.model}
-            .workflowAgentOptionsHtml=${this.workflowAgentOptionsHtml}
-            .toolUseAgentOptionsHtml=${this.toolUseAgentOptionsHtml}
-            .modelOptionsHtml=${this.modelOptionsHtml}
-            .workflowAgentOptions=${this.workflowAgentOptions}
-            .toolUseAgentOptions=${this.toolUseAgentOptions}
-            .modelOptions=${this.modelOptions}
-            .isRecording=${this.isRecording}
-            .isPolishing=${this.isPolishing}
-            .debugMode=${this.debugMode}
             @session-type-change=${this.handleComponentSessionTypeChange}
             @agent-change=${this.handleComponentAgentChange}
             @model-change=${this.handleComponentModelChange}

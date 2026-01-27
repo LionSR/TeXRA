@@ -24,10 +24,7 @@ import type {
 /**
  * Render a placeholder option.
  */
-export function renderPlaceholder(
-  text = 'None',
-  value = '',
-): TemplateResult {
+export function renderPlaceholder(text = 'None', value = ''): TemplateResult {
   return html`<vscode-option value=${value}>${text}</vscode-option>`;
 }
 
@@ -206,7 +203,7 @@ export function renderModelOption(
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
     >
       ${display}${opt.requiresKey
-        ? html`<span class="api-key-missing"> \u2717</span>`
+        ? html`<span class="api-key-missing"> ✗</span>`
         : nothing}
     </vscode-option>
   `;
@@ -248,7 +245,9 @@ export function renderCommitOptions(
 
   // Ensure HEAD is included
   const hasHead = commits.some((c) => c.hash === 'HEAD');
-  const entries = hasHead ? commits : [{ hash: 'HEAD', label: 'HEAD' }, ...commits];
+  const entries = hasHead
+    ? commits
+    : [{ hash: 'HEAD', label: 'HEAD' }, ...commits];
 
   return html`
     ${repeat(

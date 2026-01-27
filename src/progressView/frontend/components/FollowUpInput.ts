@@ -120,7 +120,9 @@ export class FollowUpInput extends LitElement {
       this.focusInput({ scrollIntoView: true }).then(() => {
         // Guard against dispatching events after disconnection
         if (this.isConnected) {
-          this.dispatchEvent(new CustomEvent('focus-complete', { bubbles: true }));
+          this.dispatchEvent(
+            new CustomEvent('focus-complete', { bubbles: true }),
+          );
         }
       });
     }
@@ -159,7 +161,6 @@ export class FollowUpInput extends LitElement {
       this.recordingController.setRecording(this.recording);
     }
   }
-
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
   private handleKeydown = (event: KeyboardEvent): void => {

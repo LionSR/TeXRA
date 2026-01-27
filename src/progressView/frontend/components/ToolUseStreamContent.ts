@@ -24,19 +24,30 @@
 // Third-party imports
 import {
   LitElement,
+  css,
   html,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
-// Local imports - shared schemas
+// Local imports - progress view utilities
 import { getRunGroups } from '../stateUtils';
+import { isToolUseState, type ToolUseStreamState } from '../store';
+
+// Local imports - progress view contexts
+import {
+  promptsContext,
+  streamStateContext,
+  type StreamContextValue,
+} from '../contexts/streamContexts';
+
+// Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-// Local imports - progress view
-import type { ToolUseStreamState } from '../store';
+// Local imports - progress view component types
 import type { PromptState } from './PromptOverlay';
 import type { FollowUpInput } from './FollowUpInput';
 
@@ -53,15 +64,21 @@ type RunGroup = { id: string; name: string; startTime: number };
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
-  // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
-  // can style the task-group-list and its content
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
+  static override styles = css`
+    :host {
+      display: contents;
+    }
+  `;
 
   @property({ type: Object }) state!: ToolUseStreamState;
   @property({ type: Object }) streamInfo!: StreamTabInfo;
   @property({ type: Array }) prompts: PromptState[] = [];
+
+  @consume({ context: streamStateContext, subscribe: true })
+  private streamContext?: StreamContextValue;
+
+  @consume({ context: promptsContext, subscribe: true })
+  private promptContext?: PromptState[];
 
   // Memoized derived values - updated in willUpdate when deps change
   @state() private filteredPrompts: PromptState[] = [];
@@ -70,41 +87,53 @@ export class ToolUseStreamContent extends LitElement {
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
-    // Recompute filtered prompts when prompts or streamInfo changes
-    if (
-      changedProperties.has('prompts') ||
-      changedProperties.has('streamInfo')
-    ) {
-      this.filteredPrompts = this.computeFilteredPrompts();
-    }
-
-    // Recompute run groups when state changes (taskGroups is inside state)
-    if (changedProperties.has('state')) {
-      this.runGroups = getRunGroups(this.state?.taskGroups ?? []);
-    }
+  protected willUpdate(_changedProperties: PropertyValues<this>): void {
+    this.filteredPrompts = this.computeFilteredPrompts();
+    this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
   }
 
   /**
    * Compute filtered prompts for this stream.
    * Only prompts matching this stream's ID (or with no streamId) are shown.
    */
+  private get currentStreamInfo(): StreamTabInfo | null {
+    return this.streamContext?.streamInfo ?? this.streamInfo ?? null;
+  }
+
+  private get currentState(): ToolUseStreamState | null {
+    const contextState = this.streamContext?.streamState;
+    if (contextState && isToolUseState(contextState)) {
+      return contextState;
+    }
+    return this.state ?? null;
+  }
+
+  private get currentPrompts(): PromptState[] {
+    return this.promptContext ?? this.prompts;
+  }
+
   private computeFilteredPrompts(): PromptState[] {
-    const streamId = this.streamInfo?.name;
+    const streamId = this.currentStreamInfo?.name;
     if (!streamId) return [];
-    return this.prompts.filter(
+    return this.currentPrompts.filter(
       (prompt) => !prompt.data.streamId || prompt.data.streamId === streamId,
     );
   }
 
   render(): TemplateResult {
+    const currentState = this.currentState;
+    const streamInfo = this.currentStreamInfo;
+    if (!currentState || !streamInfo) {
+      return html``;
+    }
+
     return html`
       <stream-header
-        .stream=${this.streamInfo}
-        .streamState=${this.state}
+        .stream=${streamInfo}
+        .streamState=${currentState}
         .runId=${null}
         .runs=${this.runGroups}
-        .yoloActive=${Boolean(this.state.toolEditBypass)}
+        .yoloActive=${Boolean(currentState.toolEditBypass)}
       ></stream-header>
 
       <prompt-overlay
@@ -112,27 +141,27 @@ export class ToolUseStreamContent extends LitElement {
         .prompt=${this.filteredPrompts.at(0) ?? null}
       ></prompt-overlay>
 
-      <todo-list .todos=${this.state.todos}></todo-list>
+      <todo-list .todos=${currentState.todos}></todo-list>
 
       <log-list
-        .groups=${this.state.taskGroups}
-        .messages=${this.state.logs}
+        .groups=${currentState.taskGroups}
+        .messages=${currentState.logs}
         .isToolUse=${true}
       ></log-list>
 
       <usage-panel
-        .contextState=${this.state.contextState ?? null}
+        .contextState=${currentState.contextState ?? null}
       ></usage-panel>
 
       <follow-up-input
         ${ref(this.followUpRef)}
         .visible=${true}
-        .value=${this.state.followUpText}
-        .queuedMessages=${this.state.queuedFollowUps}
-        .shouldFocus=${this.state.shouldFocusFollowUp ?? false}
-        .polishedText=${this.state.polishedText ?? null}
-        .transcribedText=${this.state.transcribedText ?? null}
-        .recording=${this.state.recording ?? false}
+        .value=${currentState.followUpText}
+        .queuedMessages=${currentState.queuedFollowUps}
+        .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
+        .polishedText=${currentState.polishedText ?? null}
+        .transcribedText=${currentState.transcribedText ?? null}
+        .recording=${currentState.recording ?? false}
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;

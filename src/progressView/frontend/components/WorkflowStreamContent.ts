@@ -25,23 +25,37 @@
 // Third-party imports
 import {
   LitElement,
+  css,
   html,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 
-// Local imports - shared schemas
+// Local imports - progress view utilities
 import { getRunGroups, hasOutputFiles } from '../stateUtils';
+
+// Local imports - progress view store
+import {
+  isToolUseState,
+  type FollowupOptionsState,
+  type WorkflowStreamState,
+} from '../store';
+
+// Local imports - progress view contexts
+import {
+  streamStateContext,
+  type StreamContextValue,
+} from '../contexts/streamContexts';
+
+// Local imports - shared schemas
 import type {
   InstructionUpdate,
   OutputFileInfo,
   StreamTabInfo,
   TokenUsageStats,
 } from '@shared/schemas';
-
-// Local imports - progress view
-import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - sibling components
 import './StreamHeader';
@@ -64,17 +78,20 @@ interface RunDerivedValues {
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends LitElement {
-  // Use Light DOM so document-level CSS (logs.css, groups.css, etc.)
-  // can style the task-group-list and its content
-  protected createRenderRoot(): HTMLElement {
-    return this;
-  }
+  static override styles = css`
+    :host {
+      display: contents;
+    }
+  `;
 
   @property({ type: Object }) state!: WorkflowStreamState;
   @property({ type: Object }) streamInfo!: StreamTabInfo;
   @property({ type: String }) runId: string | null = null;
   @property({ type: Object }) followupOptions: FollowupOptionsState | null =
     null;
+
+  @consume({ context: streamStateContext, subscribe: true })
+  private streamContext?: StreamContextValue;
 
   // Memoized derived values - updated in willUpdate when deps change
   @state() private runGroups: RunGroup[] = [];
@@ -85,16 +102,33 @@ export class WorkflowStreamContent extends LitElement {
     hasFiles: false,
   };
 
-  protected willUpdate(changedProperties: PropertyValues<this>): void {
+  protected willUpdate(_changedProperties: PropertyValues<this>): void {
+    const currentState = this.currentState;
     // Recompute run groups when state changes (taskGroups is inside state)
-    if (changedProperties.has('state')) {
-      this.runGroups = getRunGroups(this.state?.taskGroups ?? []);
-    }
+    this.runGroups = getRunGroups(currentState?.taskGroups ?? []);
 
     // Recompute run-specific values when runId or state changes
-    if (changedProperties.has('runId') || changedProperties.has('state')) {
-      this.runValues = this.computeRunValues();
+    this.runValues = this.computeRunValues();
+  }
+
+  private get currentStreamInfo(): StreamTabInfo | null {
+    return this.streamContext?.streamInfo ?? this.streamInfo ?? null;
+  }
+
+  private get currentState(): WorkflowStreamState | null {
+    const contextState = this.streamContext?.streamState;
+    if (contextState && !isToolUseState(contextState)) {
+      return contextState as WorkflowStreamState;
     }
+    return this.state ?? null;
+  }
+
+  private get currentRunId(): string | null {
+    return this.streamContext?.runId ?? this.runId ?? null;
+  }
+
+  private get currentFollowupOptions(): FollowupOptionsState | null {
+    return this.streamContext?.followupOptions ?? this.followupOptions ?? null;
   }
 
   /**
@@ -102,10 +136,16 @@ export class WorkflowStreamContent extends LitElement {
    * This avoids multiple object lookups during render.
    */
   private computeRunValues(): RunDerivedValues {
-    const runKey = this.runId ?? 'default';
-    const instruction = this.state.runInstructions[runKey] ?? null;
-    const usage = this.runId ? (this.state.runUsage[this.runId] ?? null) : null;
-    const files = this.runId ? (this.state.runFiles[this.runId] ?? {}) : {};
+    const state = this.currentState;
+    if (!state) {
+      return { instruction: null, usage: null, files: {}, hasFiles: false };
+    }
+
+    const runId = this.currentRunId;
+    const runKey = runId ?? 'default';
+    const instruction = state.runInstructions[runKey] ?? null;
+    const usage = runId ? (state.runUsage[runId] ?? null) : null;
+    const files = runId ? (state.runFiles[runId] ?? {}) : {};
     const hasFiles = hasOutputFiles(files);
 
     return { instruction, usage, files, hasFiles };
@@ -113,12 +153,19 @@ export class WorkflowStreamContent extends LitElement {
 
   render(): TemplateResult {
     const { instruction, usage, files, hasFiles } = this.runValues;
+    const streamInfo = this.currentStreamInfo;
+    const state = this.currentState;
+    const runId = this.currentRunId;
+
+    if (!streamInfo || !state) {
+      return html``;
+    }
 
     return html`
       <stream-header
-        .stream=${this.streamInfo}
-        .streamState=${this.state}
-        .runId=${this.runId}
+        .stream=${streamInfo}
+        .streamState=${state}
+        .runId=${runId}
         .runs=${this.runGroups}
         .yoloActive=${false}
       ></stream-header>
@@ -126,26 +173,26 @@ export class WorkflowStreamContent extends LitElement {
       <instruction-panel .instruction=${instruction}></instruction-panel>
 
       <log-list
-        .groups=${this.state.taskGroups}
-        .messages=${this.state.logs}
-        .activeRunId=${this.runId}
+        .groups=${state.taskGroups}
+        .messages=${state.logs}
+        .activeRunId=${runId}
         .isToolUse=${false}
       ></log-list>
 
       <usage-panel
         .usage=${usage}
-        .contextState=${this.state.contextState ?? null}
+        .contextState=${state.contextState ?? null}
       ></usage-panel>
 
       <file-list .filesByRound=${files} .showRoundHeaders=${true}></file-list>
 
       <followup-section
-        .agentCategory=${this.streamInfo.agentCategory}
-        .status=${this.state.status ?? this.streamInfo.status ?? ''}
+        .agentCategory=${streamInfo.agentCategory}
+        .status=${state.status ?? streamInfo.status ?? ''}
         .hasOutputFiles=${hasFiles}
-        .options=${this.followupOptions}
-        .mode=${this.state.followupMode}
-        .streamModel=${this.streamInfo.model ?? null}
+        .options=${this.currentFollowupOptions}
+        .mode=${state.followupMode}
+        .streamModel=${streamInfo.model ?? null}
       ></followup-section>
     `;
   }

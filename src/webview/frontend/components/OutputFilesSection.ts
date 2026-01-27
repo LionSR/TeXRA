@@ -6,12 +6,23 @@
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, property, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
+import Sortable from 'sortablejs';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
+import {
+  fileStateContext,
+  type FileStateContextValue,
+} from '../contexts/mainViewContexts';
+
+type SortableDragEvent = {
+  oldIndex?: number | null;
+  newIndex?: number | null;
+};
 
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
@@ -142,6 +153,67 @@ export class OutputFilesSection extends LitElement {
   /** Output files list */
   @property({ type: Array }) files: string[] = [];
 
+  @consume({ context: fileStateContext, subscribe: true })
+  private fileState?: FileStateContextValue;
+
+  @query('.multiple-files-list')
+  private fileListElement?: HTMLElement;
+
+  private sortable: Sortable | null = null;
+
+  override disconnectedCallback(): void {
+    this.destroySortable();
+    super.disconnectedCallback();
+  }
+
+  protected override updated(changedProps: Map<string, unknown>): void {
+    if (changedProps.has('files')) {
+      this.destroySortable();
+    }
+    this.initializeSortable();
+  }
+
+  private get currentFiles(): string[] {
+    return this.fileState?.multiFiles.outputFiles ?? this.files;
+  }
+
+  private get currentExpanded(): boolean {
+    return this.fileState?.outputFilesActive ?? this.expanded;
+  }
+
+  private initializeSortable(): void {
+    if (this.sortable || !this.fileListElement) return;
+    this.sortable = new Sortable(this.fileListElement, {
+      animation: 150,
+      onEnd: (event) => this.handleSortEnd(event),
+    });
+  }
+
+  private destroySortable(): void {
+    this.sortable?.destroy();
+    this.sortable = null;
+  }
+
+  private handleSortEnd(event: unknown): void {
+    const { oldIndex, newIndex } = (event ?? {}) as SortableDragEvent;
+    if (
+      oldIndex === null ||
+      oldIndex === undefined ||
+      newIndex === null ||
+      newIndex === undefined
+    ) {
+      return;
+    }
+
+    const current = [...this.currentFiles];
+    const [moved] = current.splice(oldIndex, 1);
+    current.splice(newIndex, 0, moved);
+
+    this.dispatchEvent(
+      MainViewEvents.filesReordered({ listId: 'outputFiles', files: current }),
+    );
+  }
+
   private handleToggle(): void {
     this.dispatchEvent(MainViewEvents.toggleList({ listId: 'outputFiles' }));
   }
@@ -163,14 +235,14 @@ export class OutputFilesSection extends LitElement {
   }
 
   private renderFileList(): TemplateResult {
-    if (this.files.length === 0) {
+    if (this.currentFiles.length === 0) {
       return html`<div class="file-list-placeholder">
         No extra outputs selected. Click "Add" to choose files.
       </div>`;
     }
 
     return html`${repeat(
-      this.files,
+      this.currentFiles,
       (file) => file,
       (file) => html`
         <div class="file-item" data-path=${file}>
@@ -186,12 +258,12 @@ export class OutputFilesSection extends LitElement {
   }
 
   override render(): TemplateResult {
-    const chevronClass = this.expanded
+    const chevronClass = this.currentExpanded
       ? 'codicon-chevron-up'
       : 'codicon-chevron-down';
 
     return html`
-      <div class="file-select" data-expanded=${String(this.expanded)}>
+      <div class="file-select" data-expanded=${String(this.currentExpanded)}>
         <div class="file-select-header">
           <div class="file-select-label-group">
             <span
@@ -230,7 +302,9 @@ export class OutputFilesSection extends LitElement {
         <div
           id="outputFilesContainer"
           class="multiple-files-container"
-          style=${styleMap({ display: this.expanded ? 'block' : 'none' })}
+          style=${styleMap({
+            display: this.currentExpanded ? 'block' : 'none',
+          })}
         >
           <div class="multiple-files-content">
             <div id="outputFiles" class="multiple-files-list">

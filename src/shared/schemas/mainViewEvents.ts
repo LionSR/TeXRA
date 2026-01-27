@@ -54,6 +54,12 @@ export const RemoveFileDetailSchema = z.object({
 });
 export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
 
+export const ReorderFilesDetailSchema = z.object({
+  listId: z.string(),
+  files: z.array(z.string()),
+});
+export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;
+
 export const CheckboxChangeDetailSchema = z.object({
   id: z.string(),
   checked: z.boolean(),
