@@ -18,7 +18,7 @@ import type { StorageKey } from '@shared/schemas';
  * per-run scoping. Persisted state may still reference this ID when no
  * explicit task group identifier was available at the time.
  */
-export const DEFAULT_RUN_ID: StorageKey = '__default__' as StorageKey;
+const DEFAULT_RUN_ID: StorageKey = '__default__' as StorageKey;
 
 /**
  * Normalize a run ID for workflow agents, falling back to the default sentinel value.

@@ -82,10 +82,6 @@ export class CopyButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
-  hostConnected(): void {
-    // No setup needed
-  }
-
   hostDisconnected(): void {
     // Clean up any pending timeout
     if (this._resetTimeoutId !== null) {
@@ -108,11 +104,6 @@ export class CopyButtonController implements ReactiveController {
       copied: this._copied,
       successClass: this._config.successClass,
     };
-  }
-
-  /** Whether in success/copied state */
-  get copied(): boolean {
-    return this._copied;
   }
 
   /**

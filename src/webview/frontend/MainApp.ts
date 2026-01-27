@@ -1830,47 +1830,47 @@ export class MainApp extends BaseWebviewApp {
       current.singleFiles.mediaFile === next.singleFiles.mediaFile &&
       current.singleFiles.baseFile === next.singleFiles.baseFile &&
       current.singleFiles.editedFile === next.singleFiles.editedFile &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.inputFile,
         next.fileOptions.inputFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.referenceFile,
         next.fileOptions.referenceFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.auxiliaryFile,
         next.fileOptions.auxiliaryFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.mediaFile,
         next.fileOptions.mediaFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.baseFile,
         next.fileOptions.baseFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.fileOptions.editedFile,
         next.fileOptions.editedFile,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.multiFiles.inputFiles,
         next.multiFiles.inputFiles,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.multiFiles.referenceFiles,
         next.multiFiles.referenceFiles,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.multiFiles.auxiliaryFiles,
         next.multiFiles.auxiliaryFiles,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.multiFiles.mediaFiles,
         next.multiFiles.mediaFiles,
       ) &&
-      this.areStringArraysEqual(
+      this.areArraysEqual(
         current.multiFiles.outputFiles,
         next.multiFiles.outputFiles,
       ) &&
@@ -1899,10 +1899,6 @@ export class MainApp extends BaseWebviewApp {
       current.attachTeXCount === next.attachTeXCount &&
       current.attachDiagnostics === next.attachDiagnostics
     );
-  }
-
-  private areStringArraysEqual(current: string[], next: string[]): boolean {
-    return this.areArraysEqual(current, next);
   }
 
   private areArraysEqual<T>(current: T[], next: T[]): boolean {
