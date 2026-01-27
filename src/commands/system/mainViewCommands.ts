@@ -21,7 +21,9 @@ export const mainViewCommands = {
 /**
  * Registers main view commands for the extension.
  */
-export function registerMainViewCommands(context: vscode.ExtensionContext): void {
+export function registerMainViewCommands(
+  context: vscode.ExtensionContext,
+): void {
   const resetCommand = vscode.commands.registerCommand(
     mainViewCommands.reset,
     async () => {

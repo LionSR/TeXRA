@@ -165,7 +165,21 @@ export class TaskGroupList extends LitElement {
 
   /** Check if a root group should be visible */
   private isGroupVisible(groupId: string): boolean {
-    return this.isToolUse || !this.activeRunId || groupId === this.activeRunId;
+    // Tool-use: show all groups (conversation turns are append-only)
+    if (this.isToolUse) return true;
+
+    // No run selected: show all groups
+    if (!this.activeRunId) return true;
+
+    // Fallback: if activeRunId doesn't match any root group, show all
+    // This prevents blank content when run IDs are mismatched
+    const rootGroupIds = new Set(
+      this.groups.filter((g) => !g.parentGroupId).map((g) => g.id),
+    );
+    if (!rootGroupIds.has(this.activeRunId)) return true;
+
+    // Normal case: only show the selected run
+    return groupId === this.activeRunId;
   }
 
   /** Check if a group is expanded */

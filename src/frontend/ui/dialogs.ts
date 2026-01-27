@@ -31,7 +31,9 @@ export async function selectFiles(
     options.defaultUri ??
     (workspacePath
       ? options.currentFile
-        ? vscode.Uri.file(path.dirname(path.join(workspacePath, options.currentFile)))
+        ? vscode.Uri.file(
+            path.dirname(path.join(workspacePath, options.currentFile)),
+          )
         : vscode.Uri.file(workspacePath)
       : null);
 
