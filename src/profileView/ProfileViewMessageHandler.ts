@@ -60,7 +60,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     // Track active view for handlers that need webview access
-    (this as any)._activeView = webviewView;
+    this.setActiveView(webviewView);
 
     const handled = dispatchProfileViewInbound(
       message,

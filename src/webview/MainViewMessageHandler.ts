@@ -79,11 +79,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     return {};
   }
 
-  private setActiveView(view: vscode.WebviewView): void {
-    // Access parent's private _activeView via type assertion
-    (this as any)._activeView = view;
-  }
-
   private createHandlerRegistry(
     webviewView: vscode.WebviewView,
   ): MainViewInboundHandlerRegistry {
