@@ -5,8 +5,7 @@
 
 import { createEvent } from '@shared/utils/events';
 
-import type { PermissionState } from './components/PermissionCard';
-import type { FollowupFormData } from './components/FollowupSection';
+import type { PermissionState, FollowupFormData } from './components';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';
 
 // =============================================================================

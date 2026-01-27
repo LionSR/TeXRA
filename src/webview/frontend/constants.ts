@@ -69,7 +69,6 @@ export const SESSION_TYPE_VALUES = new Set(Object.values(SESSION_TYPES));
 export function parseSessionType(
   sessionType: string | null | undefined,
 ): SessionType | undefined {
-  return SESSION_TYPE_VALUES.has(sessionType as SessionType)
-    ? (sessionType as SessionType)
-    : undefined;
+  const result = SessionTypeSchema.safeParse(sessionType);
+  return result.success ? result.data : undefined;
 }

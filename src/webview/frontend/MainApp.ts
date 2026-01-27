@@ -1971,16 +1971,16 @@ export class MainApp extends BaseWebviewApp {
               visible: this.apiKeyBanner.visible,
               provider: this.apiKeyBanner.provider,
               requiresKey: this.apiKeyBanner.requiresKey,
-            } as ApiKeyBannerState}
+            }}
             .agentConfigBanner=${{
               visible: this.agentConfigBanner.visible,
               agentName: this.agentConfigBanner.agentName,
               customDirSet: this.agentConfigBanner.customDirSet,
-            } as AgentConfigBannerState}
+            }}
             .dependencyBanner=${{
               visible: this.dependencyBanner.visible,
               missingTools: this.dependencyBanner.missingTools,
-            } as DependencyBannerState}
+            }}
             .gettingStartedVisible=${this.gettingStartedVisible}
             .loginBannerVisible=${this.loginBannerVisible}
             @api-key-action=${this.handleComponentApiKeyAction}

@@ -545,18 +545,15 @@ export class RequestPanels extends LitElement {
   private renderToolEditDiffMeta(
     request: ToolEditPermission,
   ): TemplateResult | typeof nothing {
-    const toCount = (value: number | undefined) =>
-      Number.isFinite(value) ? Math.max(0, value ?? 0) : 0;
+    const toCount = (value: number | undefined): number => {
+      if (value === undefined || !Number.isFinite(value)) return 0;
+      return Math.max(0, value);
+    };
     const added = toCount(request.addedLines);
     const removed = toCount(request.removedLines);
     const total = added + removed;
     const lineLabel = total === 1 ? 'line' : 'lines';
-    const tooltip =
-      total > 0
-        ? `${added > 0 ? `+${added}` : ''}${
-            removed > 0 ? ` / -${removed}` : ''
-          } ${lineLabel} changed`
-        : 'No line changes';
+    const tooltip = this.buildDiffTooltip(added, removed, lineLabel);
 
     return html`
       <span class="approval-request__diff" title=${tooltip}>
@@ -726,6 +723,20 @@ export class RequestPanels extends LitElement {
     this.dispatchEvent(
       ProgressEvents.permissionAction({ permission, action, feedback }),
     );
+  }
+
+  private buildDiffTooltip(
+    added: number,
+    removed: number,
+    lineLabel: string,
+  ): string {
+    if (added === 0 && removed === 0) {
+      return 'No line changes';
+    }
+    const parts: string[] = [];
+    if (added > 0) parts.push(`+${added}`);
+    if (removed > 0) parts.push(`-${removed}`);
+    return `${parts.join(' / ')} ${lineLabel} changed`;
   }
 
   private formatRetryDetails(
