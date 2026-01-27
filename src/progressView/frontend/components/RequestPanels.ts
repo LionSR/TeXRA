@@ -604,7 +604,8 @@ export class RequestPanels extends LitElement {
     if (!action || !kind || !permissionId) return;
 
     const permission = this.permissions.find(
-      (item) => item.kind === kind && this.getPermissionId(item) === permissionId,
+      (item) =>
+        item.kind === kind && this.getPermissionId(item) === permissionId,
     );
     if (!permission) return;
 

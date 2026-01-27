@@ -286,4 +286,3 @@ export const MEMORY_VIEW_COMMANDS = {
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
-

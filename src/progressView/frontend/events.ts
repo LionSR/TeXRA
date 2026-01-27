@@ -101,7 +101,8 @@ export const ProgressEvents = {
 
   followupClear: () => createEvent('followup-clear', undefined),
 
-  followupRequestOptions: () => createEvent('followup-request-options', undefined),
+  followupRequestOptions: () =>
+    createEvent('followup-request-options', undefined),
 
   followupModeChange: (detail: FollowupModeDetail) =>
     createEvent('followup-mode-change', detail),
