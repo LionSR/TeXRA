@@ -1,15 +1,10 @@
-// Local imports - shared schemas
 import {
   InstructionUpdateSchema,
   type InstructionUpdate,
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

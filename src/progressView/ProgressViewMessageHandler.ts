@@ -1,20 +1,11 @@
-// Standard library imports
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - shared schemas
-import { AgentProposalActionMessageSchema } from '@shared/schemas';
-
-// Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import {
@@ -22,28 +13,25 @@ import {
   MessageHandler,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-
-// Local imports - frontend
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-
-// Local imports - logger
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-
-// Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
-
-// Local imports - progress view
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
-
-// Local imports - tools
+import {
+  AgentProposalActionMessageSchema,
+  type ExecutionId,
+  type OutputFileInfo,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -51,8 +39,6 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-
-// Local imports - utils
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -68,8 +54,6 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-
-// Local imports - webview
 import {
   ApprovalActionMessageSchema,
   BaseFileCommandMessageSchema,
@@ -87,25 +71,12 @@ import {
   StreamMessageSchema,
 } from '@webview/types/messages';
 
-// Type imports
-import type {
-  ExecutionId,
-  OutputFileInfo,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
-
-  /**
-   * Stores model's original output when compare view is opened.
-   * Key: edited file path, Value: { content, streamId }
-   * Used to detect user modifications and inform the model via follow-up.
-   */
   private readonly modelOutputBackups = new Map<
     string,
     { content: string; streamId: StreamTabId }
@@ -115,7 +86,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
   ) {
-    // Enable activeView tracking - getActiveView() is inherited from base class
     super('ProgressView', { trackActiveView: true });
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
@@ -211,12 +181,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     };
   }
 
-  // Handler implementations
-  /**
-   * Override to notify the provider when webview is ready.
-   * This allows the provider to process any pending updates that
-   * were queued while the webview was initializing.
-   */
   protected override async handleWebviewReady(message: unknown): Promise<void> {
     const webviewView = this.getActiveView();
     if (webviewView) {
@@ -292,11 +256,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  /**
-   * Resume a paused workflow/reflection session.
-   * Reuses the executionId so the flow picks up persisted state.
-   * Tool-use agents use the follow-up mechanism instead.
-   */
   private async handleResume(message: unknown): Promise<void> {
     await this.withValidatedMessage(
       StreamMessageSchema,
@@ -308,11 +267,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           return;
         }
 
-        // For workflow agents, resume by passing the same executionId
         if (isWorkflowTaskState(taskState)) {
           const executionId = this.provider.state.getExecutionId(streamId);
           if (executionId) {
-            // Pass executionId to resume from persisted flow state
             await safeExecuteCommand('texra.execute', [
               { config: taskState.agentConfig, executionId },
             ]);
@@ -320,8 +277,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           }
         }
 
-        // Defensive fallback: start fresh if no executionId available.
-        // Tool-use agents shouldn't reach here (Resume button not in their toolbar).
         await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
       },
     );
@@ -348,8 +303,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'retryStreamRequest',
       async ({ stream: streamId, feedback }) => {
-        // triggerRetry is synchronous, no await needed
-        // Pass optional feedback from the UI
         const success = retryCoordinator.triggerRetry(streamId, feedback);
         if (!success) {
           await vscode.window.showInformationMessage(
@@ -380,9 +333,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.withToolbarTaskState(streamId, async (taskState) => {
           const executionId = this.provider.state.getExecutionId(streamId);
           const activeRunId = this.provider.state.getActiveRunId(streamId);
-          // storageKey is for logical indexing (finding file metadata in progress view state).
-          // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
-          // Note: Physical file paths use executionId (see runId below), not storageKey.
           const storageKey = (activeRunId ??
             executionId ??
             null) as StorageKey | null;
@@ -400,8 +350,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             outputFiles: taskState.agentConfig.outputFiles,
             outputFilesActive: taskState.activeFiles.output,
             streamId,
-            // executionId is for file system paths (taskRuns/<executionId>/...)
-            // storageKey is for logical storage indexing - different concepts
             runId: executionId,
             outputsByRound,
           });
@@ -615,10 +563,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  /**
-   * Handle the "setup" action for an agent proposal.
-   * Opens the proposal in the main view for editing before execution.
-   */
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {
     const proposal = this.provider.getPendingAgentProposal(proposalId);
     if (!proposal) {
@@ -629,20 +573,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Map proposal category string to AgentCategory enum
     const agentCategory =
       proposal.agentCategory === 'toolUse'
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    // Build the agentConfig based on proposal type
-    // Workflow proposals have file fields; tool-use proposals don't
     const isWorkflow = proposal.agentCategory === 'workflow';
-
-    // Helper to check if a file array has content
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
-    // Build activeFiles - only relevant for workflow agents
     const activeFiles = {
       input: isWorkflow && hasFiles(proposal.inputFiles),
       reference: isWorkflow && hasFiles(proposal.referenceFiles),
@@ -651,14 +589,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       output: isWorkflow && hasFiles(proposal.outputFiles),
     };
 
-    // Build the agentConfig from the proposal (Zod applies defaults for missing fields)
-    // For tool-use agents, file fields will get default values from AgentConfigSchema
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
       instruction: proposal.instruction,
       agentCategory,
-      // File fields only present for workflow agents
       ...(isWorkflow && {
         inputFile: proposal.inputFile,
         inputFiles: proposal.inputFiles,
@@ -670,7 +605,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         mediaFiles: proposal.mediaFiles,
         outputFiles: proposal.outputFiles,
         useMultipleOutputs: proposal.useMultipleOutputs,
-        // Set visibility flags for file arrays that have content
         inputFilesActive: activeFiles.input,
         referenceFilesActive: activeFiles.reference,
         auxiliaryFilesActive: activeFiles.auxiliary,
@@ -679,19 +613,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }),
     });
 
-    // Build the appropriate TaskState variant based on agent category
-    // WorkflowTaskState requires activeFiles; ToolUseTaskState does not
-    // Cast needed because agentConfig.agentCategory is typed as the general
-    // AgentCategory enum, not the specific literal type that TaskState requires
     const taskState = (
       isWorkflow ? { agentConfig, activeFiles } : { agentConfig }
     ) as TaskState;
 
-    // Resolve the proposal with 'setup' action to dismiss it from the UI
-    // (user will manually execute from the main view after editing)
     proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
 
-    // Open the main view with the proposal details
     await vscode.commands.executeCommand('texra.mainView.focus');
     await vscode.commands.executeCommand('texra.restoreState', taskState);
 
@@ -708,15 +635,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'openTaskStorage',
       async ({ stream: streamId }) => {
-        // Use cached activeRunId (set by event handlers when data arrives)
         const storageKey = this.provider.state.getActiveRunId(streamId);
         const runOutputs = storageKey
           ? this.provider.state.getRunOutputFiles(streamId, { storageKey })
           : undefined;
 
-        // executionId is the physical directory name: taskRuns/<executionId>/
-        // For workflow agents, storageKey (task group ID) differs from executionId,
-        // but files are always written to the executionId directory.
         const executionId = this.provider.state.getExecutionId(streamId);
 
         try {
@@ -726,9 +649,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             await ensureRunDir(executionId);
             directoryToReveal = getRunDir(executionId);
           } else if (runOutputs) {
-            // Defensive fallback: executionId and outputFiles are persisted independently,
-            // so edge cases (data migration, partial state) could leave files without executionId.
-            // Extract directory from actual file paths.
             directoryToReveal = this.findOutputDirectory(runOutputs);
           }
 
@@ -791,7 +711,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'compareOriginal',
       async ({ file, base }) => {
-        // Backup model's original output before user can modify it in the diff view
         const streamId = this.provider.state.activeStream;
         if (streamId && file) {
           try {
@@ -799,7 +718,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             const content = await flexibleFS.read(fileLocation);
             this.modelOutputBackups.set(file, { content, streamId });
           } catch {
-            // Ignore backup errors - don't block the compare operation
+            // Ignore backup errors
           }
         }
 
@@ -852,7 +771,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       message,
       'acceptFile',
       async ({ file, base }) => {
-        // Check if user modified the model's output before accepting
         const backup = file ? this.modelOutputBackups.get(file) : null;
         let currentContent: string | null = null;
 
@@ -861,7 +779,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             const fileLocation = createExternalLocation(file);
             currentContent = await flexibleFS.read(fileLocation);
           } catch {
-            // Ignore read errors
+            // Ignore errors
           }
         }
 
@@ -893,7 +811,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
         }
 
-        // Clean up backup
         if (file) {
           this.modelOutputBackups.delete(file);
         }
@@ -1000,11 +917,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  /**
-   * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
-   * @param streamId - The stream identifier whose task state should be fetched.
-   * @param action - The callback to execute when a valid workflow task state is available.
-   */
   private async withToolbarTaskState(
     streamId: StreamTabId,
     action: (taskState: WorkflowTaskState) => Promise<void>,
@@ -1017,10 +929,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await action(taskState);
   }
 
-  /**
-   * Executes a file operation command with base file validation.
-   * Returns early with a warning if base file is missing.
-   */
   private async executeWithBaseFile(
     file: string,
     base: string | undefined,
@@ -1038,10 +946,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await execute(file, base);
   }
 
-  /**
-   * Find the directory of the first valid output file from run outputs.
-   * Returns undefined if no suitable file location is found.
-   */
   private findOutputDirectory(
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string | undefined {
@@ -1056,11 +960,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return undefined;
   }
 
-  // ===== Followup Task Handlers =====
-
-  /**
-   * Handle request for followup options (agents, models).
-   */
   private async handleGetFollowupOptions(_message: unknown): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
@@ -1092,10 +991,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Handle setup followup task request.
-   * Sends the followup configuration to the main view for review.
-   */
   private async handleSetupFollowup(message: unknown): Promise<void> {
     await this.withValidatedMessage(
       FollowupTaskMessageSchema,
@@ -1105,10 +1000,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  /**
-   * Handle run followup task request.
-   * Sets up and immediately executes the followup task.
-   */
   private async handleRunFollowup(message: unknown): Promise<void> {
     await this.withValidatedMessage(
       FollowupTaskMessageSchema,
@@ -1118,10 +1009,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  /**
-   * Process a followup request (setup or run).
-   * Builds a TaskState directly and sends via restoreState for code reuse.
-   */
   private async processFollowup(
     data: {
       stream: StreamTabId;
@@ -1144,7 +1031,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       initialQuestion,
     } = data;
 
-    // Validate prerequisites
     const prereq = await this.validateFollowupPrerequisites(streamId, agent);
     if (!prereq) return;
 
@@ -1155,7 +1041,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ...originalConfig.inputFiles,
     ].filter(Boolean);
 
-    // Build file mapping: original inputs → output files
     const fileMapping = this.buildFollowupFileMapping(
       originalInputs,
       outputFiles,
@@ -1174,13 +1059,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Handle merge mode directly (bypasses main view)
     if (mode === 'merge') {
       await this.executeMergeDirectly(originalInputs, fileMapping, model);
       return;
     }
 
-    // For workflow/chat mode, build TaskState and use restoreState
     try {
       const newTaskState = await this.buildFollowupTaskState(
         taskState,
@@ -1219,10 +1102,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Validate followup prerequisites: task state, agent, and output files.
-   * Returns null if validation fails (with user notification).
-   */
   private async validateFollowupPrerequisites(
     streamId: StreamTabId,
     agent: string,
@@ -1268,9 +1147,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return { taskState, outputFiles };
   }
 
-  /**
-   * Build a mapping from original input paths to output file paths.
-   */
   private buildFollowupFileMapping(
     originalInputs: string[],
     outputFiles: string[],
@@ -1299,10 +1175,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return fileMapping;
   }
 
-  /**
-   * Build a TaskState for followup by mapping output files to inputs.
-   * Returns WorkflowTaskState for workflow mode, ToolUseTaskState for chat mode.
-   */
   private async buildFollowupTaskState(
     originalTaskState: WorkflowTaskState,
     originalConfig: AgentConfig,
@@ -1326,8 +1198,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     } = options;
     const isChat = mode === 'chat';
 
-    // Map input files: by default, outputs become new inputs
-    // When attachAgentOutputs is enabled, keep originals as inputs and add outputs as reference
     const mapOutputToRelative = (p: string): string =>
       WorkspaceFS.relativePath(fileMapping.get(p) ?? p);
     const keepOriginalRelative = (p: string): string =>
@@ -1340,13 +1210,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? originalConfig.inputFiles.map(keepOriginalRelative)
       : originalConfig.inputFiles.map(mapOutputToRelative);
 
-    // When attachAgentOutputs is enabled, add agent outputs as reference
-    // This allows agents like 'apply' to see the annotated output while modifying the original
     const outputsAsReference = attachAgentOutputs
       ? [...fileMapping.values()].map((p) => WorkspaceFS.relativePath(p))
       : [];
 
-    // Build instruction from template
     const template = isChat
       ? CHAT_INSTRUCTION_TEMPLATE
       : WORKFLOW_CONTEXT_TEMPLATE;
@@ -1359,29 +1226,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       isChat ? initialQuestion : undefined,
     );
 
-    // Workflow mode can optionally append original instruction
     const shouldAppendOriginal =
       !isChat && includeInstruction && originalConfig.instruction;
     const instruction = shouldAppendOriginal
       ? `${context}\n\n${originalConfig.instruction}`
       : context;
 
-    // Determine category based on mode
     const newAgentEntry = getAgent(agent);
     const agentCategory = isChat
       ? AgentCategory.ToolUse
       : AgentCategory.Workflow;
 
-    // Build config preserving toolConfig, reference/auxiliary files
-    // When attachAgentOutputs is enabled, merge agent outputs into reference files
     const mergedReferenceFiles = [
       ...(originalConfig.referenceFiles ?? []),
       ...outputsAsReference,
     ];
 
-    // When attachAgentOutputs is enabled, output to original input locations
-    // This allows apply agents to write changes back to the original files
-    // Note: outputFiles includes all unique files (inputFile + inputFiles), preserving insertion order
     const outputFiles = attachAgentOutputs
       ? [
           ...new Set(
@@ -1392,7 +1252,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ]
       : originalConfig.outputFiles;
 
-    // Set useMultipleOutputs when we have multiple output files
     const useMultipleOutputs =
       (attachAgentOutputs && outputFiles.length > 1) ||
       originalConfig.useMultipleOutputs;
@@ -1410,12 +1269,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentCategory,
     } as AgentConfig;
 
-    // Chat mode returns minimal TaskState, workflow preserves activeFiles
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;
     }
 
-    // Update activeFiles visibility when reference/output files are added
     const activeFiles = {
       ...originalTaskState.activeFiles,
       ...(outputsAsReference.length > 0 && { reference: true }),
@@ -1428,10 +1285,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     } as TaskState;
   }
 
-  /**
-   * Render a followup instruction using a Nunjucks template.
-   * Unifies buildWorkflowContext and buildChatInstruction into one method.
-   */
   private async renderFollowupInstruction(
     template: string,
     originalConfig: AgentConfig,
@@ -1469,15 +1322,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return renderPrompt(template, vars as Record<string, unknown>);
   }
 
-  /**
-   * Execute merge directly without going to main view.
-   */
   private async executeMergeDirectly(
     originalInputs: string[],
     fileMapping: Map<string, string>,
     model: string,
   ): Promise<void> {
-    // Build file pairs for merge
     const filePairs: { baseFile: string; editedFile: string }[] = [];
     for (const inputFile of originalInputs) {
       const outputFile = fileMapping.get(inputFile);
@@ -1499,7 +1348,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.logger.info(this.channel, 'Executing merge directly');
 
     if (filePairs.length === 1) {
-      // Single file merge - pass model as 4th parameter
       await safeExecuteCommand('texra.merge', [
         undefined,
         filePairs[0].baseFile,
@@ -1507,7 +1355,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         model,
       ]);
     } else {
-      // Multiple file merge
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
@@ -1529,9 +1376,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Extract absolute file paths from run output files.
-   */
   private extractOutputFilePaths(
     runOutputs: Map<number, OutputFileInfo[]> | null | undefined,
   ): string[] {

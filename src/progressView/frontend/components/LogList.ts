@@ -1,7 +1,8 @@
 /**
  * LogList component - declarative log rendering.
  *
- * Receives data via properties and delegates rendering to TaskGroupList.
+ * Consumes streamStateContext to get groups, messages, activeRunId, and isToolUse.
+ * Delegates rendering to TaskGroupList.
  * Handles event delegation for clicks, toggles, and file links.
  *
  * Uses Shadow DOM with modular styles for encapsulation.
@@ -9,7 +10,8 @@
 
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { customElement, query, state } from 'lit/decorators.js';
 
 // Local imports - side-effect: register component
 import './TaskGroupList';
@@ -27,6 +29,12 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS } from '../constants';
+
+// Local imports - progress view contexts
+import {
+  streamStateContext,
+  type StreamContextValue,
+} from '../contexts/streamContexts';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -54,11 +62,27 @@ export class LogList extends LitElement {
     ...logStyles,
   ];
 
-  // Reactive properties - passed from parent
-  @property({ type: Array }) groups: TaskGroup[] = [];
-  @property({ type: Array }) messages: LogMessageData[] = [];
-  @property({ type: String }) activeRunId: string | null = null;
-  @property({ type: Boolean }) isToolUse = false;
+  // Context consumption - state provided by ProgressApp
+  @consume({ context: streamStateContext, subscribe: true })
+  @state()
+  private streamContext?: StreamContextValue;
+
+  // Computed getters from context
+  private get groups(): TaskGroup[] {
+    return this.streamContext?.streamState?.taskGroups ?? [];
+  }
+
+  private get messages(): LogMessageData[] {
+    return this.streamContext?.streamState?.logs ?? [];
+  }
+
+  private get activeRunId(): string | null {
+    return this.streamContext?.runId ?? null;
+  }
+
+  private get isToolUse(): boolean {
+    return this.streamContext?.isToolUse ?? false;
+  }
 
   /** Reference to child TaskGroupList for scroll operations */
   @query('task-group-list')

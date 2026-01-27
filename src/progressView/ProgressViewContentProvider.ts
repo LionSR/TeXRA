@@ -1,7 +1,5 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
 import { BaseViewContentProvider } from '@common/webview';
 
 export class ProgressViewContentProvider extends BaseViewContentProvider {

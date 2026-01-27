@@ -1,16 +1,6 @@
-/**
- * History view message schemas.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - webview commands
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
-
-// =============================================================================
-// Data Schemas
-// =============================================================================
 
 const AgentConfigSummarySchema = z.object({
   agent: z.string().optional(),
@@ -35,10 +25,6 @@ export const HistoryItemSchema = z.object({
   agentConfig: AgentConfigSummarySchema,
 });
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
-
-// =============================================================================
-// Backend → Frontend Messages
-// =============================================================================
 
 export const UpdateHistoryMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.UPDATE_HISTORY),

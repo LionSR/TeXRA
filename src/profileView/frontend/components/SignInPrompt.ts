@@ -23,13 +23,6 @@ export class SignInPrompt extends LitElement {
       :host {
         display: block;
       }
-
-      .not-authenticated {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-medium);
-        align-items: flex-start;
-      }
     `,
   ];
 

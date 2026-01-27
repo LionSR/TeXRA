@@ -1,8 +1,6 @@
-// Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - shared schemas
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
@@ -10,15 +8,9 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,
@@ -32,8 +24,6 @@ import {
   nestedMapToRecord,
   tripleNestedMapToRecord,
 } from '@progressView/persistence/serializationUtils';
-
-// --- Zod Schemas for Output Files ---
 
 /** Schema for missing output paths (string arrays per round) */
 const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());

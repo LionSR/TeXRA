@@ -19,7 +19,7 @@ import { z } from 'zod';
  */
 export function createRecordToMapSchema<T>(
   itemSchema: z.ZodType<T>,
-): z.ZodType<Map<string, T>, z.ZodTypeDef, unknown> {
+): z.ZodType<Map<string, T>> {
   return z
     .record(z.string(), itemSchema)
     .transform((record) => new Map(Object.entries(record)))
@@ -38,9 +38,7 @@ export function createRecordToMapSchema<T>(
  * const result = LogMessagesSchema.safeParse(data);
  * // result.data is LogMessageData[]
  */
-export function createArraySchema<T>(
-  itemSchema: z.ZodType<T>,
-): z.ZodType<T[], z.ZodTypeDef, unknown> {
+export function createArraySchema<T>(itemSchema: z.ZodType<T>): z.ZodType<T[]> {
   return z.array(itemSchema).catch([]);
 }
 

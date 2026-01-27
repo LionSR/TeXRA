@@ -1,17 +1,10 @@
-// Local imports - shared schemas
 import {
   LogMessageDataSchema,
   type LogMessageData,
   type StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

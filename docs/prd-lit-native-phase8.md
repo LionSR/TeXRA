@@ -9,9 +9,9 @@
 
 Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting Lit directives, reactive patterns, and modern component architecture. This phase addresses technical debt from the initial Lit migration where imperative patterns were preserved for expediency.
 
-> **Status: Complete** (8.1, 8.3, 8.7 fully implemented; 8.4 partial)
+> **Status: Complete** (8.1, 8.3, 8.4, 8.7, 8.7b fully implemented)
 >
-> **Known Issues:** LogEntry caches HTMLElement instead of TemplateResult. See "Mixed State / Dual Logic Issues" section.
+> **Deferred:** 8.2 Virtualizer, 8.5 Light DOM → Shadow DOM, 8.6 Additional directives (low priority).
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting
 | 8.1 styleMap directive adoption         | **Complete** | Consistency, type safety   |
 | 8.2 @lit-labs/virtualizer for LogList   | Deferred     | Performance for 1000+ logs |
 | 8.3 TaskGroupDomManager → Declarative   | **Complete** | Architecture cleanup       |
-| 8.4 @lit/context for state distribution | **Partial**  | Eliminate prop drilling    |
+| 8.4 @lit/context for state distribution | **Complete** | Eliminate prop drilling    |
 | 8.5 Light DOM → Shadow DOM migration    | Deferred     | Style encapsulation        |
 | 8.6 Additional directive opportunities  | Deferred     | Code quality               |
 | 8.7 Modular CSS-in-JS styles            | **Complete** | Maintainability            |
@@ -491,17 +491,18 @@ All legacy CSS files have been removed. Only minimal `index.css` remains for bod
 
 ## Success Metrics
 
-| Metric                                 | Before | Current        | Target                       |
-| -------------------------------------- | ------ | -------------- | ---------------------------- |
-| Inline style strings                   | 6+     | 0 ✅           | 0                            |
-| Imperative DOM files                   | 2      | 0 ✅           | 0                            |
-| Props passed MainApp → FileSelectGroup | 11     | ~5 (via ctx)   | 3 (config only)              |
-| Light DOM components                   | 3      | 3              | 0 (or documented exceptions) |
-| LogList render time (1000 items)       | ~500ms | ~500ms         | <50ms                        |
-| TaskGroupDomManager lines              | ~400   | 0 ✅           | 0 (deleted)                  |
-| CSS files → TypeScript style modules   | 0      | 6 ✅           | 6 (all converted)            |
-| Legacy CSS files remaining             | 8      | 0 ✅           | 0 (all deleted)              |
-| Context providers implemented          | 0      | 1 (partial) ✅ | 2+                           |
+| Metric                                 | Before | Current      | Target                       |
+| -------------------------------------- | ------ | ------------ | ---------------------------- |
+| Inline style strings                   | 6+     | 0 ✅         | 0                            |
+| Imperative DOM files                   | 2      | 0 ✅         | 0                            |
+| Props passed MainApp → FileSelectGroup | 11     | ~5 (via ctx) | 3 (config only)              |
+| Light DOM components                   | 3      | 3            | 0 (or documented exceptions) |
+| LogList render time (1000 items)       | ~500ms | ~500ms       | <50ms                        |
+| TaskGroupDomManager lines              | ~400   | 0 ✅         | 0 (deleted)                  |
+| CSS files → TypeScript style modules   | 0      | 6 ✅         | 6 (all converted)            |
+| Legacy CSS files remaining             | 8      | 0 ✅         | 0 (all deleted)              |
+| Context providers implemented          | 0      | 2 ✅         | 2+                           |
+| LogEntry HTMLElement caching           | 1      | 0 ✅         | 0 (uses TemplateResult)      |
 
 ---
 
@@ -547,53 +548,76 @@ The following patterns represent incomplete migrations where old and new code co
 
 **Resolution:** All deprecated CSS files have been deleted. Only minimal `index.css` remains with body-level layout. All component styles are now in Shadow DOM via Lit's static styles in TypeScript modules.
 
-### 8.7b LogEntry HTMLElement Caching (MEDIUM Priority)
+### ~~8.7b LogEntry HTMLElement Caching~~ ✅ RESOLVED
 
-**Problem:** `LogEntry` component caches `HTMLElement` in state instead of using Lit templates.
-
-**Location:** `src/progressView/frontend/components/LogEntry.ts:40-60`
+**Resolution:** `LogEntry` now uses `formatter.formatTemplate()` which returns `TemplateResult` directly. No HTMLElement caching. Component is fully declarative:
 
 ```typescript
-@state() private renderedElement: HTMLElement | null = null;
-
-private formatMessage(): HTMLElement | null {
-  const formatter = getSharedLogEntryFormatter();
-  return formatter.format(this.message, { ... }); // Returns HTMLElement, not TemplateResult
-}
-
 override render(): TemplateResult {
-  return html`${this.renderedElement}`; // Bypasses Lit reactivity
+  if (!this.message) return html``;
+  const formatter = getSharedLogEntryFormatter();
+  return formatter.formatTemplate(this.message, {
+    defaultOpen: this.defaultOpen,
+  });
 }
 ```
 
-**Risk:** Memory leaks (cached DOM elements not cleaned up), bypasses Lit's efficient diffing.
+### ~~8.4a Context + Prop Drilling Coexistence~~ ✅ RESOLVED
 
-**Resolution:** Refactor `LogEntryFormatter` to return `TemplateResult` instead of `HTMLElement`.
-
-### 8.4a Context + Prop Drilling Coexistence (MEDIUM Priority)
-
-**Problem:** Stream content components consume context but still drill props to children.
-
-**Location:** `src/progressView/frontend/components/ToolUseStreamContent.ts`, `WorkflowStreamContent.ts`
+**Resolution:** LogList now consumes `streamStateContext` directly with computed getters for `groups`, `messages`, `activeRunId`, and `isToolUse`. Stream content components no longer pass these props.
 
 ```typescript
-// Consumes context
+// LogList now consumes context directly
 @consume({ context: streamStateContext, subscribe: true })
+@state()
 private streamContext?: StreamContextValue;
 
-// But still drills props to LogList
-<log-list
-  .groups=${currentState.taskGroups}
-  .messages=${currentState.logs}
-  .activeRunId=${runId}
-></log-list>
-```
+// Computed getters from context
+private get groups(): TaskGroup[] {
+  return this.streamContext?.streamState?.taskGroups ?? [];
+}
 
-**Resolution:** Have `LogList` consume `streamStateContext` directly instead of receiving props.
+private get messages(): LogMessageData[] {
+  return this.streamContext?.streamState?.logs ?? [];
+}
+
+// Stream content components simplified
+<log-list></log-list>  // No props needed
+```
 
 ---
 
 ## Progress Log
+
+### 2026-01-27 - Context + Prop Drilling Resolved (8.4a)
+
+**Completed:**
+
+- LogList now consumes `streamStateContext` directly instead of receiving props
+- Eliminated prop drilling for `groups`, `messages`, `activeRunId`, `isToolUse`
+- Simplified stream content component templates
+
+**Files Modified:**
+
+- `src/progressView/frontend/components/LogList.ts` - Added context consumption with computed getters
+- `src/progressView/frontend/components/ToolUseStreamContent.ts` - Removed props from `<log-list>`
+- `src/progressView/frontend/components/WorkflowStreamContent.ts` - Removed props from `<log-list>`
+
+---
+
+### 2026-01-27 - LogEntry HTMLElement Caching Resolved (8.7b)
+
+**Completed:**
+
+- LogEntry component refactored to use `formatter.formatTemplate()` returning `TemplateResult` directly
+- No more HTMLElement caching - fully declarative rendering
+- Memory leak risk eliminated
+
+**Files Modified:**
+
+- `src/progressView/frontend/components/LogEntry.ts` - Uses formatTemplate() instead of format()
+
+---
 
 ### 2026-01-27 - CSS Consolidation Complete
 
