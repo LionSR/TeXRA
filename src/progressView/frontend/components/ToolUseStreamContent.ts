@@ -30,7 +30,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
@@ -70,10 +70,6 @@ export class ToolUseStreamContent extends LitElement {
     }
   `;
 
-  @property({ type: Object }) state!: ToolUseStreamState;
-  @property({ type: Object }) streamInfo!: StreamTabInfo;
-  @property({ type: Array }) prompts: PromptState[] = [];
-
   @consume({ context: streamStateContext, subscribe: true })
   private streamContext?: StreamContextValue;
 
@@ -87,9 +83,14 @@ export class ToolUseStreamContent extends LitElement {
   /** Ref for FollowUpInput - exposed for parent access */
   private followUpRef: Ref<FollowUpInput> = createRef();
 
-  protected willUpdate(_changedProperties: PropertyValues<this>): void {
-    this.filteredPrompts = this.computeFilteredPrompts();
-    this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
+  protected willUpdate(changedProperties: PropertyValues<this>): void {
+    if (
+      changedProperties.has('streamContext') ||
+      changedProperties.has('promptContext')
+    ) {
+      this.filteredPrompts = this.computeFilteredPrompts();
+      this.runGroups = getRunGroups(this.currentState?.taskGroups ?? []);
+    }
   }
 
   /**
@@ -97,7 +98,7 @@ export class ToolUseStreamContent extends LitElement {
    * Only prompts matching this stream's ID (or with no streamId) are shown.
    */
   private get currentStreamInfo(): StreamTabInfo | null {
-    return this.streamContext?.streamInfo ?? this.streamInfo ?? null;
+    return this.streamContext?.streamInfo ?? null;
   }
 
   private get currentState(): ToolUseStreamState | null {
@@ -105,11 +106,11 @@ export class ToolUseStreamContent extends LitElement {
     if (contextState && isToolUseState(contextState)) {
       return contextState;
     }
-    return this.state ?? null;
+    return null;
   }
 
   private get currentPrompts(): PromptState[] {
-    return this.promptContext ?? this.prompts;
+    return this.promptContext ?? [];
   }
 
   private computeFilteredPrompts(): PromptState[] {
