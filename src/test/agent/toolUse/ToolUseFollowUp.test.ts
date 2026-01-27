@@ -10,7 +10,6 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@shared/schemas';
-// Internal imports
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;

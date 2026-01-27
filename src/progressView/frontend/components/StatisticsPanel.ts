@@ -10,7 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles/litStyles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
@@ -27,6 +27,7 @@ export interface StatItem {
 export class StatisticsPanel extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     css`
       :host {
@@ -36,30 +37,6 @@ export class StatisticsPanel extends LitElement {
 
       details {
         margin: 0;
-      }
-
-      summary {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-        opacity: var(--opacity-normal);
-      }
-
-      summary:hover {
-        opacity: 1;
-      }
-
-      summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .toggle-icon {
-        opacity: var(--opacity-subtle);
-        font-size: var(--font-size-sm);
       }
 
       .statistics-content {
@@ -89,7 +66,7 @@ export class StatisticsPanel extends LitElement {
 
     return html`
       <details>
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-graph"></i>
           <span>Statistics</span>

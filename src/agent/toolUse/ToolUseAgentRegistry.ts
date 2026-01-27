@@ -31,16 +31,10 @@ export interface IInterruptible {
   interrupt(): void;
 }
 
-// Unified registry for all interruptible executions
 const registry = new Map<StreamTabId, IInterruptible>();
-
-// ============================================================================
-// Core Registry Operations
-// ============================================================================
 
 /**
  * Register an interruptible execution by stream ID.
- * Used by both flow contexts and agent classes.
  */
 export function registerInterruptible(
   streamTabId: StreamTabId,
@@ -65,10 +59,6 @@ export function getInterruptible(
   return registry.get(streamTabId);
 }
 
-// ============================================================================
-// Tool-Use Flow Context (Type-Specific Access)
-// ============================================================================
-
 /**
  * Get a tool-use flow context by stream ID.
  * Returns undefined if the entry is not a ToolUseFlowContext.
@@ -84,10 +74,6 @@ export function getToolUseFlowContext(
   }
   return undefined;
 }
-
-// ============================================================================
-// Cleanup
-// ============================================================================
 
 /**
  * Remove registry entries for streams that no longer have an active session.

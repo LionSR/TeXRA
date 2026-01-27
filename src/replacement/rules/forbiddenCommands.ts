@@ -14,5 +14,3 @@ export const LATEX_FORBIDDEN_REPLACEMENTS: ReplacementCategory = {
     ...generateInvalidSectionEndingFixes(SECTION_TYPES),
   },
 };
-
-export default LATEX_FORBIDDEN_REPLACEMENTS;

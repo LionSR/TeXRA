@@ -126,5 +126,3 @@ export const UNICODE_REPLACEMENTS: ReplacementCategory = {
     '$ μF': '$ $\\mu$F',
   },
 };
-
-export default UNICODE_REPLACEMENTS;

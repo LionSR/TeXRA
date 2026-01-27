@@ -11,18 +11,17 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles/litStyles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
-/** Stat item to display */
-export interface ContextStatItem {
-  icon: string;
-  label: string;
-  value: string;
-}
+// Local imports - local components (re-use StatItem type)
+import type { StatItem } from './StatisticsPanel';
+
+/** Re-export StatItem as ContextStatItem for backward compatibility */
+export type ContextStatItem = StatItem;
 
 /** Action configuration */
 export interface ActionConfig {
@@ -35,6 +34,7 @@ export interface ActionConfig {
 export class ContextManagement extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     css`
       :host {
@@ -46,29 +46,9 @@ export class ContextManagement extends LitElement {
         margin: 0;
       }
 
+      /* Extend .details-summary from commonViewStyles with accent color */
       summary {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-        opacity: var(--opacity-normal);
         color: var(--accent-color, var(--vscode-foreground));
-      }
-
-      summary:hover {
-        opacity: 1;
-      }
-
-      summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .toggle-icon {
-        opacity: var(--opacity-subtle);
-        font-size: var(--font-size-sm);
       }
 
       .context-icon {
@@ -118,7 +98,7 @@ export class ContextManagement extends LitElement {
 
     return html`
       <details style="--accent-color: ${this.config.color}">
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i
             class="codicon ${this.config.icon} context-icon"

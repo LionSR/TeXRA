@@ -87,16 +87,4 @@ export const StreamStatusService = {
     const status = statusMemory.get(stream);
     return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
   },
-
-  mightAffectTabOrder(
-    previous: StreamStatus | undefined,
-    current: StreamStatus,
-  ): boolean {
-    if (previous === undefined) {
-      return true;
-    }
-    return (
-      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
-    );
-  },
 };

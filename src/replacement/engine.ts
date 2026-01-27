@@ -313,7 +313,9 @@ export function applyReplacements(
 
 /**
  * Clean content using all replacement rules.
- * Applies non-regex, then regex rules, then conditional critique wrapping.
+ * @deprecated Use replacementEngine.applyAll() instead for the recommended order.
+ * This function applies non-regex, then regex, then critique wrapping.
+ * The engine's applyAll() method applies non-regex, regex, then non-regex again.
  */
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();

@@ -1,2 +1,9 @@
-export * from './stateManager';
-export * from './pendingStateManager';
+export {
+  WorkspaceStateKey,
+  GlobalStateKey,
+  INSTRUCTION_PREFIX,
+  workspaceSM,
+  globalSM,
+  initializeStateManagers,
+} from './stateManager';
+export { setPendingState, consumePendingState } from './pendingStateManager';

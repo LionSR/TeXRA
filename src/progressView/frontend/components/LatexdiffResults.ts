@@ -11,7 +11,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles/litStyles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utilities
@@ -33,6 +33,7 @@ const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
 export class LatexdiffResults extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     codiconIconClasses,
     css`
       :host {
@@ -44,40 +45,14 @@ export class LatexdiffResults extends LitElement {
         margin: 0;
       }
 
-      summary {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-        opacity: var(--opacity-normal);
-      }
-
-      summary:hover {
-        opacity: 1;
-      }
-
-      summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .toggle-icon {
-        opacity: var(--opacity-subtle);
-        font-size: var(--font-size-sm);
-      }
-
       .latexdiff-content {
         list-style: none;
         margin: 0;
         padding: 0;
       }
 
+      /* .detail-item base styles are in commonViewStyles */
       .detail-item {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
         flex-wrap: wrap;
       }
 
@@ -165,10 +140,9 @@ export class LatexdiffResults extends LitElement {
         ? 'Latexdiff result'
         : `Latexdiff results (${this.entries.length})`;
 
-    // Note: CSS rotation via details[open] handles the icon direction
     return html`
       <details open>
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-diff"></i>
           <span>${summaryText}</span>

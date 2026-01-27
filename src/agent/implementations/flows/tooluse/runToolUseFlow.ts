@@ -9,8 +9,12 @@
  * - State persistence via PersistedFlow
  */
 
-import { EXECUTION_STATUS } from '@shared/schemas';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  END_GROUP_STATUS,
+  type EndGroupStatus,
+  type StreamTabId,
+} from '@shared/schemas';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import {
   registerInterruptible,
@@ -29,7 +33,6 @@ import {
 } from './ToolUseFlowContext';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import { migrateSharedState } from './nodes';
-import type { StreamTabId } from '@shared/schemas';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 

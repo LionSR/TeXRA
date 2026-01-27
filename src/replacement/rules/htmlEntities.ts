@@ -124,5 +124,3 @@ export const HTML_ENTITY_REPLACEMENTS: ReplacementCategory = {
     '&crarr;': '\\leftarrow',
   },
 };
-
-export default HTML_ENTITY_REPLACEMENTS;
