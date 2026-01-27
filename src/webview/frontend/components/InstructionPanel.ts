@@ -8,7 +8,7 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -40,8 +40,6 @@ import type {
   InstructionChangeDetail,
   ModelChangeDetail,
   SessionTypeChangeDetail,
-  AgentOptionData,
-  ModelOptionData,
 } from '@shared/schemas';
 
 @customElement('instruction-panel')
@@ -160,51 +158,6 @@ export class InstructionPanel extends LitElement {
     `,
   ];
 
-  /** Current session type */
-  @property({ type: String }) sessionType: SessionType = SESSION_TYPES.TOOL_USE;
-
-  /** Current instruction text */
-  @property({ type: String }) instruction = '';
-
-  /** Instruction placeholder */
-  @property({ type: String }) placeholder = '';
-
-  /** Current workflow agent */
-  @property({ type: String }) workflowAgent = '';
-
-  /** Current tool-use agent */
-  @property({ type: String }) toolUseAgent = '';
-
-  /** Current model */
-  @property({ type: String }) model = '';
-
-  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
-  @property({ type: String }) workflowAgentOptionsHtml = '';
-
-  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
-  @property({ type: String }) toolUseAgentOptionsHtml = '';
-
-  /** @deprecated Use modelOptions for Lit-native rendering */
-  @property({ type: String }) modelOptionsHtml = '';
-
-  /** Typed workflow agent options for Lit-native rendering */
-  @property({ type: Array }) workflowAgentOptions: AgentOptionData[] = [];
-
-  /** Typed tool-use agent options for Lit-native rendering */
-  @property({ type: Array }) toolUseAgentOptions: AgentOptionData[] = [];
-
-  /** Typed model options for Lit-native rendering */
-  @property({ type: Array }) modelOptions: ModelOptionData[] = [];
-
-  /** Whether recording is active */
-  @property({ type: Boolean }) isRecording = false;
-
-  /** Whether polishing is active */
-  @property({ type: Boolean }) isPolishing = false;
-
-  /** Whether debug mode is enabled */
-  @property({ type: Boolean }) debugMode = false;
-
   @consume({ context: sessionContext, subscribe: true })
   private sessionData?: SessionContextValue;
 
@@ -294,33 +247,14 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
-  private get resolvedSession(): SessionContextValue {
-    return (
-      this.sessionData ?? {
-        sessionType: this.sessionType,
-        instruction: this.instruction,
-        placeholder: this.placeholder,
-        workflowAgent: this.workflowAgent,
-        toolUseAgent: this.toolUseAgent,
-        model: this.model,
-        workflowAgentOptionsHtml: this.workflowAgentOptionsHtml,
-        toolUseAgentOptionsHtml: this.toolUseAgentOptionsHtml,
-        modelOptionsHtml: this.modelOptionsHtml,
-        workflowAgentOptions: this.workflowAgentOptions,
-        toolUseAgentOptions: this.toolUseAgentOptions,
-        modelOptions: this.modelOptions,
-        isRecording: this.isRecording,
-        isPolishing: this.isPolishing,
-        debugMode: this.debugMode,
-      }
-    );
-  }
-
   /**
    * Render workflow agent options - prefer typed data, fall back to HTML string.
    */
   private renderWorkflowAgentOptions(): TemplateResult {
-    const session = this.resolvedSession;
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
+    }
     if (session.workflowAgentOptions.length > 0) {
       return renderAgentOptions(
         session.workflowAgentOptions,
@@ -343,7 +277,10 @@ export class InstructionPanel extends LitElement {
    * Render tool-use agent options - prefer typed data, fall back to HTML string.
    */
   private renderToolUseAgentOptions(): TemplateResult {
-    const session = this.resolvedSession;
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
+    }
     if (session.toolUseAgentOptions.length > 0) {
       return renderAgentOptions(
         session.toolUseAgentOptions,
@@ -366,7 +303,10 @@ export class InstructionPanel extends LitElement {
    * Render model options - prefer typed data, fall back to HTML string.
    */
   private renderModelOptionsTemplate(): TemplateResult {
-    const session = this.resolvedSession;
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
+    }
     if (session.modelOptions.length > 0) {
       return renderModelOptions(
         session.modelOptions,
@@ -386,7 +326,10 @@ export class InstructionPanel extends LitElement {
   }
 
   override render(): TemplateResult {
-    const session = this.resolvedSession;
+    const session = this.sessionData;
+    if (!session) {
+      return html``;
+    }
     return html`
       <div class="instruction-box">
         <div class="instruction-header">

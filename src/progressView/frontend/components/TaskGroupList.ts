@@ -5,7 +5,7 @@
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
@@ -66,6 +66,9 @@ export class TaskGroupList extends LitElement {
 
   /** Toggle state store for persistence */
   @property({ type: Object }) toggleStates: ToggleStateStore | null = null;
+
+  @query('vscode-scrollable')
+  private logScroller?: HTMLElement;
 
   /** Track previous group statuses to detect completion */
   @state() private previousStatuses = new Map<string, string>();
@@ -202,6 +205,7 @@ export class TaskGroupList extends LitElement {
           .renderItem=${(m: LogMessageData) =>
             html`<log-entry .message=${m}></log-entry>`}
           .keyFunction=${(m: LogMessageData) => m.id}
+          .scroller=${this.logScroller ?? null}
         ></lit-virtualizer>
         ${repeat(
           children,
@@ -236,6 +240,7 @@ export class TaskGroupList extends LitElement {
                 .renderItem=${(m: LogMessageData) =>
                   html`<log-entry .message=${m}></log-entry>`}
                 .keyFunction=${(m: LogMessageData) => m.id}
+                .scroller=${this.logScroller ?? null}
               ></lit-virtualizer>
             `
           : nothing}
@@ -251,6 +256,7 @@ export class TaskGroupList extends LitElement {
                 .renderItem=${(m: LogMessageData) =>
                   html`<log-entry .message=${m}></log-entry>`}
                 .keyFunction=${(m: LogMessageData) => m.id}
+                .scroller=${this.logScroller ?? null}
               ></lit-virtualizer>
             `
           : nothing}

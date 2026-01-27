@@ -27,9 +27,15 @@ import {
 // Local imports - shared schemas
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
-type SortableDragEvent = {
-  oldIndex?: number | null;
-  newIndex?: number | null;
+// Local imports - shared types
+import type { SortableDragEvent } from '@shared/types/sortable';
+
+const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
+  autoExtractFigure: false,
+  autoExtractTikzFigure: false,
+  autoCompileInputPdf: false,
+  attachTeXCount: false,
+  attachDiagnostics: false,
 };
 
 @customElement('file-select-group')
@@ -244,30 +250,6 @@ export class FileSelectGroup extends LitElement {
   @consume({ context: fileStateContext, subscribe: true })
   private fileState?: FileStateContextValue;
 
-  /** Currently selected value */
-  @property({ type: String }) selectedValue = '';
-
-  /** Available file options */
-  @property({ type: Array }) options: string[] = [];
-
-  /** Whether the multiple files list is visible */
-  @property({ type: Boolean }) listVisible = false;
-
-  /** Files in the multiple files list */
-  @property({ type: Array }) files: string[] = [];
-
-  /** Checkbox values for menus */
-  @property({ type: Object }) checkboxValues: CheckboxValues = {
-    autoExtractFigure: false,
-    autoExtractTikzFigure: false,
-    autoCompileInputPdf: false,
-    attachTeXCount: false,
-    attachDiagnostics: false,
-  };
-
-  /** Whether this is tool-use session (disables some checkboxes) */
-  @property({ type: Boolean }) isToolUse = false;
-
   /** Auto-extract menu open state */
   @state() private autoExtractMenuOpen = false;
 
@@ -375,38 +357,35 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get currentCheckboxValues(): CheckboxValues {
-    return this.fileState?.checkboxValues ?? this.checkboxValues;
+    return this.fileState?.checkboxValues ?? DEFAULT_CHECKBOX_VALUES;
   }
 
   private get currentSelectedValue(): string {
     const key =
       `${this.config.type}File` as keyof FileStateContextValue['singleFiles'];
-    return this.fileState?.singleFiles[key] ?? this.selectedValue;
+    return this.fileState?.singleFiles[key] ?? '';
   }
 
   private get currentOptions(): string[] {
     const key =
       `${this.config.type}File` as keyof FileStateContextValue['fileOptions'];
-    return this.fileState?.fileOptions[key] ?? this.options;
+    return this.fileState?.fileOptions[key] ?? [];
   }
 
   private get currentFiles(): string[] {
     const key =
       `${this.config.type}Files` as keyof FileStateContextValue['multiFiles'];
-    return this.fileState?.multiFiles[key] ?? this.files;
+    return this.fileState?.multiFiles[key] ?? [];
   }
 
   private get currentListVisible(): boolean {
     const key =
       `${this.config.type}Files` as keyof FileStateContextValue['multiFilesVisible'];
-    return this.fileState?.multiFilesVisible[key] ?? this.listVisible;
+    return this.fileState?.multiFilesVisible[key] ?? false;
   }
 
   private get isToolUseSession(): boolean {
-    if (this.fileState) {
-      return this.fileState.sessionType === SESSION_TYPES.TOOL_USE;
-    }
-    return this.isToolUse;
+    return this.fileState?.sessionType === SESSION_TYPES.TOOL_USE;
   }
 
   private handleFocusOut(event: FocusEvent): void {
