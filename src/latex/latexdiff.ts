@@ -100,21 +100,19 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; subtype?: string },
   ): Promise<LaTeXdiffResult> {
-    let diffFileName = '';
-    let outputPath = '';
     try {
-      // Extract absolute paths for file operations
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
 
-      // Validate inputs
       if (!inputFile) {
         logger.warn(this.channel, 'Input file is empty or undefined');
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await flexibleFS.exists(inputLocation);
-      const editedExists = await flexibleFS.exists(editedLocation);
+      const [inputExists, editedExists] = await Promise.all([
+        flexibleFS.exists(inputLocation),
+        flexibleFS.exists(editedLocation),
+      ]);
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -131,8 +129,8 @@ export class LaTeXdiffService {
         };
       }
 
-      diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
-      outputPath = path.join(path.dirname(inputFile), diffFileName);
+      const diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
+      const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       logger.debug(
         this.channel,

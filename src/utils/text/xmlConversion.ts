@@ -87,8 +87,9 @@ const LATEX_ENVIRONMENT_MARKERS: RegExp[] = [
 
 /**
  * Convert LaTeX content to Markdown (simple regex-based conversion).
+ * Internal helper for formatContent fallback.
  */
-export function convertLatexToMarkdown(latex: string): string {
+function convertLatexToMarkdown(latex: string): string {
   const withoutEnvironments = LATEX_ENVIRONMENT_MARKERS.reduce(
     (content, pattern) => content.replace(pattern, ''),
     latex,
@@ -102,8 +103,9 @@ export function convertLatexToMarkdown(latex: string): string {
 
 /**
  * Convert HTML content to Markdown using Turndown.
+ * Internal helper for formatContent fallback.
  */
-export function convertHtmlToMarkdown(html: string): string {
+function convertHtmlToMarkdown(html: string): string {
   const turndownService = new TurndownService({
     bulletListMarker: '-',
     codeBlockStyle: 'fenced',
@@ -168,9 +170,10 @@ function normalizePandocReferences(text: string): string {
 
 /**
  * Convert content using Pandoc (if available).
+ * Internal helper for formatContent.
  * @returns Converted content, or null if Pandoc is unavailable or conversion fails
  */
-export async function convertWithPandoc(text: string): Promise<string | null> {
+async function convertWithPandoc(text: string): Promise<string | null> {
   if (!(await isPandocAvailable())) {
     return null;
   }

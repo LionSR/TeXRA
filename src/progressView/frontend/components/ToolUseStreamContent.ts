@@ -130,8 +130,6 @@ export class ToolUseStreamContent extends LitElement {
     }
 
     return html`
-      <request-panels .permissions=${this.filteredPermissions}></request-panels>
-
       <stream-header
         .stream=${streamInfo}
         .streamState=${currentState}
@@ -139,6 +137,8 @@ export class ToolUseStreamContent extends LitElement {
         .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
       ></stream-header>
+
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <todo-list .todos=${currentState.todos}></todo-list>
 

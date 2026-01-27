@@ -21,7 +21,10 @@ import type {
   WorkspaceFileLocation,
 } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
-import type { BaseFlowContextInit } from '../common/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  FlowParams,
+} from '../common/BaseFlowServices';
 
 /**
  * Services for reflection flow nodes.
@@ -85,4 +88,4 @@ export interface ReflectionServices<
  * Flow params type for reflection flows.
  * Alias for base FlowParams - reserved for future use.
  */
-export type { FlowParams as ReflectionFlowParams } from '../common';
+export type { FlowParams as ReflectionFlowParams };
