@@ -1,3 +1,8 @@
+/**
+ * HistoryApp component - main container for the agent execution history view.
+ * Manages search state and delegates to SearchBar and HistoryList components.
+ */
+
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -22,7 +27,7 @@ import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
 
-// Local imports - history view components
+// Local imports - history view components (side-effect: register)
 import './components/SearchBar';
 import './components/HistoryList';
 
@@ -34,7 +39,7 @@ import type { SearchAction } from './components/HistoryList';
 
 @customElement('history-app')
 export class HistoryApp extends BaseWebviewApp {
-  static styles = [
+  static override styles = [
     designTokens,
     commonViewStyles,
     ...badgeStyles,
@@ -149,7 +154,7 @@ export class HistoryApp extends BaseWebviewApp {
     postMessage(HISTORY_VIEW_COMMANDS.CLEAR_HISTORY);
   };
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     return html`
       <header class="view-header">
         <h2>Agent Execution History</h2>
@@ -175,5 +180,11 @@ export class HistoryApp extends BaseWebviewApp {
         @search-clear-complete=${this.handleSearchClearComplete}
       ></history-list>
     `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-app': HistoryApp;
   }
 }

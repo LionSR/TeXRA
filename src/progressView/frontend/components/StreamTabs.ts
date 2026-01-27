@@ -294,7 +294,12 @@ export class StreamTabs extends LitElement {
           'is-active': isActive,
         })}
       >
-        <button class="tab" data-stream=${stream.name} title=${tooltip}>
+        <button
+          class="tab"
+          data-stream=${stream.name}
+          data-action="select"
+          title=${tooltip}
+        >
           <div class="tab-header">
             <span
               class=${classMap({
@@ -340,6 +345,7 @@ export class StreamTabs extends LitElement {
           title="Delete stream"
           aria-label="Delete stream"
           data-stream=${stream.name}
+          data-action="delete"
         ></vscode-toolbar-button>
       </div>
     `;
@@ -349,19 +355,17 @@ export class StreamTabs extends LitElement {
     const target = event.target as Element | null;
     if (!target) return;
 
-    const tabButton = target.closest('.tab');
-    if (tabButton instanceof HTMLElement && tabButton.dataset.stream) {
-      this.dispatchEvent(
-        ProgressEvents.streamSwitch({ streamId: tabButton.dataset.stream }),
-      );
-      return;
-    }
+    // Find element with data-stream and data-action (unified delegation)
+    const actionElement = target.closest('[data-stream][data-action]');
+    if (!(actionElement instanceof HTMLElement)) return;
 
-    const deleteButton = target.closest('.tab-delete');
-    if (deleteButton instanceof HTMLElement && deleteButton.dataset.stream) {
-      this.dispatchEvent(
-        ProgressEvents.streamDelete({ streamId: deleteButton.dataset.stream }),
-      );
+    const { stream: streamId, action } = actionElement.dataset;
+    if (!streamId) return;
+
+    if (action === 'select') {
+      this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
+    } else if (action === 'delete') {
+      this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
     }
   }
 
@@ -375,8 +379,9 @@ export class StreamTabs extends LitElement {
     const target = event.target as Element | null;
     if (!target) return;
 
-    const button = target.closest('.sort-btn') as HTMLElement | null;
-    if (!button?.dataset.sort) return;
+    // Find element with data-sort attribute (unified delegation)
+    const button = target.closest('[data-sort]');
+    if (!(button instanceof HTMLElement) || !button.dataset.sort) return;
 
     this.dispatchEvent(
       ProgressEvents.sortChange({ sort: button.dataset.sort as StreamSort }),

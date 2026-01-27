@@ -38,11 +38,6 @@ export const codeBlockStyles = css`
     overflow-x: auto;
   }
 
-  .code-block pre.hljs {
-    margin: 0;
-    border-radius: 0;
-  }
-
   .code-block pre code {
     display: block;
   }
@@ -62,23 +57,25 @@ export const codeBlockStyles = css`
       color 0.15s;
   }
 
-  .code-block-copy:hover {
-    background-color: var(
-      --vscode-toolbar-hoverBackground,
-      rgba(90, 93, 94, 0.31)
-    );
-    color: var(--vscode-foreground);
-  }
+  .code-block-copy {
+    &:hover {
+      background-color: var(
+        --vscode-toolbar-hoverBackground,
+        rgba(90, 93, 94, 0.31)
+      );
+      color: var(--vscode-foreground);
+    }
 
-  .code-block-copy:active {
-    background-color: var(
-      --vscode-toolbar-activeBackground,
-      rgba(99, 102, 103, 0.31)
-    );
-  }
+    &:active {
+      background-color: var(
+        --vscode-toolbar-activeBackground,
+        rgba(99, 102, 103, 0.31)
+      );
+    }
 
-  .code-block-copy.copied {
-    color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+    &.copied {
+      color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+    }
   }
 
   /* Syntax highlighted code blocks */

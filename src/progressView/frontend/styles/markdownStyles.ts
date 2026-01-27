@@ -34,14 +34,14 @@ export const markdownStyles = css`
 
   :is(.banner-content, .banner-content--model) p {
     margin: 0.3em 0;
-  }
 
-  :is(.banner-content, .banner-content--model) p:first-child {
-    margin-top: 0;
-  }
+    &:first-child {
+      margin-top: 0;
+    }
 
-  :is(.banner-content, .banner-content--model) p:last-child {
-    margin-bottom: 0;
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   .markdown-content :is(h1, h2, h3, h4) {
@@ -73,12 +73,11 @@ export const markdownStyles = css`
     margin: 0.5em 0;
   }
 
-  .markdown-content p:last-child {
+  .markdown-content :is(p, ul, ol):last-child {
     margin-bottom: 0;
   }
 
-  .markdown-content ul,
-  .markdown-content ol {
+  .markdown-content :is(ul, ol) {
     margin: 0.5em 0;
     padding-left: 1.5em;
   }
@@ -86,10 +85,10 @@ export const markdownStyles = css`
   .markdown-content li {
     margin: 0 0 0.2em 0;
     line-height: 1.25;
-  }
 
-  .markdown-content li + li {
-    margin-top: 0.1em;
+    & + li {
+      margin-top: 0.1em;
+    }
   }
 
   .markdown-content code {
@@ -125,10 +124,10 @@ export const markdownStyles = css`
   .markdown-content a {
     color: var(--color-text-link);
     text-decoration: none;
-  }
 
-  .markdown-content a:hover {
-    text-decoration: underline;
+    &:hover {
+      text-decoration: underline;
+    }
   }
 
   .markdown-content blockquote {
@@ -144,17 +143,16 @@ export const markdownStyles = css`
     border-collapse: collapse;
     width: 100%;
     margin: var(--spacing-xlarge) 0;
-  }
 
-  .markdown-content table th,
-  .markdown-content table td {
-    border: var(--border-thin) solid var(--color-border);
-    padding: var(--spacing-small) var(--spacing-large);
-  }
+    :is(th, td) {
+      border: var(--border-thin) solid var(--color-border);
+      padding: var(--spacing-small) var(--spacing-large);
+    }
 
-  .markdown-content table th {
-    background-color: var(--vscode-editor-lineHighlightBackground);
-    text-align: left;
+    th {
+      background-color: var(--vscode-editor-lineHighlightBackground);
+      text-align: left;
+    }
   }
 
   .markdown-content img {
@@ -188,18 +186,7 @@ export const markdownStyles = css`
     padding-left: var(--spacing-medium);
   }
 
-  .markdown-content h2 + p {
-    margin-top: 0.3em;
-  }
-
-  .markdown-content p + p {
-    margin-top: 0.3em;
-  }
-
-  .markdown-content h1 + h1,
-  .markdown-content h2 + h2,
-  .markdown-content h3 + h3,
-  .markdown-content h4 + h4 {
+  .markdown-content :is(h2 + p, p + p, h1 + h1, h2 + h2, h3 + h3, h4 + h4) {
     margin-top: 0.3em;
   }
 `;
