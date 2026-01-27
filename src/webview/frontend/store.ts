@@ -2,14 +2,19 @@
  * MainView state types, defaults, and constants.
  *
  * Centralizes state management concerns for MainApp.
+ * Uses Zod-derived types from shared schemas for type safety.
  */
 
-// Local imports - shared schemas
+// Local imports - shared schemas (Zod-derived types)
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
   type FileSelectConfig,
   type CheckboxValues,
+  type SingleFiles,
+  type FileOptions,
+  type MultiFiles,
+  type MultiFilesVisible,
 } from '@shared/schemas';
 
 // Local imports - webview commands
@@ -28,8 +33,8 @@ import {
 export const DEFAULT_STATE: MainViewPersistedState =
   MainViewPersistedStateSchema.parse({});
 
-/** Default single files state */
-export const DEFAULT_SINGLE_FILES = {
+/** Default single files state (typed) */
+export const DEFAULT_SINGLE_FILES: SingleFiles = {
   inputFile: DEFAULT_STATE.inputFile,
   referenceFile: DEFAULT_STATE.referenceFile,
   auxiliaryFile: DEFAULT_STATE.auxiliaryFile,
@@ -38,18 +43,19 @@ export const DEFAULT_SINGLE_FILES = {
   editedFile: DEFAULT_STATE.editedFile,
 };
 
-/** Default file options (empty arrays) */
-export const DEFAULT_FILE_OPTIONS: Record<string, string[]> = {
+/** Default file options (typed, empty arrays) */
+export const DEFAULT_FILE_OPTIONS: FileOptions = {
   inputFile: [],
   referenceFile: [],
   auxiliaryFile: [],
   mediaFile: [],
   editedFile: [],
   baseFile: [],
+  commit: [],
 };
 
-/** Default multi-files state */
-export const DEFAULT_MULTI_FILES: Record<string, string[]> = {
+/** Default multi-files state (typed) */
+export const DEFAULT_MULTI_FILES: MultiFiles = {
   inputFiles: [],
   referenceFiles: [],
   auxiliaryFiles: [],
@@ -57,8 +63,8 @@ export const DEFAULT_MULTI_FILES: Record<string, string[]> = {
   outputFiles: [],
 };
 
-/** Default multi-files visibility state */
-export const DEFAULT_MULTI_FILES_VISIBLE: Record<string, boolean> = {
+/** Default multi-files visibility state (typed) */
+export const DEFAULT_MULTI_FILES_VISIBLE: MultiFilesVisible = {
   inputFiles: false,
   referenceFiles: false,
   auxiliaryFiles: false,
@@ -66,7 +72,7 @@ export const DEFAULT_MULTI_FILES_VISIBLE: Record<string, boolean> = {
   outputFiles: false,
 };
 
-/** Default checkbox values */
+/** Default checkbox values (typed) */
 export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoExtractFigure: DEFAULT_STATE.autoExtractFigure,
   autoExtractTikzFigure: DEFAULT_STATE.autoExtractTikzFigure,

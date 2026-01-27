@@ -64,16 +64,6 @@ export const commonViewStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
-  .badge {
-    display: inline-block;
-    padding: var(--spacing-small) var(--spacing-medium);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-  }
-
-  .badge--small {
-    padding: var(--spacing-tiny) var(--spacing-small);
-    border-radius: var(--border-radius-small);
-  }
+  /* Note: Badge base styles are in @shared/styles/badgeStyles.ts
+     Use badgeStyles for components that need badge functionality */
 `;

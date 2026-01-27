@@ -36,18 +36,15 @@ import { customElement, state } from 'lit/decorators.js';
 // Local imports - progress view utilities
 import { getRunGroups, hasOutputFiles } from '../stateUtils';
 
-// Local imports - progress view store
-import {
-  isToolUseState,
-  type FollowupOptionsState,
-  type WorkflowStreamState,
-} from '../store';
-
 // Local imports - progress view contexts
 import {
+  getWorkflowState,
   streamStateContext,
   type StreamContextValue,
 } from '../contexts/streamContexts';
+
+// Local imports - progress view store (type-only)
+import type { FollowupOptionsState, WorkflowStreamState } from '../store';
 
 // Local imports - shared schemas
 import type {
@@ -114,11 +111,8 @@ export class WorkflowStreamContent extends LitElement {
   }
 
   private get currentState(): WorkflowStreamState | null {
-    const contextState = this.streamContext?.streamState;
-    if (contextState && !isToolUseState(contextState)) {
-      return contextState as WorkflowStreamState;
-    }
-    return null;
+    if (!this.streamContext) return null;
+    return getWorkflowState(this.streamContext);
   }
 
   private get currentRunId(): string | null {

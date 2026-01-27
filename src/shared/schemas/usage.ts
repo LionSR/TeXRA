@@ -41,3 +41,11 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
 export type ExtendedTokenUsageStats = z.infer<
   typeof ExtendedTokenUsageStatsSchema
 >;
+
+/** Context window utilization state */
+export const ContextStateSchema = z.object({
+  inputTokens: z.number(),
+  contextWindow: z.number(),
+  utilizationPercent: z.number(),
+});
+export type ContextState = z.infer<typeof ContextStateSchema>;

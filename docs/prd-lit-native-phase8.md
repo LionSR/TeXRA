@@ -11,7 +11,7 @@ Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting
 
 > **Status: Complete** (8.1, 8.3, 8.7 fully implemented; 8.4 partial)
 >
-> **Known Issues:** CSS duplication (old + new styles loaded), LogEntry caches HTMLElement instead of TemplateResult. See "Mixed State / Dual Logic Issues" section.
+> **Known Issues:** LogEntry caches HTMLElement instead of TemplateResult. See "Mixed State / Dual Logic Issues" section.
 
 ## Prerequisites
 
@@ -437,21 +437,20 @@ import { codeBlockStyles, markdownStyles } from '../styles/logStyles';
 - Selective import for components needing only specific styles
 - Shadow DOM encapsulation prevents style leakage
 
-**Deprecated CSS Files:**
+**Deleted CSS Files:**
 
-The following files in `src/progressView/styles/` are now deprecated (kept for backward compatibility):
+All legacy CSS files have been removed. Only minimal `index.css` remains for body-level layout:
 
-- `logs.css` → `logEntryStyles.ts`
-- `groups.css` → `groupStyles.ts`
-- `code-block.css` → `codeBlockStyles.ts`
-- `scratchpad.css` → `toolUseStyles.ts`
-- `markdown.css` → `markdownStyles.ts`
-
-**Still Required:**
-
-- `base.css` - Core layout (body, main-container)
-- `utilities.css` - Simple utility classes
-- `hljs-vscode.css` - Syntax highlighting (global, applied to Light DOM)
+| Deleted File      | Replaced By                        |
+| ----------------- | ---------------------------------- |
+| `logs.css`        | `logEntryStyles.ts`                |
+| `groups.css`      | `groupStyles.ts`                   |
+| `code-block.css`  | `codeBlockStyles.ts`               |
+| `scratchpad.css`  | `toolUseStyles.ts`                 |
+| `markdown.css`    | `markdownStyles.ts`                |
+| `base.css`        | Inlined in `index.css` (body only) |
+| `utilities.css`   | Inlined in components              |
+| `hljs-vscode.css` | `codeBlockStyles.ts`               |
 
 ---
 
@@ -500,7 +499,8 @@ The following files in `src/progressView/styles/` are now deprecated (kept for b
 | Light DOM components                   | 3      | 3              | 0 (or documented exceptions) |
 | LogList render time (1000 items)       | ~500ms | ~500ms         | <50ms                        |
 | TaskGroupDomManager lines              | ~400   | 0 ✅           | 0 (deleted)                  |
-| CSS files → TypeScript style modules   | 0      | 5 ✅           | 5                            |
+| CSS files → TypeScript style modules   | 0      | 6 ✅           | 6 (all converted)            |
+| Legacy CSS files remaining             | 8      | 0 ✅           | 0 (all deleted)              |
 | Context providers implemented          | 0      | 1 (partial) ✅ | 2+                           |
 
 ---
@@ -543,29 +543,9 @@ Moving to Shadow DOM requires CSS restructuring.
 
 The following patterns represent incomplete migrations where old and new code coexist:
 
-### 8.7a CSS Duplication (HIGH Priority)
+### ~~8.7a CSS Duplication~~ ✅ RESOLVED
 
-**Problem:** Both old CSS files and new TypeScript style modules are loaded simultaneously.
-
-**Current State:**
-
-- `src/progressView/styles/index.css` imports deprecated CSS files (logs.css, groups.css, markdown.css, scratchpad.css, code-block.css)
-- `src/progressView/frontend/styles/*.ts` contains equivalent Lit styles
-- Shadow DOM components use new TypeScript styles
-- Light DOM formatters may still rely on old CSS
-
-**Files:**
-| Old CSS (Deprecated) | New TypeScript | Status |
-| --- | --- | --- |
-| `logs.css` | `logEntryStyles.ts` | Duplicate |
-| `groups.css` | `groupStyles.ts` | Duplicate |
-| `markdown.css` | `markdownStyles.ts` | Duplicate |
-| `scratchpad.css` | `toolUseStyles.ts` | Duplicate |
-| `code-block.css` | `codeBlockStyles.ts` | Duplicate |
-
-**Risk:** Style conflicts, increased bundle size, maintenance burden.
-
-**Resolution:** Remove deprecated CSS imports from `index.css` after verifying all Light DOM formatters use Shadow DOM components.
+**Resolution:** All deprecated CSS files have been deleted. Only minimal `index.css` remains with body-level layout. All component styles are now in Shadow DOM via Lit's static styles in TypeScript modules.
 
 ### 8.7b LogEntry HTMLElement Caching (MEDIUM Priority)
 
@@ -614,6 +594,35 @@ private streamContext?: StreamContextValue;
 ---
 
 ## Progress Log
+
+### 2026-01-27 - CSS Consolidation Complete
+
+**Completed:**
+
+- All legacy CSS files deleted from `src/progressView/styles/`:
+  - `logs.css`, `groups.css`, `markdown.css`, `scratchpad.css`, `code-block.css`
+  - `base.css`, `utilities.css`, `hljs-vscode.css`
+- Only minimal `index.css` remains with body-level layout
+- HLJS syntax highlighting styles added to `codeBlockStyles.ts` for Shadow DOM
+- CSS duplication issue (8.7a) fully resolved
+
+**Files Deleted:**
+
+- `src/progressView/styles/logs.css`
+- `src/progressView/styles/groups.css`
+- `src/progressView/styles/markdown.css`
+- `src/progressView/styles/scratchpad.css`
+- `src/progressView/styles/code-block.css`
+- `src/progressView/styles/base.css`
+- `src/progressView/styles/utilities.css`
+- `src/progressView/styles/hljs-vscode.css`
+
+**Files Modified:**
+
+- `src/progressView/styles/index.css` - Reduced to body-only layout
+- `src/progressView/frontend/styles/codeBlockStyles.ts` - Added HLJS styles
+
+---
 
 ### 2026-01-27 - Phase 8.4 and 8.7 Updates
 

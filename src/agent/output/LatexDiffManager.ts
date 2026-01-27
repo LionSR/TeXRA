@@ -24,9 +24,8 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import type { OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo, DiffResult } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
-import type { DiffResult } from './DiffResultSchemas';
 
 interface LatexDiffDependencies {
   checkToolInstalled: typeof checkToolInstalled;

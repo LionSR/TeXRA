@@ -36,6 +36,16 @@ export const fileSelectLayoutStyles = css`
     flex-shrink: 0;
   }
 
+  .file-select-header label {
+    margin-right: var(--spacing-small);
+  }
+
+  .file-select label {
+    display: block;
+    margin-bottom: var(--spacing-tiny);
+    font-size: var(--font-size);
+  }
+
   .file-select-label-group {
     display: flex;
     align-items: center;
@@ -75,6 +85,7 @@ export const fileSelectLayoutStyles = css`
     min-height: var(--height-control);
   }
 
+  .file-select select,
   .file-select vscode-single-select {
     width: 100%;
   }

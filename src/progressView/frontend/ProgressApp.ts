@@ -134,6 +134,7 @@ export class ProgressApp extends BaseWebviewApp {
     streamState: null,
     runId: null,
     followupOptions: null,
+    isToolUse: false,
   };
 
   @provide({ context: promptsContext })
@@ -200,14 +201,14 @@ export class ProgressApp extends BaseWebviewApp {
    * Single branch point - delegates to typed container components.
    */
   private renderStreamContent(): TemplateResult {
-    const { streamInfo, streamState, runId } = this.streamContextValue;
+    const { streamInfo, streamState, isToolUse } = this.streamContextValue;
     if (!streamInfo || !streamState) {
       // No active stream - show empty log-list
       return html`<log-list></log-list>`;
     }
 
     // Single branch point: delegate to typed container component
-    if (isToolUseState(streamState)) {
+    if (isToolUse) {
       return html`
         <tool-use-stream-content
           ${ref(this.toolUseContentRef)}
@@ -269,21 +270,22 @@ export class ProgressApp extends BaseWebviewApp {
         streamState: null,
         runId: null,
         followupOptions: null,
+        isToolUse: false,
       };
       this.promptsContextValue = this.prompts;
       return;
     }
 
     const streamState = getStreamState(this.appState, activeStream.name);
-    const runId = isToolUseState(streamState)
-      ? null
-      : getEffectiveRunId(streamState);
+    const isToolUse = isToolUseState(streamState);
+    const runId = isToolUse ? null : getEffectiveRunId(streamState);
 
     this.streamContextValue = {
       streamInfo: activeStream,
       streamState,
       runId,
       followupOptions: this.appState.followupOptions,
+      isToolUse,
     };
     this.promptsContextValue = this.prompts;
   }

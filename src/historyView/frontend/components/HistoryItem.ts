@@ -5,7 +5,12 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import Mark from 'mark.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import {
+  badgeStyles,
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+} from '@shared/styles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 
 // Local imports - history view styles
@@ -25,6 +30,7 @@ export class HistoryItem extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    ...badgeStyles,
     historyViewStyles,
   ];
 

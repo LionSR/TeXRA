@@ -3,7 +3,7 @@ import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { badgeStyles, designTokens } from '@shared/styles';
 
 // Local imports - profile view styles
 import { profileViewStyles } from '../styles';
@@ -13,7 +13,7 @@ import { ProfileViewEvents } from '../events';
 
 @customElement('profile-info')
 export class ProfileInfo extends LitElement {
-  static styles = [designTokens, profileViewStyles];
+  static styles = [designTokens, ...badgeStyles, profileViewStyles];
 
   @property({ type: String }) email = '';
   @property({ type: String }) userId = '';
