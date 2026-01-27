@@ -37,12 +37,14 @@ export class AgentsTable extends LitElement {
     this.dispatchEvent(ProfileViewEvents.selectAgent({ agentName }));
   }
 
+  private normalizeVisibility(visibility: string | string[]): string[] {
+    return Array.isArray(visibility) ? visibility : [visibility];
+  }
+
   private renderAgentRow(agent: RemoteAgent): TemplateResult {
-    const visibilityArray = Array.isArray(agent.visibility)
-      ? agent.visibility
-      : [agent.visibility];
-    const firstVisibility = visibilityArray[0] || 'public';
-    const visibilityClass = firstVisibility === 'public' ? 'public' : 'custom';
+    const visibilityArray = this.normalizeVisibility(agent.visibility);
+    const visibilityClass =
+      visibilityArray[0] === 'public' ? 'public' : 'custom';
     const multiOutputClass = agent.supportsMultipleOutput
       ? 'supported'
       : 'not-supported';

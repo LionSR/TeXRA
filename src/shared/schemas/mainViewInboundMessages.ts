@@ -9,7 +9,13 @@
  */
 import { z } from 'zod';
 
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+import { ExtendedFileTypeSchema, SessionTypeSchema } from './mainViewState';
 
 // ============================================================
 // Helpers to reduce boilerplate
@@ -26,21 +32,6 @@ const withOptionalFilePath = <T extends string>(command: T) =>
 /** Create a message schema with files array */
 const withFilesArray = <T extends string>(command: T) =>
   z.object({ command: z.literal(command), files: z.array(z.string()) });
-
-// ============================================================
-// Shared field schemas
-// ============================================================
-
-const FileTypeSchema = z.enum([
-  'input',
-  'reference',
-  'auxiliary',
-  'media',
-  'edited',
-  'output',
-]);
-
-const SessionTypeSchema = z.enum(['workflow', 'toolUse']);
 
 // ============================================================
 // Message schemas - grouped by category
@@ -110,7 +101,7 @@ const FileSelectionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
-    fileType: FileTypeSchema,
+    fileType: ExtendedFileTypeSchema,
   }),
 ] as const;
 
@@ -148,7 +139,7 @@ const FileOperationMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
-    fileType: FileTypeSchema,
+    fileType: ExtendedFileTypeSchema,
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES),
@@ -290,11 +281,6 @@ export type MainViewInboundMessage = z.infer<
 // ============================================================
 // Type-safe handler registry and dispatcher
 // ============================================================
-
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 
 export type MainViewInboundHandlerRegistry =
   HandlerRegistry<MainViewInboundMessage>;

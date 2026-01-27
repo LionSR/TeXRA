@@ -15,7 +15,7 @@ const MAX_MESSAGE_LENGTH = 200;
 
 @customElement('queued-follow-ups')
 export class QueuedFollowUps extends LitElement {
-  static styles = [
+  static override styles = [
     codiconIconClasses,
     css`
       :host {
@@ -88,7 +88,7 @@ export class QueuedFollowUps extends LitElement {
     };
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const visible = this.messages.length > 0;
     return html`
       <vscode-collapsible

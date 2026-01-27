@@ -78,12 +78,12 @@ export const MainViewEvents = {
   checkboxChange: (detail: CheckboxChangeDetail) =>
     createEvent('checkbox-change', detail),
 
-  refreshEditedFiles: () => createEvent('refresh-edited-files', {}),
+  refreshEditedFiles: () => createEvent('refresh-edited-files', undefined),
 
   commitChange: (detail: CommitChangeDetail) =>
     createEvent('commit-change', detail),
 
-  refreshCommits: () => createEvent('refresh-commits', {}),
+  refreshCommits: () => createEvent('refresh-commits', undefined),
 
   focusInstruction: (detail: FocusInstructionDetail) =>
     createEvent('focus-instruction', detail),
@@ -95,16 +95,16 @@ export const MainViewEvents = {
   agentConfigAction: (detail: BannerActionDetail) =>
     createEvent('agent-config-action', detail),
 
-  dependencyDismiss: () => createEvent('dependency-dismiss', {}),
+  dependencyDismiss: () => createEvent('dependency-dismiss', undefined),
 
-  recheckDependencies: () => createEvent('recheck-dependencies', {}),
+  recheckDependencies: () => createEvent('recheck-dependencies', undefined),
 
   openInstallGuide: (detail: InstallGuideDetail) =>
     createEvent('open-install-guide', detail),
 
-  signIn: () => createEvent('sign-in', {}),
+  signIn: () => createEvent('sign-in', undefined),
 
-  dismissLogin: () => createEvent('dismiss-login', {}),
+  dismissLogin: () => createEvent('dismiss-login', undefined),
 
   // LaTeXDiffs events
   latexDiffsToggle: (detail: LatexDiffsToggleDetail) =>
@@ -128,11 +128,11 @@ export const MainViewEvents = {
 
   panelAction: (detail: ActionDetail) => createEvent('panel-action', detail),
 
-  execute: () => createEvent('execute', {}),
+  execute: () => createEvent('execute', undefined),
 
-  agentSettings: () => createEvent('agent-settings', {}),
+  agentSettings: () => createEvent('agent-settings', undefined),
 
-  modelSettings: () => createEvent('model-settings', {}),
+  modelSettings: () => createEvent('model-settings', undefined),
 
-  instructionPaste: () => createEvent('instruction-paste', {}),
+  instructionPaste: () => createEvent('instruction-paste', undefined),
 } as const;

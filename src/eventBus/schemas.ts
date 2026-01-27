@@ -1,36 +1,19 @@
 import { z } from 'zod';
 
 import {
-  AddTaskGroupPayloadSchema,
   ExecutionIdSchema,
   StorageKeySchema,
   StreamTabIdSchema,
-  UpdateTaskGroupPayloadSchema,
-  UpdateTodosPayloadSchema,
 } from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
-export {
-  ProviderErrorPartialSchema,
-  RetryPermissionSchema,
-  ToolEditPermissionSchema,
-  WorkflowAgentProposalPermissionSchema,
-  WorkflowAgentProposalSchema,
-  type ProviderErrorPartial,
-  type RetryPermission,
-  type TaskGroupStatus,
-  type TodoItem,
-  type TodoStatus,
-  type ToolEditPermission,
-  type WorkflowAgentProposal,
-  type WorkflowAgentProposalPermission,
+// Import payload types from shared schemas for use in local schemas
+import type {
+  AddTaskGroupPayload,
+  UpdateTaskGroupPayload,
+  UpdateTodosPayload,
 } from '@shared/schemas';
-
-export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
-export type UpdateTaskGroupPayload = z.infer<
-  typeof UpdateTaskGroupPayloadSchema
->;
 
 export const RunScopedPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema,
@@ -38,9 +21,6 @@ export const RunScopedPayloadSchema = z.strictObject({
   executionId: ExecutionIdSchema.optional(),
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
-
-export { TODO_STATUS } from '@shared/schemas';
-export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
 
 export const SetActiveStreamPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema.nullable(),

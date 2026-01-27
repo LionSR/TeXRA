@@ -10,26 +10,6 @@ import {
 } from '@shared/schemas';
 
 // ============================================================================
-// Execution Status - Flow-Level Completion Status
-// ============================================================================
-
-/**
- * Execution status - flow-level completion states.
- * Single source of truth for flow execution results.
- *
- * This is the internal status used by flow implementations (PersistedFlow,
- * RoundPersistedFlow) to communicate how execution ended. It captures
- * more semantic detail than EndGroupStatus:
- *
- * - `completed`: Flow ran to natural completion (all rounds finished)
- * - `interrupted`: Flow was stopped by user/system before completion
- * - `error`: Flow failed due to an error
- *
- * Use toEndGroupStatus() to convert to logger-compatible status.
- */
-export { EXECUTION_STATUS, STREAM_STATUS };
-
-// ============================================================================
 // Status Transformation Functions
 // ============================================================================
 

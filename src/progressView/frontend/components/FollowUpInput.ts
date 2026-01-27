@@ -15,7 +15,7 @@ import { live } from 'lit/directives/live.js';
 import { commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
-import { insertTextAtCursor, resolveTextareaTarget } from '@shared/utils';
+import { insertTextAtCursor, resolveTextareaTarget } from '@shared/utils/textarea';
 import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
@@ -27,7 +27,7 @@ import './QueuedFollowUps';
 
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
-  static styles = [
+  static override styles = [
     commonViewStyles,
     css`
       :host {
@@ -174,7 +174,7 @@ export class FollowUpInput extends LitElement {
     }
   }
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     if (!this.visible) {
       return nothing;
     }

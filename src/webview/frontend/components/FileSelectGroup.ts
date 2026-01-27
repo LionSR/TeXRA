@@ -24,10 +24,10 @@ import {
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 
 // Local imports - shared schemas
-import { DEFAULT_CHECKBOX_VALUES } from '../store';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
 // Local imports - store (single source of truth for defaults)
+import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -83,15 +83,18 @@ export class FileSelectGroup extends LitElement {
   }
 
   private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    if (type === 'autoExtract') {
-      this.autoExtractMenuOpen = !this.autoExtractMenuOpen;
-      if (this.autoExtractMenuOpen) {
-        this.toolConfigMenuOpen = false;
-      }
-    } else {
-      this.toolConfigMenuOpen = !this.toolConfigMenuOpen;
-      if (this.toolConfigMenuOpen) {
-        this.autoExtractMenuOpen = false;
+    const isAutoExtract = type === 'autoExtract';
+    const wasOpen = isAutoExtract
+      ? this.autoExtractMenuOpen
+      : this.toolConfigMenuOpen;
+    // Close both menus first, then toggle the requested one
+    this.autoExtractMenuOpen = false;
+    this.toolConfigMenuOpen = false;
+    if (!wasOpen) {
+      if (isAutoExtract) {
+        this.autoExtractMenuOpen = true;
+      } else {
+        this.toolConfigMenuOpen = true;
       }
     }
   }

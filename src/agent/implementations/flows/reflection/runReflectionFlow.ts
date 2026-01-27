@@ -23,9 +23,12 @@ import * as path from 'path';
 
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import { OutputHandler } from '@agent/output';
-import type { IOutputHandler } from '@agent/output';
+import {
+  getExecutionStore,
+  type ExecutionKVStore,
+} from '@agent/storage/ExecutionKVStore';
+import { OutputHandler } from '@agent/output/OutputHandler';
+import type { IOutputHandler } from '@agent/output/IOutputHandler';
 import {
   registerInterruptible,
   unregisterInterruptible,

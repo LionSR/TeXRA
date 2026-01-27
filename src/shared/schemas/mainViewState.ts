@@ -8,6 +8,7 @@ import {
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
+/** Base file types for single-file selection */
 export const FileTypeSchema = z.enum([
   'input',
   'reference',
@@ -16,6 +17,7 @@ export const FileTypeSchema = z.enum([
 ]);
 export type FileType = z.infer<typeof FileTypeSchema>;
 
+/** File types for multiple-file selection (adds 'output') */
 export const MultipleFileTypeSchema = z.enum([
   'input',
   'reference',
@@ -24,6 +26,17 @@ export const MultipleFileTypeSchema = z.enum([
   'output',
 ]);
 export type MultipleFileType = z.infer<typeof MultipleFileTypeSchema>;
+
+/** Extended file types for inbound messages (adds 'edited' and 'output') */
+export const ExtendedFileTypeSchema = z.enum([
+  'input',
+  'reference',
+  'auxiliary',
+  'media',
+  'edited',
+  'output',
+]);
+export type ExtendedFileType = z.infer<typeof ExtendedFileTypeSchema>;
 
 export const MainViewPersistedStateSchema = z.object({
   sessionType: SessionTypeSchema.prefault('toolUse'),

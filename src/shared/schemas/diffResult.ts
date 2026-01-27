@@ -8,30 +8,31 @@ import { getBasename } from '../utils/path';
 export const DiffStatusSchema = z.enum(['success', 'error']);
 export type DiffStatus = z.infer<typeof DiffStatusSchema>;
 
-/** Canonical DiffResult format from backend */
-export const DiffResultSchema = z.object({
-  baseLocation: FileLocationSchema.nullable(),
-  baseRound: z.number().nullable(),
-  revised: OutputFileInfoSchema,
-  diffLocation: FileLocationSchema.nullable(),
+/** Shared metadata fields for diff results */
+const DiffMetadataSchema = z.object({
   status: DiffStatusSchema,
   message: z.string().optional(),
   runId: z.string().optional(),
 });
 
+/** Canonical DiffResult format from backend */
+export const DiffResultSchema = DiffMetadataSchema.extend({
+  baseLocation: FileLocationSchema.nullable(),
+  baseRound: z.number().nullable(),
+  revised: OutputFileInfoSchema,
+  diffLocation: FileLocationSchema.nullable(),
+});
+
 export type DiffResult = z.infer<typeof DiffResultSchema>;
 
 /** Flattened display data for rendering latexdiff entries */
-export const DiffResultDisplaySchema = z.object({
+export const DiffResultDisplaySchema = DiffMetadataSchema.extend({
   baseFile: z.string(),
   revisedFile: z.string(),
   diffFile: z.string(),
   displayName: z.string(),
   baseRound: z.number().nullable(),
   revisedRound: z.number(),
-  status: DiffStatusSchema,
-  message: z.string().optional(),
-  runId: z.string().optional(),
 });
 
 export type DiffResultDisplay = z.infer<typeof DiffResultDisplaySchema>;

@@ -12,7 +12,7 @@ import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - common
-import { AgentHistoryManager } from '@common/history';
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 
 // Local imports - tools
 

@@ -5,7 +5,8 @@
 
 import { createEvent } from '@shared/utils/events';
 
-import type { PermissionState, FollowupFormData } from './components';
+import type { FollowupFormData } from './components/FollowupSection';
+import type { PermissionState } from './components/PermissionCard';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';
 
 // =============================================================================
@@ -55,6 +56,7 @@ export interface GroupToggleDetail {
 
 export interface FileClickDetail {
   file: string;
+  line?: number;
 }
 
 export interface FileActionDetail {
@@ -80,7 +82,7 @@ export const ProgressEvents = {
 
   sortChange: (detail: SortEventDetail) => createEvent('sort-change', detail),
 
-  deleteAll: () => createEvent('delete-all', {}),
+  deleteAll: () => createEvent('delete-all', undefined),
 
   toolbarCommand: (detail: ToolbarCommandDetail) =>
     createEvent('toolbar-command', detail),
@@ -93,13 +95,13 @@ export const ProgressEvents = {
   followupChange: (detail: FollowUpChangeDetail) =>
     createEvent('followup-change', detail),
 
-  followupSend: () => createEvent('followup-send', {}),
+  followupSend: () => createEvent('followup-send', undefined),
 
-  followupPolish: () => createEvent('followup-polish', {}),
+  followupPolish: () => createEvent('followup-polish', undefined),
 
-  followupClear: () => createEvent('followup-clear', {}),
+  followupClear: () => createEvent('followup-clear', undefined),
 
-  followupRequestOptions: () => createEvent('followup-request-options', {}),
+  followupRequestOptions: () => createEvent('followup-request-options', undefined),
 
   followupModeChange: (detail: FollowupModeDetail) =>
     createEvent('followup-mode-change', detail),

@@ -97,11 +97,7 @@ export const logEntryStyles = css`
     color: var(--color-text-link);
   }
 
-  .detail-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-  }
+  /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
   :is(.file-link, .web-search-link) {
     color: var(--color-text-link);
@@ -147,11 +143,7 @@ export const logEntryStyles = css`
     margin: var(--spacing-small) 0;
   }
 
-  .details-summary {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-  }
+  /* Note: .details-summary base styles are in commonViewStyles */
 
   .banner-content-copy {
     min-width: 0;
