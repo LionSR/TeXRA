@@ -35,7 +35,7 @@ import {
   type StreamState,
 } from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { PermissionState } from './components/PermissionCard';
+import type { PermissionState } from './components';
 
 // ============================================================
 // Types

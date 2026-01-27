@@ -11,7 +11,7 @@ import { createContext } from '@lit/context';
 import type { FollowupOptionsState, StreamState } from '../store';
 
 // Local imports - progress view components
-import type { PermissionState } from '../components/PermissionCard';
+import type { PermissionState } from '../components';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
