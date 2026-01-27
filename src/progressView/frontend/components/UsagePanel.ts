@@ -19,7 +19,7 @@ import type { ContextState } from '../store';
 
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
-  static styles = [
+  static override styles = [
     codiconIconClasses,
     css`
       :host {
@@ -88,7 +88,7 @@ export class UsagePanel extends LitElement {
   @property({ type: Object }) usage: TokenUsageStats | null = null;
   @property({ type: Object }) contextState: ContextState | null = null;
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     const hasUsage =
       (this.usage?.inputTokens ?? 0) > 0 ||
       (this.usage?.outputTokens ?? 0) > 0 ||

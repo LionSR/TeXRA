@@ -1,24 +1,20 @@
-// Third-party imports
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
-// Internal imports
-import {
-  MESSAGE_TYPES,
-  MessageTypeSchema,
-  type MessageType,
-} from '@shared/schemas';
 import {
   ContextStateDataSchema,
+  MESSAGE_TYPES,
+  MessageTypeSchema,
   type ContextStateData,
-} from '@logger/AgentLogger';
+  type EndGroupStatus,
+  type LogMessageData,
+  type MessageType,
+} from '@shared/schemas';
 import { getEmitFilter } from '@logger/filterUtils';
 import { getColorForLevel } from '@logger/utils';
 import { serializeError } from '@utils/core';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { EndGroupStatus } from '@shared/schemas';
-import type { LogMessageData } from '@shared/schemas';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;

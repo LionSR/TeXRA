@@ -146,7 +146,7 @@ vscode-toolbar-button {
 
 .badge {
   display: inline-block;
-  padding: var(--spacing-small) var(--spacing-medium);
+  padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: var(--border-radius);
   font-size: var(--font-size-sm);
   font-weight: 500;

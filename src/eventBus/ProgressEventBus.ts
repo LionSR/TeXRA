@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
 
-import type { ContextStateData } from '@logger/AgentLogger';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ContextStateData,
   LogMessageData,
   LogMessageUpdate,
   OutputFileInfo,

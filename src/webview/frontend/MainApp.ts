@@ -183,7 +183,6 @@ export class MainApp extends BaseWebviewApp {
   @state() protected override debugMode = false;
   @state() private isGitRepo = true;
   private defaultOutputFiles: string[] = [];
-  private apiKeyBannerForced = false;
   private instructionSaveTimer: number | null = null;
 
   @provide({ context: fileStateContext })
@@ -293,7 +292,6 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (data) =>
       this.handleShowApiKeyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
-      this.apiKeyBannerForced = false;
       this.apiKeyBanner = { visible: false };
     },
     [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (data) =>
@@ -1155,7 +1153,6 @@ export class MainApp extends BaseWebviewApp {
   private handleShowApiKeyBanner(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER>,
   ): void {
-    this.apiKeyBannerForced = true;
     this.apiKeyBanner = {
       visible: true,
       provider: message.provider ?? '',
@@ -1742,14 +1739,7 @@ export class MainApp extends BaseWebviewApp {
     return {
       sessionType: this.sessionType,
       checkboxValues: this.checkboxValues,
-      singleFiles: {
-        inputFile: this.singleFiles.inputFile,
-        referenceFile: this.singleFiles.referenceFile,
-        auxiliaryFile: this.singleFiles.auxiliaryFile,
-        mediaFile: this.singleFiles.mediaFile,
-        baseFile: this.singleFiles.baseFile,
-        editedFile: this.singleFiles.editedFile,
-      },
+      singleFiles: { ...this.singleFiles },
       fileOptions: {
         inputFile: this.fileOptions.inputFile ?? [],
         referenceFile: this.fileOptions.referenceFile ?? [],

@@ -31,7 +31,7 @@ const ProviderErrorSchema = z.object({
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
 /** Context about where/when the error occurred */
-const ErrorContextSchema = z.object({
+export const ErrorContextSchema = z.object({
   operation: z.string().optional(),
   model: z.string().optional(),
 });

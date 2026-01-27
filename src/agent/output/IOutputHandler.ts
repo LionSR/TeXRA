@@ -1,4 +1,3 @@
-// Local imports - agent
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type {
   FileLocation,
@@ -8,7 +7,6 @@ import type {
   StorageKey,
 } from '@shared/schemas';
 
-// Local file imports
 import type { LatexDiffManager } from './LatexDiffManager';
 import type { RoundFileMapping } from './types';
 

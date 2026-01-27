@@ -7,7 +7,8 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
-import { ApprovalRequestHandler, WebviewUpdater } from '@progressView/managers';
+import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
+import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 

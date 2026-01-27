@@ -5,8 +5,8 @@ import type { MemoryItemActionDetail } from '@shared/schemas';
 export const MemoryViewEvents = {
   refresh: () => createEvent('memory-refresh', undefined),
   openFolder: () => createEvent('memory-open-folder', undefined),
-  toggleEnabled: (enabled: boolean) =>
-    createEvent('memory-toggle-enabled', { enabled }),
+  toggleEnabled: (detail: { enabled: boolean }) =>
+    createEvent('memory-toggle-enabled', detail),
   openItem: (detail: MemoryItemActionDetail) =>
     createEvent('memory-open-item', detail),
   deleteItem: (detail: MemoryItemActionDetail) =>

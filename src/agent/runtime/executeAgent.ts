@@ -13,7 +13,7 @@ import {
   type ExecutionId,
   type StorageKey,
 } from '@shared/schemas';
-import type { IModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import {
   resolveAgent,
   isRemoteAgent,
