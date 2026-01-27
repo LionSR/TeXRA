@@ -58,10 +58,6 @@ export const layoutStyles = css`
     overflow-y: auto;
   }
 
-  lit-virtualizer {
-    display: block;
-  }
-
   log-entry {
     display: block;
   }

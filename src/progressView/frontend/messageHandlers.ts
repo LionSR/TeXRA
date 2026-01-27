@@ -112,7 +112,7 @@ function removePrompt(
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
-  backendStates?: Record<string, unknown>,
+  backendStates?: Record<string, StreamState>,
 ): ProgressState {
   const nextStates = new Map(state.streamStates);
   const knownStreams = new Set(streams.map((stream) => stream.name));
@@ -126,9 +126,7 @@ function updateStreamInfo(
 
   for (const stream of streams) {
     // Use backend state if provided (source of truth), otherwise create/update locally
-    const backendState = backendStates?.[stream.name] as
-      | StreamState
-      | undefined;
+    const backendState = backendStates?.[stream.name];
     if (backendState) {
       // Backend provides discriminated state - use it directly with info
       nextStates.set(stream.name, { ...backendState, info: stream });
@@ -155,13 +153,10 @@ export function handleUpdateStreams(
   const previousStreamId = previousState.activeStreamId;
   const activeStream = result.data.activeStream ?? null;
   // Use backend-provided stream states (source of truth) when available
-  const backendStates = result.data.streamStates as
-    | Record<string, unknown>
-    | undefined;
   const updated = updateStreamInfo(
     previousState,
     result.data.streams,
-    backendStates,
+    result.data.streamStates,
   );
 
   ctx.setState(() => ({
@@ -661,23 +656,12 @@ export function handleSetFollowupOptions(
   const result = SetFollowupOptionsMessageSchema.safeParse(raw);
   if (!result.success) return;
 
-  // Destructure parsed data, providing defaults for optional HTML strings
-  const {
-    command: _command,
-    workflowAgentsHtml = '',
-    toolUseAgentsHtml = '',
-    modelOptionsHtml = '',
-    defaultMergeModel,
-  } = result.data;
+  // Store all fields except command
+  const { command: _command, ...options } = result.data;
 
   ctx.setState((prev) => ({
     ...prev,
-    followupOptions: {
-      workflowAgentsHtml,
-      toolUseAgentsHtml,
-      modelOptionsHtml,
-      defaultMergeModel,
-    },
+    followupOptions: options,
   }));
 }
 

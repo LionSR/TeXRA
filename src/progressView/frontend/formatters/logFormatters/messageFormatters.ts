@@ -15,7 +15,7 @@ import {
   classMap,
   ifDefined,
   styleMap,
-  renderToElement,
+  type FormatResult,
 } from '../litTemplates';
 
 // Local imports - formatter helpers
@@ -24,27 +24,30 @@ import { formatTimestamp } from '../timestampUtils';
 import { EMOJI_BY_LEVEL } from '../constants';
 
 // Local imports - shared schemas
-import type { LogMessageData } from '@shared/schemas';
+import {
+  ErrorLogDataSchema,
+  type ErrorLogData,
+  type LogMessageData,
+} from '@shared/schemas';
 
-/** Format user message entry (Lit-native component). */
-export function formatUserMessage(
-  text: string,
-  logId: string,
-  timestamp: number,
-): HTMLElement | null {
-  return renderToElement(html`
+/** Format user message entry as TemplateResult. */
+export function formatUserMessageTemplate(
+  message: LogMessageData,
+): FormatResult {
+  const { id, text, timestamp } = message;
+  return html`
     <user-message
       .text=${text ?? ''}
-      .logId=${logId}
+      .logId=${id}
       .timestamp=${timestamp}
     ></user-message>
-  `);
+  `;
 }
 
-/** Format progress status entry (Lit-native). */
-export function formatProgressStatus(
+/** Format progress status entry as TemplateResult. */
+export function formatProgressStatusTemplate(
   message: LogMessageData,
-): HTMLElement | null {
+): FormatResult {
   const { level = 'info', id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
@@ -55,14 +58,14 @@ export function formatProgressStatus(
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
 
   // prettier-ignore
-  return renderToElement(html`<div
+  return html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
     ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${emoji} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
         detailText,
         () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
-      )}</div>`);
+      )}</div>`;
 }
 
 // Error detail fields in display order (matches ProviderError schema)
@@ -80,16 +83,19 @@ const ERROR_DETAIL_FIELDS = [
   'rawErrorBody',
 ] as const;
 
-/** Format error message as a foldable banner (Lit-native). */
-export function formatError(message: LogMessageData): HTMLElement | null {
+/** Format error message as TemplateResult. */
+export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const { id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
-  const structured =
-    data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-  const isRelayError = structured.isRelayError === true;
+  // Parse error data with schema - use empty object if invalid
+  const parseResult = ErrorLogDataSchema.safeParse(data);
+  const errorData: Partial<ErrorLogData> = parseResult.success
+    ? parseResult.data
+    : {};
+  const isRelayError = errorData.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)
   const originalSummaryText = (text ?? '').trim() || 'Error occurred';
@@ -97,9 +103,9 @@ export function formatError(message: LogMessageData): HTMLElement | null {
     ? `[Relay] ${originalSummaryText}`
     : originalSummaryText;
 
-  // Build error details from structured data
+  // Build error details from parsed data
   const detailLines = ERROR_DETAIL_FIELDS.filter((key) => {
-    const value = structured[key];
+    const value = errorData[key as keyof ErrorLogData];
     // Skip null/undefined values and message if it duplicates the original summary
     return (
       value !== null &&
@@ -107,7 +113,7 @@ export function formatError(message: LogMessageData): HTMLElement | null {
       !(key === 'message' && value === originalSummaryText)
     );
   }).map((key) => {
-    const value = structured[key];
+    const value = errorData[key as keyof ErrorLogData];
     // Format objects (like rawErrorBody) as indented JSON
     const displayValue =
       typeof value === 'object'
@@ -120,7 +126,7 @@ export function formatError(message: LogMessageData): HTMLElement | null {
   const hasDetails = Boolean(detailText);
   const rawContent = detailText || summaryText;
 
-  return renderToElement(html`
+  return html`
     <details
       class=${classMap({
         'banner-details': true,
@@ -160,13 +166,13 @@ export function formatError(message: LogMessageData): HTMLElement | null {
         )}
       </div>
     </details>
-  `);
+  `;
 }
 
-/** Format default log message (Lit-native). */
-export function formatDefaultLogMessage(
+/** Format default log message as TemplateResult. */
+export function formatDefaultLogMessageTemplate(
   logMessage: LogMessageData,
-): HTMLElement | null {
+): FormatResult {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
   const emoji = EMOJI_BY_LEVEL[level] ?? '•';
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
@@ -176,7 +182,7 @@ export function formatDefaultLogMessage(
   const timestampContent = verbose ? `${emoji} [${timeDisplay}]` : emoji;
 
   // prettier-ignore
-  return renderToElement(html`<div
+  return html`<div
       class="log-line"
       data-log-id=${id}
       data-group-id=${ifDefined(groupId)}
@@ -184,5 +190,5 @@ export function formatDefaultLogMessage(
     ><span class="timestamp" title=${tooltipTimestamp}>${timestampContent}</span>${when(
         verbose,
         () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,
-      )} <span class=${`message-${level}`}>${text}</span></div>`);
+      )} <span class=${`message-${level}`}>${text}</span></div>`;
 }
