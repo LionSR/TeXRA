@@ -1,32 +1,35 @@
 /**
  * ProgressView CSS main file
- * Imports all modular CSS files
  *
- * Note: Many components now use Shadow DOM with static styles.
- * These CSS files are for Light DOM components (LogList, TaskGroupList)
- * and dynamically-generated content from formatters.
+ * MIGRATION STATUS: Moving to Shadow DOM with Lit styles (logStyles.ts)
+ *
+ * STILL NEEDED (webview shell):
+ * - base.css: Core layout for body, progress-app, main-container
+ * - hljs-vscode.css: Syntax highlighting theme (cannot be in Shadow DOM easily)
+ * - utilities.css: Simple utility classes
+ *
+ * DEPRECATED (now in logStyles.ts, kept for backward compatibility):
+ * - logs.css: Log entry styles - migrated to logStyles.ts
+ * - groups.css: Group styles - migrated to logStyles.ts
+ * - markdown.css: Markdown styles - migrated to logStyles.ts
+ * - scratchpad.css: Tool-use styles - migrated to logStyles.ts
+ * - code-block.css: Code block styles - migrated to logStyles.ts
+ *
+ * Shadow DOM components use src/progressView/frontend/styles/logStyles.ts
  */
 
-/* Import base styles */
+/* Import base styles - still needed for webview shell */
 @import './base.css';
 
-/* Import utility classes (must come before components) */
+/* Import utility classes */
 @import './utilities.css';
 
-/* Import component styles for Light DOM components */
+/* Syntax highlighting - needed globally */
+@import './hljs-vscode.css';
+
+/* DEPRECATED: These are now in logStyles.ts but kept for any remaining Light DOM usage */
 @import './logs.css';
 @import './groups.css';
-
-/* Import formatter output styles (dynamically generated HTML) */
 @import './markdown.css';
 @import './scratchpad.css';
 @import './code-block.css';
-@import './hljs-vscode.css';
-
-/* Shadow DOM components (styles inline in .ts files):
- * - PromptOverlay, TodoList, FileList, StreamTabs, QueuedFollowUps
- * - FollowupSection, InstructionPanel, FollowUpInput
- * - UsagePanel, RunSelector, StreamHeader
- * - UserMessage, StatisticsPanel, LatexdiffResults, ContextManagement
- * - LogPlaceholder
- */
