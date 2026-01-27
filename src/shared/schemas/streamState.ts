@@ -10,7 +10,6 @@ import { z } from 'zod';
 import { AGENT_CATEGORY, type AgentCategory } from './agent';
 import { LogMessageDataSchema } from './log';
 import { OutputFileInfoSchema } from './output';
-import { ContextStateSchema } from './progressViewMessages';
 import {
   InstructionUpdateSchema,
   StreamStatusSchema,
@@ -18,7 +17,7 @@ import {
 } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
-import { TokenUsageStatsSchema } from './usage';
+import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
 
 // =============================================================================
 // Followup Mode (frontend-only concept)

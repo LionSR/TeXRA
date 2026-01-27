@@ -1,8 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared schemas
-import { MainViewPersistedStateSchema } from '@shared/schemas';
+// Local imports - use relative imports within schemas directory
+import { MainViewPersistedStateSchema } from './mainViewState';
 
 // Local imports - shared commands
 import { COMMON_COMMANDS } from '@common/webview/commands';

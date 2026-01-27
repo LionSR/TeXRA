@@ -51,6 +51,7 @@ export class InstructionPanel extends LitElement {
       .instruction-box {
         display: flex;
         flex-direction: column;
+        position: relative;
         padding: var(--spacing-medium);
         background-color: var(--background-color);
         border-radius: var(--border-radius);
@@ -63,13 +64,15 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
-        height: var(--height-control);
+        line-height: 1.5;
+        flex-wrap: wrap;
       }
 
       .instruction-header-leading {
         display: flex;
         gap: var(--spacing-medium);
         align-items: center;
+        flex-wrap: wrap;
       }
 
       .instruction-header-actions {
@@ -94,8 +97,14 @@ export class InstructionPanel extends LitElement {
 
       vscode-textarea#instruction {
         width: 100%;
+        margin: var(--spacing-medium) 0;
         font-family: var(--vscode-editor-font-family);
         font-size: var(--font-size);
+      }
+
+      vscode-textarea#instruction::part(control) {
+        max-height: var(--height-xlarge);
+        transition: height 0.1s ease-out;
       }
 
       .instruction-controls {
@@ -103,7 +112,8 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        flex-wrap: wrap;
+        width: 100%;
       }
 
       .model-selection-footer {

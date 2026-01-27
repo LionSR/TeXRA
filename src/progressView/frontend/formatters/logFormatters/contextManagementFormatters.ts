@@ -6,6 +6,12 @@
  * Uses Lit-native component.
  */
 
+// Local imports - shared schemas
+import {
+  ContextManagementDataSchema,
+  type LogMessageData,
+} from '@shared/schemas';
+
 // Local imports - Lit template utilities
 import { html, type FormatResult } from '../litTemplates';
 
@@ -17,12 +23,6 @@ import type {
   ActionConfig,
   ContextStatItem,
 } from '../../components/ContextManagement';
-
-// Local imports - shared schemas
-import {
-  ContextManagementDataSchema,
-  type LogMessageData,
-} from '@shared/schemas';
 
 // Actions that show tokens freed stat
 const TOKENS_FREED_ACTIONS = new Set([
