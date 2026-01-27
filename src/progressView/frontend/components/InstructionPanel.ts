@@ -9,7 +9,7 @@ import { commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared controllers
-import { CopyButtonController } from '@shared/controllers/CopyButtonController';
+import { CopyButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';

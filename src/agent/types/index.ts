@@ -9,8 +9,7 @@
 export type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 
 // Usage types
-export type { TokenUsageStats } from '@shared/schemas';
-export type { ExtendedTokenUsageStats } from './UsageTypes';
+export type { TokenUsageStats, ExtendedTokenUsageStats } from '@shared/schemas';
 export type { NormalizedUsage } from './NormalizedUsage';
 
 // Result types

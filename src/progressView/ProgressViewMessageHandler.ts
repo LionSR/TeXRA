@@ -13,14 +13,16 @@ import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseViewMessageHandler,
+  PROGRESS_VIEW_COMMANDS,
+} from '@common/webview';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-import * as logger from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
@@ -65,8 +67,9 @@ type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
  * Uses discriminated union validation at dispatch point (single safeParse)
  * with typed handler registry for type-safe message handling.
  */
-export class ProgressViewMessageHandler {
-  private readonly channel = 'ProgressViewMessageHandler';
+export class ProgressViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
   private readonly recordingManager: RecordingManager;
   private readonly modelOutputBackups = new Map<
     string,
@@ -74,20 +77,15 @@ export class ProgressViewMessageHandler {
   >();
 
   /**
-   * Active webview reference for handlers that need webview access.
-   */
-  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
-
-  /**
    * Type-safe handler registry - handlers receive typed data.
    */
-  private readonly handlers: ProgressViewInboundHandlerRegistry;
+  private readonly handlerRegistry: ProgressViewInboundHandlerRegistry;
 
   constructor(
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
   ) {
-    logger.initialize(this.channel);
+    super('ProgressView', { trackActiveView: true });
 
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
@@ -97,30 +95,26 @@ export class ProgressViewMessageHandler {
       progressTitle: 'Transcribing follow-up message',
     });
 
-    this.handlers = this.createHandlers();
+    this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  /**
-   * Get the currently active webview.
-   */
-  private getActiveView():
-    | vscode.WebviewView
-    | vscode.WebviewPanel
-    | undefined {
-    return this._activeView;
+  protected createHandlers(): Record<string, never> {
+    // Handler registry is created dynamically via createHandlerRegistry
+    return {};
   }
 
   /**
    * Create the typed handler registry.
    * Each handler receives typed data - no casts or validation needed.
    */
-  private createHandlers(): ProgressViewInboundHandlerRegistry {
+  private createHandlerRegistry(): ProgressViewInboundHandlerRegistry {
     return {
       // Common handlers
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.handleTheme(data),
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: (_data) =>
+        this.handleWebviewReadySignal(),
+      [PROGRESS_VIEW_COMMANDS.THEME_SET]: (data) => this.handleThemeSet(data),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: (data) =>
-        this.handleDebugMode(data),
+        this.handleDebugModeSet(data),
 
       // Stream management
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
@@ -206,18 +200,18 @@ export class ProgressViewMessageHandler {
    * Main message handler - uses schema-driven dispatch.
    * Single safeParse at entry, routes to typed handlers.
    */
-  public async handleMessage(
+  public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     // Track active view for handlers that need webview access
-    this._activeView = webviewView;
+    (this as any)._activeView = webviewView;
 
     const handled = dispatchProgressViewInbound(
       message,
-      this.handlers,
+      this.handlerRegistry,
       (error) => {
-        logger.debug(this.channel, 'Message validation failed', {
+        this.logger.debug(this.channel, 'Message validation failed', {
           data: error,
         });
       },
@@ -229,7 +223,7 @@ export class ProgressViewMessageHandler {
       typeof message === 'object' &&
       'command' in message
     ) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `Unhandled command: ${(message as { command: string }).command}`,
       );
@@ -240,15 +234,15 @@ export class ProgressViewMessageHandler {
   // Common handlers
   // ============================================================
 
-  private handleWebviewReady(): void {
-    logger.debug(this.channel, 'Webview ready signal received');
+  private handleWebviewReadySignal(): void {
+    this.logger.debug(this.channel, 'Webview ready signal received');
     const view = this.getActiveView();
     if (view) {
       this.provider.markWebviewReady(view);
     }
   }
 
-  private handleTheme(
+  private handleThemeSet(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.THEME_SET>,
   ): void {
     const view = this.getActiveView();
@@ -260,7 +254,7 @@ export class ProgressViewMessageHandler {
     }
   }
 
-  private handleDebugMode(
+  private handleDebugModeSet(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET>,
   ): void {
     const view = this.getActiveView();
@@ -500,7 +494,7 @@ export class ProgressViewMessageHandler {
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
-          logger.error(
+          this.logger.error(
             this.channel,
             `Error polishing follow-up: ${messageText}`,
             {
@@ -581,7 +575,7 @@ export class ProgressViewMessageHandler {
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {
     const proposal = this.provider.getPendingAgentProposal(proposalId);
     if (!proposal) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `No pending agent proposal found for setup: ${proposalId}`,
       );
@@ -637,7 +631,7 @@ export class ProgressViewMessageHandler {
     await vscode.commands.executeCommand('texra.mainView.focus');
     await vscode.commands.executeCommand('texra.restoreState', taskState);
 
-    logger.info(
+    this.logger.info(
       this.channel,
       `Agent proposal ${proposalId} set up in main view`,
       {
@@ -679,7 +673,7 @@ export class ProgressViewMessageHandler {
       ]);
     } catch (error) {
       const errorMessage = toErrorMessage(error);
-      logger.error(
+      this.logger.error(
         this.channel,
         `Failed to open task storage for stream ${streamId}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
         {
@@ -896,7 +890,7 @@ export class ProgressViewMessageHandler {
         defaultMergeModel,
       });
     } catch (error) {
-      logger.error(
+      this.logger.error(
         this.channel,
         `Failed to get followup options: ${toErrorMessage(error)}`,
       );
@@ -974,7 +968,7 @@ export class ProgressViewMessageHandler {
     execute: (file: string, base: string) => Thenable<unknown>,
   ): Promise<void> {
     if (!base) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `${actionName} requested without a base path.`,
         {
@@ -1037,7 +1031,7 @@ export class ProgressViewMessageHandler {
       outputFiles,
     );
     if (fileMapping.size === 0) {
-      logger.warn(this.channel, 'Followup: No file mappings found', {
+      this.logger.warn(this.channel, 'Followup: No file mappings found', {
         data: {
           streamId,
           originalInputs: originalInputs.length,
@@ -1077,9 +1071,12 @@ export class ProgressViewMessageHandler {
         executeImmediately,
       );
 
-      logger.info(this.channel, 'Followup task configured via restoreState');
+      this.logger.info(
+        this.channel,
+        'Followup task configured via restoreState',
+      );
     } catch (error) {
-      logger.error(
+      this.logger.error(
         this.channel,
         `Failed to set up followup task: ${toErrorMessage(error)}`,
       );
@@ -1095,7 +1092,7 @@ export class ProgressViewMessageHandler {
   ): Promise<{ taskState: WorkflowTaskState; outputFiles: string[] } | null> {
     const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
-      logger.warn(this.channel, 'Followup: No task state found', {
+      this.logger.warn(this.channel, 'Followup: No task state found', {
         data: { stream: streamId },
       });
       await vscode.window.showWarningMessage(
@@ -1106,7 +1103,7 @@ export class ProgressViewMessageHandler {
 
     const agentEntry = getAgent(agent);
     if (!agentEntry) {
-      logger.warn(this.channel, 'Followup: Agent not found in registry', {
+      this.logger.warn(this.channel, 'Followup: Agent not found in registry', {
         data: { agent },
       });
       await vscode.window.showWarningMessage(
@@ -1122,7 +1119,7 @@ export class ProgressViewMessageHandler {
     const outputFiles = this.extractOutputFilePaths(runOutputs);
 
     if (outputFiles.length === 0) {
-      logger.warn(this.channel, 'Followup: No output files found', {
+      this.logger.warn(this.channel, 'Followup: No output files found', {
         data: { stream: streamId },
       });
       await vscode.window.showWarningMessage(
@@ -1331,7 +1328,7 @@ export class ProgressViewMessageHandler {
       return;
     }
 
-    logger.info(this.channel, 'Executing merge directly');
+    this.logger.info(this.channel, 'Executing merge directly');
 
     if (filePairs.length === 1) {
       await safeExecuteCommand('texra.merge', [

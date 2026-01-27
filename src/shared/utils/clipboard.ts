@@ -25,7 +25,7 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export interface CopyFeedbackOptions {
+interface CopyFeedbackOptions {
   defaultTitle?: string;
   successTitle?: string;
   successClass?: string;

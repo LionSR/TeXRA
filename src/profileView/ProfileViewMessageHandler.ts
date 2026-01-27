@@ -15,8 +15,7 @@ import {
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
-import { PROFILE_VIEW_COMMANDS } from '@common/webview';
-import * as logger from '@logger/logUtils';
+import { BaseViewMessageHandler, PROFILE_VIEW_COMMANDS } from '@common/webview';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
@@ -28,24 +27,22 @@ type MessageFor<C extends ProfileViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-export class ProfileViewMessageHandler {
-  private readonly channel = 'ProfileViewMessageHandler';
-  private _activeView: vscode.WebviewView | vscode.WebviewPanel | undefined;
-  private readonly handlers: ProfileViewInboundHandlerRegistry;
+export class ProfileViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
+  private readonly handlerRegistry: ProfileViewInboundHandlerRegistry;
 
   constructor(_context: vscode.ExtensionContext) {
-    logger.initialize(this.channel);
-    this.handlers = this.createHandlers();
+    super('ProfileView', { trackActiveView: true });
+    this.handlerRegistry = this.createHandlerRegistry();
   }
 
-  private getActiveView():
-    | vscode.WebviewView
-    | vscode.WebviewPanel
-    | undefined {
-    return this._activeView;
+  protected createHandlers(): Record<string, never> {
+    // Handler registry is created dynamically via createHandlerRegistry
+    return {};
   }
 
-  private createHandlers(): ProfileViewInboundHandlerRegistry {
+  private createHandlerRegistry(): ProfileViewInboundHandlerRegistry {
     return {
       [PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
         this.handleGetProfileData(),
@@ -58,17 +55,18 @@ export class ProfileViewMessageHandler {
     };
   }
 
-  public async handleMessage(
+  public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    this._activeView = webviewView;
+    // Track active view for handlers that need webview access
+    (this as any)._activeView = webviewView;
 
     const handled = dispatchProfileViewInbound(
       message,
-      this.handlers,
+      this.handlerRegistry,
       (error) => {
-        logger.debug(this.channel, 'Message validation failed', {
+        this.logger.debug(this.channel, 'Message validation failed', {
           data: error,
         });
       },
@@ -80,7 +78,7 @@ export class ProfileViewMessageHandler {
       typeof message === 'object' &&
       'command' in message
     ) {
-      logger.warn(
+      this.logger.warn(
         this.channel,
         `Unhandled command: ${(message as { command: string }).command}`,
       );

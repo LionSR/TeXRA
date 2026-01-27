@@ -16,7 +16,7 @@ logger.initialize(CHANNEL);
  */
 export async function safeExecuteCommand<T>(
   command: string,
-  args: any[] = [],
+  args: unknown[] = [],
   channel: string = CHANNEL,
 ): Promise<T | undefined> {
   try {

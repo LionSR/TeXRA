@@ -1,4 +1,5 @@
 export * from './clipboard';
+export * from './dispatcher';
 export * from './dom';
 export * from './events';
 export * from './icons';
