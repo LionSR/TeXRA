@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -92,9 +92,7 @@ const selectInputFile = createPicker({
   allowMany: false,
   openLabel: 'Select File',
   filters: () => ({
-    'Text files': getIncludedExtensions('input').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input'),
   }),
 });
 
@@ -102,9 +100,7 @@ const selectInputFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('input', ['.txt', '.tex', '.md']).map(
-      (ext) => ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input', ['.txt', '.tex', '.md']),
   }),
 });
 
@@ -112,9 +108,7 @@ const selectReferenceFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Ref Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('reference').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('reference'),
   }),
 });
 
@@ -122,9 +116,7 @@ const selectAuxiliaryFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Auxiliary Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('auxiliary').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('auxiliary'),
   }),
 });
 
@@ -132,12 +124,8 @@ const selectMediaFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Media',
   filters: () => ({
-    'Image files': getIncludedExtensions('media').map((ext) =>
-      ext.replace('.', ''),
-    ),
-    'Audio files': getIncludedExtensions('audio').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Image files': getFilterExtensions('media'),
+    'Audio files': getFilterExtensions('audio'),
   }),
 });
 
@@ -145,10 +133,8 @@ const selectMediaFile = createPicker({
   allowMany: false,
   openLabel: 'Select Media File',
   filters: () => ({
-    Images: getIncludedExtensions('media').map((ext) => ext.replace('.', '')),
-    'Audio files': getIncludedExtensions('audio').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    Images: getFilterExtensions('media'),
+    'Audio files': getFilterExtensions('audio'),
   }),
 });
 
@@ -189,8 +175,6 @@ const selectBaseFile = createPicker({
   allowMany: false,
   openLabel: 'Select Base File',
   filters: () => ({
-    'Text files': getIncludedExtensions('input').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input'),
   }),
 });

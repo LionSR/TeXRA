@@ -128,9 +128,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await SecretManager.delete(
-          SecretManager.getApiKeySecretName(provider as ApiProvider),
-        );
+        await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
         vscode.window.showInformationMessage(
           `${provider} API key has been removed`,
         );

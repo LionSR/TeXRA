@@ -32,9 +32,9 @@ export class ToggleStateStore {
    */
   clearSelection(ids: string[]): void {
     if (!Array.isArray(ids)) return;
-    ids.forEach((id) => {
+    for (const id of ids) {
       if (id) this._states.delete(id);
-    });
+    }
     this._saveCallback?.();
   }
 

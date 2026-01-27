@@ -18,20 +18,21 @@ export class WebviewStateManager<T extends Record<string, unknown>> {
   ) {
     this.defaultState = { ...defaultState } as T;
     const saved = vscode.getState();
+
+    // Parse saved state if schema provided
+    let parsedSaved: unknown = saved;
     if (schema) {
-      const parsed = schema.safeParse(saved);
-      if (!parsed.success) {
+      const result = schema.safeParse(saved);
+      if (!result.success) {
         console.warn(
           '[WebviewStateManager] Failed to parse saved state.',
-          parsed.error,
+          result.error,
         );
       }
-      this.state = parsed.success
-        ? { ...this.defaultState, ...parsed.data }
-        : { ...this.defaultState, ...(saved ?? {}) };
-      return;
+      parsedSaved = result.success ? result.data : saved;
     }
-    this.state = { ...this.defaultState, ...(saved ?? {}) };
+
+    this.state = { ...this.defaultState, ...(parsedSaved ?? {}) };
   }
 
   /**

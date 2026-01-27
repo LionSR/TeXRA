@@ -83,35 +83,3 @@ hljs.registerLanguage('text', plaintext); // Common alias
  * Use this instead of importing from 'highlight.js' directly.
  */
 export default hljs;
-
-/**
- * List of registered language names for reference.
- */
-export const REGISTERED_LANGUAGES = [
-  'latex',
-  'tex',
-  'bibtex',
-  'python',
-  'r',
-  'julia',
-  'matlab',
-  'mathematica',
-  'fortran',
-  'json',
-  'yaml',
-  'xml',
-  'markdown',
-  'bash',
-  'shell',
-  'sh',
-  'dockerfile',
-  'makefile',
-  'javascript',
-  'js',
-  'typescript',
-  'ts',
-  'plaintext',
-  'text',
-] as const;
-
-export type RegisteredLanguage = (typeof REGISTERED_LANGUAGES)[number];

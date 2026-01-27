@@ -192,19 +192,6 @@ export function buildFileListRender(files: FileListEntry[]): {
   return { items, summary };
 }
 
-/** Build file link template. */
-export function buildFileLink(
-  filePath: string,
-  displayName: string,
-): TemplateResult {
-  if (!filePath) {
-    return html`<span>${displayName}</span>`;
-  }
-  return html`<span class="file-link clickable-link" data-file=${filePath}
-    >${displayName}</span
-  >`;
-}
-
 /** Get appropriate icon class for a tool. */
 export function getToolIconClass(toolName: string, isError = false): string {
   if (isError) return 'codicon-error';
