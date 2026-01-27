@@ -122,10 +122,16 @@ export class InstructionPanel extends LitElement {
         flex: 0 1 auto;
       }
 
-      .model-selection-footer .codicon {
+      .model-selection-footer .codicon,
+      .model-selection-footer vscode-toolbar-button {
         display: flex;
         align-items: center;
         line-height: 1;
+      }
+
+      .model-selection-footer vscode-toolbar-button {
+        min-width: var(--height-control);
+        height: var(--height-control);
       }
 
       .agent-select-controls,
@@ -394,12 +400,14 @@ export class InstructionPanel extends LitElement {
         <div class="instruction-controls">
           <div class="model-selection-footer">
             <div class="select-group agent-select-group">
-              <i
+              <vscode-toolbar-button
                 id="agentSettingsButton"
-                class="codicon codicon-sparkle clickable"
+                class="settings-button"
+                icon="sparkle"
+                label="Agent settings"
                 title="Agent settings"
                 @click=${this.handleAgentSettings}
-              ></i>
+              ></vscode-toolbar-button>
               <div class="agent-select-controls">
                 <div class="agent-select-dropdowns">
                   <vscode-single-select
@@ -468,12 +476,14 @@ export class InstructionPanel extends LitElement {
               </div>
             </div>
             <div class="select-group">
-              <i
+              <vscode-toolbar-button
                 id="modelSettingsButton"
-                class="codicon codicon-robot clickable"
+                class="settings-button"
+                icon="robot"
+                label="Model settings"
                 title="Model settings"
                 @click=${this.handleModelSettings}
-              ></i>
+              ></vscode-toolbar-button>
               <vscode-single-select
                 id="model"
                 position="above"
