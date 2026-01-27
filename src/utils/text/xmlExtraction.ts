@@ -78,9 +78,7 @@ function extractLatexFromMarkdown(content: string): string | null {
  * Extract LaTeX document starting at \documentclass and ending at \end{document}.
  * Internal helper for extractDocument cascade.
  */
-function extractLatexBetweenDocumentClass(
-  content: string,
-): string | null {
+function extractLatexBetweenDocumentClass(content: string): string | null {
   const match = content.match(/\\documentclass[\s\S]*?\\end{document}/);
   if (!match) {
     return null;
@@ -137,7 +135,6 @@ export function extractMultipleTextFromTag(
   // Fallback: extract documents directly from the input content
   return extractNamedDocuments(inputContent);
 }
-
 
 /**
  * Extract content from XML document element for single document case

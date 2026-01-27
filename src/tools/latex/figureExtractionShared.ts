@@ -1,10 +1,4 @@
-import { z } from 'zod';
-
-import {
-  ToolError,
-  ToolFileAttachmentSchema,
-  type ToolFileAttachment,
-} from '@tools/result';
+import { ToolError, type ToolFileAttachment } from '@tools/result';
 import {
   buildFileAttachment,
   resolveAndFormat,
@@ -13,30 +7,25 @@ import {
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================
-// Figure Extraction Schemas
+// Figure Extraction Types
 // ============================================================================
 
-export const LatexFileResolutionSchema = z.object({
-  path: z.custom<WorkspacePathResolution>(),
-  display: z.string(),
-});
-export type LatexFileResolution = z.infer<typeof LatexFileResolutionSchema>;
+export interface LatexFileResolution {
+  path: WorkspacePathResolution;
+  display: string;
+}
 
-export const AttachmentLimitResultSchema = z.object({
-  attachments: z.array(ToolFileAttachmentSchema),
-  limitedPaths: z.array(z.string()),
-  limitReached: z.boolean(),
-});
-export type AttachmentLimitResult = z.infer<typeof AttachmentLimitResultSchema>;
+export interface AttachmentLimitResult {
+  attachments: ToolFileAttachment[];
+  limitedPaths: string[];
+  limitReached: boolean;
+}
 
-export const AttachmentLimitOptionsSchema = z.object({
-  limit: z.number(),
-  describe: z.custom<(filePath: string) => string>(),
-  mimeType: z.string().optional(),
-});
-export type AttachmentLimitOptions = z.infer<
-  typeof AttachmentLimitOptionsSchema
->;
+export interface AttachmentLimitOptions {
+  limit: number;
+  describe: (filePath: string) => string;
+  mimeType?: string;
+}
 
 export async function resolveLatexFileOrThrow(
   texPath: string,

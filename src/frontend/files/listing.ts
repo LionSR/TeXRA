@@ -156,38 +156,6 @@ function passesFileFilters(
   return matchesInclude && !matchesExcludeExt && !matchesExcludeKeyword;
 }
 
-export async function getFilesInDirectory(
-  dir: string,
-  includeExtensions: string[] = [],
-  excludeExtensions: string[] = [],
-  excludeDirectories: string[] = [],
-  excludeKeywords: string[] = [],
-): Promise<string[]> {
-  const filters = prepareFilters(dir, {
-    includeExtensions,
-    excludeExtensions,
-    excludeDirectories,
-    excludeKeywords,
-  });
-  const files = await vscode.workspace.findFiles(
-    new vscode.RelativePattern(dir, '*'),
-    filters.excludePattern,
-  );
-
-  return files
-    .filter((uri) => {
-      // For non-recursive search ('*'), relative path is just the filename.
-      // Use path.relative for filtering - symlink handling not needed here.
-      const relativePath = path.relative(dir, uri.fsPath);
-      return !containsExcludedDirectory(relativePath, filters.excludeDirs);
-    })
-    .map((uri) => path.basename(uri.fsPath))
-    .filter((name) => {
-      if (name.startsWith('.')) return false;
-      return passesFileFilters(name.toLowerCase(), filters);
-    });
-}
-
 export async function getFilesRecursively(
   dir: string,
   root: string,
