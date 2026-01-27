@@ -15,12 +15,12 @@ import {
 
 // Local imports - shared schemas
 import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
+  AgentProposalPermission,
+  BashPermission,
   ProviderErrorPartial,
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  WorkflowAgentProposalPrompt,
+  RetryPermission,
+  ToolEditPermission,
+  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
 
@@ -35,11 +35,14 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressEvents } from '../events';
 
 // Local imports - progress view component types
-import type { PromptState } from './PromptOverlay';
+import type { PermissionState } from './PermissionCard';
 
-const FEEDBACK_KINDS = new Set<PromptState['kind']>(['toolEdit', 'proposal']);
+const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
+  'toolEdit',
+  'proposal',
+]);
 
-type PromptKey = string;
+type PermissionKey = string;
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
@@ -50,10 +53,10 @@ export class RequestPanels extends LitElement {
     requestPanelStyles,
   ];
 
-  @property({ type: Array }) prompts: PromptState[] = [];
+  @property({ type: Array }) permissions: PermissionState[] = [];
 
-  @state() private feedbackOpenKeys: Set<PromptKey> = new Set();
-  @state() private openDiffMenuKey: PromptKey | null = null;
+  @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
+  @state() private openDiffMenuKey: PermissionKey | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -68,10 +71,10 @@ export class RequestPanels extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const approvals = this.prompts.filter((p) => p.kind === 'toolEdit');
-    const bashApprovals = this.prompts.filter((p) => p.kind === 'bash');
-    const retries = this.prompts.filter((p) => p.kind === 'retry');
-    const proposals = this.prompts.filter((p) => p.kind === 'proposal');
+    const approvals = this.permissions.filter((p) => p.kind === 'toolEdit');
+    const bashApprovals = this.permissions.filter((p) => p.kind === 'bash');
+    const retries = this.permissions.filter((p) => p.kind === 'retry');
+    const proposals = this.permissions.filter((p) => p.kind === 'proposal');
 
     if (
       approvals.length === 0 &&
@@ -95,7 +98,7 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
 
   private renderApprovalSection(
-    prompts: PromptState[],
+    prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
     if (prompts.length === 0) return nothing;
 
@@ -108,8 +111,8 @@ export class RequestPanels extends LitElement {
         <div class="approval-requests__list">
           ${repeat(
             prompts,
-            (prompt) => this.getPromptKey(prompt),
-            (prompt) => this.renderToolEditRequest(prompt),
+            (permission) => this.getPermissionKey(permission),
+            (permission) => this.renderToolEditRequest(permission),
           )}
         </div>
       </section>
@@ -117,7 +120,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderBashSection(
-    prompts: PromptState[],
+    prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
     if (prompts.length === 0) return nothing;
 
@@ -130,8 +133,8 @@ export class RequestPanels extends LitElement {
         <div class="bash-approval-requests__list">
           ${repeat(
             prompts,
-            (prompt) => this.getPromptKey(prompt),
-            (prompt) => this.renderBashRequest(prompt),
+            (permission) => this.getPermissionKey(permission),
+            (permission) => this.renderBashRequest(permission),
           )}
         </div>
       </section>
@@ -139,7 +142,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderRetrySection(
-    prompts: PromptState[],
+    prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
     if (prompts.length === 0) return nothing;
 
@@ -152,8 +155,8 @@ export class RequestPanels extends LitElement {
         <div class="retry-requests__list">
           ${repeat(
             prompts,
-            (prompt) => this.getPromptKey(prompt),
-            (prompt) => this.renderRetryRequest(prompt),
+            (permission) => this.getPermissionKey(permission),
+            (permission) => this.renderRetryRequest(permission),
           )}
         </div>
       </section>
@@ -161,7 +164,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderProposalSection(
-    prompts: PromptState[],
+    prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
     if (prompts.length === 0) return nothing;
 
@@ -174,8 +177,8 @@ export class RequestPanels extends LitElement {
         <div class="workflow-proposals__list">
           ${repeat(
             prompts,
-            (prompt) => this.getPromptKey(prompt),
-            (prompt) => this.renderProposalRequest(prompt),
+            (permission) => this.getPermissionKey(permission),
+            (permission) => this.renderProposalRequest(permission),
           )}
         </div>
       </section>
@@ -186,9 +189,9 @@ export class RequestPanels extends LitElement {
   // Individual request renderers
   // ===========================================================================
 
-  private renderToolEditRequest(prompt: PromptState): TemplateResult {
-    const data = prompt.data as ToolEditApprovalPrompt;
-    const key = this.getPromptKey(prompt);
+  private renderToolEditRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as ToolEditPermission;
+    const key = this.getPermissionKey(permission);
     const isFeedbackOpen = this.feedbackOpenKeys.has(key);
     const diffMeta = this.renderToolEditDiffMeta(data);
 
@@ -198,7 +201,7 @@ export class RequestPanels extends LitElement {
           'approval-request': true,
           'approval-request--feedback-active': isFeedbackOpen,
         })}
-        data-prompt-key=${key}
+        data-permission-key=${key}
       >
         <div class="approval-request__details">
           <div class="approval-request__path">
@@ -211,18 +214,18 @@ export class RequestPanels extends LitElement {
           </div>
         </div>
         <div class="approval-request__actions">
-          ${this.renderToolEditDiffActions(prompt)}
+          ${this.renderToolEditDiffActions(permission)}
           <vscode-toolbar-button
             data-action="reject"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label=${isFeedbackOpen ? 'Submit' : 'Reject'}
             title=${isFeedbackOpen ? 'Submit rejection' : 'Reject'}
           ></vscode-toolbar-button>
           <vscode-toolbar-button
             data-action="approve"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Approve"
           ></vscode-toolbar-button>
@@ -237,9 +240,11 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private renderToolEditDiffActions(prompt: PromptState): TemplateResult {
-    const data = prompt.data as ToolEditApprovalPrompt;
-    const key = this.getPromptKey(prompt);
+  private renderToolEditDiffActions(
+    permission: PermissionState,
+  ): TemplateResult {
+    const data = permission.data as ToolEditPermission;
+    const key = this.getPermissionKey(permission);
     const isMenuOpen = this.openDiffMenuKey === key;
     const showDropdown = Boolean(data.isLatex);
 
@@ -248,8 +253,8 @@ export class RequestPanels extends LitElement {
         <vscode-toolbar-button
           class="diff-main-button"
           data-action="openDiff"
-          data-prompt-kind=${prompt.kind}
-          data-prompt-id=${this.getPromptId(prompt)}
+          data-permission-kind=${permission.kind}
+          data-permission-id=${this.getPermissionId(permission)}
           label="Diff"
           title="Diff"
         ></vscode-toolbar-button>
@@ -272,15 +277,15 @@ export class RequestPanels extends LitElement {
               >
                 <vscode-context-menu-item
                   value="previewProposed"
-                  data-prompt-kind=${prompt.kind}
-                  data-prompt-id=${this.getPromptId(prompt)}
+                  data-permission-kind=${permission.kind}
+                  data-permission-id=${this.getPermissionId(permission)}
                 >
                   Preview
                 </vscode-context-menu-item>
                 <vscode-context-menu-item
                   value="showLatexdiff"
-                  data-prompt-kind=${prompt.kind}
-                  data-prompt-id=${this.getPromptId(prompt)}
+                  data-permission-kind=${permission.kind}
+                  data-permission-id=${this.getPermissionId(permission)}
                 >
                   LaTeXdiff
                 </vscode-context-menu-item>
@@ -291,8 +296,8 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private renderBashRequest(prompt: PromptState): TemplateResult {
-    const data = prompt.data as BashApprovalPrompt;
+  private renderBashRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as BashPermission;
     return html`
       <div class="bash-approval-request">
         <div class="bash-approval-request__details">
@@ -303,15 +308,15 @@ export class RequestPanels extends LitElement {
         <div class="bash-approval-request__actions">
           <vscode-toolbar-button
             data-action="reject"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Reject"
             title="Reject"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
             data-action="approve"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Approve"
           ></vscode-toolbar-button>
@@ -320,8 +325,8 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private renderRetryRequest(prompt: PromptState): TemplateResult {
-    const data = prompt.data as RetryRequestPrompt;
+  private renderRetryRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as RetryPermission;
     const isRelay = data.errorDetails?.isRelayError === true;
     const retryable = data.errorDetails?.retryable !== false;
     const metaParts = [
@@ -367,15 +372,15 @@ export class RequestPanels extends LitElement {
         <div class="retry-request__actions">
           <vscode-toolbar-button
             data-action="retry"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Retry"
             title="Retry"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
             data-action="dismiss"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Dismiss"
             title="Dismiss"
           ></vscode-toolbar-button>
@@ -384,9 +389,9 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private renderProposalRequest(prompt: PromptState): TemplateResult {
-    const data = prompt.data as AgentProposalPrompt;
-    const key = this.getPromptKey(prompt);
+  private renderProposalRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as AgentProposalPermission;
+    const key = this.getPermissionKey(permission);
     const isFeedbackOpen = this.feedbackOpenKeys.has(key);
     const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
@@ -415,29 +420,31 @@ export class RequestPanels extends LitElement {
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow
             ? html`<div class="workflow-proposal__files">
-                ${this.renderProposalFiles(data as WorkflowAgentProposalPrompt)}
+                ${this.renderProposalFiles(
+                  data as WorkflowAgentProposalPermission,
+                )}
               </div>`
             : nothing}
         </div>
         <div class="workflow-proposal__actions">
           <vscode-toolbar-button
             data-action="reject"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label=${isFeedbackOpen ? 'Submit' : 'Reject'}
             title=${isFeedbackOpen ? 'Submit rejection' : 'Reject'}
           ></vscode-toolbar-button>
           <vscode-toolbar-button
             data-action="setup"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Setup"
             title="Setup"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
             data-action="approve"
-            data-prompt-kind=${prompt.kind}
-            data-prompt-id=${this.getPromptId(prompt)}
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
             title="Approve"
           ></vscode-toolbar-button>
@@ -453,7 +460,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderProposalFiles(
-    prompt: WorkflowAgentProposalPrompt,
+    permission: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const combine = (single: string | null | undefined, arr: string[] = []) =>
       [single, ...arr].filter((f): f is string => Boolean(f));
@@ -504,13 +511,16 @@ export class RequestPanels extends LitElement {
   }
 
   private renderFeedbackSection(
-    prompt: PromptState,
+    permission: PermissionState,
     containerClass: string,
     inputClass: string,
     placeholder: string,
   ): TemplateResult | typeof nothing {
-    const key = this.getPromptKey(prompt);
-    if (!this.feedbackOpenKeys.has(key) || !FEEDBACK_KINDS.has(prompt.kind)) {
+    const key = this.getPermissionKey(permission);
+    if (
+      !this.feedbackOpenKeys.has(key) ||
+      !FEEDBACK_KINDS.has(permission.kind)
+    ) {
       return nothing;
     }
 
@@ -527,7 +537,7 @@ export class RequestPanels extends LitElement {
   }
 
   private renderToolEditDiffMeta(
-    request: ToolEditApprovalPrompt,
+    request: ToolEditPermission,
   ): TemplateResult | typeof nothing {
     const toCount = (value: number | undefined) =>
       Number.isFinite(value) ? Math.max(0, value ?? 0) : 0;
@@ -570,21 +580,23 @@ export class RequestPanels extends LitElement {
     if (!target) return;
 
     const actionEl = target.closest<HTMLElement>(
-      '[data-action][data-prompt-kind][data-prompt-id]',
+      '[data-action][data-permission-kind][data-permission-id]',
     );
     if (!actionEl) return;
 
     const action = actionEl.dataset.action;
-    const kind = actionEl.dataset.promptKind as PromptState['kind'] | undefined;
+    const kind = actionEl.dataset.promptKind as
+      | PermissionState['kind']
+      | undefined;
     const promptId = actionEl.dataset.promptId;
     if (!action || !kind || !promptId) return;
 
-    const prompt = this.prompts.find(
-      (item) => item.kind === kind && this.getPromptId(item) === promptId,
+    const permission = this.permissions.find(
+      (item) => item.kind === kind && this.getPermissionId(item) === promptId,
     );
-    if (!prompt) return;
+    if (!permission) return;
 
-    const key = this.getPromptKey(prompt);
+    const key = this.getPermissionKey(permission);
     if (action === 'reject' && FEEDBACK_KINDS.has(kind)) {
       if (!this.feedbackOpenKeys.has(key)) {
         this.openFeedback(key);
@@ -612,15 +624,17 @@ export class RequestPanels extends LitElement {
     const menuItem = target.closest('vscode-context-menu-item');
     if (!menuItem) return;
 
-    const kind = menuItem.dataset.promptKind as PromptState['kind'] | undefined;
+    const kind = menuItem.dataset.promptKind as
+      | PermissionState['kind']
+      | undefined;
     const promptId = menuItem.dataset.promptId;
     const action = event.detail?.value ?? menuItem.getAttribute('value') ?? '';
     if (!kind || !promptId || !action) return;
 
-    const prompt = this.prompts.find(
-      (item) => item.kind === kind && this.getPromptId(item) === promptId,
+    const permission = this.permissions.find(
+      (item) => item.kind === kind && this.getPermissionId(item) === promptId,
     );
-    if (!prompt) return;
+    if (!permission) return;
 
     this.openDiffMenuKey = null;
     this.emitAction(prompt, action);
@@ -641,12 +655,12 @@ export class RequestPanels extends LitElement {
     }
   };
 
-  private toggleDiffMenu(event: MouseEvent, key: PromptKey): void {
+  private toggleDiffMenu(event: MouseEvent, key: PermissionKey): void {
     event.stopPropagation();
     this.openDiffMenuKey = this.openDiffMenuKey === key ? null : key;
   }
 
-  private openFeedback(key: PromptKey): void {
+  private openFeedback(key: PermissionKey): void {
     const next = new Set(this.feedbackOpenKeys);
     next.add(key);
     this.feedbackOpenKeys = next;
@@ -659,13 +673,13 @@ export class RequestPanels extends LitElement {
     });
   }
 
-  private closeFeedback(key: PromptKey): void {
+  private closeFeedback(key: PermissionKey): void {
     const next = new Set(this.feedbackOpenKeys);
     next.delete(key);
     this.feedbackOpenKeys = next;
   }
 
-  private getFeedbackValue(key: PromptKey): string | undefined {
+  private getFeedbackValue(key: PermissionKey): string | undefined {
     const input = this.renderRoot.querySelector<HTMLElement>(
       `[data-feedback-for="${key}"]`,
     ) as HTMLElement & { value?: string };
@@ -678,19 +692,19 @@ export class RequestPanels extends LitElement {
   // Utilities
   // ===========================================================================
 
-  private getPromptId(prompt: PromptState): string {
-    switch (prompt.kind) {
+  private getPermissionId(permission: PermissionState): string {
+    switch (permission.kind) {
       case 'retry':
-        return prompt.data.streamId;
+        return permission.data.streamId;
       case 'proposal':
-        return prompt.data.proposalId;
+        return permission.data.proposalId;
       default:
-        return prompt.data.requestId;
+        return permission.data.requestId;
     }
   }
 
-  private getPromptKey(prompt: PromptState): PromptKey {
-    return `${prompt.kind}:${this.getPromptId(prompt)}`;
+  private getPermissionKey(permission: PermissionState): PermissionKey {
+    return `${permission.kind}:${this.getPermissionId(permission)}`;
   }
 
   private openFile(filePath: string): void {
@@ -698,12 +712,12 @@ export class RequestPanels extends LitElement {
   }
 
   private emitAction(
-    prompt: PromptState,
+    permission: PermissionState,
     action: string,
     feedback?: string,
   ): void {
     this.dispatchEvent(
-      ProgressEvents.promptAction({ prompt, action, feedback }),
+      ProgressEvents.permissionAction({ prompt, action, feedback }),
     );
   }
 

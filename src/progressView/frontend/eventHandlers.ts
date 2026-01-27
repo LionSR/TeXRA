@@ -18,7 +18,7 @@ import type {
   FollowUpChangeDetail,
   FollowupCommandDetail,
   FollowupModeDetail,
-  PromptActionDetail,
+  PermissionActionDetail,
   RunSelectedDetail,
   SortEventDetail,
   StreamEventDetail,
@@ -249,8 +249,8 @@ function sendFollowupCommand(
   });
 }
 
-export function handlePromptAction(
-  event: CustomEvent<PromptActionDetail>,
+export function handlePermissionAction(
+  event: CustomEvent<PermissionActionDetail>,
 ): void {
   const { prompt, action, feedback } = event.detail;
 

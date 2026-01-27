@@ -1,6 +1,10 @@
 /**
  * Tool-style formatters for tool use and web search messages.
  * Uses Lit templates for declarative DOM construction.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Local imports - Lit template utilities
@@ -293,25 +297,18 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
-  return html`
-    <details
-      class=${classMap({
-        'banner-details': true,
-        'tool-use-details': true,
-        'tool-use-error': showAsError,
-        'tool-use-user-feedback': isUserFeedback,
-      })}
-      ?open=${shouldOpen}
-    >
-      ${buildDetailsSummary({
-        iconClass,
-        label: titleText,
-        labelClass: 'tool-use-title',
-        includeIconClass: false,
-      })}
-      ${bannerContentTemplate}
-    </details>
-  `;
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': showAsError,
+    'tool-use-user-feedback': isUserFeedback,
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass,
+    label: titleText,
+    labelClass: 'tool-use-title',
+    includeIconClass: false,
+  })}${bannerContentTemplate}</details>`;
 }
 
 /** Format web search results as TemplateResult. */
@@ -343,15 +340,12 @@ export function formatWebSearchTemplate(
   }
 
   if (resultCount > 0) {
-    const resultsTemplate = html`
-      <span class="file-list-summary">Results (${resultCount})</span>
-      <ul class="detail-list">
-        ${(results ?? []).map(
-          // prettier-ignore
-          (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
-        )}
-      </ul>
-    `;
+    // prettier-ignore
+    const resultItems = (results ?? []).map(
+      (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+    );
+    // prettier-ignore
+    const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
     sections.push(buildToolUseSection('Sources:', resultsTemplate));
   } else if (statusKey === 'completed') {
     sections.push(
@@ -372,22 +366,15 @@ export function formatWebSearchTemplate(
   // prettier-ignore
   const bannerContentTemplate = html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
 
-  return html`
-    <details
-      class=${classMap({
-        'banner-details': true,
-        'tool-use-details': true,
-        'tool-use-error': statusKey === 'failed',
-      })}
-      ?open=${shouldOpen}
-    >
-      ${buildDetailsSummary({
-        iconClass,
-        label: titleText,
-        labelClass: 'tool-use-title',
-        includeIconClass: false,
-      })}
-      ${bannerContentTemplate}
-    </details>
-  `;
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': statusKey === 'failed',
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass,
+    label: titleText,
+    labelClass: 'tool-use-title',
+    includeIconClass: false,
+  })}${bannerContentTemplate}</details>`;
 }

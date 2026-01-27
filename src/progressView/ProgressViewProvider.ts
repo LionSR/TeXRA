@@ -10,12 +10,12 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ApprovalRequestHandler, WebviewUpdater } from '@progressView/managers';
 import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
+  AgentProposalPermission,
+  BashPermission,
   OutputFileInfo,
   StorageKey,
   StreamTabId,
-  ToolEditApprovalPrompt,
+  ToolEditPermission,
 } from '@shared/schemas';
 import { isApprovalBypassedForStream } from '@tools/approval/toolEditApproval';
 
@@ -52,11 +52,11 @@ export class ProgressViewProvider
   private readonly logger: AgentLogger;
 
   private readonly toolEditHandler: ApprovalRequestHandler<
-    ToolEditApprovalPrompt,
+    ToolEditPermission,
     'requestId'
   >;
   private readonly bashApprovalHandler: ApprovalRequestHandler<
-    BashApprovalPrompt,
+    BashPermission,
     'requestId'
   >;
   private readonly retryRequestHandler: ApprovalRequestHandler<
@@ -64,7 +64,7 @@ export class ProgressViewProvider
     'streamId'
   >;
   private readonly agentProposalHandler: ApprovalRequestHandler<
-    AgentProposalPrompt,
+    AgentProposalPermission,
     'proposalId'
   >;
 
@@ -86,14 +86,14 @@ export class ProgressViewProvider
     const u = this.webviewUpdater;
     this.toolEditHandler = new ApprovalRequestHandler(
       'requestId',
-      (p) => u.showToolEditApprovalPrompt(p),
-      (id) => u.resolveToolEditApprovalPrompt(id),
+      (p) => u.showToolEditPermission(p),
+      (id) => u.resolveToolEditPermission(id),
       canSend,
     );
     this.bashApprovalHandler = new ApprovalRequestHandler(
       'requestId',
-      (p) => u.showBashApprovalPrompt(p),
-      (id) => u.resolveBashApprovalPrompt(id),
+      (p) => u.showBashPermission(p),
+      (id) => u.resolveBashPermission(id),
       canSend,
     );
     this.retryRequestHandler = new ApprovalRequestHandler(
@@ -115,8 +115,8 @@ export class ProgressViewProvider
       {
         showRetryRequest: (p) => this.retryRequestHandler.show(p),
         resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
-        showToolEditApprovalPrompt: (p) => this.toolEditHandler.show(p),
-        resolveToolEditApprovalPrompt: (id) => this.toolEditHandler.resolve(id),
+        showToolEditPermission: (p) => this.toolEditHandler.show(p),
+        resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
         updateToolEditApprovalBypassState: (streamId, bypassActive) => {
           if (canSend())
             u.updateToolEditApprovalState(
@@ -124,8 +124,8 @@ export class ProgressViewProvider
               bypassActive,
             );
         },
-        showBashApprovalPrompt: (p) => this.bashApprovalHandler.show(p),
-        resolveBashApprovalPrompt: (id) => this.bashApprovalHandler.resolve(id),
+        showBashPermission: (p) => this.bashApprovalHandler.show(p),
+        resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
         showAgentProposal: (p) => this.agentProposalHandler.show(p),
         resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
       },
@@ -291,7 +291,7 @@ export class ProgressViewProvider
 
   public getPendingAgentProposal(
     proposalId: string,
-  ): AgentProposalPrompt | undefined {
+  ): AgentProposalPermission | undefined {
     return this.agentProposalHandler.get(proposalId);
   }
 

@@ -1,6 +1,10 @@
 /**
  * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
  * Uses Lit templates for declarative DOM construction.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Third-party imports
@@ -36,36 +40,23 @@ export function formatFileListTemplate(
 
   // Raw fallback when parsing fails
   if (!parseResult.success) {
-    return html`
-      <details class="banner-details file-list-details" ?open=${shouldOpen}>
-        ${buildDetailsSummary({
-          iconClass: 'codicon-file',
-          label: 'Files (raw)',
-          labelClass: 'summary-text',
-          includeIconClass: false,
-        })}
-        <ul class="file-list-content" data-log-id=${ifDefined(id)}>
-          <pre>${text ?? ''}</pre>
-        </ul>
-      </details>
-    `;
+    // prettier-ignore
+    return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+      iconClass: 'codicon-file',
+      label: 'Files (raw)',
+      labelClass: 'summary-text',
+      includeIconClass: false,
+    })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></details>`;
   }
 
   const renderData = buildFileListRender(parseResult.data);
-
-  return html`
-    <details class="banner-details file-list-details" ?open=${shouldOpen}>
-      ${buildDetailsSummary({
-        iconClass: 'codicon-file',
-        label: renderData?.summary ?? 'Files',
-        labelClass: 'summary-text',
-        includeIconClass: false,
-      })}
-      <ul class="file-list-content" data-log-id=${ifDefined(id)}>
-        ${renderData?.items ?? ''}
-      </ul>
-    </details>
-  `;
+  // prettier-ignore
+  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass: 'codicon-file',
+    label: renderData?.summary ?? 'Files',
+    labelClass: 'summary-text',
+    includeIconClass: false,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></details>`;
 }
 
 /** Render XML link template. */
@@ -95,25 +86,19 @@ export function formatMissingOutputsTemplate(
     return renderXmlLink(xmlFile, documentTag);
   }
 
-  return html`
-    <details class="banner-details file-list-details" ?open=${shouldOpen}>
-      ${buildDetailsSummary({
-        iconClass: 'codicon-warning',
-        label: `Missing outputs (${missing.length})`,
-        labelClass: 'summary-text',
-        includeIconClass: false,
-      })}
-      <ul class="file-list-content" data-log-id=${ifDefined(id)}>
-        ${missing.map((f) => {
-          const filePath = String(f);
-          const basename = getBasename(filePath);
-          // prettier-ignore
-          return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
-        })}
-      </ul>
-      ${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}
-    </details>
-  `;
+  // prettier-ignore
+  const listItems = missing.map((f) => {
+    const filePath = String(f);
+    const basename = getBasename(filePath);
+    return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
+  });
+  // prettier-ignore
+  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    iconClass: 'codicon-warning',
+    label: `Missing outputs (${missing.length})`,
+    labelClass: 'summary-text',
+    includeIconClass: false,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}</details>`;
 }
 
 // =============================================================================

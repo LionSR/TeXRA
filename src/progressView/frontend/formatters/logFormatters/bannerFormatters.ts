@@ -1,6 +1,10 @@
 /**
  * Banner-style formatters for thinking, scratchpad, and model response messages.
  * Uses Lit templates with unsafeHTML for markdown content rendering.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
+ * indentation will render with unwanted spaces in the output. Always use single-line
+ * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Local imports - Lit utilities
@@ -60,26 +64,16 @@ export function formatBannerContentTemplate(
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(markdownHtml)}</div>`;
 
-  return html`
-    <details
-      class="banner-details"
-      ?open=${shouldOpen}
-      data-log-id=${ifDefined(id)}
-      data-group-id=${ifDefined(groupId)}
-      data-timestamp=${ifDefined(fullTimestamp)}
-    >
-      ${buildDetailsSummary({
-        iconClass: config.iconClass,
-        label: config.labelText,
-        copyButton: {
-          title: config.copyTitle,
-          content: trimmedContent,
-          contentId: id ? `banner:${id}` : undefined,
-        },
-      })}
-      ${contentTemplate}
-    </details>
-  `;
+  // prettier-ignore
+  return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+    iconClass: config.iconClass,
+    label: config.labelText,
+    copyButton: {
+      title: config.copyTitle,
+      content: trimmedContent,
+      contentId: id ? `banner:${id}` : undefined,
+    },
+  })}${contentTemplate}</details>`;
 }
 
 /** Format a model response as TemplateResult. */
@@ -106,27 +100,17 @@ export function formatModelResponseTemplate(
     [`message-${level}`]: true,
   })}>${unsafeHTML(markdownHtml)}</div>`;
 
-  return html`
-    <details
-      class="banner-details"
-      ?open=${shouldOpen}
-      data-log-id=${ifDefined(id)}
-      data-group-id=${ifDefined(groupId)}
-      data-timestamp=${ifDefined(fullTimestamp)}
-    >
-      ${buildDetailsSummary({
-        iconClass: 'codicon-sparkle',
-        label: 'Assistant',
-        timestamp: verbose
-          ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
-          : undefined,
-        copyButton: {
-          title: 'Copy model output',
-          content: trimmedContent,
-          contentId: id ? `model:${id}` : undefined,
-        },
-      })}
-      ${contentTemplate}
-    </details>
-  `;
+  // prettier-ignore
+  return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+    iconClass: 'codicon-sparkle',
+    label: 'Assistant',
+    timestamp: verbose
+      ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
+      : undefined,
+    copyButton: {
+      title: 'Copy model output',
+      content: trimmedContent,
+      contentId: id ? `model:${id}` : undefined,
+    },
+  })}${contentTemplate}</details>`;
 }

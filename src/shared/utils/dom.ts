@@ -48,7 +48,7 @@ export function getSelectOptionElements(
   if (!isSelectLikeElement(element)) {
     return [];
   }
-  return [...element.querySelectorAll('vscode-option')] as HTMLElement[];
+  return Array.from(element.querySelectorAll('vscode-option')) as HTMLElement[];
 }
 
 /**
