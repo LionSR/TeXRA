@@ -62,12 +62,16 @@ export class RequestPanels extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener('click', this.handleActionClick);
+    this.addEventListener('keydown', this.handleKeydown);
     document.addEventListener('click', this.handleOutsideClick, true);
+    document.addEventListener('keydown', this.handleGlobalKeydown);
   }
 
   override disconnectedCallback(): void {
     this.removeEventListener('click', this.handleActionClick);
+    this.removeEventListener('keydown', this.handleKeydown);
     document.removeEventListener('click', this.handleOutsideClick, true);
+    document.removeEventListener('keydown', this.handleGlobalKeydown);
     super.disconnectedCallback();
   }
 
@@ -225,18 +229,20 @@ export class RequestPanels extends LitElement {
         <div class="approval-request__actions">
           ${this.renderToolEditDiffActions(permission)}
           <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
             data-action="reject"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
           ></vscode-toolbar-button>
           <vscode-toolbar-button
+            icon="check"
             data-action="approve"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
-            title="Approve"
+            title="Approve (y)"
           ></vscode-toolbar-button>
         </div>
         ${this.renderFeedbackSection(
@@ -260,12 +266,13 @@ export class RequestPanels extends LitElement {
     return html`
       <div class="diff-dropdown">
         <vscode-toolbar-button
+          icon="diff"
           class="diff-main-button"
           data-action="openDiff"
           data-permission-kind=${permission.kind}
           data-permission-id=${this.getPermissionId(permission)}
           label="Diff"
-          title="Diff"
+          title="View diff (d)"
         ></vscode-toolbar-button>
         ${showDropdown
           ? html`
@@ -316,18 +323,20 @@ export class RequestPanels extends LitElement {
         </div>
         <div class="bash-approval-request__actions">
           <vscode-toolbar-button
+            icon="close"
             data-action="reject"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Reject"
-            title="Reject"
+            title="Reject this command (n)"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
+            icon="check"
             data-action="approve"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
-            title="Approve"
+            title="Allow this command to execute (y)"
           ></vscode-toolbar-button>
         </div>
       </div>
@@ -380,18 +389,20 @@ export class RequestPanels extends LitElement {
         </div>
         <div class="retry-request__actions">
           <vscode-toolbar-button
+            icon="refresh"
             data-action="retry"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Retry"
-            title="Retry"
+            title="Retry (r)"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
+            icon="close"
             data-action="dismiss"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Dismiss"
-            title="Dismiss"
+            title="Dismiss (Esc)"
           ></vscode-toolbar-button>
         </div>
       </div>
@@ -437,25 +448,28 @@ export class RequestPanels extends LitElement {
         </div>
         <div class="workflow-proposal__actions">
           <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
             data-action="reject"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label=${isFeedbackOpen ? 'Submit' : 'Reject'}
-            title=${isFeedbackOpen ? 'Submit rejection' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
           ></vscode-toolbar-button>
           <vscode-toolbar-button
+            icon="settings-gear"
             data-action="setup"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Setup"
-            title="Setup"
+            title="Setup (s)"
           ></vscode-toolbar-button>
           <vscode-toolbar-button
+            icon="check"
             data-action="approve"
             data-permission-kind=${permission.kind}
             data-permission-id=${this.getPermissionId(permission)}
             label="Approve"
-            title="Approve"
+            title="Approve (y)"
           ></vscode-toolbar-button>
         </div>
         ${this.renderFeedbackSection(
@@ -628,6 +642,108 @@ export class RequestPanels extends LitElement {
     }
 
     this.emitAction(permission, action);
+  };
+
+  /**
+   * Handle keydown events on focusable elements within the component.
+   * Allows Enter/Space to activate buttons.
+   */
+  private handleKeydown = (event: KeyboardEvent): void => {
+    const target = event.target as Element | null;
+    if (!target) return;
+
+    // Handle Enter/Space on buttons
+    if (event.key === 'Enter' || event.key === ' ') {
+      const actionEl = target.closest<HTMLElement>(
+        '[data-action][data-permission-kind][data-permission-id]',
+      );
+      if (actionEl) {
+        event.preventDefault();
+        actionEl.click();
+      }
+    }
+  };
+
+  /**
+   * Handle global keyboard shortcuts for permission actions.
+   * Only active when permissions are visible and no text input is focused.
+   * Shortcuts: y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss
+   */
+  private handleGlobalKeydown = (event: KeyboardEvent): void => {
+    // Don't intercept if typing in an input/textarea
+    const activeEl = document.activeElement;
+    if (
+      activeEl instanceof HTMLInputElement ||
+      activeEl instanceof HTMLTextAreaElement ||
+      (activeEl as HTMLElement)?.isContentEditable
+    ) {
+      return;
+    }
+
+    // Don't intercept if modifier keys are pressed (except shift for some)
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    // Only process if we have permissions
+    if (this.permissions.length === 0) return;
+
+    // Get the first permission to act on (most recent/urgent)
+    const firstPermission = this.permissions[0];
+    if (!firstPermission) return;
+
+    const key = event.key.toLowerCase();
+
+    // Map keyboard shortcuts to actions
+    switch (key) {
+      case 'y': // Approve
+        event.preventDefault();
+        this.emitAction(firstPermission, 'approve');
+        break;
+      case 'n': // Reject
+        event.preventDefault();
+        if (FEEDBACK_KINDS.has(firstPermission.kind)) {
+          const permKey = this.getPermissionKey(firstPermission);
+          if (!this.feedbackOpenKeys.has(permKey)) {
+            this.openFeedback(permKey);
+          } else {
+            const feedback = this.getFeedbackValue(permKey);
+            this.closeFeedback(permKey);
+            this.emitAction(firstPermission, 'reject', feedback);
+          }
+        } else {
+          this.emitAction(firstPermission, 'reject');
+        }
+        break;
+      case 'd': // Diff (for tool edit)
+        if (firstPermission.kind === PERMISSION_KIND.TOOL_EDIT) {
+          event.preventDefault();
+          this.emitAction(firstPermission, 'openDiff');
+        }
+        break;
+      case 'r': // Retry
+        if (firstPermission.kind === PERMISSION_KIND.RETRY) {
+          event.preventDefault();
+          this.emitAction(firstPermission, 'retry');
+        }
+        break;
+      case 's': // Setup (for proposals)
+        if (firstPermission.kind === PERMISSION_KIND.PROPOSAL) {
+          event.preventDefault();
+          this.emitAction(firstPermission, 'setup');
+        }
+        break;
+      case 'escape': // Dismiss/cancel
+        event.preventDefault();
+        if (firstPermission.kind === PERMISSION_KIND.RETRY) {
+          this.emitAction(firstPermission, 'cancel');
+        } else {
+          // Close feedback if open, otherwise reject
+          const permKey = this.getPermissionKey(firstPermission);
+          if (this.feedbackOpenKeys.has(permKey)) {
+            this.closeFeedback(permKey);
+          }
+        }
+        break;
+    }
   };
 
   private handleMenuClick = (event: CustomEvent): void => {

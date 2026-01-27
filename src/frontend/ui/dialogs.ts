@@ -20,24 +20,21 @@ export interface FileDialogOptions {
   defaultUri?: vscode.Uri | null;
 }
 
-function getDefaultUri(currentFile: string): vscode.Uri | null {
-  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!workspacePath) {
-    return null;
-  }
-  return currentFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFile)))
-    : vscode.Uri.file(workspacePath);
-}
-
 /**
  * Generic helper to show an open file dialog and return selected relative paths.
  */
 export async function selectFiles(
   options: FileDialogOptions,
 ): Promise<string[] | null> {
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const defaultUri =
-    options.defaultUri ?? getDefaultUri(options.currentFile ?? '');
+    options.defaultUri ??
+    (workspacePath
+      ? options.currentFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, options.currentFile)))
+        : vscode.Uri.file(workspacePath)
+      : null);
+
   if (!defaultUri) {
     vscode.window.showErrorMessage('No workspace folder open');
     return null;

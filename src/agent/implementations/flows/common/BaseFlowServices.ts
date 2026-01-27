@@ -21,15 +21,6 @@ export const NODE_NO_RETRY = 1;
 export const NODE_NO_WAIT = 0;
 
 // ============================================================================
-// Result Types
-// ============================================================================
-
-/** Generic result type for exec methods that return a value. */
-export type NodeExecResult<T> =
-  | { kind: 'success'; result: T }
-  | { kind: 'error'; error: unknown };
-
-// ============================================================================
 // Service Interfaces
 // ============================================================================
 

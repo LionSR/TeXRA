@@ -1,24 +1,20 @@
-// Barrel export for error handling utilities
+/**
+ * Error handling utilities barrel export.
+ *
+ * Only exports utilities that are commonly imported via this barrel.
+ * For SDK-specific error utilities (isContextWindowError, attachStreamDiagnostics, etc.),
+ * import directly from @common/errors/sdkErrorUtils.
+ */
 export {
-  DocId,
   formatError,
   formatZodError,
   parseWithErrorDisplay,
   isFileNotFoundError,
   toErrorMessage,
-  logErrorMessage,
   showLoggedErrorMessage,
   showLoggedMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
 } from './errorHandlingUtils';
 
-// Error utility functions
-export {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-  isContextWindowError,
-  isPreviousResponseIdError,
-  buildErrorLogData,
-  attachStreamDiagnostics,
-} from './sdkErrorUtils';
+export { formatProviderHttpError, getSdkErrorMessage } from './sdkErrorUtils';

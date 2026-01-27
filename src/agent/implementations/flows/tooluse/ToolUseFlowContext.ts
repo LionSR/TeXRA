@@ -7,7 +7,7 @@
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { ToolDefinition } from '@model';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 
