@@ -10,7 +10,7 @@ import type {
 } from '../store';
 
 // Local imports - progress view components
-import type { PromptState } from '../components/PromptOverlay';
+import type { PermissionState } from '../components/PermissionCard';
 
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
@@ -54,4 +54,6 @@ export const streamStateContext = createContext<StreamContextValue>(
   'progress-stream-state',
 );
 
-export const promptsContext = createContext<PromptState[]>('progress-prompts');
+export const permissionsContext = createContext<PermissionState[]>(
+  'progress-permissions',
+);

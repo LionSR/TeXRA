@@ -518,7 +518,7 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
-  private updateMultiFiles(listId: string, files: string[]): void {
+  private updateMultiFiles(listId: keyof MultiFiles, files: string[]): void {
     this.multiFiles = { ...this.multiFiles, [listId]: files };
     this.saveState();
 
@@ -689,7 +689,7 @@ export class MainApp extends BaseWebviewApp {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_CURRENT_FILE>,
   ): void {
     const { fileType, filePath } = message;
-    const key = `${fileType}File`;
+    const key = `${fileType}File` as keyof FileOptions;
     if (!filePath || !(key in this.singleFiles)) return;
 
     const options = this.fileOptions[key] ?? [];
@@ -733,7 +733,7 @@ export class MainApp extends BaseWebviewApp {
     const normalizedType = fileType.endsWith('Files')
       ? fileType
       : `${fileType}Files`;
-    const listId = normalizedType;
+    const listId = normalizedType as keyof MultiFiles;
     if (!(listId in this.multiFiles)) return;
 
     const files = message.files ?? [];
@@ -919,8 +919,8 @@ export class MainApp extends BaseWebviewApp {
       updatedVisibility[key] = Boolean(visible);
     });
 
-    this.multiFiles = updatedFiles;
-    this.multiFilesVisible = updatedVisibility;
+    this.multiFiles = updatedFiles as MultiFiles;
+    this.multiFilesVisible = updatedVisibility as MultiFilesVisible;
   }
 
   private clearForNewSession(): void {
@@ -979,7 +979,7 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: 'editedFile',
   };
 
-  private readonly multipleListIdMap: Record<string, string> = {
+  private readonly multipleListIdMap: Record<string, keyof MultiFiles> = {
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: 'inputFiles',
     [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: 'referenceFiles',
     [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: 'auxiliaryFiles',
@@ -987,7 +987,7 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
   };
 
-  private toggleListVisibility(listId: string): void {
+  private toggleListVisibility(listId: keyof MultiFiles): void {
     const visible = !this.multiFilesVisible[listId];
     this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: visible };
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
@@ -1012,8 +1012,10 @@ export class MainApp extends BaseWebviewApp {
     this.multiFiles = { ...this.multiFiles, outputFiles: initialFiles };
   }
 
-  private handleRemoveFile(listId: string, file: string): void {
-    const files = (this.multiFiles[listId] ?? []).filter((f) => f !== file);
+  private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
+    const files = (this.multiFiles[listId] ?? []).filter(
+      (f: string) => f !== file,
+    );
     if (files.length === 0) {
       this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: false };
       if (listId === ELEMENT_IDS.OUTPUT_FILES) {
@@ -1286,7 +1288,7 @@ export class MainApp extends BaseWebviewApp {
 
     const multipleFileSelections: Record<string, string[] | boolean> = {};
     MULTIPLE_FILE_TYPES.forEach((type) => {
-      const listId = `${type}Files`;
+      const listId = `${type}Files` as keyof MultiFiles;
       const isActive = this.multiFilesVisible[listId];
       const files = isActive ? (this.multiFiles[listId] ?? []) : [];
       multipleFileSelections[listId] = files;
@@ -1496,7 +1498,7 @@ export class MainApp extends BaseWebviewApp {
   private handleComponentToggleList(
     e: CustomEvent<MultipleFilesActionDetail>,
   ): void {
-    this.toggleListVisibility(e.detail.listId);
+    this.toggleListVisibility(e.detail.listId as keyof MultiFiles);
   }
 
   private handleComponentAddOpenedFiles(
@@ -1520,13 +1522,13 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleComponentRemoveFile(e: CustomEvent<RemoveFileDetail>): void {
-    this.handleRemoveFile(e.detail.listId, e.detail.file);
+    this.handleRemoveFile(e.detail.listId as keyof MultiFiles, e.detail.file);
   }
 
   private handleComponentFilesReordered(
     e: CustomEvent<ReorderFilesDetail>,
   ): void {
-    this.updateMultiFiles(e.detail.listId, e.detail.files);
+    this.updateMultiFiles(e.detail.listId as keyof MultiFiles, e.detail.files);
   }
 
   private handleComponentCheckboxChange(

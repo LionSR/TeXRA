@@ -13,18 +13,18 @@ import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
 export {
   ProviderErrorPartialSchema,
-  RetryRequestPromptSchema,
-  ToolEditApprovalPromptSchema,
-  WorkflowAgentProposalPromptSchema,
+  RetryPermissionSchema,
+  ToolEditPermissionSchema,
+  WorkflowAgentProposalPermissionSchema,
   WorkflowAgentProposalSchema,
   type ProviderErrorPartial,
-  type RetryRequestPrompt,
+  type RetryPermission,
   type TaskGroupStatus,
   type TodoItem,
   type TodoStatus,
-  type ToolEditApprovalPrompt,
+  type ToolEditPermission,
   type WorkflowAgentProposal,
-  type WorkflowAgentProposalPrompt,
+  type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 
 export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;

@@ -25,8 +25,9 @@ const AGENT_CATEGORY_VALUES = ['workflow', 'toolUse'] as const;
 const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
   'reject',
-  'approveAll',
-  'rejectAll',
+  'openDiff',
+  'showLatexdiff',
+  'previewProposed',
 ] as const;
 
 /** Bash approval actions - must match BASH_APPROVAL_ACTIONS in bashApproval.ts */

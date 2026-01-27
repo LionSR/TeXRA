@@ -10,7 +10,7 @@ import { getBasename } from '@shared/utils/path';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
-import { promptOverlayStyles } from '@shared/styles/promptOverlayStyles';
+import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -18,22 +18,22 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - progress view
 import { ProgressEvents } from '../events';
 import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  WorkflowAgentProposalPrompt,
+  AgentProposalPermission,
+  BashPermission,
+  RetryPermission,
+  ToolEditPermission,
+  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 
 // =============================================================================
 // Types
 // =============================================================================
 
-export type PromptState =
-  | { kind: 'toolEdit'; data: ToolEditApprovalPrompt }
-  | { kind: 'bash'; data: BashApprovalPrompt }
-  | { kind: 'retry'; data: RetryRequestPrompt }
-  | { kind: 'proposal'; data: AgentProposalPrompt };
+export type PermissionState =
+  | { kind: 'toolEdit'; data: ToolEditPermission }
+  | { kind: 'bash'; data: BashPermission }
+  | { kind: 'retry'; data: RetryPermission }
+  | { kind: 'proposal'; data: AgentProposalPermission };
 
 /** Action button configuration */
 type ActionConfig = {
@@ -47,16 +47,16 @@ type ActionConfig = {
 // Configuration
 // =============================================================================
 
-/** Icon for each prompt type header */
-const PROMPT_ICONS: Record<PromptState['kind'], string> = {
+/** Icon for each permission type header */
+const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
   toolEdit: 'codicon-diff',
   bash: 'codicon-terminal',
   retry: 'codicon-refresh',
   proposal: 'codicon-rocket',
 };
 
-/** Title for each prompt type */
-const PROMPT_TITLES: Record<PromptState['kind'], string> = {
+/** Title for each permission type */
+const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   toolEdit: 'Tool edit approval',
   bash: 'Command approval',
   retry: 'Retry request',
@@ -64,14 +64,14 @@ const PROMPT_TITLES: Record<PromptState['kind'], string> = {
 };
 
 /** Prompt kinds that support rejection feedback */
-const FEEDBACK_ELIGIBLE_PROMPTS = new Set<PromptState['kind']>([
+const FEEDBACK_ELIGIBLE_PERMISSIONS = new Set<PermissionState['kind']>([
   'toolEdit',
   'bash',
   'proposal',
 ]);
 
-/** Primary actions (approve/reject) for each prompt type */
-const PRIMARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
+/** Primary actions (approve/reject) for each permission type */
+const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   toolEdit: [
     {
       action: 'approve',
@@ -110,8 +110,8 @@ const PRIMARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
   ],
 };
 
-/** Secondary actions for each prompt type */
-const SECONDARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
+/** Secondary actions for each permission type */
+const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   toolEdit: [
     {
       action: 'openDiff',
@@ -148,31 +148,31 @@ const SECONDARY_ACTIONS: Record<PromptState['kind'], ActionConfig[]> = {
 // Component
 // =============================================================================
 
-@customElement('prompt-overlay')
-export class PromptOverlay extends LitElement {
-  static styles = [designTokens, codiconIconClasses, promptOverlayStyles];
+@customElement('permission-card')
+export class PermissionCard extends LitElement {
+  static styles = [designTokens, codiconIconClasses, permissionCardStyles];
 
-  @property({ type: Object }) prompt: PromptState | null = null;
+  @property({ type: Object }) permission: PermissionState | null = null;
   @state() private showFeedback = false;
   @query('.feedback-input') private feedbackInput?: HTMLTextAreaElement;
 
   protected willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('prompt')) {
+    if (changed.has('permission')) {
       this.showFeedback = false;
     }
   }
 
   render(): TemplateResult | typeof nothing {
-    if (!this.prompt) return nothing;
+    if (!this.permission) return nothing;
 
     return html`
-      <div class="prompt-card" data-type=${this.prompt.kind}>
-        <div class="prompt-header">
-          <i class="codicon ${PROMPT_ICONS[this.prompt.kind]}"></i>
+      <div class="permission-card" data-type=${this.permission.kind}>
+        <div class="permission-header">
+          <i class="codicon ${PERMISSION_ICONS[this.permission.kind]}"></i>
           <span>${this.getTitle()}</span>
         </div>
-        <div class="prompt-body">${this.renderBody()}</div>
-        <div class="prompt-actions">${this.renderActions()}</div>
+        <div class="permission-body">${this.renderBody()}</div>
+        <div class="permission-actions">${this.renderActions()}</div>
       </div>
     `;
   }
@@ -182,15 +182,15 @@ export class PromptOverlay extends LitElement {
   // ===========================================================================
 
   private getTitle(): string {
-    if (!this.prompt) return '';
+    if (!this.permission) return '';
 
-    if (this.prompt.kind === 'proposal') {
+    if (this.permission.kind === 'proposal') {
       const isWorkflow =
-        this.prompt.data.agentCategory === AGENT_CATEGORY.WORKFLOW;
+        this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW;
       return `Agent proposal (${isWorkflow ? 'Workflow' : 'Tool-Use'})`;
     }
 
-    return PROMPT_TITLES[this.prompt.kind];
+    return PERMISSION_TITLES[this.permission.kind];
   }
 
   // ===========================================================================
@@ -198,57 +198,57 @@ export class PromptOverlay extends LitElement {
   // ===========================================================================
 
   private renderBody(): TemplateResult | typeof nothing {
-    if (!this.prompt) return nothing;
+    if (!this.permission) return nothing;
 
-    switch (this.prompt.kind) {
+    switch (this.permission.kind) {
       case 'toolEdit':
-        return this.renderToolEditBody(this.prompt.data);
+        return this.renderToolEditBody(this.permission.data);
       case 'bash':
-        return this.renderBashBody(this.prompt.data);
+        return this.renderBashBody(this.permission.data);
       case 'retry':
-        return this.renderRetryBody(this.prompt.data);
+        return this.renderRetryBody(this.permission.data);
       case 'proposal':
-        return this.renderProposalBody(this.prompt.data);
+        return this.renderProposalBody(this.permission.data);
       default:
         return nothing;
     }
   }
 
-  private renderToolEditBody(prompt: ToolEditApprovalPrompt): TemplateResult {
+  private renderToolEditBody(data: ToolEditPermission): TemplateResult {
     return html`
       <p>
-        <span class="file-path">${prompt.relativePath || prompt.path}</span>
+        <span class="file-path">${data.relativePath || data.path}</span>
       </p>
       <p>
         <span class="diff-info">
-          <span class="diff-added">+${prompt.addedLines}</span>
-          <span class="diff-removed">-${prompt.removedLines}</span>
+          <span class="diff-added">+${data.addedLines}</span>
+          <span class="diff-removed">-${data.removedLines}</span>
         </span>
-        <span class="meta-text">via ${prompt.sourceTool}</span>
+        <span class="meta-text">via ${data.sourceTool}</span>
       </p>
       ${this.renderFeedbackSection()}
     `;
   }
 
-  private renderBashBody(prompt: BashApprovalPrompt): TemplateResult {
+  private renderBashBody(data: BashPermission): TemplateResult {
     return html`
-      <code class="code-block">${prompt.command}</code>
+      <code class="code-block">${data.command}</code>
       ${this.renderFeedbackSection()}
     `;
   }
 
-  private renderRetryBody(prompt: RetryRequestPrompt): TemplateResult {
+  private renderRetryBody(data: RetryPermission): TemplateResult {
     return html`
-      <p><strong>Operation:</strong> ${prompt.operation}</p>
+      <p><strong>Operation:</strong> ${data.operation}</p>
       ${when(
-        prompt.errorMessage,
-        () => html`<p><strong>Error:</strong> ${prompt.errorMessage}</p>`,
+        data.errorMessage,
+        () => html`<p><strong>Error:</strong> ${data.errorMessage}</p>`,
       )}
       ${this.renderFeedbackSection()}
     `;
   }
 
-  private renderProposalBody(prompt: AgentProposalPrompt): TemplateResult {
+  private renderProposalBody(data: AgentProposalPermission): TemplateResult {
     const isWorkflow = prompt.agentCategory === AGENT_CATEGORY.WORKFLOW;
 
     return html`
@@ -256,13 +256,13 @@ export class PromptOverlay extends LitElement {
       <p><strong>Model:</strong> ${prompt.model}</p>
       <p><strong>Instruction:</strong> ${prompt.instruction}</p>
       ${isWorkflow
-        ? this.renderWorkflowFiles(prompt as WorkflowAgentProposalPrompt)
+        ? this.renderWorkflowFiles(prompt as WorkflowAgentProposalPermission)
         : nothing}
       ${this.renderFeedbackSection()}
     `;
   }
 
-  /** Render feedback section (shared across all prompt types) */
+  /** Render feedback section (shared across all permission types) */
   private renderFeedbackSection(): TemplateResult | typeof nothing {
     if (!this.showFeedback || !this.canCollectFeedback()) return nothing;
 
@@ -278,7 +278,7 @@ export class PromptOverlay extends LitElement {
   }
 
   private renderWorkflowFiles(
-    prompt: WorkflowAgentProposalPrompt,
+    prompt: WorkflowAgentProposalPermission,
   ): TemplateResult {
     const combine = (single: string | null | undefined, arr: string[] = []) =>
       [single, ...arr].filter((f): f is string => Boolean(f));
@@ -333,10 +333,10 @@ export class PromptOverlay extends LitElement {
   // ===========================================================================
 
   private renderActions(): TemplateResult | typeof nothing {
-    if (!this.prompt) return nothing;
+    if (!this.permission) return nothing;
 
-    const primaryActions = PRIMARY_ACTIONS[this.prompt.kind];
-    const secondaryActions = SECONDARY_ACTIONS[this.prompt.kind];
+    const primaryActions = PRIMARY_ACTIONS[this.permission.kind];
+    const secondaryActions = SECONDARY_ACTIONS[this.permission.kind];
 
     return html`
       <div class="primary-actions">
@@ -430,14 +430,19 @@ export class PromptOverlay extends LitElement {
 
   private canCollectFeedback(): boolean {
     return Boolean(
-      this.prompt && FEEDBACK_ELIGIBLE_PROMPTS.has(this.prompt.kind),
+      this.permission &&
+      FEEDBACK_ELIGIBLE_PERMISSIONS.has(this.permission.kind),
     );
   }
 
   private emitAction(action: string, feedback?: string) {
-    if (!this.prompt) return;
+    if (!this.permission) return;
     this.dispatchEvent(
-      ProgressEvents.promptAction({ prompt: this.prompt, action, feedback }),
+      ProgressEvents.permissionAction({
+        prompt: this.permission,
+        action,
+        feedback,
+      }),
     );
   }
 }

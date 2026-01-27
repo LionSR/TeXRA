@@ -10,10 +10,10 @@ import {
 } from './mainViewMessages';
 import { OutputFileInfoSchema } from './output';
 import {
-  AgentProposalPromptSchema,
-  BashApprovalPromptSchema,
-  RetryRequestPromptSchema,
-  ToolEditApprovalPromptSchema,
+  AgentProposalPermissionSchema,
+  BashPermissionSchema,
+  RetryPermissionSchema,
+  ToolEditPermissionSchema,
 } from './prompts';
 import {
   InstructionUpdateSchema,
@@ -153,7 +153,7 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
 
 export const ShowToolEditApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL),
-  request: ToolEditApprovalPromptSchema,
+  request: ToolEditPermissionSchema,
 });
 
 export const ResolveToolEditApprovalMessageSchema = z.object({
@@ -169,7 +169,7 @@ export const UpdateToolEditApprovalStateMessageSchema = z.object({
 
 export const ShowBashApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL),
-  request: BashApprovalPromptSchema,
+  request: BashPermissionSchema,
 });
 
 export const ResolveBashApprovalMessageSchema = z.object({
@@ -179,7 +179,7 @@ export const ResolveBashApprovalMessageSchema = z.object({
 
 export const ShowRetryRequestMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST),
-  request: RetryRequestPromptSchema,
+  request: RetryPermissionSchema,
 });
 
 export const ResolveRetryRequestMessageSchema = z.object({
@@ -189,7 +189,7 @@ export const ResolveRetryRequestMessageSchema = z.object({
 
 export const ShowAgentProposalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL),
-  proposal: AgentProposalPromptSchema,
+  proposal: AgentProposalPermissionSchema,
 });
 
 export const ResolveAgentProposalMessageSchema = z.object({

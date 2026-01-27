@@ -1,13 +1,13 @@
 // Core styles
-export { codiconStyles, codiconIconClasses } from './codiconStyles.js';
-export { commonViewStyles } from './commonViewStyles.js';
-export { designTokens, utilityStyles, animationStyles } from './litStyles.js';
+export { codiconStyles, codiconIconClasses } from './codiconStyles';
+export { commonViewStyles } from './commonViewStyles';
+export { designTokens, utilityStyles, animationStyles } from './litStyles';
 
 // Component styles
-export { selectStyles } from './selectStyles.js';
-export { statusIndicatorStyles } from './statusIndicatorStyles.js';
-export { promptOverlayStyles } from './promptOverlayStyles.js';
-export { requestPanelStyles } from './requestPanelStyles.js';
+export { selectStyles } from './selectStyles';
+export { statusIndicatorStyles } from './statusIndicatorStyles';
+export { permissionCardStyles } from './permissionCardStyles';
+export { requestPanelStyles } from './requestPanelStyles';
 
 // Badge styles
 export {
@@ -16,4 +16,4 @@ export {
   categoryBadgeStyles,
   emptyStateStyles,
   searchHighlightStyles,
-} from './badgeStyles.js';
+} from './badgeStyles';

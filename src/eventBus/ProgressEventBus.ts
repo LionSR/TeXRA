@@ -2,16 +2,16 @@ import { EventEmitter } from 'events';
 
 import type { ContextStateData } from '@logger/AgentLogger';
 import type {
-  AgentProposalPrompt,
-  BashApprovalPrompt,
+  AgentProposalPermission,
+  BashPermission,
   LogMessageData,
   LogMessageUpdate,
   OutputFileInfo,
-  RetryRequestPrompt,
+  RetryPermission,
   StreamStatus,
   StreamTabId,
   TokenUsageStats,
-  ToolEditApprovalPrompt,
+  ToolEditPermission,
 } from '@shared/schemas';
 import type {
   AddTaskGroupPayload,
@@ -51,17 +51,17 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     contextState: ContextStateData;
   };
-  showRetryRequest: RetryRequestPrompt;
+  showRetryRequest: RetryPermission;
   resolveRetryRequest: { streamId: StreamTabId };
-  showToolEditApprovalPrompt: ToolEditApprovalPrompt;
-  resolveToolEditApprovalPrompt: { requestId: string };
+  showToolEditPermission: ToolEditPermission;
+  resolveToolEditPermission: { requestId: string };
   updateToolEditApprovalBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
-  showBashApprovalPrompt: BashApprovalPrompt;
-  resolveBashApprovalPrompt: { requestId: string };
-  showAgentProposal: AgentProposalPrompt;
+  showBashPermission: BashPermission;
+  resolveBashPermission: { requestId: string };
+  showAgentProposal: AgentProposalPermission;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   updateQueuedFollowUps: { streamId: StreamTabId };
