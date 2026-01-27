@@ -1,36 +1,33 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import { XMLParser } from 'fast-xml-parser';
 
-// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
+import replacementEngine, {
   applyReplacements,
   getReplacementsByCategory,
 } from '@replacement/engine';
-import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, TaskRunFileService, getFileDirectory } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { OutputFileInfo } from '@shared/schemas';
 import {
-  DOCUMENT_NAME_REGEX,
+  AbsoluteFS,
+  getFileDirectory,
+  TaskRunFileService,
+  type FileLocation,
+} from '@utils/files';
+import {
   addCdataToTags,
   addCdataToTagsMultiple,
+  DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
   extractDocument,
   extractDocuments,
 } from '@utils/text/xmlUtils';
-
-// Local file imports
-import type { OutputFileInfo } from '@shared/schemas';
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
@@ -71,7 +68,6 @@ export class XmlOutputManager {
     return content;
   }
 
-  /** Mapping of extraction methods to their log messages */
   private static readonly EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
     named: 'from named document tag',
     simple: 'using fallback method',
@@ -127,7 +123,6 @@ export class XmlOutputManager {
     const { name } = path.parse(outputLocation.absolutePath);
     const texFilename = `${name}.tex`;
 
-    // Derive relative path for the tex file (same directory as output)
     const outputDir = getFileDirectory(outputLocation);
     const texRelativePath = outputDir
       ? path.join(outputDir, texFilename)
