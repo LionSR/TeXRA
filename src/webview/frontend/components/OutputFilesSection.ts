@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
-import { SortableController } from '@shared/controllers/SortableController';
+import { SortableController } from '@shared/controllers';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,

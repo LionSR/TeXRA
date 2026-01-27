@@ -3,6 +3,8 @@
  * Both dispatch and handler sides use these types.
  */
 
+import { createEvent } from '@shared/utils/events';
+
 import type { PermissionState } from './components/PermissionCard';
 import type { FollowupFormData } from './components/FollowupSection';
 import type { FollowupMode, StreamFilter, StreamSort } from './store';
@@ -56,11 +58,16 @@ export interface FileClickDetail {
   file: string;
 }
 
+export interface FileActionDetail {
+  command: string;
+  file: string;
+  base?: string;
+  prev?: string;
+}
+
 // =============================================================================
 // Event Creators - use these to dispatch typed events
 // =============================================================================
-
-import { createEvent } from '@shared/utils/events';
 
 export const ProgressEvents = {
   streamSwitch: (detail: StreamEventDetail) =>
@@ -82,8 +89,7 @@ export const ProgressEvents = {
   runSelected: (detail: RunSelectedDetail) =>
     createEvent('run-selected', detail),
 
-  fileAction: (detail: Record<string, string>) =>
-    createEvent('file-action', detail),
+  fileAction: (detail: FileActionDetail) => createEvent('file-action', detail),
 
   followupChange: (detail: FollowUpChangeDetail) =>
     createEvent('followup-change', detail),

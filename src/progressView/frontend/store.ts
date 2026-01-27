@@ -61,7 +61,7 @@ export function getStreamState(
 ): StreamState {
   return (
     state.streamStates.get(streamId) ??
-    createEmptyStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
+    createStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
   );
 }
 

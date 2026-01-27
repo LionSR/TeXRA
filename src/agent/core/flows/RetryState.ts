@@ -13,6 +13,12 @@
  */
 
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type ProviderError,
+  type RetryErrorInfo,
+} from '@shared/schemas';
 import { Node, type NonIterableObject } from '@agent/node';
 import {
   retryCoordinator,
@@ -21,12 +27,6 @@ import {
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { formatProviderHttpError } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
-import {
-  MESSAGE_TYPES,
-  STREAM_STATUS,
-  type ProviderError,
-  type RetryErrorInfo,
-} from '@shared/schemas';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
