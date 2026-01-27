@@ -15,6 +15,10 @@ import './TaskGroupItem';
 import './LogEntry';
 import './LogPlaceholder';
 
+// Local imports - shared schemas
+import { STREAM_STATUS } from '@shared/schemas';
+import type { LogMessageData, TaskGroup } from '@shared/schemas';
+
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
@@ -31,9 +35,6 @@ import { logStyles } from '../styles/logStyles';
 
 // Local imports - services
 import { AudioNotificationService } from '../services/AudioNotificationService';
-
-// Local imports - shared schemas
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
 interface GroupTree {
   group: TaskGroup;
@@ -94,9 +95,10 @@ export class TaskGroupList extends LitElement {
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = /^r\d+$/.test(group.name);
-      const wasRunning = prev === 'running';
+      const wasRunning = prev === STREAM_STATUS.RUNNING;
       const isNowComplete =
-        group.status === 'ready' || group.status === 'stopped';
+        group.status === STREAM_STATUS.READY ||
+        group.status === STREAM_STATUS.STOPPED;
 
       if (isRunGroup && wasRunning && isNowComplete) {
         AudioNotificationService.playCompletionSound();

@@ -1,3 +1,6 @@
+// Third-party imports
+import type { ChatCompletion } from 'openai/resources/chat/completions';
+
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
@@ -18,7 +21,7 @@ import type { ExtractResponseResult } from './types/IModelHandler';
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
   /** Extracts response text and usage statistics from API response. */
   override extractResponse(
-    responseObject: any,
+    responseObject: ChatCompletion,
     endTag: string,
   ): ExtractResponseResult {
     const result = super.extractResponse(responseObject, endTag);
