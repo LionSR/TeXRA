@@ -33,15 +33,13 @@ import {
   setToolUseMemoryEnabled,
 } from '@utils/config/constants';
 
-// Local imports - schemas
+// Local imports - shared schemas
 import {
   MemoryPathMessageSchema,
   MemoryDeleteMessageSchema,
   MemoryEnabledMessageSchema,
-} from '@webview/types/messages';
-
-// Local imports - shared schemas
-import type { MemoryViewItem } from '@shared/schemas';
+  type MemoryViewItem,
+} from '@shared/schemas/memoryViewMessages';
 
 export class MemoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel

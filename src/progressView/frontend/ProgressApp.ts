@@ -228,6 +228,7 @@ export class ProgressApp extends BaseWebviewApp {
       <workflow-stream-content
         ${ref(this.workflowContentRef)}
         @toolbar-command=${this.onToolbarCommand}
+        @prompt-action=${this.onPromptAction}
         @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
         @followup-request-options=${this.onFollowupRequestOptions}
