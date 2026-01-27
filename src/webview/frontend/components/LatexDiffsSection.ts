@@ -173,7 +173,9 @@ export class LatexDiffsSection extends LitElement {
 
   private renderCommitOptions(): TemplateResult {
     if (!this.isGitRepo) {
-      return html`<vscode-option value="">Not a Git repository</vscode-option>`;
+      return html`<vscode-option value="" selected
+        >Not a Git repository</vscode-option
+      >`;
     }
     const entries = this.commitOptions.some((commit) =>
       commit.startsWith('HEAD'),

@@ -107,6 +107,8 @@ export const UpdateInstructionMessageSchema = z.object({
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   instruction: InstructionUpdateSchema.nullable(),
   agentCategory: z.string().optional(),
+  /** Run ID for the instruction. When provided, frontend uses this directly instead of resolving. */
+  runId: z.string().nullish(),
 });
 
 export const AddTaskGroupMessageSchema = z.object({

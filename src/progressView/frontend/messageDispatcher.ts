@@ -88,6 +88,15 @@ function removePrompt(
   );
 }
 
+function setActiveStreamRecording(
+  ctx: MessageHandlerContext,
+  recording: boolean,
+): void {
+  const streamId = ctx.getState().activeStreamId;
+  if (!streamId) return;
+  updateToolUseState(ctx, streamId, (prev) => ({ ...prev, recording }));
+}
+
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
@@ -351,11 +360,12 @@ const handlers: HandlerRegistry = {
 
   // Run-specific updates
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
-    const { stream, instruction } = data;
+    const { stream, instruction, runId: providedRunId } = data;
     if (!stream) return;
 
     updateWorkflowState(ctx, stream, (prev) => {
-      const runId = resolveActiveRunId(prev) ?? 'default';
+      // Use provided runId from backend if available, otherwise resolve from state
+      const runId = providedRunId ?? resolveActiveRunId(prev) ?? 'default';
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
@@ -490,35 +500,14 @@ const handlers: HandlerRegistry = {
     }));
   },
 
-  [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: (_data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
+  [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: (_data, ctx) =>
+    setActiveStreamRecording(ctx, true),
 
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      recording: true,
-    }));
-  },
+  [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: (_data, ctx) =>
+    setActiveStreamRecording(ctx, false),
 
-  [PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED]: (_data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
-
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      recording: false,
-    }));
-  },
-
-  [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: (_data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
-
-    updateToolUseState(ctx, streamId, (prev) => ({
-      ...prev,
-      recording: false,
-    }));
-  },
+  [PROGRESS_VIEW_COMMANDS.RECORDING_ERROR]: (_data, ctx) =>
+    setActiveStreamRecording(ctx, false),
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
     const { command: _command, ...options } = data;

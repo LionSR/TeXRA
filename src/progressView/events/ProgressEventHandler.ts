@@ -274,6 +274,7 @@ export class ProgressEventHandler {
       stream,
       instructionUpdate ?? null,
       category,
+      runId ?? null,
     );
   }
 

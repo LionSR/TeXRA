@@ -3,7 +3,7 @@
  * Provides text formatting helpers for rendering.
  *
  * For data validation and normalization, see:
- * - logDataParsers.ts - Complex normalization (toolUse, fileList)
+ * - logDataParsers.ts - Complex normalization (toolUse)
  * - @shared/schemas - Zod schemas for simple validation
  */
 
