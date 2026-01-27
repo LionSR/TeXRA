@@ -505,8 +505,8 @@ export class ModelHandlerOpenAI<
     userRequest: string,
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    const messages: ChatCompletionMessageParam[] = [];
+  ): Promise<any[]> {
+    const messages: any[] = [];
 
     // Handle system prompt differently for O1 models
     if (systemPrompt) {
@@ -537,9 +537,7 @@ export class ModelHandlerOpenAI<
         this.capabilities.supportsNativeAudio)
     ) {
       // createMediaMessage returns an array of objects formatted by createMediaContent
-      const formattedMediaContent = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ChatCompletionContentPart[];
+      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -575,10 +573,10 @@ export class ModelHandlerOpenAI<
 
   /** Adds user message content for subsequent rounds. */
   async createRoundMessages(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     userMessage: string,
     mediaFiles?: FileLocation[],
-  ): Promise<ChatCompletionMessageParam[]> {
+  ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
     // OpenAI API: system role does not support images/audio
     // Error: 400 Invalid 'messages[N]'. Image URLs are only allowed for messages with role 'user'
@@ -591,9 +589,7 @@ export class ModelHandlerOpenAI<
         this.capabilities.supportsNativeAudio)
     ) {
       try {
-        const formattedMediaContent = (await this.createMediaMessage(
-          mediaFiles,
-        )) as ChatCompletionContentPart[];
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
@@ -609,9 +605,9 @@ export class ModelHandlerOpenAI<
   }
 
   async createUserFollowUpMessages(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     userMessage: string,
-  ): Promise<ChatCompletionMessageParam[]> {
+  ): Promise<any[]> {
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessage }],
@@ -704,40 +700,29 @@ export class ModelHandlerOpenAI<
     });
   }
 
-  /**
-   * Extracts response text and usage statistics from API response.
-   * Handles both standard ChatCompletion and streaming-style fallback responses.
-   */
-  extractResponse(
-    responseObject: ChatCompletion | Record<string, unknown>,
-    endTag: string,
-  ): ExtractResponseResult {
-    const resp = responseObject as Record<string, unknown>;
-    const choices = resp.choices as ChatCompletion['choices'] | undefined;
-
-    if (!choices?.length) {
-      this.logger.debug(`Response object: ${objectToLogString(resp)}`);
+  /** Extracts response text and usage statistics from API response. */
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
+    if (!responseObject.choices?.length) {
+      this.logger.debug(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
 
       // Add fallback for streaming which returns content directly in responseObject
-      if (typeof resp.role === 'string' && typeof resp.content === 'string') {
+      if (responseObject.role && responseObject.content) {
         this.logger.warn(
           'Using direct response format (streaming style) as fallback',
         );
-        let newResponse = resp.content.trim();
+        let newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume stop
-        let stopReason: ProviderStopReason = OPENAI_CHAT_FINISH.STOP;
-        const fallbackChoices = choices as
-          | ChatCompletion['choices']
-          | undefined;
-        if (fallbackChoices?.[0]?.finish_reason) {
-          stopReason = fallbackChoices[0].finish_reason;
+        let stopReason = OPENAI_CHAT_FINISH.STOP;
+        if (responseObject.choices?.[0]?.finish_reason) {
+          stopReason = responseObject.choices[0].finish_reason;
         }
 
-        // For usage, we'll use empty values since they're not provided
-        const usage = (resp.usage as ExtendedCompletionUsage | undefined) ?? {
+        // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
+        const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
-          total_tokens: 0,
         };
 
         // Add end tag if response was stopped and tag isn't present
@@ -753,20 +738,22 @@ export class ModelHandlerOpenAI<
         return { text: newResponse, usage, stopReason };
       }
 
-      if (resp.error) {
-        const errorMsg = `API error: ${JSON.stringify(resp.error)}`;
+      if (responseObject.error) {
+        const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
       }
 
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
-      this.logger.error(`Response object: ${objectToLogString(resp)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       throw new Error(errorMsg);
     }
 
-    // Extract base response (choices is guaranteed to exist at this point)
-    const choice = choices[0];
+    // Extract base response
+    const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
     this.logger.debug(`Stop reason: ${stopReason}`);
     let newResponse = '';
@@ -785,7 +772,9 @@ export class ModelHandlerOpenAI<
       this.logger.debug('Received tool call without message content');
     } else {
       newResponse = '';
-      this.logger.error(`Response object: ${objectToLogString(resp)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       this.logger.error('content is empty');
     }
 
@@ -799,16 +788,12 @@ export class ModelHandlerOpenAI<
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return {
-      text: newResponse,
-      usage: resp.usage as ExtendedCompletionUsage | undefined,
-      stopReason,
-    };
+    return { text: newResponse, usage: responseObject.usage, stopReason };
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    _messages: ChatCompletionMessageParam[],
+    _messages: any[],
     _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
@@ -819,7 +804,7 @@ export class ModelHandlerOpenAI<
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
@@ -845,11 +830,11 @@ export class ModelHandlerOpenAI<
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
-  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
+  ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
@@ -1006,7 +991,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models with prefill support. */
   updateMessageContentWithPrefill(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1045,7 +1030,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models without prefill support. */
   updateMessageContentWithoutPrefill(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1146,14 +1131,10 @@ export class ModelHandlerOpenAI<
    * @returns The extracted reasoning content or null if none found
    */
   processThinkingBlock(
-    responseObject: ChatCompletion | Record<string, unknown>,
+    responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const resp = responseObject as Record<string, unknown>;
-    const choices = resp.choices as ChatCompletion['choices'] | undefined;
-    const message = choices?.[0]?.message as
-      | Record<string, unknown>
-      | undefined;
+    const message = responseObject?.choices?.[0]?.message;
     const reasoning = this.extractReasoningFromMessage(message);
     if (!reasoning) {
       return null;
@@ -1320,7 +1301,7 @@ export class ModelHandlerOpenAI<
    * @throws Error if token calculation fails.
    */
   private _calculateApproximateTokens(
-    messages: ChatCompletionMessageParam[],
+    messages: any[],
     systemPrompt?: string,
   ): number {
     // Note: This is a simplified token count. A more accurate count would
@@ -1334,9 +1315,8 @@ export class ModelHandlerOpenAI<
     // For now, concatenate text content.
     let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
     messages.forEach((msg) => {
-      const content = 'content' in msg ? msg.content : null;
-      if (Array.isArray(content)) {
-        content.forEach((part) => {
+      if (Array.isArray(msg.content)) {
+        msg.content.forEach((part: any) => {
           if (part.type === 'text') {
             textToCount += `${msg.role}: ${part.text}\n`;
           }
@@ -1348,8 +1328,8 @@ export class ModelHandlerOpenAI<
             textToCount += `${msg.role}: [Audio]\n`;
           }
         });
-      } else if (typeof content === 'string') {
-        textToCount += `${msg.role}: ${content}\n`;
+      } else if (typeof msg.content === 'string') {
+        textToCount += `${msg.role}: ${msg.content}\n`;
       }
     });
     // Use the appropriate encoding based on the model, defaulting to cl100k_base
@@ -1399,9 +1379,7 @@ export class ModelHandlerOpenAI<
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
     try {
-      const formattedMedia = (await this.createMediaMessage(
-        mediaFiles,
-      )) as ChatCompletionContentPart[];
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (typeof lastUserMsg.content === 'string') {
         lastUserMsg.content = [
           ...formattedMedia,
