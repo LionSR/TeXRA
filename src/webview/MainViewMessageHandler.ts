@@ -214,14 +214,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
 
-      ...this.createBannerForwardHandlers([
-        MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-        MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
-        MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-        MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
-        MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-        MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
-      ]),
+      ...this.createDelegateHandlers(
+        [
+          MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+          MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+          MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
+          MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+          MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
+        ],
+        (m) => this.postToActiveView(m),
+      ),
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await updateConfig('ui.showDependencyReminders', m.value);
       },
@@ -249,9 +252,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           });
         }
       },
-      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
-        this.forwardToWebview({
+        this.postToActiveView({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
         }),
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
@@ -259,7 +262,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
           const authStatus = await getAuthStatus();
           if (authStatus.authenticated) {
-            this.forwardToWebview({
+            this.postToActiveView({
               command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
             });
           }
@@ -272,7 +275,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
         await updateConfig('ui.showLoginBanner', false);
-        this.forwardToWebview({
+        this.postToActiveView({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
         });
       },
@@ -331,21 +334,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
         this.executionManager.handleFileOperation(m),
     };
-  }
-
-  /** Forward a message directly to the webview client */
-  private forwardToWebview(message: any): void {
-    const view = this.getActiveView();
-    view?.webview.postMessage(message);
-  }
-
-  /** Create forwarding handlers for multiple banner commands */
-  private createBannerForwardHandlers(
-    commands: string[],
-  ): Record<string, MessageHandler<vscode.WebviewView>> {
-    return this.createDelegateHandlers(commands, (m) =>
-      this.forwardToWebview(m),
-    );
   }
 
   /** Create handlers that delegate to the same handler function */

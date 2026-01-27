@@ -14,4 +14,4 @@ export const HistoryViewEvents = {
   clearHistory: () => createEvent('history-clear', undefined),
   matchCount: (detail: { display: string }) =>
     createEvent('history-match-count', detail),
-};
+} as const;
