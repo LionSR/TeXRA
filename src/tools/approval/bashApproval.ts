@@ -102,7 +102,7 @@ async function showApprovalPrompt(
       });
 
       void safeExecuteCommand('texra.showProgressView');
-      bus.emit('showBashApprovalPrompt', {
+      bus.emit('showBashPermission', {
         requestId,
         command: request.command,
         allowBypass: true,
@@ -111,7 +111,7 @@ async function showApprovalPrompt(
     });
   } finally {
     pendingApprovals.delete(requestId);
-    bus.emit('resolveBashApprovalPrompt', { requestId });
+    bus.emit('resolveBashPermission', { requestId });
   }
 }
 
