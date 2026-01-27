@@ -5,6 +5,12 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - reuse option schemas from messages (avoid duplication)
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from './mainViewMessages';
+
 // =============================================================================
 // Core enums
 // =============================================================================
@@ -134,3 +140,83 @@ export const CheckboxValuesSchema = MainViewPersistedStateSchema.pick({
   attachDiagnostics: true,
 });
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
+
+// =============================================================================
+// Structured state schemas (for MainApp state consolidation)
+// =============================================================================
+
+/** Single file selections */
+export const SingleFilesSchema = z.object({
+  inputFile: z.string(),
+  referenceFile: z.string(),
+  auxiliaryFile: z.string(),
+  mediaFile: z.string(),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+export type SingleFiles = z.infer<typeof SingleFilesSchema>;
+
+/** File options (dropdown options for each file type) */
+export const FileOptionsSchema = z.object({
+  inputFile: z.array(z.string()),
+  referenceFile: z.array(z.string()),
+  auxiliaryFile: z.array(z.string()),
+  mediaFile: z.array(z.string()),
+  baseFile: z.array(z.string()),
+  editedFile: z.array(z.string()),
+  commit: z.array(z.string()).optional(),
+});
+export type FileOptions = z.infer<typeof FileOptionsSchema>;
+
+/** Multiple file selections */
+export const MultiFilesSchema = z.object({
+  inputFiles: z.array(z.string()),
+  referenceFiles: z.array(z.string()),
+  auxiliaryFiles: z.array(z.string()),
+  mediaFiles: z.array(z.string()),
+  outputFiles: z.array(z.string()),
+});
+export type MultiFiles = z.infer<typeof MultiFilesSchema>;
+
+/** Multiple files visibility flags */
+export const MultiFilesVisibleSchema = z.object({
+  inputFiles: z.boolean(),
+  referenceFiles: z.boolean(),
+  auxiliaryFiles: z.boolean(),
+  mediaFiles: z.boolean(),
+  outputFiles: z.boolean(),
+});
+export type MultiFilesVisible = z.infer<typeof MultiFilesVisibleSchema>;
+
+// =============================================================================
+// Context value schemas (for @lit/context providers)
+// =============================================================================
+
+/** File state context value - passed to file selection components */
+export const FileStateContextSchema = z.object({
+  sessionType: SessionTypeSchema,
+  checkboxValues: CheckboxValuesSchema,
+  singleFiles: SingleFilesSchema,
+  fileOptions: FileOptionsSchema,
+  multiFiles: MultiFilesSchema,
+  multiFilesVisible: MultiFilesVisibleSchema,
+  outputFilesActive: z.boolean(),
+});
+export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
+
+/** Session context value - passed to instruction panel */
+export const SessionContextSchema = z.object({
+  sessionType: SessionTypeSchema,
+  instruction: z.string(),
+  placeholder: z.string(),
+  workflowAgent: z.string(),
+  toolUseAgent: z.string(),
+  model: z.string(),
+  workflowAgentOptions: z.array(AgentOptionDataSchema),
+  toolUseAgentOptions: z.array(AgentOptionDataSchema),
+  modelOptions: z.array(ModelOptionDataSchema),
+  isRecording: z.boolean(),
+  isPolishing: z.boolean(),
+  debugMode: z.boolean(),
+});
+export type SessionContextValue = z.infer<typeof SessionContextSchema>;

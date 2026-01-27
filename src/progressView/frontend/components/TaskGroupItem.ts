@@ -20,8 +20,6 @@ import { GROUP_DOM_IDS } from '../constants';
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
-// Local imports - shared styles
-
 // Local imports - shared schemas
 import type { TaskGroup } from '@shared/schemas';
 
@@ -73,7 +71,6 @@ export class TaskGroupItem extends LitElement {
     const headerClasses = {
       'log-group-header': true,
       [`is-${group.status}`]: true,
-      'top-level': this.isRoot,
     };
 
     return html`

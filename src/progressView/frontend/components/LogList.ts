@@ -19,7 +19,6 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
-import { scrollToBottom } from '@shared/utils/dom';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 
@@ -27,10 +26,13 @@ import { WebviewStateManager } from '@shared/state/WebviewStateManager';
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - progress view constants
-import { COMMANDS, ELEMENT_IDS } from '../constants';
+import { COMMANDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
+
+// Local imports - progress view components (type-only for @query reference)
+import type { TaskGroupList } from './TaskGroupList';
 
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
@@ -55,8 +57,9 @@ export class LogList extends LitElement {
   @property({ type: String }) activeRunId: string | null = null;
   @property({ type: Boolean }) isToolUse = false;
 
-  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
-  private logContainer?: HTMLElement;
+  /** Reference to child TaskGroupList for scroll operations */
+  @query('task-group-list')
+  private taskGroupList?: TaskGroupList;
 
   // Non-reactive state
   private stateManager: WebviewStateManager<LogListState>;
@@ -100,14 +103,8 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render - need to query through shadow DOM
-    const taskGroupList = this.shadowRoot?.querySelector('task-group-list');
-    const container = taskGroupList?.shadowRoot?.querySelector(
-      `#${ELEMENT_IDS.LOG_CONTENT}`,
-    );
-    if (container instanceof HTMLElement) {
-      scrollToBottom(container);
-    }
+    // Scroll to bottom after render via public method on child component
+    this.taskGroupList?.scrollToBottom();
   }
 
   // ============================================================

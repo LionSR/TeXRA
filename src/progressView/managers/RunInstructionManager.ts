@@ -1,3 +1,11 @@
+// Local imports - shared schemas
+import {
+  InstructionUpdateSchema,
+  type InstructionUpdate,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
+
 // Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
@@ -6,17 +14,11 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import {
-  mapToRecord,
-  recordToMap,
-} from '@progressView/persistence/serializationUtils';
+import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 
-// Type imports
-import type {
-  InstructionUpdate,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
+/** Schema for deserializing persisted instructions */
+const InstructionsMapSchema = createRecordToMapSchema(InstructionUpdateSchema);
 
 type InstructionMap = Map<string, InstructionUpdate>;
 
@@ -91,6 +93,6 @@ export class RunInstructionManager extends PersistentMapManager<
     data: unknown,
     _stream: StreamTabId,
   ): InstructionMap {
-    return recordToMap<InstructionUpdate>(data);
+    return InstructionsMapSchema.parse(data);
   }
 }

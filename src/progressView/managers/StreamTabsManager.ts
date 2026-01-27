@@ -1,3 +1,10 @@
+// Local imports - shared schemas
+import {
+  LogMessageDataSchema,
+  type LogMessageData,
+  type StreamTabId,
+} from '@shared/schemas';
+
 // Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
@@ -9,9 +16,10 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { createArraySchema } from '@progressView/persistence/schemaUtils';
 
-// Type imports
-import type { LogMessageData, StreamTabId } from '@shared/schemas';
+/** Schema for deserializing persisted log messages */
+const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
 
 /**
  * Manages stream tabs collection with persistence.
@@ -145,14 +153,11 @@ export class StreamTabsManager extends PersistentMapManager<
     }
   }
 
-  /** Normalize loaded messages with shallow copies for independence */
+  /** Normalize loaded messages with schema validation */
   protected override deserialize(
     data: unknown,
     _key: StreamTabId,
   ): LogMessageData[] {
-    if (!Array.isArray(data)) {
-      return [];
-    }
-    return data.map((entry) => ({ ...entry })) as LogMessageData[];
+    return LogMessagesSchema.parse(data);
   }
 }

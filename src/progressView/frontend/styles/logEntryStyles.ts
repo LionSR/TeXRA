@@ -6,8 +6,7 @@ import { css } from 'lit';
  */
 export const logEntryStyles = css`
   /* Note: Component-specific :host and element layout styles should be defined
-     in each component, not here. These styles are for content classes only.
-     Global layout styles for custom elements remain in logs.css */
+     in each component, not here. These styles are for content classes only. */
 
   .log-container {
     flex: 1 1 auto;
