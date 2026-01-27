@@ -3,17 +3,17 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
+import { normalizeFilePath } from '@shared/utils/path';
 import { getAgent } from '@agent/index';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getIncludedExtensions,
   ExtensionCategory,
 } from '@common/files/fileTypeUtils';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
-import { normalizeFilePath } from '@shared/utils/path';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,

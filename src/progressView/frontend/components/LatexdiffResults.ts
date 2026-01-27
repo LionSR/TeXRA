@@ -17,6 +17,9 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
 // Local imports - schemas
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 
@@ -104,14 +107,7 @@ export class LatexdiffResults extends LitElement {
   @property({ type: Array }) entries: DiffResultDisplay[] = [];
 
   private handleFileClick(filePath: string): void {
-    // Dispatch event for parent to handle file opening
-    this.dispatchEvent(
-      new CustomEvent('file-click', {
-        detail: { file: filePath },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(ProgressEvents.fileClick({ file: filePath }));
   }
 
   private renderFileLink(filePath: string, label: string): TemplateResult {

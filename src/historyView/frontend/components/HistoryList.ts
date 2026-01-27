@@ -71,12 +71,7 @@ export class HistoryList extends LitElement {
     ) {
       this.performClearSearch();
       // Dispatch event to reset the trigger
-      this.dispatchEvent(
-        new CustomEvent('search-clear-complete', {
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.dispatchEvent(HistoryViewEvents.searchClearComplete());
     }
 
     // Handle searchTerm changes - apply search
@@ -92,12 +87,7 @@ export class HistoryList extends LitElement {
         this.performNavigatePrev();
       }
       // Dispatch event to reset the action
-      this.dispatchEvent(
-        new CustomEvent('search-navigate-complete', {
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.dispatchEvent(HistoryViewEvents.searchNavigateComplete());
     }
   }
 

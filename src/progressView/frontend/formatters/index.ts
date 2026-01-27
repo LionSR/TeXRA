@@ -163,5 +163,3 @@ export const getSharedLogEntryFormatter = (): LogEntryFormatter => {
   }
   return sharedLogEntryFormatter;
 };
-
-export type { LogFormatOptions };

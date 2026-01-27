@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+import {
+  AgentCategoryFilterSchema,
+  createStreamState,
+  StorageKeySchema,
+  TodoItemSchema,
+  type AgentCategoryFilter,
+  type ExecutionId,
+  type InstructionUpdate,
+  type OutputFileInfo,
+  type StorageKey,
+  type StreamState,
+  type StreamTabId,
+  type TodoItem,
+} from '@shared/schemas';
+import { isPlainObject } from '@shared/utils';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -23,21 +38,6 @@ import {
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import {
-  AgentCategoryFilterSchema,
-  createStreamState,
-  StorageKeySchema,
-  TodoItemSchema,
-  type AgentCategoryFilter,
-  type ExecutionId,
-  type InstructionUpdate,
-  type OutputFileInfo,
-  type StorageKey,
-  type StreamState,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
-import { isPlainObject } from '@shared/utils';
 import { getConfig } from '@utils/config';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */

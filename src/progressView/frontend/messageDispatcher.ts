@@ -10,17 +10,16 @@
  */
 
 // External imports
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
+  createStreamState,
   ProgressViewOutboundMessageSchema,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
-import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { PermissionState } from './components/PermissionCard';
 import {
   updateToolUseState,
   updateWorkflowState,
@@ -29,13 +28,14 @@ import {
   prependInstructionForToolUse,
 } from './stateUtils';
 import {
-  createEmptyStreamState,
   getStreamState,
   isToolUseState,
   isWorkflowState,
   type ProgressState,
   type StreamState,
 } from './store';
+import type { FrontendEventHandlerContext } from './eventHandlers';
+import type { PermissionState } from './components/PermissionCard';
 
 // ============================================================
 // Types
@@ -107,8 +107,7 @@ function updateStreamInfo(
       nextStates.set(stream.name, { ...backendState, info: stream });
     } else {
       const existing =
-        nextStates.get(stream.name) ??
-        createEmptyStreamState(stream.agentCategory);
+        nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
       nextStates.set(stream.name, { ...existing, info: stream });
     }
   }

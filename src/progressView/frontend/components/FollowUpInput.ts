@@ -126,9 +126,7 @@ export class FollowUpInput extends LitElement {
       this.focusInput({ scrollIntoView: true }).then(() => {
         // Guard against dispatching events after disconnection
         if (this.isConnected) {
-          this.dispatchEvent(
-            new CustomEvent('focus-complete', { bubbles: true }),
-          );
+          this.dispatchEvent(ProgressEvents.focusComplete());
         }
       });
     }

@@ -24,15 +24,10 @@ import {
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 
 // Local imports - shared schemas
+import { DEFAULT_CHECKBOX_VALUES } from '../store';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 
-const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
-  autoExtractFigure: false,
-  autoExtractTikzFigure: false,
-  autoCompileInputPdf: false,
-  attachTeXCount: false,
-  attachDiagnostics: false,
-};
+// Local imports - store (single source of truth for defaults)
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
