@@ -89,13 +89,13 @@ const ProposalPermissionBaseSchema = z.object({
 });
 
 export const WorkflowAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.merge(WorkflowAgentProposalSchema);
+  ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
 export type WorkflowAgentProposalPermission = z.infer<
   typeof WorkflowAgentProposalPermissionSchema
 >;
 
 export const ToolUseAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.merge(ToolUseAgentProposalSchema);
+  ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
 export type ToolUseAgentProposalPermission = z.infer<
   typeof ToolUseAgentProposalPermissionSchema
 >;
