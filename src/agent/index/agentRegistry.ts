@@ -25,9 +25,9 @@ import {
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
-import type { AgentOptionData } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
