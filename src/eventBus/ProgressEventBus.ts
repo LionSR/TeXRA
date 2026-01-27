@@ -1,13 +1,18 @@
-// Standard library imports
 import { EventEmitter } from 'events';
 
-// Type imports
 import type { ContextStateData } from '@logger/AgentLogger';
-import type { OutputFileInfo } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
-import type { TokenUsageStats } from '@shared/schemas';
-import type { StreamStatus } from '@shared/schemas';
-import type { LogMessageData, LogMessageUpdate } from '@shared/schemas';
+import type {
+  AgentProposalPrompt,
+  BashApprovalPrompt,
+  LogMessageData,
+  LogMessageUpdate,
+  OutputFileInfo,
+  RetryRequestPrompt,
+  StreamStatus,
+  StreamTabId,
+  TokenUsageStats,
+  ToolEditApprovalPrompt,
+} from '@shared/schemas';
 import type {
   AddTaskGroupPayload,
   RunScopedPayload,
@@ -16,14 +21,7 @@ import type {
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@shared/schemas';
 
-// Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
 export interface ProgressEventPayloads {

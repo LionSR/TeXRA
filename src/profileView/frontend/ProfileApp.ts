@@ -12,7 +12,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import { UpdateProfileMessageSchema, type RemoteAgent } from '@shared/schemas';
@@ -34,6 +34,7 @@ export class ProfileApp extends BaseWebviewApp {
   static override styles = [
     designTokens,
     commonViewStyles,
+    ...badgeStyles,
     profileViewStyles,
     css`
       :host {

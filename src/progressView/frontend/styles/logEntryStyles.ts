@@ -41,23 +41,21 @@ export const logEntryStyles = css`
     padding: 0;
   }
 
-  .file-list-content {
-    .file-var,
-    .file-source {
-      color: var(--color-text-secondary);
-    }
+  .file-list-content .file-var,
+  .file-list-content .file-source {
+    color: var(--color-text-secondary);
+  }
 
-    .file-var {
-      opacity: 0.8;
-      font-size: 0.9em;
-      margin-left: var(--spacing-tiny);
-    }
+  .file-list-content .file-var {
+    opacity: 0.8;
+    font-size: 0.9em;
+    margin-left: var(--spacing-tiny);
+  }
 
-    .file-source {
-      opacity: 0.6;
-      font-size: 0.85em;
-      font-style: italic;
-    }
+  .file-list-content .file-source {
+    opacity: 0.6;
+    font-size: 0.85em;
+    font-style: italic;
   }
 
   .xml-link-container {

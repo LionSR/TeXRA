@@ -1,4 +1,3 @@
-// Local imports - shared schemas
 import {
   STREAM_STATUS,
   TaskGroupSchema,
@@ -6,14 +5,8 @@ import {
   type TaskGroup,
   type UpdateTaskGroupPayload,
 } from '@shared/schemas';
-
-// Local imports - common
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,

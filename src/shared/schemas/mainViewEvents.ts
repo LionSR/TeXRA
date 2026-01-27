@@ -1,11 +1,5 @@
-/**
- * Main view event detail schemas.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - main view state
 import { FileTypeSchema, SessionTypeSchema } from './mainViewState';
 
 export const FileSelectChangeDetailSchema = z.object({

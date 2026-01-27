@@ -46,6 +46,10 @@ import {
   parseSessionType,
 } from './constants';
 import { mainViewStyles } from './styles';
+import {
+  dispatchMainViewMessage,
+  type MainViewHandlerRegistry,
+} from './mainViewDispatcher';
 
 // Local imports - main view components (side-effect imports to register custom elements)
 import './components/FileSelectGroup';
@@ -103,11 +107,13 @@ import type {
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 
-type MainViewMessageHandler = (message: MainViewMessage) => void;
+// Helper type for extracting specific message type from union
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
   MainViewMessage,
   { command: C }
 >;
+
+// Union types for handlers that process multiple similar commands
 type SetSingleFileOptionsMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILE>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE>
@@ -196,111 +202,80 @@ export class MainApp extends BaseWebviewApp {
     );
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
-  private readonly messageHandlers: Record<string, MainViewMessageHandler> = {
-    [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) =>
-      this.handleSetModelOptions(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (message) =>
-      this.handleSetAgentOptions(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (message) =>
-      this.handleSetSingleFileOptions(message as SetSingleFileOptionsMessage),
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (message) =>
-      this.handleSetSingleFileOptions(message as SetSingleFileOptionsMessage),
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (message) =>
-      this.handleSetSingleFileOptions(message as SetSingleFileOptionsMessage),
-    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (message) =>
-      this.handleSetSingleFileOptions(message as SetSingleFileOptionsMessage),
-    [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (message) =>
-      this.handleSetSingleFileOptions(message as SetSingleFileOptionsMessage),
-    [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (message) =>
-      this.handleSetBaseFile(
-        message as MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_BASE_FILE>,
-      ),
-    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (message) =>
-      this.handleSingleFileSelected(message as SingleFileSelectedMessage),
-    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (message) =>
-      this.handleSingleFileSelected(message as SingleFileSelectedMessage),
-    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (message) =>
-      this.handleSingleFileSelected(message as SingleFileSelectedMessage),
-    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (message) =>
-      this.handleSingleFileSelected(message as SingleFileSelectedMessage),
-    [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (message) =>
-      this.handleSingleFileSelected(message as SingleFileSelectedMessage),
-    [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (message) =>
-      this.handleSetMultipleFiles(message as SetMultipleFilesMessage),
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (message) =>
-      this.handleSetMultipleFiles(message as SetMultipleFilesMessage),
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (message) =>
-      this.handleSetMultipleFiles(message as SetMultipleFilesMessage),
-    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (message) =>
-      this.handleSetMultipleFiles(message as SetMultipleFilesMessage),
-    [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (message) =>
-      this.handleSetMultipleFiles(message as SetMultipleFilesMessage),
-    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (message) =>
-      this.handleSetDefaultOutputFiles(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (message) =>
-      this.handleAddMediaFile(
-        message as MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE>,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (message) =>
-      this.handleSetRecentCommits(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (message) =>
-      this.handleSetCurrentFile(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_CURRENT_FILE
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT]: (message) =>
-      this.handleSetSelectedCommit(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (message) =>
-      this.handleSetOpenedFiles(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_OPENED_FILES
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES]: (message) =>
-      this.handleSetAllSingleFiles(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (message) =>
-      this.handleInstructionTextPolished(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (message) =>
-      this.handleInstructionTextPolishError(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR
-        >,
-      ),
-    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (message) =>
-      this.handleInstructionTextTranscribed(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED
-        >,
-      ),
+
+  /**
+   * Type-safe message handler registry.
+   * Handlers receive typed data - no casts needed.
+   */
+  private readonly messageHandlers: MainViewHandlerRegistry = {
+    // Model and agent options
+    [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (data) =>
+      this.handleSetModelOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (data) =>
+      this.handleSetAgentOptions(data),
+
+    // Single file operations
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (data) =>
+      this.handleSetSingleFileOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (data) =>
+      this.handleSetSingleFileOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (data) =>
+      this.handleSetSingleFileOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (data) =>
+      this.handleSetSingleFileOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (data) =>
+      this.handleSetSingleFileOptions(data),
+    [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (data) => this.handleSetBaseFile(data),
+
+    // Single file selected
+    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (data) =>
+      this.handleSingleFileSelected(data),
+    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (data) =>
+      this.handleSingleFileSelected(data),
+    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (data) =>
+      this.handleSingleFileSelected(data),
+    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (data) =>
+      this.handleSingleFileSelected(data),
+    [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (data) =>
+      this.handleSingleFileSelected(data),
+
+    // Multiple file operations
+    [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (data) =>
+      this.handleSetMultipleFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (data) =>
+      this.handleSetMultipleFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (data) =>
+      this.handleSetMultipleFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (data) =>
+      this.handleSetMultipleFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (data) =>
+      this.handleSetMultipleFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (data) =>
+      this.handleSetDefaultOutputFiles(data),
+    [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (data) =>
+      this.handleAddMediaFile(data),
+
+    // Commit operations
+    [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (data) =>
+      this.handleSetRecentCommits(data),
+    [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (data) =>
+      this.handleSetCurrentFile(data),
+    [MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT]: (data) =>
+      this.handleSetSelectedCommit(data),
+    [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (data) =>
+      this.handleSetOpenedFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES]: (data) =>
+      this.handleSetAllSingleFiles(data),
+
+    // Instruction operations
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (data) =>
+      this.handleInstructionTextPolished(data),
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (data) =>
+      this.handleInstructionTextPolishError(data),
+    [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (data) =>
+      this.handleInstructionTextTranscribed(data),
+
+    // Recording state
     [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {
       this.isRecording = true;
     },
@@ -310,31 +285,21 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => {
       this.isRecording = false;
     },
-    [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (message) =>
-      this.handleShowApiKeyBanner(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER
-        >,
-      ),
+
+    // Banner operations
+    [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (data) =>
+      this.handleShowApiKeyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
       this.apiKeyBannerForced = false;
       this.apiKeyBanner = { visible: false };
     },
-    [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (message) =>
-      this.handleShowAgentConfigBanner(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER
-        >,
-      ),
+    [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (data) =>
+      this.handleShowAgentConfigBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () => {
       this.agentConfigBanner = { visible: false };
     },
-    [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (message) =>
-      this.handleShowDependencyBanner(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER
-        >,
-      ),
+    [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (data) =>
+      this.handleShowDependencyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () => {
       this.dependencyBanner = { visible: false };
     },
@@ -350,12 +315,10 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () => {
       this.loginBannerVisible = false;
     },
-    [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (message) =>
-      this.handleSetSelectedAgent(
-        message as MainViewMessageFor<
-          typeof MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT
-        >,
-      ),
+
+    // Agent selection
+    [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (data) =>
+      this.handleSetSelectedAgent(data),
   };
 
   override connectedCallback(): void {
@@ -374,19 +337,14 @@ export class MainApp extends BaseWebviewApp {
   }
 
   protected handleMessage(raw: unknown): void {
-    const result = mainViewMessages.MainViewMessageSchema.safeParse(raw);
-    if (!result.success) {
+    // Schema-driven dispatch - parses once with discriminated union,
+    // then routes to typed handler
+    dispatchMainViewMessage(raw, this.messageHandlers, (error) => {
       this.logSchemaError(
         '[MainApp] Main view message validation failed.',
-        result.error,
+        error,
       );
-      return;
-    }
-
-    const handler = this.messageHandlers[result.data.command];
-    if (handler) {
-      handler(result.data);
-    }
+    });
   }
 
   protected override firstUpdated(): void {

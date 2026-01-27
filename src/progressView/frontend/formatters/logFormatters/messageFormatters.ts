@@ -131,7 +131,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
     () => html`<pre class="error-details">${detailText}</pre>`,
   );
   // prettier-ignore
-  const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error" data-raw-content=${rawContent}>${detailTemplate}</div>`;
+  const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
 
   return html`
     <details

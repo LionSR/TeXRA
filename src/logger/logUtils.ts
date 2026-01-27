@@ -1,17 +1,10 @@
-// Third-party imports
 import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
 
-// Local imports - logger
-import { END_GROUP_STATUS } from '@shared/schemas';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { registry } from './LogChannelRegistry';
-
-// Local imports - constants
-
-// Type imports
-import type { EndGroupStatus } from '@shared/schemas';
-import type { VSCodeTransport } from './transports/VSCodeTransport';
 import type { LogUtilsOptions } from './logOptions';
+import type { VSCodeTransport } from './transports/VSCodeTransport';
 
 type ChannelKey = string;
 
@@ -21,7 +14,6 @@ interface ChannelContext {
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
 
-/** Key format matches LogChannelRegistry.getKey() for consistency. */
 function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
@@ -48,11 +40,6 @@ function pushGroupContext(
   contextStorage.enterWith(store);
 }
 
-/**
- * Removes the specified groupId from the context stack.
- * Uses lastIndexOf to find and remove only the most recent occurrence,
- * supporting both LIFO (normal) and non-LIFO (out-of-order) group endings.
- */
 function popGroupContext(
   channel: string,
   groupId: string,
@@ -84,10 +71,6 @@ function resolveActiveGroupByKey(
   return getStore().get(key)?.stack.at(-1);
 }
 
-/**
- * Get or create a channel entry.
- * Delegates to registry which handles its own caching.
- */
 function getOrCreateEntry(
   channel: string,
   isAgent: boolean,
@@ -95,10 +78,6 @@ function getOrCreateEntry(
   return registry.ensure(channel, { isAgent });
 }
 
-/**
- * Get transport, creating the channel if needed for writes, or returning
- * undefined for reads on non-existent channels.
- */
 function getTransport(
   channel: string,
   isAgent: boolean,
@@ -177,9 +156,6 @@ export async function runWithGroupContext<T>(
   }
 }
 
-/**
- * Log a debug message with options object.
- */
 export function debug(
   channel: string,
   message: string,
@@ -188,9 +164,6 @@ export function debug(
   logWithGroup(channel, 'debug', message, options);
 }
 
-/**
- * Log an info message with options object.
- */
 export function info(
   channel: string,
   message: string,
@@ -199,9 +172,6 @@ export function info(
   logWithGroup(channel, 'info', message, options);
 }
 
-/**
- * Log a warning message with options object.
- */
 export function warn(
   channel: string,
   message: string,
@@ -210,9 +180,6 @@ export function warn(
   logWithGroup(channel, 'warn', message, options);
 }
 
-/**
- * Log an error message with options object.
- */
 export function error(
   channel: string,
   message: string,

@@ -5,13 +5,13 @@ import { z } from 'zod';
 export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
-/** Unique UUID for each execution instance */
 export const ExecutionIdSchema = z.uuid();
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
-/** Valid storage key: UUID or '__default__' for legacy */
 const STORAGE_KEY_PATTERN =
   /^(__default__|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/** Valid storage key: UUID or '__default__' for legacy */
 export const StorageKeySchema = z
   .string()
   .regex(
@@ -21,12 +21,7 @@ export const StorageKeySchema = z
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
-/**
- * Unified identity for an execution - computed once, used everywhere.
- * - executionId: unique instance (for history, audit)
- * - storageKey: THE key for storage (files, usage, artifacts)
- * - streamTabId: UI tab identifier
- */
+/** Unified identity for an execution - computed once, used everywhere */
 export const ExecutionIdentitySchema = z.strictObject({
   executionId: ExecutionIdSchema,
   storageKey: StorageKeySchema,

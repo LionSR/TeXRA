@@ -1,16 +1,6 @@
-/**
- * Profile view message schemas.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - webview commands
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands';
-
-// =============================================================================
-// Data Schemas
-// =============================================================================
 
 export const ProfileUserSchema = z.object({
   email: z.string(),
@@ -35,10 +25,6 @@ export const TierConstantsSchema = z.object({
   max: z.string(),
 });
 export type TierConstants = z.infer<typeof TierConstantsSchema>;
-
-// =============================================================================
-// Backend → Frontend Messages
-// =============================================================================
 
 export const UpdateProfileMessageSchema = z.object({
   command: z.literal(PROFILE_VIEW_COMMANDS.UPDATE_PROFILE),

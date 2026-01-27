@@ -85,31 +85,25 @@ export class HistoryItem extends LitElement {
    * Uses direct DOM manipulation since mark.js creates marks dynamically.
    */
   protected override updated(): void {
-    // Only update if highlightedMatchIndex changed
     if (this.highlightedMatchIndex === this.previousHighlightedIndex) {
       return;
     }
 
     const marks = this.getMarks();
+    const prevMark =
+      this.previousHighlightedIndex !== null
+        ? marks[this.previousHighlightedIndex]
+        : null;
+    const currMark =
+      this.highlightedMatchIndex !== null
+        ? marks[this.highlightedMatchIndex]
+        : null;
 
-    // Remove current-match from previous
-    if (
-      this.previousHighlightedIndex !== null &&
-      marks[this.previousHighlightedIndex]
-    ) {
-      marks[this.previousHighlightedIndex].removeAttribute('data-current');
-    }
+    prevMark?.removeAttribute('data-current');
 
-    // Add current-match to new and scroll
-    if (
-      this.highlightedMatchIndex !== null &&
-      marks[this.highlightedMatchIndex]
-    ) {
-      marks[this.highlightedMatchIndex].setAttribute('data-current', 'true');
-      marks[this.highlightedMatchIndex].scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+    if (currMark) {
+      currMark.setAttribute('data-current', 'true');
+      currMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     this.previousHighlightedIndex = this.highlightedMatchIndex;
