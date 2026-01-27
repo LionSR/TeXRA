@@ -6,6 +6,7 @@ import {
 } from '@shared/schemas';
 import { computeAgentOptionsData } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
+import { RecordingManager } from '@common/managers/RecordingManager';
 import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -16,13 +17,10 @@ import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
-import {
-  RecordingManager,
-  FileManager,
-  ExecutionManager,
-  DiffManager,
-  InstructionManager,
-} from './managers';
+import { DiffManager } from './managers/DiffManager';
+import { ExecutionManager } from './managers/ExecutionManager';
+import { FileManager } from './managers/FileManager';
+import { InstructionManager } from './managers/InstructionManager';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;

@@ -21,10 +21,3 @@ export const StorageKeySchema = z
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
-/** Unified identity for an execution - computed once, used everywhere */
-const ExecutionIdentitySchema = z.strictObject({
-  executionId: ExecutionIdSchema,
-  storageKey: StorageKeySchema,
-  streamTabId: StreamTabIdSchema,
-});
-type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;

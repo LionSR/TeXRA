@@ -151,7 +151,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
 
 @customElement('permission-card')
 export class PermissionCard extends LitElement {
-  static styles = [designTokens, codiconIconClasses, permissionCardStyles];
+  static override styles = [designTokens, codiconIconClasses, permissionCardStyles];
 
   @property({ type: Object }) permission: PermissionState | null = null;
   @state() private showFeedback = false;
@@ -163,7 +163,7 @@ export class PermissionCard extends LitElement {
     }
   }
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     if (!this.permission) return nothing;
 
     return html`

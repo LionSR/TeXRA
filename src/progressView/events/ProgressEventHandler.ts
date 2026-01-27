@@ -11,7 +11,7 @@ import {
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
-import { WebviewUpdater } from '@progressView/managers';
+import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,

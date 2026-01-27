@@ -111,29 +111,18 @@ export class HistoryApp extends BaseWebviewApp {
   }
 
   private handleSearchChange(event: CustomEvent<{ term: string }>): void {
-    // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
     this.searchTerm = event.detail.term;
   }
 
-  private handleSearchNext(): void {
-    // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
-    this.searchAction = 'next';
+  private handleSearchNavigate(direction: SearchAction): void {
+    this.searchAction = direction;
   }
-
-  private handleSearchPrev(): void {
-    // Set reactive property - HistoryList reacts in willUpdate (Lit-native)
-    this.searchAction = 'prev';
-  }
-
-  // === Reactive property reset handlers (Lit-native Phase 9) ===
 
   private handleSearchNavigateComplete(): void {
-    // Reset action after child processes it
     this.searchAction = null;
   }
 
   private handleSearchClearComplete(): void {
-    // Reset trigger after child processes it
     this.clearSearchTrigger = false;
   }
 
@@ -162,8 +151,8 @@ export class HistoryApp extends BaseWebviewApp {
       <history-search-bar
         .matchCount=${this.matchCount}
         @history-search-change=${this.handleSearchChange}
-        @history-search-next=${this.handleSearchNext}
-        @history-search-prev=${this.handleSearchPrev}
+        @history-search-next=${() => this.handleSearchNavigate('next')}
+        @history-search-prev=${() => this.handleSearchNavigate('prev')}
       ></history-search-bar>
 
       <history-list

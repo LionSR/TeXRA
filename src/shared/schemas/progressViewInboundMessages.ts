@@ -9,17 +9,19 @@
  */
 import { z } from 'zod';
 
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
+import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 
 // ============================================================
 // Shared constants (must match backend definitions)
 // Defined inline to avoid backend module dependencies.
 // ============================================================
-
-/** Agent category values - must match AgentCategory enum in AgentDataclass.ts */
-const AGENT_CATEGORY_VALUES = ['workflow', 'toolUse'] as const;
 
 /** Tool edit approval actions - must match TOOL_EDIT_APPROVAL_ACTIONS in toolEditApproval.ts */
 const TOOL_EDIT_APPROVAL_ACTIONS = [
@@ -186,7 +188,7 @@ const SortStreamsMessageSchema = z.object({
 
 const FilterStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS),
-  filter: z.union([z.literal('all'), z.enum(AGENT_CATEGORY_VALUES)]),
+  filter: z.union([z.literal('all'), AgentCategorySchema]),
 });
 
 // ============================================================
@@ -278,8 +280,8 @@ const OpenLabelMessageSchema = z.object({
 // Followup task message schemas
 // ============================================================
 
-const SetupFollowupMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
+/** Shared followup configuration fields */
+const FollowupConfigSchema = z.object({
   stream: StreamTabIdSchema,
   mode: z.enum(['chat', 'workflow', 'merge']),
   agent: z.string().min(1),
@@ -289,15 +291,12 @@ const SetupFollowupMessageSchema = z.object({
   attachAgentOutputs: z.boolean().optional(),
 });
 
-const RunFollowupMessageSchema = z.object({
+const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
+});
+
+const RunFollowupMessageSchema = FollowupConfigSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
-  stream: StreamTabIdSchema,
-  mode: z.enum(['chat', 'workflow', 'merge']),
-  agent: z.string().min(1),
-  model: z.string().min(1),
-  includeInstruction: z.boolean().optional(),
-  initialQuestion: z.string().optional(),
-  attachAgentOutputs: z.boolean().optional(),
 });
 
 // ============================================================
@@ -382,11 +381,6 @@ export type ProgressViewInboundMessage = z.infer<
 // ============================================================
 // Type-safe handler registry and dispatcher
 // ============================================================
-
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 
 export type ProgressViewInboundHandlerRegistry =
   HandlerRegistry<ProgressViewInboundMessage>;

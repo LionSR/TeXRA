@@ -20,24 +20,25 @@ export const OptionalStreamIdSchema = z.union([
 ]);
 export type OptionalStreamId = z.infer<typeof OptionalStreamIdSchema>;
 
-export const ToolEditPermissionSchema = z.strictObject({
+/** Common permission request fields */
+const PermissionBaseSchema = z.strictObject({
   requestId: z.string(),
+  allowBypass: z.boolean(),
+  streamId: OptionalStreamIdSchema,
+});
+
+export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
   path: z.string(),
   relativePath: z.string(),
   sourceTool: z.string(),
-  allowBypass: z.boolean(),
-  streamId: OptionalStreamIdSchema,
   addedLines: z.int().nonnegative(),
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
 });
 export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 
-export const BashPermissionSchema = z.strictObject({
-  requestId: z.string(),
+export const BashPermissionSchema = PermissionBaseSchema.extend({
   command: z.string(),
-  allowBypass: z.boolean(),
-  streamId: OptionalStreamIdSchema,
 });
 export type BashPermission = z.infer<typeof BashPermissionSchema>;
 

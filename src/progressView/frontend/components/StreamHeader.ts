@@ -105,7 +105,7 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
-  static styles = [
+  static override styles = [
     commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
@@ -301,7 +301,7 @@ export class StreamHeader extends LitElement {
   }> = [];
   @property({ type: Boolean }) yoloActive = false;
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
       return nothing;
     }

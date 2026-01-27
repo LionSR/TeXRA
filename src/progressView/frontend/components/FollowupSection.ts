@@ -57,7 +57,7 @@ export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
 
 @customElement('followup-section')
 export class FollowupSection extends LitElement {
-  static styles = [
+  static override styles = [
     codiconIconClasses,
     css`
       :host {
@@ -204,7 +204,7 @@ export class FollowupSection extends LitElement {
     }
   }
 
-  render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult | typeof nothing {
     // Visibility computed from declarative props
     // Note: READY streams have their status deleted from statusMemory, so
     // this.status will be undefined for ready streams. Treat undefined as ready.

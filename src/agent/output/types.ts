@@ -1,14 +1,6 @@
-/**
- * Output file types used by agent output handlers.
- */
-
-// Type imports
 import type { FileLocation } from '@shared/schemas';
 
-/**
- * Internal mapping for file relationships (used by OutputHandler).
- * All maps are indexed by OUTPUT path for efficient lineage lookup.
- */
+/** Internal mapping for file relationships (used by OutputHandler). All maps indexed by OUTPUT path. */
 export interface RoundFileMapping {
   /** Output path → base FileLocation (for round-based diffs) */
   baseToOutput: Map<string, FileLocation>;

@@ -9,7 +9,7 @@ import { ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { formatZodError } from '@common/errors';
-import { AgentHistoryManager } from '@common/history';
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 

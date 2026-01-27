@@ -68,18 +68,6 @@ export class HistoryItem extends LitElement {
     );
   }
 
-  private handleDeleteClick(): void {
-    this.handleAction('delete');
-  }
-
-  private handleRestoreClick(): void {
-    this.handleAction('restore');
-  }
-
-  private handleRerunClick(): void {
-    this.handleAction('rerun');
-  }
-
   /**
    * React to highlightedMatchIndex changes - apply current match attribute.
    * Uses direct DOM manipulation since mark.js creates marks dynamically.
@@ -231,19 +219,19 @@ export class HistoryItem extends LitElement {
               icon="trash"
               label="Delete"
               title="Delete"
-              @click=${this.handleDeleteClick}
+              @click=${() => this.handleAction('delete')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="reply"
               label="Restore"
               title="Restore"
-              @click=${this.handleRestoreClick}
+              @click=${() => this.handleAction('restore')}
             ></vscode-toolbar-button>
             <vscode-toolbar-button
               icon="debug-rerun"
               label="Rerun"
               title="Rerun"
-              @click=${this.handleRerunClick}
+              @click=${() => this.handleAction('rerun')}
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>

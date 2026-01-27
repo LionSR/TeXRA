@@ -1,16 +1,16 @@
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
+import { ModelHandlerXAI } from '@agent/modelHandlers/modelHandlerXAI';
+import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
+import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import {
-  ModelHandler,
-  ModelHandlerAnthropic,
-  ModelHandlerGoogleGenAI,
-  ModelHandlerDeepSeek,
-  ModelHandlerXAI,
-  ModelHandlerKimi,
-  ModelHandlerDashScope,
   ModelHandlerOpenRouter,
   ModelHandlerAnthropicViaOpenRouter,
-  ModelHandlerOpenAI,
-  ModelHandlerOpenAIResponse,
-} from '@agent/modelHandlers';
+} from '@agent/modelHandlers/modelHandlerOpenRouter';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import * as logger from '@logger/logUtils';

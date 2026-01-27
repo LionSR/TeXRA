@@ -9,7 +9,7 @@ export const profileViewStyles: CSSResult = css`
     color: var(--vscode-foreground);
     margin-top: var(--spacing-xlarge);
     margin-bottom: var(--spacing-medium);
-    font-size: 1.2em;
+    font-size: var(--font-size-lg);
     border-bottom: var(--border-thin) solid var(--color-border);
     padding-bottom: var(--spacing-small);
   }
@@ -192,7 +192,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-option input[type='radio'] {
-    margin-top: 3px;
+    margin-top: var(--spacing-tiny);
     accent-color: var(--vscode-focusBorder);
   }
 
@@ -248,9 +248,9 @@ export const profileViewStyles: CSSResult = css`
     margin-left: auto;
     border: solid var(--color-text-secondary);
     border-width: 0 1.5px 1.5px 0;
-    padding: 3px;
+    padding: var(--spacing-tiny);
     transform: rotate(45deg);
-    opacity: 0.6;
+    opacity: var(--opacity-subtle);
     transition: transform 0.2s ease;
   }
 
@@ -263,7 +263,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .separator {
-    opacity: 0.5;
+    opacity: var(--opacity-disabled);
   }
 
   .models-list-container {

@@ -7,7 +7,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles/litStyles';
+import { designTokens } from '@shared/styles';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from '../events';
@@ -36,7 +36,7 @@ export class MemoryToggle extends LitElement {
   private handleChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
-      MemoryViewEvents.toggleEnabled(Boolean(target?.checked)),
+      MemoryViewEvents.toggleEnabled({ enabled: Boolean(target?.checked) }),
     );
   }
 
