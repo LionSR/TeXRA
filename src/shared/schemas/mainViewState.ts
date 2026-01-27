@@ -1,19 +1,9 @@
-/**
- * Main view state and UI schema definitions.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - reuse option schemas from messages (avoid duplication)
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
 } from './mainViewMessages';
-
-// =============================================================================
-// Core enums
-// =============================================================================
 
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
@@ -34,10 +24,6 @@ export const MultipleFileTypeSchema = z.enum([
   'output',
 ]);
 export type MultipleFileType = z.infer<typeof MultipleFileTypeSchema>;
-
-// =============================================================================
-// Persisted state schema
-// =============================================================================
 
 export const MainViewPersistedStateSchema = z.object({
   sessionType: SessionTypeSchema.prefault('toolUse'),
@@ -78,10 +64,6 @@ export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;
 
-// =============================================================================
-// Banner UI schemas
-// =============================================================================
-
 export const BannerStateSchema = z.object({
   visible: z.boolean(),
 });
@@ -105,10 +87,6 @@ export const DependencyBannerStateSchema = BannerStateSchema.extend({
   missingTools: z.array(z.string()).nullish(),
 });
 export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
-
-// =============================================================================
-// UI configuration schemas
-// =============================================================================
 
 export const FileSelectConfigSchema = z.object({
   type: FileTypeSchema,
@@ -141,11 +119,6 @@ export const CheckboxValuesSchema = MainViewPersistedStateSchema.pick({
 });
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
 
-// =============================================================================
-// Structured state schemas (for MainApp state consolidation)
-// =============================================================================
-
-/** Single file selections */
 export const SingleFilesSchema = z.object({
   inputFile: z.string(),
   referenceFile: z.string(),
@@ -156,7 +129,6 @@ export const SingleFilesSchema = z.object({
 });
 export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
-/** File options (dropdown options for each file type) */
 export const FileOptionsSchema = z.object({
   inputFile: z.array(z.string()),
   referenceFile: z.array(z.string()),
@@ -168,7 +140,6 @@ export const FileOptionsSchema = z.object({
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
-/** Multiple file selections */
 export const MultiFilesSchema = z.object({
   inputFiles: z.array(z.string()),
   referenceFiles: z.array(z.string()),
@@ -178,7 +149,6 @@ export const MultiFilesSchema = z.object({
 });
 export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 
-/** Multiple files visibility flags */
 export const MultiFilesVisibleSchema = z.object({
   inputFiles: z.boolean(),
   referenceFiles: z.boolean(),
@@ -188,11 +158,6 @@ export const MultiFilesVisibleSchema = z.object({
 });
 export type MultiFilesVisible = z.infer<typeof MultiFilesVisibleSchema>;
 
-// =============================================================================
-// Context value schemas (for @lit/context providers)
-// =============================================================================
-
-/** File state context value - passed to file selection components */
 export const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
   checkboxValues: CheckboxValuesSchema,
@@ -204,7 +169,6 @@ export const FileStateContextSchema = z.object({
 });
 export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
 
-/** Session context value - passed to instruction panel */
 export const SessionContextSchema = z.object({
   sessionType: SessionTypeSchema,
   instruction: z.string(),

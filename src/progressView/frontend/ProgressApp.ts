@@ -57,7 +57,7 @@ import {
   handleToolbarCommand,
   type FrontendEventHandlerContext,
 } from './eventHandlers';
-import { MESSAGE_HANDLERS } from './messageHandlerRegistry';
+import { dispatchMessage } from './messageDispatcher';
 import { getFilteredStreams } from './stateUtils';
 
 // Local imports - progress view contexts
@@ -68,7 +68,7 @@ import {
 } from './contexts/streamContexts';
 
 // Local imports - progress view message handlers
-import type { MessageHandlerContext } from './messageHandlers';
+import type { MessageHandlerContext } from './messageDispatcher';
 
 // Local imports - progress view components
 import './components/StreamTabs';
@@ -239,15 +239,9 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected handleMessage(raw: unknown): void {
-    if (!raw || typeof raw !== 'object') return;
-    if (!('command' in raw) || typeof raw.command !== 'string') return;
-    const command = raw.command;
-
-    // Look up and invoke the appropriate message handler
-    const handler = MESSAGE_HANDLERS[command];
-    if (handler) {
-      handler(raw, this.createMessageHandlerContext());
-    }
+    // Schema-driven dispatch - parses once with discriminated union,
+    // then routes to typed handler
+    dispatchMessage(raw, this.createMessageHandlerContext());
   }
 
   private getActiveStreamInfo(): StreamTabInfo | null {

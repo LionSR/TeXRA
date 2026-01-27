@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { MESSAGE_TYPES, MessageTypeSchema } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 
-// ============================================================================
-// Filter Schemas
-// ============================================================================
-
 export const FilterOptionsSchema = z.object({
   level: z.enum(['debug', 'info', 'warn', 'error']),
   messageType: MessageTypeSchema,
@@ -19,14 +15,6 @@ export const FilterResultSchema = z.object({
 });
 export type FilterResult = z.infer<typeof FilterResultSchema>;
 
-/**
- * Determines whether a log message should be emitted to the progress view
- * and returns the debug mode state for setting the verbose flag.
- *
- * This filtering logic is shared between:
- * - VSCodeTransport.emitLogEvent() (winston transport path)
- * - AgentLogger.createStream() (stream-based logging path)
- */
 export function getEmitFilter(options: FilterOptions): FilterResult {
   const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
   // Filter: INTERNAL messages always hidden; debug-level messages hidden unless debugMode

@@ -1,21 +1,13 @@
-/**
- * Progress View Message Schemas
- *
- * Shared message envelope schemas for communication between
- * backend (WebviewUpdater) and frontend (ProgressApp).
- *
- * These schemas compose existing data schemas from this directory
- * and add the command discriminator for type-safe dispatch.
- */
-
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - use relative imports within schemas directory
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 import { LogMessageDataSchema } from './log';
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from './mainViewMessages';
 import { OutputFileInfoSchema } from './output';
 import {
   AgentProposalPromptSchema,
@@ -32,36 +24,23 @@ import { StreamStateSchema } from './streamState';
 import { TaskGroupSchema, UpdateTaskGroupPayloadSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
-import {
-  AgentOptionDataSchema,
-  ModelOptionDataSchema,
-} from './mainViewMessages';
 
-// Local imports - command constants
-
-// ============================================================================
 // Shared Field Schemas
-// ============================================================================
 
-/** Agent category filter - 'all' or specific category */
 export const AgentCategoryFilterSchema = z.union([
   z.literal('all'),
   AgentCategorySchema,
 ]);
+
 export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
-// ============================================================================
-// Backend → Frontend Messages (Outbound)
-// ============================================================================
-
-// --- Stream Management ---
+// Backend → Frontend Messages
 
 export const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
-  /** Full stream states keyed by stream ID - backend is source of truth */
   streamStates: z.record(z.string(), StreamStateSchema).optional(),
 });
 
@@ -76,8 +55,6 @@ export const UpdateStatusMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STATUS),
   status: StreamStatusSchema,
 });
-
-// --- Log Messages ---
 
 export const UpdateLogsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_LOGS),
@@ -109,8 +86,6 @@ export const UpdateLogMessageSchema = z.object({
   logMessage: LogMessageDataSchema,
 });
 
-// --- Files ---
-
 export const UpdateFilesMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
   stream: StreamTabIdSchema,
@@ -127,16 +102,12 @@ export const UpdateMissingOutputsMessageSchema = z.object({
   reset: z.boolean().optional(),
 });
 
-// --- Instruction ---
-
 export const UpdateInstructionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   instruction: InstructionUpdateSchema.nullable(),
   agentCategory: z.string().optional(),
 });
-
-// --- Task Groups ---
 
 export const AddTaskGroupMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP),
@@ -149,15 +120,11 @@ export const UpdateTaskGroupMessageSchema = z.object({
   update: UpdateTaskGroupPayloadSchema,
 });
 
-// --- Todos ---
-
 export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   stream: StreamTabIdSchema,
   todos: z.array(TodoItemSchema),
 });
-
-// --- Usage ---
 
 export const UpdateUsageMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_USAGE),
@@ -178,15 +145,11 @@ export const UpdateContextStateMessageSchema = z.object({
   contextState: ContextStateSchema,
 });
 
-// --- Queued Follow-ups ---
-
 export const UpdateQueuedFollowUpsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
   stream: StreamTabIdSchema,
   messages: z.array(z.string()),
 });
-
-// --- Tool Edit Approval ---
 
 export const ShowToolEditApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL),
@@ -204,8 +167,6 @@ export const UpdateToolEditApprovalStateMessageSchema = z.object({
   bypassActive: z.boolean(),
 });
 
-// --- Bash Approval ---
-
 export const ShowBashApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL),
   request: BashApprovalPromptSchema,
@@ -215,8 +176,6 @@ export const ResolveBashApprovalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL),
   requestId: z.string(),
 });
-
-// --- Retry Request ---
 
 export const ShowRetryRequestMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST),
@@ -228,8 +187,6 @@ export const ResolveRetryRequestMessageSchema = z.object({
   streamId: StreamTabIdSchema,
 });
 
-// --- Agent Proposal ---
-
 export const ShowAgentProposalMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL),
   proposal: AgentProposalPromptSchema,
@@ -240,8 +197,6 @@ export const ResolveAgentProposalMessageSchema = z.object({
   proposalId: z.string(),
 });
 
-// --- Follow-up Text ---
-
 export const FollowUpTextPolishedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
   text: z.string(),
@@ -251,8 +206,6 @@ export const FollowUpTextTranscribedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED),
   text: z.string(),
 });
-
-// --- Recording ---
 
 export const RecordingStartedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
@@ -266,8 +219,6 @@ export const RecordingErrorMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_ERROR),
 });
 
-// --- Followup Options ---
-
 export const SetFollowupOptionsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
   workflowAgentsData: z.array(AgentOptionDataSchema).optional(),
@@ -276,14 +227,10 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
-// --- Theme ---
-
 export const SetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: z.enum(['dark', 'light']),
 });
-
-// --- Stream Deletion (extension host → frontend) ---
 
 export const DeleteStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
@@ -294,14 +241,8 @@ export const DeleteAllMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
 });
 
-// ============================================================================
-// Discriminated Union for Type-Safe Dispatch
-// ============================================================================
+// Discriminated Union
 
-/**
- * All backend → frontend messages for the progress view.
- * Use this for parsing incoming messages with full type narrowing.
- */
 export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
   'command',
   [
@@ -363,9 +304,7 @@ export type ProgressViewOutboundMessage = z.infer<
   typeof ProgressViewOutboundMessageSchema
 >;
 
-// ============================================================================
-// Type Exports for Individual Messages
-// ============================================================================
+// Type Exports
 
 export type UpdateStreamsMessage = z.infer<typeof UpdateStreamsMessageSchema>;
 export type UpdateLogsMessage = z.infer<typeof UpdateLogsMessageSchema>;

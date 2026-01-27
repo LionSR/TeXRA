@@ -1,57 +1,43 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Type imports
-
-// Internal imports
-import { STREAM_STATUS } from '@shared/schemas';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
+import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
   type ActiveStreamId,
 } from '@progressView/state/ProgressViewState';
-import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  STREAM_STATUS,
+  type StorageKey,
+  type StreamStatus,
+  type StreamTabId,
+  type TaskGroup,
+  type TokenUsageStats,
+} from '@shared/schemas';
 
-// Local file imports - domain event handlers
 import {
   canUpdateWebview,
   type EventHandlerContext,
 } from './EventHandlerContext';
+import { withEventErrorHandling } from './errorHandling';
+import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerLogEventHandlers } from './LogEventHandlers';
 import { registerOutputEventHandlers } from './OutputEventHandlers';
-import { registerUsageEventHandlers } from './UsageEventHandlers';
 import { registerTodoEventHandlers } from './TodoEventHandlers';
-import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
-import { withEventErrorHandling } from './errorHandling';
-import type { StreamStatus } from '@shared/schemas';
-import type { TaskGroup } from '@shared/schemas';
-import type { TokenUsageStats } from '@shared/schemas';
-import type { StreamTabId, StorageKey } from '@shared/schemas';
+import { registerUsageEventHandlers } from './UsageEventHandlers';
 
-// Re-export for consumers
 export type { UICallbacks };
 
-/**
- * Handles progress event bus subscriptions for the progress view.
- * Provides a clean separation between event handling and business logic
- * by delegating to the state manager and webview updater.
- */
+/** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
-  /**
-   * Buffer for task groups that arrive before their stream is activated.
-   * Key: stream ID, Value: array of groups waiting to be sent to frontend.
-   * Groups are replayed when setActiveStream is processed for the stream.
-   */
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
-
-  /** Shared context for domain handlers - used for canUpdateWebview checks */
   private readonly ctx: EventHandlerContext;
 
   constructor(
@@ -63,10 +49,6 @@ export class ProgressEventHandler {
     this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
   }
 
-  /**
-   * Update agentCategoryFilter to match the session category if needed.
-   * Only updates when filter is not 'all' and doesn't already match.
-   */
   private maybeUpdateFilterForCategory(
     category: AgentCategory | undefined,
   ): void {
@@ -79,24 +61,10 @@ export class ProgressEventHandler {
     }
   }
 
-  /**
-   * Setup all event bus listeners.
-   * Uses AbortController for cleanup - single dispose aborts all listeners.
-   *
-   * Event handling is split into focused domain handlers:
-   * - Core stream/task events: handled inline (stream lifecycle)
-   * - Log events: LogEventHandlers.ts
-   * - Output events: OutputEventHandlers.ts
-   * - Usage events: UsageEventHandlers.ts
-   * - Todo events: TodoEventHandlers.ts
-   * - Follow-up events: FollowUpEventHandlers.ts
-   * - UI events: UIEvents.ts
-   */
   setupEventListeners(): vscode.Disposable[] {
     const controller = new AbortController();
     const { signal } = controller;
 
-    // Core stream/task events (handled inline - stream lifecycle)
     bus.on('setActiveStream', this.handleSetActiveStream, { signal });
     bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
     bus.on('setTaskState', this.handleSetTaskState, { signal });
@@ -106,7 +74,6 @@ export class ProgressEventHandler {
       signal,
     });
 
-    // Domain-specific event handlers (modular, focused files)
     registerLogEventHandlers(bus, this.ctx, signal);
     registerOutputEventHandlers(bus, this.ctx, signal);
     registerUsageEventHandlers(bus, this.ctx, signal);
@@ -114,11 +81,9 @@ export class ProgressEventHandler {
     registerFollowUpEventHandlers(bus, this.ctx, signal);
     registerUIEvents(bus, this.uiCallbacks, signal);
 
-    // Single disposable that cleans up everything
     return [new vscode.Disposable(() => controller.abort())];
   }
 
-  // Event handlers - arrow functions to preserve `this`
   private handleSetActiveStream = (
     payload: ProgressEventPayloads['setActiveStream'],
   ): void => {
@@ -129,7 +94,6 @@ export class ProgressEventHandler {
     );
   };
 
-  /** Core logic for setActiveStream event, separated for clarity */
   private async processSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
   ): Promise<void> {
@@ -148,10 +112,7 @@ export class ProgressEventHandler {
 
     if (!this.webviewUpdater.isAvailable()) return;
 
-    // Update stream tabs list (required to set activeStream in frontend)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
-
-    // Refresh stream content: status first (critical), then logs, then todos/instruction
     this.refreshStreamSurface(streamId, { updateInstruction: true });
   }
 
@@ -196,9 +157,6 @@ export class ProgressEventHandler {
           this.sendInstructionUpdate(streamId);
         }
 
-        // Update stream tabs when filter changes or active stream gets metadata.
-        // Filter change affects visible streams; active stream update ensures
-        // tab label reflects latest taskState (agent name, input file, etc.).
         if (this.webviewUpdater.isAvailable()) {
           const filterChanged =
             this.state.agentCategoryFilter !== previousFilter;
@@ -238,9 +196,6 @@ export class ProgressEventHandler {
           await this.initializeStreamForTaskGroup(streamId);
         }
 
-        // Send to webview if available and stream is active, otherwise buffer.
-        // IMPORTANT: Always buffer when webview unavailable to prevent groups
-        // from being dropped during initialization (e.g., Init stage).
         if (
           this.webviewUpdater.isAvailable() &&
           streamId === this.state.activeStream
@@ -279,14 +234,6 @@ export class ProgressEventHandler {
     }
   };
 
-  // ============================================================================
-  // Helper Methods
-  // ============================================================================
-
-  /**
-   * Send instruction updates for the provided stream.
-   * @param runIdHint - Use undefined to auto-resolve, null to skip persistence
-   */
   private sendInstructionUpdate(
     stream: StreamTabId | '',
     runIdHint?: StorageKey | null,
@@ -303,11 +250,9 @@ export class ProgressEventHandler {
     const taskState = this.state.getTaskState(stream);
     const category = this.getStreamCategory(stream);
 
-    // Use provided runId or read cached activeRunId (no expensive resolution)
     const runId =
       runIdHint === undefined ? this.state.getActiveRunId(stream) : runIdHint;
 
-    // Preserve existing timestamp if instruction already stored for this run
     const existingInstruction = runId
       ? this.state.getRunInstruction(stream, runId)
       : undefined;
@@ -332,23 +277,6 @@ export class ProgressEventHandler {
     );
   }
 
-  /**
-   * Refresh all webview surface data for a specific stream.
-   *
-   * Sends UPDATE_LOGS with action: 'render' (or 'clear' if stream is empty).
-   * Frontend detects stream switches using its lastRenderedStream tracking
-   * and decides whether to do full rebuild or incremental update.
-   *
-   * NOTE: Status/todos/instruction are sent as separate small messages rather
-   * than batched into UPDATE_LOGS. This ensures critical UI feedback (status)
-   * isn't blocked by potentially large log payloads, and provides fault isolation
-   * if the large payload has issues.
-   *
-   * @param stream - Stream to refresh, or empty string to clear all content.
-   * @param options.updateInstruction - If true (default), also update instruction panel.
-   * @returns The resolved active run ID, useful for callers that need to pass it
-   *   to sendInstructionUpdate separately (when updateInstruction is false).
-   */
   public refreshStreamSurface(
     stream: ActiveStreamId,
     options: { updateInstruction?: boolean } = {},
@@ -357,13 +285,11 @@ export class ProgressEventHandler {
 
     const { updateInstruction = true } = options;
 
-    // Handle empty stream (clear all content)
     if (!stream) {
       this.clearStreamSurface(updateInstruction);
       return null;
     }
 
-    // Collect stream data (activeRunId is already set by event handlers when data arrives)
     const messages = this.state.streamTabs.getMessages(stream);
     const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
     const activeRunId = this.state.getActiveRunId(stream);
@@ -382,14 +308,8 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream) ?? [];
     const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
-    // Clear pendingTaskGroups since we're doing a full refresh from state.taskGroups.
-    // This handles both: (1) processSetActiveStream flow (replayPendingTaskGroups called first),
-    // (2) updateWebview flow (called directly without replay, groups already in state).
     this.pendingTaskGroups.delete(stream);
 
-    // NOTE: Status already sent via updateAll() → UPDATE_STREAMS → handleUpdateStreams.
-
-    // Send primary content update (includes all run-scoped data in single message)
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,
@@ -399,7 +319,6 @@ export class ProgressEventHandler {
       contextState,
     });
 
-    // Send ephemeral state separately (small, independent messages)
     this.webviewUpdater.updateTodos(stream, todos);
 
     if (updateInstruction) {
@@ -409,13 +328,6 @@ export class ProgressEventHandler {
     return activeRunId;
   }
 
-  /**
-   * Clear all webview content when no stream is active.
-   *
-   * Note: updateLogContent with action='clear' triggers the frontend to clear
-   * all run-scoped state (files, missing outputs, usage). No separate reset
-   * messages needed - the frontend handles this in its full rebuild path.
-   */
   private clearStreamSurface(clearInstruction: boolean): void {
     this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
     this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
@@ -424,24 +336,10 @@ export class ProgressEventHandler {
     }
   }
 
-  /**
-   * Get current stream status.
-   * Delegates to StreamStatusService as the single source of truth.
-   */
   getStreamStatus(streamId: StreamTabId): StreamStatus | undefined {
     return StreamStatusService.get(streamId);
   }
 
-  /**
-   * Set the status for a specific stream synchronously.
-   * Updates StreamStatusService (single source of truth) and triggers webview updates.
-   *
-   * For NEW streams: full refresh (adds stream to tab list)
-   * For EXISTING streams: targeted status update only (no rebuild)
-   *
-   * Tab reordering is driven by log timestamps, not status changes.
-   * Status is just a visual indicator - no need to rebuild tabs for it.
-   */
   setStreamStatus(
     streamId: StreamTabId,
     status: StreamStatus,
@@ -459,7 +357,6 @@ export class ProgressEventHandler {
     const streamExists = this.state.streamTabs.has(streamId);
 
     if (!streamExists) {
-      // New stream - full refresh to add it to tab list
       const streamCategory = this.getStreamCategory(streamId);
       if (streamCategory) {
         this.maybeUpdateFilterForCategory(streamCategory);
@@ -468,15 +365,11 @@ export class ProgressEventHandler {
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.updateAll(this.state, statusesForRefresh);
     } else {
-      // Existing stream - targeted status update only
       const lastTimestamp = this.state.streamTabs.getLastTimestamp(streamId);
       this.webviewUpdater.updateStreamStatus(streamId, status, lastTimestamp);
     }
   }
 
-  /**
-   * Get the agent category for a stream from taskState or hints.
-   */
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     const taskState = this.state.getTaskState(streamId);
     return (
@@ -485,18 +378,10 @@ export class ProgressEventHandler {
     );
   }
 
-  /**
-   * Get a copy of all stream statuses.
-   * Delegates to StreamStatusService as the single source of truth.
-   */
   getAllStreamStatuses(): Map<StreamTabId, StreamStatus> {
     return StreamStatusService.getAll();
   }
 
-  /**
-   * Buffer a task group for later replay when the stream becomes active.
-   * Called by TaskGroupEvents when addTaskGroup arrives before setActiveStream.
-   */
   private bufferTaskGroupForReplay(
     streamId: StreamTabId,
     group: TaskGroup,
@@ -506,10 +391,6 @@ export class ProgressEventHandler {
     this.pendingTaskGroups.set(streamId, pending);
   }
 
-  /**
-   * Replay any buffered task groups for a stream after it becomes active.
-   * Groups are only deleted after successful replay to preserve them if webview unavailable.
-   */
   private replayPendingTaskGroups(streamId: StreamTabId): void {
     const pending = this.pendingTaskGroups.get(streamId);
     if (!pending || pending.length === 0) {
@@ -524,16 +405,11 @@ export class ProgressEventHandler {
     }
   }
 
-  /**
-   * Initialize a stream when task group events arrive before dedicated
-   * status or activation events, preserving any existing status metadata.
-   */
   private async initializeStreamForTaskGroup(
     streamId: StreamTabId,
   ): Promise<void> {
     await this.state.streamTabs.ensureStream(streamId);
 
-    // Set status to RUNNING if not already set (without emitting to avoid redundant updates)
     if (!StreamStatusService.has(streamId)) {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
     }
@@ -548,32 +424,18 @@ export class ProgressEventHandler {
       return;
     }
 
-    // Coordinated update: UPDATE_STREAMS first (sets frontend activeStream),
-    // then stream content (requires activeStream to be set)
     this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
     this.refreshStreamSurface(streamId, { updateInstruction: true });
   }
 
-  /**
-   * Clear pending task groups for a specific stream.
-   * Called when a stream is deleted to prevent memory leaks.
-   */
   clearPendingTaskGroups(streamId: StreamTabId): void {
     this.pendingTaskGroups.delete(streamId);
   }
 
-  /**
-   * Clear all pending task groups.
-   * Called when all streams are deleted to prevent memory leaks.
-   */
   clearAllPendingTaskGroups(): void {
     this.pendingTaskGroups.clear();
   }
 
-  /**
-   * Reset running tasks to ERROR status (used during webview reload)
-   * Returns the list of affected streams for further processing
-   */
   resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
     const waitingSet = waitingStreams ?? new Set<StreamTabId>();

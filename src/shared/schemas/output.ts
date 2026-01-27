@@ -1,13 +1,7 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { DiffStatsSchema } from '@agent/types/DiffTypes';
-import { ExecutionIdSchema } from './identifiers';
-
-// ============================================================================
-// File location schemas (browser-safe)
-// ============================================================================
+import { ExecutionIdSchema } from './identifiers.js';
 
 export const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
@@ -48,24 +42,17 @@ export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
 export type FileLocation = z.infer<typeof FileLocationSchema>;
 export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
-// ============================================================================
-// Output file schemas
-// ============================================================================
-
-/** Minimal output file reference - source name + location */
 export const OutputFileSchema = z.strictObject({
   source: z.string(),
   location: FileLocationSchema,
 });
 
-/** File lineage - tracks where files came from */
 export const FileLineageSchema = z.strictObject({
   original: FileLocationSchema.nullable(),
   diffBase: FileLocationSchema.nullable(),
   diffFile: FileLocationSchema.nullable(),
 });
 
-/** Complete output file metadata (extends OutputFileSchema) */
 export const OutputFileInfoSchema = OutputFileSchema.extend({
   round: z.number().prefault(() => 0),
   lineage: FileLineageSchema.nullable(),
@@ -78,7 +65,6 @@ export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 
-/** XML summary schema with defaults via prefault */
 export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
     .record(z.string(), z.union([z.string(), z.array(z.string())]))
@@ -89,7 +75,6 @@ export const OutputXmlSummarySchema = z.strictObject({
 });
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
-/** Output from processing a conversation round */
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),
   rawOutput: FileLocationSchema.nullable(),

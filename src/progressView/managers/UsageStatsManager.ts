@@ -1,30 +1,20 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared schemas
 import {
   TokenUsageStatsSchema,
   type StorageKey,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-
-// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-
-// --- Zod Schemas for Usage Stats ---
 
 /** Coerces input to number, defaulting non-finite values to 0 */
 const FiniteNumber = z.coerce

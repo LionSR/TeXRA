@@ -1,4 +1,3 @@
-// Third-party imports
 import { encode as encodeEntities, decode as decodeEntities } from 'he';
 
 /**
@@ -19,8 +18,8 @@ export function decodeHtml(value: unknown): string {
  * Encode a list of values for safe HTML insertion as a separated string.
  */
 export function encodeListForHtml(values: unknown[], separator = ', '): string {
-  if (!Array.isArray(values) || values.length === 0) {
+  if (values.length === 0) {
     return '';
   }
-  return values.map((entry) => encodeHtml(entry)).join(separator);
+  return values.map((v) => encodeHtml(v)).join(separator);
 }
