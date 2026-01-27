@@ -54,7 +54,7 @@ import {
  * Natively serializable context prepared for a round.
  * Stores snapshots (not class instances) for structuredClone() compatibility.
  */
-export const RoundContextSchema = z.object({
+const RoundContextSchema = z.object({
   messages: z.array(ProviderMessageSchema),
   prefill: z.string(),
   stateRoundSnapshot: ConversationRoundStateSnapshotSchema,

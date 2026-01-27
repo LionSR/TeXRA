@@ -16,7 +16,4 @@ export {
 export { RemoteAgentLoader } from './RemoteAgentLoader';
 
 // VS Code-specific utilities
-export {
-  selectAgentInMainView,
-  type SelectAgentResult,
-} from './remoteAgentUtils';
+export { selectAgentInMainView } from './remoteAgentUtils';
