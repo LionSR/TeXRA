@@ -28,6 +28,8 @@ export * from './mainViewState';
 export * from './mainViewEvents';
 
 // Layer 5: View message schemas
+export * as commonViewMessages from './commonViewMessages';
+export { ThemeSchema, type Theme } from './commonViewMessages';
 export * from './progressViewMessages';
 export * from './progressViewInboundMessages';
 export * from './progressViewData';
