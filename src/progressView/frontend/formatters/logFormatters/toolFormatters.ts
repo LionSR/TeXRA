@@ -8,8 +8,8 @@ import {
   html,
   classMap,
   ifDefined,
-  renderToElement,
   type TemplateResult,
+  type FormatResult,
 } from '../litTemplates';
 
 // Local imports - shared schemas
@@ -35,7 +35,7 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
-import type { WebSearchPayload } from '@shared/schemas';
+import type { WebSearchPayload, LogMessageData } from '@shared/schemas';
 
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
@@ -105,13 +105,12 @@ function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   return 'Tool Use';
 }
 
-/** Format tool use log entry. */
-export function formatToolUse(
-  data: unknown,
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-): HTMLElement | null {
+/** Format tool use log entry as TemplateResult. */
+export function formatToolUseTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
   if (!normalizedToolLog) return null;
 
@@ -290,8 +289,9 @@ export function formatToolUse(
       : joinWithSeparator(sections);
 
   const fullTimestamp = new Date(timestamp).toISOString();
+  const shouldOpen = options?.defaultOpen ?? false;
 
-  const template = html`
+  return html`
     <details
       class=${classMap({
         'banner-details': true,
@@ -299,6 +299,7 @@ export function formatToolUse(
         'tool-use-error': showAsError,
         'tool-use-user-feedback': isUserFeedback,
       })}
+      ?open=${shouldOpen}
     >
       ${buildDetailsSummary({
         iconClass,
@@ -308,7 +309,7 @@ export function formatToolUse(
       })}
       <div
         class="banner-content log-entry-content"
-        data-log-id=${ifDefined(logId)}
+        data-log-id=${ifDefined(id)}
         data-group-id=${ifDefined(groupId)}
         data-timestamp=${ifDefined(fullTimestamp)}
       >
@@ -316,17 +317,14 @@ export function formatToolUse(
       </div>
     </details>
   `;
-
-  return renderToElement(template);
 }
 
-/** Format web search results from native provider tools. */
-export function formatWebSearch(
-  data: unknown,
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-): HTMLElement | null {
+/** Format web search results as TemplateResult. */
+export function formatWebSearchTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, data } = message;
   if (!data || typeof data !== 'object') return null;
 
   const { query, results, provider, status } = data as WebSearchPayload;
@@ -375,14 +373,16 @@ export function formatWebSearch(
       : joinWithSeparator(sections);
 
   const fullTimestamp = new Date(timestamp).toISOString();
+  const shouldOpen = options?.defaultOpen ?? false;
 
-  const template = html`
+  return html`
     <details
       class=${classMap({
         'banner-details': true,
         'tool-use-details': true,
         'tool-use-error': statusKey === 'failed',
       })}
+      ?open=${shouldOpen}
     >
       ${buildDetailsSummary({
         iconClass,
@@ -392,7 +392,7 @@ export function formatWebSearch(
       })}
       <div
         class="banner-content log-entry-content"
-        data-log-id=${ifDefined(logId)}
+        data-log-id=${ifDefined(id)}
         data-group-id=${ifDefined(groupId)}
         data-timestamp=${ifDefined(fullTimestamp)}
       >
@@ -400,6 +400,4 @@ export function formatWebSearch(
       </div>
     </details>
   `;
-
-  return renderToElement(template);
 }

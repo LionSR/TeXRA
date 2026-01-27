@@ -54,9 +54,6 @@ export interface SessionContextValue {
   workflowAgent: string;
   toolUseAgent: string;
   model: string;
-  workflowAgentOptionsHtml: string;
-  toolUseAgentOptionsHtml: string;
-  modelOptionsHtml: string;
   workflowAgentOptions: AgentOptionData[];
   toolUseAgentOptions: AgentOptionData[];
   modelOptions: ModelOptionData[];

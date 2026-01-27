@@ -8,6 +8,8 @@
 Phase 9 addresses remaining Lit anti-patterns identified in the codebase. This phase focuses on eliminating imperative patterns, document-level event listeners, manual DOM queries, classList manipulation, and HTML string building in favor of idiomatic Lit patterns.
 
 > **Status: Complete** (9.1-9.6 all complete, mark.js boundary cases documented as acceptable)
+>
+> **Known Issues:** Dual logic patterns exist for dropdown options (HTML + typed data coexist). See "Mixed State / Dual Logic Issues" section.
 
 ## Prerequisites
 
@@ -653,6 +655,69 @@ These patterns exist in shared utilities and are lower priority since they're he
 5. **src/progressView/frontend/components/LogList.ts** - querySelector in event handlers
    - Light DOM component with event delegation
    - Acceptable for Light DOM event handling pattern
+
+---
+
+## Known Mixed State / Dual Logic Issues
+
+The following patterns represent incomplete migrations where old and new code coexist:
+
+### 9.4a Dropdown Options Dual Data Flow (MEDIUM Priority)
+
+**Problem:** Backend sends BOTH `optionsHtml` (HTML strings) AND `optionsData` (typed arrays). Components check typed data first, fall back to HTML strings.
+
+**Affected Files:**
+
+| Layer     | File                            | Dual Fields                                                                                     |
+| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Backend   | `MainViewProvider.ts`           | Sends both `options` (HTML) and `optionsData`                                                   |
+| Backend   | `ProgressViewMessageHandler.ts` | Sends both `modelOptionsHtml` and `modelOptionsData`                                            |
+| State     | `MainApp.ts`                    | Stores `modelOptionsHtml` + `modelOptions`, `workflowAgentOptionsHtml` + `workflowAgentOptions` |
+| Context   | `mainViewContexts.ts`           | `SessionContextValue` has both `*OptionsHtml` and `*Options` fields                             |
+| Schema    | `mainViewMessages.ts`           | `optionsData` marked `@deprecated Use optionsData for Lit-native rendering`                     |
+| Component | `InstructionPanel.ts:253-326`   | `renderWorkflowAgentOptions()` checks typed first, falls back to HTML                           |
+
+**Current Pattern:**
+
+```typescript
+// InstructionPanel.ts - Dual logic
+private renderWorkflowAgentOptions(): TemplateResult {
+  if (session.workflowAgentOptions.length > 0) {
+    return renderAgentOptions(session.workflowAgentOptions, ...); // Lit-native
+  }
+  // Fallback to HTML string (legacy)
+  return html`${unsafeHTML(htmlOptions)}`; // Anti-pattern
+}
+```
+
+**Risk:** Doubled data transfer, inconsistent rendering paths, maintenance burden.
+
+**Resolution:**
+
+1. Remove `*OptionsHtml` fields from schemas and contexts
+2. Update backend to only send typed `optionsData`
+3. Remove fallback branches from components
+4. Delete `src/shared/utils/dropdown.ts` string manipulation utilities
+
+### 9.2a querySelector in Event Handlers (LOW Priority)
+
+**Problem:** LogList uses `@query` decorator for container but uses `querySelector` in event handlers for nested elements.
+
+**Location:** `src/progressView/frontend/components/LogList.ts:147-181`
+
+```typescript
+// Event handler uses querySelector
+const contentElem = copyButton
+  .closest('.banner-details')
+  ?.querySelector('.banner-content') as HTMLElement | null;
+
+const codeBlock = codeBlockCopy.closest('.code-block');
+const codeElem = codeBlock?.querySelector('code');
+```
+
+**Resolution:** This is acceptable for event delegation in Light DOM components. The pattern finds elements relative to event target, which is idiomatic for delegated handlers.
+
+---
 
 ### 2026-01-27 - Phase 9.6 SortableController Complete
 

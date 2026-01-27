@@ -9,7 +9,7 @@ import {
   unsafeHTML,
   classMap,
   ifDefined,
-  renderToElement,
+  type FormatResult,
 } from '../litTemplates';
 
 // Local imports - formatter helpers
@@ -18,9 +18,9 @@ import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
 
 // Local imports - shared schemas
-import type { LogLevel } from '@shared/schemas';
+import type { LogMessageData } from '@shared/schemas';
 
-// Banner configuration by content type
+// Banner configuration by messageType
 const BANNER_CONFIG: Record<
   string,
   {
@@ -30,13 +30,13 @@ const BANNER_CONFIG: Record<
     contentClass: string;
   }
 > = {
-  Thinking: {
+  thinking: {
     iconClass: 'codicon-lightbulb',
     labelText: 'Thinking',
     copyTitle: 'Copy thinking',
     contentClass: 'banner-content--thinking',
   },
-  Scratchpad: {
+  scratchpad: {
     iconClass: 'codicon-pencil',
     labelText: 'Scratchpad',
     copyTitle: 'Copy scratchpad',
@@ -44,25 +44,25 @@ const BANNER_CONFIG: Record<
   },
 };
 
-/** Format thinking or scratchpad banner content. */
-export function formatBannerContent(
-  text: string,
-  contentType: string,
-  logId: string,
-  groupId: string | undefined,
-  timestamp: number,
-): HTMLElement | null {
+/** Format thinking or scratchpad banner content as TemplateResult. */
+export function formatBannerContentTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, text, messageType } = message;
   const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
-  const config = BANNER_CONFIG[contentType] ?? BANNER_CONFIG.Thinking;
+  const config = BANNER_CONFIG[messageType ?? ''] ?? BANNER_CONFIG.thinking;
   const { fullTimestamp } = formatTimestamp(new Date(timestamp));
   const markdownHtml = processMarkdownContent(trimmedContent);
+  const shouldOpen = options?.defaultOpen ?? false;
 
-  const template = html`
+  return html`
     <details
       class="banner-details"
-      data-log-id=${ifDefined(logId)}
+      ?open=${shouldOpen}
+      data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
     >
@@ -79,26 +79,14 @@ export function formatBannerContent(
       </div>
     </details>
   `;
-
-  return renderToElement(template);
 }
 
-/** Format a model response with markdown rendering. */
-export function formatModelResponse({
-  id,
-  groupId,
-  timestamp,
-  verbose,
-  text,
-  level,
-}: {
-  id: string;
-  groupId?: string;
-  timestamp: number;
-  verbose?: boolean;
-  text: string;
-  level: LogLevel;
-}): HTMLElement | null {
+/** Format a model response as TemplateResult. */
+export function formatModelResponseTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { id, groupId, timestamp, verbose, text, level } = message;
   const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
@@ -106,11 +94,13 @@ export function formatModelResponse({
     new Date(timestamp),
   );
   const markdownHtml = processMarkdownContent(trimmedContent);
+  // Model response defaults to open (was hardcoded open before)
+  const shouldOpen = options?.defaultOpen ?? true;
 
-  const template = html`
+  return html`
     <details
       class="banner-details"
-      open
+      ?open=${shouldOpen}
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
@@ -137,6 +127,4 @@ export function formatModelResponse({
       </div>
     </details>
   `;
-
-  return renderToElement(template);
 }

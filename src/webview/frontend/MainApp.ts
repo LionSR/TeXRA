@@ -176,17 +176,8 @@ export class MainApp extends BaseWebviewApp {
   };
   @state() private isRecording = false;
   @state() private isPolishing = false;
-  /** @deprecated Use modelOptions for Lit-native rendering */
-  @state() private modelOptionsHtml = '';
-  /** @deprecated Use workflowAgentOptions for Lit-native rendering */
-  @state() private workflowAgentOptionsHtml = '';
-  /** @deprecated Use toolUseAgentOptions for Lit-native rendering */
-  @state() private toolUseAgentOptionsHtml = '';
-  /** Typed model options for Lit-native rendering */
   @state() private modelOptions: ModelOptionData[] = [];
-  /** Typed workflow agent options for Lit-native rendering */
   @state() private workflowAgentOptions: AgentOptionData[] = [];
-  /** Typed tool-use agent options for Lit-native rendering */
   @state() private toolUseAgentOptions: AgentOptionData[] = [];
   @state() private apiKeyBanner: ApiKeyBannerState = { visible: false };
   @state() private agentConfigBanner: AgentConfigBannerState = {
@@ -447,9 +438,6 @@ export class MainApp extends BaseWebviewApp {
       changed.has('workflowAgent') ||
       changed.has('toolUseAgent') ||
       changed.has('model') ||
-      changed.has('workflowAgentOptionsHtml') ||
-      changed.has('toolUseAgentOptionsHtml') ||
-      changed.has('modelOptionsHtml') ||
       changed.has('workflowAgentOptions') ||
       changed.has('toolUseAgentOptions') ||
       changed.has('modelOptions') ||
@@ -605,19 +593,14 @@ export class MainApp extends BaseWebviewApp {
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
-    // Store typed data (preferred for Lit-native rendering)
     if (message.optionsData) {
       this.modelOptions = message.optionsData;
     }
-    // Also store HTML for backward compatibility during migration
-    if (message.options) {
-      this.modelOptionsHtml = message.options;
-    }
     // Validate selected model exists in new options
-    if (this.model) {
-      const hasModel = message.optionsData
-        ? message.optionsData.some((opt) => opt.value === this.model)
-        : this.hasOptionValue(message.options ?? '', this.model);
+    if (this.model && message.optionsData) {
+      const hasModel = message.optionsData.some(
+        (opt) => opt.value === this.model,
+      );
       if (!hasModel) {
         this.model = '';
       }
@@ -627,40 +610,33 @@ export class MainApp extends BaseWebviewApp {
   private handleSetAgentOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS>,
   ): void {
-    const options = message.options ?? {};
     const optionsData = message.optionsData ?? {};
 
     // Workflow agents
     if (optionsData.workflow) {
       this.workflowAgentOptions = optionsData.workflow;
-    }
-    if (options.workflow !== null && options.workflow !== undefined) {
-      this.workflowAgentOptionsHtml = options.workflow;
-    }
-    // Validate selected workflow agent
-    if (this.workflowAgent) {
-      const hasAgent = optionsData.workflow
-        ? optionsData.workflow.some((opt) => opt.value === this.workflowAgent)
-        : this.hasOptionValue(options.workflow ?? '', this.workflowAgent);
-      if (!hasAgent) {
-        this.workflowAgent = '';
+      // Validate selected workflow agent
+      if (this.workflowAgent) {
+        const hasAgent = optionsData.workflow.some(
+          (opt) => opt.value === this.workflowAgent,
+        );
+        if (!hasAgent) {
+          this.workflowAgent = '';
+        }
       }
     }
 
     // Tool-use agents
     if (optionsData.toolUse) {
       this.toolUseAgentOptions = optionsData.toolUse;
-    }
-    if (options.toolUse !== null && options.toolUse !== undefined) {
-      this.toolUseAgentOptionsHtml = options.toolUse;
-    }
-    // Validate selected tool-use agent
-    if (this.toolUseAgent) {
-      const hasAgent = optionsData.toolUse
-        ? optionsData.toolUse.some((opt) => opt.value === this.toolUseAgent)
-        : this.hasOptionValue(options.toolUse ?? '', this.toolUseAgent);
-      if (!hasAgent) {
-        this.toolUseAgent = '';
+      // Validate selected tool-use agent
+      if (this.toolUseAgent) {
+        const hasAgent = optionsData.toolUse.some(
+          (opt) => opt.value === this.toolUseAgent,
+        );
+        if (!hasAgent) {
+          this.toolUseAgent = '';
+        }
       }
     }
   }
@@ -1824,15 +1800,6 @@ export class MainApp extends BaseWebviewApp {
     });
   }
 
-  /** Check if an options HTML string contains a value. */
-  private hasOptionValue(optionsHtml: string, value: string): boolean {
-    if (!value || !optionsHtml) return false;
-    return (
-      optionsHtml.includes(`value="${value}"`) ||
-      optionsHtml.includes(`value='${value}'`)
-    );
-  }
-
   private buildFileStateContext(): FileStateContextValue {
     return {
       sessionType: this.sessionType,
@@ -1879,9 +1846,6 @@ export class MainApp extends BaseWebviewApp {
       workflowAgent: this.workflowAgent,
       toolUseAgent: this.toolUseAgent,
       model: this.model,
-      workflowAgentOptionsHtml: this.workflowAgentOptionsHtml,
-      toolUseAgentOptionsHtml: this.toolUseAgentOptionsHtml,
-      modelOptionsHtml: this.modelOptionsHtml,
       workflowAgentOptions: this.workflowAgentOptions,
       toolUseAgentOptions: this.toolUseAgentOptions,
       modelOptions: this.modelOptions,
@@ -1902,9 +1866,6 @@ export class MainApp extends BaseWebviewApp {
       current.workflowAgent === next.workflowAgent &&
       current.toolUseAgent === next.toolUseAgent &&
       current.model === next.model &&
-      current.workflowAgentOptionsHtml === next.workflowAgentOptionsHtml &&
-      current.toolUseAgentOptionsHtml === next.toolUseAgentOptionsHtml &&
-      current.modelOptionsHtml === next.modelOptionsHtml &&
       this.areArraysEqual(
         current.workflowAgentOptions,
         next.workflowAgentOptions,
