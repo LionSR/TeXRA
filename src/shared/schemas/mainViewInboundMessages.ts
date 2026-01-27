@@ -288,49 +288,17 @@ export type MainViewInboundMessage = z.infer<
 >;
 
 // ============================================================
-// Type-safe handler registry
+// Type-safe handler registry and dispatcher
 // ============================================================
 
-type TypedHandler<T extends MainViewInboundMessage> = (
-  data: T,
-) => Promise<void> | void;
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 
-export type MainViewInboundHandlerRegistry = {
-  [K in MainViewInboundMessage['command']]?: TypedHandler<
-    Extract<MainViewInboundMessage, { command: K }>
-  >;
-};
+export type MainViewInboundHandlerRegistry =
+  HandlerRegistry<MainViewInboundMessage>;
 
-// ============================================================
-// Dispatcher function
-// ============================================================
-
-/**
- * Dispatch an inbound message to its handler using schema-driven validation.
- */
-export function dispatchMainViewInbound(
-  raw: unknown,
-  handlers: MainViewInboundHandlerRegistry,
-  onError?: (error: unknown) => void,
-): boolean {
-  const result = MainViewInboundMessageSchema.safeParse(raw);
-  if (!result.success) {
-    onError?.(result.error);
-    return false;
-  }
-
-  const message = result.data;
-  const handler = handlers[message.command] as
-    | TypedHandler<typeof message>
-    | undefined;
-
-  if (handler) {
-    const maybePromise = handler(message);
-    if (maybePromise instanceof Promise) {
-      maybePromise.catch((error) => onError?.(error));
-    }
-    return true;
-  }
-
-  return false;
-}
+export const dispatchMainViewInbound = createDispatcher(
+  MainViewInboundMessageSchema,
+);

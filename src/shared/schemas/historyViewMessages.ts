@@ -103,46 +103,17 @@ export type HistoryViewInboundMessage = z.infer<
 >;
 
 // ============================================================
-// Type-safe handler registry
+// Type-safe handler registry and dispatcher
 // ============================================================
 
-type TypedInboundHandler<T extends HistoryViewInboundMessage> = (
-  data: T,
-) => Promise<void> | void;
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 
-export type HistoryViewInboundHandlerRegistry = {
-  [K in HistoryViewInboundMessage['command']]?: TypedInboundHandler<
-    Extract<HistoryViewInboundMessage, { command: K }>
-  >;
-};
+export type HistoryViewInboundHandlerRegistry =
+  HandlerRegistry<HistoryViewInboundMessage>;
 
-// ============================================================
-// Dispatcher function
-// ============================================================
-
-export function dispatchHistoryViewInbound(
-  raw: unknown,
-  handlers: HistoryViewInboundHandlerRegistry,
-  onError?: (error: unknown) => void,
-): boolean {
-  const result = HistoryViewInboundMessageSchema.safeParse(raw);
-  if (!result.success) {
-    onError?.(result.error);
-    return false;
-  }
-
-  const message = result.data;
-  const handler = handlers[message.command] as
-    | TypedInboundHandler<typeof message>
-    | undefined;
-
-  if (handler) {
-    const maybePromise = handler(message);
-    if (maybePromise instanceof Promise) {
-      maybePromise.catch((error) => onError?.(error));
-    }
-    return true;
-  }
-
-  return false;
-}
+export const dispatchHistoryViewInbound = createDispatcher(
+  HistoryViewInboundMessageSchema,
+);

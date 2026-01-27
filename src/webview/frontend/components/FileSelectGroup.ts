@@ -14,7 +14,7 @@ import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
-import { SortableController } from '@shared/controllers/SortableController';
+import { SortableController } from '@shared/controllers';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import {
