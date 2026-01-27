@@ -45,11 +45,13 @@ The project supports fast builds using esbuild (for the extension host) and Vite
 
 These commands are significantly faster and do not require increased memory allocation.
 
-**Important:** Fast builds do NOT perform TypeScript type checking. To verify there are no type errors, run:
+**Important:** Fast builds do NOT perform TypeScript type checking (esbuild only strips types). To verify there are no type errors, run:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 ```
+
+Alternatively, use `npm run compile:safe` which runs type checking before building.
 
 ### Legacy Webpack Builds
 
