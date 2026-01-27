@@ -222,7 +222,8 @@ export const logEntryStyles = css`
   }
 
   .banner-details {
-    padding: var(--spacing-tiny) 0 var(--spacing-tiny) var(--spacing-large);
+    margin: var(--spacing-small) 0;
+    padding: var(--spacing-small) 0 var(--spacing-small) var(--spacing-large);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-tiny);
