@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { TaskGroupStatus } from './stream.js';
+import type { TaskGroupStatus } from './stream';
 
 export const LOG_LEVELS = {
   ERROR: 'error',
