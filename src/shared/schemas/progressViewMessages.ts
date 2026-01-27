@@ -50,9 +50,6 @@ export const AgentCategoryFilterSchema = z.union([
 ]);
 export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
-// Re-export ContextStateSchema from usage.ts for backwards compatibility
-export { ContextStateSchema, type ContextState } from './usage';
-
 // ============================================================================
 // Backend → Frontend Messages (Outbound)
 // ============================================================================
