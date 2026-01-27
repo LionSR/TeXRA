@@ -48,10 +48,6 @@ const RoundDataSchema = z.object({
 
 type RoundData = z.infer<typeof RoundDataSchema>;
 
-function createEmptyRoundData(): RoundData {
-  return RoundDataSchema.parse({});
-}
-
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
@@ -196,7 +192,7 @@ export class OutputHandler implements IOutputHandler {
   private ensureRoundData(round: number): RoundData {
     let data = this.rounds.get(round);
     if (!data) {
-      data = createEmptyRoundData();
+      data = RoundDataSchema.parse({});
       this.rounds.set(round, data);
     }
     return data;

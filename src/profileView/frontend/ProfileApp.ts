@@ -63,6 +63,15 @@ export class ProfileApp extends BaseWebviewApp {
   }
 
   protected override handleMessage(raw: unknown): void {
+    if (!raw || typeof raw !== 'object' || !('command' in raw)) {
+      return;
+    }
+
+    const command = (raw as { command: string }).command;
+    if (command !== PROFILE_VIEW_COMMANDS.UPDATE_PROFILE) {
+      return;
+    }
+
     const result = UpdateProfileMessageSchema.safeParse(raw);
     if (!result.success) {
       this.logSchemaError(

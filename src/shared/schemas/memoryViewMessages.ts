@@ -50,6 +50,15 @@ export const MemoryPathMessageSchema = z.object({
 });
 export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
 
+/** Memory item action detail for frontend events (open/delete) */
+export const MemoryItemActionDetailSchema = z.object({
+  storagePath: z.string(),
+  displayPath: z.string().optional(),
+});
+export type MemoryItemActionDetail = z.infer<
+  typeof MemoryItemActionDetailSchema
+>;
+
 /** Memory delete message with display path for confirmation (reusable field schema) */
 export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
   displayPath: z.string().min(1),

@@ -9,4 +9,4 @@ export const ProfileViewEvents = {
     createEvent('profile-select-agent', detail),
   setApiAccessMode: (detail: { mode: 'included' | 'personal' }) =>
     createEvent('profile-api-access-mode', detail),
-};
+} as const;
