@@ -91,20 +91,6 @@ ${lines.map((line, i) => {
   >`;
 }
 
-/** Set common dataset attributes on an element. */
-export function setElementDataset(
-  element: HTMLElement,
-  {
-    logId,
-    groupId,
-    timestamp,
-  }: { logId?: string; groupId?: string; timestamp?: string },
-): void {
-  if (logId) element.dataset.logId = logId;
-  if (groupId) element.dataset.groupId = groupId;
-  if (timestamp) element.dataset.fullTimestamp = timestamp;
-}
-
 // Note: Toggle icons now use CSS-only rotation via details[open] selector.
 // Always render with CHEVRON_RIGHT_CLASS and CSS will rotate when open.
 
