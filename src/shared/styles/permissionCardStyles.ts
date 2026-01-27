@@ -1,26 +1,26 @@
 /**
- * Shared prompt overlay styles for Shadow DOM components.
+ * Shared permission card styles for Shadow DOM components.
  *
- * Provides overlay styling for:
- * - Centered prompt card with dimmed backdrop
+ * Provides styling for:
+ * - Centered permission card with dimmed backdrop
  * - Header, body, and action layout
  * - Action buttons (primary/secondary)
  * - File paths and diff info
  * - Feedback forms
  *
- * Used by: PromptOverlay
+ * Used by: PermissionCard
  *
  * @example
- * import { promptOverlayStyles } from '@shared/styles/promptOverlayStyles';
+ * import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
  *
  * class MyComponent extends LitElement {
- *   static styles = [designTokens, promptOverlayStyles, css`...`];
+ *   static styles = [designTokens, permissionCardStyles, css`...`];
  * }
  */
 
 import { css, type CSSResult } from 'lit';
 
-export const promptOverlayStyles: CSSResult = css`
+export const permissionCardStyles: CSSResult = css`
   :host {
     position: fixed;
     inset: 0;
@@ -39,7 +39,7 @@ export const promptOverlayStyles: CSSResult = css`
     display: none;
   }
 
-  .prompt-card {
+  .permission-card {
     background: var(--vscode-editor-background);
     border: 1px solid var(--vscode-panel-border);
     border-radius: 6px;
@@ -49,7 +49,7 @@ export const promptOverlayStyles: CSSResult = css`
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   }
 
-  .prompt-header {
+  .permission-header {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -57,7 +57,7 @@ export const promptOverlayStyles: CSSResult = css`
     margin-bottom: 8px;
   }
 
-  .prompt-body {
+  .permission-body {
     font-size: 13px;
     line-height: 1.5;
   }
@@ -74,7 +74,7 @@ export const promptOverlayStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .prompt-actions {
+  .permission-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;

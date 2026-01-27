@@ -20,7 +20,7 @@ export const OptionalStreamIdSchema = z.union([
 ]);
 export type OptionalStreamId = z.infer<typeof OptionalStreamIdSchema>;
 
-export const ToolEditApprovalPromptSchema = z.strictObject({
+export const ToolEditPermissionSchema = z.strictObject({
   requestId: z.string(),
   path: z.string(),
   relativePath: z.string(),
@@ -31,26 +31,24 @@ export const ToolEditApprovalPromptSchema = z.strictObject({
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
 });
-export type ToolEditApprovalPrompt = z.infer<
-  typeof ToolEditApprovalPromptSchema
->;
+export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 
-export const BashApprovalPromptSchema = z.strictObject({
+export const BashPermissionSchema = z.strictObject({
   requestId: z.string(),
   command: z.string(),
   allowBypass: z.boolean(),
   streamId: OptionalStreamIdSchema,
 });
-export type BashApprovalPrompt = z.infer<typeof BashApprovalPromptSchema>;
+export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
-export const RetryRequestPromptSchema = z.strictObject({
+export const RetryPermissionSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
   errorDetails: ProviderErrorPartialSchema.optional(),
 });
-export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
+export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
 export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
 export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
@@ -83,28 +81,29 @@ export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
 ]);
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
-const ProposalPromptBaseSchema = z.object({
+const ProposalPermissionBaseSchema = z.object({
   proposalId: z.string(),
   streamId: StreamTabIdSchema,
 });
 
-export const WorkflowAgentProposalPromptSchema =
-  ProposalPromptBaseSchema.extend(WorkflowAgentProposalSchema.shape);
-export type WorkflowAgentProposalPrompt = z.infer<
-  typeof WorkflowAgentProposalPromptSchema
+export const WorkflowAgentProposalPermissionSchema =
+  ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
+export type WorkflowAgentProposalPermission = z.infer<
+  typeof WorkflowAgentProposalPermissionSchema
 >;
 
-export const ToolUseAgentProposalPromptSchema = ProposalPromptBaseSchema.extend(
-  ToolUseAgentProposalSchema.shape,
+export const ToolUseAgentProposalPermissionSchema =
+  ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
+export type ToolUseAgentProposalPermission = z.infer<
+  typeof ToolUseAgentProposalPermissionSchema
+>;
+
+export const AgentProposalPermissionSchema = z.discriminatedUnion(
+  'agentCategory',
+  [WorkflowAgentProposalPermissionSchema, ToolUseAgentProposalPermissionSchema],
 );
-export type ToolUseAgentProposalPrompt = z.infer<
-  typeof ToolUseAgentProposalPromptSchema
+export type AgentProposalPermission = z.infer<
+  typeof AgentProposalPermissionSchema
 >;
-
-export const AgentProposalPromptSchema = z.discriminatedUnion('agentCategory', [
-  WorkflowAgentProposalPromptSchema,
-  ToolUseAgentProposalPromptSchema,
-]);
-export type AgentProposalPrompt = z.infer<typeof AgentProposalPromptSchema>;
 
 export type { ProviderErrorPartial };

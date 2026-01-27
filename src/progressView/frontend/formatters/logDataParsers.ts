@@ -99,8 +99,11 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const toolName = trimmedOrNull(validated.toolName ?? validated.tool) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
 
-  // Build parsed record for fallback rendering (includes all original fields)
-  const parsed: Record<string, unknown> = { ...validated };
+  // Build parsed record for fallback rendering
+  // Use original data (not validated) to preserve unknown fields that Zod strips
+  const parsed: Record<string, unknown> = isPlainObject(data)
+    ? { ...data }
+    : { ...validated };
 
   return {
     parsed,

@@ -898,8 +898,7 @@ export class ProgressViewMessageHandler {
     } catch (error) {
       logger.error(
         this.channel,
-        'Failed to get followup options',
-        toErrorMessage(error),
+        `Failed to get followup options: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -1082,8 +1081,7 @@ export class ProgressViewMessageHandler {
     } catch (error) {
       logger.error(
         this.channel,
-        'Failed to set up followup task',
-        toErrorMessage(error),
+        `Failed to set up followup task: ${toErrorMessage(error)}`,
       );
       await vscode.window.showErrorMessage(
         `Failed to set up followup task: ${toErrorMessage(error)}`,

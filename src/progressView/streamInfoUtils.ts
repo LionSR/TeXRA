@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategoryFilter } from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';

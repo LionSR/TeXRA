@@ -126,12 +126,13 @@ export class LogEntryFormatter {
     const { messageType } = logMessage;
 
     // Determine if details should be open
+    // Pass undefined (not false) so formatters can use their own defaults
     const shouldBeOpen = resolveOpenState(
       messageType ?? '',
       options,
       this._autoExpandedTypes,
     );
-    const templateOptions = { defaultOpen: shouldBeOpen ?? false };
+    const templateOptions = { defaultOpen: shouldBeOpen };
 
     const formatter = messageType
       ? this._templateFormatters[messageType]

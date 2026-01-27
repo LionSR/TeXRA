@@ -2,10 +2,6 @@ import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
-import {
-  isAgentCategoryFilter,
-  type AgentCategoryFilter,
-} from '@agent/types/AgentStreamTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import {
@@ -28,9 +24,11 @@ import {
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
+  AgentCategoryFilterSchema,
   createStreamState,
   StorageKeySchema,
   TodoItemSchema,
+  type AgentCategoryFilter,
   type ExecutionId,
   type InstructionUpdate,
   type OutputFileInfo,
@@ -165,7 +163,7 @@ export class ProgressViewState {
   }
 
   set agentCategoryFilter(filter: AgentCategoryFilter) {
-    if (!isAgentCategoryFilter(filter)) {
+    if (!AgentCategoryFilterSchema.safeParse(filter).success) {
       this.logger.warn(
         `Invalid agent filter: ${filter}, defaulting to '${PROGRESS_VIEW_DEFAULTS.agentCategoryFilter}'`,
       );
@@ -441,7 +439,9 @@ export class ProgressViewState {
   }
 
   async load(): Promise<void> {
-    this.logger.info('[Persistence] Starting state load from workspace storage');
+    this.logger.info(
+      '[Persistence] Starting state load from workspace storage',
+    );
 
     await Promise.all([
       this._streamTabs.load(),
@@ -608,8 +608,9 @@ export class ProgressViewState {
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       PROGRESS_VIEW_DEFAULTS.agentCategoryFilter,
     );
-    this._agentCategoryFilter = isAgentCategoryFilter(savedFilter)
-      ? savedFilter
+    const parsed = AgentCategoryFilterSchema.safeParse(savedFilter);
+    this._agentCategoryFilter = parsed.success
+      ? parsed.data
       : PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
   }
 

@@ -236,8 +236,8 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Retry requests */
   .retry-requests {
-    border: 1px solid var(--vscode-inputValidation-warningBorder);
-    background: var(--vscode-inputValidation-warningBackground);
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-editor-background);
   }
 
   .retry-requests__header .codicon {
