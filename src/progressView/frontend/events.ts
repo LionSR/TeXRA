@@ -47,14 +47,20 @@ export interface PermissionActionDetail {
   feedback?: string;
 }
 
+export interface GroupToggleDetail {
+  groupId: string;
+  expanded: boolean;
+}
+
+export interface FileClickDetail {
+  file: string;
+}
+
 // =============================================================================
 // Event Creators - use these to dispatch typed events
 // =============================================================================
 
-/** Create a bubbling composed custom event with typed detail. */
-function createEvent<T>(type: string, detail: T): CustomEvent<T> {
-  return new CustomEvent(type, { detail, bubbles: true, composed: true });
-}
+import { createEvent } from '@shared/utils/events';
 
 export const ProgressEvents = {
   streamSwitch: (detail: StreamEventDetail) =>
@@ -101,4 +107,14 @@ export const ProgressEvents = {
 
   permissionAction: (detail: PermissionActionDetail) =>
     createEvent('permission-action', detail),
+
+  groupToggle: (detail: GroupToggleDetail) =>
+    createEvent('group-toggle', detail),
+
+  fileClick: (detail: FileClickDetail) => createEvent('file-click', detail),
+
+  focusComplete: () => createEvent('focus-complete', undefined),
+
+  followupFocusComplete: () =>
+    createEvent('followup-focus-complete', undefined),
 } as const;

@@ -14,14 +14,6 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ProviderErrorPartial,
-  RetryPermission,
-  ToolEditPermission,
-  WorkflowAgentProposalPermission,
-} from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
 
 // Local imports - shared utilities
@@ -33,6 +25,14 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
+import type {
+  AgentProposalPermission,
+  BashPermission,
+  ProviderErrorPartial,
+  RetryPermission,
+  ToolEditPermission,
+  WorkflowAgentProposalPermission,
+} from '@shared/schemas';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';

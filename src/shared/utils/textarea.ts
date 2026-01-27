@@ -39,7 +39,7 @@ export function resolveTextareaTarget(
  * Sync value from wrapped textarea to host element.
  * vscode-textarea should handle this automatically, but we do it for safety.
  */
-export function syncHostValue(
+function syncHostValue(
   host: HTMLElement | null,
   textarea: HTMLTextAreaElement | null,
 ): void {
@@ -69,26 +69,4 @@ export function insertTextAtCursor(target: TextareaTarget, text: string): void {
   const newCursorPos = start + text.length;
   textarea.selectionStart = textarea.selectionEnd = newCursorPos;
   syncHostValue(host, textarea);
-}
-
-/**
- * Ensure callbacks run after a vscode-textarea upgrades to its wrapped textarea.
- * For native textareas the callback executes immediately.
- */
-export async function awaitTextareaUpgrade(
-  target: TextareaTarget,
-): Promise<TextareaResolution> {
-  if (!target) {
-    return { host: null, textarea: null };
-  }
-
-  const host = target as HTMLElement & { updateComplete?: Promise<unknown> };
-  if (
-    host.tagName?.toLowerCase?.() === 'vscode-textarea' &&
-    typeof host.updateComplete?.then === 'function'
-  ) {
-    await host.updateComplete;
-  }
-
-  return resolveTextareaTarget(target);
 }

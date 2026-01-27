@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
+import { mainViewMessages } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
-import { mainViewMessages } from '@shared/schemas';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
 

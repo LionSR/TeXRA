@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import type { z } from 'zod';
 
 import {
   AgentConfigSchema,
@@ -13,6 +12,7 @@ import {
   getPastedImageFullPath,
 } from '@utils/files/pastedImageUtils';
 import { capitalize } from '@utils/text/stringUtils';
+import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);

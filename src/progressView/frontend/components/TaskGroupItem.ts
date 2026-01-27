@@ -20,6 +20,9 @@ import { GROUP_DOM_IDS } from '../constants';
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
 // Local imports - shared schemas
 import type { TaskGroup } from '@shared/schemas';
 
@@ -38,10 +41,9 @@ export class TaskGroupItem extends LitElement {
   private handleToggle(event: Event): void {
     const details = event.target as HTMLDetailsElement;
     this.dispatchEvent(
-      new CustomEvent('group-toggle', {
-        detail: { groupId: this.group.id, expanded: details.open },
-        bubbles: true,
-        composed: true,
+      ProgressEvents.groupToggle({
+        groupId: this.group.id,
+        expanded: details.open,
       }),
     );
   }

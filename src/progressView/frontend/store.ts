@@ -13,7 +13,6 @@ import {
 
 // Re-export schema types for components (single source of truth)
 export {
-  createStreamState,
   isToolUseState,
   isWorkflowState,
   type FollowupMode,
@@ -37,16 +36,6 @@ export interface ProgressState {
   streamSort: StreamSort;
   streamStates: Map<StreamTabId, StreamState>;
   followupOptions: FollowupOptionsState | null;
-}
-
-/**
- * Create an empty stream state for the given agent category.
- * Uses the schema factory to create the correct discriminated type.
- */
-export function createEmptyStreamState(
-  agentCategory: AgentCategory = AGENT_CATEGORY.WORKFLOW,
-): StreamState {
-  return createStreamState(agentCategory);
 }
 
 export function createInitialState(): ProgressState {
