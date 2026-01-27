@@ -21,6 +21,7 @@ import {
 } from '@shared/utils/selectTemplates';
 
 // Local imports - shared schemas
+import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -208,8 +209,8 @@ export class FollowupSection extends LitElement {
     // Note: READY streams have their status deleted from statusMemory, so
     // this.status will be undefined for ready streams. Treat undefined as ready.
     const isTerminal =
-      this.status === 'stopped' ||
-      this.status === 'ready' ||
+      this.status === STREAM_STATUS.STOPPED ||
+      this.status === STREAM_STATUS.READY ||
       this.status === undefined;
     const visible =
       this.agentCategory === 'workflow' && isTerminal && this.hasOutputFiles;

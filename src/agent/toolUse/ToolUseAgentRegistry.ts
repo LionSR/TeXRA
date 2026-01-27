@@ -75,12 +75,12 @@ export function getInterruptible(
  */
 export function getToolUseFlowContext(
   streamTabId: StreamTabId,
-): ToolUseFlowContext<any> | undefined {
+): ToolUseFlowContext<unknown> | undefined {
   const entry = registry.get(streamTabId);
   // Type guard: ToolUseFlowContext has a session with appendFollowUp method
-  const session = (entry as ToolUseFlowContext<any> | undefined)?.session;
+  const session = (entry as ToolUseFlowContext<unknown> | undefined)?.session;
   if (session && typeof session.appendFollowUp === 'function') {
-    return entry as ToolUseFlowContext<any>;
+    return entry as ToolUseFlowContext<unknown>;
   }
   return undefined;
 }

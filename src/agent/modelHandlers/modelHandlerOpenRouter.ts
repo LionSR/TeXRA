@@ -35,6 +35,7 @@ import type {
   ChatCompletion,
   ChatCompletionChunk,
   ChatCompletionMessageParam,
+  ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 
 /** Extract text content from a reasoning detail item by type */
@@ -113,7 +114,12 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
-    const kwargs: any = {
+    const kwargs: ChatCompletionStreamParams & {
+      extra_headers?: Record<string, string>;
+      reasoning?: { effort?: string; enabled?: boolean };
+      include_reasoning?: boolean;
+      stop?: string[];
+    } = {
       model: this.config.openrouterFullName, // Use OpenRouter model name
       messages,
       max_tokens: this.config.maxOutputTokens,
@@ -217,7 +223,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
  */
 export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -244,7 +250,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
 
   /** Updates message content for models with prefill support. */
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     _bestConnector: string,
     _newResponse: string,
     workspaceState: AgentWorkspaceState,

@@ -8,25 +8,19 @@ import { safeFormat, resolveOpenState } from './baseLogFormatter';
 import { getMarkdownRenderer } from './markdownRenderer';
 import {
   formatBannerContentTemplate,
-  formatModelResponseTemplate,
-} from './logFormatters/bannerFormatters';
-import {
-  formatToolUseTemplate,
-  formatWebSearchTemplate,
-} from './logFormatters/toolFormatters';
-import {
-  formatFileListTemplate,
-  formatMissingOutputsTemplate,
-  formatLatexdiffTemplate,
-  formatStatisticsTemplate,
-} from './logFormatters/dataFormatters';
-import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
-import {
-  formatUserMessageTemplate,
-  formatProgressStatusTemplate,
-  formatErrorTemplate,
+  formatContextManagementTemplate,
   formatDefaultLogMessageTemplate,
-} from './logFormatters/messageFormatters';
+  formatErrorTemplate,
+  formatFileListTemplate,
+  formatLatexdiffTemplate,
+  formatMissingOutputsTemplate,
+  formatModelResponseTemplate,
+  formatProgressStatusTemplate,
+  formatStatisticsTemplate,
+  formatToolUseTemplate,
+  formatUserMessageTemplate,
+  formatWebSearchTemplate,
+} from './logFormatters';
 
 // Local imports - Lit template utilities
 import { html, type TemplateResult, type FormatResult } from './litTemplates';
