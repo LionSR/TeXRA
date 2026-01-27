@@ -104,15 +104,10 @@ export class SortableController implements ReactiveController {
 
   private handleSortEnd(event: unknown): void {
     const { oldIndex, newIndex } = (event ?? {}) as {
-      oldIndex?: number | null;
-      newIndex?: number | null;
+      oldIndex?: number;
+      newIndex?: number;
     };
-    if (
-      oldIndex === null ||
-      oldIndex === undefined ||
-      newIndex === null ||
-      newIndex === undefined
-    ) {
+    if (oldIndex === undefined || newIndex === undefined) {
       return;
     }
 
