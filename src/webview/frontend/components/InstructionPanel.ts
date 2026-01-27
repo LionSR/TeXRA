@@ -30,15 +30,6 @@ import {
   type SessionContextValue,
 } from '../contexts/mainViewContexts';
 
-// Local imports - shared schemas
-import type {
-  ActionDetail,
-  AgentChangeDetail,
-  InstructionChangeDetail,
-  ModelChangeDetail,
-  SessionTypeChangeDetail,
-} from '@shared/schemas';
-
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   static override styles = [
@@ -201,37 +192,20 @@ export class InstructionPanel extends LitElement {
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  private createEvent<T>(type: string, detail: T): CustomEvent<T> {
-    return new CustomEvent(type, { detail, bubbles: true, composed: true });
-  }
-
   private handleSessionTypeChange(value: SessionType): void {
-    this.dispatchEvent(
-      this.createEvent<SessionTypeChangeDetail>('session-type-change', {
-        value,
-      }),
-    );
+    this.dispatchEvent(MainViewEvents.sessionTypeChange({ value }));
   }
 
   private handleAgentChange(sessionType: SessionType, value: string): void {
-    this.dispatchEvent(
-      this.createEvent<AgentChangeDetail>('agent-change', {
-        sessionType,
-        value,
-      }),
-    );
+    this.dispatchEvent(MainViewEvents.agentChange({ sessionType, value }));
   }
 
   private handleModelChange(value: string): void {
-    this.dispatchEvent(
-      this.createEvent<ModelChangeDetail>('model-change', { value }),
-    );
+    this.dispatchEvent(MainViewEvents.modelChange({ value }));
   }
 
   private handleInstructionInput(value: string): void {
-    this.dispatchEvent(
-      this.createEvent<InstructionChangeDetail>('instruction-input', { value }),
-    );
+    this.dispatchEvent(MainViewEvents.instructionInput({ value }));
   }
 
   /** Handle paste event on instruction textarea (Lit-native) */
@@ -244,39 +218,27 @@ export class InstructionPanel extends LitElement {
       const target = event.target as HTMLTextAreaElement;
       const updatedValue = target.value ?? '';
       this.dispatchEvent(
-        this.createEvent<InstructionChangeDetail>('instruction-input', {
-          value: updatedValue,
-        }),
+        MainViewEvents.instructionInput({ value: updatedValue }),
       );
       // Dispatch additional event so parent can save state
-      this.dispatchEvent(
-        new CustomEvent('instruction-paste', { bubbles: true, composed: true }),
-      );
+      this.dispatchEvent(MainViewEvents.instructionPaste());
     }
   };
 
   private handleAction(action: string): void {
-    this.dispatchEvent(
-      this.createEvent<ActionDetail>('panel-action', { action }),
-    );
+    this.dispatchEvent(MainViewEvents.panelAction({ action }));
   }
 
   private handleExecute(): void {
-    this.dispatchEvent(
-      new CustomEvent('execute', { bubbles: true, composed: true }),
-    );
+    this.dispatchEvent(MainViewEvents.execute());
   }
 
   private handleAgentSettings(): void {
-    this.dispatchEvent(
-      new CustomEvent('agent-settings', { bubbles: true, composed: true }),
-    );
+    this.dispatchEvent(MainViewEvents.agentSettings());
   }
 
   private handleModelSettings(): void {
-    this.dispatchEvent(
-      new CustomEvent('model-settings', { bubbles: true, composed: true }),
-    );
+    this.dispatchEvent(MainViewEvents.modelSettings());
   }
 
   private handleFocus(key: string, text: string): void {

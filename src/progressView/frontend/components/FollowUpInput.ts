@@ -266,27 +266,6 @@ export class FollowUpInput extends LitElement {
     }
   }
 
-  applyPolishedText(text: string): void {
-    this.polishing = false;
-    this.updateValue(text);
-    this.focusInput({ scrollIntoView: true });
-  }
-
-  insertTranscription(text: string): void {
-    if (!this.textAreaEl) return;
-
-    const { textarea } = resolveTextareaTarget(this.textAreaEl);
-    if (!textarea) return;
-
-    insertTextAtCursor(textarea, text);
-    this.updateValue(textarea.value);
-    this.focusInput({ scrollIntoView: true });
-  }
-
-  setRecording(recording: boolean): void {
-    this.recordingController.setRecording(recording);
-  }
-
   private handleInput(event: InputEvent): void {
     const target = event.target as HTMLTextAreaElement | null;
     const value = target?.value ?? '';

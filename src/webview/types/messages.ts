@@ -6,8 +6,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { StreamTabIdSchema } from '@shared/schemas';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategorySchema, StreamTabIdSchema } from '@shared/schemas';
 import {
   TOOL_EDIT_APPROVAL_ACTIONS,
   BASH_APPROVAL_ACTIONS,
@@ -307,7 +306,7 @@ export type SortStreamsMessage = z.infer<typeof SortStreamsMessageSchema>;
 
 /** Filter streams message */
 export const FilterStreamsMessageSchema = z.object({
-  filter: z.union([z.literal('all'), z.enum(AgentCategory)]),
+  filter: z.union([z.literal('all'), AgentCategorySchema]),
 });
 
 export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
@@ -342,53 +341,3 @@ export const OpenLabelMessageSchema = z.object({
 });
 
 export type OpenLabelMessage = z.infer<typeof OpenLabelMessageSchema>;
-
-// --- History View Schemas ---
-
-/** History ID message for history operations */
-export const HistoryIdMessageSchema = z.object({
-  historyId: z.string().min(1),
-});
-
-export type HistoryIdMessage = z.infer<typeof HistoryIdMessageSchema>;
-
-// --- Profile View Schemas ---
-
-/** Agent selection message */
-export const SelectAgentMessageSchema = z.object({
-  agentName: z.string().min(1),
-});
-
-export type SelectAgentMessage = z.infer<typeof SelectAgentMessageSchema>;
-
-/** API access mode message */
-export const SetApiAccessModeMessageSchema = z.object({
-  mode: z.enum(['included', 'personal']),
-});
-
-export type SetApiAccessModeMessage = z.infer<
-  typeof SetApiAccessModeMessageSchema
->;
-
-// --- Memory View Schemas ---
-
-/** Memory path message for file operations */
-export const MemoryPathMessageSchema = z.object({
-  storagePath: z.string().min(1),
-});
-
-export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
-
-/** Memory delete message with display path for confirmation */
-export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
-  displayPath: z.string().min(1),
-});
-
-export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;
-
-/** Memory enabled toggle message */
-export const MemoryEnabledMessageSchema = z.object({
-  enabled: z.boolean(),
-});
-
-export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
