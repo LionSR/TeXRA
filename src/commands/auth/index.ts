@@ -20,7 +20,10 @@ export function registerAuthCommands(
     vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, signIn),
     vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_OUT, signOut),
     vscode.commands.registerCommand(AUTH_COMMANDS.VIEW_PROFILE, viewProfile),
-    vscode.commands.registerCommand(AUTH_COMMANDS.ACCOUNT_MENU, showAccountMenu),
+    vscode.commands.registerCommand(
+      AUTH_COMMANDS.ACCOUNT_MENU,
+      showAccountMenu,
+    ),
   ];
 
   context.subscriptions.push(...disposables);
