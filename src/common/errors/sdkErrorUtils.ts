@@ -1,4 +1,3 @@
-// Third-party imports
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
   APIConnectionError as AnthropicConnectionError,
@@ -30,17 +29,15 @@ import {
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
 } from 'openai';
 
-// Local imports - core utilities
 import {
-  type ProviderError,
-  type ErrorLogData,
   type ErrorContext,
+  type ErrorLogData,
+  type ProviderError,
   type StreamDiagnostics,
 } from '@shared/schemas';
 import { extractErrorMessage, isObject, isString } from '@utils/core';
-import { toErrorMessage } from './errorHandlingUtils';
 
-// Import canonical schemas - SINGLE SOURCE OF TRUTH
+import { toErrorMessage } from './errorHandlingUtils';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -363,29 +360,9 @@ function detectRawErrorBody(err: unknown): unknown {
   return undefined;
 }
 
-// ============================================================================
-// Stream Diagnostics (Anthropic-specific)
-// ============================================================================
-
-/**
- * Symbol key for attaching stream diagnostics to errors.
- * Using a symbol prevents property name collisions and keeps it internal.
- */
 const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
 
-/**
- * Attaches stream diagnostics to an error before throwing.
- * Call this in the catch block before rethrowing stream errors.
- *
- * @example
- * ```ts
- * catch (streamError) {
- *   const diagnostics = streamHandler.getDiagnostics();
- *   attachStreamDiagnostics(streamError, diagnostics);
- *   throw streamError;
- * }
- * ```
- */
+/** Attaches stream diagnostics to an error before rethrowing. */
 export function attachStreamDiagnostics(
   err: unknown,
   diagnostics: StreamDiagnostics,
@@ -395,10 +372,6 @@ export function attachStreamDiagnostics(
   }
 }
 
-/**
- * Extracts stream diagnostics from an error object.
- * Returns undefined if no diagnostics are attached.
- */
 function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
   if (!isObject(err)) {
     return undefined;
@@ -411,22 +384,9 @@ function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
   return undefined;
 }
 
-/**
- * Anthropic error type strings (no dedicated SDK classes for these).
- * @see https://docs.anthropic.com/en/api/errors
- */
 const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
 const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
 
-/**
- * Checks if the error body indicates a relay error.
- * Relay errors include `_relay` version field and should generally be retryable
- * so users can fix issues (refresh auth, switch API keys, etc.) and retry.
- *
- * Checks multiple locations because SDKs handle error bodies differently:
- * - OpenAI/Anthropic: extract `error` field, so `_relay` is at top level
- * - Google GenAI: may preserve full body, so `_relay` is under `error`
- */
 function isRelayError(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) {
     return false;
@@ -440,13 +400,6 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-/**
- * Determines if an error is retryable based on status code and error content.
- *
- * Provider-specific overrides:
- * - Anthropic: "overloaded_error" and "timeout_error" are retryable (no dedicated SDK classes)
- * - Relay: errors with `_relay` field are retryable (user can fix and retry)
- */
 function determineRetryable(
   err: unknown,
   statusCode?: number,
@@ -552,21 +505,6 @@ export function getSdkErrorMessage(err: unknown): string {
   return formatProviderHttpError(err).message;
 }
 
-// ============================================================================
-// Context Window Error Detection
-// ============================================================================
-
-/**
- * Patterns that indicate a context window/token limit violation.
- * These are intentional validation errors that should NOT be retried
- * and should propagate to fail fast.
- *
- * Pattern coverage by provider:
- * - TeXRA internal: "exceeds context window" (token counting validation)
- * - OpenAI: "maximum context length", "too many tokens"
- * - Anthropic: "exceeds context window", "token limit exceeded"
- * - Google: "input too long", "context length exceeded"
- */
 const CONTEXT_WINDOW_PATTERNS = [
   'exceeds context window', // TeXRA internal, Anthropic
   'context length exceeded', // Google
@@ -576,24 +514,7 @@ const CONTEXT_WINDOW_PATTERNS = [
   'input too long', // Google
 ] as const;
 
-/**
- * Checks if an error is a context window violation.
- * These errors should NOT be caught by soft failure handlers because
- * they indicate the input needs to be reduced - retrying won't help.
- *
- * Use this to re-throw context window errors in token counting catch blocks:
- * @example
- * ```ts
- * try {
- *   await countTokens(input);
- * } catch (err) {
- *   if (isContextWindowError(err)) {
- *     throw err; // Don't swallow - this is intentional validation
- *   }
- *   logger.warn('Token counting failed, proceeding without adjustment');
- * }
- * ```
- */
+/** Checks if an error is a context window violation (should not be retried). */
 export function isContextWindowError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false;
@@ -602,19 +523,7 @@ export function isContextWindowError(err: unknown): boolean {
   return CONTEXT_WINDOW_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
-/**
- * Checks if an error is the OpenAI SDK "missing finish_reason" error.
- * This error occurs when the streaming response doesn't include a finish_reason
- * in the final chunk, which can happen with:
- * - DeepSeek reasoning models
- * - Other OpenAI-compatible APIs that don't properly send finish_reason
- *
- * When detected, the streaming aggregator should be used to build a fallback
- * response with a default finish_reason of 'stop'.
- *
- * @see https://github.com/openai/openai-node/issues/499
- * @see https://github.com/openai/openai-node/issues/1206
- */
+/** Checks for OpenAI SDK "missing finish_reason" error (DeepSeek, other providers). */
 export function isMissingFinishReasonError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false;
@@ -622,31 +531,12 @@ export function isMissingFinishReasonError(err: unknown): boolean {
   return err.message.includes('missing finish_reason');
 }
 
-// ============================================================================
-// Previous Response ID Error Detection (OpenAI Responses API)
-// ============================================================================
-
-/**
- * Checks if an error indicates the previous_response_id is invalid.
- *
- * OpenAI Responses API: When the `previous_response_id` parameter references
- * a response that doesn't exist or has expired, the error message will contain
- * "previous_response_id".
- *
- * When this returns true, the caller should:
- * 1. Clear the previousResponseId
- * 2. Rebuild the conversation from local message history
- * 3. Retry without previous_response_id
- */
+/** Checks if an error indicates the previous_response_id is invalid (OpenAI Responses API). */
 export function isPreviousResponseIdError(err: unknown): boolean {
-  // OpenAI Responses API: errors referencing the previous_response_id parameter
   return err instanceof Error && err.message.includes('previous_response_id');
 }
 
-/**
- * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
- * Ensures all error logs have the same structure for DRY display formatting.
- */
+/** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */
 export function buildErrorLogData(
   err: unknown,
   context?: ErrorContext,

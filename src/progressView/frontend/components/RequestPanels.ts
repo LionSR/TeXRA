@@ -344,7 +344,7 @@ export class RequestPanels extends LitElement {
             ${isRelay ? '[Relay] ' : ''}
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
           </div>
-          <div class="retry-request__meta">${metaParts.join(' • ')}</div>
+          <div class="retry-request__meta">${metaParts.join(' \u2022 ')}</div>
           ${when(
             data.errorMessage,
             () =>

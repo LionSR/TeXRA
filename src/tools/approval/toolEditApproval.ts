@@ -1,7 +1,7 @@
-// Third-party imports
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+
 import {
   diff_match_patch,
   DIFF_DELETE,
@@ -10,25 +10,17 @@ import {
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
 
-// Local imports - agent types
-
-// Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { type ToolResult, type LineChanges } from '@tools/result';
+import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
-// Local file imports
-import {
-  type LatexPreviewEntry,
-  previewProposedLatex,
-  runLatexdiff,
-} from './latexPreview';
 import { rejectPendingEntries } from './bashApproval';
+import { type LatexPreviewEntry, previewProposedLatex, runLatexdiff } from './latexPreview';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface ToolEditApprovalRequest {
@@ -60,7 +52,6 @@ interface PendingApprovalEntry extends LatexPreviewEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-/** All valid approval actions for tool edit prompts */
 export const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
   'reject',
@@ -85,12 +76,11 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-/** Per-stream YOLO mode state tracking (single source of truth) */
 const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
-function notifyProgressViewApprovalBypassState(streamId: StreamTabId): void {
+function notifyApprovalBypassState(streamId: StreamTabId): void {
   if (!initialized) {
     return;
   }
@@ -138,7 +128,7 @@ export function setToolEditApprovalSessionBypass(
   enabled: boolean,
 ): void {
   approvalsBypassedByStream.set(streamId, enabled);
-  notifyProgressViewApprovalBypassState(streamId);
+  notifyApprovalBypassState(streamId);
 }
 
 export function toggleToolEditApprovalSessionBypass(
@@ -150,7 +140,6 @@ export function toggleToolEditApprovalSessionBypass(
   return newState;
 }
 
-/** Check if YOLO mode is enabled for a specific stream */
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
@@ -600,11 +589,6 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-/**
- * Render a human-readable, line-numbered unified diff for user adjustments.
- * Uses difflib to compute a unified diff between the suggested and applied
- * contents, including hunk headers with line ranges.
- */
 export function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
@@ -721,20 +705,12 @@ export function buildApprovalRejectedResult(
   userMessage?: string,
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
-  // Always mark rejections as errors so logs, status, and tests reflect failure,
-  // while still forwarding any user feedback as explicit instruction for the model.
   const feedback = userMessage?.trim();
-  const result: ToolResult = {
-    // Use output to ensure the rejection message is always shown to the model.
-    // formatToolResultAsText prioritizes output over error/summary.
+  return {
     output: baseMessage,
     summary: baseMessage,
     error: baseMessage,
     isError: true,
     ...(feedback ? { userInstruction: feedback } : {}),
   };
-
-  // No file attachments for user feedback; treated purely as guidance via fields.
-
-  return result;
 }

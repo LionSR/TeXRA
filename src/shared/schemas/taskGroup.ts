@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers.js';
-import { TaskGroupStatusSchema } from './stream.js';
+import { StreamTabIdSchema } from './identifiers';
+import { TaskGroupStatusSchema } from './stream';
 
 export const TaskGroupSchema = z.strictObject({
   id: z.string().min(1),
