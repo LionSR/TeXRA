@@ -10,6 +10,8 @@
 Phase 8 focuses on making the codebase more idiomatically Lit-native by adopting Lit directives, reactive patterns, and modern component architecture. This phase addresses technical debt from the initial Lit migration where imperative patterns were preserved for expediency.
 
 > **Status: Complete** (8.1, 8.3, 8.7 fully implemented; 8.4 partial)
+>
+> **Known Issues:** CSS duplication (old + new styles loaded), LogEntry caches HTMLElement instead of TemplateResult. See "Mixed State / Dual Logic Issues" section.
 
 ## Prerequisites
 
@@ -534,6 +536,80 @@ Moving to Shadow DOM requires CSS restructuring.
 - Formatters already use Lit templates
 - Incremental migration (one component at a time)
 - Keep external CSS for truly global styles
+
+---
+
+## Known Mixed State / Dual Logic Issues
+
+The following patterns represent incomplete migrations where old and new code coexist:
+
+### 8.7a CSS Duplication (HIGH Priority)
+
+**Problem:** Both old CSS files and new TypeScript style modules are loaded simultaneously.
+
+**Current State:**
+
+- `src/progressView/styles/index.css` imports deprecated CSS files (logs.css, groups.css, markdown.css, scratchpad.css, code-block.css)
+- `src/progressView/frontend/styles/*.ts` contains equivalent Lit styles
+- Shadow DOM components use new TypeScript styles
+- Light DOM formatters may still rely on old CSS
+
+**Files:**
+| Old CSS (Deprecated) | New TypeScript | Status |
+| --- | --- | --- |
+| `logs.css` | `logEntryStyles.ts` | Duplicate |
+| `groups.css` | `groupStyles.ts` | Duplicate |
+| `markdown.css` | `markdownStyles.ts` | Duplicate |
+| `scratchpad.css` | `toolUseStyles.ts` | Duplicate |
+| `code-block.css` | `codeBlockStyles.ts` | Duplicate |
+
+**Risk:** Style conflicts, increased bundle size, maintenance burden.
+
+**Resolution:** Remove deprecated CSS imports from `index.css` after verifying all Light DOM formatters use Shadow DOM components.
+
+### 8.7b LogEntry HTMLElement Caching (MEDIUM Priority)
+
+**Problem:** `LogEntry` component caches `HTMLElement` in state instead of using Lit templates.
+
+**Location:** `src/progressView/frontend/components/LogEntry.ts:40-60`
+
+```typescript
+@state() private renderedElement: HTMLElement | null = null;
+
+private formatMessage(): HTMLElement | null {
+  const formatter = getSharedLogEntryFormatter();
+  return formatter.format(this.message, { ... }); // Returns HTMLElement, not TemplateResult
+}
+
+override render(): TemplateResult {
+  return html`${this.renderedElement}`; // Bypasses Lit reactivity
+}
+```
+
+**Risk:** Memory leaks (cached DOM elements not cleaned up), bypasses Lit's efficient diffing.
+
+**Resolution:** Refactor `LogEntryFormatter` to return `TemplateResult` instead of `HTMLElement`.
+
+### 8.4a Context + Prop Drilling Coexistence (MEDIUM Priority)
+
+**Problem:** Stream content components consume context but still drill props to children.
+
+**Location:** `src/progressView/frontend/components/ToolUseStreamContent.ts`, `WorkflowStreamContent.ts`
+
+```typescript
+// Consumes context
+@consume({ context: streamStateContext, subscribe: true })
+private streamContext?: StreamContextValue;
+
+// But still drills props to LogList
+<log-list
+  .groups=${currentState.taskGroups}
+  .messages=${currentState.logs}
+  .activeRunId=${runId}
+></log-list>
+```
+
+**Resolution:** Have `LogList` consume `streamStateContext` directly instead of receiving props.
 
 ---
 

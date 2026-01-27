@@ -1,35 +1,15 @@
 /**
  * ProgressView CSS main file
  *
- * MIGRATION STATUS: Moving to Shadow DOM with Lit styles (logStyles.ts)
- *
- * STILL NEEDED (webview shell):
- * - base.css: Core layout for body, progress-app, main-container
- * - hljs-vscode.css: Syntax highlighting theme (cannot be in Shadow DOM easily)
- * - utilities.css: Simple utility classes
- *
- * DEPRECATED (now in logStyles.ts, kept for backward compatibility):
- * - logs.css: Log entry styles - migrated to logStyles.ts
- * - groups.css: Group styles - migrated to logStyles.ts
- * - markdown.css: Markdown styles - migrated to logStyles.ts
- * - scratchpad.css: Tool-use styles - migrated to logStyles.ts
- * - code-block.css: Code block styles - migrated to logStyles.ts
- *
- * Shadow DOM components use src/progressView/frontend/styles/logStyles.ts
+ * Log entry styles are now in Shadow DOM via logStyles.ts.
+ * This file only contains styles for the webview shell and global utilities.
  */
 
-/* Import base styles - still needed for webview shell */
+/* Import base styles - needed for webview shell layout */
 @import './base.css';
 
 /* Import utility classes */
 @import './utilities.css';
 
-/* Syntax highlighting - needed globally */
+/* Syntax highlighting - needed globally for hljs */
 @import './hljs-vscode.css';
-
-/* DEPRECATED: These are now in logStyles.ts but kept for any remaining Light DOM usage */
-@import './logs.css';
-@import './groups.css';
-@import './markdown.css';
-@import './scratchpad.css';
-@import './code-block.css';

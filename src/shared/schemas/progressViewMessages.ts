@@ -21,6 +21,7 @@ import {
   LogMessageDataSchema,
   OutputFileInfoSchema,
   RetryRequestPromptSchema,
+  StreamStateSchema,
   StreamStatusSchema,
   StreamTabIdSchema,
   StreamTabInfoSchema,
@@ -68,7 +69,7 @@ export const UpdateStreamsMessageSchema = z.object({
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
   /** Full stream states keyed by stream ID - backend is source of truth */
-  streamStates: z.record(z.string(), z.unknown()).optional(),
+  streamStates: z.record(z.string(), StreamStateSchema).optional(),
 });
 
 export const UpdateStreamStatusMessageSchema = z.object({

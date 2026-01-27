@@ -86,11 +86,11 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 // =============================================================================
 
 /** Run-scoped record: Record<runId, T> */
-const RunScopedRecord = <T extends z.ZodTypeAny>(valueSchema: T) =>
+const RunScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
   z.record(z.string(), valueSchema).prefault({});
 
 /** Round-scoped record: Record<runId, Record<round, T[]>> */
-const RoundScopedRecord = <T extends z.ZodTypeAny>(valueSchema: T) =>
+const RoundScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
   z.record(z.string(), z.record(z.string(), z.array(valueSchema))).prefault({});
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({

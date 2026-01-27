@@ -11,17 +11,14 @@ import { consume } from '@lit/context';
 import { customElement, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared styles
 import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
-import { markOptionAsSelected, withPlaceholder } from '@shared/utils/dropdown';
 import {
   renderAgentOptions,
   renderModelOptions,
-  renderPlaceholder,
 } from '@shared/utils/selectTemplates';
 
 // Local imports - main view
@@ -247,82 +244,40 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.focusInstruction({ key, text }));
   }
 
-  /**
-   * Render workflow agent options - prefer typed data, fall back to HTML string.
-   */
   private renderWorkflowAgentOptions(): TemplateResult {
     const session = this.sessionData;
     if (!session) {
       return html``;
     }
-    if (session.workflowAgentOptions.length > 0) {
-      return renderAgentOptions(
-        session.workflowAgentOptions,
-        session.workflowAgent,
-        'Select agent',
-      );
-    }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        session.workflowAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
+    return renderAgentOptions(
+      session.workflowAgentOptions,
       session.workflowAgent,
+      'Select agent',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
-  /**
-   * Render tool-use agent options - prefer typed data, fall back to HTML string.
-   */
   private renderToolUseAgentOptions(): TemplateResult {
     const session = this.sessionData;
     if (!session) {
       return html``;
     }
-    if (session.toolUseAgentOptions.length > 0) {
-      return renderAgentOptions(
-        session.toolUseAgentOptions,
-        session.toolUseAgent,
-        'Select agent',
-      );
-    }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        session.toolUseAgentOptionsHtml,
-        '<vscode-option value="">Select agent</vscode-option>',
-      ),
+    return renderAgentOptions(
+      session.toolUseAgentOptions,
       session.toolUseAgent,
+      'Select agent',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
-  /**
-   * Render model options - prefer typed data, fall back to HTML string.
-   */
   private renderModelOptionsTemplate(): TemplateResult {
     const session = this.sessionData;
     if (!session) {
       return html``;
     }
-    if (session.modelOptions.length > 0) {
-      return renderModelOptions(
-        session.modelOptions,
-        session.model,
-        'Select model',
-      );
-    }
-    // Fallback to HTML string (legacy)
-    const htmlOptions = markOptionAsSelected(
-      withPlaceholder(
-        session.modelOptionsHtml,
-        '<vscode-option value="">Select model</vscode-option>',
-      ),
+    return renderModelOptions(
+      session.modelOptions,
       session.model,
+      'Select model',
     );
-    return html`${unsafeHTML(htmlOptions)}`;
   }
 
   override render(): TemplateResult {
