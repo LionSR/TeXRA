@@ -58,6 +58,14 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
+  hostConnected(): void {
+    // Required by ReactiveController interface - no setup needed
+  }
+
+  hostDisconnected(): void {
+    // Required by ReactiveController interface - no cleanup needed
+  }
+
   /**
    * Get computed state for use in templates (Lit-native approach).
    * The host component should use these values in its template bindings.
