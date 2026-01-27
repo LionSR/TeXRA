@@ -18,6 +18,7 @@ import './LogPlaceholder';
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
+import { getGettingStartedHtml } from '@shared/utils/uiConstants';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
@@ -40,12 +41,9 @@ interface GroupTree {
   messages: LogMessageData[];
 }
 
-const PLACEHOLDER_HTML =
-  'No runs yet—use TeXRA commands to start. Try ' +
-  '<a href="command:texra.openGettingStarted">open the getting started walkthrough</a>, ' +
-  '<a href="command:texra.createSampleProject">create a sample project</a>, ' +
-  '<a href="command:texra.cloneOverleafProject">clone an Overleaf project</a>, or ' +
-  '<a href="command:texra.downloadArXivSource">download an arXiv source</a>.';
+const PLACEHOLDER_HTML = getGettingStartedHtml(
+  'No runs yet—use TeXRA commands to start. Try ',
+);
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
