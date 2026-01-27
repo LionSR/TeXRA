@@ -14,8 +14,6 @@ import { STREAM_STATUS } from '../constants';
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
-// Local imports - shared styles
-
 // Local imports - formatter helpers
 import {
   getDateTimeFormatter,

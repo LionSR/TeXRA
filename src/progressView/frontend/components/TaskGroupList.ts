@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { LitElement, html, type TemplateResult, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - side effects: register components
@@ -17,6 +17,7 @@ import './LogPlaceholder';
 
 // Local imports - shared utilities
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { scrollToBottom } from '@shared/utils/dom';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
@@ -77,6 +78,17 @@ export class TaskGroupList extends LitElement {
 
   /** Track previous group statuses to detect completion */
   @state() private previousStatuses = new Map<string, string>();
+
+  /** Reference to the scroll container */
+  @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
+  private scrollContainer?: HTMLElement;
+
+  /** Public method to scroll to bottom - called by parent LogList */
+  scrollToBottom(): void {
+    if (this.scrollContainer) {
+      scrollToBottom(this.scrollContainer);
+    }
+  }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
     if (changedProperties.has('groups')) {
@@ -185,6 +197,18 @@ export class TaskGroupList extends LitElement {
     }
   }
 
+  /** Render ungrouped messages as log entries */
+  private renderUngroupedMessages(
+    messages: LogMessageData[],
+  ): TemplateResult | typeof nothing {
+    if (messages.length === 0) return nothing;
+    return repeat(
+      messages,
+      (m) => m.id,
+      (m) => html`<log-entry .message=${m}></log-entry>`,
+    );
+  }
+
   /** Render a group node and its children recursively */
   private renderGroupNode(node: GroupTree): TemplateResult | typeof nothing {
     const { group, children, messages } = node;
@@ -229,27 +253,20 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
+    // Tool-use: ungrouped messages first, then tree
+    // Workflow: tree first, then ungrouped messages
+    const ungroupedBefore = this.isToolUse ? ungroupedMessages : [];
+    const ungroupedAfter = this.isToolUse ? [] : ungroupedMessages;
+
     return html`
       <vscode-scrollable id=${ELEMENT_IDS.LOG_CONTENT} class="log-container">
-        ${this.isToolUse
-          ? repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )
-          : nothing}
+        ${this.renderUngroupedMessages(ungroupedBefore)}
         ${repeat(
           tree,
           (t) => t.group.id,
           (t) => this.renderGroupNode(t),
         )}
-        ${!this.isToolUse
-          ? repeat(
-              ungroupedMessages,
-              (m) => m.id,
-              (m) => html`<log-entry .message=${m}></log-entry>`,
-            )
-          : nothing}
+        ${this.renderUngroupedMessages(ungroupedAfter)}
       </vscode-scrollable>
     `;
   }

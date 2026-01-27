@@ -21,10 +21,6 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       progressBundleUri: webview.asWebviewUri(
         vscode.Uri.joinPath(distPath, 'bundle.js'),
       ),
-      // Bundled CSS includes KaTeX styles and fonts
-      bundledStyleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(distPath, 'index.css'),
-      ),
     };
   }
 

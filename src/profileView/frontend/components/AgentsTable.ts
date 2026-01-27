@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles } from '@shared/styles';
+import { badgeStyles, codiconStyles, designTokens } from '@shared/styles';
 
 // Local imports - profile view styles
 import { profileViewStyles } from '../styles';
@@ -17,7 +17,12 @@ import type { RemoteAgent } from '@shared/schemas';
 
 @customElement('agents-table')
 export class AgentsTable extends LitElement {
-  static styles = [designTokens, codiconStyles, profileViewStyles];
+  static styles = [
+    designTokens,
+    codiconStyles,
+    ...badgeStyles,
+    profileViewStyles,
+  ];
 
   @property({ attribute: false }) agents: RemoteAgent[] = [];
 

@@ -11,26 +11,27 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared schemas (data types)
+// Local imports - use relative imports within schemas directory
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { AgentCategorySchema } from './agent';
+import { StreamTabIdSchema } from './identifiers';
+import { LogMessageDataSchema } from './log';
+import { OutputFileInfoSchema } from './output';
 import {
-  AgentCategorySchema,
   AgentProposalPromptSchema,
   BashApprovalPromptSchema,
-  InstructionUpdateSchema,
-  LogMessageDataSchema,
-  OutputFileInfoSchema,
   RetryRequestPromptSchema,
-  StreamStateSchema,
-  StreamStatusSchema,
-  StreamTabIdSchema,
-  StreamTabInfoSchema,
-  TaskGroupSchema,
-  TodoItemSchema,
-  TokenUsageStatsSchema,
   ToolEditApprovalPromptSchema,
-  UpdateTaskGroupPayloadSchema,
-} from './index';
+} from './prompts';
+import {
+  InstructionUpdateSchema,
+  StreamStatusSchema,
+  StreamTabInfoSchema,
+} from './stream';
+import { StreamStateSchema } from './streamState';
+import { TaskGroupSchema, UpdateTaskGroupPayloadSchema } from './taskGroup';
+import { TodoItemSchema } from './todo';
+import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
@@ -49,13 +50,8 @@ export const AgentCategoryFilterSchema = z.union([
 ]);
 export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
-/** Context window utilization state */
-export const ContextStateSchema = z.object({
-  inputTokens: z.number(),
-  contextWindow: z.number(),
-  utilizationPercent: z.number(),
-});
-export type ContextState = z.infer<typeof ContextStateSchema>;
+// Re-export ContextStateSchema from usage.ts for backwards compatibility
+export { ContextStateSchema, type ContextState } from './usage';
 
 // ============================================================================
 // Backend → Frontend Messages (Outbound)

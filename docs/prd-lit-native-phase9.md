@@ -9,7 +9,7 @@ Phase 9 addresses remaining Lit anti-patterns identified in the codebase. This p
 
 > **Status: Complete** (9.1-9.6 all complete, mark.js boundary cases documented as acceptable)
 >
-> **Known Issues:** Dual logic patterns exist for dropdown options (HTML + typed data coexist). See "Mixed State / Dual Logic Issues" section.
+> All known issues resolved. Dropdown utilities deleted, CSS consolidated.
 
 ## Prerequisites
 
@@ -163,33 +163,28 @@ if (!this.isOptionDisabled(selectedOption.value)) { ... }
 
 ---
 
-## 9.4 Convert Dropdown Utilities to Lit-Native (MEDIUM Priority)
+## 9.4 Convert Dropdown Utilities to Lit-Native (MEDIUM Priority) ✅
 
-**Problem:** Dropdown utilities build HTML strings that require `unsafeHTML` injection. This breaks type safety and declarative rendering.
+> **Completed:** All dropdown HTML string utilities deleted. Components use Lit templates with typed data.
 
-### Files Affected
+**Problem (Resolved):** Dropdown utilities built HTML strings requiring `unsafeHTML` injection.
 
-| File                                                      | Role                                   |
-| --------------------------------------------------------- | -------------------------------------- |
-| `src/shared/utils/dropdown.ts`                            | String manipulation utilities          |
-| `src/webview/frontend/components/InstructionPanel.ts`     | 3 unsafeHTML calls                     |
-| `src/webview/frontend/components/FileSelectGroup.ts`      | 1 unsafeHTML call + buildOptionsHtml() |
-| `src/webview/frontend/components/LatexDiffsSection.ts`    | 3 unsafeHTML calls                     |
-| `src/progressView/frontend/components/FollowupSection.ts` | Uses @query due to HTML injection      |
+### Files Deleted
 
-### Current Anti-Pattern
+| File                                | Reason                                  |
+| ----------------------------------- | --------------------------------------- |
+| `src/shared/utils/dropdown.ts`      | Replaced by Lit templates in components |
+| `src/shared/types/selectOptions.ts` | Types inlined where needed              |
 
-```typescript
-// dropdown.ts builds HTML strings
-export function markOptionAsSelected(optionsHtml: string, value: string): string {
-  const searchStr = `value="${value}"`;
-  const index = optionsHtml.indexOf(searchStr);  // String manipulation
-  return `${optionsHtml.slice(0, tagEnd)} selected${optionsHtml.slice(tagEnd)}`;
-}
+### Files Updated
 
-// Components inject with unsafeHTML
-${unsafeHTML(this.buildOptionsHtml())}
-```
+| File                                                      | Change                                    |
+| --------------------------------------------------------- | ----------------------------------------- |
+| `src/webview/frontend/components/InstructionPanel.ts`     | Uses Lit templates, no unsafeHTML         |
+| `src/webview/frontend/components/FileSelectGroup.ts`      | Uses Lit templates, no unsafeHTML         |
+| `src/webview/frontend/components/LatexDiffsSection.ts`    | Uses Lit templates, no unsafeHTML         |
+| `src/progressView/frontend/components/FollowupSection.ts` | Uses Lit templates, no @query for options |
+| `src/shared/utils/selectTemplates.ts`                     | Simplified, only template helpers remain  |
 
 ### Solution Strategy
 
@@ -488,20 +483,21 @@ private sortableController = new SortableController(
 
 ## Success Metrics
 
-| Metric                                | Before | Current     | Target |
-| ------------------------------------- | ------ | ----------- | ------ |
-| Document-level listeners              | 5      | 2\*         | 0      |
-| querySelector calls in Lit components | 11     | 4\*\*       | 0      |
-| classList manipulation calls          | 4      | 2\*\*\*     | 0      |
-| unsafeHTML for dropdowns              | 7      | 0\*\*\*\*   | 0      |
-| Imperative child method calls         | 7      | 0\*\*\*\*\* | 0      |
-| Sortable.js jQuery patterns           | 3      | 0 ✅        | 0      |
+| Metric                                | Before | Current   | Target           |
+| ------------------------------------- | ------ | --------- | ---------------- |
+| Document-level listeners              | 5      | 2\*       | 0                |
+| querySelector calls in Lit components | 11     | 4\*\*     | 0                |
+| classList manipulation calls          | 4      | 2\*\*\*   | 0                |
+| unsafeHTML for dropdowns              | 7      | 0 ✅      | 0                |
+| Imperative child method calls         | 7      | 0\*\*\*\* | 0                |
+| Sortable.js jQuery patterns           | 3      | 0 ✅      | 0                |
+| Dropdown HTML utilities               | 1      | 0 ✅      | 0 (deleted)      |
+| Dual data flow patterns               | 6      | 0 ✅      | 0 (consolidated) |
 
 \* FileSelectGroup now lazy-attaches, LogList uses component-level
-\*\* MainApp dead code removed, Sortable moved to controller, some remain in child component event handlers
+\*\* MainApp dead code removed, Sortable moved to controller, some remain in child component event handlers (acceptable)
 \*\*\* mark.js boundary (acceptable), icons.ts deprecated
-\*\*\*\* All dropdown components now use Lit templates (with HTML fallback for backward compatibility)
-\*\*\*\*\* FollowUpInput and HistoryList use reactive properties (mark.js child calls remain - acceptable boundary)
+\*\*\*\* FollowUpInput and HistoryList use reactive properties (mark.js child calls remain - acceptable boundary)
 
 ---
 
@@ -660,44 +656,14 @@ These patterns exist in shared utilities and are lower priority since they're he
 
 ## Known Mixed State / Dual Logic Issues
 
-The following patterns represent incomplete migrations where old and new code coexist:
+### ~~9.4a Dropdown Options Dual Data Flow~~ ✅ RESOLVED
 
-### 9.4a Dropdown Options Dual Data Flow (MEDIUM Priority)
+**Resolution:** All HTML string fields removed from schemas and components. Backend sends only typed data. Legacy dropdown utilities deleted:
 
-**Problem:** Backend sends BOTH `optionsHtml` (HTML strings) AND `optionsData` (typed arrays). Components check typed data first, fall back to HTML strings.
-
-**Affected Files:**
-
-| Layer     | File                            | Dual Fields                                                                                     |
-| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Backend   | `MainViewProvider.ts`           | Sends both `options` (HTML) and `optionsData`                                                   |
-| Backend   | `ProgressViewMessageHandler.ts` | Sends both `modelOptionsHtml` and `modelOptionsData`                                            |
-| State     | `MainApp.ts`                    | Stores `modelOptionsHtml` + `modelOptions`, `workflowAgentOptionsHtml` + `workflowAgentOptions` |
-| Context   | `mainViewContexts.ts`           | `SessionContextValue` has both `*OptionsHtml` and `*Options` fields                             |
-| Schema    | `mainViewMessages.ts`           | `optionsData` marked `@deprecated Use optionsData for Lit-native rendering`                     |
-| Component | `InstructionPanel.ts:253-326`   | `renderWorkflowAgentOptions()` checks typed first, falls back to HTML                           |
-
-**Current Pattern:**
-
-```typescript
-// InstructionPanel.ts - Dual logic
-private renderWorkflowAgentOptions(): TemplateResult {
-  if (session.workflowAgentOptions.length > 0) {
-    return renderAgentOptions(session.workflowAgentOptions, ...); // Lit-native
-  }
-  // Fallback to HTML string (legacy)
-  return html`${unsafeHTML(htmlOptions)}`; // Anti-pattern
-}
-```
-
-**Risk:** Doubled data transfer, inconsistent rendering paths, maintenance burden.
-
-**Resolution:**
-
-1. Remove `*OptionsHtml` fields from schemas and contexts
-2. Update backend to only send typed `optionsData`
-3. Remove fallback branches from components
-4. Delete `src/shared/utils/dropdown.ts` string manipulation utilities
+- `src/shared/utils/dropdown.ts` - Deleted
+- `src/shared/types/selectOptions.ts` - Deleted
+- All `*OptionsHtml` fields removed from schemas and contexts
+- All `unsafeHTML` fallback branches removed from components
 
 ### 9.2a querySelector in Event Handlers (LOW Priority)
 
@@ -716,6 +682,34 @@ const codeElem = codeBlock?.querySelector('code');
 ```
 
 **Resolution:** This is acceptable for event delegation in Light DOM components. The pattern finds elements relative to event target, which is idiomatic for delegated handlers.
+
+---
+
+### 2026-01-27 - Legacy Dropdown Utilities Removed
+
+**Completed:**
+
+- Deleted `src/shared/utils/dropdown.ts` (HTML string manipulation utilities)
+- Deleted `src/shared/types/selectOptions.ts` (types now inlined)
+- Removed all `*OptionsHtml` fields from schemas and contexts
+- Removed all `unsafeHTML` fallback branches from components
+- Simplified `src/shared/utils/selectTemplates.ts` to template helpers only
+- Dual data flow pattern (9.4a) fully resolved
+
+**Files Deleted:**
+
+- `src/shared/utils/dropdown.ts`
+- `src/shared/types/selectOptions.ts`
+
+**Files Modified:**
+
+- `src/shared/schemas/mainViewMessages.ts` - Removed HTML option fields
+- `src/webview/frontend/contexts/mainViewContexts.ts` - Removed HTML option state
+- `src/webview/frontend/MainApp.ts` - Simplified option handling
+- `src/webview/frontend/components/InstructionPanel.ts` - Lit templates only
+- `src/webview/frontend/components/FileSelectGroup.ts` - Lit templates only
+- `src/webview/frontend/components/LatexDiffsSection.ts` - Lit templates only
+- `src/progressView/frontend/components/FollowupSection.ts` - Lit templates only
 
 ---
 
