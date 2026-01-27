@@ -26,6 +26,7 @@ import {
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
@@ -38,8 +39,8 @@ import { ProgressEvents } from '../events';
 import type { PermissionState } from './PermissionCard';
 
 const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
-  'toolEdit',
-  'proposal',
+  PERMISSION_KIND.TOOL_EDIT,
+  PERMISSION_KIND.PROPOSAL,
 ]);
 
 type PermissionKey = string;
@@ -71,10 +72,18 @@ export class RequestPanels extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const approvals = this.permissions.filter((p) => p.kind === 'toolEdit');
-    const bashApprovals = this.permissions.filter((p) => p.kind === 'bash');
-    const retries = this.permissions.filter((p) => p.kind === 'retry');
-    const proposals = this.permissions.filter((p) => p.kind === 'proposal');
+    const approvals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.TOOL_EDIT,
+    );
+    const bashApprovals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.BASH,
+    );
+    const retries = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.RETRY,
+    );
+    const proposals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.PROPOSAL,
+    );
 
     if (
       approvals.length === 0 &&
@@ -698,9 +707,9 @@ export class RequestPanels extends LitElement {
 
   private getPermissionId(permission: PermissionState): string {
     switch (permission.kind) {
-      case 'retry':
+      case PERMISSION_KIND.RETRY:
         return permission.data.streamId;
-      case 'proposal':
+      case PERMISSION_KIND.PROPOSAL:
         return permission.data.proposalId;
       default:
         return permission.data.requestId;

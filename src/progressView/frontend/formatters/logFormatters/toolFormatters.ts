@@ -109,6 +109,17 @@ function getToolTitlePrefix(isUserFeedback: boolean, isError: boolean): string {
   return 'Tool Use';
 }
 
+/** Build title base from tool name and prefix. */
+function buildTitleBase(
+  toolName: string,
+  titlePrefix: string,
+  isNormalToolUse: boolean,
+): string {
+  if (!toolName) return titlePrefix;
+  if (isNormalToolUse) return toolName;
+  return `${titlePrefix}: ${toolName}`;
+}
+
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
@@ -137,14 +148,7 @@ export function formatToolUseTemplate(
   // Build title
   const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const isNormalToolUse = !isUserFeedback && !showAsError;
-  let titleBase: string;
-  if (toolName && isNormalToolUse) {
-    titleBase = toolName;
-  } else if (toolName) {
-    titleBase = `${titlePrefix}: ${toolName}`;
-  } else {
-    titleBase = titlePrefix;
-  }
+  const titleBase = buildTitleBase(toolName, titlePrefix, isNormalToolUse);
 
   const headerSummary = normalizedToolLog.headerSummary ?? '';
   const titleText = headerSummary

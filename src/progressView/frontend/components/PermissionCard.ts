@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
@@ -30,10 +31,10 @@ import type {
 // =============================================================================
 
 export type PermissionState =
-  | { kind: 'toolEdit'; data: ToolEditPermission }
-  | { kind: 'bash'; data: BashPermission }
-  | { kind: 'retry'; data: RetryPermission }
-  | { kind: 'proposal'; data: AgentProposalPermission };
+  | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
+  | { kind: typeof PERMISSION_KIND.BASH; data: BashPermission }
+  | { kind: typeof PERMISSION_KIND.RETRY; data: RetryPermission }
+  | { kind: typeof PERMISSION_KIND.PROPOSAL; data: AgentProposalPermission };
 
 /** Action button configuration */
 type ActionConfig = {
@@ -49,30 +50,30 @@ type ActionConfig = {
 
 /** Icon for each permission type header */
 const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
-  toolEdit: 'codicon-diff',
-  bash: 'codicon-terminal',
-  retry: 'codicon-refresh',
-  proposal: 'codicon-rocket',
+  [PERMISSION_KIND.TOOL_EDIT]: 'codicon-diff',
+  [PERMISSION_KIND.BASH]: 'codicon-terminal',
+  [PERMISSION_KIND.RETRY]: 'codicon-refresh',
+  [PERMISSION_KIND.PROPOSAL]: 'codicon-rocket',
 };
 
 /** Title for each permission type */
 const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
-  toolEdit: 'Tool edit approval',
-  bash: 'Command approval',
-  retry: 'Retry request',
-  proposal: 'Agent proposal',
+  [PERMISSION_KIND.TOOL_EDIT]: 'Tool edit approval',
+  [PERMISSION_KIND.BASH]: 'Command approval',
+  [PERMISSION_KIND.RETRY]: 'Retry request',
+  [PERMISSION_KIND.PROPOSAL]: 'Agent proposal',
 };
 
 /** Prompt kinds that support rejection feedback */
 const FEEDBACK_ELIGIBLE_PERMISSIONS = new Set<PermissionState['kind']>([
-  'toolEdit',
-  'bash',
-  'proposal',
+  PERMISSION_KIND.TOOL_EDIT,
+  PERMISSION_KIND.BASH,
+  PERMISSION_KIND.PROPOSAL,
 ]);
 
 /** Primary actions (approve/reject) for each permission type */
 const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
-  toolEdit: [
+  [PERMISSION_KIND.TOOL_EDIT]: [
     {
       action: 'approve',
       label: 'Approve',
@@ -81,7 +82,7 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
     { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
   ],
-  bash: [
+  [PERMISSION_KIND.BASH]: [
     {
       action: 'approve',
       label: 'Approve',
@@ -90,7 +91,7 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
     { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
   ],
-  retry: [
+  [PERMISSION_KIND.RETRY]: [
     {
       action: 'retry',
       label: 'Retry',
@@ -99,7 +100,7 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
     { action: 'cancel', label: 'Cancel', icon: 'codicon-x', variant: 'reject' },
   ],
-  proposal: [
+  [PERMISSION_KIND.PROPOSAL]: [
     {
       action: 'approve',
       label: 'Approve',
@@ -112,7 +113,7 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
 
 /** Secondary actions for each permission type */
 const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
-  toolEdit: [
+  [PERMISSION_KIND.TOOL_EDIT]: [
     {
       action: 'openDiff',
       label: 'Diff',
@@ -132,9 +133,9 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
       variant: 'secondary',
     },
   ],
-  bash: [],
-  retry: [],
-  proposal: [
+  [PERMISSION_KIND.BASH]: [],
+  [PERMISSION_KIND.RETRY]: [],
+  [PERMISSION_KIND.PROPOSAL]: [
     {
       action: 'setup',
       label: 'Setup',
@@ -184,7 +185,7 @@ export class PermissionCard extends LitElement {
   private getTitle(): string {
     if (!this.permission) return '';
 
-    if (this.permission.kind === 'proposal') {
+    if (this.permission.kind === PERMISSION_KIND.PROPOSAL) {
       const isWorkflow =
         this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW;
       return `Agent proposal (${isWorkflow ? 'Workflow' : 'Tool-Use'})`;
@@ -201,13 +202,13 @@ export class PermissionCard extends LitElement {
     if (!this.permission) return nothing;
 
     switch (this.permission.kind) {
-      case 'toolEdit':
+      case PERMISSION_KIND.TOOL_EDIT:
         return this.renderToolEditBody(this.permission.data);
-      case 'bash':
+      case PERMISSION_KIND.BASH:
         return this.renderBashBody(this.permission.data);
-      case 'retry':
+      case PERMISSION_KIND.RETRY:
         return this.renderRetryBody(this.permission.data);
-      case 'proposal':
+      case PERMISSION_KIND.PROPOSAL:
         return this.renderProposalBody(this.permission.data);
       default:
         return nothing;

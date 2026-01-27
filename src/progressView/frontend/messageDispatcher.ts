@@ -17,6 +17,7 @@ import {
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -427,11 +428,11 @@ const handlers: HandlerRegistry = {
 
   // Approval requests
   [PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: (data, ctx) => {
-    addPermission(ctx, { kind: 'toolEdit', data: data.request });
+    addPermission(ctx, { kind: PERMISSION_KIND.TOOL_EDIT, data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (data, ctx) => {
-    removePrompt(ctx, 'toolEdit', 'requestId', data.requestId);
+    removePrompt(ctx, PERMISSION_KIND.TOOL_EDIT, 'requestId', data.requestId);
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (data, ctx) => {
@@ -442,27 +443,27 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL]: (data, ctx) => {
-    addPermission(ctx, { kind: 'bash', data: data.request });
+    addPermission(ctx, { kind: PERMISSION_KIND.BASH, data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL]: (data, ctx) => {
-    removePrompt(ctx, 'bash', 'requestId', data.requestId);
+    removePrompt(ctx, PERMISSION_KIND.BASH, 'requestId', data.requestId);
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST]: (data, ctx) => {
-    addPermission(ctx, { kind: 'retry', data: data.request });
+    addPermission(ctx, { kind: PERMISSION_KIND.RETRY, data: data.request });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST]: (data, ctx) => {
-    removePrompt(ctx, 'retry', 'streamId', data.streamId);
+    removePrompt(ctx, PERMISSION_KIND.RETRY, 'streamId', data.streamId);
   },
 
   [PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL]: (data, ctx) => {
-    addPermission(ctx, { kind: 'proposal', data: data.proposal });
+    addPermission(ctx, { kind: PERMISSION_KIND.PROPOSAL, data: data.proposal });
   },
 
   [PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL]: (data, ctx) => {
-    removePrompt(ctx, 'proposal', 'proposalId', data.proposalId);
+    removePrompt(ctx, PERMISSION_KIND.PROPOSAL, 'proposalId', data.proposalId);
   },
 
   // Follow-up and recording
