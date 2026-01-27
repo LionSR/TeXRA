@@ -4,7 +4,7 @@
 
 export type TextareaTarget = HTMLElement | HTMLTextAreaElement | null;
 
-export interface TextareaResolution {
+interface TextareaResolution {
   host: HTMLElement | null;
   textarea: HTMLTextAreaElement | null;
 }

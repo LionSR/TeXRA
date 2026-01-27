@@ -118,46 +118,17 @@ export type MemoryViewInboundMessage = z.infer<
 >;
 
 // ============================================================
-// Type-safe handler registry
+// Type-safe handler registry and dispatcher
 // ============================================================
 
-type TypedInboundHandler<T extends MemoryViewInboundMessage> = (
-  data: T,
-) => Promise<void> | void;
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 
-export type MemoryViewInboundHandlerRegistry = {
-  [K in MemoryViewInboundMessage['command']]?: TypedInboundHandler<
-    Extract<MemoryViewInboundMessage, { command: K }>
-  >;
-};
+export type MemoryViewInboundHandlerRegistry =
+  HandlerRegistry<MemoryViewInboundMessage>;
 
-// ============================================================
-// Dispatcher function
-// ============================================================
-
-export function dispatchMemoryViewInbound(
-  raw: unknown,
-  handlers: MemoryViewInboundHandlerRegistry,
-  onError?: (error: unknown) => void,
-): boolean {
-  const result = MemoryViewInboundMessageSchema.safeParse(raw);
-  if (!result.success) {
-    onError?.(result.error);
-    return false;
-  }
-
-  const message = result.data;
-  const handler = handlers[message.command] as
-    | TypedInboundHandler<typeof message>
-    | undefined;
-
-  if (handler) {
-    const maybePromise = handler(message);
-    if (maybePromise instanceof Promise) {
-      maybePromise.catch((error) => onError?.(error));
-    }
-    return true;
-  }
-
-  return false;
-}
+export const dispatchMemoryViewInbound = createDispatcher(
+  MemoryViewInboundMessageSchema,
+);

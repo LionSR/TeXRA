@@ -379,62 +379,18 @@ export type ProgressViewInboundMessage = z.infer<
 // Type-safe handler registry types
 // ============================================================
 
-/**
- * Handler function type - receives typed message data (already validated).
- */
-type TypedInboundHandler<T extends ProgressViewInboundMessage> = (
-  data: T,
-) => Promise<void> | void;
-
-/**
- * Handler registry mapping command to typed handler.
- * TypeScript ensures handlers receive the correct message type.
- */
-export type ProgressViewInboundHandlerRegistry = {
-  [K in ProgressViewInboundMessage['command']]?: TypedInboundHandler<
-    Extract<ProgressViewInboundMessage, { command: K }>
-  >;
-};
-
 // ============================================================
-// Dispatcher function
+// Type-safe handler registry and dispatcher
 // ============================================================
 
-/**
- * Dispatch an inbound message to its handler using schema-driven validation.
- *
- * Parses the raw message once with the discriminated union schema,
- * then routes to the appropriate typed handler.
- *
- * @param raw - Raw message from webview postMessage
- * @param handlers - Typed handler registry
- * @param onError - Optional error callback for validation failures
- * @returns true if message was handled, false otherwise
- */
-export function dispatchProgressViewInbound(
-  raw: unknown,
-  handlers: ProgressViewInboundHandlerRegistry,
-  onError?: (error: unknown) => void,
-): boolean {
-  const result = ProgressViewInboundMessageSchema.safeParse(raw);
-  if (!result.success) {
-    onError?.(result.error);
-    return false;
-  }
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 
-  const message = result.data;
-  const handler = handlers[message.command] as
-    | TypedInboundHandler<typeof message>
-    | undefined;
+export type ProgressViewInboundHandlerRegistry =
+  HandlerRegistry<ProgressViewInboundMessage>;
 
-  if (handler) {
-    // Handle both sync and async handlers
-    const maybePromise = handler(message);
-    if (maybePromise instanceof Promise) {
-      maybePromise.catch((error) => onError?.(error));
-    }
-    return true;
-  }
-
-  return false;
-}
+export const dispatchProgressViewInbound = createDispatcher(
+  ProgressViewInboundMessageSchema,
+);

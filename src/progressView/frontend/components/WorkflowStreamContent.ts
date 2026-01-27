@@ -38,7 +38,6 @@ import { getRunGroups, hasOutputFiles, type RunGroup } from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
-  getWorkflowState,
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
@@ -125,8 +124,9 @@ export class WorkflowStreamContent extends LitElement {
   }
 
   private get currentState(): WorkflowStreamState | null {
-    if (!this.streamContext) return null;
-    return getWorkflowState(this.streamContext);
+    const ctx = this.streamContext;
+    if (!ctx || ctx.isToolUse || !ctx.streamState) return null;
+    return ctx.streamState as WorkflowStreamState;
   }
 
   private get currentRunId(): string | null {

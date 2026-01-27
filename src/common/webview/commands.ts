@@ -287,8 +287,8 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 } as const;
 
-// Export all commands in a single object for convenience
-export const WEBVIEW_COMMANDS = {
+// Combined commands object for convenience (not exported - use individual exports)
+const WEBVIEW_COMMANDS = {
   COMMON: COMMON_COMMANDS,
   MAIN_VIEW: MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,

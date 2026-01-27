@@ -38,7 +38,6 @@ import { getRunGroups, type RunGroup } from '../stateUtils';
 
 // Local imports - progress view contexts
 import {
-  getToolUseState,
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
@@ -108,8 +107,9 @@ export class ToolUseStreamContent extends LitElement {
   }
 
   private get currentState(): ToolUseStreamState | null {
-    if (!this.streamContext) return null;
-    return getToolUseState(this.streamContext);
+    const ctx = this.streamContext;
+    if (!ctx || !ctx.isToolUse || !ctx.streamState) return null;
+    return ctx.streamState as ToolUseStreamState;
   }
 
   private computeFilteredPermissions(): PermissionState[] {
