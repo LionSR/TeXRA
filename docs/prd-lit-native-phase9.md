@@ -7,7 +7,7 @@
 
 Phase 9 addresses remaining Lit anti-patterns identified in the codebase. This phase focuses on eliminating imperative patterns, document-level event listeners, manual DOM queries, classList manipulation, and HTML string building in favor of idiomatic Lit patterns.
 
-> **Status: Complete** (9.1-9.6 all complete, except deferred mark.js boundary cases)
+> **Status: Complete** (9.1-9.6 all complete, mark.js boundary cases documented as acceptable)
 
 ## Prerequisites
 
@@ -16,14 +16,14 @@ Phase 9 addresses remaining Lit anti-patterns identified in the codebase. This p
 
 ## Status Summary
 
-| Task                                      | Status       | Impact                             |
-| ----------------------------------------- | ------------ | ---------------------------------- |
-| 9.1 Remove document-level event listeners | **Complete** | Memory leaks, encapsulation        |
-| 9.2 Replace manual DOM queries            | **Complete** | Reactive patterns, testability     |
-| 9.3 Replace classList with classMap       | **Deferred** | mark.js boundary case              |
-| 9.4 Convert dropdown utils to Lit-native  | **Complete** | Type safety, maintainability       |
-| 9.5 Convert imperative child methods      | **Complete** | FollowUpInput and HistoryList done |
-| 9.6 Refactor Sortable.js integration      | **Deferred** | Needs child component move         |
+| Task                                      | Status       | Impact                                 |
+| ----------------------------------------- | ------------ | -------------------------------------- |
+| 9.1 Remove document-level event listeners | **Complete** | Memory leaks, encapsulation            |
+| 9.2 Replace manual DOM queries            | **Complete** | Reactive patterns, testability         |
+| 9.3 Replace classList with classMap       | **Deferred** | mark.js boundary case                  |
+| 9.4 Convert dropdown utils to Lit-native  | **Complete** | Type safety, maintainability           |
+| 9.5 Convert imperative child methods      | **Complete** | FollowUpInput and HistoryList done     |
+| 9.6 Refactor Sortable.js integration      | **Complete** | SortableController reactive controller |
 
 ## Key Discoveries
 
@@ -354,64 +354,95 @@ this.shouldFocusFollowUp = true;
 
 ---
 
-## 9.6 Refactor Sortable.js Integration (LOW-MEDIUM Priority)
+## 9.6 Refactor Sortable.js Integration (LOW-MEDIUM Priority) - COMPLETE
 
-**Problem:** Sortable.js is integrated with jQuery-style patterns - DOM queries, reading state from DOM.
+> **Completed:** SortableController reactive controller created and integrated into FileSelectGroup and OutputFilesSection.
 
-### File Affected
+**Problem:** Sortable.js was integrated with jQuery-style patterns - DOM queries, reading state from DOM.
 
-`src/webview/frontend/MainApp.ts` (Lines 590-617)
+### Solution: SortableController Reactive Controller
 
-### Current Anti-Pattern
+**Location:** `src/shared/controllers/SortableController.ts`
+
+A proper Lit reactive controller that encapsulates Sortable.js lifecycle management:
 
 ```typescript
-private initializeSortables(): void {
-  listIds.forEach((listId) => {
-    const element = this.renderRoot.querySelector(`#${listId}`);  // DOM query
-    new Sortable(element, { onEnd: () => this.handleSortEnd(listId) });
-  });
-}
+/**
+ * Lit reactive controller for managing Sortable.js drag-and-drop reordering.
+ */
+export class SortableController implements ReactiveController {
+  constructor(
+    private readonly host: ReactiveControllerHost,
+    private readonly getElement: () => HTMLElement | undefined,
+    private readonly getItems: () => string[],
+    private readonly onReorder: SortableReorderCallback,
+    config: SortableControllerConfig = {},
+  ) {
+    this.host.addController(this);
+  }
 
-private handleSortEnd(listId: string): void {
-  const element = this.renderRoot.querySelector(`#${listId}`);  // Query again
-  const items = Array.from(element.querySelectorAll('.file-item'));
-  const files = items.map((item) => item.getAttribute('data-path'));  // Read from DOM
-  this.updateMultiFiles(listId, files);
+  hostConnected(): void {
+    /* Lazy initialization */
+  }
+  hostUpdated(): void {
+    this.initialize();
+  }
+  hostDisconnected(): void {
+    this.destroy();
+  }
+
+  reinitialize(): void {
+    /* Force reinitialization */
+  }
+
+  private handleSortEnd(event: SortableDragEvent): void {
+    // Reads indices from event, not DOM
+    // Reorders state array, not DOM elements
+    const current = [...this.getItems()];
+    const [moved] = current.splice(event.oldIndex, 1);
+    current.splice(event.newIndex, 0, moved);
+    this.onReorder({ oldIndex, newIndex, items: current });
+  }
 }
 ```
 
-### Solution Strategy
+### Usage in Components
+
+**FileSelectGroup.ts:**
 
 ```typescript
-// Use @query decorators
-@query('#inputFiles') private inputFilesList!: HTMLElement;
-@query('#contextFiles') private contextFilesList!: HTMLElement;
+import { SortableController } from '@shared/controllers/SortableController';
 
-// Track order in state, read from event indices
-private handleSortEnd(listId: string, event: Sortable.SortableEvent): void {
-  const current = [...this.multiFiles[listId]];
-  const [moved] = current.splice(event.oldIndex!, 1);
-  current.splice(event.newIndex!, 0, moved);
-  this.updateMultiFiles(listId, current);  // State drives DOM
-}
-
-// Initialize with element references
-protected firstUpdated(): void {
-  this.initializeSortable(this.inputFilesList, 'inputFiles');
-  this.initializeSortable(this.contextFilesList, 'contextFiles');
-}
-
-private initializeSortable(element: HTMLElement, listId: string): void {
-  if (!element) return;
-  const sortable = new Sortable(element, {
-    animation: 150,
-    onEnd: (event) => this.handleSortEnd(listId, event),
-  });
-  this.sortables.push(sortable);
-}
+private sortableController = new SortableController(
+  this,
+  () => this.fileListElement,
+  () => this.currentFiles,
+  (result) => this.dispatchEvent(
+    MainViewEvents.filesReordered({ listId: this.listId, files: result.items })
+  ),
+);
 ```
 
-**Effort:** Low-Medium (1-2 hours)
+**OutputFilesSection.ts:** Similar pattern for output files list.
+
+### Key Improvements
+
+| Before (Anti-pattern)          | After (Lit-native)                               |
+| ------------------------------ | ------------------------------------------------ |
+| DOM queries in MainApp         | Controller manages element reference             |
+| Read file order from DOM       | Read from state, use event indices               |
+| Manual initialization/cleanup  | Automatic via ReactiveController lifecycle       |
+| Sortable in parent component   | Sortable in child component owning the list      |
+| Event handler reads data-attrs | Event handler uses typed callback with reordered |
+
+### Files Modified/Created
+
+- **Created:** `src/shared/controllers/SortableController.ts` (134 lines)
+- **Modified:** `src/webview/frontend/components/FileSelectGroup.ts` - uses controller
+- **Modified:** `src/webview/frontend/components/OutputFilesSection.ts` - uses controller
+- **Modified:** `src/webview/frontend/MainApp.ts` - removed broken Sortable initialization
+
+**Effort:** Complete
 
 ---
 
@@ -433,7 +464,7 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 
 7. ✅ Document MainApp shadow DOM isolation issues
 8. ✅ Remove broken MainApp querySelector/decoration code
-9. ⏸️ Sortable.js - Documented, needs move to child components
+9. ✅ Sortable.js - SortableController implemented, moved to child components
 
 ### Phase 9d: Dropdown Refactor (4-6 hours)
 
@@ -455,16 +486,17 @@ private initializeSortable(element: HTMLElement, listId: string): void {
 
 ## Success Metrics
 
-| Metric                                | Before | Current   | Target |
-| ------------------------------------- | ------ | --------- | ------ |
-| Document-level listeners              | 5      | 2\*       | 0      |
-| querySelector calls in Lit components | 11     | 6\*\*     | 0      |
-| classList manipulation calls          | 4      | 2\*\*\*   | 0      |
-| unsafeHTML for dropdowns              | 7      | 0\*\*\*\* | 0      |
-| Imperative child method calls         | 7      | 0**\***   | 0      |
+| Metric                                | Before | Current     | Target |
+| ------------------------------------- | ------ | ----------- | ------ |
+| Document-level listeners              | 5      | 2\*         | 0      |
+| querySelector calls in Lit components | 11     | 4\*\*       | 0      |
+| classList manipulation calls          | 4      | 2\*\*\*     | 0      |
+| unsafeHTML for dropdowns              | 7      | 0\*\*\*\*   | 0      |
+| Imperative child method calls         | 7      | 0\*\*\*\*\* | 0      |
+| Sortable.js jQuery patterns           | 3      | 0 ✅        | 0      |
 
 \* FileSelectGroup now lazy-attaches, LogList uses component-level
-\*\* MainApp dead code removed, some remain in child component queries
+\*\* MainApp dead code removed, Sortable moved to controller, some remain in child component event handlers
 \*\*\* mark.js boundary (acceptable), icons.ts deprecated
 \*\*\*\* All dropdown components now use Lit templates (with HTML fallback for backward compatibility)
 \*\*\*\*\* FollowUpInput and HistoryList use reactive properties (mark.js child calls remain - acceptable boundary)
@@ -621,6 +653,32 @@ These patterns exist in shared utilities and are lower priority since they're he
 5. **src/progressView/frontend/components/LogList.ts** - querySelector in event handlers
    - Light DOM component with event delegation
    - Acceptable for Light DOM event handling pattern
+
+### 2026-01-27 - Phase 9.6 SortableController Complete
+
+**Completed:**
+
+- Created `SortableController` reactive controller in `src/shared/controllers/SortableController.ts`
+- Moved Sortable.js initialization from MainApp to child components
+- FileSelectGroup and OutputFilesSection now use the controller
+- Eliminated jQuery-style DOM queries for file list reordering
+
+**Key Design Decisions:**
+
+- Controller reads items from state callback, not DOM data attributes
+- Event handler receives typed `SortableReorderResult` with reordered array
+- Lifecycle managed via `hostUpdated()` and `hostDisconnected()`
+- Lazy initialization - waits for DOM to be ready
+
+**Files Created:**
+
+- `src/shared/controllers/SortableController.ts` (134 lines)
+
+**Files Modified:**
+
+- `src/webview/frontend/components/FileSelectGroup.ts` - uses SortableController
+- `src/webview/frontend/components/OutputFilesSection.ts` - uses SortableController
+- `src/webview/frontend/MainApp.ts` - removed broken Sortable initialization
 
 ---
 
