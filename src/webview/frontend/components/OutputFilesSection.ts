@@ -7,7 +7,7 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import Sortable from 'sortablejs';
@@ -19,10 +19,8 @@ import {
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
 
-type SortableDragEvent = {
-  oldIndex?: number | null;
-  newIndex?: number | null;
-};
+// Local imports - shared types
+import type { SortableDragEvent } from '@shared/types/sortable';
 
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
@@ -147,12 +145,6 @@ export class OutputFilesSection extends LitElement {
     }
   `;
 
-  /** Whether the section is expanded */
-  @property({ type: Boolean }) expanded = false;
-
-  /** Output files list */
-  @property({ type: Array }) files: string[] = [];
-
   @consume({ context: fileStateContext, subscribe: true })
   private fileState?: FileStateContextValue;
 
@@ -167,18 +159,18 @@ export class OutputFilesSection extends LitElement {
   }
 
   protected override updated(changedProps: Map<string, unknown>): void {
-    if (changedProps.has('files')) {
+    if (changedProps.has('fileState')) {
       this.destroySortable();
     }
     this.initializeSortable();
   }
 
   private get currentFiles(): string[] {
-    return this.fileState?.multiFiles.outputFiles ?? this.files;
+    return this.fileState?.multiFiles.outputFiles ?? [];
   }
 
   private get currentExpanded(): boolean {
-    return this.fileState?.outputFilesActive ?? this.expanded;
+    return this.fileState?.outputFilesActive ?? false;
   }
 
   private initializeSortable(): void {

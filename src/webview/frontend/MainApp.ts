@@ -74,6 +74,7 @@ import type {
   AgentChangeDetail,
   BannerActionDetail,
   BaseFileChangeDetail,
+  CheckboxValues,
   CheckboxChangeDetail,
   CommitChangeDetail,
   EditedFileChangeDetail,
@@ -431,7 +432,12 @@ export class MainApp extends BaseWebviewApp {
       changed.has('checkboxValues') ||
       changed.has('outputFilesActive')
     ) {
-      this.fileStateContextValue = this.buildFileStateContext();
+      const nextValue = this.buildFileStateContext();
+      if (
+        !this.isFileStateContextEqual(this.fileStateContextValue, nextValue)
+      ) {
+        this.fileStateContextValue = nextValue;
+      }
     }
 
     if (
@@ -451,7 +457,10 @@ export class MainApp extends BaseWebviewApp {
       changed.has('isPolishing') ||
       changed.has('debugMode')
     ) {
-      this.sessionContextValue = this.buildSessionContext();
+      const nextValue = this.buildSessionContext();
+      if (!this.isSessionContextEqual(this.sessionContextValue, nextValue)) {
+        this.sessionContextValue = nextValue;
+      }
     }
   }
 
@@ -1880,6 +1889,136 @@ export class MainApp extends BaseWebviewApp {
       isPolishing: this.isPolishing,
       debugMode: this.debugMode,
     };
+  }
+
+  private isSessionContextEqual(
+    current: SessionContextValue,
+    next: SessionContextValue,
+  ): boolean {
+    return (
+      current.sessionType === next.sessionType &&
+      current.instruction === next.instruction &&
+      current.placeholder === next.placeholder &&
+      current.workflowAgent === next.workflowAgent &&
+      current.toolUseAgent === next.toolUseAgent &&
+      current.model === next.model &&
+      current.workflowAgentOptionsHtml === next.workflowAgentOptionsHtml &&
+      current.toolUseAgentOptionsHtml === next.toolUseAgentOptionsHtml &&
+      current.modelOptionsHtml === next.modelOptionsHtml &&
+      this.areArraysEqual(
+        current.workflowAgentOptions,
+        next.workflowAgentOptions,
+      ) &&
+      this.areArraysEqual(
+        current.toolUseAgentOptions,
+        next.toolUseAgentOptions,
+      ) &&
+      this.areArraysEqual(current.modelOptions, next.modelOptions) &&
+      current.isRecording === next.isRecording &&
+      current.isPolishing === next.isPolishing &&
+      current.debugMode === next.debugMode
+    );
+  }
+
+  private isFileStateContextEqual(
+    current: FileStateContextValue,
+    next: FileStateContextValue,
+  ): boolean {
+    return (
+      current.sessionType === next.sessionType &&
+      this.areCheckboxValuesEqual(
+        current.checkboxValues,
+        next.checkboxValues,
+      ) &&
+      current.singleFiles.inputFile === next.singleFiles.inputFile &&
+      current.singleFiles.referenceFile === next.singleFiles.referenceFile &&
+      current.singleFiles.auxiliaryFile === next.singleFiles.auxiliaryFile &&
+      current.singleFiles.mediaFile === next.singleFiles.mediaFile &&
+      current.singleFiles.baseFile === next.singleFiles.baseFile &&
+      current.singleFiles.editedFile === next.singleFiles.editedFile &&
+      this.areStringArraysEqual(
+        current.fileOptions.inputFile,
+        next.fileOptions.inputFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.fileOptions.referenceFile,
+        next.fileOptions.referenceFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.fileOptions.auxiliaryFile,
+        next.fileOptions.auxiliaryFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.fileOptions.mediaFile,
+        next.fileOptions.mediaFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.fileOptions.baseFile,
+        next.fileOptions.baseFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.fileOptions.editedFile,
+        next.fileOptions.editedFile,
+      ) &&
+      this.areStringArraysEqual(
+        current.multiFiles.inputFiles,
+        next.multiFiles.inputFiles,
+      ) &&
+      this.areStringArraysEqual(
+        current.multiFiles.referenceFiles,
+        next.multiFiles.referenceFiles,
+      ) &&
+      this.areStringArraysEqual(
+        current.multiFiles.auxiliaryFiles,
+        next.multiFiles.auxiliaryFiles,
+      ) &&
+      this.areStringArraysEqual(
+        current.multiFiles.mediaFiles,
+        next.multiFiles.mediaFiles,
+      ) &&
+      this.areStringArraysEqual(
+        current.multiFiles.outputFiles,
+        next.multiFiles.outputFiles,
+      ) &&
+      current.multiFilesVisible.inputFiles ===
+        next.multiFilesVisible.inputFiles &&
+      current.multiFilesVisible.referenceFiles ===
+        next.multiFilesVisible.referenceFiles &&
+      current.multiFilesVisible.auxiliaryFiles ===
+        next.multiFilesVisible.auxiliaryFiles &&
+      current.multiFilesVisible.mediaFiles ===
+        next.multiFilesVisible.mediaFiles &&
+      current.multiFilesVisible.outputFiles ===
+        next.multiFilesVisible.outputFiles &&
+      current.outputFilesActive === next.outputFilesActive
+    );
+  }
+
+  private areCheckboxValuesEqual(
+    current: CheckboxValues,
+    next: CheckboxValues,
+  ): boolean {
+    return (
+      current.autoExtractFigure === next.autoExtractFigure &&
+      current.autoExtractTikzFigure === next.autoExtractTikzFigure &&
+      current.autoCompileInputPdf === next.autoCompileInputPdf &&
+      current.attachTeXCount === next.attachTeXCount &&
+      current.attachDiagnostics === next.attachDiagnostics
+    );
+  }
+
+  private areStringArraysEqual(current: string[], next: string[]): boolean {
+    return this.areArraysEqual(current, next);
+  }
+
+  private areArraysEqual<T>(current: T[], next: T[]): boolean {
+    if (current === next) {
+      return true;
+    }
+    if (current.length !== next.length) {
+      return false;
+    }
+    return current.every((value, index) => Object.is(value, next[index]));
   }
 
   render(): TemplateResult {

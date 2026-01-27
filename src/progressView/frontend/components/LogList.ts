@@ -121,10 +121,7 @@ export class LogList extends LitElement {
   /** Handle click events for file links, copy buttons, etc. */
   private handleClickEvent = async (event: Event): Promise<void> => {
     if (!(event instanceof MouseEvent)) return;
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    const fileLink = target.closest('.file-link') as HTMLElement | null;
+    const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
       postMessage(COMMANDS.OPEN_FILE, {
         file: fileLink.dataset.file,
@@ -135,15 +132,16 @@ export class LogList extends LitElement {
       return;
     }
 
-    const latexRef = target.closest('.latex-ref') as HTMLElement | null;
+    const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
       postMessage(COMMANDS.OPEN_LABEL, { label: latexRef.dataset.label });
       return;
     }
 
-    const copyButton = target.closest(
+    const copyButton = this.findTargetInPath<HTMLElement>(
+      event,
       '.banner-content-copy',
-    ) as HTMLElement | null;
+    );
     if (copyButton) {
       event.stopPropagation();
       const contentElem = copyButton
@@ -164,9 +162,10 @@ export class LogList extends LitElement {
       return;
     }
 
-    const codeBlockCopy = target.closest(
+    const codeBlockCopy = this.findTargetInPath<HTMLElement>(
+      event,
       '.code-block-copy',
-    ) as HTMLElement | null;
+    );
     if (codeBlockCopy) {
       event.stopPropagation();
       const codeBlock = codeBlockCopy.closest('.code-block');
@@ -181,6 +180,18 @@ export class LogList extends LitElement {
       });
     }
   };
+
+  private findTargetInPath<T extends Element>(
+    event: Event,
+    selector: string,
+  ): T | null {
+    for (const node of event.composedPath()) {
+      if (node instanceof Element && node.matches(selector)) {
+        return node as T;
+      }
+    }
+    return null;
+  }
 
   /** Handle file-click events from Shadow DOM components. */
   private handleFileClickEvent = (event: Event): void => {
