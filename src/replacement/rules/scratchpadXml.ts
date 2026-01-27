@@ -42,5 +42,3 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
       '<rebuttal_package><scratchpad>',
   },
 };
-
-export default SCRATCHPAD_XML_REPLACEMENTS;

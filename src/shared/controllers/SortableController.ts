@@ -71,10 +71,6 @@ export class SortableController implements ReactiveController {
     this.host.addController(this);
   }
 
-  hostConnected(): void {
-    // Sortable is initialized lazily in hostUpdated after DOM is ready
-  }
-
   hostUpdated(): void {
     this.initialize();
   }

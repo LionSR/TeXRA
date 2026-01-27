@@ -5,8 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { agentDirectories } from '@frontend/agents';
-import { validateYamlAndPromptAdd } from '@frontend/agents';
+import { agentDirectories, validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_WATCHER_MS } from '@utils/config';

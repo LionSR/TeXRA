@@ -14,23 +14,16 @@ export class FileItem extends vscode.TreeItem {
     super(label, collapsibleState);
 
     this.tooltip = this.resourceUri.fsPath;
-    this.description = undefined;
 
-    if (collapsibleState === vscode.TreeItemCollapsibleState.None) {
-      this.iconPath = new vscode.ThemeIcon('file');
-    } else {
-      this.iconPath = new vscode.ThemeIcon('folder');
-    }
-
-    if (
-      isBuiltIn &&
-      collapsibleState === vscode.TreeItemCollapsibleState.None
-    ) {
+    const isFile = collapsibleState === vscode.TreeItemCollapsibleState.None;
+    if (isBuiltIn && isFile) {
       this.resourceUri = this.resourceUri.with({
         scheme: 'file',
         query: 'readonly',
       });
       this.iconPath = new vscode.ThemeIcon('lock');
+    } else {
+      this.iconPath = new vscode.ThemeIcon(isFile ? 'file' : 'folder');
     }
   }
 }

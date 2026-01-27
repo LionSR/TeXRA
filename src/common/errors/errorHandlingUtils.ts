@@ -35,11 +35,7 @@ import type { z } from 'zod';
  * Valid documentation identifiers for error messages.
  * This ensures type safety when referencing documentation sections.
  */
-export type DocId =
-  | 'intelligent-merge'
-  | 'custom-agents'
-  | 'tool-integration'
-  | 'latex-diff';
+export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
 /** Maximum length for error details before truncation */
 const MAX_ERROR_LENGTH = 500;
