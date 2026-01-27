@@ -13,8 +13,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
-// Note: Previous dropdown.ts utils no longer needed - using Lit templates directly
-
 // Local imports - main view
 import { SortableController } from '@shared/controllers/SortableController';
 import { MainViewEvents } from '../events';
@@ -23,6 +21,7 @@ import {
   fileStateContext,
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
+import { fileSelectStyles } from '../styles/fileSelectStyles';
 
 // Local imports - shared schemas
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
@@ -37,209 +36,14 @@ const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
-
-    .file-select {
-      margin-bottom: var(--spacing-large);
-    }
-
-    .file-select:has(.optional-label) {
-      margin-bottom: var(--spacing-tiny);
-    }
-
-    .file-select-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: var(--spacing-small);
-      flex-wrap: nowrap;
-      line-height: 1.5;
-      gap: var(--spacing-small);
-    }
-
-    .file-select-label-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-small);
-      flex-wrap: nowrap;
-      flex: 1;
-      min-width: 0;
-      min-height: var(--height-control);
-    }
-
-    .file-select-label-group vscode-toolbar-button {
-      opacity: 1;
-    }
-
-    .file-select-header > vscode-toolbar-button {
-      opacity: 1;
-      flex-shrink: 0;
-    }
-
-    .file-select-label-group label {
-      margin-right: var(--spacing-small);
-    }
-
-    .file-select-label-group vscode-textfield {
-      flex: 1;
-      min-width: 0;
-      margin: 0;
-    }
-
-    .file-select-actions,
-    vscode-toolbar-container.file-select-actions {
-      flex-direction: column !important;
-      flex-wrap: nowrap;
-      margin-left: auto;
-    }
-
-    .file-select-actions vscode-toolbar-button {
-      opacity: 1;
-      width: var(--height-control);
-      height: var(--height-control);
-      min-width: var(--height-control);
-      min-height: var(--height-control);
-    }
-
-    .file-select vscode-single-select {
-      width: 100%;
-    }
-
-    .file-select:not([data-expanded='true']) .file-action-button {
-      display: none;
-    }
-
-    .file-select[data-expanded='true'] .optional-label {
-      color: var(--vscode-foreground);
-    }
-
-    .file-select[data-expanded='true'] .toggle-icon {
-      color: var(--vscode-foreground);
-    }
-
-    .optional-label {
-      color: var(--text-color);
-      font-weight: normal;
-      font-size: var(--font-size);
-      white-space: nowrap;
-      min-width: calc(var(--width-button-min) * 2);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .toggle-icon {
-      cursor: pointer;
-      user-select: none;
-      margin: 0;
-      position: relative;
-      padding: 0 var(--spacing-tiny);
-      color: var(--text-color);
-      display: flex;
-      align-items: center;
-      height: var(--height-control);
-    }
-
-    .multiple-files-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-top: var(--spacing-small);
-      padding: 0;
-    }
-
-    .multiple-files-content {
-      width: 100%;
-      padding: 0;
-    }
-
-    .multiple-files-list {
-      background-color: var(--background-color);
-      border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
-      border-radius: var(--border-radius);
-      padding: var(--spacing-small);
-      font-size: var(--font-size);
-      max-height: var(--height-small);
-      overflow-y: auto;
-    }
-
-    .file-item {
-      padding: var(--spacing-tiny) var(--spacing-small);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .file-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-
-    .remove-button {
-      color: var(--vscode-errorForeground);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .file-list-placeholder {
-      color: var(--color-text-secondary);
-      font-style: italic;
-      padding: var(--spacing-tiny) var(--spacing-small);
-    }
-
-    /* Dropdown menu styles */
-    .dropdown-container {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .dropdown-container vscode-toolbar-button {
-      flex-shrink: 0;
-    }
-
-    .dropdown-container .dropdown-menu {
-      position: absolute;
-      top: calc(100% + var(--spacing-tiny));
-      left: 0;
-      right: auto;
-      z-index: 100;
-      display: block;
-      background-color: var(--vscode-menu-background);
-      color: var(--vscode-menu-foreground);
-      border: 1px solid var(--vscode-menu-border);
-      border-radius: var(--border-radius);
-      min-width: 160px;
-    }
-
-    .dropdown-container .dropdown-menu:not([show]) {
-      display: none;
-    }
-
-    .dropdown-container .dropdown-menu .dropdown-menu-content {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      padding: var(--spacing-tiny);
-    }
-
-    .dropdown-container .dropdown-menu vscode-checkbox {
-      display: flex;
-      align-items: center;
-      height: 20px;
-      padding: var(--spacing-tiny);
-      font-size: var(--font-size-sm);
-    }
-
-    .dropdown-container .dropdown-menu vscode-checkbox:hover {
-      background: var(--vscode-list-hoverBackground);
-    }
-  `;
+  static override styles = [
+    ...fileSelectStyles,
+    css`
+      :host {
+        display: block;
+      }
+    `,
+  ];
 
   /** File type configuration */
   @property({ type: Object }) config!: FileSelectConfig;
