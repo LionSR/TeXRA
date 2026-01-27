@@ -33,9 +33,9 @@ export class SignInPrompt extends LitElement {
     `,
   ];
 
-  private handleSignIn = (): void => {
+  private handleSignIn(): void {
     this.dispatchEvent(ProfileViewEvents.signIn());
-  };
+  }
 
   override render(): TemplateResult {
     return html`

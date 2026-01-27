@@ -30,7 +30,7 @@ export class SearchBar extends LitElement {
     super.disconnectedCallback();
   }
 
-  private handleInput = (event: Event): void => {
+  private handleInput(event: Event): void {
     const target = event.target as HTMLInputElement | null;
     const term = target?.value?.trim() ?? '';
     if (this.searchTimeoutId) {
@@ -39,17 +39,17 @@ export class SearchBar extends LitElement {
     this.searchTimeoutId = setTimeout(() => {
       this.dispatchEvent(HistoryViewEvents.searchChange({ term }));
     }, 300);
-  };
+  }
 
-  private handleNext = (): void => {
+  private handleNext(): void {
     this.dispatchEvent(HistoryViewEvents.searchNext());
-  };
+  }
 
-  private handlePrev = (): void => {
+  private handlePrev(): void {
     this.dispatchEvent(HistoryViewEvents.searchPrev());
-  };
+  }
 
-  private handleKeydown = (event: KeyboardEvent): void => {
+  private handleKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (event.shiftKey) {
@@ -57,7 +57,7 @@ export class SearchBar extends LitElement {
     } else {
       this.handleNext();
     }
-  };
+  }
 
   override render(): TemplateResult {
     return html`

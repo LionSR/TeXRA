@@ -124,6 +124,11 @@ export const historyViewStyles: CSSResult = css`
     word-break: break-word;
   }
 
+  .history-none {
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
   /* Search highlight styles for mark.js */
   mark {
     background-color: var(

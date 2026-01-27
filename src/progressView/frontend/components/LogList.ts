@@ -31,6 +31,9 @@ import { COMMANDS } from '../constants';
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
+// Local imports - progress view formatters
+import { getCopyContent } from '../formatters/copyContentStore';
+
 // Local imports - progress view components (type-only for @query reference)
 import type { TaskGroupList } from './TaskGroupList';
 
@@ -122,7 +125,7 @@ export class LogList extends LitElement {
   }
 
   /** Handle click events for file links, copy buttons, etc. */
-  private handleClickEvent = async (event: Event): Promise<void> => {
+  private async handleClickEvent(event: Event): Promise<void> {
     if (!(event instanceof MouseEvent)) return;
     const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
@@ -141,14 +144,15 @@ export class LogList extends LitElement {
       return;
     }
 
-    // Handle copy buttons - content is stored directly on button via data-copy-content
+    // Handle copy buttons - content is stored in the copy registry
     const copyButton = this.findTargetInPath<HTMLElement>(
       event,
-      '[data-copy-content]',
+      '[data-copy-id]',
     );
     if (copyButton) {
       event.stopPropagation();
-      const textToCopy = copyButton.dataset.copyContent ?? '';
+      const copyId = copyButton.dataset.copyId ?? '';
+      const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
       if (!textToCopy.trim()) return;
 
       const isCodeBlock = copyButton.dataset.copyType === 'code-block';
@@ -161,7 +165,7 @@ export class LogList extends LitElement {
         successClass: isCodeBlock ? 'copied' : undefined,
       });
     }
-  };
+  }
 
   private findTargetInPath<T extends Element>(
     event: Event,
@@ -176,7 +180,7 @@ export class LogList extends LitElement {
   }
 
   /** Handle file-click events from Shadow DOM components. */
-  private handleFileClickEvent = (event: Event): void => {
+  private handleFileClickEvent(event: Event): void {
     const { file, line } = (
       event as CustomEvent<{ file: string; line?: number }>
     ).detail;
@@ -186,7 +190,7 @@ export class LogList extends LitElement {
         ...(line !== undefined && { line }),
       });
     }
-  };
+  }
 }
 
 declare global {

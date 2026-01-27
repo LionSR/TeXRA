@@ -92,7 +92,7 @@ export class WorkflowStreamContent extends LitElement {
     hasFiles: false,
   };
 
-  protected willUpdate(changedProperties: PropertyValues): void {
+  protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('streamContext')) {
       const currentState = this.currentState;
       // Recompute run groups when state changes (taskGroups is inside state)
@@ -140,7 +140,7 @@ export class WorkflowStreamContent extends LitElement {
     return { instruction, usage, files, hasFiles };
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const { instruction, usage, files, hasFiles } = this.runValues;
     const streamInfo = this.currentStreamInfo;
     const state = this.currentState;

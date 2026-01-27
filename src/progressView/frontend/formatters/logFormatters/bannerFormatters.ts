@@ -57,6 +57,8 @@ export function formatBannerContentTemplate(
   const { fullTimestamp } = formatTimestamp(new Date(timestamp));
   const markdownHtml = processMarkdownContent(trimmedContent);
   const shouldOpen = options?.defaultOpen ?? false;
+  // prettier-ignore
+  const contentTemplate = html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}" data-raw-content=${trimmedContent}>${unsafeHTML(markdownHtml)}</div>`;
 
   return html`
     <details
@@ -69,14 +71,13 @@ export function formatBannerContentTemplate(
       ${buildDetailsSummary({
         iconClass: config.iconClass,
         label: config.labelText,
-        copyButton: { title: config.copyTitle, content: trimmedContent },
+        copyButton: {
+          title: config.copyTitle,
+          content: trimmedContent,
+          contentId: id ? `banner:${id}` : undefined,
+        },
       })}
-      <div
-        class="banner-content markdown-content log-entry-content ${config.contentClass}"
-        data-raw-content=${trimmedContent}
-      >
-        ${unsafeHTML(markdownHtml)}
-      </div>
+      ${contentTemplate}
     </details>
   `;
 }
@@ -96,6 +97,14 @@ export function formatModelResponseTemplate(
   const markdownHtml = processMarkdownContent(trimmedContent);
   // Model response defaults to open (was hardcoded open before)
   const shouldOpen = options?.defaultOpen ?? true;
+  // prettier-ignore
+  const contentTemplate = html`<div class=${classMap({
+    'banner-content': true,
+    'markdown-content': true,
+    'log-entry-content': true,
+    'banner-content--model': true,
+    [`message-${level}`]: true,
+  })} data-raw-content=${trimmedContent}>${unsafeHTML(markdownHtml)}</div>`;
 
   return html`
     <details
@@ -111,20 +120,13 @@ export function formatModelResponseTemplate(
         timestamp: verbose
           ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
           : undefined,
-        copyButton: { title: 'Copy model output', content: trimmedContent },
+        copyButton: {
+          title: 'Copy model output',
+          content: trimmedContent,
+          contentId: id ? `model:${id}` : undefined,
+        },
       })}
-      <div
-        class=${classMap({
-          'banner-content': true,
-          'markdown-content': true,
-          'log-entry-content': true,
-          'banner-content--model': true,
-          [`message-${level}`]: true,
-        })}
-        data-raw-content=${trimmedContent}
-      >
-        ${unsafeHTML(markdownHtml)}
-      </div>
+      ${contentTemplate}
     </details>
   `;
 }

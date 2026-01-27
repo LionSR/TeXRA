@@ -33,12 +33,12 @@ export class MemoryToggle extends LitElement {
   @property({ type: Boolean }) enabled = false;
   @property({ type: Boolean }) disabled = false;
 
-  private handleChange = (event: Event): void => {
+  private handleChange(event: Event): void {
     const target = event.target as HTMLInputElement | null;
     this.dispatchEvent(
       MemoryViewEvents.toggleEnabled(Boolean(target?.checked)),
     );
-  };
+  }
 
   override render(): TemplateResult {
     return html`

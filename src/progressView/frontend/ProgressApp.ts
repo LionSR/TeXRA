@@ -332,41 +332,79 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   // Event handler wrappers - delegate to extracted handlers
-  private onStreamSwitch = (e: CustomEvent): void => handleStreamSwitch(e);
-  private onStreamDelete = (e: CustomEvent): void => handleStreamDelete(e);
-  private onFilterChange = (e: CustomEvent): void =>
+  private onStreamSwitch(e: CustomEvent): void {
+    handleStreamSwitch(e);
+  }
+
+  private onStreamDelete(e: CustomEvent): void {
+    handleStreamDelete(e);
+  }
+
+  private onFilterChange(e: CustomEvent): void {
     handleFilterChange(e, this.createEventHandlerContext());
-  private onSortChange = (e: CustomEvent): void =>
+  }
+
+  private onSortChange(e: CustomEvent): void {
     handleSortChange(e, this.createEventHandlerContext());
-  private onDeleteAll = (): void => handleDeleteAll();
-  private onToolbarCommand = (e: CustomEvent): void =>
+  }
+
+  private onDeleteAll(): void {
+    handleDeleteAll();
+  }
+
+  private onToolbarCommand(e: CustomEvent): void {
     handleToolbarCommand(e, this.createEventHandlerContext());
-  private onRunSelected = (e: CustomEvent): void =>
+  }
+
+  private onRunSelected(e: CustomEvent): void {
     handleRunSelected(e, this.createEventHandlerContext());
-  private onFileAction = (e: CustomEvent): void => handleFileAction(e);
-  private onFollowUpChange = (e: CustomEvent): void =>
+  }
+
+  private onFileAction(e: CustomEvent): void {
+    handleFileAction(e);
+  }
+
+  private onFollowUpChange(e: CustomEvent): void {
     handleFollowUpChange(e, this.createEventHandlerContext());
-  private onFollowUpSend = (): void =>
+  }
+
+  private onFollowUpSend(): void {
     handleFollowUpSend(this.createEventHandlerContext());
-  private onFollowUpPolish = (): void =>
+  }
+
+  private onFollowUpPolish(): void {
     handleFollowUpPolish(this.createEventHandlerContext());
-  private onFollowUpClear = (): void =>
+  }
+
+  private onFollowUpClear(): void {
     handleFollowUpClear(this.createEventHandlerContext());
-  private onFollowupRequestOptions = (): void =>
+  }
+
+  private onFollowupRequestOptions(): void {
     handleFollowupRequestOptions(this.createEventHandlerContext());
-  private onFollowupModeChange = (e: CustomEvent): void =>
+  }
+
+  private onFollowupModeChange(e: CustomEvent): void {
     handleFollowupModeChange(e, this.createEventHandlerContext());
-  private onFollowupSetup = (e: CustomEvent): void =>
+  }
+
+  private onFollowupSetup(e: CustomEvent): void {
     handleFollowupSetup(e, this.createEventHandlerContext());
-  private onFollowupRun = (e: CustomEvent): void =>
+  }
+
+  private onFollowupRun(e: CustomEvent): void {
     handleFollowupRun(e, this.createEventHandlerContext());
-  private onPromptAction = (e: CustomEvent): void => handlePromptAction(e);
+  }
+
+  private onPromptAction(e: CustomEvent): void {
+    handlePromptAction(e);
+  }
 
   /**
    * Reset focus/polish/transcription triggers after they've been consumed.
    * Part of Lit-native Phase 9e reactive property pattern.
    */
-  private onFollowUpFocusComplete = (): void => {
+  private onFollowUpFocusComplete(): void {
     const streamId = this.appState.activeStreamId;
     if (!streamId) return;
 
@@ -379,5 +417,5 @@ export class ProgressApp extends BaseWebviewApp {
         transcribedText: null,
       };
     });
-  };
+  }
 }
