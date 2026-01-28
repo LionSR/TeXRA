@@ -59,7 +59,7 @@ import {
   AgentUsageReporter,
   getStreamTabId,
   type AgentLogStage,
-} from '@logger';
+} from '@logger/index';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -93,7 +93,11 @@ function computePreliminaryStreamId(
     configPayload.agent,
     configPayload.model,
     configPayload.inputFile ?? '',
-    { agentCategory, executionId, useMultipleOutputs: configPayload.useMultipleOutputs },
+    {
+      agentCategory,
+      executionId,
+      useMultipleOutputs: configPayload.useMultipleOutputs,
+    },
   );
 }
 

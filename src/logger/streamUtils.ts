@@ -17,7 +17,8 @@ export function getStreamTabId(
   const cleanAgent = getCleanAgentName(agent);
 
   if (options.agentCategory === AgentCategory.ToolUse) {
-    const shortId = options.executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
+    const shortId =
+      options.executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
     return `${cleanAgent}@${model}#${shortId}`;
   }
 
