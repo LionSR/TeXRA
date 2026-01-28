@@ -1,25 +1,22 @@
 /**
- * ToolUseSessionLifecycle - Session lifecycle for tool-use flows.
+ * ToolUseSessionLifecycle - Follow-up queue management for tool-use flows.
  *
- * Provides follow-up queue management and stream status updates.
+ * Handles follow-up message queueing, waiting, and interruption.
+ * Stream status transitions are handled directly by flow nodes.
  */
 
-import { STREAM_STATUS } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { StreamTabId } from '@shared/schemas';
 
-/** Interface for tool-use session lifecycle operations (follow-ups, stream status). */
+/** Interface for tool-use session follow-up queue operations. */
 export interface IToolUseSession {
   appendFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up message. Returns null if interrupted. */
   waitForFollowUp(checkInterruption: () => boolean): Promise<string | null>;
-  enterWaitingState(): Promise<void>;
-  markRunning(): Promise<void>;
 }
 
-/** Session lifecycle implementation managing follow-up queue and stream status. */
+/** Session lifecycle implementation managing follow-up queue. */
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps = ToolUseFollowUpQueue.acquire(this.streamTabId);
 
@@ -37,16 +34,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     checkInterruption: () => boolean,
   ): Promise<string | null> {
     return this.followUps.waitAndDrainAll(checkInterruption);
-  }
-
-  async enterWaitingState(): Promise<void> {
-    if (this.followUps.isEmpty()) {
-      StreamStatusService.set(this.streamTabId, STREAM_STATUS.WAITING);
-    }
-  }
-
-  async markRunning(): Promise<void> {
-    StreamStatusService.set(this.streamTabId, STREAM_STATUS.RUNNING);
   }
 
   interrupt(): void {

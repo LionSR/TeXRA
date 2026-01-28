@@ -2,9 +2,12 @@
  * ToolUseWaitNode - Waits for user follow-up messages.
  *
  * Manages the waiting state and processes follow-up messages.
+ * Stream status transitions are handled directly here for explicit control flow.
  */
+import { STREAM_STATUS } from '@shared/schemas';
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
@@ -15,29 +18,28 @@ export class ToolUseWaitNode<C> extends Node<
   ToolUseServices<C>
 > {
   async exec(): Promise<WaitExecResult> {
-    if (this.services.checkInterruption()) {
+    const { checkInterruption, session, streamId } = this.services;
+
+    if (checkInterruption()) {
       return { kind: 'stop' };
     }
 
-    if (!this.services.session.hasQueuedFollowUp()) {
-      await this.services.session.enterWaitingState();
+    // Only enter waiting state if no follow-ups are queued
+    if (!session.hasQueuedFollowUp()) {
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     }
 
-    const followUp = await this.services.session.waitForFollowUp(
-      this.services.checkInterruption,
-    );
-    if (!followUp || this.services.checkInterruption()) {
+    const followUp = await session.waitForFollowUp(checkInterruption);
+    if (!followUp || checkInterruption()) {
       return { kind: 'stop' };
     }
 
     return { kind: 'continue', followUp };
   }
 
-  async execFallback(
-    _prepRes: void,
-    error: Error,
-  ): Promise<WaitExecResult> {
-    this.services.logger.error(`ToolUseWaitNode error: ${error.message}`);
+  async execFallback(_prepRes: void, error: Error): Promise<WaitExecResult> {
+    const { logger } = this.services;
+    logger.error(`ToolUseWaitNode error: ${error.message}`);
     return { kind: 'stop' };
   }
 
@@ -46,18 +48,19 @@ export class ToolUseWaitNode<C> extends Node<
     _prepRes: void,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
+    const { onFollowUpConsumed, streamId, logger, modelHandler } = this.services;
+
     if (execRes.kind === 'stop') {
       return FlowTransition.DEFAULT;
     }
 
-    this.services.onFollowUpConsumed?.();
-    await this.services.session.markRunning();
-    this.services.logger.userMessage(execRes.followUp);
-    shared.conversation =
-      await this.services.modelHandler.createUserFollowUpMessages(
-        shared.conversation,
-        execRes.followUp,
-      );
+    onFollowUpConsumed?.();
+    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+    logger.userMessage(execRes.followUp);
+    shared.conversation = await modelHandler.createUserFollowUpMessages(
+      shared.conversation,
+      execRes.followUp,
+    );
 
     return FlowTransition.CONTINUE;
   }

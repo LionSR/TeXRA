@@ -72,6 +72,17 @@ import { createInterruptCallbacks } from './InterruptManager';
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
+/**
+ * Creates a usage recorder callback for flows.
+ * Wraps UsageMonitor.recordUsage with the appropriate run kind.
+ */
+function createUsageRecorder(
+  usageMonitor: UsageMonitor,
+  runKind: 'workflow' | 'tool-use',
+): () => (run: Parameters<UsageMonitor['recordUsage']>[0]) => Promise<void> {
+  return () => (run) => usageMonitor.recordUsage(run, { runKind });
+}
+
 interface ResolvedAgentBase extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
@@ -223,7 +234,7 @@ async function resolveAgentBase(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await (await parentStage.stage('Init')).run(buildVars);
+      : await parentStage.stage('Init').then((s) => s.run(buildVars));
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze(baseVars),
@@ -464,8 +475,7 @@ export async function executeAgent(
       if (setting.agentCategory === AgentCategory.ToolUse) {
         const result = await runToolUseFlow({
           ...flowContext,
-          getUsageRecorder: () => (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
@@ -475,8 +485,7 @@ export async function executeAgent(
 
       const result = await runReflectionFlow({
         ...flowContext,
-        getUsageRecorder: () => (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         parentStage: ctx.parentStage,
       });
@@ -532,8 +541,7 @@ export async function executeMergeAgent(
       const result = await runReflectionFlow({
         ...ctx,
         ...createInterruptCallbacks(),
-        getUsageRecorder: () => (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
         parentStage: ctx.parentStage,
@@ -554,7 +562,7 @@ export async function resumeToolUseFromSnapshot(
       streamTabIdOverride: snapshot.streamId,
     },
   );
-  const { setting, streamId, config } = ctx;
+  const { setting, streamId } = ctx;
 
   if (setting.agentCategory !== AgentCategory.ToolUse) {
     throw new Error(
@@ -577,8 +585,7 @@ export async function resumeToolUseFromSnapshot(
       const result = await runToolUseFlow(
         {
           ...flowContext,
-          getUsageRecorder: () => (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>

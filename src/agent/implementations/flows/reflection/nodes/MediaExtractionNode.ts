@@ -60,7 +60,10 @@ export class MediaExtractionNode<C = unknown> extends Node<
   async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
     const { modelHandler, latexMediaManager, config } = this.services;
 
-    if (!modelHandler.capabilities.supportsVision || prepRes.files.length === 0) {
+    if (
+      !modelHandler.capabilities.supportsVision ||
+      prepRes.files.length === 0
+    ) {
       return null;
     }
 
@@ -88,7 +91,8 @@ export class MediaExtractionNode<C = unknown> extends Node<
     _prepRes: PrepInput,
     error: Error,
   ): Promise<FileLocation[] | null> {
-    this.services.logger.debug(`Media extraction skipped: ${error.message}`);
+    const { logger } = this.services;
+    logger.debug(`Media extraction skipped: ${error.message}`);
     return null;
   }
 
