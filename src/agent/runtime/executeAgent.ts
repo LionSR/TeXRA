@@ -591,6 +591,7 @@ export async function resumeToolUseFromSnapshot(
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         },
+        undefined, // use default tool registry
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
       return result.status;
