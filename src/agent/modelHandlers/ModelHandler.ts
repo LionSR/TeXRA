@@ -467,47 +467,9 @@ export abstract class ModelHandler<
     return this.createMediaContent(entries);
   }
 
-  /** Calculates token-based stop flags. */
-  protected computeTokenFlags(
-    stateRound: ConversationRoundState,
-    stateGlobal: AgentRunState,
-  ): TokenFlags {
-    const totals = stateGlobal.usageAccumulator.getTotals();
-    const maxOutputTokens =
-      totals.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * totals.firstInputTokens
-        : Number.POSITIVE_INFINITY;
-
-    return {
-      continuationLimit: stateRound.continuationCount > this.continueLimit,
-      inputTokenLimit: totals.totalInputTokens > this.inputTokenLimit,
-      maxOutputTokensExceeded: totals.totalOutputTokens > maxOutputTokens,
-    };
-  }
-
-  /** Detects stop markers in model output. */
-  protected detectStopMarkers(
-    stopReason: ProviderStopReason,
-    response: string,
-    setting: AgentSetting,
-  ): MarkerFlags {
-    const endTurnReasons: ProviderStopReason[] = [
-      ANTHROPIC_STOP.END_TURN,
-      ANTHROPIC_STOP.STOP_SEQUENCE,
-      OPENAI_CHAT_FINISH.STOP,
-      FinishReason.STOP,
-      'STOP', // handle string form returned by some Google clients
-    ];
-
-    return {
-      endTurn: endTurnReasons.includes(stopReason ?? ''),
-      encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
-    };
-  }
-
   /**
    * Evaluates conversation stop conditions based on model response and state.
-   * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
+   * @returns Object with endTurn (should end current turn) and shouldStop (should stop conversation)
    */
   public checkStopConditions(
     stopReason: ProviderStopReason,
@@ -516,32 +478,49 @@ export abstract class ModelHandler<
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
   ): StopConditionsResult {
-    const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
-    const markerFlags = this.detectStopMarkers(
-      stopReason,
-      newResponse,
-      agentSetting,
+    // Compute token-based stop flags
+    const totals = stateGlobal.usageAccumulator.getTotals();
+    const maxOutputTokens =
+      totals.firstInputTokens > 0
+        ? this.maxOutputTokensFactor * totals.firstInputTokens
+        : Number.POSITIVE_INFINITY;
+    const continuationLimitExceeded =
+      stateRound.continuationCount > this.continueLimit;
+    const inputTokenLimitExceeded =
+      totals.totalInputTokens > this.inputTokenLimit;
+    const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
+
+    // Detect stop markers in model output
+    const endTurnReasons: ProviderStopReason[] = [
+      ANTHROPIC_STOP.END_TURN,
+      ANTHROPIC_STOP.STOP_SEQUENCE,
+      OPENAI_CHAT_FINISH.STOP,
+      FinishReason.STOP,
+      'STOP', // handle string form returned by some Google clients
+    ];
+    const endTurn = endTurnReasons.includes(stopReason ?? '');
+    const encounterDocumentTag = newResponse.includes(
+      `</${agentSetting.documentTag}>`,
     );
 
-    if (tokenFlags.maxOutputTokensExceeded) {
-      const totals = stateGlobal.usageAccumulator.getTotals();
+    if (maxOutputTokensExceeded) {
       this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens (total: ${totals.totalOutputTokens}, first input: ${totals.firstInputTokens})`,
       );
     }
 
     const shouldStop =
-      markerFlags.encounterDocumentTag ||
-      tokenFlags.continuationLimit ||
-      tokenFlags.inputTokenLimit;
+      encounterDocumentTag ||
+      continuationLimitExceeded ||
+      inputTokenLimitExceeded;
 
     if (shouldStop) {
       this.logger.debug(
-        `StopFlags: endTurn: ${markerFlags.endTurn} encounterDocumentTag: ${markerFlags.encounterDocumentTag} continuation_limit: ${tokenFlags.continuationLimit} inputTokenLimit: ${tokenFlags.inputTokenLimit} maxOutputTokens: ${tokenFlags.maxOutputTokensExceeded}`,
+        `StopFlags: endTurn: ${endTurn} encounterDocumentTag: ${encounterDocumentTag} continuation_limit: ${continuationLimitExceeded} inputTokenLimit: ${inputTokenLimitExceeded} maxOutputTokens: ${maxOutputTokensExceeded}`,
       );
     }
 
-    return { endTurn: markerFlags.endTurn, shouldStop };
+    return { endTurn, shouldStop };
   }
 
   public containCutOffMessage(
