@@ -270,15 +270,15 @@ export const FollowUpTextTranscribedMessageSchema = z.object({
   text: z.string(),
 });
 
-export const RecordingStartedMessageSchema = z.object({
+export const ProgressRecordingStartedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
 });
 
-export const RecordingStoppedMessageSchema = z.object({
+export const ProgressRecordingStoppedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED),
 });
 
-export const RecordingErrorMessageSchema = z.object({
+export const ProgressRecordingErrorMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_ERROR),
 });
 
@@ -290,17 +290,17 @@ export const SetFollowupOptionsMessageSchema = z.object({
   defaultMergeModel: z.string().optional(),
 });
 
-export const SetThemeMessageSchema = z.object({
+export const ProgressSetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: z.enum(['dark', 'light']),
 });
 
-export const DeleteStreamMessageSchema = z.object({
+export const ProgressDeleteStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
   stream: StreamTabIdSchema,
 });
 
-export const DeleteAllMessageSchema = z.object({
+export const ProgressDeleteAllMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
 });
 
@@ -334,13 +334,13 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     ResolveAgentProposalMessageSchema,
     FollowUpTextPolishedMessageSchema,
     FollowUpTextTranscribedMessageSchema,
-    RecordingStartedMessageSchema,
-    RecordingStoppedMessageSchema,
-    RecordingErrorMessageSchema,
+    ProgressRecordingStartedMessageSchema,
+    ProgressRecordingStoppedMessageSchema,
+    ProgressRecordingErrorMessageSchema,
     SetFollowupOptionsMessageSchema,
-    SetThemeMessageSchema,
-    DeleteStreamMessageSchema,
-    DeleteAllMessageSchema,
+    ProgressSetThemeMessageSchema,
+    ProgressDeleteStreamMessageSchema,
+    ProgressDeleteAllMessageSchema,
   ],
 );
 
