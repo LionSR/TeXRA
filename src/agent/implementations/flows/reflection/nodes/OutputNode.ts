@@ -12,6 +12,16 @@
 
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
+import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import {
+  calculateRoundMapping,
+  ensureXmlStructure,
+  finalizeRoundData,
+  getRoundArtifacts,
+  hasRoundOutputs,
+  processRoundOutputs,
+  validateOutputsExist,
+} from '@agent/output/outputUtils';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -84,11 +94,14 @@ export class OutputNode<C = unknown> extends Node<
 
   async exec(prepRes: OutputPrepInput): Promise<RoundOutput> {
     const {
-      outputHandler,
+      outputState,
+      outputDeps,
+      xmlManager,
+      diffManager,
       setting,
       logger,
       baseFiles,
-      shouldEnsureXmlStructure,
+      shouldEnsureXmlStructure: shouldEnsureXml,
       streamId,
     } = this.services;
     const { shared, outputLocation } = prepRes;
@@ -101,11 +114,12 @@ export class OutputNode<C = unknown> extends Node<
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      if (shouldEnsureXmlStructure) {
+      if (shouldEnsureXml) {
         await tryOperation(
           'XML structure',
           () =>
-            outputHandler.ensureXmlStructure(
+            ensureXmlStructure(
+              xmlManager,
               outputLocation,
               setting.documentTag ?? 'document',
             ),
@@ -115,36 +129,45 @@ export class OutputNode<C = unknown> extends Node<
 
       await tryOperation(
         'Output processing',
-        () => outputHandler.processOutputFiles(outputLocation, currentRound),
+        () =>
+          processRoundOutputs(
+            outputState,
+            outputDeps,
+            xmlManager,
+            outputLocation,
+            currentRound,
+          ),
         logger,
       );
 
-      if (outputHandler.hasRoundOutputs(currentRound)) {
-        mapping = outputHandler.getRoundMapping(currentRound);
+      if (hasRoundOutputs(outputState, currentRound)) {
+        mapping = calculateRoundMapping(outputState, baseFiles, currentRound);
 
         await tryOperation(
           'Latexdiff',
-          () => this.handleLatexdiff(currentRound, baseFiles, mapping!),
+          () => this.handleLatexdiff(currentRound, baseFiles, mapping!, diffManager),
           logger,
         );
       }
     }
 
     // Finalize round and get data for event emission/file opening
-    const finalizeResult = await outputHandler.finalizeRound(
+    const finalizeResult = await finalizeRoundData(
+      outputState,
+      outputDeps,
       outputLocation,
       currentRound,
       { endTurn, mapping },
     );
 
-    // Emit addOutputFiles event (moved from OutputHandler)
+    // Emit addOutputFiles event
     bus.emit('addOutputFiles', {
       streamId,
       storageKey: finalizeResult.storageKey,
       filesByRound: { [currentRound]: finalizeResult.fileInfos },
     });
 
-    // Open files that haven't been opened yet (moved from OutputHandler)
+    // Open files that haven't been opened yet
     for (const location of finalizeResult.filesToOpen) {
       await tryOperation(
         `Open file ${location.absolutePath}`,
@@ -153,12 +176,14 @@ export class OutputNode<C = unknown> extends Node<
       );
     }
 
-    // Validate expected outputs if turn ended (moved from OutputHandler)
+    // Validate expected outputs if turn ended
     if (endTurn) {
       await tryOperation(
         'Validate expected outputs',
         async () => {
-          const validationResult = await outputHandler.validateExpectedOutputs(
+          const validationResult = await validateOutputsExist(
+            outputState,
+            outputDeps,
             outputLocation,
             currentRound,
             finalizeResult.stage,
@@ -184,7 +209,7 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     // Get round artifacts - this is critical, throw if it fails
-    return await outputHandler.getRoundArtifacts(currentRound);
+    return await getRoundArtifacts(outputState, baseFiles, currentRound);
   }
 
   async execFallback(
@@ -222,8 +247,9 @@ export class OutputNode<C = unknown> extends Node<
     currentRound: number,
     baseFiles: FileLocation[],
     mapping: RoundFileMapping,
+    diffManager: LatexDiffManager,
   ): Promise<void> {
-    const { outputHandler, logger } = this.services;
+    const { logger } = this.services;
 
     const existingBase = await Promise.all(
       baseFiles.map((f) => flexibleFS.exists(f)),
@@ -233,9 +259,6 @@ export class OutputNode<C = unknown> extends Node<
       return;
     }
 
-    await outputHandler.diffManager.handleLatexdiffofOutput(
-      currentRound,
-      mapping,
-    );
+    await diffManager.handleLatexdiffofOutput(currentRound, mapping);
   }
 }
