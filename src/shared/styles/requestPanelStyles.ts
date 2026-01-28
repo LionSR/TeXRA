@@ -52,6 +52,7 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--vscode-editorHoverWidget-background);
     padding: var(--spacing-large);
     gap: var(--spacing-medium);
+    position: relative; /* Required for ::before pseudo-element positioning */
   }
 
   .approval-request__details,
@@ -182,6 +183,10 @@ export const requestPanelStyles: CSSResult = css`
     left: 0;
     z-index: 100;
     min-width: 150px;
+  }
+
+  .approval-request__actions .diff-dropdown .diff-dropdown-menu:not([show]) {
+    display: none;
   }
 
   .approval-request__actions

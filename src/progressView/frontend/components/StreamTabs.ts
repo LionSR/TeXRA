@@ -207,6 +207,15 @@ export class StreamTabs extends LitElement {
         color: var(--color-text-secondary);
         padding: var(--spacing-large) var(--spacing-medium);
       }
+
+      .log-placeholder a {
+        color: var(--color-text-link);
+        text-decoration: underline;
+      }
+
+      .log-placeholder a:hover {
+        color: var(--color-text-link-active);
+      }
     `,
   ];
 
