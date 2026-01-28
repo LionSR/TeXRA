@@ -4,12 +4,17 @@
  * Extends BaseFlowContextInit with:
  * - Narrowed setting type (AgentWorkflowSetting)
  * - Required getUsageRecorder (narrowed from optional)
- * - Workflow-specific services (outputHandler, promptBuilder, etc.)
+ * - Workflow-specific services (outputState, promptBuilder, etc.)
  */
 
-import type { IOutputHandler } from '@agent/output/IOutputHandler';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type {
+  OutputState,
+  OutputDependencies,
+} from '@agent/output/outputUtils';
+import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { PromptBuilder } from '@utils/prompt';
 import type {
   AgentFileLocation,
@@ -28,7 +33,14 @@ export interface ReflectionServices<
 > extends BaseFlowContextInit<C> {
   /** Narrowed from AgentSetting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
-  readonly outputHandler: IOutputHandler;
+  /** Mutable state for output processing */
+  readonly outputState: OutputState;
+  /** Dependencies for output utility functions */
+  readonly outputDeps: OutputDependencies;
+  /** Manager for XML output processing */
+  readonly xmlManager: XmlOutputManager;
+  /** Manager for latexdiff operations */
+  readonly diffManager: LatexDiffManager;
   readonly latexMediaManager: LatexMediaManager;
   readonly promptBuilder: PromptBuilder;
   readonly fileService: TaskRunFileService;
