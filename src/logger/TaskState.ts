@@ -1,45 +1,31 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   liftLegacyAgentCategory,
   type AgentConfig,
 } from '@agent/core/AgentConfig';
-
-// Type imports
 import { FILE_TYPES, type FileType } from '@utils/config';
 
 // -----------------------------------------------------------------------------
-// Zod Schemas for Persisted State Validation
+// Schemas - Validate persisted TaskState data with lightweight agentConfig check
 // -----------------------------------------------------------------------------
-// These schemas validate persisted TaskState data. The agentConfig was already
-// validated when created, so we use passthrough() to avoid re-validation and
-// only check the discriminator and variant-specific fields.
 
-/** Schema for tool session state */
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),
 });
 
-/** Active files record schema */
 const ActiveFilesSchema = z.partialRecord(
   z.enum(FILE_TYPES),
   z.boolean(),
 ) as z.ZodType<Record<FileType, boolean>>;
 
-/**
- * Lightweight AgentConfig schema for persisted TaskState validation.
- * Uses shared liftLegacyAgentCategory (single source of truth) for migration.
- * Only validates agentCategory discriminator, not full config.
- */
+/** Lightweight agentConfig schema - validates discriminator only, not full config */
 const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
   z.looseObject({ agentCategory: z.enum(AgentCategory) }),
 );
 
-/** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigSchema.refine(
     (c) => c.agentCategory === AgentCategory.Workflow,
@@ -48,7 +34,6 @@ const WorkflowTaskStateSchema = z.object({
   activeFiles: ActiveFilesSchema,
 });
 
-/** Schema for tool-use task state */
 const ToolUseTaskStateSchema = z.object({
   agentConfig: AgentConfigSchema.refine(
     (c) => c.agentCategory === AgentCategory.ToolUse,
@@ -57,20 +42,14 @@ const ToolUseTaskStateSchema = z.object({
   toolSessionState: ToolSessionStateSchema.optional(),
 });
 
-/**
- * TaskState schema for validating persisted state.
- * Uses passthrough on agentConfig since it was validated when created.
- */
 export const TaskStateSchema = z.union([
   WorkflowTaskStateSchema,
   ToolUseTaskStateSchema,
 ]);
 
 // -----------------------------------------------------------------------------
-// Types - Explicitly defined with proper AgentConfig structure
+// Types - Explicitly defined (validation schemas use passthrough for efficiency)
 // -----------------------------------------------------------------------------
-// Types are defined explicitly (not inferred from validation schemas) because
-// the validation schemas use passthrough() for efficiency.
 
 export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 

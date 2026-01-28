@@ -1,11 +1,8 @@
-// Third-party imports
 import * as winston from 'winston';
 import * as vscode from 'vscode';
 
-// Local imports - config
 import { getConfig } from '@utils/config';
 
-// Local imports - logger
 import { VSCodeTransport } from './transports/VSCodeTransport';
 
 interface ChannelEntry {
@@ -22,12 +19,8 @@ export class LogChannelRegistry {
   private mainOutputChannel: vscode.OutputChannel | null = null;
   private readonly channels = new Map<string, ChannelEntry>();
 
-  getTransport(
-    channel: string,
-    options?: ChannelOptions,
-  ): VSCodeTransport | undefined {
-    const key = this.getKey(channel, options?.isAgent ?? false);
-    return this.channels.get(key)?.transport;
+  getTransport(channel: string, isAgent = false): VSCodeTransport | undefined {
+    return this.channels.get(this.getKey(channel, isAgent))?.transport;
   }
 
   ensure(channel: string, options: ChannelOptions): ChannelEntry {
@@ -50,18 +43,9 @@ export class LogChannelRegistry {
     });
 
     const logger = winston.createLogger({
-      levels: {
-        error: 0,
-        warn: 1,
-        info: 2,
-        debug: 3,
-      },
+      levels: { error: 0, warn: 1, info: 2, debug: 3 },
       level: 'debug',
-      format: winston.format.combine(
-        winston.format.timestamp({
-          format: 'YYYY-MM-DD HH:mm:ss.SSS',
-        }),
-      ),
+      format: winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
       transports: [transport],
     });
 

@@ -45,7 +45,7 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   str_replace_based_edit_tool: 'text_editor_20250429',
   web_search: 'web_search_20250305',
   memory: 'memory_20250818',
-} as const;
+};
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
@@ -70,7 +70,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 /**
  * Options for OpenAI Responses API tool conversion.
  */
-export interface OpenAIResponseToolOptions {
+interface OpenAIResponseToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
   /** Whether the model supports function calling. Defaults to true. */
@@ -120,7 +120,7 @@ export function toOpenAIResponseTools(
 /**
  * Options for Anthropic tool conversion.
  */
-export interface AnthropicToolOptions {
+interface AnthropicToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
 }

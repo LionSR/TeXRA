@@ -82,18 +82,14 @@ export type ResponseCycleServices<C = unknown> = CycleStateSlices &
 export type ToolUseCycleServices<C = unknown> = BaseCycleStateSlices &
   Readonly<ToolUseCycleOptions<C>>;
 
-/** Generic params type for cycle nodes. */
-export interface CycleParams<TServices extends BaseCycleStateSlices> {
+/** Params type for response cycle nodes. */
+export interface ResponseCycleParams<C = unknown> {
   [key: string]: unknown;
-  services: TServices;
+  services: ResponseCycleServices<C>;
 }
 
-/** Params type for response cycle nodes. */
-export type ResponseCycleParams<C = unknown> = CycleParams<
-  ResponseCycleServices<C>
->;
-
 /** Params type for tool-use cycle nodes. */
-export type ToolUseCycleParams<C = unknown> = CycleParams<
-  ToolUseCycleServices<C>
->;
+export interface ToolUseCycleParams<C = unknown> {
+  [key: string]: unknown;
+  services: ToolUseCycleServices<C>;
+}

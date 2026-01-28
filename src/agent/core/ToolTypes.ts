@@ -81,27 +81,11 @@ export class MapToolRegistry implements IToolRegistry {
     this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
   }
 
-  get size(): number {
-    return this.tools.size;
-  }
-
   get(name: string): ITool | undefined {
     return this.tools.get(name);
   }
 
   has(name: string): boolean {
     return this.tools.has(name);
-  }
-
-  keys(): IterableIterator<string> {
-    return this.tools.keys();
-  }
-
-  values(): IterableIterator<ITool> {
-    return this.tools.values();
-  }
-
-  entries(): IterableIterator<[string, ITool]> {
-    return this.tools.entries();
   }
 }

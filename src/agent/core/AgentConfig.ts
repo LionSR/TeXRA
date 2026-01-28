@@ -3,8 +3,6 @@ import { z } from 'zod';
 import { AgentCategory } from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
-const stringArrayField = () => z.array(z.string()).prefault([]);
-
 /** Pure object schema without refinements for use with .partial(). */
 const AgentConfigFieldsSchema = z.object({
   agent: z.string().prefault('correct'),
@@ -12,17 +10,17 @@ const AgentConfigFieldsSchema = z.object({
   instruction: z.string().prefault(''),
   useMultipleOutputs: z.boolean().prefault(false),
   inputFile: z.string().prefault(''),
-  inputFiles: stringArrayField(),
+  inputFiles: z.array(z.string()).prefault([]),
   referenceFile: z.string().nullable().prefault(null),
-  referenceFiles: stringArrayField(),
+  referenceFiles: z.array(z.string()).prefault([]),
   auxiliaryFile: z.string().nullable().prefault(null),
-  auxiliaryFiles: stringArrayField(),
+  auxiliaryFiles: z.array(z.string()).prefault([]),
   mediaFile: z.string().nullable().prefault(null),
-  mediaFiles: stringArrayField(),
-  outputFiles: stringArrayField(),
+  mediaFiles: z.array(z.string()).prefault([]),
+  outputFiles: z.array(z.string()).prefault([]),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFile: z.string().nullable().prefault(null),
-  editedFiles: stringArrayField(),
+  editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
 });
 
