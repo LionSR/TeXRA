@@ -4,7 +4,6 @@ import { randomUUID } from 'crypto';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { registry } from './LogChannelRegistry';
 import type { LogUtilsOptions } from './logOptions';
-import type { VSCodeTransport } from './transports/VSCodeTransport';
 
 type ChannelKey = string;
 
@@ -63,30 +62,8 @@ function popGroupContext(
   contextStorage.enterWith(store);
 }
 
-function resolveActiveGroupByKey(
-  key: ChannelKey,
-  groupId: string | undefined,
-): string | undefined {
-  if (groupId) return groupId;
+function getActiveGroup(key: ChannelKey): string | undefined {
   return getStore().get(key)?.stack.at(-1);
-}
-
-function getOrCreateEntry(
-  channel: string,
-  isAgent: boolean,
-): ReturnType<typeof registry.ensure> {
-  return registry.ensure(channel, { isAgent });
-}
-
-function getTransport(
-  channel: string,
-  isAgent: boolean,
-  createIfMissing: boolean,
-): VSCodeTransport | undefined {
-  if (createIfMissing) {
-    return getOrCreateEntry(channel, isAgent).transport;
-  }
-  return registry.getTransport(channel, isAgent);
 }
 
 function logWithGroup(
@@ -97,8 +74,8 @@ function logWithGroup(
 ): void {
   const isAgent = options.isAgent ?? false;
   const key = getChannelKey(channel, isAgent);
-  const entry = getOrCreateEntry(channel, isAgent);
-  const activeGroupId = resolveActiveGroupByKey(key, options.groupId);
+  const entry = registry.ensure(channel, { isAgent });
+  const activeGroupId = options.groupId ?? getActiveGroup(key);
 
   entry.logger.log(level, message, {
     groupId: activeGroupId,
@@ -108,7 +85,7 @@ function logWithGroup(
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  getOrCreateEntry(channel, isAgent);
+  registry.ensure(channel, { isAgent });
 }
 
 export function startGroup(
@@ -118,7 +95,7 @@ export function startGroup(
   parentGroupId?: string,
   isAgent = false,
 ): string {
-  const transport = getTransport(channel, isAgent, true)!;
+  const transport = registry.ensure(channel, { isAgent }).transport;
   const groupId = id ?? randomUUID();
   pushGroupContext(channel, groupId, isAgent);
   return transport.startGroup(groupName, groupId, parentGroupId);
@@ -130,7 +107,7 @@ export function endGroup(
   status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   isAgent = false,
 ): void {
-  getTransport(channel, isAgent, false)?.endGroup(groupId, status);
+  registry.getTransport(channel, isAgent)?.endGroup(groupId, status);
   popGroupContext(channel, groupId, isAgent);
 }
 
@@ -138,8 +115,7 @@ export function getActiveGroupId(
   channel: string,
   isAgent = false,
 ): string | undefined {
-  const key = getChannelKey(channel, isAgent);
-  return resolveActiveGroupByKey(key, undefined);
+  return getActiveGroup(getChannelKey(channel, isAgent));
 }
 
 export async function runWithGroupContext<T>(

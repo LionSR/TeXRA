@@ -58,19 +58,13 @@ const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
   },
 };
 
-/**
- * Get the decorator config for a model provider.
- */
 export function getModelProviderDecorator(provider: string): ProviderDecorator {
   return (
     MODEL_PROVIDER_DECORATORS[provider] ?? MODEL_PROVIDER_DECORATORS.others
   );
 }
 
-/**
- * Agent decorator configuration - single source of truth for all agent indicators.
- */
-interface AgentDecorator {
+export interface AgentDecorator {
   icon: string;
   unicode: string;
   label: string;
@@ -106,15 +100,13 @@ export const AGENT_DECORATORS = {
 
 export type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
 
-/**
- * Get the decorator config for an agent category.
- */
 export function getAgentCategoryDecorator(
   agentCategory: string | undefined,
 ): (typeof AGENT_DECORATORS.agentCategories)[AgentCategory] {
   const categories = AGENT_DECORATORS.agentCategories;
-  if (agentCategory && agentCategory in categories) {
-    return categories[agentCategory as AgentCategory];
-  }
-  return categories.workflow;
+  const isValidCategory =
+    agentCategory !== undefined && agentCategory in categories;
+  return isValidCategory
+    ? categories[agentCategory as AgentCategory]
+    : categories.workflow;
 }

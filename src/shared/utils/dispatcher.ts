@@ -1,36 +1,15 @@
-/**
- * Generic message dispatcher factory for type-safe message handling.
- *
- * Eliminates duplicate dispatch functions across view message schemas.
- * Each view uses createDispatcher() with its message schema to get a
- * type-safe dispatcher function.
- */
-
 import type { z } from 'zod';
 
-/**
- * Constraint for message types with a command discriminant.
- */
 type CommandMessage = { command: string };
 
-/**
- * Handler function type for a specific message.
- */
 type MessageHandler<T> = (data: T) => Promise<void> | void;
 
-/**
- * Handler registry mapping command names to typed handlers.
- * Handlers are optional - missing handlers are silently skipped.
- */
 export type HandlerRegistry<TMessage extends CommandMessage> = {
   [K in TMessage['command']]?: MessageHandler<
     Extract<TMessage, { command: K }>
   >;
 };
 
-/**
- * Dispatcher function signature.
- */
 export type DispatcherFn<TMessage extends CommandMessage> = (
   raw: unknown,
   handlers: HandlerRegistry<TMessage>,
@@ -62,25 +41,25 @@ export function createDispatcher<TMessage extends CommandMessage>(
     handlers: HandlerRegistry<TMessage>,
     onError?: (error: unknown) => void,
   ): boolean => {
-    const result = schema.safeParse(raw);
-    if (!result.success) {
-      onError?.(result.error);
+    const parseResult = schema.safeParse(raw);
+    if (!parseResult.success) {
+      onError?.(parseResult.error);
       return false;
     }
 
-    const message = result.data;
+    const message = parseResult.data;
     const handler = handlers[message.command as TMessage['command']] as
       | MessageHandler<typeof message>
       | undefined;
 
-    if (handler) {
-      const maybePromise = handler(message);
-      if (maybePromise instanceof Promise) {
-        maybePromise.catch((error) => onError?.(error));
-      }
-      return true;
+    if (!handler) {
+      return false;
     }
 
-    return false;
+    const handlerResult = handler(message);
+    if (handlerResult instanceof Promise) {
+      handlerResult.catch((error) => onError?.(error));
+    }
+    return true;
   };
 }
