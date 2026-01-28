@@ -311,14 +311,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const services = this.services;
-
     const successRes = handleInvocationResult(
       execRes,
       shared,
       { lastError: shared.lastError },
       {
-        logger: services.logger,
+        logger: this.services.logger,
         operationName: this.getOperationName(),
       },
     );
@@ -331,13 +329,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     shared.response = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
-    const { modelName, agentName } = services;
     await maybeSaveDebugObject({
       object: successRes.response,
       objectType: 'response',
-      context: getDebugContext(services, {
-        modelName,
-        isRemote: isRemoteAgent(agentName),
+      context: getDebugContext(this.services, {
+        modelName: this.services.modelName,
+        isRemote: isRemoteAgent(this.services.agentName),
       }),
       fileOptions: {
         continuationCount: shared.cycleIndex,

@@ -10,30 +10,31 @@ import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerTo
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 
-export const ThinkingBlockSchema = z.object({
+/** Internal schema for thinking blocks. */
+const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
   signature: z.string().optional(),
   data: z.string().optional(),
 });
 
-export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
+type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
-export const ResponseAssemblyStateSchema = z.object({
+/** Internal schema for response assembly state. */
+const ResponseAssemblyStateSchema = z.object({
   lastResponse: z.string().prefault(''),
   accumulatedOutput: z.string().prefault(''),
 });
 
-export type ResponseAssemblyState = z.output<
-  typeof ResponseAssemblyStateSchema
->;
+type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
 
-export const FileInteractionStateSnapshotSchema = z.object({
+/** Internal schema for file interaction state snapshot. */
+const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
   edits: z.array(FlattenedEditRecordSchema).prefault([]),
 });
 
-export type FileInteractionStateSnapshot = z.output<
+type FileInteractionStateSnapshot = z.output<
   typeof FileInteractionStateSnapshotSchema
 >;
 
@@ -148,10 +149,11 @@ const MediaFileEntrySchema = z
       typeof entry === 'string' ? pathToLocation(entry) : entry,
   );
 
-export const MediaAttachmentStateSnapshotSchema = z.object({
+/** Internal schema for media attachment state snapshot. */
+const MediaAttachmentStateSnapshotSchema = z.object({
   files: z.array(MediaFileEntrySchema).prefault([]),
 });
-export type MediaAttachmentStateSnapshot = z.output<
+type MediaAttachmentStateSnapshot = z.output<
   typeof MediaAttachmentStateSnapshotSchema
 >;
 
@@ -188,28 +190,28 @@ export class MediaAttachmentState {
   }
 }
 
-export const ReasoningCacheStateSchema = z.object({
+/** Internal schema for reasoning cache state. */
+const ReasoningCacheStateSchema = z.object({
   thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
   thinkingAdded: z.boolean().prefault(false),
 });
 
-export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
+type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-export const ServerToolContentStateSchema = z.object({
+/** Internal schema for server tool content state. */
+const ServerToolContentStateSchema = z.object({
   contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
   lastAssistantContent: z.array(z.unknown()).prefault(() => []),
 });
 
-/** Derived from ServerToolContentStateSchema - schema is single source of truth. */
-export type ServerToolContentState = z.output<
-  typeof ServerToolContentStateSchema
->;
+type ServerToolContentState = z.output<typeof ServerToolContentStateSchema>;
 
-export const TodoStateSnapshotSchema = z.object({
+/** Internal schema for todo state snapshot. */
+const TodoStateSnapshotSchema = z.object({
   todos: z.array(TodoItemSchema).prefault([]),
 });
 
-export type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
+type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
 
 export class TodoState {
   private _todos: TodoItem[] = [];
