@@ -310,7 +310,10 @@ function detectRawErrorBody(err: unknown): unknown {
   };
 
   const directBody =
-    candidate.error ?? candidate.body ?? candidate.data ?? candidate.response?.data;
+    candidate.error ??
+    candidate.body ??
+    candidate.data ??
+    candidate.response?.data;
   if (directBody !== undefined) {
     return directBody;
   }

@@ -17,126 +17,139 @@ logger.initialize(CHANNEL);
 
 const RequiredString = z.string().min(1);
 
-/** For packSingle - all fields required */
-const PackParamsSchema = z.object({
+const BasePackSchema = z.object({
   inputFile: RequiredString,
   agent: RequiredString,
   model: RequiredString,
 });
 
-/** For pack command - model optional (may come from stored config) */
-const PackConfigSchema = z
-  .object({
-    inputFile: RequiredString,
-    agent: RequiredString,
-    model: z.string().prefault(''),
-    outputFiles: z.array(z.string()).prefault([]),
-    useMultipleOutputs: z.boolean().optional(),
-    streamId: z.string().optional(),
-    skipProgressViewClear: z.boolean().optional(),
-  })
-  .transform((c) => ({
-    ...c,
-    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
-  }));
+const PackConfigSchema = BasePackSchema.extend({
+  model: z.string().prefault(''),
+  outputFiles: z.array(z.string()).prefault([]),
+  useMultipleOutputs: z.boolean().optional(),
+  streamId: z.string().optional(),
+  skipProgressViewClear: z.boolean().optional(),
+}).transform((c) => ({
+  ...c,
+  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
+}));
 
-/** For packMultiple - inputFile optional if outputFiles provided */
-const PackMultipleSchema = z
-  .object({
-    agent: RequiredString,
-    model: RequiredString,
-    inputFile: z.string().prefault(''),
-    outputFiles: z.array(z.string()).prefault([]),
-  })
-  .refine((d) => d.inputFile || d.outputFiles.length > 0, {
-    error: 'inputFile or outputFiles required',
-  });
+const PackMultipleSchema = BasePackSchema.extend({
+  inputFile: z.string().prefault(''),
+  outputFiles: z.array(z.string()).prefault([]),
+}).refine((d) => d.inputFile || d.outputFiles.length > 0, {
+  error: 'inputFile or outputFiles required',
+});
 
 // --- Helpers ---
+
+const PACK_RESULT_MESSAGES: Record<
+  Exclude<FileOpResult['status'], 'success'>,
+  { template: string; isError: boolean }
+> = {
+  noFiles: {
+    template: 'No files found to pack for {inputFile}',
+    isError: false,
+  },
+  missingParams: {
+    template: 'Missing required parameters for pack',
+    isError: true,
+  },
+  error: { template: 'Error during packing: {error}', isError: true },
+};
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
   if (result.status === 'success') {
     const folder = result.outputFolder;
-    if (folder) {
-      vscode.window
-        .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-        .then((sel) => {
-          if (sel === 'Open Folder') {
-            void vscode.commands.executeCommand(
-              'revealFileInOS',
-              vscode.Uri.file(WorkspaceFS.fullPath(folder)),
-            );
-          }
-        });
-    }
+    if (!folder) return;
+    vscode.window
+      .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
+      .then((sel) => {
+        if (sel === 'Open Folder') {
+          void vscode.commands.executeCommand(
+            'revealFileInOS',
+            vscode.Uri.file(WorkspaceFS.fullPath(folder)),
+          );
+        }
+      });
     return;
   }
 
-  const messages: Record<
-    Exclude<FileOpResult['status'], 'success'>,
-    { text: string; isError: boolean }
-  > = {
-    noFiles: {
-      text: `No files found to pack for ${inputFile}`,
-      isError: false,
-    },
-    missingParams: {
-      text: 'Missing required parameters for pack',
-      isError: true,
-    },
-    error: { text: `Error during packing: ${result.error}`, isError: true },
-  };
-  const msg = messages[result.status];
-  if (msg.isError) {
-    vscode.window.showErrorMessage(msg.text);
-  } else {
-    vscode.window.showInformationMessage(msg.text);
+  const { template, isError } = PACK_RESULT_MESSAGES[result.status];
+  const text = template
+    .replace('{inputFile}', inputFile)
+    .replace('{error}', result.error ?? '');
+  const showMessage = isError
+    ? vscode.window.showErrorMessage
+    : vscode.window.showInformationMessage;
+  showMessage(text);
+}
+
+interface PackParams {
+  agent: string;
+  model: string;
+  inputFile: string;
+}
+
+interface PackClearOptions {
+  streamConfig: PackParams;
+  useMultipleOutputs: boolean;
+  streamIdOverride?: string;
+}
+
+async function executePackOperation<T extends PackParams>(
+  schema: z.ZodType<T>,
+  input: unknown,
+  label: string,
+  runOperation: (data: T) => Promise<FileOpResult>,
+  clearOptions: (data: T) => PackClearOptions | null,
+): Promise<void> {
+  const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
+  if (!data) return;
+
+  const result = await runOperation(data);
+  showPackResult(result, data.inputFile);
+
+  const options = clearOptions(data);
+  if (options) {
+    emitClearMissingOutputs(options);
   }
 }
 
 // --- Handlers ---
 
 async function handlePack(config: unknown): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
+  return executePackOperation(
     PackConfigSchema,
     config,
     'config',
+    (data) => {
+      if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
+        logger.warn(
+          CHANNEL,
+          'Multiple output files but multi-output mode disabled',
+        );
+      }
+      return runPack(
+        data.model,
+        data.inputFile,
+        data.agent,
+        data.useMultipleOutputs ? data.outputFiles : [],
+      );
+    },
+    (data) =>
+      data.skipProgressViewClear
+        ? null
+        : {
+            streamConfig: {
+              agent: data.agent,
+              model: data.model,
+              inputFile: data.inputFile,
+            },
+            useMultipleOutputs: data.useMultipleOutputs,
+            streamIdOverride: data.streamId,
+          },
   );
-  if (!data) return;
-
-  const {
-    agent,
-    model,
-    inputFile,
-    outputFiles,
-    useMultipleOutputs,
-    streamId,
-    skipProgressViewClear,
-  } = data;
-
-  if (outputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(
-      CHANNEL,
-      'Multiple output files but multi-output mode disabled',
-    );
-  }
-
-  const result = await runPack(
-    model,
-    inputFile,
-    agent,
-    useMultipleOutputs ? outputFiles : [],
-  );
-  showPackResult(result, inputFile);
-
-  if (!skipProgressViewClear) {
-    emitClearMissingOutputs({
-      streamConfig: { agent, model, inputFile },
-      useMultipleOutputs,
-      streamIdOverride: streamId,
-    });
-  }
 }
 
 async function handlePackSingle(
@@ -144,24 +157,20 @@ async function handlePackSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
-    PackParamsSchema,
+  return executePackOperation(
+    BasePackSchema,
     { inputFile, agent, model },
     'params',
+    (data) => runPackSingle(data.model, data.inputFile, data.agent),
+    (data) => ({
+      streamConfig: {
+        agent: data.agent,
+        model: data.model,
+        inputFile: data.inputFile,
+      },
+      useMultipleOutputs: false,
+    }),
   );
-  if (!data) return;
-
-  const result = await runPackSingle(data.model, data.inputFile, data.agent);
-  showPackResult(result, data.inputFile);
-  emitClearMissingOutputs({
-    streamConfig: {
-      agent: data.agent,
-      model: data.model,
-      inputFile: data.inputFile,
-    },
-    useMultipleOutputs: false,
-  });
 }
 
 async function handlePackMultiple(
@@ -170,28 +179,21 @@ async function handlePackMultiple(
   model: string,
   outputFiles: string[] = [],
 ): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
+  return executePackOperation(
     PackMultipleSchema,
     { inputFile, agent, model, outputFiles },
     'params',
+    (data) =>
+      runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles),
+    (data) => ({
+      streamConfig: {
+        agent: data.agent,
+        model: data.model,
+        inputFile: data.inputFile,
+      },
+      useMultipleOutputs: true,
+    }),
   );
-  if (!data) return;
-  const result = await runPackMultiple(
-    data.model,
-    data.inputFile,
-    data.agent,
-    data.outputFiles,
-  );
-  showPackResult(result, data.inputFile);
-  emitClearMissingOutputs({
-    streamConfig: {
-      agent: data.agent,
-      model: data.model,
-      inputFile: data.inputFile,
-    },
-    useMultipleOutputs: true,
-  });
 }
 
 // --- Registration ---
