@@ -64,7 +64,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
-import { createInterruptManager } from './InterruptManager';
+import { createInterruptCallbacks } from './InterruptManager';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -444,12 +444,12 @@ export async function executeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      const interruptManager = createInterruptManager();
+      const interruptCallbacks = createInterruptCallbacks();
 
       if (setting.agentCategory === AgentCategory.ToolUse) {
         const result = await runToolUseFlow({
           ...ctx,
-          ...interruptManager.asFlowInput(),
+          ...interruptCallbacks,
           getUsageRecorder: () => (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: ctx.setting as AgentToolUseSetting,
@@ -461,7 +461,7 @@ export async function executeAgent(
 
       const result = await runReflectionFlow({
         ...ctx,
-        ...interruptManager.asFlowInput(),
+        ...interruptCallbacks,
         getUsageRecorder: () => (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
@@ -509,7 +509,7 @@ export async function executeMergeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      const interruptManager = createInterruptManager();
+      const interruptCallbacks = createInterruptCallbacks();
 
       const fileService = new TaskRunFileService(executionId);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
@@ -520,7 +520,7 @@ export async function executeMergeAgent(
 
       const result = await runReflectionFlow({
         ...ctx,
-        ...interruptManager.asFlowInput(),
+        ...interruptCallbacks,
         getUsageRecorder: () => (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
@@ -552,7 +552,7 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  const interruptManager = createInterruptManager();
+  const interruptCallbacks = createInterruptCallbacks();
 
   await runFlowWithLifecycle(
     ctx,
@@ -564,7 +564,7 @@ export async function resumeToolUseFromSnapshot(
       const result = await runToolUseFlow(
         {
           ...ctx,
-          ...interruptManager.asFlowInput(),
+          ...interruptCallbacks,
           getUsageRecorder: () => (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,

@@ -1,12 +1,7 @@
 import { z } from 'zod';
 
 import * as logger from '@logger/logUtils';
-import { ToolDefinitionSchema, type ToolDefinition } from '@model';
-
-const CHANNEL = 'AgentDataclass';
-
-export const MIN_TEMPERATURE = 0;
-export const MAX_TEMPERATURE = 1;
+import { ToolDefinitionSchema } from '@model';
 
 export const AgentSource = z.enum([
   'custom',
@@ -39,12 +34,7 @@ export const AgentSettingBaseSchema = z.strictObject({
     .min(1, 'documentTag cannot be empty')
     .prefault('document'),
   endTag: z.string().prefault('</latex_document>'),
-  temperature: z
-    .number()
-    .min(MIN_TEMPERATURE)
-    .max(MAX_TEMPERATURE)
-    .nullable()
-    .prefault(0.0),
+  temperature: z.number().min(0).max(1).nullable().prefault(0.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
   defaultOutputFiles: z.array(z.string()).prefault([]),
@@ -90,7 +80,7 @@ function normalizeAgentSettingInput(input: unknown): unknown {
 
   if (maxRounds !== undefined && rest.rounds === undefined) {
     logger.debug(
-      CHANNEL,
+      'AgentDataclass',
       `Migrating legacy maxRounds (${maxRounds}) to rounds`,
     );
     rest.rounds = maxRounds;
@@ -98,14 +88,14 @@ function normalizeAgentSettingInput(input: unknown): unknown {
 
   if (rest.agentCategory !== undefined) {
     if (agentType !== undefined) {
-      logger.debug(CHANNEL, `Stripping legacy agentType: ${agentType}`);
+      logger.debug('AgentDataclass', `Stripping legacy agentType: ${agentType}`);
     }
     return rest;
   }
 
   if (agentType === 'toolUse') {
     logger.debug(
-      CHANNEL,
+      'AgentDataclass',
       `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`,
     );
     return { ...rest, agentCategory: AgentCategory.ToolUse };
@@ -113,7 +103,7 @@ function normalizeAgentSettingInput(input: unknown): unknown {
 
   if (agentType !== undefined) {
     logger.debug(
-      CHANNEL,
+      'AgentDataclass',
       `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`,
     );
   }
@@ -163,29 +153,27 @@ export function hasEndTag(
   if (settings.endTag && fileContent.includes(settings.endTag)) {
     return true;
   }
-  const closingTag = settings.documentTag && `</${settings.documentTag}>`;
-  return Boolean(closingTag && fileContent.includes(closingTag));
+  return (
+    settings.documentTag !== '' &&
+    fileContent.includes(`</${settings.documentTag}>`)
+  );
 }
-
-const promptEntrySchema = z.union([z.string(), z.array(z.string())]);
 
 export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
-  userRequest: promptEntrySchema.prefault(''),
+  userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
   userReflect: z.string().optional(),
 });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
-const DefinitionBlockSchema = z.record(z.string(), z.unknown()).prefault({});
-
 export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
   description: z.string().optional(),
   inherits: z.string().optional(),
-  settings: DefinitionBlockSchema,
-  prompts: DefinitionBlockSchema,
+  settings: z.record(z.string(), z.unknown()).prefault({}),
+  prompts: z.record(z.string(), z.unknown()).prefault({}),
 });
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;

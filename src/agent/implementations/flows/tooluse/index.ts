@@ -53,8 +53,4 @@ export type { ToolUseFlowContextInit } from './ToolUseFlowContext';
 export type { StateSlicesSnapshot } from './nodes';
 
 // Node implementations (exported for testing and extensibility)
-export {
-  ToolUsePrepareNode,
-  ToolUseCycleNode,
-  ToolUseWaitNode,
-} from './nodes';
+export { ToolUsePrepareNode, ToolUseCycleNode, ToolUseWaitNode } from './nodes';

@@ -367,16 +367,14 @@ export class AgentLogger {
       return;
     }
 
-    // Use explicit === true check: only count files where existence was confirmed
-    const loadedCount = files.filter((f) => f.ok === true).length;
-    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
-
     const entries: FileListEntry[] = files.map((f) => ({
       path: f.path,
       ok: f.ok === true,
       source: category,
       sourceDisplay: category,
     }));
+    const loadedCount = entries.filter((e) => e.ok).length;
+    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
 
     this.logFileListData(summary, entries, groupId);
   }
@@ -398,7 +396,10 @@ export class AgentLogger {
    * Log missing output information.
    */
   missingOutputs(info: unknown, groupId?: string): void {
-    const missing = (info as { missing?: unknown[] } | null)?.missing;
+    const missing =
+      info && typeof info === 'object' && 'missing' in info
+        ? (info as { missing: unknown }).missing
+        : undefined;
     const count = Array.isArray(missing) ? missing.length : 0;
     this.info(`${count} output file${count === 1 ? '' : 's'} missing`, {
       groupId,
@@ -467,11 +468,7 @@ export class AgentLogger {
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
-    if (!groupId) {
-      return undefined;
-    }
-
-    return fn(groupId);
+    return groupId ? fn(groupId) : undefined;
   }
 
   async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {

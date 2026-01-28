@@ -147,7 +147,7 @@ export function assertCycleFieldsPopulated<T extends object>(
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
  *
- * Services accessed via `_params.services` (options flattened into services).
+ * Services accessed via `this.services` following PocketFlow service injection.
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -237,7 +237,7 @@ interface InvocationPrepResult extends BaseInvocationPrepResult {
  * - default: Continue to next node on success
  * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
  *
- * Services accessed via `_params.services` (options flattened into services).
+ * Services accessed via `this.services` following PocketFlow service injection.
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared,

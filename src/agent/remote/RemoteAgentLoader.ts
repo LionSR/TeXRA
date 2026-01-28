@@ -253,9 +253,7 @@ function buildCandidateNames(
   const multipleName = getMultipleName(agentName);
   const baseName = getBaseName(agentName);
 
-  return baseName !== multipleName
-    ? [multipleName, baseName]
-    : [multipleName];
+  return baseName !== multipleName ? [multipleName, baseName] : [multipleName];
 }
 
 /** Fetch and parse agent config from edge function. */

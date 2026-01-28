@@ -8,7 +8,7 @@ import {
   MessageTypeSchema,
   type ContextStateData,
   type EndGroupStatus,
-  type LogMessageData,
+  type LogLevel,
   type MessageType,
 } from '@shared/schemas';
 import { getEmitFilter } from '@logger/filterUtils';
@@ -120,7 +120,7 @@ export class VSCodeTransport extends Transport {
       event.messageType,
     );
 
-    const level = event.level as 'debug' | 'info' | 'warn' | 'error';
+    const level = event.level as LogLevel;
     const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
     if (!shouldEmit) return;
 

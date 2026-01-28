@@ -12,24 +12,15 @@ export interface InterruptCallbacks {
 }
 
 /**
- * Interrupt state manager for flow execution.
+ * Create interrupt callbacks for a single flow execution.
  *
- * Encapsulates interrupt state with type-safe access and abort controller management.
+ * Returns callbacks directly - spread into flow inputs with `...createInterruptCallbacks()`.
  */
-export interface InterruptManager {
-  /** Get interrupt-related fields for flow input. */
-  asFlowInput: () => InterruptCallbacks;
-}
-
-/**
- * Create an interrupt manager for a single flow execution.
- */
-export function createInterruptManager(): InterruptManager {
+export function createInterruptCallbacks(): InterruptCallbacks {
   let isInterrupted = false;
   let abortController: AbortController | null = null;
 
-  // Cached callbacks object - stable reference for spreading into flow inputs
-  const callbacks: InterruptCallbacks = {
+  return {
     checkInterruption: () => isInterrupted,
     setAbortController: (controller) => {
       abortController = controller;
@@ -39,9 +30,5 @@ export function createInterruptManager(): InterruptManager {
       isInterrupted = true;
       abortController?.abort();
     },
-  };
-
-  return {
-    asFlowInput: () => callbacks,
   };
 }
