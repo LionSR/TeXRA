@@ -1,6 +1,6 @@
 // Third-party imports
-import type { ReactiveController, ReactiveControllerHost } from 'lit';
 import Sortable from 'sortablejs';
+import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 export interface SortableControllerConfig {
   /** Animation duration in ms (default: 150) */
@@ -86,7 +86,8 @@ export class SortableController implements ReactiveController {
 
     this.sortable = new Sortable(element, {
       animation: this.config.animation,
-      onEnd: (event) => this.handleSortEnd(event),
+      onEnd: (event) =>
+        this.handleSortEnd(event as { oldIndex?: number; newIndex?: number }),
     });
   }
 

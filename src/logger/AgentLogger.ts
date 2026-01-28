@@ -22,12 +22,7 @@ import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
-  /**
-   * When true, no progress-view group is created. The callback runs inside the
-   * currently active group (or without grouping) while still inheriting the
-   * logging context. Use this for instrumentation helpers that should not
-   * clutter the UI with nested groups.
-   */
+  /** When true, no progress-view group is created (for instrumentation helpers) */
   skip?: boolean;
   successStatus?: EndGroupStatus;
   errorStatus?: EndGroupStatus;
@@ -38,48 +33,12 @@ export interface AgentLoggerStageOptions extends LoggerScopeOptions {
   parent?: AgentLogStage;
 }
 
-/**
- * Represents a logical logging scope that can wrap asynchronous work and
- * create nested child stages.
- *
- * - {@link run} executes the provided callback and automatically finalizes the
- *   stage with a success or error status when the promise settles.
- * - {@link within} runs the callback without ending the stage, allowing the
- *   caller to perform additional work (or register nested stages) before
- *   explicitly calling {@link end}. If the callback throws, the stage remains
- *   active until the caller finalizes it via {@link end}. Prefer calling
- *   {@link run} unless you need to coordinate several steps inside the same
- *   stage and can guarantee cleanup in a `finally` block.
- * - {@link end} manually finalizes the stage; calling it multiple times is a
- *   no-op after the first invocation.
- * - {@link stage} spawns a nested stage that inherits the current context.
- */
 export interface AgentLogStage {
   readonly id?: string;
-  /**
-   * Runs work within the stage and automatically ends it once the promise
-   * resolves or rejects.
-   */
   run<T>(fn: () => Promise<T>): Promise<T>;
-  /**
-   * Executes work within the stage context without ending it. Useful when the
-   * caller wants to manually control completion across several async steps.
-   * Callers should typically wrap the invocation in a `try/finally` block that
-   * calls {@link end} to avoid leaking the stage when the callback rejects.
-   */
   within<T>(fn: () => Promise<T>): Promise<T>;
-  /**
-   * Explicitly finalizes the stage with the provided status. Safe to call
-   * multiple times; subsequent calls are ignored.
-   */
   end(status?: EndGroupStatus): void;
-  /**
-   * Creates a nested child stage beneath the current stage.
-   */
-  stage(
-    label: string,
-    options?: AgentLoggerStageOptions,
-  ): Promise<AgentLogStage>;
+  stage(label: string, options?: AgentLoggerStageOptions): Promise<AgentLogStage>;
 }
 
 class AgentLogStageHandle implements AgentLogStage {
@@ -153,15 +112,10 @@ export interface AgentLogStream {
   finalize(finalText?: string): string;
 }
 
-/**
- * Encapsulates logging functionality for agents with a dedicated channel.
- * Uses the updated consolidated logger system.
- */
 export class AgentLogger {
   public readonly isAgentLogger: boolean;
 
   constructor(
-    /** The stream identifier used for routing log messages. */
     public readonly streamId: string,
     isAgentLogger = false,
   ) {
@@ -169,7 +123,6 @@ export class AgentLogger {
     logger.initialize(this.streamId, this.isAgentLogger);
   }
 
-  /** Internal helper to log at any level with consistent options handling. */
   private log(
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,
@@ -199,7 +152,6 @@ export class AgentLogger {
     this.log('error', message, options);
   }
 
-  /** Log a structured error with consistent formatting. */
   logError(
     message: string,
     err: unknown,
@@ -222,7 +174,6 @@ export class AgentLogger {
     });
   }
 
-  /** Log a structured error with pre-formatted error data. */
   logErrorData(message: string, errorData: unknown, groupId?: string): void {
     this.error(message, {
       groupId,
@@ -386,13 +337,6 @@ export class AgentLogger {
     groupName: string,
     options: AgentLoggerStageOptions = {},
   ): Promise<AgentLogStage> {
-    return this.createStageHandle(groupName, options);
-  }
-
-  private async createStageHandle(
-    groupName: string,
-    options: AgentLoggerStageOptions | LoggerScopeOptions,
-  ): Promise<AgentLogStageHandle> {
     const {
       skip = false,
       successStatus = 'stopped',
@@ -400,7 +344,7 @@ export class AgentLogger {
       parentGroupId,
       id,
       parent,
-    } = options as AgentLoggerStageOptions;
+    } = options;
 
     const resolvedParent =
       parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
@@ -429,42 +373,18 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const emitStreamId = this.streamId;
+    const streamId = this.streamId;
     const id = randomUUID();
-    let buffer = '';
-    let isFirstUpdate = true;
     const level = options.level ?? 'info';
-    const progressEnabled = options.progressViewEnabled ?? true;
     const groupId = options.groupId ?? this.resolveActiveGroupId();
+    const progressEnabled = options.progressViewEnabled ?? true;
 
-    // Apply filtering - get both shouldEmit and debugMode for verbose flag
-    // Matches VSCodeTransport.emitLogEvent() behavior for consistency
     const { shouldEmit, debugMode } = progressEnabled
       ? getEmitFilter({ level, messageType: type })
       : { shouldEmit: false, debugMode: false };
 
-    // Helper to emit log message (reduces duplication between append/finalize)
-    const emitMessage = (isNew: boolean, text: string): void => {
-      if (isNew) {
-        bus.emit('addLogMessage', {
-          streamId: emitStreamId,
-          logMessage: {
-            id,
-            text,
-            level,
-            timestamp: Date.now(),
-            groupId,
-            messageType: type,
-            verbose: debugMode, // Now included for consistency with VSCodeTransport
-          },
-        });
-      } else {
-        bus.emit('updateLogMessage', {
-          streamId: emitStreamId,
-          logMessage: { id, text, groupId, messageType: type },
-        });
-      }
-    };
+    let buffer = '';
+    let messageCreated = false;
 
     return {
       append: (text: string) => {
@@ -472,14 +392,48 @@ export class AgentLogger {
         buffer += text;
         if (!shouldEmit) return;
 
-        emitMessage(isFirstUpdate, buffer);
-        isFirstUpdate = false;
+        if (messageCreated) {
+          bus.emit('updateLogMessage', {
+            streamId,
+            logMessage: { id, text: buffer, groupId, messageType: type },
+          });
+        } else {
+          bus.emit('addLogMessage', {
+            streamId,
+            logMessage: {
+              id,
+              text: buffer,
+              level,
+              timestamp: Date.now(),
+              groupId,
+              messageType: type,
+              verbose: debugMode,
+            },
+          });
+          messageCreated = true;
+        }
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
 
-        if (shouldEmit) {
-          emitMessage(isFirstUpdate, buffer);
+        if (shouldEmit && !messageCreated) {
+          bus.emit('addLogMessage', {
+            streamId,
+            logMessage: {
+              id,
+              text: buffer,
+              level,
+              timestamp: Date.now(),
+              groupId,
+              messageType: type,
+              verbose: debugMode,
+            },
+          });
+        } else if (shouldEmit) {
+          bus.emit('updateLogMessage', {
+            streamId,
+            logMessage: { id, text: buffer, groupId, messageType: type },
+          });
         }
 
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
