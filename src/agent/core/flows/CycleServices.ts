@@ -71,7 +71,7 @@ export type ToolUseCycleServices<C = unknown> = BaseCycleStateSlices &
   Readonly<ToolUseCycleOptions<C>>;
 
 /** Params for response cycle nodes (services injected via `this.services`). */
-export type ResponseCycleParams = Record<string, unknown>;
+export type ResponseCycleParams<_C = unknown> = Record<string, unknown>;
 
 /** Params for tool-use cycle nodes (services injected via `this.services`). */
-export type ToolUseCycleParams = Record<string, unknown>;
+export type ToolUseCycleParams<_C = unknown> = Record<string, unknown>;

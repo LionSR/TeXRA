@@ -20,8 +20,6 @@ import {
 import type { DiffStats } from '@agent/types/DiffTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
@@ -30,13 +28,12 @@ import {
   pathToLocation,
 } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
 import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
-import type { IOutputHandler } from './IOutputHandler';
+import type { IOutputHandler, FinalizeRoundResult, ValidationResult } from './IOutputHandler';
 import type { RoundFileMapping } from './types';
 
 const RoundDataSchema = z.object({
@@ -303,24 +300,19 @@ export class OutputHandler implements IOutputHandler {
     outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
-  ): Promise<void> {
-    await this.withOutputStage(
+  ): Promise<ValidationResult> {
+    return this.withOutputStage(
       `Validate expected r${currRound}`,
       stage,
-      async () => {
+      async (): Promise<ValidationResult> => {
         const storageKey = this.getStorageKey();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
-          bus.emit('updateMissingOutputs', {
-            streamId: this.streamId,
-            storageKey,
-            filesByRound: { [currRound]: [] },
-          });
           this.logger.debug(
-            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} storageKey=${storageKey}`,
+            `No expected outputs for round ${currRound} storageKey=${storageKey}`,
             { messageType: MESSAGE_TYPES.INTERNAL },
           );
-          return;
+          return { storageKey, currRound, missing: [], xmlExists: false };
         }
 
         const checks = expected.map(async (file) => ({
@@ -331,19 +323,14 @@ export class OutputHandler implements IOutputHandler {
         }));
         const results = await Promise.all(checks);
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
+        const xmlExists = await flexibleFS.exists(outputLocation);
 
         if (missing.length > 0) {
-          const xmlExists = await flexibleFS.exists(outputLocation);
-
           this.logger.missingOutputs({
             missing,
             xmlFile: xmlExists ? outputLocation.absolutePath : null,
             documentTag: this.agentSetting.documentTag,
           });
-          await showInstructionWithSuppress(
-            'missingOutputsInfo',
-            'Missing output files detected',
-          );
           this.logger.debug(
             `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,
           );
@@ -353,15 +340,7 @@ export class OutputHandler implements IOutputHandler {
           );
         }
 
-        bus.emit('updateMissingOutputs', {
-          streamId: this.streamId,
-          storageKey,
-          filesByRound: { [currRound]: missing },
-        });
-        this.logger.debug(
-          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} storageKey=${storageKey}`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
-        );
+        return { storageKey, currRound, missing, xmlExists };
       },
     );
   }
@@ -374,11 +353,11 @@ export class OutputHandler implements IOutputHandler {
       stage?: AgentLogStage;
       mapping?: RoundFileMapping;
     },
-  ): Promise<void> {
-    await this.withOutputStage(
+  ): Promise<FinalizeRoundResult> {
+    return this.withOutputStage(
       `Finalize r${currRound}`,
       options.stage,
-      async (scope) => {
+      async (scope): Promise<FinalizeRoundResult> => {
         const data = this.ensureRoundData(currRound);
         data.rawOutput ??= outputFile;
 
@@ -389,42 +368,30 @@ export class OutputHandler implements IOutputHandler {
         data.outputs = fileInfos;
         const storageKey = this.getStorageKey();
 
-        if (options.endTurn) {
-          try {
-            await this.validateExpectedOutputs(outputFile, currRound, scope);
-            this.logger.debug(
-              `Expected outputs validated for round ${currRound}`,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Expected output validation failed after round ${currRound}: ${toErrorMessage(error)}`,
-            );
+        // Collect file paths that haven't been opened yet
+        const filesToOpen: FileLocation[] = [];
+        for (const info of fileInfos) {
+          const filePath = info.location.absolutePath;
+          if (!this.openedOutputs.has(filePath)) {
+            filesToOpen.push(info.location);
+            this.openedOutputs.add(filePath);
           }
         }
 
-        bus.emit('addOutputFiles', {
-          streamId: this.streamId,
-          storageKey,
-          filesByRound: { [currRound]: fileInfos },
-        });
         this.logger.debug(
-          `addOutputFiles emitted for round ${currRound} storageKey=${storageKey} files=${fileInfos.length}`,
+          `Finalized round ${currRound} storageKey=${storageKey} files=${fileInfos.length}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
 
-        for (const info of fileInfos) {
-          const filePath = info.location.absolutePath;
-          if (this.openedOutputs.has(filePath)) continue;
-
-          try {
-            await openBuildDisplayIfTex(info.location, { preserveFocus: true });
-            this.openedOutputs.add(filePath);
-          } catch (error) {
-            this.logger.error(
-              `Failed to open output file ${filePath}: ${toErrorMessage(error)}`,
-            );
-          }
-        }
+        return {
+          storageKey,
+          currRound,
+          fileInfos,
+          filesToOpen,
+          outputFile,
+          endTurn: options.endTurn,
+          stage: scope,
+        };
       },
     );
   }
