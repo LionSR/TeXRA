@@ -9,7 +9,7 @@ import {
   UsageLogService,
   type AgentLogger,
   type AgentUsageReporter,
-} from '@logger';
+} from '@logger/index';
 import type { ModelCapabilities, ModelConfig } from '@model';
 import type {
   ExtendedTokenUsageStats,
