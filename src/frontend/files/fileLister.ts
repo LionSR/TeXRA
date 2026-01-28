@@ -54,46 +54,25 @@ export class FileLister {
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
-    type IgnoreListKey =
-      | 'ignoredFileExtensions'
-      | 'ignoredDirectories'
-      | 'ignoredKeywords'
-      | 'ignoredInputFiles'
-      | 'ignoredInputDirectories'
-      | 'ignoredAuxKeywords'
-      | 'ignoredMediaDirs';
 
-    const mappings: Array<{ key: string; target: IgnoreListKey }> = [
-      {
-        key: 'texra.files.ignored.fileExtensions',
-        target: 'ignoredFileExtensions',
-      },
-      { key: 'texra.files.ignored.directories', target: 'ignoredDirectories' },
-      { key: 'texra.files.ignored.keywords', target: 'ignoredKeywords' },
-      { key: 'texra.files.ignored.inputFiles', target: 'ignoredInputFiles' },
-      {
-        key: 'texra.files.ignored.inputDirectories',
-        target: 'ignoredInputDirectories',
-      },
-      {
-        key: 'texra.files.ignored.auxiliaryKeywords',
-        target: 'ignoredAuxKeywords',
-      },
-      {
-        key: 'texra.files.ignored.mediaDirectories',
-        target: 'ignoredMediaDirs',
-      },
-    ];
+    const loadIgnoreList = (configKey: string): string[] =>
+      getConfig<string[]>(configKey, []).map((v) => v.toLowerCase());
 
-    for (const { key, target } of mappings) {
-      this[target] = getConfig<string[]>(key, []).map((value) =>
-        value.toLowerCase(),
-      );
-    }
-  }
-
-  private get workspace(): string | null {
-    return this.workspacePath ?? null;
+    this.ignoredFileExtensions = loadIgnoreList(
+      'texra.files.ignored.fileExtensions',
+    );
+    this.ignoredDirectories = loadIgnoreList('texra.files.ignored.directories');
+    this.ignoredKeywords = loadIgnoreList('texra.files.ignored.keywords');
+    this.ignoredInputFiles = loadIgnoreList('texra.files.ignored.inputFiles');
+    this.ignoredInputDirectories = loadIgnoreList(
+      'texra.files.ignored.inputDirectories',
+    );
+    this.ignoredAuxKeywords = loadIgnoreList(
+      'texra.files.ignored.auxiliaryKeywords',
+    );
+    this.ignoredMediaDirs = loadIgnoreList(
+      'texra.files.ignored.mediaDirectories',
+    );
   }
 
   /** Get file listing config for each file type */
@@ -147,8 +126,7 @@ export class FileLister {
   }
 
   public async list(fileType: ListableFileType): Promise<string[]> {
-    const workspace = this.workspace;
-    if (!workspace) {
+    if (!this.workspacePath) {
       logger.warn(CHANNEL, 'No workspace folder found');
       return [];
     }
@@ -159,8 +137,8 @@ export class FileLister {
     }
 
     return getFilesRecursively(
-      workspace,
-      workspace,
+      this.workspacePath,
+      this.workspacePath,
       config.extensions,
       config.ignoredExtensions,
       config.ignoredDirs,
@@ -170,15 +148,14 @@ export class FileLister {
   }
 
   public async listEditedFiles(baseFileName: string): Promise<string[]> {
-    const workspace = this.workspace;
-    if (!workspace) {
+    if (!this.workspacePath) {
       logger.warn(CHANNEL, 'No workspace folder found');
       return [];
     }
 
     const files = await getFilesRecursively(
-      workspace,
-      workspace,
+      this.workspacePath,
+      this.workspacePath,
       getIncludedExtensions('edited'),
       this.ignoredFileExtensions,
       [...this.ignoredDirectories, ...this.ignoredInputDirectories],
@@ -186,17 +163,23 @@ export class FileLister {
       this.ignoredInputFiles,
     );
 
-    const baseNameMatch = baseFileName.match(/^(.*?)(?:_r\d+|$)/);
-    const baseNameBeforeRound = baseNameMatch ? baseNameMatch[1] : baseFileName;
+    // Extract the base name without round suffix (e.g., "paper_r2" -> "paper")
+    const baseNameWithoutRound =
+      baseFileName.match(/^(.*?)(?:_r\d+)?$/)?.[1] ?? baseFileName;
 
     return files.filter((file) => {
       const fileBase = path.basename(file, path.extname(file));
-      return (
-        (fileBase.startsWith(baseFileName) && fileBase !== baseFileName) ||
-        (fileBase.startsWith(baseNameBeforeRound) &&
-          /_r\d+/.test(fileBase) &&
-          fileBase !== baseFileName)
-      );
+      if (fileBase === baseFileName) return false;
+
+      // Match files that start with the base name or have round suffixes
+      if (fileBase.startsWith(baseFileName)) return true;
+      if (
+        fileBase.startsWith(baseNameWithoutRound) &&
+        /_r\d+/.test(fileBase)
+      ) {
+        return true;
+      }
+      return false;
     });
   }
 }

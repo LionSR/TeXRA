@@ -35,7 +35,7 @@ import {
  * Minimum retry count for background mode (at least 3 attempts before manual retry UI).
  * Background jobs may fail due to timeouts and need more automatic recovery attempts.
  */
-export const BACKGROUND_MODE_MIN_RETRIES = 3;
+const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 // ============================================================================
 // Error State Types (using canonical schema)
@@ -132,16 +132,16 @@ interface RetryableNodeServices {
  *
  * Subclasses must implement:
  * - getOperationName(): Operation name for logging (e.g., 'Model invocation')
- * - getServices(): Access to options containing streamId and logger
  * - prep(): Extract data from shared for exec()
  * - exec(): Perform the actual invocation
  * - post(): Apply side effects from exec result
  *
+ * Access services via `this.services` (typed via the Svc generic parameter).
+ *
  * @example
  * ```typescript
- * class MyInvocationNode extends RetryableInvocationNode<MyShared, MyParams> {
+ * class MyInvocationNode extends RetryableInvocationNode<MyShared, MyParams, MyServices> {
  *   getOperationName(): string { return 'My operation'; }
- *   getServices() { return this._params.services; }
  *   async exec(prepRes: PrepResult): Promise<InvocationResult<SuccessData>> { ... }
  * }
  * ```
@@ -183,14 +183,6 @@ export abstract class RetryableInvocationNode<
   protected abstract getOperationName(): string;
 
   /**
-   * Access services containing streamId and logger.
-   * Uses this.services which is typed via the Svc generic parameter.
-   */
-  protected getServices(): Svc {
-    return this.services;
-  }
-
-  /**
    * Reset instance flags on clone to prevent stale state.
    * Note: BaseNode.clone() shallow-copies with Object.assign. Subclasses with
    * object/array properties must override to deep-copy them.
@@ -226,7 +218,7 @@ export abstract class RetryableInvocationNode<
       throw this._persistent401Error;
     }
 
-    const services = this.getServices();
+    const services = this.services;
     let activeController = new AbortController();
     this.signal = activeController.signal;
     services.setAbortController(activeController);
@@ -348,7 +340,7 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { streamId, logger } = this.getServices();
+    const { streamId, logger } = this.services;
     const operationName = this.getOperationName();
     const formatted = formatProviderHttpError(error);
 
@@ -403,7 +395,7 @@ export abstract class RetryableInvocationNode<
     const formatted = formatProviderHttpError(error);
     // Log final failure (only for non-retryable - retryable were logged in retryPrompt)
     if (!formatted.retryable) {
-      this.getServices().logger.logErrorData(
+      this.services.logger.logErrorData(
         `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
         formatted, // Pass complete ProviderError - no field loss
       );

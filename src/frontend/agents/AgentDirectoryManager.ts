@@ -4,10 +4,8 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
+// Local imports
 import type { AgentSource } from '@agent/core/AgentDataclass';
-
-// Local imports - log
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
@@ -20,35 +18,25 @@ const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
 
-  /**
-   * Ensure a built-in agents directory exists and return its path.
-   */
-  private async ensureBuiltInDir(dirName: string): Promise<string> {
-    this.ensureInitialized();
-
-    await GlobalStorageFS.ensureDir(dirName);
-
-    const basePath = GlobalStorageFS.fullPath(dirName);
-    const label = dirName === 'tool_use_agents' ? 'tool-use' : dirName;
-    logger.debug(CHANNEL, `Using built-in ${label} directory: ${basePath}`);
-
-    return basePath;
-  }
-
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
     StorageFS.initialize(context);
   }
 
-  private ensureInitialized(): vscode.ExtensionContext {
+  private ensureInitialized(): void {
     if (!this.context) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
       );
     }
+  }
 
-    StorageFS.initialize(this.context);
-    return this.context;
+  private async ensureBuiltInDir(dirName: string): Promise<string> {
+    this.ensureInitialized();
+    await GlobalStorageFS.ensureDir(dirName);
+    const basePath = GlobalStorageFS.fullPath(dirName);
+    logger.debug(CHANNEL, `Using built-in ${dirName} directory: ${basePath}`);
+    return basePath;
   }
 
   async builtIn(): Promise<string> {
@@ -90,9 +78,9 @@ export class AgentDirectoryManager {
     ]);
 
     return [
-      { directory: customDir, source: 'custom' as const },
-      { directory: builtInDir, source: 'builtIn' as const },
-      { directory: builtInToolUseDir, source: 'builtInToolUse' as const },
+      { directory: customDir, source: 'custom' },
+      { directory: builtInDir, source: 'builtIn' },
+      { directory: builtInToolUseDir, source: 'builtInToolUse' },
     ];
   }
 

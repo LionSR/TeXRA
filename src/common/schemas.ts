@@ -21,25 +21,6 @@ export const StreamConfigSchema = z.object({
 export type StreamConfig = z.infer<typeof StreamConfigSchema>;
 
 // ============================================================================
-// Listing Options Schema
-// ============================================================================
-
-/**
- * Options for file listing operations with sensible defaults.
- * Used by prepareFilters in listing.ts.
- */
-export const ListingOptionsSchema = z.object({
-  includeExtensions: z.array(z.string()).prefault([]),
-  excludeExtensions: z.array(z.string()).prefault([]),
-  excludeDirectories: z.array(z.string()).prefault([]),
-  excludeKeywords: z.array(z.string()).prefault([]),
-  excludeFiles: z.array(z.string()).prefault([]),
-});
-
-/** Input type - all fields optional (for function parameters) */
-export type ListingOptions = z.input<typeof ListingOptionsSchema>;
-
-// ============================================================================
 // LaTeX Compile Options Schema
 // ============================================================================
 
