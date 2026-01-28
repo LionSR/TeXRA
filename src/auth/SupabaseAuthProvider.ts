@@ -173,31 +173,25 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Store session and notify listeners.
-   * Use for new logins where session change event should fire.
+   * Store session with optional notification.
+   * @param notify - If true, fires session change event and clears caches (for new logins)
    */
-  private async storeSessionAndNotify(session: SupabaseSession): Promise<void> {
+  private async storeSession(
+    session: SupabaseSession,
+    notify = false,
+  ): Promise<void> {
     await this.context.secrets.store(
       SUPABASE_SESSION_KEY,
       JSON.stringify(session),
     );
-    getServerSideKeyService().clearAllCaches();
-    this._onDidChangeSessions.fire({
-      added: [this.toVSCodeSession(session)],
-      removed: [],
-      changed: [],
-    });
-  }
-
-  /**
-   * Store session quietly (no event).
-   * Use for session refresh where no session change notification is needed.
-   */
-  private async storeSession(session: SupabaseSession): Promise<void> {
-    await this.context.secrets.store(
-      SUPABASE_SESSION_KEY,
-      JSON.stringify(session),
-    );
+    if (notify) {
+      getServerSideKeyService().clearAllCaches();
+      this._onDidChangeSessions.fire({
+        added: [this.toVSCodeSession(session)],
+        removed: [],
+        changed: [],
+      });
+    }
   }
 
   /**
@@ -312,25 +306,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      // Store session and notify
-      try {
-        await this.storeSessionAndNotify(result.session);
-        void vscode.window.showInformationMessage(
-          `Signed in as ${result.session.account.label}`,
-        );
-        logger.info(
-          'SupabaseAuthProvider',
-          `Magic link sign-in successful for ${result.session.account.label}`,
-        );
-      } catch (storeError) {
-        logger.error(
-          'SupabaseAuthProvider',
-          `Failed to store session: ${toErrorMessage(storeError)}`,
-        );
-        void vscode.window.showErrorMessage(
-          `Sign-in failed: Could not save session`,
-        );
-      }
+      await this.storeSession(result.session, true);
+      void vscode.window.showInformationMessage(
+        `Signed in as ${result.session.account.label}`,
+      );
+      logger.info(
+        'SupabaseAuthProvider',
+        `Magic link sign-in successful for ${result.session.account.label}`,
+      );
     } catch (error) {
       logger.error(
         'SupabaseAuthProvider',
@@ -367,11 +350,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const expiresIn = getParam('expires_in');
     const error = getParam('error');
     const errorDescription = getParam('error_description');
-
-    logger.debug(
-      'SupabaseAuthProvider',
-      `Parsing callback URI - path: ${uri.path}, has fragment: ${!!uri.fragment}, has query: ${!!uri.query}`,
-    );
 
     if (error) {
       return {
@@ -433,46 +411,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       if (Date.now() >= session.expiresAt) {
         const refreshed = await this.refreshSession(session);
         if (!refreshed) {
-          await this.removeSession(session.id);
-          const action = await vscode.window.showWarningMessage(
-            'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.',
-            'Sign In',
-          );
-          if (action === 'Sign In') {
-            try {
-              await vscode.commands.executeCommand('texra.auth.signIn');
-            } catch (error) {
-              logger.error(
-                'SupabaseAuthProvider',
-                `Failed to trigger sign-in: ${error}`,
-              );
-            }
-          }
+          await this.handleInvalidSession(session.id, 'expired');
           return [];
         }
         return [this.toVSCodeSession(refreshed)];
       }
 
-      // Verify session is still valid with Supabase
       const { data, error } = await SupabaseClient.getClient().auth.getUser(
         session.accessToken,
       );
       if (error || !data.user) {
-        await this.removeSession(session.id);
-        const action = await vscode.window.showWarningMessage(
-          'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
-          'Sign In',
-        );
-        if (action === 'Sign In') {
-          try {
-            await vscode.commands.executeCommand('texra.auth.signIn');
-          } catch (error) {
-            logger.error(
-              'SupabaseAuthProvider',
-              `Failed to trigger sign-in: ${error}`,
-            );
-          }
-        }
+        await this.handleInvalidSession(session.id, 'invalid');
         return [];
       }
 
@@ -487,11 +436,51 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Check if running in VS Code web environment (Codespaces, vscode.dev, etc.)
-   * where traditional OAuth callbacks don't work reliably.
+   * Handle invalid session by removing it and prompting user to sign in again.
    */
+  private async handleInvalidSession(
+    sessionId: string,
+    reason: 'expired' | 'invalid',
+  ): Promise<void> {
+    await this.removeSession(sessionId);
+    const message =
+      reason === 'expired'
+        ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+        : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+    const action = await vscode.window.showWarningMessage(message, 'Sign In');
+    if (action === 'Sign In') {
+      try {
+        await vscode.commands.executeCommand('texra.auth.signIn');
+      } catch (error) {
+        logger.error(
+          'SupabaseAuthProvider',
+          `Failed to trigger sign-in: ${error}`,
+        );
+      }
+    }
+  }
+
   private isWebEnvironment(): boolean {
     return vscode.env.uiKind === vscode.UIKind.Web;
+  }
+
+  private async buildOAuthOptions(
+    isWeb: boolean,
+  ): Promise<{ redirectTo: string; queryParams?: Record<string, string> }> {
+    if (isWeb) {
+      const callbackInfo = await getExternalAuthCallbackInfo();
+      logger.info(
+        'SupabaseAuthProvider',
+        `OAuth callback URI (web): ${callbackInfo.fullUrl}`,
+      );
+      return callbackInfo.vscodeState
+        ? { redirectTo: callbackInfo.baseUrl, queryParams: { state: callbackInfo.vscodeState } }
+        : { redirectTo: callbackInfo.baseUrl };
+    }
+
+    const redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
+    logger.info('SupabaseAuthProvider', `OAuth callback URI (desktop): ${redirectTo}`);
+    return { redirectTo };
   }
 
   /**
@@ -622,7 +611,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         useCustomRefresh: true,
       };
 
-      await this.storeSessionAndNotify(session);
+      await this.storeSession(session, true);
       void vscode.window.showInformationMessage(
         `Signed in as ${session.account.label}`,
       );
@@ -683,42 +672,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Promise<vscode.AuthenticationSession> {
     try {
       const supabase = SupabaseClient.getClient();
-
-      // For web environments (Codespaces), use asExternalUri to get proper callback URL
-      // For desktop, use simple callback URI (avoids issues with asExternalUri adding params)
       const isWeb = this.isWebEnvironment();
 
-      let redirectTo: string;
-      let oauthOptions: {
-        redirectTo: string;
-        queryParams?: Record<string, string>;
-      };
-
-      if (isWeb) {
-        // Web environment: use asExternalUri for proper Codespaces callback URL
-        const callbackInfo = await getExternalAuthCallbackInfo();
-        redirectTo = callbackInfo.baseUrl;
-        oauthOptions = { redirectTo };
-
-        if (callbackInfo.vscodeState) {
-          // Preserve VS Code's state for callback routing in Codespaces
-          oauthOptions.queryParams = { state: callbackInfo.vscodeState };
-        }
-
-        logger.info(
-          'SupabaseAuthProvider',
-          `OAuth callback URI (web): ${callbackInfo.fullUrl} (vscodeState: ${callbackInfo.vscodeState ? 'present' : 'none'})`,
-        );
-      } else {
-        // Desktop: use simple callback URI like 0.35.1
-        redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
-        oauthOptions = { redirectTo };
-
-        logger.info(
-          'SupabaseAuthProvider',
-          `OAuth callback URI (desktop): ${redirectTo} (scheme: ${vscode.env.uriScheme})`,
-        );
-      }
+      const oauthOptions = await this.buildOAuthOptions(isWeb);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -751,7 +707,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               'Authentication cancelled or timed out. Try again.',
             );
           }
-          await this.storeSessionAndNotify(session);
+          await this.storeSession(session, true);
           return this.toVSCodeSession(session);
         },
       );
@@ -870,107 +826,95 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     });
   }
 
-  /** Refresh session with concurrency protection. */
+  /**
+   * Refresh session with concurrency protection.
+   * Routes to custom endpoint for GitHub auth sessions, otherwise uses Supabase native refresh.
+   */
   private async refreshSession(
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
-    this.refreshPromise = this._refreshSession(session).finally(() => {
-      this.refreshPromise = null;
-    });
 
-    return this.refreshPromise;
-  }
-
-  private async _refreshSession(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    try {
-      // Use custom refresh for sessions created via VS Code GitHub auth
-      if (session.useCustomRefresh) {
-        return this._refreshSessionViaCustomEndpoint(session);
-      }
-
-      // Standard Supabase refresh for OAuth-created sessions
-      const { data, error } =
-        await SupabaseClient.getClient().auth.refreshSession({
-          refresh_token: session.refreshToken,
-        });
-
-      if (error || !data.session) {
-        return null;
-      }
-
-      const refreshed = toStorableSession(data.session);
-      await this.storeSession(refreshed);
-      return refreshed;
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error refreshing session: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Refresh session using our custom Edge Function.
-   * Used for sessions created via VS Code GitHub auth where tokens
-   * are stored in our sessions table, not Supabase's internal auth.
-   */
-  private async _refreshSessionViaCustomEndpoint(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    try {
-      const response = await this.fetchWithTimeout(
-        GITHUB_TOKEN_REFRESH_URL,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: session.refreshToken }),
-        },
-        EDGE_FUNCTION_TIMEOUT_MS,
-        'Token refresh timeout',
-      );
-
-      if (!response.ok) {
-        logger.warn(
+    const doRefresh = async (): Promise<SupabaseSession | null> => {
+      try {
+        if (session.useCustomRefresh) {
+          return this.refreshViaCustomEndpoint(session);
+        }
+        return this.refreshViaSupabase(session);
+      } catch (error) {
+        logger.error(
           'SupabaseAuthProvider',
-          `Token refresh failed: ${response.status}`,
+          `Error refreshing session: ${toErrorMessage(error)}`,
         );
         return null;
       }
+    };
 
-      const data = await this.parseTokenExchangeResponse(response);
-      const refreshed: SupabaseSession = {
-        id: data.user.id,
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        account: {
-          id: data.user.id,
-          label: data.user.email || session.account.label,
-        },
-        expiresAt: data.expires_at
-          ? data.expires_at * 1000
-          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-        useCustomRefresh: true,
-      };
+    this.refreshPromise = doRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
 
-      await this.storeSession(refreshed);
-      logger.info(
+  private async refreshViaSupabase(
+    session: SupabaseSession,
+  ): Promise<SupabaseSession | null> {
+    const { data, error } =
+      await SupabaseClient.getClient().auth.refreshSession({
+        refresh_token: session.refreshToken,
+      });
+
+    if (error || !data.session) {
+      return null;
+    }
+
+    const refreshed = toStorableSession(data.session);
+    await this.storeSession(refreshed);
+    return refreshed;
+  }
+
+  private async refreshViaCustomEndpoint(
+    session: SupabaseSession,
+  ): Promise<SupabaseSession | null> {
+    const response = await this.fetchWithTimeout(
+      GITHUB_TOKEN_REFRESH_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: session.refreshToken }),
+      },
+      EDGE_FUNCTION_TIMEOUT_MS,
+      'Token refresh timeout',
+    );
+
+    if (!response.ok) {
+      logger.warn(
         'SupabaseAuthProvider',
-        'Token refreshed via custom endpoint',
-      );
-      return refreshed;
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error refreshing via custom endpoint: ${toErrorMessage(error)}`,
+        `Token refresh failed: ${response.status}`,
       );
       return null;
     }
+
+    const data = await this.parseTokenExchangeResponse(response);
+    const refreshed: SupabaseSession = {
+      id: data.user.id,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      account: {
+        id: data.user.id,
+        label: data.user.email || session.account.label,
+      },
+      expiresAt: data.expires_at
+        ? data.expires_at * 1000
+        : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+      useCustomRefresh: true,
+    };
+
+    await this.storeSession(refreshed);
+    logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
+    return refreshed;
   }
 
   private toVSCodeSession(

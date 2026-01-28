@@ -19,9 +19,12 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
+/**
+ * Prep result carries shared reference for exec access.
+ * This avoids re-extracting fields that are already on shared.
+ */
 interface PrepInput {
-  currentRound: number;
-  conversation: ProviderMessage[];
+  shared: ReflectionFlowShared;
 }
 
 export class PrepareContextNode<C = unknown> extends Node<
@@ -30,15 +33,12 @@ export class PrepareContextNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
-    return {
-      currentRound: shared.currentRound,
-      conversation: shared.conversation,
-    };
+    return { shared };
   }
 
   async exec(prepRes: PrepInput): Promise<RoundContext> {
     const { promptBuilder, modelHandler } = this.services;
-    const { currentRound, conversation } = prepRes;
+    const { currentRound, conversation } = prepRes.shared;
 
     const stateRound = new ConversationRoundState(currentRound);
     const isFirstRound = currentRound === 0;

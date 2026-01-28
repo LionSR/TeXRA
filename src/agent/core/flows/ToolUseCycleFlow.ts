@@ -358,7 +358,6 @@ type ToolUseProcessExecResult =
       serverToolContentBlocks?: ServerToolContentBlock[];
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
-      responseTimeMs?: number;
     };
 
 /** Prep result for ToolUseProcessNode - captures shared state snapshot for exec. */
@@ -461,7 +460,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,
       normalizedUsage,
-      responseTimeMs: prepRes.responseTimeMs,
     };
   }
 
@@ -485,8 +483,8 @@ class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    if (execRes.responseTimeMs !== undefined) {
-      shared.cycleResponseTimeMs += execRes.responseTimeMs;
+    if (shared.responseTimeMs !== undefined) {
+      shared.cycleResponseTimeMs += shared.responseTimeMs;
     }
     if (execRes.normalizedUsage) {
       shared.cycleNormalizedUsage = execRes.normalizedUsage;

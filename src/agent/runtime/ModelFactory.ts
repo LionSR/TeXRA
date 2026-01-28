@@ -54,15 +54,15 @@ export function createModelHandler(config: ModelConfig): ModelHandler {
 
   // Route through OpenRouter if configured
   if (config.openRouterOnly || useOpenRouter) {
-    const routerConfig: ModelConfig = {
-      ...config,
-      openrouterFullName:
-        config.openrouterFullName || `${config.provider}/${config.fullName}`,
-    };
+    const openrouterFullName =
+      config.openrouterFullName || `${config.provider}/${config.fullName}`;
     if (config.provider === ModelProvider.ANTHROPIC) {
-      return new ModelHandlerAnthropicViaOpenRouter(routerConfig);
+      return new ModelHandlerAnthropicViaOpenRouter({
+        ...config,
+        openrouterFullName,
+      });
     }
-    return new ModelHandlerOpenRouter(routerConfig);
+    return new ModelHandlerOpenRouter({ ...config, openrouterFullName });
   }
 
   // Direct provider handler

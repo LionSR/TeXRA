@@ -19,10 +19,12 @@ import type {
 // Types
 // ============================================================================
 
+/**
+ * Prep result carries shared reference for exec access.
+ * This avoids re-extracting fields that are already on shared.
+ */
 interface RoundCompletePrepInput {
-  currentRound: number;
-  totalRounds: number;
-  continueRounds: boolean;
+  shared: ReflectionFlowShared;
 }
 
 type RoundCompleteExecResult = { kind: 'continue' } | { kind: 'finalize' };
@@ -37,18 +39,14 @@ export class RoundCompleteNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
-    return {
-      currentRound: shared.currentRound,
-      totalRounds: shared.totalRounds,
-      continueRounds: shared.continueRounds,
-    };
+    return { shared };
   }
 
   async exec(
     prepRes: RoundCompletePrepInput,
   ): Promise<RoundCompleteExecResult> {
     const { logger } = this.services;
-    const { currentRound, totalRounds, continueRounds } = prepRes;
+    const { currentRound, totalRounds, continueRounds } = prepRes.shared;
 
     const nextRound = currentRound + 1;
 

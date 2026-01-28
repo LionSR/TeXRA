@@ -139,58 +139,58 @@ export class DiffCommandExecutor {
     commandType: string,
     cwd?: string,
   ): Promise<ExecResult> {
+    const execOptions = { channel: this.channel, timeout: this.timeoutMs, cwd };
+
     logger.debug(this.channel, `Attempting ${commandType} with --flatten flag`);
-    let result = await executeCommand(commandBuilder(true), {
-      channel: this.channel,
-      timeout: this.timeoutMs,
-      cwd,
-    });
+    const result = await executeCommand(commandBuilder(true), execOptions);
 
-    if (!result.success) {
-      if (result.timedOut) {
-        throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, this.timeoutMs));
-      }
-
-      const errorOutput = result.stderr ?? '';
-      if (this.isBibliographyError(errorOutput)) {
-        logger.warn(
-          this.channel,
-          'Bibliography compilation failed with --flatten, retrying without --flatten',
-        );
-
-        logger.debug(
-          this.channel,
-          `Retrying ${commandType} without --flatten flag`,
-        );
-        result = await executeCommand(commandBuilder(false), {
-          channel: this.channel,
-          timeout: this.timeoutMs,
-          cwd,
-        });
-
-        if (!result.success) {
-          if (result.timedOut) {
-            throw new Error(
-              ERROR_MESSAGES.TIMEOUT_RETRY(commandType, this.timeoutMs),
-            );
-          }
-          throw new Error(ERROR_MESSAGES.FAILED_BOTH(commandType));
-        }
-
-        logger.debug(
-          this.channel,
-          `${commandType} completed successfully (without --flatten)`,
-        );
-      } else {
-        throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
-      }
-    } else {
+    if (result.success) {
       logger.debug(
         this.channel,
         `${commandType} completed successfully (with --flatten)`,
       );
+      return result;
     }
 
+    if (result.timedOut) {
+      throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, this.timeoutMs));
+    }
+
+    const errorOutput = result.stderr ?? '';
+    if (!this.isBibliographyError(errorOutput)) {
+      throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
+    }
+
+    return this.retryWithoutFlatten(commandBuilder, commandType, execOptions);
+  }
+
+  private async retryWithoutFlatten(
+    commandBuilder: (useFlatten: boolean) => string[],
+    commandType: string,
+    execOptions: { channel: string; timeout: number; cwd?: string },
+  ): Promise<ExecResult> {
+    logger.warn(
+      this.channel,
+      'Bibliography compilation failed with --flatten, retrying without --flatten',
+    );
+    logger.debug(this.channel, `Retrying ${commandType} without --flatten flag`);
+
+    const result = await executeCommand(commandBuilder(false), execOptions);
+
+    if (result.timedOut) {
+      throw new Error(
+        ERROR_MESSAGES.TIMEOUT_RETRY(commandType, this.timeoutMs),
+      );
+    }
+
+    if (!result.success) {
+      throw new Error(ERROR_MESSAGES.FAILED_BOTH(commandType));
+    }
+
+    logger.debug(
+      this.channel,
+      `${commandType} completed successfully (without --flatten)`,
+    );
     return result;
   }
 

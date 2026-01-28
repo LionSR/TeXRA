@@ -9,10 +9,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
-import {
-  isWebviewAvailable,
-  type EventHandlerContext,
-} from './EventHandlerContext';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 export function registerUsageEventHandlers(
   bus: ProgressEventBusLike,
@@ -46,7 +43,7 @@ function handleUpdateStreamUsage(
       ctx.state.setActiveRunId(streamId, storageKey);
     }
 
-    if (accumulated && isWebviewAvailable(ctx)) {
+    if (accumulated && ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateRunUsage(streamId, storageKey, accumulated);
     }
   });
@@ -58,7 +55,7 @@ function handleUpdateContextState(
 ): void {
   withEventErrorHandling('UsageEvents', 'updateContextState', () => {
     ctx.state.setContextState(streamId, contextState);
-    if (isWebviewAvailable(ctx)) {
+    if (ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateContextState(streamId, contextState);
     }
   });
