@@ -1,26 +1,47 @@
 import { EventEmitter } from 'events';
 
+import type { AgentCategory } from '@agent/core/AgentDataclass';
+import type { TaskState } from '@logger/TaskState';
 import type {
+  AddTaskGroupPayload,
   AgentProposalPermission,
   BashPermission,
   ContextStateData,
+  ExecutionId,
   LogMessageData,
   LogMessageUpdate,
   OutputFileInfo,
   RetryPermission,
+  StorageKey,
   StreamStatus,
   StreamTabId,
   TokenUsageStats,
   ToolEditPermission,
-} from '@shared/schemas';
-import type {
-  AddTaskGroupPayload,
-  RunScopedPayload,
-  SetActiveStreamPayload,
-  SetTaskStatePayload,
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
-} from './schemas';
+} from '@shared/schemas';
+
+/** Payload for events scoped to a specific run (stream + storage key). */
+export interface RunScopedPayload {
+  streamId: StreamTabId;
+  storageKey: StorageKey;
+  executionId?: ExecutionId;
+}
+
+export interface SetActiveStreamPayload {
+  streamId: StreamTabId | null;
+  agentCategory?: AgentCategory;
+  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  isRemote?: boolean;
+  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
+  hasMultipleOutputs?: boolean;
+}
+
+export interface SetTaskStatePayload {
+  streamId: StreamTabId;
+  executionId?: ExecutionId;
+  taskState: TaskState;
+}
 
 const MAX_BUFFER_SIZE = 1000;
 

@@ -5,65 +5,39 @@ import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { registry } from './LogChannelRegistry';
 import type { LogUtilsOptions } from './logOptions';
 
-type ChannelKey = string;
+const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
 
-interface ChannelContext {
-  stack: string[];
-}
-
-const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
-
-function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
+function getKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
-function getStore(): Map<ChannelKey, ChannelContext> {
-  let store = contextStorage.getStore();
-  if (!store) {
-    store = new Map();
+function getStore(): Map<string, string[]> {
+  return contextStorage.getStore() ?? (() => {
+    const store = new Map<string, string[]>();
     contextStorage.enterWith(store);
-  }
-  return store;
+    return store;
+  })();
 }
 
-function pushGroupContext(
-  channel: string,
-  groupId: string,
-  isAgent: boolean,
-): void {
+function pushGroup(channel: string, groupId: string, isAgent: boolean): void {
   const store = getStore();
-  const key = getChannelKey(channel, isAgent);
-  const context = store.get(key) ?? { stack: [] };
-
-  store.set(key, { stack: [...context.stack, groupId] });
+  const key = getKey(channel, isAgent);
+  store.set(key, [...(store.get(key) ?? []), groupId]);
   contextStorage.enterWith(store);
 }
 
-function popGroupContext(
-  channel: string,
-  groupId: string,
-  isAgent: boolean,
-): void {
+function popGroup(channel: string, groupId: string, isAgent: boolean): void {
   const store = getStore();
-  const key = getChannelKey(channel, isAgent);
-  const context = store.get(key);
+  const key = getKey(channel, isAgent);
+  const stack = store.get(key);
+  if (!stack?.length) return;
 
-  if (!context?.stack.length) return;
+  const idx = stack.lastIndexOf(groupId);
+  if (idx === -1) return;
 
-  const lastIndex = context.stack.lastIndexOf(groupId);
-  if (lastIndex === -1) return;
-
-  const newStack = context.stack.toSpliced(lastIndex, 1);
-  if (newStack.length === 0) {
-    store.delete(key);
-  } else {
-    store.set(key, { stack: newStack });
-  }
+  const newStack = stack.toSpliced(idx, 1);
+  newStack.length ? store.set(key, newStack) : store.delete(key);
   contextStorage.enterWith(store);
-}
-
-function getActiveGroup(key: ChannelKey): string | undefined {
-  return getStore().get(key)?.stack.at(-1);
 }
 
 function logWithGroup(
@@ -73,12 +47,11 @@ function logWithGroup(
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  const key = getChannelKey(channel, isAgent);
+  const key = getKey(channel, isAgent);
   const entry = registry.ensure(channel, { isAgent });
-  const activeGroupId = options.groupId ?? getActiveGroup(key);
 
   entry.logger.log(level, message, {
-    groupId: activeGroupId,
+    groupId: options.groupId ?? getStore().get(key)?.at(-1),
     messageType: options.messageType,
     data: options.data,
   });
@@ -95,10 +68,9 @@ export function startGroup(
   parentGroupId?: string,
   isAgent = false,
 ): string {
-  const transport = registry.ensure(channel, { isAgent }).transport;
   const groupId = id ?? randomUUID();
-  pushGroupContext(channel, groupId, isAgent);
-  return transport.startGroup(groupName, groupId, parentGroupId);
+  pushGroup(channel, groupId, isAgent);
+  return registry.ensure(channel, { isAgent }).transport.startGroup(groupName, groupId, parentGroupId);
 }
 
 export function endGroup(
@@ -108,14 +80,11 @@ export function endGroup(
   isAgent = false,
 ): void {
   registry.getTransport(channel, isAgent)?.endGroup(groupId, status);
-  popGroupContext(channel, groupId, isAgent);
+  popGroup(channel, groupId, isAgent);
 }
 
-export function getActiveGroupId(
-  channel: string,
-  isAgent = false,
-): string | undefined {
-  return getActiveGroup(getChannelKey(channel, isAgent));
+export function getActiveGroupId(channel: string, isAgent = false): string | undefined {
+  return getStore().get(getKey(channel, isAgent))?.at(-1);
 }
 
 export async function runWithGroupContext<T>(
@@ -124,11 +93,11 @@ export async function runWithGroupContext<T>(
   isAgent: boolean,
   fn: () => Promise<T> | T,
 ): Promise<T> {
-  pushGroupContext(channel, groupId, isAgent);
+  pushGroup(channel, groupId, isAgent);
   try {
     return await fn();
   } finally {
-    popGroupContext(channel, groupId, isAgent);
+    popGroup(channel, groupId, isAgent);
   }
 }
 
