@@ -54,18 +54,12 @@ export class SecretManager {
 
   /**
    * Lookup API key from secret storage or environment variable.
-   * Returns the key value if found, undefined otherwise.
    */
   private static async lookupApiKey(
     provider: ApiProvider,
   ): Promise<string | undefined> {
     const secretKey = await this.get(this.getApiKeySecretName(provider));
-    if (secretKey) {
-      return secretKey;
-    }
-
-    const envKey = `${provider.toUpperCase()}_API_KEY`;
-    return process.env[envKey];
+    return secretKey ?? process.env[`${provider.toUpperCase()}_API_KEY`];
   }
 
   public static async getApiKey(provider: ApiProvider): Promise<string> {
@@ -73,28 +67,26 @@ export class SecretManager {
     if (key) {
       return key;
     }
-
-    const envKey = `${provider.toUpperCase()}_API_KEY`;
     throw new Error(
-      `No API key found for ${provider}. Please set it using the "Set API Key" command or ${envKey} environment variable.`,
+      `No API key found for ${provider}. Please set it using the "Set API Key" command or ${provider.toUpperCase()}_API_KEY environment variable.`,
     );
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
-    // Check local API keys first
-    for (const provider of this.API_PROVIDERS) {
-      if (await this.apiKeyExists(provider)) {
-        return true;
-      }
+    // Check all local API keys in parallel
+    const keyChecks = await Promise.all(
+      this.API_PROVIDERS.map((provider) => this.apiKeyExists(provider)),
+    );
+    if (keyChecks.some(Boolean)) {
+      return true;
     }
-
-    // Check if server-side keys are available (Ultra tier + enabled providers)
-    // This returns true if user has Ultra tier and at least one provider is enabled
+    // Fall back to server-side keys (Ultra tier + enabled providers)
     return getServerSideKeyService().canUseServerSideKeys();
   }
 
   public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    return !!(await this.lookupApiKey(provider));
+    const key = await this.lookupApiKey(provider);
+    return key !== undefined;
   }
 
   public static async getApiProviderQuickPickItems(): Promise<

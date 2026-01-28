@@ -80,23 +80,6 @@ export class ConversationRoundState {
   setNormalizedUsage(usage: NormalizedUsage): void {
     this.normalizedUsage = usage;
   }
-
-  clearUsage(): void {
-    this.normalizedUsage = null;
-  }
-
-  /**
-   * Reset this round state for a new round.
-   * Mutates the existing object to preserve references held by store and services.
-   *
-   * @param newRoundIndex - The new round index
-   */
-  reset(newRoundIndex: number): void {
-    this.roundIndex = newRoundIndex;
-    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
-    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
-    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
-  }
 }
 
 /**
@@ -159,20 +142,9 @@ export class AgentRunState {
     this.totalRounds += 1;
   }
 
-  addResponseTime(durationMs: number): void {
-    this.totalResponseTimeMs += durationMs;
-  }
-
   /**
-   * Record cycle metrics directly (single source of truth).
-   *
-   * This is the core implementation used by both reflection and tool-use flows.
-   * - Reflection flows call `recordRound()` which delegates here
-   * - Tool-use flows call this directly with accumulated cycle values
-   *
-   * @param cycleIndex - The round/cycle index for usage tracking
-   * @param responseTimeMs - Total response time for this cycle
-   * @param normalizedUsage - Optional normalized usage data
+   * Record cycle metrics (single source of truth).
+   * Used by both reflection flows (via recordRound) and tool-use flows (directly).
    */
   recordCycleMetrics(
     cycleIndex: number,
@@ -182,7 +154,7 @@ export class AgentRunState {
     if (normalizedUsage) {
       this.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
     }
-    this.addResponseTime(responseTimeMs);
+    this.totalResponseTimeMs += responseTimeMs;
   }
 
   /**

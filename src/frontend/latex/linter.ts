@@ -12,17 +12,31 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'LinterUtils';
-
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 
 /**
- * Trigger a LaTeX build for a specific file.
- * Internal helper - waits for diagnostics to update after build.
+ * Retrieve linter diagnostics for a file.
+ * Triggers a LaTeX build first for .tex files to refresh diagnostics.
  */
-async function triggerLaTeXBuild(filePath: string): Promise<void> {
-  const fullPath = WorkspaceFS.fullPath(filePath);
-  const fileUri = vscode.Uri.file(fullPath);
+export async function getLinterMessages(
+  filePath: string,
+): Promise<vscode.Diagnostic[]> {
+  const fileUri = vscode.Uri.file(WorkspaceFS.fullPath(filePath));
 
+  if (isTexFile(filePath)) {
+    await triggerLaTeXBuild(filePath, fileUri);
+  }
+
+  return vscode.languages.getDiagnostics(fileUri);
+}
+
+/**
+ * Trigger a LaTeX build and wait for diagnostics to update.
+ */
+async function triggerLaTeXBuild(
+  filePath: string,
+  fileUri: vscode.Uri,
+): Promise<void> {
   await ensureFileOpen(filePath, { preserveFocus: true, save: true });
 
   const diagnosticsWait = waitForDiagnosticsChange(
@@ -32,30 +46,12 @@ async function triggerLaTeXBuild(filePath: string): Promise<void> {
 
   try {
     await vscode.commands.executeCommand('latex-workshop.build', fileUri);
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to trigger LaTeX build: ${toErrorMessage(err)}`,
+    );
   } finally {
     await diagnosticsWait;
   }
-}
-
-/**
- * Retrieve linter diagnostics for a file.
- * Triggers a LaTeX build first for .tex files to refresh diagnostics.
- */
-export async function getLinterMessages(
-  filePath: string,
-): Promise<vscode.Diagnostic[]> {
-  if (isTexFile(filePath)) {
-    try {
-      await triggerLaTeXBuild(filePath);
-    } catch (err) {
-      logger.warn(
-        CHANNEL,
-        `Failed to trigger LaTeX build: ${toErrorMessage(err)}`,
-      );
-    }
-  }
-
-  const fullPath = WorkspaceFS.fullPath(filePath);
-  const fileUri = vscode.Uri.file(fullPath);
-  return vscode.languages.getDiagnostics(fileUri);
 }
