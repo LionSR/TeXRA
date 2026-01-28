@@ -1,20 +1,13 @@
 /**
  * Lit-native template helpers for rendering select options.
- *
- * These replace the HTML string building approach with declarative Lit templates.
- * Use these helpers in component render() methods instead of unsafeHTML().
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
+import { AGENT_DECORATORS, getModelProviderDecorator } from './icons.js';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
-
-// =============================================================================
-// PLACEHOLDER
-// =============================================================================
 
 function renderPlaceholder(
   text: string,
@@ -28,49 +21,30 @@ function renderPlaceholder(
   >`;
 }
 
-// =============================================================================
-// AGENT OPTIONS
-// =============================================================================
-
-/**
- * Build tooltip text for an agent option.
- */
 function buildAgentTooltip(opt: AgentOptionData): string {
+  const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
-  if (opt.isRemote) {
-    hints.push(AGENT_DECORATORS.properties.remote.hint);
-  }
-  if (opt.isCustom) {
-    hints.push(AGENT_DECORATORS.properties.custom.hint);
-  }
-  if (opt.description) {
-    hints.push(opt.description);
-  }
-  if (opt.isMultiple) {
-    hints.push(AGENT_DECORATORS.properties.multipleOutputs.hint);
-  }
-  if (opt.isToolUse) {
-    hints.push('Can execute tools and code');
-  }
+  if (opt.isRemote) hints.push(properties.remote.hint);
+  if (opt.isCustom) hints.push(properties.custom.hint);
+  if (opt.description) hints.push(opt.description);
+  if (opt.isMultiple) hints.push(properties.multipleOutputs.hint);
+  if (opt.isToolUse) hints.push('Can execute tools and code');
 
   return hints.join('\n');
 }
 
-/**
- * Render a single agent option with decorators.
- */
 function renderAgentOption(
   opt: AgentOptionData,
   selectedValue: string,
 ): TemplateResult {
-  const isSelected = opt.value === selectedValue;
+  const { properties } = AGENT_DECORATORS;
   const tooltip = buildAgentTooltip(opt);
 
   return html`
     <vscode-option
       value=${opt.value}
-      ?selected=${isSelected}
+      ?selected=${opt.value === selectedValue}
       title=${tooltip || nothing}
       data-label=${opt.label}
       data-multiple=${opt.isMultiple ? 'true' : nothing}
@@ -80,22 +54,19 @@ function renderAgentOption(
       data-description=${opt.description || nothing}
       style=${opt.isMultiple ? 'opacity: 0.9' : nothing}
     >
-      ${opt.label}${opt.isMultiple
+      ${opt.label}
+      ${opt.isMultiple
         ? html`<span class="agent-icon">
-            ${' '}${AGENT_DECORATORS.properties.multipleOutputs.unicode}</span
+            ${properties.multipleOutputs.unicode}</span
           >`
-        : nothing}${opt.isRemote
-        ? html`<span class="agent-icon">
-            ${' '}${AGENT_DECORATORS.properties.remote.unicode}</span
-          >`
+        : nothing}
+      ${opt.isRemote
+        ? html`<span class="agent-icon"> ${properties.remote.unicode}</span>`
         : nothing}
     </vscode-option>
   `;
 }
 
-/**
- * Render agent options with decorators.
- */
 export function renderAgentOptions(
   options: AgentOptionData[],
   selectedValue: string,
@@ -111,20 +82,11 @@ export function renderAgentOptions(
   `;
 }
 
-// =============================================================================
-// MODEL OPTIONS
-// =============================================================================
-
-/**
- * Render a single model option with provider decoration.
- */
 function renderModelOption(
   opt: ModelOptionData,
   selectedValue: string,
 ): TemplateResult {
-  const isSelected = opt.value === selectedValue;
   const decorator = getModelProviderDecorator(opt.provider ?? '');
-
   const display = decorator.unicode
     ? `${decorator.unicode} ${opt.label}`
     : opt.label;
@@ -138,7 +100,7 @@ function renderModelOption(
   return html`
     <vscode-option
       value=${opt.value}
-      ?selected=${isSelected}
+      ?selected=${opt.value === selectedValue}
       ?disabled=${opt.disabled}
       title=${tooltip || nothing}
       data-provider=${opt.provider || nothing}
@@ -146,16 +108,14 @@ function renderModelOption(
       data-cost=${opt.cost || nothing}
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
     >
-      ${display}${opt.requiresKey
+      ${display}
+      ${opt.requiresKey
         ? html`<span class="api-key-missing"> ✗</span>`
         : nothing}
     </vscode-option>
   `;
 }
 
-/**
- * Render model options with provider decorations.
- */
 export function renderModelOptions(
   options: ModelOptionData[],
   selectedValue: string,

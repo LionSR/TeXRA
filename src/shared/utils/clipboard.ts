@@ -1,24 +1,15 @@
-/**
- * Clipboard utilities for webview frontends.
- * Provides consistent clipboard operations with UI feedback.
- */
-
-/** Default delay before resetting copy button feedback (ms) */
 export const COPY_RESET_DELAY_MS = 2000;
 
 /**
- * Attempt to copy text to the clipboard using the asynchronous clipboard API.
- * Normalizes line endings to LF.
+ * Copy text to clipboard with LF-normalized line endings.
  */
 export async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (typeof text !== 'string' || !text) {
+  if (!text) {
     return false;
   }
 
-  const normalized = text.replaceAll(/\r?\n/g, '\n');
-
   try {
-    await navigator.clipboard.writeText(normalized);
+    await navigator.clipboard.writeText(text.replaceAll(/\r?\n/g, '\n'));
     return true;
   } catch {
     return false;
@@ -33,16 +24,15 @@ interface CopyFeedbackOptions {
 }
 
 /**
- * Copy text to the clipboard and surface lightweight feedback on the button.
- * Manages button state (title, aria-label, CSS class) and auto-resets after delay.
+ * Copy text to clipboard and show feedback on a button element.
+ * Auto-resets button state after the configured delay.
  */
 export async function copyWithFeedback(
   button: HTMLElement,
   text: string,
   options: CopyFeedbackOptions = {},
 ): Promise<boolean> {
-  const trimmed = text.trim();
-  if (!trimmed) {
+  if (!text.trim()) {
     return false;
   }
 
@@ -56,34 +46,32 @@ export async function copyWithFeedback(
   const successClass = options.successClass ?? 'copy-success';
   const resetDelay = options.resetDelay ?? COPY_RESET_DELAY_MS;
 
-  // Clear any pending reset timers so we can restart the feedback window.
-  const existingTimeoutId = button.dataset.copyResetTimeoutId;
-  if (existingTimeoutId) {
-    window.clearTimeout(Number(existingTimeoutId));
+  function setButtonState(title: string, showSuccess: boolean): void {
+    button.classList.toggle(successClass, showSuccess);
+    button.setAttribute('title', title);
+    button.setAttribute('aria-label', title);
+  }
+
+  if (button.dataset.copyResetTimeoutId) {
+    window.clearTimeout(Number(button.dataset.copyResetTimeoutId));
     delete button.dataset.copyResetTimeoutId;
   }
 
-  button.classList.remove(successClass);
-  button.setAttribute('title', defaultTitle);
-  button.setAttribute('aria-label', defaultTitle);
+  setButtonState(defaultTitle, false);
 
   const copied = await copyTextToClipboard(text);
   if (!copied) {
     return false;
   }
 
-  button.classList.add(successClass);
-  button.setAttribute('title', successTitle);
-  button.setAttribute('aria-label', successTitle);
+  setButtonState(successTitle, true);
 
   const timeoutId = window.setTimeout(() => {
-    button.classList.remove(successClass);
-    button.setAttribute('title', defaultTitle);
-    button.setAttribute('aria-label', defaultTitle);
+    setButtonState(defaultTitle, false);
     delete button.dataset.copyResetTimeoutId;
   }, resetDelay);
 
-  button.dataset.copyResetTimeoutId = `${timeoutId}`;
+  button.dataset.copyResetTimeoutId = String(timeoutId);
   button.dataset.defaultTitle = defaultTitle;
   button.dataset.successTitle = successTitle;
 
