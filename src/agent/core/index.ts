@@ -6,17 +6,21 @@
  */
 
 // Most commonly used - enums and category types
-export { AgentCategory, hasEndTag } from './AgentDataclass.js';
+export { AgentCategory, hasEndTag } from './AgentDataclass';
 export type {
   AgentSetting,
   AgentPrompt,
   AgentWorkflowSetting,
-} from './AgentDataclass.js';
+} from './AgentDataclass';
 
 // Config types and schemas
-export { AgentConfigSchema, type AgentConfig } from './AgentConfig.js';
-export type { ToolConfig } from './ToolConfig.js';
+export { AgentConfigSchema, type AgentConfig } from './AgentConfig';
+export {
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigSchema,
+  type ToolConfig,
+} from './ToolConfig';
 
 // State classes - commonly instantiated
-export { AgentWorkspaceState } from './AgentWorkspaceState.js';
-export { ConversationRoundState } from './AgentState.js';
+export { AgentWorkspaceState } from './AgentWorkspaceState';
+export { ConversationRoundState } from './AgentState';

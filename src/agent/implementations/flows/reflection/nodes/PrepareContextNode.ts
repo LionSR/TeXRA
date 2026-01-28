@@ -37,7 +37,7 @@ export class PrepareContextNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<RoundContext> {
-    const { promptBuilder, modelHandler } = this.services;
+    const { promptBuilder, modelHandler, logger } = this.services;
     const { currentRound, conversation } = prepRes.shared;
 
     const stateRound = new ConversationRoundState(currentRound);
@@ -63,7 +63,7 @@ export class PrepareContextNode<C = unknown> extends Node<
 
     const prefill = await promptBuilder.buildPrefill(currentRound);
 
-    this.services.logger.debug(
+    logger.debug(
       `Prepared ${isFirstRound ? 'first' : `round ${currentRound}`} context with ${messages.length} messages`,
     );
 

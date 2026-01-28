@@ -1,9 +1,6 @@
 /**
  * Service interfaces and option types for cycle flows.
- *
- * Services are injected via PocketFlow's native service injection:
- * - `this.services` - immutable dependencies (logger, modelHandler, state slices)
- * - `shared` - mutable runtime state only
+ * Services are injected via PocketFlow's `this.services` (immutable dependencies).
  */
 
 import type {
@@ -17,9 +14,9 @@ import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { TaskRunFileService } from '@utils/files';
 
-// ============================================================================
-// CYCLE STATE SLICES
-// ============================================================================
+// ---------------------------------------------------------------------------
+// State Slices
+// ---------------------------------------------------------------------------
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
@@ -38,58 +35,43 @@ export interface CycleStateSlices extends BaseCycleStateSlices {
   round: ConversationRoundState;
 }
 
-// ============================================================================
-// CYCLE OPTIONS
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Cycle Options
+// ---------------------------------------------------------------------------
 
 /** Options for response cycle execution (workflow flows). */
-export interface ResponseCycleOptions<
-  C = unknown,
-> extends AgentCycleBaseOptions<C> {
+export interface ResponseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
   config: AgentConfig;
   fileService: TaskRunFileService;
 }
 
 /** Options for tool-use cycle execution (interactive flows). */
-export interface ToolUseCycleOptions<
-  C = unknown,
-> extends AgentCycleBaseOptions<C> {
+export interface ToolUseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
   toolRegistry: IToolRegistry;
   modelName?: string;
   agentName?: string;
-  /**
-   * Session for follow-up queue access.
-   * When provided, allows injecting queued user messages after tool dispatch
-   * so the model can continue without ending the turn.
-   */
+  /** Session for injecting queued user messages after tool dispatch. */
   session?: IToolUseSession;
-  /**
-   * Callback invoked when a queued follow-up message is consumed.
-   * Used to update the UI (clear the queued message display).
-   */
+  /** Callback when a queued follow-up is consumed (clears UI display). */
   onFollowUpConsumed?: () => void;
 }
 
-// ============================================================================
-// SERVICE CONTAINERS
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Service Containers
+// ---------------------------------------------------------------------------
 
-/** Services for response cycle flows. Options flattened directly into services. */
+/** Services for response cycle flows. */
 export type ResponseCycleServices<C = unknown> = CycleStateSlices &
   Readonly<ResponseCycleOptions<C>>;
 
-/** Services for tool-use cycle flows. Options flattened directly into services. */
+/** Services for tool-use cycle flows. */
 export type ToolUseCycleServices<C = unknown> = BaseCycleStateSlices &
   Readonly<ToolUseCycleOptions<C>>;
 
-/**
- * Params type for response cycle nodes.
- * Services are injected via `this.services`, not via params.
- */
-export type ResponseCycleParams<C = unknown> = Record<string, unknown>;
+/** Params for response cycle nodes (services injected via `this.services`). */
+export type ResponseCycleParams = Record<string, unknown>;
 
-/**
- * Params type for tool-use cycle nodes.
- * Services are injected via `this.services`, not via params.
- */
-export type ToolUseCycleParams<C = unknown> = Record<string, unknown>;
+/** Params for tool-use cycle nodes (services injected via `this.services`). */
+export type ToolUseCycleParams = Record<string, unknown>;

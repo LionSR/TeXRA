@@ -43,10 +43,21 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<CycleExecResult> {
+    const {
+      streamId,
+      setting,
+      resolvedTools,
+      modelHandler,
+      getUsageRecorder,
+      config,
+      session,
+      onFollowUpConsumed,
+    } = this.services;
+
     if (prepRes.shouldSkip) {
       if (prepRes.workspaceState.todos.todos.length > 0) {
         bus.emit('updateTodos', {
-          streamId: this.services.streamId,
+          streamId,
           todos: prepRes.workspaceState.todos.todos,
         });
       }
@@ -71,20 +82,20 @@ export class ToolUseCycleNode<C> extends Node<
     const flow = createToolUseCycleFlow<C>();
     flow.setServices({
       ...this.services,
-      setting: { ...this.services.setting, tools: this.services.resolvedTools },
-      client: await this.services.modelHandler.getClient(),
+      setting: { ...setting, tools: resolvedTools },
+      client: await modelHandler.getClient(),
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundFinalized: this.services.getUsageRecorder(),
-      modelName: this.services.config.model,
-      agentName: this.services.config.agent,
-      session: this.services.session,
-      onFollowUpConsumed: this.services.onFollowUpConsumed,
+      onRoundFinalized: getUsageRecorder(),
+      modelName: config.model,
+      agentName: config.agent,
+      session,
+      onFollowUpConsumed,
     });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
-        streamId: this.services.streamId,
+        streamId,
         todos,
       });
     });
