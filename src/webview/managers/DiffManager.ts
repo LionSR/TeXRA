@@ -20,11 +20,12 @@ export class DiffManager extends BaseWebviewManager {
       });
       return;
     }
-    this.runDiffCommand(parsed.data.command, parsed.data, [
-      'inputFile',
-      'baseFile',
-      'editedFile',
-    ]);
+    void vscode.commands.executeCommand(
+      `texra.${parsed.data.command}`,
+      parsed.data.inputFile,
+      parsed.data.baseFile,
+      parsed.data.editedFile,
+    );
   }
 
   handleLatexdiffvc(message: unknown): void {
@@ -35,11 +36,12 @@ export class DiffManager extends BaseWebviewManager {
       });
       return;
     }
-    this.runDiffCommand(parsed.data.command, parsed.data, [
-      'inputFile',
-      'baseFile',
-      'commitHash',
-    ]);
+    void vscode.commands.executeCommand(
+      `texra.${parsed.data.command}`,
+      parsed.data.inputFile,
+      parsed.data.baseFile,
+      parsed.data.commitHash,
+    );
   }
 
   handleLatexdiffvcOperation(message: unknown): void {
@@ -51,39 +53,13 @@ export class DiffManager extends BaseWebviewManager {
       });
       return;
     }
-    this.runDiffCommand(parsed.data.command, parsed.data, [
-      'inputFile',
-      'baseFile',
-      'commitHash',
-      'clean',
-    ]);
-  }
-
-  private runDiffCommand(
-    command: string,
-    message: Record<string, unknown>,
-    paramKeys: string[],
-  ): void {
     void vscode.commands.executeCommand(
-      `texra.${command}`,
-      ...paramKeys.map((k) => message[k]),
+      `texra.${parsed.data.command}`,
+      parsed.data.inputFile,
+      parsed.data.baseFile,
+      parsed.data.commitHash,
+      parsed.data.clean,
     );
-  }
-
-  private async fetchRecentCommits(): Promise<{
-    commits: string[];
-    isGitRepo: boolean;
-  }> {
-    const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    if (!isGitRepo) {
-      return { commits: [], isGitRepo: false };
-    }
-    const commits = await vscode.commands.executeCommand<string[]>(
-      'texra.getRecentCommits',
-    );
-    return { commits, isGitRepo: true };
   }
 
   async handleRequestRecentCommits(message: unknown): Promise<void> {
@@ -95,13 +71,18 @@ export class DiffManager extends BaseWebviewManager {
       });
       return;
     }
-    const result = await this.fetchRecentCommits();
+
+    const isGitRepo = await vscode.commands.executeCommand<boolean>(
+      'texra.isGitRepository',
+    );
+    const commits = isGitRepo
+      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
+      : [];
 
     const shouldNotify =
-      parsed.data.notifyWhenEmpty &&
-      (result.commits.length === 0 || !result.isGitRepo);
+      parsed.data.notifyWhenEmpty && (commits.length === 0 || !isGitRepo);
     if (shouldNotify) {
-      const infoMessage = result.isGitRepo
+      const infoMessage = isGitRepo
         ? 'No recent commits found for this repository.'
         : 'This workspace is not a Git repository.';
       logger.info(CHANNEL, infoMessage);
@@ -110,15 +91,23 @@ export class DiffManager extends BaseWebviewManager {
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      ...result,
+      commits,
+      isGitRepo: Boolean(isGitRepo),
     });
   }
 
   async handleRefreshCommits(): Promise<void> {
-    const result = await this.fetchRecentCommits();
+    const isGitRepo = await vscode.commands.executeCommand<boolean>(
+      'texra.isGitRepository',
+    );
+    const commits = isGitRepo
+      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
+      : [];
+
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      ...result,
+      commits,
+      isGitRepo: Boolean(isGitRepo),
     });
   }
 }

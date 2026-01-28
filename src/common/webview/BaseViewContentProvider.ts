@@ -43,7 +43,10 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
-  private buildUri(webview: vscode.Webview, pathSegments: string[]): vscode.Uri {
+  private buildUri(
+    webview: vscode.Webview,
+    pathSegments: string[],
+  ): vscode.Uri {
     return webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, ...pathSegments),
     );
@@ -117,7 +120,12 @@ export abstract class BaseViewContentProvider {
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
         ['node_modules'],
       ),
-      tokensStyleUri: this.buildUri(webview, ['src', 'shared', 'styles', 'tokens.css']),
+      tokensStyleUri: this.buildUri(webview, [
+        'src',
+        'shared',
+        'styles',
+        'tokens.css',
+      ]),
     };
   }
 }
