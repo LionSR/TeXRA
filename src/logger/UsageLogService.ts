@@ -30,7 +30,6 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   enabled: true,
 };
 
-/** Batched, non-blocking usage logging service. Errors are logged but never propagate. */
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;

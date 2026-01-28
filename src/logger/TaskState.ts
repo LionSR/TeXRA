@@ -16,7 +16,6 @@ const ActiveFilesSchema = z.partialRecord(
   z.boolean(),
 ) as z.ZodType<Record<FileType, boolean>>;
 
-/** Lightweight agentConfig schema - validates discriminator only, not full config */
 const AgentConfigSchema = z.preprocess(
   liftLegacyAgentCategory,
   z.looseObject({ agentCategory: z.enum(AgentCategory) }),

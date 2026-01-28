@@ -116,14 +116,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
    * Cycle results are written directly to shared's cycle fields.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
-    const services = this.services;
     const { shared } = prepRes;
 
     // Initialize output file and prefill before starting cycle
     const [prefillEndsTurn, initializedMessages] =
-      await services.modelHandler.initializeOutputAndPrefill(
-        services.config,
-        services.setting,
+      await this.services.modelHandler.initializeOutputAndPrefill(
+        this.services.config,
+        this.services.setting,
         prepRes.context.messages,
         prepRes.workspace,
         prepRes.outputLocation,
@@ -132,16 +131,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     // If prefill already completes the response, return success with endTurn=true
     if (prefillEndsTurn) {
-      // Update shared directly for native nesting
       shared.endTurn = true;
       shared.messages = initializedMessages;
       shared.outputLocation = prepRes.outputLocation;
       return {
         kind: 'success',
         endTurn: true,
-        round: prepRes.round,
-        run: prepRes.run,
-        workspace: prepRes.workspace,
+        ...prepRes,
         failedWithError: false,
         userCancelled: false,
       };
@@ -164,11 +160,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
       shared.lastError = undefined;
 
       // Create and run the flow directly on shared (native nesting)
-      // Spread parent services directly - no intermediate cycleOptions object
       const flow = createResponseCycleFlow<C>();
       flow.setServices({
-        ...services, // Parent ReflectionServices has all needed fields
-        client: await services.modelHandler.getClient(), // Get fresh client from handler
+        ...this.services,
+        client: await this.services.modelHandler.getClient(),
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
@@ -184,9 +179,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       return {
         kind: 'success',
-        round: prepRes.round,
-        run: prepRes.run,
-        workspace: prepRes.workspace,
+        ...prepRes,
         endTurn: shared.endTurn,
         ...completion,
       };

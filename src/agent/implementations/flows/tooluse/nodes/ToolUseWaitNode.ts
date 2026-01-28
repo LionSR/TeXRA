@@ -23,12 +23,11 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    const session = this.services.session;
-    if (!session.hasQueuedFollowUp()) {
-      await session.enterWaitingState();
+    if (!this.services.session.hasQueuedFollowUp()) {
+      await this.services.session.enterWaitingState();
     }
 
-    const followUp = await session.waitForFollowUp(
+    const followUp = await this.services.session.waitForFollowUp(
       this.services.checkInterruption,
     );
     if (!followUp || this.services.checkInterruption()) {
@@ -56,9 +55,7 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     this.services.onFollowUpConsumed?.();
-
-    const session = this.services.session;
-    await session.markRunning();
+    await this.services.session.markRunning();
     this.services.logger.userMessage(execRes.followUp);
     shared.conversation =
       await this.services.modelHandler.createUserFollowUpMessages(
