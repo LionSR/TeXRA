@@ -6,4 +6,9 @@ export {
   globalSM,
   initializeStateManagers,
 } from './stateManager';
-export { setPendingState, consumePendingState } from './pendingStateManager';
+export {
+  setPendingState,
+  consumePendingState,
+  type PendingStateData,
+} from './pendingStateManager';
+export { buildMainViewState } from './mainViewStateUtils';

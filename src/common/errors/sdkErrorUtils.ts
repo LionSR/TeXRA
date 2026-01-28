@@ -52,12 +52,7 @@ type ErrorConstructor<T extends Error = Error> = abstract new (
   ...args: never[]
 ) => T;
 
-/**
- * Unified SDK error entry. Provider is detected from class name.
- * - message: For connection/abort errors (no HTTP status)
- * - fallbackStatusCode: For HTTP errors when status not in error object
- * - retryable: Override (else derived from status code)
- */
+/** SDK error mapping entry. Provider detected from class name. */
 interface SdkErrorEntry {
   ctor: ErrorConstructor;
   message?: string;
@@ -65,7 +60,6 @@ interface SdkErrorEntry {
   retryable?: boolean;
 }
 
-/** Creates SDK error entry pairs for OpenAI and Anthropic error classes. */
 function createErrorPair(
   openAiCtor: ErrorConstructor,
   anthropicCtor: ErrorConstructor,
@@ -145,20 +139,10 @@ function isRetryableStatusCode(statusCode?: number): boolean {
   return RETRYABLE_4XX_CODES.has(statusCode);
 }
 
-/**
- * Partial result from SDK error matching.
- * Does NOT include isRelayError or rawErrorBody - those are added by
- * formatProviderHttpError() after relay detection.
- */
+/** Partial result before relay detection (isRelayError/rawErrorBody added later). */
 type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
 
-/**
- * Matches known SDK error types and returns structured error details.
- * Handles both message-only errors (connection/abort) and HTTP errors.
- *
- * NOTE: Returns partial result without isRelayError/rawErrorBody.
- * formatProviderHttpError() adds those fields after relay detection.
- */
+/** Match known SDK error types and return structured error details. */
 function matchSdkError(err: unknown): SdkMatchResult | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
@@ -188,10 +172,7 @@ function matchSdkError(err: unknown): SdkMatchResult | undefined {
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
-    // Known SDK error types without status codes are unusual (SDK errors typically
-    // have status codes). Be conservative and don't retry.
-    // Note: This differs from formatProviderHttpError's fallback which treats
-    // unrecognized errors without status codes as retryable (likely network errors).
+    // SDK errors without status codes are unusual - be conservative and don't retry
     return {
       message: finalMessage,
       provider,
@@ -285,10 +266,7 @@ function detectProvider(err: unknown): string | undefined {
   return providers.find((p) => lowered.includes(p));
 }
 
-/**
- * Extracts request ID from SDK errors for debugging with provider support.
- * OpenAI uses 'request_id', Anthropic uses 'request_id' in headers.
- */
+/** Extract request ID from SDK errors (property or headers). */
 function detectRequestId(err: unknown): string | undefined {
   if (!isObject(err)) {
     return undefined;
@@ -317,12 +295,7 @@ function detectRequestId(err: unknown): string | undefined {
   return undefined;
 }
 
-/**
- * Extracts the raw error body from SDK errors.
- * OpenAI SDK stores the parsed JSON response in an `error` property.
- * Google GenAI SDK stores the raw JSON in the error message.
- * Useful for debugging relay errors where the body contains additional context.
- */
+/** Extract raw error body from SDK errors for relay error debugging. */
 function detectRawErrorBody(err: unknown): unknown {
   if (!isObject(err)) {
     return undefined;
@@ -336,19 +309,13 @@ function detectRawErrorBody(err: unknown): unknown {
     message?: string;
   };
 
-  // Try common SDK property names in order of likelihood
   const directBody =
-    candidate.error ?? // OpenAI SDK
-    candidate.body ??
-    candidate.data ??
-    candidate.response?.data;
-
+    candidate.error ?? candidate.body ?? candidate.data ?? candidate.response?.data;
   if (directBody !== undefined) {
     return directBody;
   }
 
-  // Google GenAI SDK: raw JSON may be in the error message
-  // e.g., ApiError: {"error":{"_relay":"1.8.2","message":"..."}}
+  // Google GenAI SDK may embed JSON in the error message
   if (candidate.message && candidate.message.startsWith('{')) {
     try {
       return JSON.parse(candidate.message);
@@ -405,7 +372,6 @@ function determineRetryable(
   statusCode?: number,
   rawErrorBody?: unknown,
 ): boolean {
-  // Relay errors should be retryable - user can fix (refresh auth, switch keys) and retry
   if (isRelayError(rawErrorBody)) {
     return true;
   }
@@ -424,13 +390,10 @@ function determineRetryable(
 }
 
 export function formatProviderHttpError(err: unknown): ProviderError {
-  // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
-  // Extract stream diagnostics if attached (Anthropic streaming errors)
   const streamDiagnostics = detectStreamDiagnostics(err);
 
-  // Detect DOMException AbortError (from AbortController.abort())
-  // This covers providers without SDK-specific abort error classes (e.g., Google)
+  // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
     return {
       message: 'Request aborted',
@@ -441,10 +404,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  // Try to match known SDK error types
   const sdkMatch = matchSdkError(err);
   if (sdkMatch) {
-    // Check if this should be retryable due to relay/overloaded error
     const isRelay = isRelayError(rawErrorBody);
     const retryable =
       determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
@@ -472,10 +433,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
-    // Unrecognized errors without status codes reached the fallback path.
-    // These are likely network/connection errors (not SDK-typed) and should
-    // be retryable. Note: This differs from matchSdkError which is
-    // conservative for known SDK types missing status codes.
+    // Unrecognized errors without status codes are likely network errors - retry
     return {
       message: finalMessage,
       provider,
