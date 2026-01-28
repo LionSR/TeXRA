@@ -26,24 +26,9 @@
  * ```
  */
 
-// Flow factory and types
-export {
-  createReflectionFlow,
-  type ReflectionFlowShared,
-  type ReflectionFlowState,
-  type ReflectionServices,
-  type ReflectionFlowParams,
-} from './ReflectionFlow';
-
 // Direct flow execution (creates services inline)
 export {
   runReflectionFlow,
   type RunReflectionFlowInput,
   type RunReflectionFlowResult,
 } from './runReflectionFlow';
-
-// State types and schemas
-export {
-  type RoundContext,
-  ReflectionFlowStateSchema,
-} from './ReflectionFlowState';

@@ -30,11 +30,6 @@ import {
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 
-interface HttpErrorResult {
-  message: string;
-  shouldContinue: boolean;
-}
-
 /** Maps HTTP status codes to user-friendly error messages. */
 function mapHttpError(
   status: number,
@@ -42,19 +37,13 @@ function mapHttpError(
   candidateName: string,
   isLastCandidate: boolean,
   errorText: string,
-): HttpErrorResult {
+): string {
   if (status === StatusCodes.UNAUTHORIZED) {
-    return {
-      message: 'Session expired. Sign in again to continue.',
-      shouldContinue: false,
-    };
+    return 'Session expired. Sign in again to continue.';
   }
 
   if (status === StatusCodes.FORBIDDEN) {
-    return {
-      message: `Access denied to agent "${agentName}". Upgrade your account for access.`,
-      shouldContinue: false,
-    };
+    return `Access denied to agent "${agentName}". Upgrade your account for access.`;
   }
 
   if (status === StatusCodes.NOT_FOUND) {
@@ -63,34 +52,23 @@ function mapHttpError(
         CHANNEL,
         `Agent variant "${candidateName}" not found, trying next candidate`,
       );
-      return {
-        message: `Agent variant "${candidateName}" not found`,
-        shouldContinue: true,
-      };
+      return `Agent variant "${candidateName}" not found`;
     }
-    return {
-      message: `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
-      shouldContinue: false,
-    };
+    return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
   }
 
   if (
     status === StatusCodes.INTERNAL_SERVER_ERROR &&
     errorText.includes('Failed to load agent configuration')
   ) {
-    return {
-      message:
-        `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
-        `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
-        `Please contact the TeXRA team if this agent should be available.`,
-      shouldContinue: false,
-    };
+    return (
+      `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+      `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+      `Please contact the TeXRA team if this agent should be available.`
+    );
   }
 
-  return {
-    message: `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`,
-    shouldContinue: false,
-  };
+  return `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`;
 }
 
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
@@ -282,17 +260,13 @@ async function fetchAgentConfig(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    const { message, shouldContinue } = mapHttpError(
+    const message = mapHttpError(
       response.status,
       agentName,
       candidateName,
       isLastCandidate,
       errorText,
     );
-
-    if (shouldContinue) {
-      throw new Error(message);
-    }
     throw new Error(message);
   }
 

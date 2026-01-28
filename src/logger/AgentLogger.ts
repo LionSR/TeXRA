@@ -72,14 +72,10 @@ class AgentLogStageHandle implements AgentLogStage {
   }
 
   async within<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.config.skip) {
-      if (this.config.parentGroupId) {
-        return this.logger.runWithGroup(this.config.parentGroupId, fn);
-      }
-      return this.logger.runWithinCurrentGroup(fn);
-    }
-
-    return this.logger.runWithGroup(this.config.id, fn);
+    const groupId = this.config.skip
+      ? this.config.parentGroupId
+      : this.config.id;
+    return this.logger.runWithGroup(groupId, fn);
   }
 
   async run<T>(fn: () => Promise<T>): Promise<T> {
@@ -115,14 +111,11 @@ export interface AgentLogStream {
 }
 
 export class AgentLogger {
-  public readonly isAgentLogger: boolean;
-
   constructor(
     public readonly streamId: string,
-    isAgentLogger = false,
+    public readonly isAgentLogger = false,
   ) {
-    this.isAgentLogger = isAgentLogger;
-    logger.initialize(this.streamId, this.isAgentLogger);
+    logger.initialize(streamId, isAgentLogger);
   }
 
   private log(
@@ -343,21 +336,13 @@ export class AgentLogger {
 
     const resolvedParent =
       parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
+    const groupId = skip
+      ? undefined
+      : await this.startGroup(groupName, id, resolvedParent);
 
-    if (skip) {
-      return new AgentLogStageHandle(this, {
-        id: undefined,
-        skip: true,
-        successStatus,
-        errorStatus,
-        parentGroupId: resolvedParent,
-      });
-    }
-
-    const groupId = await this.startGroup(groupName, id, resolvedParent);
     return new AgentLogStageHandle(this, {
       id: groupId,
-      skip: false,
+      skip,
       successStatus,
       errorStatus,
       parentGroupId: resolvedParent,
@@ -411,23 +396,21 @@ export class AgentLogger {
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
 
-        if (shouldEmit && !messageCreated) {
-          bus.emit('addLogMessage', {
+        if (shouldEmit) {
+          const event = messageCreated ? 'updateLogMessage' : 'addLogMessage';
+          bus.emit(event, {
             streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              level,
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-              verbose: debugMode,
-            },
-          });
-        } else if (shouldEmit) {
-          bus.emit('updateLogMessage', {
-            streamId,
-            logMessage: { id, text: buffer, groupId, messageType: type },
+            logMessage: messageCreated
+              ? { id, text: buffer, groupId, messageType: type }
+              : {
+                  id,
+                  text: buffer,
+                  level,
+                  timestamp: Date.now(),
+                  groupId,
+                  messageType: type,
+                  verbose: debugMode,
+                },
           });
         }
 

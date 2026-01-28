@@ -1,4 +1,3 @@
-// Third-party imports
 import { z } from 'zod';
 
 /** Stream diagnostics for debugging Anthropic streaming failures */
