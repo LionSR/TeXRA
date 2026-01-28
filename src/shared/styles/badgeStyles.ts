@@ -1,16 +1,5 @@
-// Third-party imports
 import { css, type CSSResult } from 'lit';
 
-/**
- * Shared badge styles for category and status indicators.
- *
- * Used by:
- * - HistoryView (agent category badges)
- * - ProfileView (category, visibility, tier badges)
- * - ProgressView (status indicators)
- */
-
-/** Base badge styles - foundation for all badge types */
 export const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
@@ -21,19 +10,16 @@ export const baseBadgeStyles: CSSResult = css`
   }
 
   .badge--small {
-    padding: var(--spacing-tiny) var(--spacing-small);
     border-radius: var(--border-radius-small);
   }
 `;
 
-/** Agent category badge styles (workflow vs tool-use) */
 export const categoryBadgeStyles: CSSResult = css`
   .category-badge,
   .agent-category-badge {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-small);
-    /* Base styling for unknown categories */
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
   }
@@ -43,7 +29,6 @@ export const categoryBadgeStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  /* Workflow category - blue tones */
   .category-workflow,
   .category-badge.workflow {
     background-color: var(
@@ -53,7 +38,6 @@ export const categoryBadgeStyles: CSSResult = css`
     color: var(--vscode-editorInfo-foreground, #3794ff);
   }
 
-  /* Tool-use category - yellow/amber tones */
   .category-tool-use,
   .category-badge.tooluse,
   .category-badge.tool-use {
@@ -65,7 +49,6 @@ export const categoryBadgeStyles: CSSResult = css`
   }
 `;
 
-/** Search highlight mark styles */
 export const searchHighlightStyles: CSSResult = css`
   mark {
     background-color: var(
@@ -83,7 +66,6 @@ export const searchHighlightStyles: CSSResult = css`
   }
 `;
 
-/** Empty/placeholder state styles */
 export const emptyStateStyles: CSSResult = css`
   .empty-state,
   .no-data,
@@ -101,7 +83,6 @@ export const emptyStateStyles: CSSResult = css`
   }
 `;
 
-/** Combined badge styles for components needing all badge functionality */
 export const badgeStyles = [
   baseBadgeStyles,
   categoryBadgeStyles,

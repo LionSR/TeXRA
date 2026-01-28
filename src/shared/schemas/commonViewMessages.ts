@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
-import { MainViewPersistedStateSchema } from './mainViewState';
+import { MainViewPersistedStateSchema } from './mainView';
 
 /** Theme values - single source of truth for all theme schemas */
 export const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);

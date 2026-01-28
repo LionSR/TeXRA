@@ -108,39 +108,38 @@ export interface RunReflectionFlowResult {
 // Configuration Derivation
 // ============================================================================
 
-interface DerivedConfig {
+/** Derive configuration values from settings and prompts. */
+function deriveConfig(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): {
   useScratchpad: boolean;
   shouldEnsureXmlStructure: boolean;
   totalRounds: number;
   outputExt: string;
-}
+} {
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
 
-/** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
-function shouldEnforceXmlStructure(
-  setting: AgentWorkflowSetting,
-  useScratchpad: boolean,
-): boolean {
-  const mode = setting.xmlStructureMode ?? 'scratchpadOnly';
-
-  switch (mode) {
+  // Determine if XML structure enforcement is needed
+  const xmlMode = setting.xmlStructureMode ?? 'scratchpadOnly';
+  let shouldEnsureXmlStructure: boolean;
+  switch (xmlMode) {
     case 'always':
-      return true;
+      shouldEnsureXmlStructure = true;
+      break;
     case 'never':
-      return false;
+      shouldEnsureXmlStructure = false;
+      break;
     case 'scratchpadOnly':
-      return useScratchpad;
+      shouldEnsureXmlStructure = useScratchpad;
+      break;
     default: {
-      const _exhaustive: never = mode;
+      const _exhaustive: never = xmlMode;
       throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
     }
   }
-}
 
-/** Compute the total number of rounds: max(setting.rounds, userRequest.length) */
-function computeTotalRounds(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): number {
+  // Compute total rounds: max(setting.rounds, userRequest.length)
   const { userRequest } = prompt;
   let requestCount = 0;
   if (Array.isArray(userRequest)) {
@@ -148,20 +147,12 @@ function computeTotalRounds(
   } else if (userRequest) {
     requestCount = 1;
   }
-  return Math.max(setting.rounds ?? 2, requestCount);
-}
-
-/** Derive configuration values from settings and prompts. */
-function deriveConfig(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): DerivedConfig {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
     useScratchpad,
-    shouldEnsureXmlStructure: shouldEnforceXmlStructure(setting, useScratchpad),
-    totalRounds: computeTotalRounds(setting, prompt),
+    shouldEnsureXmlStructure,
+    totalRounds,
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
   };
 }
@@ -272,27 +263,16 @@ export async function runReflectionFlow<C = unknown>(
     const kv: ExecutionKVStore = getExecutionStore(executionId);
 
     // Try to restore full state from persisted flow (resume scenario)
-    let isResume = false;
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    const validated = flowRecord?.shared
+      ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
+      : null;
+    const isResume = validated?.success ?? false;
 
-    try {
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      if (flowRecord?.shared) {
-        // Validate and use persisted shared state directly
-        const validated = ReflectionFlowStateSchema.safeParse(
-          flowRecord.shared,
-        );
-        if (validated.success) {
-          shared = validated.data as ReflectionFlowShared;
-          isResume = true;
-          logger.debug(
-            `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
-          );
-        }
-      }
-    } catch (error) {
-      // Log parse failures to help diagnose resume issues
+    if (validated?.success) {
+      shared = validated.data as ReflectionFlowShared;
       logger.debug(
-        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
+        `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
       );
     }
 

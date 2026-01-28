@@ -104,10 +104,9 @@ export class UsageMonitor {
 
     try {
       const totals = stateGlobal.usageAccumulator.getTotals();
-      const latestUsageSnapshot = stateGlobal.usageAccumulator
+      const latestUsage = stateGlobal.usageAccumulator
         .getNormalizedSnapshots()
-        .at(-1);
-      const latestUsage = latestUsageSnapshot?.usage;
+        .at(-1)?.usage;
 
       // Per-round usage - sent to both UI (for accumulation) and backend analytics
       const roundInputTokens = latestUsage?.inputTokens ?? 0;
@@ -116,83 +115,81 @@ export class UsageMonitor {
       const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
+      const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
 
-      const cachingStats =
-        this.modelInfo.capabilities.supportsPromptCaching ||
-        this.modelInfo.capabilities.supportsAutoPromptCaching;
+      const { capabilities } = this.modelInfo;
+      const supportsCaching =
+        capabilities.supportsPromptCaching ||
+        capabilities.supportsAutoPromptCaching;
 
-      // Use accumulated totals for cache percentage calculation (for display)
-      const totalCacheReadTokens = totals.totalCacheReadInputTokens;
-      const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
+      // Calculate cache percentage for display
+      const percentageCached = this.calculateCachePercentage(
+        supportsCaching,
+        totals,
+      );
 
-      let totalCacheableTokens = 0;
-      if (cachingStats) {
-        totalCacheableTokens = this.modelInfo.capabilities.supportsPromptCaching
-          ? totalCacheCreationTokens + totalCacheReadTokens
-          : totals.totalInputTokens;
-      }
-
-      let percentageCached: number | undefined;
-      if (cachingStats && totalCacheableTokens > 0) {
-        percentageCached = (totalCacheReadTokens / totalCacheableTokens) * 100;
-      } else if (cachingStats) {
-        percentageCached = 0;
-      }
-
-      // Send per-round deltas - storage will accumulate them
-      const baseStats: TokenUsageStats = {
+      // Build payload for UI
+      const payload: ExtendedTokenUsageStats = {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cost: Number(roundCost.toFixed(3)),
-        // Include cache tokens for display (only if > 0)
-        cacheReadInputTokens:
-          roundCacheReadTokens > 0 ? roundCacheReadTokens : undefined,
-        cacheCreationInputTokens:
-          roundCacheCreationTokens > 0 ? roundCacheCreationTokens : undefined,
-      };
-
-      const payload: ExtendedTokenUsageStats = {
-        ...baseStats,
         elapsedTime: Number(
           (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
         ),
+        ...(roundCacheReadTokens > 0 && {
+          cacheReadInputTokens: roundCacheReadTokens,
+        }),
+        ...(roundCacheCreationTokens > 0 && {
+          cacheCreationInputTokens: roundCacheCreationTokens,
+        }),
+        ...(supportsCaching && {
+          percentageCached: Number(percentageCached.toFixed(2)),
+        }),
+        ...(capabilities.supportsReasoning && {
+          reasoningTokens: roundReasoningTokens,
+        }),
+        ...(toolUseTokens > 0 && { toolUseTokens }),
       };
-      if (cachingStats) {
-        payload.percentageCached = Number((percentageCached ?? 0).toFixed(2));
-      }
-      if (this.modelInfo.capabilities.supportsReasoning) {
-        payload.reasoningTokens = roundReasoningTokens;
-      }
-      const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
-      if (toolUseTokens > 0) {
-        payload.toolUseTokens = toolUseTokens;
-      }
 
-      // Use activeGroupId for statistics grouping if set (round-specific),
-      // otherwise fall back to storageKey (parent stage or execution ID)
       usageReporter.report(
         payload,
         this.context.storageKey,
         this.activeGroupId,
       );
 
-      // Note: Context state is emitted by model handlers during token counting
-      // (Anthropic, Google, OpenAI). This avoids duplicate emissions and ensures
-      // we use the native token count which is more accurate than response usage.
-
       // Log to backend for analytics (non-blocking, fire-and-forget)
-      const backendLogUsage = {
+      this.logToBackend(stateGlobal.totalResponseTimeMs, {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
-      };
-      this.logToBackend(stateGlobal.totalResponseTimeMs, backendLogUsage);
+      });
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
+  }
+
+  /**
+   * Calculate cache percentage based on model capabilities and totals.
+   */
+  private calculateCachePercentage(
+    supportsCaching: boolean,
+    totals: ReturnType<AgentRunState['usageAccumulator']['getTotals']>,
+  ): number {
+    if (!supportsCaching) return 0;
+
+    const totalCacheReadTokens = totals.totalCacheReadInputTokens;
+    const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
+
+    const totalCacheableTokens = this.modelInfo.capabilities
+      .supportsPromptCaching
+      ? totalCacheCreationTokens + totalCacheReadTokens
+      : totals.totalInputTokens;
+
+    if (totalCacheableTokens === 0) return 0;
+    return (totalCacheReadTokens / totalCacheableTokens) * 100;
   }
 
   /**
