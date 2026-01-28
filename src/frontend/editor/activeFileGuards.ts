@@ -16,15 +16,15 @@ export interface ActiveFileGuardOptions {
   saveDocument?: boolean;
 }
 
+export interface ActiveFileGuardSuccess {
+  status: 'ok';
+  editor: vscode.TextEditor;
+  relativePath: string;
+}
+
 export type ActiveFileGuardResult =
-  | {
-      status: 'ok';
-      editor: vscode.TextEditor;
-      relativePath: string;
-    }
-  | {
-      status: ActiveFileGuardFailureReason;
-    };
+  | ActiveFileGuardSuccess
+  | { status: ActiveFileGuardFailureReason };
 
 /**
  * Retrieve the active text editor when available and ensure the document
@@ -89,7 +89,7 @@ export async function getActiveEditorWithGuards(
  * @param channel - Logger channel name
  * @param action - Description of the action being performed (e.g., "parse XML", "indent LaTeX document")
  * @param reason - Reason for guard failure
- * @param resourceType - Optional resource type (e.g., "LaTeX", "XML", "YAML") for unsupported extension messages
+ * @param resourceType - Optional resource type (e.g., "LaTeX", "XML", "YAML") for context
  */
 export function logGuardFailure(
   channel: string,
@@ -97,28 +97,25 @@ export function logGuardFailure(
   reason: ActiveFileGuardFailureReason,
   resourceType?: string,
 ): void {
+  const prefix = `Cannot ${action}:`;
+  const typeLabel = resourceType ?? 'the';
+
   switch (reason) {
     case 'noEditor':
-      logger.warn(channel, `Cannot ${action}: no active editor found.`);
+      logger.warn(channel, `${prefix} no active editor found.`);
       break;
-    case 'unsupportedExtension': {
-      const typeDescription = resourceType
-        ? ` ${resourceType} file`
-        : ' file with the expected extension';
+    case 'unsupportedExtension':
       logger.warn(
         channel,
-        `Cannot ${action}: active document is not a${typeDescription}.`,
+        `${prefix} active document is not a ${typeLabel} file.`,
       );
       break;
-    }
-    case 'saveFailed': {
-      const typeDescription = resourceType ? ` ${resourceType}` : '';
+    case 'saveFailed':
       logger.error(
         channel,
-        `Cannot ${action}: failed to save${typeDescription} document before running command.`,
+        `${prefix} failed to save ${typeLabel} document before running command.`,
       );
       break;
-    }
   }
 }
 
@@ -134,33 +131,12 @@ export interface LaTeXGuardOptions {
 /**
  * Execute an operation with LaTeX file guards.
  *
- * This wrapper eliminates the repeated guard pattern across LaTeX commands. It automatically:
- * - Checks for an active editor
- * - Validates the .tex extension
- * - Optionally saves the document
- * - Logs guard failures with standardized messages
- * - Returns early on guard failure
- *
- * @param options - Guard configuration (channel, action, saveDocument)
- * @param operation - Function to run if guards pass, receives the validated guard result
- * @returns Result of the operation, or undefined if guards failed
- *
- * @example
- * ```typescript
- * await withLaTeXGuard(
- *   { channel: CHANNEL, action: 'indent LaTeX document', saveDocument: true },
- *   async (guardResult) => {
- *     const { relativePath, editor } = guardResult;
- *     // Perform LaTeX operation
- *   }
- * );
- * ```
+ * Validates the active editor has a .tex file, optionally saves it,
+ * logs failures, and runs the operation only if guards pass.
  */
 export async function withLaTeXGuard<T>(
   options: LaTeXGuardOptions,
-  operation: (
-    guardResult: Extract<ActiveFileGuardResult, { status: 'ok' }>,
-  ) => Promise<T>,
+  operation: (guardResult: ActiveFileGuardSuccess) => Promise<T>,
 ): Promise<T | undefined> {
   const { channel, action, saveDocument = false } = options;
 

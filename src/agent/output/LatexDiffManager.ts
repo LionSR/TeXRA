@@ -25,18 +25,6 @@ import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 
 import type { RoundFileMapping } from './types';
 
-interface LatexDiffDependencies {
-  checkToolInstalled: typeof checkToolInstalled;
-  compileLatex2Pdf: typeof compileLatex2Pdf;
-  getConfig: typeof getConfig;
-}
-
-const defaultLatexDiffDependencies: LatexDiffDependencies = {
-  checkToolInstalled,
-  compileLatex2Pdf,
-  getConfig,
-};
-
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
@@ -47,7 +35,6 @@ export class LatexDiffManager {
     private readonly logger: AgentLogger,
     private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
-    private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(streamId);
   }
@@ -114,14 +101,9 @@ export class LatexDiffManager {
     mapping: RoundFileMapping,
     stage?: AgentLogStage,
   ): Promise<void> {
+    const execute = () => this.performLatexdiffOperations(currRound, mapping);
     try {
-      if (stage) {
-        await stage.within(() =>
-          this.performLatexdiffOperations(currRound, mapping),
-        );
-      } else {
-        await this.performLatexdiffOperations(currRound, mapping);
-      }
+      await (stage ? stage.within(execute) : execute());
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${toErrorMessage(err)}`,
@@ -134,7 +116,7 @@ export class LatexDiffManager {
     currRound: number,
     mapping: RoundFileMapping,
   ): Promise<void> {
-    if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
+    if (!(await checkToolInstalled('latexdiff'))) {
       this.logger.warn(
         'Skipping latexdiff operations - latexdiff not installed',
       );
@@ -187,7 +169,7 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
+    const generateBetweenRoundDiffs = getConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
@@ -329,7 +311,7 @@ export class LatexDiffManager {
       path.dirname(diffLocation.absolutePath),
       'build',
     );
-    await this.dependencies.compileLatex2Pdf(diffLocation, {
+    await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       compiler: 'latexmk',

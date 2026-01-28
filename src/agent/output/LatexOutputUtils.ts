@@ -13,7 +13,7 @@ export async function indentLatexFile(
   fileLocation: FileLocation,
   logger: Logger,
 ): Promise<void> {
-  if (!fileLocation.absolutePath.includes('.tex')) {
+  if (!fileLocation.absolutePath.endsWith('.tex')) {
     return;
   }
   logger.debug(`Formatting ${fileLocation.absolutePath}`);
@@ -33,28 +33,17 @@ export async function cleanupLatexBackups(
   fileLocation: FileLocation | null,
   logger: Logger,
 ): Promise<void> {
-  if (!fileLocation) {
-    return;
-  }
-
   const workspaceRoot = WorkspaceFS.getPath();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  if (fileLocation.kind !== 'workspace') {
+  if (!fileLocation || !workspaceRoot || fileLocation.kind !== 'workspace') {
     return;
   }
   const workspaceAbsolute = fileLocation.absolutePath;
 
-  const { dir, base, name } = path.parse(workspaceAbsolute);
+  const { dir, base } = path.parse(workspaceAbsolute);
   const backupCandidates = new Set<string>([
     path.join(dir, `${base}.bak`),
     path.join(dir, `${base}.bak0`),
     path.join(dir, `${base}.bak1`),
-    path.join(dir, `${name}.bak`),
-    path.join(dir, `${name}.bak0`),
-    path.join(dir, `${name}.bak1`),
     path.join(dir, 'indent.log'),
   ]);
 

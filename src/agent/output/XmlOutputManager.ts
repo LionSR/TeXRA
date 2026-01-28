@@ -42,6 +42,14 @@ const XML_PARSER_OPTIONS = {
   ignoreDeclaration: true,
 } as const;
 
+/** Human-readable descriptions for document extraction methods */
+const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
+  named: 'from named document tag',
+  simple: 'using fallback method',
+  markdown: 'from markdown code block',
+  latex: 'from \\documentclass block',
+};
+
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -66,34 +74,6 @@ export class XmlOutputManager {
     }
 
     return content;
-  }
-
-  private static readonly EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
-    named: 'from named document tag',
-    simple: 'using fallback method',
-    markdown: 'from markdown code block',
-    latex: 'from \\documentclass block',
-  };
-
-  private extractDocumentbyRegex(
-    outputContent: string,
-    documentTag: string,
-  ): string | null {
-    const filename = path.basename(this.agentConfig.inputFile);
-    const result = extractDocument(outputContent, documentTag, filename);
-
-    if (!result.content) {
-      this.logger.debugInternal(
-        `No ${documentTag} found in output file using fallback method`,
-      );
-      return null;
-    }
-
-    const suffix = XmlOutputManager.EXTRACTION_METHOD_MESSAGES[result.method];
-    if (suffix) {
-      this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
-    }
-    return result.content;
   }
 
   private extractMultipleDocumentsbyRegex(

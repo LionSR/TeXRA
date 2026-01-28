@@ -175,7 +175,7 @@ export class PersistedFlow<
 
   async getShared(): Promise<S | undefined> {
     const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
-    return (flow?.shared as S) ?? undefined;
+    return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
