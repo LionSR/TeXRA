@@ -14,11 +14,15 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'openFileCommands';
+logger.initialize(CHANNEL);
 
-function revealPosition(
-  editor: vscode.TextEditor,
-  pos: vscode.Position,
-): void {
+export const openFileCommands = {
+  openFileCompile: 'texra.openFileCompile',
+  openFile: 'texra.openFile',
+  openLabel: 'texra.openLabel',
+};
+
+function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   const range = new vscode.Range(pos, pos);
   editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
   editor.selection = new vscode.Selection(pos, pos);
@@ -74,10 +78,10 @@ export function registerOpenFileCommands(
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'texra.openFileCompile',
+      openFileCommands.openFileCompile,
       openBuildDisplayIfTex,
     ),
-    vscode.commands.registerCommand('texra.openFile', openFile),
-    vscode.commands.registerCommand('texra.openLabel', openLabel),
+    vscode.commands.registerCommand(openFileCommands.openFile, openFile),
+    vscode.commands.registerCommand(openFileCommands.openLabel, openLabel),
   );
 }

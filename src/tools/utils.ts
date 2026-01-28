@@ -187,6 +187,23 @@ export function requireNonEmptyString(
 }
 
 /**
+ * Validate that a field is not null/undefined for a given command.
+ * Centralizes the common pattern of validating required parameters in tool execute methods.
+ */
+export function requireField<T>(
+  value: T | null | undefined,
+  fieldName: string,
+  command: string,
+): T {
+  if (value == null) {
+    throw new ToolError(
+      `Parameter \`${fieldName}\` is required for command: ${command}`,
+    );
+  }
+  return value;
+}
+
+/**
  * Wrap an async API call and convert any error to a ToolError.
  * Simplifies the common try-catch-rethrow-as-ToolError pattern.
  */

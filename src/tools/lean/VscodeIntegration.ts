@@ -26,9 +26,11 @@ export interface PlainGoal {
  * ExtUri-compatible object for Lean 4 extension.
  * The Lean 4 extension expects objects with scheme, fsPath, and toString().
  */
-function createExtUri(
-  absolutePath: string,
-): { scheme: 'file'; fsPath: string; toString: () => string } {
+function createExtUri(absolutePath: string): {
+  scheme: 'file';
+  fsPath: string;
+  toString: () => string;
+} {
   const uri = vscode.Uri.file(absolutePath);
   return {
     scheme: 'file',
@@ -212,7 +214,9 @@ async function sendPositionRequest<T>(
     );
   }
   if (!client.isRunning()) {
-    return errorResult('Lean server not running. Try lean_project restart_server.');
+    return errorResult(
+      'Lean server not running. Try lean_project restart_server.',
+    );
   }
 
   // Send LSP request
