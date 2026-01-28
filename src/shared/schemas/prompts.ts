@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
 import { AGENT_CATEGORY } from './agent';
-import {
-  ProviderErrorPartialSchema,
-  type ProviderErrorPartial,
-} from './errors';
+import { ProviderErrorPartialSchema } from './errors';
 import { StreamTabIdSchema } from './identifiers';
 import {
   BaseProposalFieldsSchema,

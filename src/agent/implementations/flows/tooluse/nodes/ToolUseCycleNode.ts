@@ -31,15 +31,14 @@ export class ToolUseCycleNode<C> extends Node<
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     assertPreparedShared(shared);
 
-    const { stateSlices } = shared;
     return {
       shouldSkip: shared.shouldSkipCycle,
       conversation: shared.conversation,
-      runState: AgentRunState.fromSnapshot(stateSlices.runStateSnapshot),
+      runState: AgentRunState.fromSnapshot(shared.stateSlices.runStateSnapshot),
       workspaceState: AgentWorkspaceState.fromSnapshot(
-        stateSlices.workspaceSnapshot,
+        shared.stateSlices.workspaceSnapshot,
       ),
-      userChannels: stateSlices.userChannels,
+      userChannels: shared.stateSlices.userChannels,
     };
   }
 
@@ -70,19 +69,18 @@ export class ToolUseCycleNode<C> extends Node<
       cycleNormalizedUsage: undefined,
     };
 
-    const services = this.services;
     const flow = createToolUseCycleFlow<C>();
     flow.setServices({
-      ...services,
-      setting: { ...services.setting, tools: services.resolvedTools },
-      client: await services.modelHandler.getClient(),
+      ...this.services,
+      setting: { ...this.services.setting, tools: this.services.resolvedTools },
+      client: await this.services.modelHandler.getClient(),
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundFinalized: services.getUsageRecorder(),
-      modelName: services.config.model,
-      agentName: services.config.agent,
-      session: services.session,
-      onFollowUpConsumed: services.onFollowUpConsumed,
+      onRoundFinalized: this.services.getUsageRecorder(),
+      modelName: this.services.config.model,
+      agentName: this.services.config.agent,
+      session: this.services.session,
+      onFollowUpConsumed: this.services.onFollowUpConsumed,
     });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {

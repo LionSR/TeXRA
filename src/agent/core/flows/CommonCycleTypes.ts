@@ -97,14 +97,13 @@ export const BaseCycleFieldsSchema = z.object({
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /**
- * Unified debug context used across all cycle flows.
- * Provides consistent logging and execution tracking.
+ * Internal debug context used by getDebugContext().
+ * NOT exported - use getDebugContext() to create instances.
  *
  * NOTE: This type is NOT stored in shared state - it's derived from services
  * at each `maybeSaveDebugObject` call site using `getDebugContext()`.
- * This eliminates redundant storage of logger and executionId.
  */
-export interface CycleDebugContext {
+interface CycleDebugContext {
   logger: AgentLogger;
   modelName?: string;
   executionId?: ExecutionId;
