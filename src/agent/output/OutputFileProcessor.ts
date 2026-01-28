@@ -9,7 +9,7 @@ import {
 } from '@shared/schemas';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
+import type { AgentLogger } from '@logger/AgentLogger';
 import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,
@@ -44,7 +44,6 @@ export class OutputFileProcessor {
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
-    scope: AgentLogStage,
   ): Promise<void> {
     const { logger } = this.ctx;
 
@@ -54,8 +53,9 @@ export class OutputFileProcessor {
 
     try {
       const processedPairs =
-        await this.ctx.xmlManager.processMultipleXmlOutputs(
+        await this.ctx.xmlManager.splitScratchpadMultipleOutputXml(
           outputLocation,
+          this.ctx.agentSetting.documentTag,
           currRound,
         );
 
@@ -76,12 +76,7 @@ export class OutputFileProcessor {
           );
         }
         this.ctx.setRoundOutputs(currRound, processedPairs);
-        await this.captureXmlSummary(
-          currRound,
-          rawLocation,
-          processedPairs,
-          scope,
-        );
+        await this.captureXmlSummary(currRound, rawLocation, processedPairs);
         return;
       }
 
@@ -90,14 +85,14 @@ export class OutputFileProcessor {
       );
       this.ctx.setRoundOutputs(currRound, []);
       await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.captureXmlSummary(currRound, rawLocation, []);
     } catch (err) {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
       });
       this.ctx.setRoundOutputs(currRound, []);
       await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.captureXmlSummary(currRound, rawLocation, []);
     }
   }
 
@@ -106,69 +101,50 @@ export class OutputFileProcessor {
     currRound: number,
     rawLocation: FileLocation,
     storageKey: StorageKey,
-    scope: AgentLogStage,
   ): Promise<void> {
     const { agentSetting, logger } = this.ctx;
 
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
     try {
-      const processedLocation = rawLocation ?? outputLocation;
-      let processed: OutputFileInfo = {
-        source: path.basename(outputLocation.absolutePath),
-        round: currRound,
-        location: processedLocation,
-        lineage: null,
-        diff: null,
-      };
+      const shouldProcessXml = this.shouldProcessXml(agentSetting);
+      const processed = shouldProcessXml
+        ? await this.ctx.xmlManager.processSingleXmlOutput(
+            outputLocation,
+            currRound,
+          )
+        : {
+            source: path.basename(outputLocation.absolutePath),
+            round: currRound,
+            location: rawLocation ?? outputLocation,
+            lineage: null,
+            diff: null,
+          };
 
-      const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
-      let shouldProcessXml = false;
-      if (xmlMode === 'always') {
-        shouldProcessXml = true;
-      } else if (xmlMode === 'scratchpadOnly') {
-        const hasDocumentTag = Boolean(agentSetting.documentTag);
-        const hasScratchpadPrefill =
-          agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-          false;
-        shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
-      }
-
-      if (shouldProcessXml) {
-        processed = await this.ctx.xmlManager.processSingleXmlOutput(
-          outputLocation,
-          currRound,
-        );
-      }
-
-      const processedFiles = processed.location.absolutePath ? [processed] : [];
-
-      if (processedFiles.length > 0) {
-        await indentLatexFile(processed.location, logger);
-        logger.debug(
-          `Indented single output file: ${processed.location.absolutePath}`,
-        );
-
-        if (this.ctx.baseFiles.length > 0) {
-          await replaceInputCommands(
-            this.ctx.baseFiles,
-            processedFiles.map((entry) => entry.location),
-            logger,
-          );
-        }
-      } else {
+      if (!processed.location.absolutePath) {
         logger.debug(
           `No processed file was generated from ${outputLocation.absolutePath}`,
         );
+        this.ctx.setRoundOutputs(currRound, []);
+        await this.captureXmlSummary(currRound, rawLocation, []);
+        return;
       }
-      this.ctx.setRoundOutputs(currRound, processedFiles);
 
-      await this.captureXmlSummary(
-        currRound,
-        rawLocation,
-        processedFiles,
-        scope,
+      await indentLatexFile(processed.location, logger);
+      logger.debug(
+        `Indented single output file: ${processed.location.absolutePath}`,
       );
+
+      if (this.ctx.baseFiles.length > 0) {
+        await replaceInputCommands(
+          this.ctx.baseFiles,
+          [processed.location],
+          logger,
+        );
+      }
+
+      this.ctx.setRoundOutputs(currRound, [processed]);
+      await this.captureXmlSummary(currRound, rawLocation, [processed]);
     } catch (err) {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
@@ -185,21 +161,11 @@ export class OutputFileProcessor {
         filesByRound: { [currRound]: [] },
       });
       this.ctx.setRoundOutputs(currRound, []);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.captureXmlSummary(currRound, rawLocation, []);
     }
   }
 
-  async captureXmlSummary(
-    round: number,
-    rawOutput: FileLocation | null,
-    processed: OutputFileInfo[],
-    stage?: AgentLogStage,
-  ): Promise<void> {
-    const execute = () => this.buildXmlSummary(round, rawOutput, processed);
-    await (stage ? stage.within(execute) : execute());
-  }
-
-  private async buildXmlSummary(
+  private async captureXmlSummary(
     round: number,
     rawOutput: FileLocation | null,
     processed: OutputFileInfo[],
@@ -276,5 +242,23 @@ export class OutputFileProcessor {
       );
       data.xmlSummary = createEmptySummary();
     }
+  }
+
+  private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
+    const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
+
+    if (xmlMode === 'always') {
+      return true;
+    }
+
+    if (xmlMode === 'scratchpadOnly') {
+      const hasDocumentTag = Boolean(agentSetting.documentTag);
+      const hasScratchpadPrefill =
+        agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+        false;
+      return hasDocumentTag || hasScratchpadPrefill;
+    }
+
+    return false;
   }
 }

@@ -33,61 +33,43 @@ export abstract class BaseViewContentProvider {
   }
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return this.buildUriRecord(webview, this.moduleDescriptors);
+    return this.buildUriRecord(webview, this.moduleDescriptors, [
+      'src',
+      this.getViewPath(),
+    ]);
   }
 
   protected getTemplateVariables(): Record<string, string | vscode.Uri> {
     return {};
   }
 
-  protected getWebviewPath(filePath: string): vscode.Uri {
-    return vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'src',
-      this.getViewPath(),
-      filePath,
-    );
-  }
-
-  protected getWebviewUri(webview: vscode.Webview, path: string): vscode.Uri {
-    return webview.asWebviewUri(this.getWebviewPath(path));
-  }
-
-  protected getCommonUri(webview: vscode.Webview, path: string): vscode.Uri {
+  private buildUri(webview: vscode.Webview, pathSegments: string[]): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
+      vscode.Uri.joinPath(this.context.extensionUri, ...pathSegments),
     );
   }
 
-  protected getNodeModulesUri(
-    webview: vscode.Webview,
-    path: string,
-  ): vscode.Uri {
-    return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
-    );
-  }
-
-  protected buildUriRecord(
+  private buildUriRecord(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
-    resolver: (webview: vscode.Webview, path: string) => vscode.Uri = this
-      .getWebviewUri,
+    basePath: string[],
   ): Record<string, vscode.Uri> {
     return Object.fromEntries(
       descriptors.map(({ key, path }) => [
         key,
-        resolver.call(this, webview, path),
+        this.buildUri(webview, [...basePath, path]),
       ]),
     );
   }
 
   public getHtmlContent(webview: vscode.Webview): string {
     try {
-      const htmlPath = this.getWebviewPath('index.html');
-      const commonUris = this.getCommonModuleUris(webview);
-      const specificUris = this.getModuleUris(webview);
-      const templateVariables = this.getTemplateVariables();
+      const htmlPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'src',
+        this.getViewPath(),
+        'index.html',
+      );
 
       this.logger.debug(
         this.channel,
@@ -95,9 +77,9 @@ export abstract class BaseViewContentProvider {
       );
 
       return buildWebviewHtml(webview, htmlPath, {
-        ...commonUris,
-        ...specificUris,
-        ...templateVariables,
+        ...this.getCommonModuleUris(webview),
+        ...this.getModuleUris(webview),
+        ...this.getTemplateVariables(),
       });
     } catch (err) {
       this.logger.error(
@@ -128,22 +110,14 @@ export abstract class BaseViewContentProvider {
       ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
-        this.getCommonUri,
+        ['src', 'common'],
       ),
       ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
-        this.getNodeModulesUri,
+        ['node_modules'],
       ),
-      tokensStyleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'shared',
-          'styles',
-          'tokens.css',
-        ),
-      ),
+      tokensStyleUri: this.buildUri(webview, ['src', 'shared', 'styles', 'tokens.css']),
     };
   }
 }

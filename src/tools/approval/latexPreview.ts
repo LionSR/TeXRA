@@ -148,11 +148,17 @@ export async function previewProposedLatex(
       entry.proposedUri,
       entry.proposedContent,
     );
-    const tempPath = await createTempFileWithCleanup(entry, content, '_preview');
+    const tempPath = await createTempFileWithCleanup(
+      entry,
+      content,
+      '_preview',
+    );
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(tempPath), { preserveFocus: true });
+    await openBuildDisplayIfTex(pathToLocation(tempPath), {
+      preserveFocus: true,
+    });
   });
 }
 

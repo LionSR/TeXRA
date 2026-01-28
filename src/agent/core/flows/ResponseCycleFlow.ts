@@ -158,12 +158,10 @@ class ResponsePrepNode<C> extends BaseNode<
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
-    outputLocation: AgentFileLocation;
   }> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const outputLocation = shared.outputLocation!;
-    const exists = await flexibleFS.exists(outputLocation);
+    const exists = await flexibleFS.exists(shared.outputLocation!);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -171,7 +169,7 @@ class ResponsePrepNode<C> extends BaseNode<
           ...userVarChannels.transient,
         });
 
-    return { interrupted, exists, systemPrompt, outputLocation };
+    return { interrupted, exists, systemPrompt };
   }
 
   async post(
@@ -180,7 +178,6 @@ class ResponsePrepNode<C> extends BaseNode<
       interrupted: boolean;
       exists: boolean;
       systemPrompt?: string;
-      outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
@@ -192,7 +189,6 @@ class ResponsePrepNode<C> extends BaseNode<
     const { config, round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
-    shared.outputLocation = prepRes.outputLocation;
     resetCycleState(shared, ['responseObject', 'processedResponse']);
 
     await maybeSaveDebugObject({
@@ -205,7 +201,7 @@ class ResponsePrepNode<C> extends BaseNode<
       fileOptions: {
         continuationCount: round.continuationCount,
         baseName: 'response',
-        outputFile: prepRes.outputLocation.relativePath,
+        outputFile: shared.outputLocation!.relativePath,
       },
     });
 
@@ -353,14 +349,14 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
 /**
  * Data extracted by prep() for response processing.
+ * Note: outputLocation and outputExists are accessed directly from shared
+ * in post() since they're only needed there.
  */
 interface ProcessPrepResult {
   shouldStop: boolean;
   responseObject: unknown;
   responseTimeMs?: number;
   messages: ProviderMessage[];
-  outputLocation: AgentFileLocation;
-  outputExists: boolean;
   lastResponse: string;
   accumulatedOutput: string;
 }
@@ -375,7 +371,6 @@ interface ProcessResult {
   responseUsage: ProviderUsage;
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
-  responseTimeMs?: number;
   updatedLastResponse?: string;
   updatedAccumulatedOutput?: string;
 }
@@ -420,8 +415,6 @@ class ResponseProcessNode<C> extends BaseNode<
       responseObject: shared.responseObject,
       responseTimeMs: shared.responseTimeMs,
       messages: shared.messages,
-      outputLocation: shared.outputLocation!,
-      outputExists: shared.outputExists,
       lastResponse: assembly.lastResponse,
       accumulatedOutput: assembly.accumulatedOutput,
     };
@@ -544,7 +537,6 @@ class ResponseProcessNode<C> extends BaseNode<
           responseUsage,
           normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
-          responseTimeMs: prepRes.responseTimeMs,
           updatedLastResponse,
           updatedAccumulatedOutput,
         },
@@ -566,8 +558,8 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const result = execRes.value;
 
-    if (result.responseTimeMs !== undefined) {
-      round.addResponseTime(result.responseTimeMs);
+    if (shared.responseTimeMs !== undefined) {
+      round.addResponseTime(shared.responseTimeMs);
     }
 
     if (result.normalizedUsage) {
@@ -597,21 +589,22 @@ class ResponseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    await AbsoluteFS.ensureDir(dirname(prepRes.outputLocation.absolutePath));
+    const outputLocation = shared.outputLocation!;
+    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
 
-    if (!prepRes.outputExists) {
-      logger.debug(`Creating new file: ${prepRes.outputLocation.absolutePath}`);
+    if (!shared.outputExists) {
+      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
       await AbsoluteFS.write(
-        prepRes.outputLocation.absolutePath,
+        outputLocation.absolutePath,
         result.processedResponse,
       );
       shared.outputExists = true;
     } else {
       logger.debug(
-        `Appending to existing file: ${prepRes.outputLocation.absolutePath}`,
+        `Appending to existing file: ${outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
-        prepRes.outputLocation,
+        outputLocation,
         (result.bestConnector ?? '') + result.processedResponse,
       );
     }
