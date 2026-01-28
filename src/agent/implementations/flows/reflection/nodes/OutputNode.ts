@@ -75,7 +75,13 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: OutputPrepInput): Promise<RoundOutput> {
-    const { outputHandler, setting, logger, baseFiles, shouldEnsureXmlStructure } = this.services;
+    const {
+      outputHandler,
+      setting,
+      logger,
+      baseFiles,
+      shouldEnsureXmlStructure,
+    } = this.services;
     const { shared, outputLocation } = prepRes;
     const { currentRound, endTurn } = shared;
 
@@ -133,7 +139,8 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<RoundOutput> {
-    this.services.logger.warn(`Output processing failed: ${error.message}`);
+    const { logger } = this.services;
+    logger.warn(`Output processing failed: ${error.message}`);
     return {
       round: prepRes.shared.currentRound,
       rawOutput: null,
