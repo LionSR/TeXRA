@@ -22,19 +22,24 @@ import {
   ERROR_STATUS,
 } from '../common/FlowLifecycle';
 import { createToolUseFlow, type ToolUseRunShared } from './ToolUseFlow';
-import {
-  resolveTools,
-  type ToolUseFlowContextInit,
-} from './ToolUseFlowContext';
+import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
+import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import { resolveTools } from './ToolUseFlowContext';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import { migrateSharedState } from './nodes';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
-/** Input for running a tool-use flow. */
-export interface RunToolUseFlowInput<C = unknown>
-  extends Omit<ToolUseFlowContextInit<C>, 'resumeSnapshot'> {
+/**
+ * Input for running a tool-use flow.
+ * Follows same pattern as RunReflectionFlowInput: extends BaseFlowContextInit
+ * and adds flow-specific fields. toolRegistry is a separate parameter.
+ */
+export interface RunToolUseFlowInput<C = unknown> extends BaseFlowContextInit<C> {
+  setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
+  onFollowUpConsumed?: () => void;
 }
 
 /** Result from running a tool-use flow. */
@@ -55,23 +60,29 @@ export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext<unknown>,
 ) => void;
 
-/** Run a tool-use flow. Interrupt registration is handled automatically. */
+/**
+ * Run a tool-use flow. Interrupt registration is handled automatically.
+ * @param input - Flow input (extends BaseFlowContextInit with tool-use fields)
+ * @param toolRegistry - Optional tool registry (defaults to global registry)
+ * @param onSetup - Optional callback invoked after context creation
+ */
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
+  toolRegistry?: IToolRegistry,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
-  const resumeSnapshot = input.resumeSnapshot ?? null;
+  const snapshot = input.resumeSnapshot ?? null;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
-  const toolRegistry = input.toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
-  // Exclude toolRegistry and resumeSnapshot which are not part of ToolUseServices
-  const { toolRegistry: _, resumeSnapshot: __, ...baseInput } = input;
+  const registry = toolRegistry ?? getDefaultToolRegistry();
+  const resolvedTools = resolveTools(setting.tools, registry, logger);
+
+  // Build services: spread input + add computed fields (matches reflection flow pattern)
   const services: ToolUseServices<C> = {
-    ...baseInput as Omit<typeof baseInput, 'toolRegistry' | 'resumeSnapshot'>,
+    ...input,
     session: sessionLifecycle,
     resolvedTools,
-    snapshot: resumeSnapshot,
+    snapshot,
     getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
   };
 
