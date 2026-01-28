@@ -355,49 +355,36 @@ export abstract class ModelHandler<
     });
   }
 
-  /** Checks if the model is from a specific provider. */
-  isProvider(provider: ModelProvider): boolean {
-    return this.config.provider === provider;
-  }
-
   /** Checks if the model is from Anthropic provider. */
   get isAnthropic(): boolean {
-    return this.isProvider(ModelProvider.ANTHROPIC);
+    return this.config.provider === ModelProvider.ANTHROPIC;
   }
 
   /** Checks if the model is from OpenAI provider. */
   get isOpenai(): boolean {
-    return this.isProvider(ModelProvider.OPENAI);
+    return this.config.provider === ModelProvider.OPENAI;
   }
 
   /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
-    return this.isProvider(ModelProvider.GOOGLE);
+    return this.config.provider === ModelProvider.GOOGLE;
   }
 
   /** Checks if the model is from DeepSeek provider. */
   get isDeepSeek(): boolean {
-    return this.isProvider(ModelProvider.DEEPSEEK);
+    return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
-  /** Provider to config suffix mapping for streaming settings */
-  private static readonly PROVIDER_STREAMING_SUFFIX: Record<
-    ModelProvider,
-    string
-  > = {
-    [ModelProvider.ANTHROPIC]: 'Anthropic',
-    [ModelProvider.OPENAI]: 'Openai',
-    [ModelProvider.GOOGLE]: 'Google',
-    [ModelProvider.DEEPSEEK]: 'Deepseek',
-    [ModelProvider.MOONSHOT]: 'Moonshot',
-    [ModelProvider.DASHSCOPE]: 'Dashscope',
-    [ModelProvider.COPILOT]: 'Copilot',
-    [ModelProvider.XAI]: 'Xai',
-    [ModelProvider.OTHERS]: '',
-  };
+  /**
+   * Capitalizes the first letter of a string.
+   * Used to convert provider enum values to config key suffixes.
+   */
+  private static capitalize(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
 
   /**
-   * Gets streaming configuration for the current model provider
+   * Gets streaming configuration for the current model provider.
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
@@ -413,9 +400,13 @@ export abstract class ModelHandler<
       );
     }
 
-    const suffix = ModelHandler.PROVIDER_STREAMING_SUFFIX[this.config.provider];
-    if (!suffix) return globalDefault;
+    // ModelProvider.OTHERS has no provider-specific streaming config
+    if (this.config.provider === ModelProvider.OTHERS) {
+      return globalDefault;
+    }
 
+    // Derive config key suffix from provider enum value (e.g., 'openai' -> 'Openai')
+    const suffix = ModelHandler.capitalize(this.config.provider);
     return getConfig<boolean>(
       `texra.model.useStreaming${suffix}`,
       globalDefault,
