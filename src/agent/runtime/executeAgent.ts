@@ -54,13 +54,16 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { AgentUsageReporter } from '@logger/AgentUsageReporter';
+import {
+  AgentLogger,
+  AgentUsageReporter,
+  getStreamTabId,
+  type AgentLogStage,
+} from '@logger';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';

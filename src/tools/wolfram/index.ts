@@ -1,3 +1,2 @@
-// Export wolframscript utilities
-export * from './wolframScriptUtils';
-export * from './WolframTool';
+// Export only the tool class - utility functions are internal
+export { WolframTool } from './WolframTool';
