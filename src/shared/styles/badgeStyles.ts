@@ -33,6 +33,9 @@ export const categoryBadgeStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-small);
+    /* Base styling for unknown categories */
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
   }
 
   .category-badge .codicon,
@@ -69,6 +72,7 @@ export const searchHighlightStyles: CSSResult = css`
       --vscode-editor-findMatchHighlightBackground,
       #ffef0b80
     );
+    color: var(--vscode-editor-findMatchHighlightForeground, inherit);
     padding: 0;
     border-radius: var(--border-radius-small);
   }

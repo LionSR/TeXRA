@@ -684,12 +684,30 @@ export class RequestPanels extends LitElement {
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     // Don't intercept if typing in an input/textarea
+    // Must check both the document.activeElement AND shadowRoot focus
+    // because custom elements like vscode-textarea wrap native inputs
     const activeEl = document.activeElement;
-    if (
-      activeEl instanceof HTMLInputElement ||
-      activeEl instanceof HTMLTextAreaElement ||
-      (activeEl as HTMLElement)?.isContentEditable
-    ) {
+
+    // Check if focus is in a text-editable element (handles Shadow DOM)
+    const isTextInput = (el: Element | null): boolean => {
+      if (!el) return false;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+        return true;
+      if ((el as HTMLElement)?.isContentEditable) return true;
+      // Check custom element tags that contain text inputs
+      const tagName = el.tagName?.toLowerCase() ?? '';
+      if (tagName.includes('textarea') || tagName.includes('input'))
+        return true;
+      // Check shadow root for focused text inputs
+      const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot })
+        ?.shadowRoot;
+      if (shadowRoot?.activeElement) {
+        return isTextInput(shadowRoot.activeElement);
+      }
+      return false;
+    };
+
+    if (isTextInput(activeEl)) {
       return;
     }
 

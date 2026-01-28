@@ -19,6 +19,9 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       progressBundleUri: webview.asWebviewUri(
         vscode.Uri.joinPath(distPath, 'bundle.js'),
       ),
+      progressStyleUri: webview.asWebviewUri(
+        vscode.Uri.joinPath(distPath, 'index.css'),
+      ),
     };
   }
 }

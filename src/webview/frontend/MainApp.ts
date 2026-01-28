@@ -1324,6 +1324,13 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleMerge(): void {
+    if (!this.singleFiles.inputFile || !this.singleFiles.editedFile) {
+      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
+        text: 'Please select both input and edited files to merge',
+      });
+      return;
+    }
+
     postMessage(MAIN_VIEW_COMMANDS.MERGE, {
       inputFile: this.singleFiles.inputFile,
       editedFile: this.singleFiles.editedFile,

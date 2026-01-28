@@ -88,4 +88,12 @@ export const selectStyles: CSSResult = css`
   vscode-single-select::part(listbox) {
     max-height: var(--height-large, 300px);
   }
+
+  /* API key missing indicator in model options */
+  .api-key-missing {
+    color: var(--vscode-errorForeground);
+    opacity: 1;
+    font-style: normal;
+    margin-left: var(--spacing-tiny);
+  }
 `;
