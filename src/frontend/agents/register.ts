@@ -7,11 +7,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  AgentCategory,
-  type AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
-import { getBaseName, getMultipleName } from '@agent/index/agentRegistry';
+import { AgentCategory, type AgentWorkflowSetting } from '@agent/core';
+import { getBaseName, getMultipleName } from '@agent/index';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';

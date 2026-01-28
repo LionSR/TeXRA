@@ -64,6 +64,18 @@ export function formatSize(bytes: number): string {
 }
 
 /**
+ * Validate that a relative path stays within the memory root (no escaping via ..).
+ * @param relative - Relative path to validate
+ * @param originalPath - Original path for error messages
+ * @throws Error if path escapes the memory storage root
+ */
+function validateRelativePath(relative: string, originalPath: string): void {
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Invalid memory path: ${originalPath}`);
+  }
+}
+
+/**
  * Validate and resolve a storage path, ensuring it stays within MEMORY_STORAGE_ROOT.
  * @param storagePath - Path to validate (should be within memories/)
  * @returns Resolved path within MEMORY_STORAGE_ROOT
@@ -72,9 +84,7 @@ export function formatSize(bytes: number): string {
 export function resolveMemoryStoragePath(storagePath: string): string {
   const normalized = path.normalize(storagePath);
   const relative = path.relative(MEMORY_STORAGE_ROOT, normalized);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`Invalid memory path: ${storagePath}`);
-  }
+  validateRelativePath(relative, storagePath);
   return toStoragePath(relative);
 }
 
@@ -99,11 +109,7 @@ export function displayToStoragePath(displayPath: string): string {
       : displayPath.slice(`${MEMORY_DISPLAY_ROOT}/`.length);
   const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
   const base = path.resolve(MEMORY_STORAGE_ROOT);
-  if (resolved !== base && !resolved.startsWith(`${base}${path.sep}`)) {
-    throw new Error(
-      `The path ${displayPath} does not exist. Please provide a valid path.`,
-    );
-  }
   const relative = path.relative(base, resolved);
+  validateRelativePath(relative, displayPath);
   return toStoragePath(relative);
 }

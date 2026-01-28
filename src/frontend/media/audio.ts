@@ -7,7 +7,7 @@ import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, StorageFS } from '@utils/files';

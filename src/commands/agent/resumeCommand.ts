@@ -14,7 +14,7 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { logErrorMessage } from '@common/errors';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
