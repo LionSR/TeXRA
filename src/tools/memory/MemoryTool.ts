@@ -66,23 +66,23 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     switch (input.command) {
       case 'view':
         return this.view(
-          this.requirePath(input.path, input.command),
+          this.requireField(input.path, 'path', input.command),
           input.view_range ?? undefined,
         );
       case 'create':
         return this.create(
-          this.requirePath(input.path, input.command),
+          this.requireField(input.path, 'path', input.command),
           this.requireField(input.file_text, 'file_text', input.command),
         );
       case 'str_replace':
         return this.strReplace(
-          this.requirePath(input.path, input.command),
+          this.requireField(input.path, 'path', input.command),
           this.requireField(input.old_str, 'old_str', input.command),
           this.requireField(input.new_str, 'new_str', input.command),
         );
       case 'insert':
         return this.insert(
-          this.requirePath(input.path, input.command),
+          this.requireField(input.path, 'path', input.command),
           this.requireField(input.insert_line, 'insert_line', input.command),
           this.requireField(
             input.insert_text ?? input.new_str,
@@ -91,7 +91,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
           ),
         );
       case 'delete':
-        return this.delete(this.requirePath(input.path, input.command));
+        return this.delete(this.requireField(input.path, 'path', input.command));
       case 'rename':
         return this.rename(
           this.requireField(input.old_path, 'old_path', input.command),
@@ -100,18 +100,6 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
       default:
         throw new ToolError(`Unrecognized command: ${input.command}`);
     }
-  }
-
-  private requirePath(
-    value: string | null | undefined,
-    command: string,
-  ): string {
-    if (!value) {
-      throw new ToolError(
-        `Parameter \`path\` is required for command: ${command}`,
-      );
-    }
-    return value;
   }
 
   private requireField<T>(
@@ -138,20 +126,13 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
-  /**
-   * Validates that the path exists and is a file (not a directory).
-   * Throws ToolError if validation fails.
-   */
   private async requireEditableFile(
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
     const exists = await StorageFS.exists(resolvedPath);
-    if (!exists) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
-    }
-    const isDir = await StorageFS.isDir(resolvedPath);
-    if (isDir) {
+    const isDir = exists && (await StorageFS.isDir(resolvedPath));
+    if (!exists || isDir) {
       throw new ToolError(`Error: The path ${inputPath} does not exist`);
     }
   }
@@ -266,11 +247,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const numbered = formatLinesWithNumbers(updatedLines);
 
     return {
-      output: [
-        'The memory file has been edited.',
-        `Here's the content of ${inputPath} with line numbers:`,
-        ...numbered,
-      ].join('\n'),
+      output: `The memory file has been edited.\nHere's the content of ${inputPath} with line numbers:\n${numbered.join('\n')}`,
     };
   }
 

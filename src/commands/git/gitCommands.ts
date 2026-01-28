@@ -10,6 +10,10 @@ import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'gitCommands';
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
+const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
+const LATEX_PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
+const LATEX_GIT_URL_PATTERN =
+  /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -79,7 +83,7 @@ function findCommitInHistory(commitHash: string): string | null {
   }
 
   const sanitizedCommit = commitHash.trim();
-  if (!/^[0-9a-fA-F]{4,40}$/.test(sanitizedCommit)) {
+  if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
     return null;
   }
 
@@ -126,11 +130,9 @@ function parseLatexGitUrl(
   const trimmed = input.trim();
 
   // Full URL
-  const m = trimmed.match(
-    /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i,
-  );
-  if (m) {
-    const [, host, hasGit, id] = m;
+  const match = LATEX_GIT_URL_PATTERN.exec(trimmed);
+  if (match) {
+    const [, host, hasGit, id] = match;
     return {
       host,
       path: hasGit ? `/git/${id}` : `/${id}`,
@@ -139,7 +141,7 @@ function parseLatexGitUrl(
   }
 
   // Bare project ID -> Overleaf
-  if (/^[a-f0-9]{24}$/i.test(trimmed)) {
+  if (LATEX_PROJECT_ID_PATTERN.test(trimmed)) {
     return { host: 'git.overleaf.com', path: `/${trimmed}`, isOverleaf: true };
   }
 
@@ -171,21 +173,16 @@ async function getGitToken(
   title: string,
   validate?: (t: string) => boolean,
 ): Promise<{ remote: string; sensitive: string[] } | null> {
-  let token = (await secrets.get(key))?.trim() ?? '';
-  if (token && validate && !validate(token)) {
-    await secrets.delete(key);
-    token = '';
-  }
+  const isValid = (t: string): boolean => !validate || validate(t);
+  const stored = (await secrets.get(key))?.trim() ?? '';
+  let token = isValid(stored) ? stored : '';
+
+  if (!token && stored) await secrets.delete(key);
 
   if (!token) {
-    const input = await promptInput(
-      title,
-      'Enter your Git authentication token.',
-      true,
-    );
+    const input = await promptInput(title, 'Enter your Git authentication token.', true);
     if (!input) return null;
-
-    if (validate && !validate(input)) {
+    if (!isValid(input)) {
       vscode.window.showErrorMessage('Invalid token format.');
       return null;
     }
@@ -193,8 +190,35 @@ async function getGitToken(
     await secrets.store(key, token);
   }
 
-  const enc = encodeURIComponent(token);
-  return { remote: `git:${enc}`, sensitive: [token, enc] };
+  const encoded = encodeURIComponent(token);
+  return { remote: `git:${encoded}`, sensitive: [token, encoded] };
+}
+
+const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
+
+async function checkClonePreconditions(
+  workspacePath: string,
+): Promise<{ ok: true } | { ok: false }> {
+  if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
+    vscode.window.showErrorMessage('Git not found in PATH.');
+    return { ok: false };
+  }
+
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await WorkspaceFS.readDir(workspacePath);
+  } catch (e) {
+    vscode.window.showErrorMessage('Cannot read workspace folder.');
+    logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
+    return { ok: false };
+  }
+
+  if (entries.some(([n]) => !IGNORED_FILES.has(n))) {
+    vscode.window.showErrorMessage('Workspace folder must be empty.');
+    return { ok: false };
+  }
+
+  return { ok: true };
 }
 
 async function cloneOverleafProject(
@@ -218,63 +242,34 @@ async function cloneOverleafProject(
     return;
   }
 
-  // Get credentials
-  const creds = parsed.isOverleaf
-    ? await getGitToken(
-        context.secrets,
-        'overleaf.gitToken',
-        'Overleaf Git Token',
-        (t) => t.startsWith('olp_'),
-      )
-    : await getGitToken(
-        context.secrets,
-        `sharelatex.${parsed.host}.token`,
-        `ShareLaTeX Token (${parsed.host})`,
-      );
+  const tokenKey = parsed.isOverleaf
+    ? 'overleaf.gitToken'
+    : `sharelatex.${parsed.host}.token`;
+  const tokenTitle = parsed.isOverleaf
+    ? 'Overleaf Git Token'
+    : `ShareLaTeX Token (${parsed.host})`;
+  const tokenValidator = parsed.isOverleaf ? (t: string) => t.startsWith('olp_') : undefined;
+
+  const creds = await getGitToken(context.secrets, tokenKey, tokenTitle, tokenValidator);
   if (!creds) return;
 
-  // Check preconditions
-  if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
-    vscode.window.showErrorMessage('Git not found in PATH.');
-    return;
-  }
+  const preconditions = await checkClonePreconditions(workspacePath);
+  if (!preconditions.ok) return;
 
-  let entries: [string, vscode.FileType][];
-  try {
-    entries = await WorkspaceFS.readDir(workspacePath);
-  } catch (e) {
-    vscode.window.showErrorMessage('Cannot read workspace folder.');
-    logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
-    return;
-  }
-
-  const dominated = new Set(['.DS_Store', 'Thumbs.db']);
-  if (entries.some(([n]) => !dominated.has(n))) {
-    vscode.window.showErrorMessage('Workspace folder must be empty.');
-    return;
-  }
-
-  // Clone
   const remote = `https://${creds.remote}@${parsed.host}${parsed.path}`;
   const label = parsed.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
   try {
     await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Cloning ${label}…`,
-      },
-      () =>
-        execa('git', ['clone', remote, '.'], {
-          cwd: workspacePath,
-          env: { GIT_TERMINAL_PROMPT: '0' },
-        }),
+      { location: vscode.ProgressLocation.Notification, title: `Cloning ${label}…` },
+      () => execa('git', ['clone', remote, '.'], {
+        cwd: workspacePath,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+      }),
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
   } catch (e) {
-    vscode.window.showErrorMessage(
-      `Clone failed. Check credentials and connection.`,
-    );
+    vscode.window.showErrorMessage('Clone failed. Check credentials and connection.');
     if (e instanceof Error) {
       let msg = e.message;
       for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');

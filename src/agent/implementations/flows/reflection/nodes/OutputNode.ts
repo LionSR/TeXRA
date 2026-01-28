@@ -23,12 +23,13 @@ import type {
 // Types
 // ============================================================================
 
+/**
+ * Prep result carries shared reference and validated output location.
+ * Other fields are accessed directly from shared and services.
+ */
 interface OutputPrepInput {
-  currentRound: number;
+  shared: ReflectionFlowShared;
   outputLocation: AgentFileLocation;
-  endTurn: boolean;
-  baseFiles: FileLocation[]; // Can include external files
-  ensureXmlStructure: boolean;
 }
 
 // ============================================================================
@@ -68,23 +69,15 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     return {
-      currentRound: shared.currentRound,
+      shared,
       outputLocation: shared.outputLocation,
-      endTurn: shared.endTurn,
-      baseFiles: this.services.baseFiles,
-      ensureXmlStructure: this.services.shouldEnsureXmlStructure,
     };
   }
 
   async exec(prepRes: OutputPrepInput): Promise<RoundOutput> {
-    const { outputHandler, setting, logger } = this.services;
-    const {
-      currentRound,
-      outputLocation,
-      endTurn,
-      baseFiles,
-      ensureXmlStructure,
-    } = prepRes;
+    const { outputHandler, setting, logger, baseFiles, shouldEnsureXmlStructure } = this.services;
+    const { shared, outputLocation } = prepRes;
+    const { currentRound, endTurn } = shared;
 
     // Calculate mapping once for both latexdiff and finalization
     let mapping: RoundFileMapping | undefined;
@@ -93,7 +86,7 @@ export class OutputNode<C = unknown> extends Node<
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      if (ensureXmlStructure) {
+      if (shouldEnsureXmlStructure) {
         await tryOperation(
           'XML structure',
           () =>
@@ -142,7 +135,7 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<RoundOutput> {
     this.services.logger.warn(`Output processing failed: ${error.message}`);
     return {
-      round: prepRes.currentRound,
+      round: prepRes.shared.currentRound,
       rawOutput: null,
       outputs: [],
       xmlSummary: {
@@ -155,12 +148,12 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async post(
-    shared: ReflectionFlowShared,
-    _prepRes: OutputPrepInput,
+    _shared: ReflectionFlowShared,
+    prepRes: OutputPrepInput,
     execRes: RoundOutput,
   ): Promise<string | undefined> {
     // Store round output
-    shared.roundOutputs[shared.currentRound] = execRes;
+    prepRes.shared.roundOutputs[prepRes.shared.currentRound] = execRes;
 
     // Continue to RoundCompleteNode
     return FlowTransition.DEFAULT;

@@ -287,20 +287,6 @@ export class XmlOutputManager {
     };
   }
 
-  async processMultipleXmlOutputs(
-    outputLocation: FileLocation,
-    round: number,
-  ): Promise<OutputFileInfo[]> {
-    this.logger.debug(
-      `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
-    );
-    return this.splitScratchpadMultipleOutputXml(
-      outputLocation,
-      this.agentSetting.documentTag,
-      round,
-    );
-  }
-
   async ensureCorrectXmlStructure(
     fileLocation: FileLocation,
     documentTag: string,

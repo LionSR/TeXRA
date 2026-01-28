@@ -139,13 +139,18 @@ export function generateBackslashFixes(commands: string[]): PatternDict {
 export function generateGroupedBackslashFixes(commandGroups: {
   [groupName: string]: string[];
 }): PatternDict {
-  return createPatterns(Object.values(commandGroups).flat(), backslashFixMapper);
+  return createPatterns(
+    Object.values(commandGroups).flat(),
+    backslashFixMapper,
+  );
 }
 
 /**
  * Generates patterns for converting XML tags to LaTeX environments and vice versa
  */
-export function generateXmlLatexConversions(environments: string[]): PatternDict {
+export function generateXmlLatexConversions(
+  environments: string[],
+): PatternDict {
   return createPatterns(environments, xmlToLatexMapper);
 }
 
@@ -159,7 +164,9 @@ export function generateLatexToXmlConversions(tags: string[]): PatternDict {
 /**
  * Generates patterns for braces fixes in environment names
  */
-export function generateEnvironmentBracesFixes(environments: string[]): PatternDict {
+export function generateEnvironmentBracesFixes(
+  environments: string[],
+): PatternDict {
   return createPatterns(environments, (env) => [[`{\\${env}}`, `{${env}}`]]);
 }
 
@@ -182,7 +189,9 @@ export function generateSectionSpacingFixes(
  * Generates patterns that remove invalid section ending commands.
  * These commands (e.g., \end{section}) should never appear in LaTeX output.
  */
-export function generateInvalidSectionEndingFixes(sectionTypes: string[]): PatternDict {
+export function generateInvalidSectionEndingFixes(
+  sectionTypes: string[],
+): PatternDict {
   return createPatterns(sectionTypes, (sectionType) =>
     [
       `\\end{${sectionType}}`,
@@ -202,7 +211,9 @@ export function generateInvalidSectionEndingFixes(sectionTypes: string[]): Patte
 /**
  * Generates patterns for non-breaking spaces in references
  */
-export function generateReferenceSpacing(referenceTypes: string[]): PatternDict {
+export function generateReferenceSpacing(
+  referenceTypes: string[],
+): PatternDict {
   return createPatterns(referenceTypes, (type) => {
     const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
     if (/^[a-z]/.test(type)) {
@@ -219,7 +230,9 @@ export function generateReferenceSpacing(referenceTypes: string[]): PatternDict 
 /**
  * Generates patterns for linebreak fixes within environments
  */
-export function generateEnvironmentLinebreakFixes(environments: string[]): PatternDict {
+export function generateEnvironmentLinebreakFixes(
+  environments: string[],
+): PatternDict {
   return createPatterns(environments, linebreakFixMapper);
 }
 
@@ -227,7 +240,9 @@ export function generateEnvironmentLinebreakFixes(environments: string[]): Patte
  * Generate patterns for mapping math commands to shorter versions
  * Example: \\alpha -> \\al
  */
-export function generateMathCommandShortcuts(commandMap: PatternDict): PatternDict {
+export function generateMathCommandShortcuts(
+  commandMap: PatternDict,
+): PatternDict {
   return createPatternsFromMap(commandMap, (fullCmd, shortCmd) => [
     [`\\${fullCmd}`, `\\${shortCmd}`],
   ]);
@@ -353,7 +368,9 @@ export function generateLegacyTextCommandNormalization(
  * Generate patterns for arrow and relation shortcuts
  * Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
  */
-export function generateArrowRelationShortcuts(arrowMap: PatternDict): PatternDict {
+export function generateArrowRelationShortcuts(
+  arrowMap: PatternDict,
+): PatternDict {
   return createPatternsFromMap(arrowMap, (arrow, shortcut) => [
     [`\\${arrow} `, `\\${shortcut} `],
     [`\\${arrow}\\`, `\\${shortcut}\\`],

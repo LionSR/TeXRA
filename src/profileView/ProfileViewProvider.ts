@@ -26,21 +26,15 @@ export class ProfileViewProvider
     return 'profileView';
   }
 
-  /**
-   * Create and show the webview panel (for command palette activation)
-   */
-  public async showProfileView() {
+  public async showProfileView(): Promise<void> {
     const isNew = this.createOrShowPanel({
       viewType: ProfileViewProvider.viewType,
       title: 'TeXRA Profile',
       viewPath: 'profileView',
     });
 
-    // Send fresh data when revealing existing panel
     if (!isNew && this._view) {
       await this.messageHandler.sendProfileData(this._view.webview);
     }
-    // For new panels: HTML is set by createOrShowPanel -> resolveWebviewViewInternal
-    // Webview will request data via GET_PROFILE_DATA on DOMContentLoaded
   }
 }

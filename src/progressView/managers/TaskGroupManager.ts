@@ -47,35 +47,27 @@ export class TaskGroupManager extends PersistentMapManager<
    * Update an existing task group.
    * Uses UpdateTaskGroupPayload from event bus schema as single source of truth.
    */
-  async updateGroup({
-    streamId,
-    id,
-    status,
-    endTime,
-  }: UpdateTaskGroupPayload): Promise<void> {
-    const streamGroups = this.get(streamId);
+  async updateGroup(payload: UpdateTaskGroupPayload): Promise<void> {
+    const streamGroups = this.get(payload.streamId);
     if (!streamGroups) {
       this.logger.warn(
-        `Cannot update group ${id}: stream ${streamId} not found`,
+        `Cannot update group ${payload.id}: stream ${payload.streamId} not found`,
       );
       return;
     }
 
-    const group = streamGroups.get(id);
+    const group = streamGroups.get(payload.id);
     if (!group) {
       this.logger.warn(
-        `Cannot update group ${id}: group not found in stream ${streamId}`,
+        `Cannot update group ${payload.id}: group not found in stream ${payload.streamId}`,
       );
       return;
     }
 
-    // Apply updates - only include endTime if explicitly provided
-    const updated: TaskGroup = {
-      ...group,
-      status,
-      ...(endTime !== undefined && { endTime }),
-    };
-    streamGroups.set(id, updated);
+    group.status = payload.status;
+    if (payload.endTime !== undefined) {
+      group.endTime = payload.endTime;
+    }
     await this.save();
   }
 
