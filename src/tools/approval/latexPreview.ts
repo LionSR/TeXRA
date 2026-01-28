@@ -35,20 +35,21 @@ const UUID_PREFIX_LENGTH = 8;
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
-/**
- * Clean up LaTeX auxiliary files for a given base path.
- */
+/** Silently attempt to delete a file, ignoring errors */
+async function silentUnlink(filePath: string): Promise<void> {
+  await fs.unlink(filePath).catch(() => {});
+}
+
+/** Clean up LaTeX auxiliary files for a given base path */
 async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
   const ext = path.extname(filePath);
   const basePathNoExt = filePath.slice(0, -ext.length);
   for (const tempExt of TEMP_EXTENSIONS) {
-    await fs.unlink(basePathNoExt + tempExt).catch(() => {});
+    await silentUnlink(basePathNoExt + tempExt);
   }
 }
 
-/**
- * Register cleanup function with entry, or run immediately if already settled.
- */
+/** Register cleanup function with entry, or run immediately if already settled */
 function registerCleanup(
   entry: LatexPreviewEntry,
   cleanup: () => Promise<void>,
@@ -60,9 +61,7 @@ function registerCleanup(
   entry.workspaceTempCleanup.push(cleanup);
 }
 
-/**
- * Execute a LaTeX operation with standard error handling and progress tracking.
- */
+/** Execute a LaTeX operation with standard error handling and progress tracking */
 async function withLatexOperation(
   entry: LatexPreviewEntry,
   operationName: string,
@@ -83,15 +82,23 @@ async function withLatexOperation(
   }
 }
 
+/** Read file content with fallback to provided default */
+async function readFileWithFallback(
+  uri: vscode.Uri,
+  fallback: string,
+): Promise<string> {
+  return fs.readFile(uri.fsPath, 'utf8').catch(() => fallback);
+}
+
 /**
- * Create a temporary file for LaTeX compilation.
- * Location is controlled by texra.latexdiff.tempFileLocation setting.
+ * Create a temporary file and register its cleanup with the entry.
+ * Returns the temp file path for further operations.
  */
-async function createTempFile(
-  originalPath: string,
+async function createTempFileWithCleanup(
+  entry: LatexPreviewEntry,
   content: string,
   suffix: string,
-): Promise<{ tempPath: string; cleanup: () => Promise<void> }> {
+): Promise<string> {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     throw new Error('No workspace folder open');
@@ -102,6 +109,7 @@ async function createTempFile(
     'sameDirectory',
   );
 
+  const originalPath = entry.request.path;
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
   const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, UUID_PREFIX_LENGTH)}${ext}`;
@@ -109,6 +117,7 @@ async function createTempFile(
   let tempDir: string;
   if (location === 'workspaceTemp') {
     tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
+    await fs.mkdir(tempDir, { recursive: true });
   } else {
     const resolvedPath = path.isAbsolute(originalPath)
       ? originalPath
@@ -116,48 +125,34 @@ async function createTempFile(
     tempDir = path.dirname(resolvedPath);
   }
 
-  if (location === 'workspaceTemp') {
-    await fs.mkdir(tempDir, { recursive: true });
-  }
-
   const tempPath = path.join(tempDir, tempFileName);
   await fs.writeFile(tempPath, content, 'utf8');
 
-  const cleanup = async () => {
-    await fs.unlink(tempPath).catch(() => {});
+  registerCleanup(entry, async () => {
+    await silentUnlink(tempPath);
     await cleanupLatexAuxFiles(tempPath);
     if (location === 'workspaceTemp') {
       await fs.rmdir(tempDir).catch(() => {});
     }
-  };
+  });
 
-  return { tempPath, cleanup };
+  return tempPath;
 }
 
-/**
- * Preview the proposed LaTeX document by creating a temp file and building it.
- */
+/** Preview the proposed LaTeX document by creating a temp file and building it */
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
 ): Promise<void> {
   await withLatexOperation(entry, 'Preview', async () => {
-    const content = await fs
-      .readFile(entry.proposedUri.fsPath, 'utf8')
-      .catch(() => entry.proposedContent);
-
-    const { tempPath, cleanup } = await createTempFile(
-      entry.request.path,
-      content,
-      '_preview',
+    const content = await readFileWithFallback(
+      entry.proposedUri,
+      entry.proposedContent,
     );
+    const tempPath = await createTempFileWithCleanup(entry, content, '_preview');
 
-    registerCleanup(entry, cleanup);
-    if (entry.isSettled()) {
-      return;
-    }
+    if (entry.isSettled()) return;
 
-    const tempLocation = pathToLocation(tempPath);
-    await openBuildDisplayIfTex(tempLocation, { preserveFocus: true });
+    await openBuildDisplayIfTex(pathToLocation(tempPath), { preserveFocus: true });
   });
 }
 
@@ -170,39 +165,30 @@ export async function runLatexdiff(
   options?: { subtype?: string },
 ): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
-    const originalContent = await fs
-      .readFile(entry.originalUri.fsPath, 'utf8')
-      .catch(() => entry.originalContent);
-    const proposedContent = await fs
-      .readFile(entry.proposedUri.fsPath, 'utf8')
-      .catch(() => entry.proposedContent);
+    const [originalContent, proposedContent] = await Promise.all([
+      readFileWithFallback(entry.originalUri, entry.originalContent),
+      readFileWithFallback(entry.proposedUri, entry.proposedContent),
+    ]);
 
-    const original = await createTempFile(
-      entry.request.path,
+    const originalPath = await createTempFileWithCleanup(
+      entry,
       originalContent,
       '_original',
     );
-    registerCleanup(entry, original.cleanup);
-
-    const proposed = await createTempFile(
-      entry.request.path,
+    const proposedPath = await createTempFileWithCleanup(
+      entry,
       proposedContent,
       '_proposed',
     );
-    registerCleanup(entry, proposed.cleanup);
 
-    const originalLocation = pathToLocation(original.tempPath);
-    const proposedLocation = pathToLocation(proposed.tempPath);
-
-    const workspacePath = WorkspaceFS.getPath();
     const result = await latexdiffService.runDiff(
-      originalLocation,
-      proposedLocation,
+      pathToLocation(originalPath),
+      pathToLocation(proposedPath),
       '_diff',
       false,
       'coarse',
       {
-        cwd: workspacePath ?? path.dirname(original.tempPath),
+        cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
         subtype: options?.subtype,
       },
     );
@@ -227,19 +213,18 @@ export async function runLatexdiff(
     }
 
     const diffFilePath = path.join(
-      path.dirname(original.tempPath),
+      path.dirname(originalPath),
       result.diffFileName,
     );
     registerCleanup(entry, async () => {
-      await fs.unlink(diffFilePath).catch(() => {});
+      await silentUnlink(diffFilePath);
       await cleanupLatexAuxFiles(diffFilePath);
     });
 
-    if (entry.isSettled()) {
-      return;
-    }
+    if (entry.isSettled()) return;
 
-    const diffLocation = pathToLocation(diffFilePath);
-    await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
+    await openBuildDisplayIfTex(pathToLocation(diffFilePath), {
+      preserveFocus: true,
+    });
   });
 }

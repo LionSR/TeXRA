@@ -7,9 +7,7 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentCategory, hasEndTag } from '@agent/core/AgentDataclass';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
+import { hasEndTag, type AgentSetting } from '@agent/core/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -181,7 +179,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Background mode is only eligible for Workflow agents
-    return this.getAgentCategory() === AgentCategory.Workflow;
+    return this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
@@ -1294,10 +1292,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Models with prefill support do not require additional continuation messages. */
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.defaultAddContinueWithPrefill();
   }
@@ -1486,10 +1482,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Adds continuation instructions for models without prefill support. */
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -1565,13 +1559,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
-    const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
-      state,
       workspaceState,
       agentSetting,
-      agentConfig,
     );
 
     endTurn = false;

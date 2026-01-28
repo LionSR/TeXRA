@@ -1,11 +1,8 @@
 /**
  * Agent core barrel export.
  *
- * NOTE: This barrel is currently unused - all external imports are direct
- * (e.g., '@agent/core/AgentDataclass' instead of '@agent/core').
- *
- * Retained for potential future use and documentation of public API.
- * For most imports, use the specific file path directly.
+ * Exports commonly used types and schemas from the agent core module.
+ * For internal implementation details, import directly from the specific file.
  */
 
 // Most commonly used - enums and category types
@@ -16,8 +13,8 @@ export type {
   AgentWorkflowSetting,
 } from './AgentDataclass.js';
 
-// Config types
-export type { AgentConfig } from './AgentConfig.js';
+// Config types and schemas
+export { AgentConfigSchema, type AgentConfig } from './AgentConfig.js';
 export type { ToolConfig } from './ToolConfig.js';
 
 // State classes - commonly instantiated

@@ -31,7 +31,6 @@ import {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
@@ -938,10 +937,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   addContinueMessageWithPrefill(
     _messages: Content[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
@@ -950,10 +947,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   addContinueMessageWithoutPrefill(
     messages: Content[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -1085,13 +1080,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
-    const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
-      state,
       workspaceState,
       agentSetting,
-      agentConfig,
     );
     return [endTurn, messages];
   }
