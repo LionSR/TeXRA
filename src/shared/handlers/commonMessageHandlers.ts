@@ -5,7 +5,6 @@ import {
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import type { ZodError } from 'zod';
 
-
 export interface CommonMessageContext {
   setTheme: (theme: string) => void;
   setDebugMode: (enabled: boolean) => void;

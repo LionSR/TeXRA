@@ -14,15 +14,24 @@ const STAR_ENVIRONMENTS = [
   'alignat\\*',
 ];
 
-/** Packages that need extra newlines added before them for readability. */
-const PACKAGES_NEEDING_NEWLINE = [
+/** Substrings that trigger extra newlines before the line for readability. */
+const PACKAGES_NEEDING_NEWLINE = new Set([
   '\\usepackage{tikz}',
   '\\usepackage{pgfplots}',
   '\\providecommand{\\DIFaddbegin}',
   '\\RequirePackage[normalem]{ulem}',
   '\\usetikzlibrary',
   '\\RequirePackage{color}',
-];
+]);
+
+/** Pattern to match TEX root comments (handles various spacing: %!TEX, % !TEX, %! TEX). */
+const TEX_ROOT_COMMENT = /^%\s?!\s?TEX root/;
+
+/** Markers that indicate start of preamble content to skip (before document starts). */
+const PREAMBLE_SKIP_MARKERS = ['%DIF ADD', 'Here is', '以下是'];
+
+/** Markers that indicate document structure has begun. */
+const DOCUMENT_START_MARKERS = ['\\documentclass', '\\input'];
 
 /** Patterns to fix broken document endings after latexdiff processing. */
 const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
@@ -63,47 +72,67 @@ export class DiffFileProcessor {
   }
 
   private processLineByLine(content: string): string {
-    const lines = content.split('\n');
-    let newContent = '';
-    let addBlock = false;
+    let skippingPreambleBlock = false;
     let documentStarted = false;
 
-    for (const line of lines) {
-      // Skip TEX root comments (handles various spacing: %!TEX, % !TEX, %! TEX)
-      if (/^%\s?!\s?TEX root/.test(line)) {
-        continue;
+    const processedLines = content.split('\n').flatMap((line) => {
+      if (TEX_ROOT_COMMENT.test(line)) {
+        return [];
       }
 
-      // Add newlines before specific packages
-      if (PACKAGES_NEEDING_NEWLINE.some((pkg) => line.includes(pkg))) {
-        newContent += '\n';
+      const lineState = this.updateLineState(line, documentStarted);
+      documentStarted = lineState.documentStarted;
+      skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
+
+      if (skippingPreambleBlock) {
+        return [];
       }
 
-      // Handle document structure
-      if (line.includes('\\documentclass') || line.includes('\\input')) {
-        addBlock = false;
-        documentStarted = true;
-      } else if (
-        (line.includes('%DIF ADD') ||
-          line.includes('Here is') ||
-          line.includes('以下是')) &&
-        !documentStarted
-      ) {
-        addBlock = true;
-      }
+      return this.formatLine(line);
+    });
 
-      // Add line if not in add block
-      if (!addBlock) {
-        newContent += `${line}\n`;
-      }
+    return processedLines.join('\n') + '\n';
+  }
 
-      // Add extra newline after color package
-      if (line.includes('\\RequirePackage{color}')) {
-        newContent += '\n';
-      }
+  private updateLineState(
+    line: string,
+    documentStarted: boolean,
+  ): { documentStarted: boolean; skipBlock?: boolean } {
+    if (DOCUMENT_START_MARKERS.some((marker) => line.includes(marker))) {
+      return { documentStarted: true, skipBlock: false };
+    }
+    if (
+      !documentStarted &&
+      PREAMBLE_SKIP_MARKERS.some((marker) => line.includes(marker))
+    ) {
+      return { documentStarted, skipBlock: true };
+    }
+    return { documentStarted };
+  }
+
+  private formatLine(line: string): string[] {
+    const result: string[] = [];
+
+    if (this.needsNewlineBefore(line)) {
+      result.push('');
     }
 
-    return newContent;
+    result.push(line);
+
+    if (line.includes('\\RequirePackage{color}')) {
+      result.push('');
+    }
+
+    return result;
+  }
+
+  private needsNewlineBefore(line: string): boolean {
+    for (const pkg of PACKAGES_NEEDING_NEWLINE) {
+      if (line.includes(pkg)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private async processTikzPictureEndings(
