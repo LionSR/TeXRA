@@ -20,8 +20,8 @@
  * 2. Retries don't have side effects on shared state
  * 3. Clear data flow through the node lifecycle
  *
- * Services (modelHandler, client, etc.) are accessed via `_params.services`,
- * which is the PocketFlow pattern for immutable configuration.
+ * Services (modelHandler, client, etc.) are accessed via `this.services`,
+ * following the PocketFlow service injection pattern.
  */
 
 import { z } from 'zod';

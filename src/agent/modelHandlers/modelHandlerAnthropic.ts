@@ -136,65 +136,17 @@ interface UploadedAnthropicAttachment {
   mediaType?: string;
 }
 
-/**
- * Union type for thinking content blocks from Anthropic Beta API responses.
- * These blocks contain the model's internal reasoning process.
- * Uses Beta types since BetaMessage.content returns BetaContentBlock[].
- */
-type BetaThinkingContent = BetaThinkingBlock | BetaRedactedThinkingBlock;
-
-/**
- * Union type for thinking block params used in API requests.
- * Used when including thinking blocks in follow-up messages.
- */
-type AnthropicThinkingContentParam =
-  | ThinkingBlockParam
-  | RedactedThinkingBlockParam;
-
-/** Type guard for Anthropic thinking blocks in Beta API responses */
-const isBetaThinkingBlock = (
-  block: BetaContentBlock,
-): block is BetaThinkingBlock => block.type === 'thinking';
-
-/** Type guard for Anthropic redacted thinking blocks in Beta API responses */
-const isBetaRedactedThinkingBlock = (
-  block: BetaContentBlock,
-): block is BetaRedactedThinkingBlock => block.type === 'redacted_thinking';
-
-/** Type guard for thinking block params in message content */
-const isThinkingBlockParam = (
-  block: ContentBlockParam,
-): block is ThinkingBlockParam => block.type === 'thinking';
-
-/** Type guard for redacted thinking block params in message content */
-const isRedactedThinkingBlockParam = (
-  block: ContentBlockParam,
-): block is RedactedThinkingBlockParam => block.type === 'redacted_thinking';
 
 /** Type guard for any thinking-related content block param */
 const isAnyThinkingBlockParam = (
   block: ContentBlockParam,
-): block is AnthropicThinkingContentParam =>
-  isThinkingBlockParam(block) || isRedactedThinkingBlockParam(block);
+): block is ThinkingBlockParam | RedactedThinkingBlockParam =>
+  block.type === 'thinking' || block.type === 'redacted_thinking';
 
 /** Type guard for tool use blocks in Beta API responses */
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
 
-/** Extract concatenated text from content blocks, optionally trimming each block */
-const extractTextFromContent = (
-  content: BetaContentBlock[] | undefined,
-  trim = false,
-): string => {
-  if (!content) return '';
-  return content
-    .filter(
-      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-        block.type === 'text',
-    )
-    .map((block) => (trim ? block.text.trim() : block.text))
-    .join('');
-};
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -1350,7 +1302,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Extract base response
     const stopReason = responseObject.stop_reason;
-    let newResponse = extractTextFromContent(responseObject.content, true);
+    let newResponse = responseObject.content
+      .filter(
+        (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+          block.type === 'text',
+      )
+      .map((block) => block.text.trim())
+      .join('');
 
     // Add end tag if needed
     if (
@@ -1716,7 +1674,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug(
         `Adding ${thinkingBlocks.length} thinking blocks to new assistant message`,
       );
-      content.push(...(thinkingBlocks as AnthropicThinkingContentParam[]));
+      content.push(
+        ...(thinkingBlocks as (ThinkingBlockParam | RedactedThinkingBlockParam)[]),
+      );
       workspaceState.resetReasoning();
     }
 
@@ -1778,18 +1738,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return null;
     }
 
-    // Extract all thinking blocks from the response using SDK type guards
-    const thinkingBlocks: BetaThinkingContent[] = [];
+    // Extract all thinking blocks from the response
+    const thinkingBlocks: (BetaThinkingBlock | BetaRedactedThinkingBlock)[] = [];
     let regularThinkingContent: string | null = null;
 
     if (responseObject.content && Array.isArray(responseObject.content)) {
       for (const item of responseObject.content) {
-        if (isBetaThinkingBlock(item) && item.thinking) {
+        if (item.type === 'thinking' && item.thinking) {
           thinkingBlocks.push(item);
           if (regularThinkingContent === null) {
             regularThinkingContent = item.thinking;
           }
-        } else if (isBetaRedactedThinkingBlock(item) && item.data) {
+        } else if (item.type === 'redacted_thinking' && item.data) {
           thinkingBlocks.push(item);
         }
       }

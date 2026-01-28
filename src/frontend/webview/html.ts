@@ -21,11 +21,11 @@ export function buildWebviewHtml(
     .replaceAll('${cspSource}', webview.cspSource);
 
   for (const [key, value] of Object.entries(replacements)) {
-    const replaced =
+    const resolved =
       value instanceof vscode.Uri
         ? webview.asWebviewUri(value).toString()
         : value;
-    result = result.replaceAll(new RegExp(`\\$\\{${key}\\}`, 'g'), replaced);
+    result = result.replaceAll(`\${${key}}`, resolved);
   }
 
   return result;

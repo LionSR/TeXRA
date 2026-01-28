@@ -173,10 +173,7 @@ export class FileLister {
 
       // Match files that start with the base name or have round suffixes
       if (fileBase.startsWith(baseFileName)) return true;
-      if (
-        fileBase.startsWith(baseNameWithoutRound) &&
-        /_r\d+/.test(fileBase)
-      ) {
+      if (fileBase.startsWith(baseNameWithoutRound) && /_r\d+/.test(fileBase)) {
         return true;
       }
       return false;

@@ -269,7 +269,7 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
   - `FlowTransition.CONTINUE` - loop back to flow entry
   - `FlowTransition.FINALIZE` - exit flow after finalization
   - `FlowTransition.COMPLETE` - return control to caller
-- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Use constants `NODE_NO_RETRY` and `NODE_NO_WAIT` for node configuration.
+- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Override `maxRetries` and `retryDelay` getters for retry configuration.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
 
 See `docs/pocketflow/` for full framework documentation.
