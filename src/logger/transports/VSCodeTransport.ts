@@ -6,7 +6,6 @@ import {
   ContextStateDataSchema,
   MESSAGE_TYPES,
   MessageTypeSchema,
-  type ContextStateData,
   type EndGroupStatus,
   type LogLevel,
   type MessageType,
@@ -39,7 +38,6 @@ export class VSCodeTransport extends Transport {
 
   log(info: any, callback: () => void): void {
     const { level, message, timestamp, messageType, groupId } = info;
-    // Serialize errors for logging (inline from serializeLogData)
     const data =
       info.data instanceof Error ? serializeError(info.data) : info.data;
 
@@ -100,11 +98,6 @@ export class VSCodeTransport extends Transport {
     }
   }
 
-  /**
-   * Emit log message to progress view event bus.
-   * Only emits for agent channels; filters debug and internal messages
-   * using shared filtering logic from filterUtils.
-   */
   private emitLogEvent(event: {
     level: string;
     message: string;
@@ -115,7 +108,6 @@ export class VSCodeTransport extends Transport {
   }): void {
     if (!this.isAgentChannel) return;
 
-    // Use Zod schema with .catch() for O(1) validation with automatic fallback
     const messageType = MessageTypeSchema.catch(MESSAGE_TYPES.DEFAULT).parse(
       event.messageType,
     );
@@ -141,35 +133,15 @@ export class VSCodeTransport extends Transport {
     this.maybeEmitContextState(messageType, event.data);
   }
 
-  /**
-   * Emit context state for CONTEXT_STATE messages only.
-   *
-   * CONTEXT_STATE messages contain actual API token counts from responses,
-   * which are accurate. CONTEXT_MANAGEMENT messages contain pre-request
-   * estimates (e.g., from gpt-tokenizer) which can differ significantly
-   * from actual counts, especially for OpenAI models.
-   *
-   * By only emitting from CONTEXT_STATE, the UI always shows actual token
-   * counts rather than potentially inaccurate estimates.
-   */
   private maybeEmitContextState(messageType: MessageType, data: unknown): void {
-    // Only emit context state from CONTEXT_STATE messages (actual API tokens)
-    // Skip CONTEXT_MANAGEMENT to avoid overwriting actual counts with estimates
     if (messageType !== MESSAGE_TYPES.CONTEXT_STATE || !data) return;
 
     const parseResult = ContextStateDataSchema.safeParse(data);
     if (!parseResult.success) return;
 
-    this.emitContextState(parseResult.data);
-  }
-
-  /**
-   * Emit context state to the progress view event bus.
-   */
-  private emitContextState(contextState: ContextStateData): void {
     bus.emit('updateContextState', {
       streamId: this.streamId,
-      contextState,
+      contextState: parseResult.data,
     });
   }
 }

@@ -1,15 +1,10 @@
-// Local imports - shared schemas
 import {
   CommonViewMessageSchema,
-  type CommonViewMessage,
   type StateRestoreMessage,
 } from '@shared/schemas/commonViewMessages';
-
-// Local imports - shared commands
 import { COMMON_COMMANDS } from '@common/webview/commands';
-
-// Type imports
 import type { ZodError } from 'zod';
+
 
 export interface CommonMessageContext {
   setTheme: (theme: string) => void;
@@ -32,19 +27,18 @@ export function handleCommonMessage(
     return false;
   }
 
-  const message: CommonViewMessage = result.data;
-  switch (message.command) {
+  switch (result.data.command) {
     case COMMON_COMMANDS.THEME_SET:
-      context.setTheme(message.theme);
+      context.setTheme(result.data.theme);
       return true;
     case COMMON_COMMANDS.DEBUG_MODE_SET:
-      context.setDebugMode(message.debugMode);
+      context.setDebugMode(result.data.debugMode);
       return true;
     case COMMON_COMMANDS.STATE_RESTORE:
-      context.restoreState(message);
+      context.restoreState(result.data);
       return true;
     case COMMON_COMMANDS.ERROR:
-      context.onError(message.message, message.details ?? undefined);
+      context.onError(result.data.message, result.data.details);
       return true;
     case COMMON_COMMANDS.WEBVIEW_READY:
       return true;

@@ -1,8 +1,8 @@
-// Local imports - shared webview
-import { postMessage } from '@shared/vscode';
-
 // Third-party imports
+import { postMessage } from '@shared/vscode';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
+
+// Local imports
 
 export interface RecordingButtonConfig {
   startCommand: string;
@@ -58,7 +58,6 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
-  // ReactiveController requires at least one lifecycle method
   hostConnected(): void {}
 
   /**
@@ -94,9 +93,8 @@ export class RecordingButtonController implements ReactiveController {
    * Update recording state and trigger host re-render.
    */
   setRecording(recording: boolean): void {
-    const wasRecording = this._recording;
-    this._recording = Boolean(recording);
-    if (wasRecording !== this._recording) {
+    if (this._recording !== recording) {
+      this._recording = recording;
       this.host.requestUpdate();
     }
   }
