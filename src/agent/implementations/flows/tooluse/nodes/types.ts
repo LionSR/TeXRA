@@ -46,11 +46,19 @@ export interface ToolUseRunShared {
 // Result Types
 // ============================================================================
 
-export interface PrepareResult {
-  messages: ProviderMessage[];
+/** Common state fields shared by node result types. */
+interface NodeResultStateBase {
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
+}
+
+/**
+ * Result from ToolUsePrepareNode.
+ * Uses `messages` (initial) and `shouldSkipCycle` for prepare phase.
+ */
+export interface PrepareResult extends NodeResultStateBase {
+  messages: ProviderMessage[];
   shouldSkipCycle: boolean;
 }
 
@@ -64,12 +72,13 @@ export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
   | { kind: 'stop' };
 
-export interface CyclePrepResult {
-  shouldSkip: boolean;
+/**
+ * Result from ToolUseCycleNode prep phase.
+ * Uses `conversation` (ongoing) and `shouldSkip` for cycle phase.
+ */
+export interface CyclePrepResult extends NodeResultStateBase {
   conversation: ProviderMessage[];
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
+  shouldSkip: boolean;
 }
 
 // ============================================================================
