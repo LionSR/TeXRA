@@ -249,7 +249,7 @@ export async function buildFileAttachment({
   }
 
   const buffer = await wrapApiCall(
-    () => WorkspaceFS.readFileBytes(path.relative),
+    () => WorkspaceFS.readBytes(path.relative),
     `Failed to read attachment ${display}`,
   );
 

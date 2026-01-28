@@ -1,8 +1,6 @@
-// Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports
 import { toErrorMessage } from '@common/errors';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
@@ -15,13 +13,7 @@ import {
 import { ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - VS Code integration
 import * as vscodeIntegration from './VscodeIntegration';
-
-// ============================================================================
-// Schema Definitions
-// ============================================================================
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
@@ -35,21 +27,18 @@ const LeanDiagnosticsInputSchema = z.strictObject({
 
 export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
-// ============================================================================
-// Lean File Tool (file-specific commands)
-// ============================================================================
-
 const FILE_COMMANDS = ['restart', 'refresh_dependencies'] as const;
 type FileCommand = (typeof FILE_COMMANDS)[number];
 
-const FILE_COMMAND_MAP: Record<FileCommand, string> = {
-  restart: 'lean4.restartFile',
-  refresh_dependencies: 'lean4.refreshFileDependencies',
-};
-
-const FILE_COMMAND_DESCRIPTIONS: Record<FileCommand, string> = {
-  restart: 'Restart Lean server for this file',
-  refresh_dependencies: 'Refresh file dependencies without full restart',
+const FILE_COMMAND_CONFIG: Record<FileCommand, { vscode: string; description: string }> = {
+  restart: {
+    vscode: 'lean4.restartFile',
+    description: 'Restart Lean server for this file',
+  },
+  refresh_dependencies: {
+    vscode: 'lean4.refreshFileDependencies',
+    description: 'Refresh file dependencies without full restart',
+  },
 };
 
 const LeanFileInputSchema = z.strictObject({
@@ -62,10 +51,6 @@ const LeanFileInputSchema = z.strictObject({
 });
 
 export type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
-
-// ============================================================================
-// Lean Project Tool (global commands - project, server, and setup)
-// ============================================================================
 
 const PROJECT_COMMANDS = [
   // Server commands
@@ -84,36 +69,17 @@ const PROJECT_COMMANDS = [
 ] as const;
 type ProjectCommand = (typeof PROJECT_COMMANDS)[number];
 
-const PROJECT_COMMAND_MAP: Record<ProjectCommand, string> = {
-  // Server
-  restart_server: 'lean4.restartServer',
-  stop_server: 'lean4.stopServer',
-  // Project
-  build: 'lean4.project.build',
-  clean: 'lean4.project.clean',
-  fetch_cache: 'lean4.project.fetchCache',
-  fetch_file_cache: 'lean4.project.fetchFileCache',
-  // Setup
-  install_elan: 'lean4.setup.installElan',
-  install_deps: 'lean4.setup.installDeps',
-  update_elan: 'lean4.setup.updateElan',
-  select_toolchain: 'lean4.setup.selectDefaultToolchain',
-};
-
-const PROJECT_COMMAND_DESCRIPTIONS: Record<ProjectCommand, string> = {
-  // Server
-  restart_server: 'Restart the entire Lean language server',
-  stop_server: 'Stop the Lean language server',
-  // Project
-  build: 'Build the project (runs lake build)',
-  clean: 'Clean project build artifacts',
-  fetch_cache: 'Download Mathlib build cache for the project',
-  fetch_file_cache: "Download Mathlib cache for current file's imports only",
-  // Setup
-  install_elan: 'Install Elan (Lean version manager)',
-  install_deps: 'Install Lean dependencies',
-  update_elan: 'Update Elan to latest version',
-  select_toolchain: 'Select default Lean toolchain version',
+const PROJECT_COMMAND_CONFIG: Record<ProjectCommand, { vscode: string; description: string }> = {
+  restart_server: { vscode: 'lean4.restartServer', description: 'Restart the entire Lean language server' },
+  stop_server: { vscode: 'lean4.stopServer', description: 'Stop the Lean language server' },
+  build: { vscode: 'lean4.project.build', description: 'Build the project (runs lake build)' },
+  clean: { vscode: 'lean4.project.clean', description: 'Clean project build artifacts' },
+  fetch_cache: { vscode: 'lean4.project.fetchCache', description: 'Download Mathlib build cache for the project' },
+  fetch_file_cache: { vscode: 'lean4.project.fetchFileCache', description: "Download Mathlib cache for current file's imports only" },
+  install_elan: { vscode: 'lean4.setup.installElan', description: 'Install Elan (Lean version manager)' },
+  install_deps: { vscode: 'lean4.setup.installDeps', description: 'Install Lean dependencies' },
+  update_elan: { vscode: 'lean4.setup.updateElan', description: 'Update Elan to latest version' },
+  select_toolchain: { vscode: 'lean4.setup.selectDefaultToolchain', description: 'Select default Lean toolchain version' },
 };
 
 const LeanProjectInputSchema = z.strictObject({
@@ -127,10 +93,6 @@ Setup: install_elan, install_deps, update_elan, select_toolchain`,
 });
 
 export type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
-
-// ============================================================================
-// Lean Inspect Tool (position-based queries: goal or hover)
-// ============================================================================
 
 const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
 
@@ -155,10 +117,6 @@ const LeanInspectInputSchema = z.strictObject({
 
 export type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
 If you expected errors:
@@ -180,13 +138,6 @@ async function navigateToFirstError(
   }
 }
 
-// ============================================================================
-// Tool Implementations
-// ============================================================================
-
-/**
- * Get diagnostics for a Lean file from VS Code.
- */
 export class LeanDiagnosticsTool extends defineTool({
   name: 'lean_diagnostics',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
@@ -269,9 +220,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
   }
 }
 
-/**
- * Execute file-specific Lean 4 extension commands.
- */
 export class LeanFileTool extends defineTool({
   name: 'lean_file',
   description: `Execute Lean 4 extension commands on a specific file.
@@ -285,40 +233,24 @@ Requires: Lean 4 VS Code extension installed and active.`,
 }) {
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
     const { command, file } = input;
-    const vscodeCommand = FILE_COMMAND_MAP[command];
-    const description = FILE_COMMAND_DESCRIPTIONS[command];
+    const config = FILE_COMMAND_CONFIG[command];
 
     try {
-      const success = await vscodeIntegration.executeFileCommand(
-        vscodeCommand,
-        file,
-      );
-
-      if (success) {
+      const success = await vscodeIntegration.executeFileCommand(config.vscode, file);
+      if (!success) {
         return {
-          summary: description,
-          output: `Executed "${command}" on ${file}`,
+          summary: 'Command failed',
+          output: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
+          isError: true,
         };
       }
-
-      return {
-        summary: 'Command failed',
-        output: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
-        isError: true,
-      };
+      return { summary: config.description, output: `Executed "${command}" on ${file}` };
     } catch (error) {
-      return {
-        summary: 'Command failed',
-        output: `Error: ${toErrorMessage(error)}`,
-        isError: true,
-      };
+      return { summary: 'Command failed', output: `Error: ${toErrorMessage(error)}`, isError: true };
     }
   }
 }
 
-/**
- * Execute global Lean 4 extension commands (project, server, and setup).
- */
 export class LeanProjectTool extends defineTool({
   name: 'lean_project',
   description: `Execute global Lean 4 extension commands (no file required).
@@ -344,29 +276,17 @@ Requires: Lean 4 VS Code extension installed.`,
 }) {
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {
     const { command } = input;
-    const vscodeCommand = PROJECT_COMMAND_MAP[command];
-    const description = PROJECT_COMMAND_DESCRIPTIONS[command];
+    const config = PROJECT_COMMAND_CONFIG[command];
 
     try {
-      await vscode.commands.executeCommand(vscodeCommand);
-
-      return {
-        summary: description,
-        output: `Executed "${command}" successfully`,
-      };
+      await vscode.commands.executeCommand(config.vscode);
+      return { summary: config.description, output: `Executed "${command}" successfully` };
     } catch (error) {
-      return {
-        summary: 'Command failed',
-        output: `Error executing "${command}": ${toErrorMessage(error)}`,
-        isError: true,
-      };
+      return { summary: 'Command failed', output: `Error executing "${command}": ${toErrorMessage(error)}`, isError: true };
     }
   }
 }
 
-/**
- * Inspect proof state or type info at a position in a Lean file.
- */
 export class LeanInspectTool extends defineTool({
   name: 'lean_inspect',
   description: `Inspect proof state or type information at a position in a Lean 4 file.

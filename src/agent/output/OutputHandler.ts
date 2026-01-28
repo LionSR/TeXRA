@@ -437,8 +437,7 @@ export class OutputHandler implements IOutputHandler {
     await this.withOutputStage(
       `Process files r${currRound}`,
       stage,
-      async (scope) => {
-        this.ensureRound(currRound);
+      async () => {
         await this.prepareRunWorkspaceIfNeeded();
 
         const data = this.ensureRoundData(currRound);
@@ -454,7 +453,6 @@ export class OutputHandler implements IOutputHandler {
             outputLocation,
             currRound,
             rawLocation,
-            scope,
           );
           return;
         }
@@ -464,7 +462,6 @@ export class OutputHandler implements IOutputHandler {
           currRound,
           rawLocation,
           this.getStorageKey(),
-          scope,
         );
       },
     );

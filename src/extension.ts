@@ -259,8 +259,8 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Register the folder explorer with context
-  const folderExplorer = new FolderExplorer(workspaceRoot, context);
+  // Register the folder explorer
+  const folderExplorer = new FolderExplorer();
   const explorerOps = new ExplorerOperations(() => folderExplorer.refresh());
   const commandManager = new ExplorerCommands(context, explorerOps);
   commandManager.register();
