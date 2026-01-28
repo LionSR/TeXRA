@@ -22,7 +22,7 @@
 import * as path from 'path';
 
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import type { EndGroupStatus } from '@shared/schemas';
 import {
   getExecutionStore,
   type ExecutionKVStore,
@@ -44,7 +44,11 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
-import { executionToEndStatus } from '@common/constants/streamStatus';
+import {
+  toEndStatus,
+  ERROR_STATUS,
+  COMPLETED_STATUS,
+} from '../common/FlowLifecycle';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import {
@@ -141,13 +145,9 @@ function deriveConfig(
 
   // Compute total rounds: max(setting.rounds, userRequest.length)
   const { userRequest } = prompt;
-  let requestCount = 0;
-  if (Array.isArray(userRequest)) {
-    requestCount = userRequest.length;
-  } else if (userRequest) {
-    requestCount = 1;
-  }
-  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
+  const requestCount = Array.isArray(userRequest) ? userRequest.length : 0;
+  const effectiveRequestCount = userRequest && !Array.isArray(userRequest) ? 1 : requestCount;
+  const totalRounds = Math.max(setting.rounds ?? 2, effectiveRequestCount);
 
   return {
     useScratchpad,
@@ -182,7 +182,7 @@ export async function runReflectionFlow<C = unknown>(
     usageMonitor,
   } = input;
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let status: EndGroupStatus = COMPLETED_STATUS;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
@@ -346,15 +346,15 @@ export async function runReflectionFlow<C = unknown>(
 
     await pf.run(shared);
     shared = await pf.getShared();
-    status = executionToEndStatus(flowResult.status) as EndGroupStatus;
+    status = toEndStatus(flowResult.status);
   } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
+    status = ERROR_STATUS;
     throw error;
   } finally {
     // Only delete flow record on successful completion
     // Keep it for interrupted/error flows to enable resume
-    // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
-    if (status === END_GROUP_STATUS.STOPPED) {
+    // Note: COMPLETED_STATUS means "completed" (not user-stopped)
+    if (status === COMPLETED_STATUS) {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);

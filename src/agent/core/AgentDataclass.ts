@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import * as logger from '@logger/logUtils';
 import { ToolDefinitionSchema } from '@model';
 
 export const AgentSource = z.enum([
@@ -11,18 +10,7 @@ export const AgentSource = z.enum([
 ]);
 export type AgentSource = z.infer<typeof AgentSource>;
 
-/**
- * Primary discriminator for agent families.
- *
- * **Workflow**: Document processing agents that run for a fixed number of rounds.
- * - Default rounds: max(configured rounds, userRequest length)
- * - Use `rounds: 1` for single-pass processing
- * - XML structure enforcement controlled by `xmlStructureMode` (default: 'scratchpadOnly')
- *
- * **ToolUse**: Interactive agents with tool-calling capabilities.
- * - Continues until user follow-up or interruption
- * - Manages persistent sessions with checkpointing
- */
+/** Workflow: fixed-round document processing. ToolUse: interactive tool-calling. */
 export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
@@ -71,47 +59,27 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.ToolUse),
 });
 
-/** Normalize input to ensure agentCategory discriminator is present. */
+/** Normalize input to ensure agentCategory discriminator is present (migrates legacy fields). */
 function normalizeAgentSettingInput(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
   const { agentType, maxRounds, ...rest } = input as Record<string, unknown>;
 
+  // Migrate legacy maxRounds → rounds
   if (maxRounds !== undefined && rest.rounds === undefined) {
-    logger.debug(
-      'AgentDataclass',
-      `Migrating legacy maxRounds (${maxRounds}) to rounds`,
-    );
     rest.rounds = maxRounds;
   }
 
+  // Already has agentCategory - just strip legacy agentType if present
   if (rest.agentCategory !== undefined) {
-    if (agentType !== undefined) {
-      logger.debug(
-        'AgentDataclass',
-        `Stripping legacy agentType: ${agentType}`,
-      );
-    }
     return rest;
   }
 
-  if (agentType === 'toolUse') {
-    logger.debug(
-      'AgentDataclass',
-      `Migrating legacy agentType: toolUse → AgentCategory.ToolUse`,
-    );
-    return { ...rest, agentCategory: AgentCategory.ToolUse };
-  }
-
-  if (agentType !== undefined) {
-    logger.debug(
-      'AgentDataclass',
-      `Migrating legacy agentType: ${agentType} → AgentCategory.Workflow`,
-    );
-  }
-
-  return { ...rest, agentCategory: AgentCategory.Workflow };
+  // Migrate legacy agentType → agentCategory
+  const category =
+    agentType === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
+  return { ...rest, agentCategory: category };
 }
 
 export const AgentSettingSchema = z.preprocess(

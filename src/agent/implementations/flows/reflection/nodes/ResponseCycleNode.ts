@@ -89,9 +89,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Reconstruct state instances from snapshots
-    const workspace = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot);
+    const workspace = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
     const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
-    const round = ConversationRoundState.fromSnapshot(context.stateRoundSnapshot);
+    const round = ConversationRoundState.fromSnapshot(
+      context.stateRoundSnapshot,
+    );
 
     return {
       shared,

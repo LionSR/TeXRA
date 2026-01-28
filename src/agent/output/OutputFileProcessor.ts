@@ -60,20 +60,14 @@ export class OutputFileProcessor {
         );
 
       if (processedPairs.length > 0) {
-        await indentLatexFiles(
-          processedPairs.map((p) => p.location),
-          logger,
-        );
+        const locations = processedPairs.map((p: OutputFileInfo) => p.location);
+        await indentLatexFiles(locations, logger);
         logger.debug(
-          `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
+          `Indented multiple output files: ${locations.map((l) => l.absolutePath).join(',')}`,
         );
 
         if (this.ctx.baseFiles.length > 0) {
-          await replaceInputCommands(
-            this.ctx.baseFiles,
-            processedPairs.map((p) => p.location),
-            logger,
-          );
+          await replaceInputCommands(this.ctx.baseFiles, locations, logger);
         }
         this.ctx.setRoundOutputs(currRound, processedPairs);
         await this.captureXmlSummary(currRound, rawLocation, processedPairs);
