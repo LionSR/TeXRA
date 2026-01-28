@@ -321,10 +321,8 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const { logger, config, round } = this.services;
-
     const successRes = handleInvocationResult(execRes, shared, shared, {
-      logger,
+      logger: this.services.logger,
       operationName: this.getOperationName(),
     });
 
@@ -339,11 +337,11 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       object: successRes.response,
       objectType: 'response',
       context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
+        modelName: this.services.config.model,
+        isRemote: isRemoteAgent(this.services.config.agent),
       }),
       fileOptions: {
-        continuationCount: round.continuationCount,
+        continuationCount: this.services.round.continuationCount,
         baseName: 'response',
         outputFile: shared.outputLocation!.relativePath,
       },

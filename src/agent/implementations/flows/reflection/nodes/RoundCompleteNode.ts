@@ -47,13 +47,13 @@ export class RoundCompleteNode<C = unknown> extends Node<
   async exec(
     prepRes: RoundCompletePrepInput,
   ): Promise<RoundCompleteExecResult> {
-    const { checkInterruption, logger } = this.services;
+    const { logger } = this.services;
     const { currentRound, totalRounds, continueRounds } = prepRes;
 
     const nextRound = currentRound + 1;
 
     // Check for interruption
-    if (checkInterruption()) {
+    if (this.services.checkInterruption()) {
       logger.debug('Interruption requested - finalizing');
       return { kind: 'finalize' };
     }

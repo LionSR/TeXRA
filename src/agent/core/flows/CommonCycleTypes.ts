@@ -51,25 +51,6 @@ import type { ExecutionId } from '@shared/schemas';
  *
  * Optional fields (populated during/after cycle execution):
  * - responseTimeMs, stopReason, lastError
- *
- * ## Usage
- *
- * Specific flows extend this with their own fields:
- * ```typescript
- * // ResponseCycleFlow adds output tracking:
- * const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
- *   outputExists: z.boolean(),
- *   outputLocation: AgentFileLocationSchema.nullable(),
- *   processedResponse: z.string().optional(),
- * });
- *
- * // ToolUseCycleFlow adds tool tracking:
- * const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
- *   toolCalls: z.array(SdkToolCallSchema).optional(),
- *   text: z.string().optional(),
- *   cycleIndex: z.number(),
- * });
- * ```
  */
 export const BaseCycleFieldsSchema = z.object({
   /** Messages being processed in this cycle */
@@ -99,9 +80,6 @@ export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 /**
  * Internal debug context used by getDebugContext().
  * NOT exported - use getDebugContext() to create instances.
- *
- * NOTE: This type is NOT stored in shared state - it's derived from services
- * at each `maybeSaveDebugObject` call site using `getDebugContext()`.
  */
 interface CycleDebugContext {
   logger: AgentLogger;

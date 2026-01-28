@@ -26,8 +26,8 @@ export const DEFAULT_TOTALS = {
   totalServerToolRequests: 0,
 } as const;
 
-/** Schema for run usage totals - uses .prefault() for input normalization */
-export const RunUsageTotalsSchema = z.object({
+/** Schema for run usage totals. Internal only. */
+const RunUsageTotalsSchema = z.object({
   firstInputTokens: z.number().prefault(DEFAULT_TOTALS.firstInputTokens),
   totalInputTokens: z.number().prefault(DEFAULT_TOTALS.totalInputTokens),
   totalOutputTokens: z.number().prefault(DEFAULT_TOTALS.totalOutputTokens),
@@ -48,16 +48,14 @@ export const RunUsageTotalsSchema = z.object({
     .number()
     .prefault(DEFAULT_TOTALS.totalServerToolRequests),
 });
-export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
-/** Schema for normalized usage snapshot */
-export const NormalizedUsageSnapshotSchema = z.object({
+/** Schema for normalized usage snapshot. Internal only. */
+const NormalizedUsageSnapshotSchema = z.object({
   round: z.number(),
   usage: NormalizedUsageSchema,
 });
-export type NormalizedUsageSnapshot = z.infer<
-  typeof NormalizedUsageSnapshotSchema
->;
+type NormalizedUsageSnapshot = z.infer<typeof NormalizedUsageSnapshotSchema>;
 
 /**
  * Schema for RunUsageAccumulator JSON serialization.

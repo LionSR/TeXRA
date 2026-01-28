@@ -25,8 +25,7 @@ export class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: PrepareResult }> {
-    const { modelHandler, prompt, userVarChannels, logger, snapshot } =
-      this.services;
+    const { userVarChannels, logger, snapshot } = this.services;
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
@@ -53,7 +52,7 @@ export class ToolUsePrepareNode<C> extends Node<
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
-        prompt,
+        this.services.prompt,
         userVarChannels.transient,
         logger,
         { memoryEnabled },
@@ -69,7 +68,7 @@ export class ToolUsePrepareNode<C> extends Node<
     const systemMessage = systemPrompt
       ? `${systemPrompt}\n${instructionSuffix}`
       : instructionSuffix;
-    const messages = await modelHandler.initializeMessages(
+    const messages = await this.services.modelHandler.initializeMessages(
       userPrefix,
       userRequest,
       undefined,
