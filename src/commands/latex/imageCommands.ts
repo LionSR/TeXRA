@@ -16,14 +16,6 @@ logger.initialize(CHANNEL);
 
 const PDF_FILTERS = { 'PDF files': ['pdf'] };
 
-function logTruncatedBase64(base64String: string): void {
-  const truncated = base64String.substring(0, 100);
-  logger.debug(
-    CHANNEL,
-    `Truncated base64 string (first 100 chars): ${truncated}...`,
-  );
-}
-
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.countPdfPages', handleCountPdfPages),
@@ -85,7 +77,10 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
     );
 
     const base64String = await getBase64EncodedMedia(selection.relativePath);
-    logTruncatedBase64(base64String);
+    logger.debug(
+      CHANNEL,
+      `Truncated base64 string (first 100 chars): ${base64String.substring(0, 100)}...`,
+    );
     return base64String;
   } catch (err) {
     await showLoggedErrorMessage(

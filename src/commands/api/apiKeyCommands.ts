@@ -6,8 +6,10 @@ import { showLoggedErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ApiKeyCommands';
+logger.initialize(CHANNEL);
 
 export const PROVIDER_URLS: Record<ApiProvider, string> = {
   openai: 'https://platform.openai.com/api-keys',
@@ -86,43 +88,41 @@ async function setApiKeyForProvider(
   }
 }
 
-export function registerApiKeyCommands(context: vscode.ExtensionContext) {
-  // Command to set API key (accepts optional provider parameter)
-  const setApiKeyCommand = vscode.commands.registerCommand(
-    apiKeyCommands.setApiKey,
-    async (provider?: ApiProvider) => {
-      let selectedProvider = provider;
-      const skipDialog = !!provider; // Skip dialog if provider was passed
+export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      apiKeyCommands.setApiKey,
+      async (provider?: ApiProvider) => {
+        let selectedProvider = provider;
+        const skipDialog = !!provider;
 
-      if (!selectedProvider) {
-        // Show provider selection if no provider specified
-        const providerItems =
-          await SecretManager.getApiProviderQuickPickItems();
-        const providerPick = await vscode.window.showQuickPick(providerItems, {
-          placeHolder: 'Select API provider',
-        });
-        selectedProvider = providerPick?.provider;
-      }
+        if (!selectedProvider) {
+          const providerItems =
+            await SecretManager.getApiProviderQuickPickItems();
+          const providerPick = await vscode.window.showQuickPick(
+            providerItems,
+            {
+              placeHolder: 'Select API provider',
+            },
+          );
+          selectedProvider = providerPick?.provider;
+        }
 
-      if (!selectedProvider) {
-        return;
-      }
+        if (!selectedProvider) {
+          return;
+        }
 
-      await setApiKeyForProvider(selectedProvider, skipDialog);
-    },
-  );
+        await setApiKeyForProvider(selectedProvider, skipDialog);
+      },
+    ),
 
-  // Command to remove API key
-  const removeApiKeyCommand = vscode.commands.registerCommand(
-    apiKeyCommands.removeApiKey,
-    async () => {
+    vscode.commands.registerCommand(apiKeyCommands.removeApiKey, async () => {
       const providerItems = await SecretManager.getApiProviderQuickPickItems();
       const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider to remove key',
       });
 
       const provider = providerPick?.provider;
-
       if (!provider) {
         return;
       }
@@ -146,8 +146,6 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
           err,
         );
       }
-    },
+    }),
   );
-
-  context.subscriptions.push(setApiKeyCommand, removeApiKeyCommand);
 }

@@ -114,15 +114,25 @@ export class ExecutionManager {
   }
 
   handleFileOperation(message: CommandMessage): void {
-    this.runCommand(message, ['inputFile', 'baseFile', 'editedFile']);
+    void vscode.commands.executeCommand(
+      `texra.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.editedFile,
+    );
   }
 
   handleHousekeeping(message: CommandMessage): void {
-    this.runCommand(message, []);
+    void vscode.commands.executeCommand(`texra.${message.command}`);
   }
 
   handleSingleOperation(message: CommandMessage): void {
-    this.runCommand(message, ['inputFile', 'agent', 'model']);
+    void vscode.commands.executeCommand(
+      `texra.${message.command}`,
+      message.inputFile,
+      message.agent,
+      message.model,
+    );
   }
 
   handleMultipleOperation(message: CommandMessage): void {
@@ -134,16 +144,12 @@ export class ExecutionManager {
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
     );
-    this.runCommand(message, ['inputFile', 'agent', 'model', 'outputFiles']);
-  }
-
-  private runCommand(
-    message: CommandMessage,
-    paramKeys: (keyof CommandMessage)[],
-  ): void {
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
-      ...paramKeys.map((k) => message[k]),
+      message.inputFile,
+      message.agent,
+      message.model,
+      message.outputFiles,
     );
   }
 }

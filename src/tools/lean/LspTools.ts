@@ -30,7 +30,10 @@ export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 const FILE_COMMANDS = ['restart', 'refresh_dependencies'] as const;
 type FileCommand = (typeof FILE_COMMANDS)[number];
 
-const FILE_COMMAND_CONFIG: Record<FileCommand, { vscode: string; description: string }> = {
+const FILE_COMMAND_CONFIG: Record<
+  FileCommand,
+  { vscode: string; description: string }
+> = {
   restart: {
     vscode: 'lean4.restartFile',
     description: 'Restart Lean server for this file',
@@ -69,17 +72,50 @@ const PROJECT_COMMANDS = [
 ] as const;
 type ProjectCommand = (typeof PROJECT_COMMANDS)[number];
 
-const PROJECT_COMMAND_CONFIG: Record<ProjectCommand, { vscode: string; description: string }> = {
-  restart_server: { vscode: 'lean4.restartServer', description: 'Restart the entire Lean language server' },
-  stop_server: { vscode: 'lean4.stopServer', description: 'Stop the Lean language server' },
-  build: { vscode: 'lean4.project.build', description: 'Build the project (runs lake build)' },
-  clean: { vscode: 'lean4.project.clean', description: 'Clean project build artifacts' },
-  fetch_cache: { vscode: 'lean4.project.fetchCache', description: 'Download Mathlib build cache for the project' },
-  fetch_file_cache: { vscode: 'lean4.project.fetchFileCache', description: "Download Mathlib cache for current file's imports only" },
-  install_elan: { vscode: 'lean4.setup.installElan', description: 'Install Elan (Lean version manager)' },
-  install_deps: { vscode: 'lean4.setup.installDeps', description: 'Install Lean dependencies' },
-  update_elan: { vscode: 'lean4.setup.updateElan', description: 'Update Elan to latest version' },
-  select_toolchain: { vscode: 'lean4.setup.selectDefaultToolchain', description: 'Select default Lean toolchain version' },
+const PROJECT_COMMAND_CONFIG: Record<
+  ProjectCommand,
+  { vscode: string; description: string }
+> = {
+  restart_server: {
+    vscode: 'lean4.restartServer',
+    description: 'Restart the entire Lean language server',
+  },
+  stop_server: {
+    vscode: 'lean4.stopServer',
+    description: 'Stop the Lean language server',
+  },
+  build: {
+    vscode: 'lean4.project.build',
+    description: 'Build the project (runs lake build)',
+  },
+  clean: {
+    vscode: 'lean4.project.clean',
+    description: 'Clean project build artifacts',
+  },
+  fetch_cache: {
+    vscode: 'lean4.project.fetchCache',
+    description: 'Download Mathlib build cache for the project',
+  },
+  fetch_file_cache: {
+    vscode: 'lean4.project.fetchFileCache',
+    description: "Download Mathlib cache for current file's imports only",
+  },
+  install_elan: {
+    vscode: 'lean4.setup.installElan',
+    description: 'Install Elan (Lean version manager)',
+  },
+  install_deps: {
+    vscode: 'lean4.setup.installDeps',
+    description: 'Install Lean dependencies',
+  },
+  update_elan: {
+    vscode: 'lean4.setup.updateElan',
+    description: 'Update Elan to latest version',
+  },
+  select_toolchain: {
+    vscode: 'lean4.setup.selectDefaultToolchain',
+    description: 'Select default Lean toolchain version',
+  },
 };
 
 const LeanProjectInputSchema = z.strictObject({
@@ -236,7 +272,10 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const config = FILE_COMMAND_CONFIG[command];
 
     try {
-      const success = await vscodeIntegration.executeFileCommand(config.vscode, file);
+      const success = await vscodeIntegration.executeFileCommand(
+        config.vscode,
+        file,
+      );
       if (!success) {
         return {
           summary: 'Command failed',
@@ -244,9 +283,16 @@ Requires: Lean 4 VS Code extension installed and active.`,
           isError: true,
         };
       }
-      return { summary: config.description, output: `Executed "${command}" on ${file}` };
+      return {
+        summary: config.description,
+        output: `Executed "${command}" on ${file}`,
+      };
     } catch (error) {
-      return { summary: 'Command failed', output: `Error: ${toErrorMessage(error)}`, isError: true };
+      return {
+        summary: 'Command failed',
+        output: `Error: ${toErrorMessage(error)}`,
+        isError: true,
+      };
     }
   }
 }
@@ -280,9 +326,16 @@ Requires: Lean 4 VS Code extension installed.`,
 
     try {
       await vscode.commands.executeCommand(config.vscode);
-      return { summary: config.description, output: `Executed "${command}" successfully` };
+      return {
+        summary: config.description,
+        output: `Executed "${command}" successfully`,
+      };
     } catch (error) {
-      return { summary: 'Command failed', output: `Error executing "${command}": ${toErrorMessage(error)}`, isError: true };
+      return {
+        summary: 'Command failed',
+        output: `Error executing "${command}": ${toErrorMessage(error)}`,
+        isError: true,
+      };
     }
   }
 }

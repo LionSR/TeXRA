@@ -35,8 +35,12 @@ function isVSCodeGitHubEnabled(): boolean {
     .get('enableVSCodeGitHub', false);
 }
 
-async function getExistingSession(): Promise<vscode.AuthenticationSession | undefined> {
-  return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], { silent: true });
+async function getExistingSession(): Promise<
+  vscode.AuthenticationSession | undefined
+> {
+  return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
+    silent: true,
+  });
 }
 
 interface SignInOption {
@@ -47,16 +51,32 @@ interface SignInOption {
 
 function getSignInOptions(): SignInOption[] {
   const options: SignInOption[] = [
-    { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
-    { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
+    {
+      label: '$(globe) Google',
+      description: 'Sign in with Google',
+      method: 'google',
+    },
+    {
+      label: '$(github) GitHub',
+      description: 'Sign in with GitHub via web browser',
+      method: 'github-browser',
+    },
   ];
 
   if (EMAIL_LOGIN_ENABLED) {
-    options.push({ label: '$(mail) Email', description: 'Sign in with a magic link sent to your email', method: 'email' });
+    options.push({
+      label: '$(mail) Email',
+      description: 'Sign in with a magic link sent to your email',
+      method: 'email',
+    });
   }
 
   if (isVSCodeGitHubEnabled()) {
-    options.push({ label: '$(github) GitHub (VS Code)', description: 'Sign in using VS Code GitHub authentication', method: 'github' });
+    options.push({
+      label: '$(github) GitHub (VS Code)',
+      description: 'Sign in using VS Code GitHub authentication',
+      method: 'github',
+    });
   }
 
   return options;
@@ -67,7 +87,9 @@ export async function signIn(): Promise<void> {
     const existing = await getExistingSession();
     if (existing) {
       const user = await SupabaseClient.getUser();
-      void vscode.window.showInformationMessage(`Already signed in as ${user?.email || 'unknown user'}`);
+      void vscode.window.showInformationMessage(
+        `Already signed in as ${user?.email || 'unknown user'}`,
+      );
       return;
     }
 
@@ -91,10 +113,14 @@ export async function signIn(): Promise<void> {
     if (session) {
       const user = await SupabaseClient.getUser();
       const tier = await SupabaseClient.getUserTier();
-      void vscode.window.showInformationMessage(`Signed in as ${user?.email || 'unknown user'} (${tier} tier)`);
+      void vscode.window.showInformationMessage(
+        `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
+      );
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(`Sign in failed: ${toErrorMessage(error)}`);
+    void vscode.window.showErrorMessage(
+      `Sign in failed: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -125,7 +151,9 @@ async function signInWithEmail(): Promise<void> {
       `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
     );
   } catch (error) {
-    void vscode.window.showErrorMessage(`Failed to send magic link: ${toErrorMessage(error)}`);
+    void vscode.window.showErrorMessage(
+      `Failed to send magic link: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -149,27 +177,39 @@ export async function signOut(): Promise<void> {
       await authProvider.removeSession(session.id);
       void vscode.window.showInformationMessage('Signed out successfully');
     } else {
-      void vscode.window.showErrorMessage('Authentication provider not available');
+      void vscode.window.showErrorMessage(
+        'Authentication provider not available',
+      );
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(`Sign out failed: ${toErrorMessage(error)}`);
+    void vscode.window.showErrorMessage(
+      `Sign out failed: ${toErrorMessage(error)}`,
+    );
   }
 }
 
 export async function viewProfile(): Promise<void> {
   if (!profileViewProvider) {
-    void vscode.window.showErrorMessage('Profile view not initialized. Please reload the extension.');
+    void vscode.window.showErrorMessage(
+      'Profile view not initialized. Please reload the extension.',
+    );
     return;
   }
 
   try {
     await profileViewProvider.showProfileView();
   } catch (error) {
-    void vscode.window.showErrorMessage(`Failed to load profile: ${toErrorMessage(error)}`);
+    void vscode.window.showErrorMessage(
+      `Failed to load profile: ${toErrorMessage(error)}`,
+    );
   }
 }
 
-export async function getAuthStatus(): Promise<{ authenticated: boolean; email?: string; tier?: string }> {
+export async function getAuthStatus(): Promise<{
+  authenticated: boolean;
+  email?: string;
+  tier?: string;
+}> {
   const isAuth = await SupabaseClient.isAuthenticated();
   if (!isAuth) return { authenticated: false };
 
@@ -204,16 +244,21 @@ export async function showAccountMenu(): Promise<void> {
       : [
           {
             label: '$(sign-in) Sign In',
-            description: 'Access AI models and remote agents via Researcher Access Program',
+            description:
+              'Access AI models and remote agents via Researcher Access Program',
             command: AUTH_COMMANDS.SIGN_IN,
           },
         ];
 
-    const choice = await vscode.window.showQuickPick(items, { placeHolder: 'Account Options' });
+    const choice = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Account Options',
+    });
     if (choice) {
       await vscode.commands.executeCommand(choice.command);
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(`Failed to show account menu: ${toErrorMessage(error)}`);
+    void vscode.window.showErrorMessage(
+      `Failed to show account menu: ${toErrorMessage(error)}`,
+    );
   }
 }

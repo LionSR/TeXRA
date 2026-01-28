@@ -163,34 +163,13 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
 
   private buildFallbackResponse(): ChatCompletion {
     const chunk = this.lastChunkWithChoices ?? this.usageChunk;
-    if (!chunk) {
-      return {
-        id: '',
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: '',
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: this.getFullContent(),
-              refusal: null,
-            },
-            finish_reason: 'stop',
-            logprobs: null,
-          },
-        ],
-      };
-    }
-
-    const choice = chunk.choices[0];
+    const choice = chunk?.choices[0];
 
     return {
-      id: chunk.id,
+      id: chunk?.id ?? '',
       object: 'chat.completion',
-      created: chunk.created,
-      model: chunk.model,
+      created: chunk?.created ?? Math.floor(Date.now() / 1000),
+      model: chunk?.model ?? '',
       choices: [
         {
           index: choice?.index ?? 0,
