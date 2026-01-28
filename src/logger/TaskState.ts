@@ -7,10 +7,6 @@ import {
 } from '@agent/core/AgentConfig';
 import { FILE_TYPES, type FileType } from '@utils/config';
 
-// -----------------------------------------------------------------------------
-// Schemas - Validate persisted TaskState data with lightweight agentConfig check
-// -----------------------------------------------------------------------------
-
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),
 });
@@ -47,10 +43,6 @@ export const TaskStateSchema = z.union([
   ToolUseTaskStateSchema,
 ]);
 
-// -----------------------------------------------------------------------------
-// Types - Explicitly defined (validation schemas use passthrough for efficiency)
-// -----------------------------------------------------------------------------
-
 export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export interface WorkflowTaskState {
@@ -65,18 +57,12 @@ export interface ToolUseTaskState {
 
 export type TaskState = WorkflowTaskState | ToolUseTaskState;
 
-// -----------------------------------------------------------------------------
-// Type Guards
-// -----------------------------------------------------------------------------
-
-/** Type guard for TaskState narrowing to WorkflowTaskState */
 export function isWorkflowTaskState(
   taskState: TaskState,
 ): taskState is WorkflowTaskState {
   return taskState.agentConfig.agentCategory === AgentCategory.Workflow;
 }
 
-/** Type guard for TaskState narrowing to ToolUseTaskState */
 export function isToolUseTaskState(
   taskState: TaskState,
 ): taskState is ToolUseTaskState {

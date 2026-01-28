@@ -90,10 +90,6 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
   return (value: string) => matcher.match(value.replaceAll('\\', '/'));
 }
 
-// Re-export gitignore utilities from standalone module
-export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
-export type { GitignoreMatcher } from './gitignore';
-
 /** Default width for line number padding */
 const LINE_NUMBER_WIDTH = 6;
 
@@ -240,11 +236,10 @@ export async function buildFileAttachment({
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
-  const stats = await WorkspaceFS.stat(path.relative).catch((err) => {
-    throw new ToolError(
-      `Failed to inspect attachment ${display}: ${toErrorMessage(err)}`,
-    );
-  });
+  const stats = await wrapApiCall(
+    () => WorkspaceFS.stat(path.relative),
+    `Failed to inspect attachment ${display}`,
+  );
 
   if (stats.size > maxBytes) {
     const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
@@ -253,11 +248,10 @@ export async function buildFileAttachment({
     );
   }
 
-  const buffer = await WorkspaceFS.readFileBytes(path.relative).catch((err) => {
-    throw new ToolError(
-      `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
-    );
-  });
+  const buffer = await wrapApiCall(
+    () => WorkspaceFS.readFileBytes(path.relative),
+    `Failed to read attachment ${display}`,
+  );
 
   const inferredMime =
     mimeType ?? getMimeType(path.relative) ?? 'application/octet-stream';

@@ -1,12 +1,3 @@
-/**
- * Usage Log Service - Sends API usage data to Supabase for analytics.
- *
- * Design principles:
- * - Non-blocking: Never delays the main execution flow
- * - Failure-tolerant: Errors are logged but never thrown to callers
- * - Batched: Collects events and flushes periodically to reduce requests
- * - Fire-and-forget: If it fails, it fails - no retries
- */
 import { randomUUID } from 'crypto';
 
 import * as logger from '@logger/logUtils';
@@ -39,12 +30,7 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   enabled: true,
 };
 
-/**
- * Singleton service for logging API usage to the backend.
- *
- * Automatically batches and flushes usage entries.
- * Completely non-blocking - errors are logged but never propagate.
- */
+/** Batched, non-blocking usage logging service. Errors are logged but never propagate. */
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
@@ -66,7 +52,6 @@ class UsageLogServiceImpl {
     );
   }
 
-  /** Non-blocking - returns immediately. */
   log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion'>): void {
     if (!this.config.enabled) return;
 
@@ -90,7 +75,6 @@ class UsageLogServiceImpl {
     }
   }
 
-  /** Called automatically on batch size or interval. */
   async flush(): Promise<void> {
     if (this.isFlushing || this.queue.length === 0) return;
 
@@ -157,7 +141,6 @@ class UsageLogServiceImpl {
       }
 
       const data = await response.json();
-      // Parse with fallback - if response is invalid, assume success since HTTP was OK
       return UsageLogResponseSchema.catch({
         success: true,
         accepted: batch.entries.length,
@@ -181,10 +164,6 @@ class UsageLogServiceImpl {
     }
   }
 
-  /**
-   * Dispose the service - flush remaining entries and stop timer.
-   * Waits for any in-flight flush to complete (with timeout) before flushing remaining entries.
-   */
   async dispose(): Promise<void> {
     this.stopFlushTimer();
     this.config.enabled = false;
@@ -204,5 +183,4 @@ class UsageLogServiceImpl {
   }
 }
 
-/** Singleton instance */
 export const UsageLogService = new UsageLogServiceImpl();

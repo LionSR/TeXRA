@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { FileLocationSchema, OutputFileInfoSchema } from './output';
 import { getBasename } from '../utils/path';
 
