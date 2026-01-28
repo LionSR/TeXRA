@@ -86,7 +86,7 @@ function getTransport(
   if (createIfMissing) {
     return getOrCreateEntry(channel, isAgent).transport;
   }
-  return registry.getTransport(channel, { isAgent });
+  return registry.getTransport(channel, isAgent);
 }
 
 function logWithGroup(

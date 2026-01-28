@@ -74,6 +74,8 @@ export async function sendFollowUp(
   }
 
   // No active/waiting session found - caller should handle UI notification
-  logger.warn(`No active session for follow-up on stream ${streamId}. Status: ${status ?? 'undefined'}`);
+  logger.warn(
+    `No active session for follow-up on stream ${streamId}. Status: ${status ?? 'undefined'}`,
+  );
   return { status: 'no_session', streamStatus: status };
 }

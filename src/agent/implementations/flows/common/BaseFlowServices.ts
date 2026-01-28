@@ -10,20 +10,6 @@
  * Flow-specific services extend this interface.
  */
 
-// ============================================================================
-// Node Configuration Constants
-// ============================================================================
-
-/** Node retry configuration: no retries (single attempt). */
-export const NODE_NO_RETRY = 1;
-
-/** Node wait configuration: no wait between retries. */
-export const NODE_NO_WAIT = 0;
-
-// ============================================================================
-// Service Interfaces
-// ============================================================================
-
 import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';

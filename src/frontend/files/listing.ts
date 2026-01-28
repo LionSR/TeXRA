@@ -122,14 +122,19 @@ function prepareFilters(
 }
 
 /** Check if a filename passes extension and keyword filters */
-function passesFileFilters(fileNameLower: string, filters: FileFilters): boolean {
+function passesFileFilters(
+  fileNameLower: string,
+  filters: FileFilters,
+): boolean {
   const matchesInclude =
     filters.includeExt.length === 0 ||
     filters.includeExt.some((ext) => fileNameLower.endsWith(ext));
 
   if (!matchesInclude) return false;
-  if (filters.excludeExt.some((ext) => fileNameLower.endsWith(ext))) return false;
-  if (filters.excludeKeywords.some((kw) => fileNameLower.includes(kw))) return false;
+  if (filters.excludeExt.some((ext) => fileNameLower.endsWith(ext)))
+    return false;
+  if (filters.excludeKeywords.some((kw) => fileNameLower.includes(kw)))
+    return false;
 
   return true;
 }
@@ -162,7 +167,8 @@ export async function getFilesRecursively(
     .filter((relativePath) => {
       if (!relativePath) return false;
       if (containsHiddenSegment(relativePath)) return false;
-      if (containsExcludedDirectory(relativePath, filters.excludeDirs)) return false;
+      if (containsExcludedDirectory(relativePath, filters.excludeDirs))
+        return false;
 
       const fileNameLower = path.basename(relativePath).toLowerCase();
       if (filters.excludeFiles.includes(fileNameLower)) return false;

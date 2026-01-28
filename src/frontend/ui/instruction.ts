@@ -38,8 +38,3 @@ export async function showInstructionWithSuppress(
     await action?.callback();
   }
 }
-
-/**
- * Validate that expected output files exist. If any are missing,
- * show a reminder about checking the XML output.
- */

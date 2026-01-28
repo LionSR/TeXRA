@@ -37,6 +37,7 @@ import type { ToolFileAttachment } from '@tools/result';
 // Local imports - utils
 import { getConfig, K_SLICE } from '@utils/config';
 import type { FileLocation } from '@utils/files';
+import { capitalize } from '@utils/text/stringUtils';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -70,19 +71,6 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-
-/** Flags for token-based stop conditions. */
-interface TokenFlags {
-  continuationLimit: boolean;
-  inputTokenLimit: boolean;
-  maxOutputTokensExceeded: boolean;
-}
-
-/** Flags for markers indicating the end of a conversation. */
-interface MarkerFlags {
-  endTurn: boolean;
-  encounterDocumentTag: boolean;
-}
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -376,14 +364,6 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Capitalizes the first letter of a string.
-   * Used to convert provider enum values to config key suffixes.
-   */
-  private static capitalize(s: string): string {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-
-  /**
    * Gets streaming configuration for the current model provider.
    * @returns Boolean indicating if streaming should be enabled
    */
@@ -406,7 +386,7 @@ export abstract class ModelHandler<
     }
 
     // Derive config key suffix from provider enum value (e.g., 'openai' -> 'Openai')
-    const suffix = ModelHandler.capitalize(this.config.provider);
+    const suffix = capitalize(this.config.provider);
     return getConfig<boolean>(
       `texra.model.useStreaming${suffix}`,
       globalDefault,
