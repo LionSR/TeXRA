@@ -5,7 +5,7 @@ import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
-} from '@shared/schemas/progressViewInboundMessages';
+} from '@shared/schemas/progressView';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';

@@ -12,11 +12,12 @@ function getKey(channel: string, isAgent: boolean): string {
 }
 
 function getStore(): Map<string, string[]> {
-  return contextStorage.getStore() ?? (() => {
-    const store = new Map<string, string[]>();
-    contextStorage.enterWith(store);
-    return store;
-  })();
+  const existing = contextStorage.getStore();
+  if (existing) return existing;
+
+  const store = new Map<string, string[]>();
+  contextStorage.enterWith(store);
+  return store;
 }
 
 function pushGroup(channel: string, groupId: string, isAgent: boolean): void {
@@ -36,7 +37,11 @@ function popGroup(channel: string, groupId: string, isAgent: boolean): void {
   if (idx === -1) return;
 
   const newStack = stack.toSpliced(idx, 1);
-  newStack.length ? store.set(key, newStack) : store.delete(key);
+  if (newStack.length) {
+    store.set(key, newStack);
+  } else {
+    store.delete(key);
+  }
   contextStorage.enterWith(store);
 }
 
@@ -68,9 +73,10 @@ export function startGroup(
   parentGroupId?: string,
   isAgent = false,
 ): string {
+  const transport = registry.ensure(channel, { isAgent }).transport;
   const groupId = id ?? randomUUID();
   pushGroup(channel, groupId, isAgent);
-  return registry.ensure(channel, { isAgent }).transport.startGroup(groupName, groupId, parentGroupId);
+  return transport.startGroup(groupName, groupId, parentGroupId);
 }
 
 export function endGroup(
@@ -83,7 +89,10 @@ export function endGroup(
   popGroup(channel, groupId, isAgent);
 }
 
-export function getActiveGroupId(channel: string, isAgent = false): string | undefined {
+export function getActiveGroupId(
+  channel: string,
+  isAgent = false,
+): string | undefined {
   return getStore().get(getKey(channel, isAgent))?.at(-1);
 }
 
