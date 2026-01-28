@@ -338,14 +338,11 @@ export class AgentWorkspaceState {
 
   toSnapshot(): AgentWorkspaceSnapshot {
     return {
-      assembly: {
-        lastResponse: this.assembly.lastResponse,
-        accumulatedOutput: this.assembly.accumulatedOutput,
-      },
+      assembly: { ...this.assembly },
       media: this.media.toSnapshot(),
       reasoning: {
+        ...this.reasoning,
         thinkingBlocks: [...this.reasoning.thinkingBlocks],
-        thinkingAdded: this.reasoning.thinkingAdded,
       },
       interactions: this.interactions.toSnapshot(),
       todos: this.todos.toSnapshot(),

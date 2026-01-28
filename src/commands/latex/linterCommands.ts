@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
