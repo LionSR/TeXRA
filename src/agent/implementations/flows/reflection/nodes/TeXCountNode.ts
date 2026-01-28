@@ -53,7 +53,8 @@ export class TeXCountNode<C = unknown> extends Node<
     _prepRes: PrepInput,
     error: Error,
   ): Promise<string | null> {
-    this.services.logger.debug(`TeXCount skipped: ${error.message}`);
+    const { logger } = this.services;
+    logger.debug(`TeXCount skipped: ${error.message}`);
     return null;
   }
 

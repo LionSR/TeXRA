@@ -5,11 +5,7 @@
  * and state persistence via PersistedFlow.
  */
 
-import {
-  EXECUTION_STATUS,
-  END_GROUP_STATUS,
-  type EndGroupStatus,
-} from '@shared/schemas';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import {
   registerInterruptible,
@@ -18,9 +14,13 @@ import {
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
-import { executionToEndStatus } from '@common/constants/streamStatus';
 
 import { getDefaultToolRegistry } from '@tools/registry';
+import {
+  toEndStatus,
+  getExecutionStatus,
+  ERROR_STATUS,
+} from '../common/FlowLifecycle';
 import { createToolUseFlow, type ToolUseRunShared } from './ToolUseFlow';
 import {
   resolveTools,
@@ -32,10 +32,8 @@ import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
 /** Input for running a tool-use flow. */
-export interface RunToolUseFlowInput<C = unknown> extends Omit<
-  ToolUseFlowContextInit<C>,
-  'resumeSnapshot'
-> {
+export interface RunToolUseFlowInput<C = unknown>
+  extends Omit<ToolUseFlowContextInit<C>, 'resumeSnapshot'> {
   resumeSnapshot?: ToolUseSessionSnapshot | null;
 }
 
@@ -109,7 +107,9 @@ export async function runToolUseFlow<C = unknown>(
       // Migrate legacy nested format to flat format if needed
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
-        logger.warn('Failed to parse flow record shared state, starting fresh');
+        logger.warn(
+          'Failed to parse flow record shared state, starting fresh',
+        );
         await kv.delete(`flow:${executionId}`);
         flowRecord = null;
       } else if (migrationResult.migrated) {
@@ -134,12 +134,9 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(flowContext.services);
     await pf.run(shared);
 
-    const executionStatus = input.checkInterruption()
-      ? EXECUTION_STATUS.INTERRUPTED
-      : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(executionStatus) as EndGroupStatus;
+    status = toEndStatus(getExecutionStatus(input.checkInterruption));
   } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
+    status = ERROR_STATUS;
     throw error;
   } finally {
     // Preserve flow record if user cancelled retry (for resume), otherwise delete
