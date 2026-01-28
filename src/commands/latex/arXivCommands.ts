@@ -21,88 +21,77 @@ export const arXivCommands = {
 export function registerArXivCommands(context: vscode.ExtensionContext) {
   logger.initialize(CHANNEL);
 
-  // Register the download arXiv source command
-  const downloadCommand = vscode.commands.registerCommand(
-    arXivCommands.downloadArXivSource,
-    async () => {
-      try {
-        // Ask for arXiv ID or URL
-        const arxivId = await vscode.window.showInputBox({
-          placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
-          prompt: 'Enter arXiv ID or URL',
-          validateInput: arxivProcessor.validateId.bind(arxivProcessor),
-        });
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      arXivCommands.downloadArXivSource,
+      async () => {
+        try {
+          const arxivId = await vscode.window.showInputBox({
+            placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
+            prompt: 'Enter arXiv ID or URL',
+            validateInput: arxivProcessor.validateId.bind(arxivProcessor),
+          });
 
-        if (!arxivId) {
-          return; // User cancelled
-        }
+          if (!arxivId) {
+            return;
+          }
 
-        // Ask if user wants to auto-indent LaTeX files
-        const shouldAutoIndent = await vscode.window.showQuickPick(
-          ['Yes', 'No'],
-          {
-            placeHolder: 'Auto-indent LaTeX files after download?',
-            canPickMany: false,
-          },
-        );
-
-        const autoIndent = shouldAutoIndent === 'Yes';
-
-        // Initialize extractedPath with a definite assignment
-        let extractedPath = '';
-
-        // Show progress
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Downloading arXiv Source',
-            cancellable: true,
-          },
-          async (progress, token) => {
-            token.onCancellationRequested(() => {
-              logger.info(CHANNEL, 'User cancelled the download');
-            });
-
-            // Progress callback function
-            const progressCallback = (message: string, increment?: number) => {
-              progress.report({ message, increment });
-            };
-
-            // Download and extract source
-            extractedPath = await arxivProcessor.downloadSource(
-              arxivId,
-              progressCallback,
-              autoIndent,
-            );
-          },
-        );
-
-        // Show success message with a button to open the extracted folder AFTER the progress window completes
-        const openFolderAction = 'Open Folder';
-        const result = await vscode.window.showInformationMessage(
-          `arXiv source downloaded to ${path.basename(extractedPath)}${
-            autoIndent ? ' with LaTeX files indented' : ''
-          }`,
-          openFolderAction,
-        );
-
-        if (result === openFolderAction) {
-          // Open the extracted folder in Explorer
-          void vscode.commands.executeCommand(
-            'revealFileInOS',
-            vscode.Uri.file(extractedPath),
+          const shouldAutoIndent = await vscode.window.showQuickPick(
+            ['Yes', 'No'],
+            {
+              placeHolder: 'Auto-indent LaTeX files after download?',
+              canPickMany: false,
+            },
           );
-        }
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'An unknown error occurred';
-        vscode.window.showErrorMessage(
-          `Failed to download arXiv source: ${message}`,
-        );
-        logger.error(CHANNEL, `Error downloading arXiv source: ${message}`);
-      }
-    },
-  );
 
-  context.subscriptions.push(downloadCommand);
+          const autoIndent = shouldAutoIndent === 'Yes';
+          let extractedPath = '';
+
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Downloading arXiv Source',
+              cancellable: true,
+            },
+            async (progress, token) => {
+              token.onCancellationRequested(() => {
+                logger.info(CHANNEL, 'User cancelled the download');
+              });
+
+              extractedPath = await arxivProcessor.downloadSource(
+                arxivId,
+                (message: string, increment?: number) => {
+                  progress.report({ message, increment });
+                },
+                autoIndent,
+              );
+            },
+          );
+
+          const result = await vscode.window.showInformationMessage(
+            `arXiv source downloaded to ${path.basename(extractedPath)}${
+              autoIndent ? ' with LaTeX files indented' : ''
+            }`,
+            'Open Folder',
+          );
+
+          if (result === 'Open Folder') {
+            void vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(extractedPath),
+            );
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'An unknown error occurred';
+          vscode.window.showErrorMessage(
+            `Failed to download arXiv source: ${message}`,
+          );
+          logger.error(CHANNEL, `Error downloading arXiv source: ${message}`);
+        }
+      },
+    ),
+  );
 }

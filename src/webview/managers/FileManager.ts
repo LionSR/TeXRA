@@ -169,7 +169,12 @@ export class FileManager extends BaseWebviewManager {
     this.postFileUpdate('Input', refreshedInputFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
-    this.updateGettingStartedBanner(refreshedInputFiles.length === 0);
+    this.postMessage({
+      command:
+        refreshedInputFiles.length === 0
+          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+    });
   }
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
@@ -207,7 +212,12 @@ export class FileManager extends BaseWebviewManager {
         ? { preserveBaseFile: true }
         : undefined,
     });
-    this.updateGettingStartedBanner(files.length === 0);
+    this.postMessage({
+      command:
+        files.length === 0
+          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+    });
   }
 
   async handleRequestDefaultOutputFiles(
@@ -288,7 +298,12 @@ export class FileManager extends BaseWebviewManager {
     });
 
     await this.updateBaseFileSelect();
-    this.updateGettingStartedBanner(refreshedFiles.input.length === 0);
+    this.postMessage({
+      command:
+        refreshedFiles.input.length === 0
+          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+    });
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
@@ -503,14 +518,6 @@ export class FileManager extends BaseWebviewManager {
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
       preserveBaseFile: true,
-    });
-  }
-
-  private updateGettingStartedBanner(isEmpty: boolean): void {
-    this.postMessage({
-      command: isEmpty
-        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

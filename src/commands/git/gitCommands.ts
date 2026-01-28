@@ -9,21 +9,36 @@ import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'gitCommands';
+logger.initialize(CHANNEL);
+
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const LATEX_PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const LATEX_GIT_URL_PATTERN =
   /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
 
+export const gitCommands = {
+  isGitRepository: 'texra.isGitRepository',
+  getRecentCommits: 'texra.getRecentCommits',
+  findCommitInHistory: 'texra.findCommitInHistory',
+  cloneOverleafProject: 'texra.cloneOverleafProject',
+};
+
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.isGitRepository', isGitRepository),
-    vscode.commands.registerCommand('texra.getRecentCommits', getRecentCommits),
     vscode.commands.registerCommand(
-      'texra.findCommitInHistory',
+      gitCommands.isGitRepository,
+      isGitRepository,
+    ),
+    vscode.commands.registerCommand(
+      gitCommands.getRecentCommits,
+      getRecentCommits,
+    ),
+    vscode.commands.registerCommand(
+      gitCommands.findCommitInHistory,
       findCommitInHistory,
     ),
-    vscode.commands.registerCommand('texra.cloneOverleafProject', () =>
+    vscode.commands.registerCommand(gitCommands.cloneOverleafProject, () =>
       cloneOverleafProject(context),
     ),
   );
@@ -180,7 +195,11 @@ async function getGitToken(
   if (!token && stored) await secrets.delete(key);
 
   if (!token) {
-    const input = await promptInput(title, 'Enter your Git authentication token.', true);
+    const input = await promptInput(
+      title,
+      'Enter your Git authentication token.',
+      true,
+    );
     if (!input) return null;
     if (!isValid(input)) {
       vscode.window.showErrorMessage('Invalid token format.');
@@ -248,9 +267,16 @@ async function cloneOverleafProject(
   const tokenTitle = parsed.isOverleaf
     ? 'Overleaf Git Token'
     : `ShareLaTeX Token (${parsed.host})`;
-  const tokenValidator = parsed.isOverleaf ? (t: string) => t.startsWith('olp_') : undefined;
+  const tokenValidator = parsed.isOverleaf
+    ? (t: string) => t.startsWith('olp_')
+    : undefined;
 
-  const creds = await getGitToken(context.secrets, tokenKey, tokenTitle, tokenValidator);
+  const creds = await getGitToken(
+    context.secrets,
+    tokenKey,
+    tokenTitle,
+    tokenValidator,
+  );
   if (!creds) return;
 
   const preconditions = await checkClonePreconditions(workspacePath);
@@ -261,15 +287,21 @@ async function cloneOverleafProject(
 
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Cloning ${label}…` },
-      () => execa('git', ['clone', remote, '.'], {
-        cwd: workspacePath,
-        env: { GIT_TERMINAL_PROMPT: '0' },
-      }),
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Cloning ${label}…`,
+      },
+      () =>
+        execa('git', ['clone', remote, '.'], {
+          cwd: workspacePath,
+          env: { GIT_TERMINAL_PROMPT: '0' },
+        }),
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
   } catch (e) {
-    vscode.window.showErrorMessage('Clone failed. Check credentials and connection.');
+    vscode.window.showErrorMessage(
+      'Clone failed. Check credentials and connection.',
+    );
     if (e instanceof Error) {
       let msg = e.message;
       for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');

@@ -2,9 +2,9 @@
 import { CrossrefClient, type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
-// Local imports - metadata
-import { toErrorMessage } from '@common/errors';
+// Local imports
 import { ToolError } from '@tools/result';
+import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
@@ -25,26 +25,21 @@ export class CrossrefDoiTool extends defineTool({
   schema: CrossrefDoiInputSchema,
 }) {
   protected async execute(input: CrossrefDoiInput) {
-    const trimmedDoi = input.doi.trim();
-    if (!trimmedDoi) {
-      throw new ToolError('Invalid DOI string.');
-    }
+    const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
 
-    let work: Work;
-    try {
-      // Respect Crossref API rate limits
+    const response = await wrapApiCall(async () => {
       await waitForRateLimit(
         'crossref',
         CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       );
-      const response = await crossrefClient.work(trimmedDoi);
-      if (!response.ok || !response.content?.message) {
-        throw new Error('Crossref response did not include metadata.');
-      }
-      work = response.content.message;
-    } catch (error) {
-      throw new ToolError(`Crossref lookup failed: ${toErrorMessage(error)}`);
+      return crossrefClient.work(trimmedDoi);
+    }, 'Crossref lookup failed');
+
+    if (!response.ok || !response.content?.message) {
+      throw new ToolError('Crossref response did not include metadata.');
     }
+
+    const work: Work = response.content.message;
 
     const metadata = {
       doi: work.DOI,

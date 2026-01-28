@@ -48,10 +48,7 @@ export async function runPackLatexdiffvc(
     return;
   }
 
-  const now = new Date()
-    .toISOString()
-    .replaceAll(/[-:]/g, '')
-    .split('.')[0];
+  const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
   const outputFolder = path.join(
     inputDir,
     'Diffs',
