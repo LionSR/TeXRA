@@ -8,7 +8,6 @@ import {
   OutputXmlSummarySchema,
   type FileLocation,
   type OutputFileInfo,
-  type OutputXmlSummary,
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
@@ -482,10 +481,5 @@ export class OutputHandler implements IOutputHandler {
       outputs: data.outputs,
       xmlSummary: data.xmlSummary,
     };
-  }
-
-  public getRoundXmlSummary(round: number): OutputXmlSummary {
-    const data = this.rounds.get(round);
-    return data?.xmlSummary ?? OutputXmlSummarySchema.parse({});
   }
 }
