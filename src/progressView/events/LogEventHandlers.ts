@@ -5,11 +5,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 
 import { withEventErrorHandling } from './errorHandling';
-import {
-  canUpdateWebview,
-  isWebviewAvailable,
-  type EventHandlerContext,
-} from './EventHandlerContext';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 export function registerLogEventHandlers(
   bus: ProgressEventBusLike,
@@ -36,7 +32,7 @@ function handleAddLogMessage(
     async () => {
       const isNew = await ctx.state.streamTabs.addMessage(streamId, logMessage);
       // Send to webview if available (regardless of active stream - messages persist)
-      if (isNew && isWebviewAvailable(ctx)) {
+      if (isNew && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
       }
     },
@@ -70,7 +66,8 @@ function handleUpdateLogMessage(
         updates,
       );
 
-      if (updated && canUpdateWebview(ctx, streamId)) {
+      const isActive = streamId === ctx.state.activeStream;
+      if (updated && ctx.webviewUpdater.isAvailable() && isActive) {
         ctx.webviewUpdater.updateLogMessage(streamId, {
           ...existing,
           ...updates,

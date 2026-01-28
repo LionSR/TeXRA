@@ -14,12 +14,8 @@ export class ToolUseWaitNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  async prep(_shared: ToolUseRunShared): Promise<{ interrupted: boolean }> {
-    return { interrupted: this.services.checkInterruption() };
-  }
-
-  async exec(prepRes: { interrupted: boolean }): Promise<WaitExecResult> {
-    if (prepRes.interrupted) {
+  async exec(): Promise<WaitExecResult> {
+    if (this.services.checkInterruption()) {
       return { kind: 'stop' };
     }
 
@@ -38,7 +34,7 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async execFallback(
-    _prepRes: { interrupted: boolean },
+    _prepRes: void,
     error: Error,
   ): Promise<WaitExecResult> {
     this.services.logger.error(`ToolUseWaitNode error: ${error.message}`);
@@ -47,7 +43,7 @@ export class ToolUseWaitNode<C> extends Node<
 
   async post(
     shared: ToolUseRunShared,
-    _prepRes: { interrupted: boolean },
+    _prepRes: void,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'stop') {

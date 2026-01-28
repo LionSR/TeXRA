@@ -228,8 +228,7 @@ export async function loadAttachmentBuffer(
   if (attachment.bytes?.length) return Buffer.from(attachment.bytes);
   if (attachment.base64Data?.length)
     return Buffer.from(attachment.base64Data, 'base64');
-  if (attachment.path?.length)
-    return WorkspaceFS.readFileBytes(attachment.path);
+  if (attachment.path?.length) return WorkspaceFS.readBytes(attachment.path);
 
   throw new Error('Attachment did not include bytes, base64 data, or a path.');
 }

@@ -9,7 +9,7 @@ import * as figureModule from '@latex/extractFigure';
 describe('ExtractLatexFiguresTool', () => {
   const originalExtract = figureModule.extractFigurePathsFromLatex;
   const originalExists = WorkspaceFS.exists;
-  const originalReadBytes = WorkspaceFS.readFileBytes;
+  const originalReadBytes = WorkspaceFS.readBytes;
 
   afterEach(() => {
     (
@@ -18,8 +18,8 @@ describe('ExtractLatexFiguresTool', () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       originalExists;
     (
-      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
-    ).readFileBytes = originalReadBytes;
+      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
+    ).readBytes = originalReadBytes;
   });
 
   it('attaches discovered figure files', async () => {
@@ -28,8 +28,8 @@ describe('ExtractLatexFiguresTool', () => {
         return path === 'main.tex' || path === 'figures/plot.pdf';
       };
     (
-      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
-    ).readFileBytes = async () => Buffer.from('pdf');
+      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
+    ).readBytes = async () => Buffer.from('pdf');
     (
       figureModule as {
         extractFigurePathsFromLatex: typeof originalExtract;

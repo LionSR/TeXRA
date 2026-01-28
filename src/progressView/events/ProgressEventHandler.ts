@@ -20,10 +20,7 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-import {
-  canUpdateWebview,
-  type EventHandlerContext,
-} from './EventHandlerContext';
+import type { EventHandlerContext } from './EventHandlerContext';
 import { withEventErrorHandling } from './errorHandling';
 import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerLogEventHandlers } from './LogEventHandlers';
@@ -219,7 +216,8 @@ export class ProgressEventHandler {
       async () => {
         await this.state.taskGroups.updateGroup(data);
 
-        if (canUpdateWebview(this.ctx, data.streamId)) {
+        const isActive = data.streamId === this.state.activeStream;
+        if (this.webviewUpdater.isAvailable() && isActive) {
           this.webviewUpdater.updateTaskGroup(data);
         }
       },

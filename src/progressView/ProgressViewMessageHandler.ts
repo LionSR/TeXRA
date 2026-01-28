@@ -148,16 +148,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: () =>
         this.handleStartRecording(),
       [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: () => this.handleStopRecording(),
-      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (data) =>
-        this.handleShowInformationMessage(data),
+      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
+        await vscode.window.showInformationMessage(data.text);
+      },
       [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) =>
-        this.handleToolEditApprovalAction(data),
-      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
-        this.handleToggleToolEditApprovalBypass(data),
+        handleProgressViewToolEditApprovalAction(data),
+      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (
+        data,
+      ) => {
+        const isNowEnabled = toggleToolEditApprovalSessionBypass(data.stream);
+        const msg = isNowEnabled
+          ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool actions will prompt for approval.';
+        await vscode.window.showInformationMessage(msg);
+      },
       [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
         this.handleAgentProposalAction(data),
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
-        this.handleBashApprovalAction(data),
+        handleProgressViewBashApprovalAction(data),
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: () => this.handleOpenProfile(),
@@ -495,56 +503,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private async handleShowInformationMessage(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE>,
-  ): Promise<void> {
-    await vscode.window.showInformationMessage(data.text);
-  }
-
-  private async handleToolEditApprovalAction(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION>,
-  ): Promise<void> {
-    await handleProgressViewToolEditApprovalAction(data);
-  }
-
-  private async handleToggleToolEditApprovalBypass(
-    data: MessageFor<
-      typeof PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS
-    >,
-  ): Promise<void> {
-    const isNowEnabled = toggleToolEditApprovalSessionBypass(data.stream);
-    const infoMessage = isNowEnabled
-      ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
-      : 'YOLO mode disabled: Tool actions will prompt for approval.';
-    await vscode.window.showInformationMessage(infoMessage);
-  }
-
-  private async handleBashApprovalAction(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
-  ): Promise<void> {
-    await handleProgressViewBashApprovalAction(data);
-  }
-
   private async handleAgentProposalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION>,
   ): Promise<void> {
     const { proposalId, action, feedback } = data;
-    switch (action) {
-      case 'approve':
-        proposalCoordinator.resolveRequest(proposalId, {
-          action: 'approve',
-        });
-        break;
-      case 'reject':
-        proposalCoordinator.resolveRequest(proposalId, {
-          action: 'reject',
-          feedback,
-        });
-        break;
-      case 'setup':
-        await this.handleAgentProposalSetup(proposalId);
-        break;
+    if (action === 'setup') {
+      await this.handleAgentProposalSetup(proposalId);
+      return;
     }
+    proposalCoordinator.resolveRequest(proposalId, { action, feedback });
   }
 
   private async handleAgentProposalSetup(proposalId: string): Promise<void> {

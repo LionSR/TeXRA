@@ -5,9 +5,8 @@ import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 
-/**
- * Command identifiers for auth-related commands.
- */
+const AUTH_PROVIDER_ID = 'texra-supabase';
+
 export const AUTH_COMMANDS = {
   SIGN_IN: 'texra.auth.signIn',
   SIGN_OUT: 'texra.auth.signOut',
@@ -15,13 +14,8 @@ export const AUTH_COMMANDS = {
   ACCOUNT_MENU: 'texra.auth.accountMenu',
 } as const;
 
-// Singleton instance of ProfileViewProvider
 let profileViewProvider: ProfileViewProvider | null = null;
 
-/**
- * Initialize the profile view provider.
- * Must be called during extension activation.
- */
 export function initializeProfileViewProvider(
   context: vscode.ExtensionContext,
 ): ProfileViewProvider {
@@ -31,323 +25,195 @@ export function initializeProfileViewProvider(
   return profileViewProvider;
 }
 
-/** Auth method type including OAuth providers, browser variants, and email */
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
-/** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
 
-/** Check if VS Code native GitHub auth is enabled via settings */
 function isVSCodeGitHubEnabled(): boolean {
   return vscode.workspace
     .getConfiguration('texra.auth')
     .get('enableVSCodeGitHub', false);
 }
 
-/** Sign-in option shown to users */
+async function getExistingSession(): Promise<vscode.AuthenticationSession | undefined> {
+  return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], { silent: true });
+}
+
 interface SignInOption {
   label: string;
   description: string;
   method: AuthMethod;
 }
 
-/** Build sign-in options based on enabled auth methods */
 function getSignInOptions(): SignInOption[] {
   const options: SignInOption[] = [
-    {
-      label: '$(globe) Google',
-      description: 'Sign in with Google',
-      method: 'google',
-    },
-    {
-      label: '$(github) GitHub',
-      description: 'Sign in with GitHub via web browser',
-      method: 'github-browser',
-    },
+    { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
+    { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
   ];
 
   if (EMAIL_LOGIN_ENABLED) {
-    options.push({
-      label: '$(mail) Email',
-      description: 'Sign in with a magic link sent to your email',
-      method: 'email',
-    });
+    options.push({ label: '$(mail) Email', description: 'Sign in with a magic link sent to your email', method: 'email' });
   }
 
   if (isVSCodeGitHubEnabled()) {
-    options.push({
-      label: '$(github) GitHub (VS Code)',
-      description: 'Sign in using VS Code GitHub authentication',
-      method: 'github',
-    });
+    options.push({ label: '$(github) GitHub (VS Code)', description: 'Sign in using VS Code GitHub authentication', method: 'github' });
   }
 
   return options;
 }
 
-/**
- * Command to sign in to TeXRA account.
- */
 export async function signIn(): Promise<void> {
   try {
-    // Check if already signed in
-    const existing = await vscode.authentication.getSession(
-      'texra-supabase',
-      [],
-      {
-        silent: true,
-      },
-    );
-
+    const existing = await getExistingSession();
     if (existing) {
       const user = await SupabaseClient.getUser();
-      void vscode.window.showInformationMessage(
-        `Already signed in as ${user?.email || 'unknown user'}`,
-      );
+      void vscode.window.showInformationMessage(`Already signed in as ${user?.email || 'unknown user'}`);
       return;
     }
 
-    const signInOptions = getSignInOptions();
-
-    const selected = await vscode.window.showQuickPick(signInOptions, {
+    const selected = await vscode.window.showQuickPick(getSignInOptions(), {
       placeHolder: 'Choose a sign-in method',
       title: 'TeXRA Sign In',
     });
+    if (!selected) return;
 
-    if (!selected) {
-      return; // User cancelled
-    }
-
-    // Handle email authentication separately
     if (selected.method === 'email') {
       await signInWithEmail();
       return;
     }
 
-    // Request OAuth authentication with selected provider passed via scopes
     const session = await vscode.authentication.getSession(
-      'texra-supabase',
+      AUTH_PROVIDER_ID,
       [`provider:${selected.method}`],
-      {
-        createIfNone: true,
-      },
+      { createIfNone: true },
     );
 
     if (session) {
       const user = await SupabaseClient.getUser();
       const tier = await SupabaseClient.getUserTier();
-      void vscode.window.showInformationMessage(
-        `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
-      );
+      void vscode.window.showInformationMessage(`Signed in as ${user?.email || 'unknown user'} (${tier} tier)`);
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Sign in failed: ${toErrorMessage(error)}`,
-    );
+    void vscode.window.showErrorMessage(`Sign in failed: ${toErrorMessage(error)}`);
   }
 }
 
-/**
- * Sign in using email magic link.
- * Sends a one-time login link to the user's email.
- * Uses vscode.env.asExternalUri() to get environment-appropriate callback URI.
- */
 async function signInWithEmail(): Promise<void> {
-  // Prompt for email
   const email = await vscode.window.showInputBox({
     prompt: 'Enter your email address',
     placeHolder: 'you@example.com',
     validateInput: (value) => {
-      if (!value) {
-        return 'Email is required';
-      }
-      // Basic email validation
+      if (!value) return 'Email is required';
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        return 'Please enter a valid email address';
-      }
+      if (!emailRegex.test(value)) return 'Please enter a valid email address';
       return undefined;
     },
   });
-
-  if (!email) {
-    return; // User cancelled
-  }
+  if (!email) return;
 
   try {
     const supabase = SupabaseClient.getClient();
-
-    // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
     const redirectUri = await getExternalAuthCallbackUri();
-
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: redirectUri,
-      },
+      options: { emailRedirectTo: redirectUri },
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     void vscode.window.showInformationMessage(
       `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
     );
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to send magic link: ${toErrorMessage(error)}`,
-    );
+    void vscode.window.showErrorMessage(`Failed to send magic link: ${toErrorMessage(error)}`);
   }
 }
 
-/**
- * Command to sign out of TeXRA account.
- */
 export async function signOut(): Promise<void> {
   try {
-    const session = await vscode.authentication.getSession(
-      'texra-supabase',
-      [],
-      {
-        silent: true,
-      },
-    );
-
+    const session = await getExistingSession();
     if (!session) {
       void vscode.window.showInformationMessage('Not signed in');
       return;
     }
 
-    // Confirm sign out
     const confirm = await vscode.window.showWarningMessage(
       'Are you sure you want to sign out?',
       { modal: true },
       'Sign Out',
     );
+    if (confirm !== 'Sign Out') return;
 
-    if (confirm !== 'Sign Out') {
-      return;
-    }
-
-    // Use authentication provider to properly sign out
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
-      // removeSession() handles cache clearing internally
       await authProvider.removeSession(session.id);
       void vscode.window.showInformationMessage('Signed out successfully');
     } else {
-      void vscode.window.showErrorMessage(
-        'Authentication provider not available',
-      );
+      void vscode.window.showErrorMessage('Authentication provider not available');
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Sign out failed: ${toErrorMessage(error)}`,
-    );
+    void vscode.window.showErrorMessage(`Sign out failed: ${toErrorMessage(error)}`);
   }
 }
 
-/**
- * Command to view profile and account status.
- * Uses the ProfileViewProvider for consistent webview architecture.
- */
 export async function viewProfile(): Promise<void> {
   if (!profileViewProvider) {
-    void vscode.window.showErrorMessage(
-      'Profile view not initialized. Please reload the extension.',
-    );
+    void vscode.window.showErrorMessage('Profile view not initialized. Please reload the extension.');
     return;
   }
 
   try {
     await profileViewProvider.showProfileView();
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to load profile: ${toErrorMessage(error)}`,
-    );
+    void vscode.window.showErrorMessage(`Failed to load profile: ${toErrorMessage(error)}`);
   }
 }
 
-/**
- * Command to check authentication status (for status bar, etc.).
- */
-export async function getAuthStatus(): Promise<{
-  authenticated: boolean;
-  email?: string;
-  tier?: string;
-}> {
+export async function getAuthStatus(): Promise<{ authenticated: boolean; email?: string; tier?: string }> {
   const isAuth = await SupabaseClient.isAuthenticated();
-  if (!isAuth) {
-    return { authenticated: false };
-  }
+  if (!isAuth) return { authenticated: false };
 
   const user = await SupabaseClient.getUser();
   const tier = await SupabaseClient.getUserTier();
-
-  return {
-    authenticated: true,
-    email: user?.email,
-    tier,
-  };
+  return { authenticated: true, email: user?.email, tier };
 }
 
-/**
- * Command to show account menu with sign in/out and profile options.
- * Provides accessible UI for authentication actions.
- */
+interface MenuOption {
+  label: string;
+  description: string;
+  command: string;
+}
+
 export async function showAccountMenu(): Promise<void> {
   try {
     const status = await getAuthStatus();
 
-    if (!status.authenticated) {
-      // Not signed in - show sign in option
-      const items = [
-        {
-          label: '$(sign-in) Sign In',
-          description:
-            'Access AI models and remote agents via Researcher Access Program',
-          action: 'signIn' as const,
-        },
-      ];
+    const items: MenuOption[] = status.authenticated
+      ? [
+          {
+            label: '$(account) View Profile',
+            description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
+            command: AUTH_COMMANDS.VIEW_PROFILE,
+          },
+          {
+            label: '$(sign-out) Sign Out',
+            description: 'Sign out of your TeXRA account',
+            command: AUTH_COMMANDS.SIGN_OUT,
+          },
+        ]
+      : [
+          {
+            label: '$(sign-in) Sign In',
+            description: 'Access AI models and remote agents via Researcher Access Program',
+            command: AUTH_COMMANDS.SIGN_IN,
+          },
+        ];
 
-      const choice = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Account Options',
-      });
-
-      if (choice?.action === 'signIn') {
-        await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-      }
-    } else {
-      // Signed in - show profile and sign out options
-      const items = [
-        {
-          label: '$(account) View Profile',
-          description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
-          action: 'viewProfile' as const,
-        },
-        {
-          label: '$(sign-out) Sign Out',
-          description: 'Sign out of your TeXRA account',
-          action: 'signOut' as const,
-        },
-      ];
-
-      const choice = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Account Options',
-      });
-
-      const actionCommands: Record<'viewProfile' | 'signOut', string> = {
-        viewProfile: AUTH_COMMANDS.VIEW_PROFILE,
-        signOut: AUTH_COMMANDS.SIGN_OUT,
-      };
-      if (choice) {
-        await vscode.commands.executeCommand(actionCommands[choice.action]);
-      }
+    const choice = await vscode.window.showQuickPick(items, { placeHolder: 'Account Options' });
+    if (choice) {
+      await vscode.commands.executeCommand(choice.command);
     }
   } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Failed to show account menu: ${toErrorMessage(error)}`,
-    );
+    void vscode.window.showErrorMessage(`Failed to show account menu: ${toErrorMessage(error)}`);
   }
 }

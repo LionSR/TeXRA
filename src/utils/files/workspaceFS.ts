@@ -32,10 +32,6 @@ export class WorkspaceFS extends RelativeFS {
     return vscode.workspace.asRelativePath(filePath, false);
   }
 
-  public static async readFileBytes(target: string): Promise<Buffer> {
-    return this.readBytes(target);
-  }
-
   /**
    * Convert a file path to an absolute path.
    * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
