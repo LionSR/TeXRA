@@ -2,6 +2,7 @@
 export { isFile, isDirectory } from './fsEntryType';
 export {
   ExtensionCategory,
+  getFilterExtensions,
   getIncludedExtensions,
   isLatexFile,
   isTexFile,

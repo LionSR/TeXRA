@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { formatZodError } from '@common/errors';
 import { AgentHistoryManager } from '@common/history/AgentHistoryManager';

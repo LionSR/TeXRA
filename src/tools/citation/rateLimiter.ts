@@ -5,11 +5,7 @@ import { delay } from '@utils/core';
  * Ensures minimum delay between consecutive requests to the same API.
  */
 
-interface RateLimiterState {
-  lastRequestTime: number;
-}
-
-const rateLimiters = new Map<string, RateLimiterState>();
+const lastRequestTimes = new Map<string, number>();
 
 /**
  * Enforces rate limiting by waiting if necessary before allowing the next request.
@@ -22,18 +18,13 @@ export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
-  const state = rateLimiters.get(apiName) ?? { lastRequestTime: 0 };
-  const now = Date.now();
-  const timeSinceLastRequest = now - state.lastRequestTime;
+  const lastTime = lastRequestTimes.get(apiName) ?? 0;
+  const elapsed = Date.now() - lastTime;
+  const waitTime = minDelayMs - elapsed;
 
-  if (timeSinceLastRequest < minDelayMs) {
-    const waitTime = minDelayMs - timeSinceLastRequest;
+  if (waitTime > 0) {
     await delay(waitTime);
-    // Use calculated time to avoid drift from async operations
-    state.lastRequestTime = now + waitTime;
-  } else {
-    state.lastRequestTime = now;
   }
 
-  rateLimiters.set(apiName, state);
+  lastRequestTimes.set(apiName, Date.now());
 }

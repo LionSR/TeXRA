@@ -38,11 +38,10 @@ export class FileLineageCalculator {
     previousOutputs: OutputFileInfo[],
   ): RoundFileMapping {
     const currentLocations = currentOutputs.map((entry) => entry.location);
-    const prevLocations = previousOutputs.map((entry) => entry.location);
 
     const baseToOutput = this.calculateBaseToOutputMapping(currentLocations);
     const prevToOutput = this.calculatePrevToOutputMapping(
-      prevLocations,
+      previousOutputs.map((entry) => entry.location),
       currentLocations,
     );
 

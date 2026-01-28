@@ -46,17 +46,18 @@ export class OutputFileProcessor {
     rawLocation: FileLocation,
     scope: AgentLogStage,
   ): Promise<void> {
-    const { logger, xmlManager, baseFiles } = this.ctx;
+    const { logger } = this.ctx;
 
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,
     );
 
     try {
-      const processedPairs = await xmlManager.processMultipleXmlOutputs(
-        outputLocation,
-        currRound,
-      );
+      const processedPairs =
+        await this.ctx.xmlManager.processMultipleXmlOutputs(
+          outputLocation,
+          currRound,
+        );
 
       if (processedPairs.length > 0) {
         await indentLatexFiles(
@@ -67,9 +68,9 @@ export class OutputFileProcessor {
           `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
         );
 
-        if (baseFiles.length > 0) {
+        if (this.ctx.baseFiles.length > 0) {
           await replaceInputCommands(
-            baseFiles,
+            this.ctx.baseFiles,
             processedPairs.map((p) => p.location),
             logger,
           );
@@ -107,7 +108,7 @@ export class OutputFileProcessor {
     storageKey: StorageKey,
     scope: AgentLogStage,
   ): Promise<void> {
-    const { agentSetting, logger, xmlManager, baseFiles, streamId } = this.ctx;
+    const { agentSetting, logger } = this.ctx;
 
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
@@ -134,7 +135,7 @@ export class OutputFileProcessor {
       }
 
       if (shouldProcessXml) {
-        processed = await xmlManager.processSingleXmlOutput(
+        processed = await this.ctx.xmlManager.processSingleXmlOutput(
           outputLocation,
           currRound,
         );
@@ -148,9 +149,9 @@ export class OutputFileProcessor {
           `Indented single output file: ${processed.location.absolutePath}`,
         );
 
-        if (baseFiles.length > 0) {
+        if (this.ctx.baseFiles.length > 0) {
           await replaceInputCommands(
-            baseFiles,
+            this.ctx.baseFiles,
             processedFiles.map((entry) => entry.location),
             logger,
           );
@@ -179,7 +180,7 @@ export class OutputFileProcessor {
       };
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
-        streamId: streamId,
+        streamId: this.ctx.streamId,
         storageKey,
         filesByRound: { [currRound]: [] },
       });
@@ -203,7 +204,6 @@ export class OutputFileProcessor {
     rawOutput: FileLocation | null,
     processed: OutputFileInfo[],
   ): Promise<void> {
-    const { agentSetting, logger } = this.ctx;
     const data = this.ctx.ensureRoundData(round);
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
@@ -224,7 +224,7 @@ export class OutputFileProcessor {
       const rawContent = await flexibleFS.read(rawOutput);
       const tagContents: Record<string, string | string[]> = {};
       const documents: string[] = [];
-      const documentTag = agentSetting.documentTag;
+      const documentTag = this.ctx.agentSetting.documentTag;
 
       const documentEntries = extractMultipleTextFromTag(
         rawContent,
@@ -270,7 +270,7 @@ export class OutputFileProcessor {
         sourceLocation: rawOutput,
       };
     } catch (error) {
-      logger.debug(
+      this.ctx.logger.debug(
         `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );

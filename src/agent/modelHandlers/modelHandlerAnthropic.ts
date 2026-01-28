@@ -12,12 +12,10 @@ import {
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  AgentCategory,
   type AgentSetting,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
@@ -286,7 +284,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     supportsReasoning,
     thresholdPercent,
   }: ContextManagementSetupOptions): void {
-    if (this.agentCategory !== AgentCategory.ToolUse) {
+    if (!this.isToolUseMode()) {
       return;
     }
 
@@ -1328,10 +1326,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.defaultAddContinueWithPrefill();
   }
@@ -1339,10 +1335,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -1457,13 +1451,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = new ConversationRoundState(0);
       this.addContinueMessageWithoutPrefill(
         messages,
-        state,
         workspaceState,
         agentSetting,
-        agentConfig,
       );
 
       this.logger.debug(

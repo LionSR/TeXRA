@@ -13,3 +13,5 @@ export {
 } from './runToolUseFlow';
 
 export { type IToolUseSession } from './ToolUseSessionLifecycle';
+
+export { type ToolUseSessionSnapshot } from './ToolUseSessionTypes';

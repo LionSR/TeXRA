@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { AgentSource } from '@agent/core/AgentDataclass';
+import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
