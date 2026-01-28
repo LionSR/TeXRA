@@ -36,12 +36,6 @@ logger.initialize(CHANNEL);
 // =============================================================================
 
 /**
- * Remote agent visibility levels.
- * Visibility is an array of group names that can access the agent.
- */
-type RemoteVisibility = string[];
-
-/**
  * Minimal agent metadata for dropdown display and path resolution.
  * No redundant fields - derive what you need.
  */
@@ -54,7 +48,7 @@ export interface AgentEntry {
   description?: string;
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
-  visibility?: RemoteVisibility; // remote only
+  visibility?: string[]; // remote only: group names that can access the agent
 }
 
 /**
@@ -453,36 +447,23 @@ export function createKey(source: AgentSource, name: string): string {
   return `${source}:${name}`;
 }
 
-/** Parse source:name key. */
-function parseKey(
-  key: string,
-): { source: AgentSource; name: string } | undefined {
-  const colonIdx = key.indexOf(':');
-  if (colonIdx === -1) return undefined;
-
-  const source = key.slice(0, colonIdx);
-  const name = key.slice(colonIdx + 1);
-
-  if (!AgentSource.safeParse(source).success) return undefined;
-  return { source: source as AgentSource, name };
-}
-
 /**
  * Extract the clean agent name from an identifier.
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
  */
 export function getCleanAgentName(agentIdentifier: string): string {
-  return parseKey(agentIdentifier)?.name ?? agentIdentifier;
+  const colonIdx = agentIdentifier.indexOf(':');
+  if (colonIdx === -1) return agentIdentifier;
+
+  const source = agentIdentifier.slice(0, colonIdx);
+  if (!AgentSource.safeParse(source).success) return agentIdentifier;
+
+  return agentIdentifier.slice(colonIdx + 1);
 }
 
 // =============================================================================
 // _MULTIPLE VARIANT HELPERS
 // =============================================================================
-
-/** Check if agent name is a _multiple variant. */
-function isMultipleVariant(name: string): boolean {
-  return name.endsWith(MULTIPLE_SUFFIX);
-}
 
 /** Get base name (strips _multiple suffix if present). */
 export function getBaseName(name: string): string {
@@ -493,7 +474,7 @@ export function getBaseName(name: string): string {
 
 /** Get _multiple variant name (adds suffix if not present). */
 export function getMultipleName(name: string): string {
-  return isMultipleVariant(name) ? name : `${name}${MULTIPLE_SUFFIX}`;
+  return name.endsWith(MULTIPLE_SUFFIX) ? name : `${name}${MULTIPLE_SUFFIX}`;
 }
 
 // =============================================================================
@@ -595,7 +576,7 @@ interface AgentOptionsDataPayload {
  * Convert AgentEntry to typed option data.
  */
 function entryToOptionData(entry: AgentEntry): AgentOptionData {
-  const key = `${entry.source}:${entry.name}`;
+  const key = createKey(entry.source, entry.name);
   return {
     value: key,
     label: entry.name,

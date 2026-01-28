@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { AGENT_CATEGORY } from './agent';
 import {
   ProviderErrorPartialSchema,
@@ -107,5 +105,3 @@ export const AgentProposalPermissionSchema = z.discriminatedUnion(
 export type AgentProposalPermission = z.infer<
   typeof AgentProposalPermissionSchema
 >;
-
-export type { ProviderErrorPartial };
