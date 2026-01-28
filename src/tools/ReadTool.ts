@@ -83,19 +83,11 @@ export class ReadFileTool extends defineTool({
     const totalLines = lines.length;
 
     const requestedStartLine = input.range?.start ?? 1;
-    let requestedEndLine: number;
-    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
-    if (input.range?.end != null) {
-      requestedEndLine = input.range.end;
-      // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
-    } else if (input.range?.start != null) {
-      requestedEndLine = Math.min(
-        requestedStartLine + READ_FILE_MAX_LINES - 1,
-        totalLines,
-      );
-    } else {
-      requestedEndLine = totalLines;
-    }
+    const requestedEndLine = this.computeRequestedEndLine(
+      input.range,
+      requestedStartLine,
+      totalLines,
+    );
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
@@ -151,7 +143,7 @@ export class ReadFileTool extends defineTool({
   }
 
   private buildSummary({
-    path,
+    path: filePath,
     totalLines,
     visibleCount,
     actualStartLine,
@@ -162,27 +154,25 @@ export class ReadFileTool extends defineTool({
     rangeEndExceeded,
   }: BuildSummaryParams): string {
     if (visibleCount === 0) {
-      return totalLines === 0
-        ? `Read ${path} (file is empty)`
-        : `Read ${path} (no lines in requested range)`;
+      const reason =
+        totalLines === 0 ? 'file is empty' : 'no lines in requested range';
+      return `Read ${filePath} (${reason})`;
     }
 
     const startLine = actualStartLine ?? 1;
     const endLine = actualEndLine ?? startLine + visibleCount - 1;
-    const isPartialRead =
-      rangeProvided || truncated || startLine !== 1 || endLine !== totalLines;
+    const isFullRead =
+      !rangeProvided && !truncated && startLine === 1 && endLine === totalLines;
+
+    if (isFullRead) {
+      return `Read ${filePath}`;
+    }
 
     const rangeLabel =
       startLine === endLine
         ? `line ${startLine}`
         : `lines ${startLine}-${endLine}`;
-
-    let base: string;
-    if (isPartialRead) {
-      base = `Read ${rangeLabel} of ${path}`;
-    } else {
-      base = `Read ${path}`;
-    }
+    const base = `Read ${rangeLabel} of ${filePath}`;
 
     if (rangeEndExceeded) {
       return `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
@@ -190,22 +180,39 @@ export class ReadFileTool extends defineTool({
     return base;
   }
 
+  private computeRequestedEndLine(
+    range: ReadInput['range'],
+    requestedStartLine: number,
+    totalLines: number,
+  ): number {
+    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+    if (range?.end != null) {
+      return range.end;
+    }
+    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+    if (range?.start != null) {
+      return Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines);
+    }
+    return totalLines;
+  }
+
   private getAttachmentConfig(
     filePath: string,
   ): { kind: 'pdf' | 'image'; label: string } | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
-    const lowerPath = filePath.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
-    const extension = path.extname(lowerPath);
+    const extension = path.extname(filePath.toLowerCase());
 
-    if (mimeType === 'application/pdf' || extension === '.pdf') {
+    const isPdf = mimeType === 'application/pdf' || extension === '.pdf';
+    if (isPdf) {
       return { kind: 'pdf', label: 'PDF' };
     }
 
-    const isImageMime = mimeType?.startsWith('image/');
     // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
     // even though the underlying file is XML text.
-    if (isImageMime || (extension && IMAGE_EXTENSIONS.has(extension))) {
+    const isImage =
+      mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension);
+    if (isImage) {
       return { kind: 'image', label: 'image' };
     }
 
@@ -216,31 +223,21 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
     config: { kind: 'pdf' | 'image'; label: string },
   ): Promise<ToolResult> {
-    const attachmentCopy = ATTACHMENT_COPY[config.kind];
+    const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
       filePath: input.path,
-      description:
-        config.kind === 'pdf'
-          ? 'PDF returned by read_file tool.'
-          : 'Image returned by read_file tool.',
+      description: `${config.label === 'PDF' ? 'PDF' : 'Image'} returned by read_file tool.`,
     });
 
-    const summaryParts = [`Attached ${config.label} ${attachment.path}.`];
-    if (input.range) {
-      summaryParts.push(attachmentCopy.rangeSummary);
-    }
+    const baseSummary = `Attached ${config.label} ${attachment.path}.`;
+    const summary = input.range
+      ? `${baseSummary} ${copy.rangeSummary}`
+      : baseSummary;
+    const output = input.range
+      ? `${copy.rangeOutput} ${copy.coreOutput}`
+      : copy.coreOutput;
 
-    const outputParts: string[] = [];
-    if (input.range) {
-      outputParts.push(attachmentCopy.rangeOutput);
-    }
-    outputParts.push(attachmentCopy.coreOutput);
-
-    return {
-      summary: summaryParts.join(' '),
-      output: outputParts.join(' '),
-      files: [attachment],
-    };
+    return { summary, output, files: [attachment] };
   }
 }
 

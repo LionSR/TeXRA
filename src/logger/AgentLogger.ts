@@ -4,7 +4,6 @@ import {
   END_GROUP_STATUS,
   MESSAGE_TYPES,
   type ContextManagementData,
-  type ContextStateData,
   type EndGroupStatus,
   type ErrorContext,
   type ExtendedTokenUsageStats,
@@ -38,7 +37,10 @@ export interface AgentLogStage {
   run<T>(fn: () => Promise<T>): Promise<T>;
   within<T>(fn: () => Promise<T>): Promise<T>;
   end(status?: EndGroupStatus): void;
-  stage(label: string, options?: AgentLoggerStageOptions): Promise<AgentLogStage>;
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage>;
 }
 
 class AgentLogStageHandle implements AgentLogStage {
@@ -221,19 +223,12 @@ export class AgentLogger {
     groupId?: string,
   ): void {
     const utilizationPercent = (inputTokens / contextWindow) * 100;
-    const data: ContextStateData = {
-      inputTokens,
-      contextWindow,
-      utilizationPercent,
-    };
-    // Use info level to ensure message reaches progress view (debug is filtered)
-    // The CONTEXT_STATE message type triggers UI update without cluttering logs
     this.info(
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
         groupId,
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
-        data,
+        data: { inputTokens, contextWindow, utilizationPercent },
       },
     );
   }
