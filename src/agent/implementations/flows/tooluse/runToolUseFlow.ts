@@ -65,9 +65,10 @@ export async function runToolUseFlow<C = unknown>(
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const toolRegistry = input.toolRegistry ?? getDefaultToolRegistry();
   const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
+  // Exclude toolRegistry and resumeSnapshot which are not part of ToolUseServices
+  const { toolRegistry: _, resumeSnapshot: __, ...baseInput } = input;
   const services: ToolUseServices<C> = {
-    ...input,
-    toolRegistry,
+    ...baseInput as Omit<typeof baseInput, 'toolRegistry' | 'resumeSnapshot'>,
     session: sessionLifecycle,
     resolvedTools,
     snapshot: resumeSnapshot,

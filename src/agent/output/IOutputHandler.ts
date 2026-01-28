@@ -9,6 +9,25 @@ import type {
 import type { LatexDiffManager } from './LatexDiffManager';
 import type { RoundFileMapping } from './types';
 
+/** Result of validateExpectedOutputs - data for caller to handle events/UI. */
+export interface ValidationResult {
+  storageKey: StorageKey;
+  currRound: number;
+  missing: string[];
+  xmlExists: boolean;
+}
+
+/** Result of finalizeRound - data for caller to handle events/file opening. */
+export interface FinalizeRoundResult {
+  storageKey: StorageKey;
+  currRound: number;
+  fileInfos: OutputFileInfo[];
+  filesToOpen: FileLocation[];
+  outputFile: FileLocation;
+  endTurn: boolean;
+  stage?: AgentLogStage;
+}
+
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
   /** Map of generated output files by round. */
@@ -38,7 +57,7 @@ export interface IOutputHandler {
   /** Retrieve the cached mapping metadata for a round. */
   getRoundMapping(currRound: number): RoundFileMapping;
 
-  /** Finalize processing for a round. */
+  /** Finalize processing for a round. Returns data for caller to handle events/file opening. */
   finalizeRound(
     outputFile: FileLocation,
     currRound: number,
@@ -47,7 +66,14 @@ export interface IOutputHandler {
       stage?: AgentLogStage;
       mapping?: RoundFileMapping;
     },
-  ): Promise<void>;
+  ): Promise<FinalizeRoundResult>;
+
+  /** Validate expected outputs exist. Returns data for caller to handle events/UI. */
+  validateExpectedOutputs(
+    outputLocation: FileLocation,
+    currRound: number,
+    stage?: AgentLogStage,
+  ): Promise<ValidationResult>;
 
   getRoundArtifacts(round: number): Promise<RoundOutput>;
 
