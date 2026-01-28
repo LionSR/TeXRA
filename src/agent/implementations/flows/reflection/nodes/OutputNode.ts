@@ -16,9 +16,9 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
+import { bus } from '@eventBus/ProgressEventBus';
 import type { RoundOutput } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
