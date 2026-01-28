@@ -49,13 +49,6 @@ export class ConversationRoundState {
     this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
-  /** Apply default values to all fields except roundIndex. */
-  private applyDefaults(): void {
-    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
-    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
-    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
-  }
-
   /** Deserialize from a snapshot. Validates and applies schema defaults. */
   static fromSnapshot(snapshot: unknown): ConversationRoundState {
     const parsed = ConversationRoundStateSnapshotSchema.parse(snapshot);
@@ -100,7 +93,9 @@ export class ConversationRoundState {
    */
   reset(newRoundIndex: number): void {
     this.roundIndex = newRoundIndex;
-    this.applyDefaults();
+    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
+    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
+    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 }
 
