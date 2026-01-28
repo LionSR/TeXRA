@@ -114,14 +114,19 @@ export class XmlOutputManager {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    const namedDocumentContent = this.extractDocumentbyRegex(
-      outputContent,
-      documentTag,
-    );
-    if (namedDocumentContent) {
-      await AbsoluteFS.write(texLocation.absolutePath, namedDocumentContent);
+    const filename = path.basename(this.agentConfig.inputFile);
+    const regexResult = extractDocument(outputContent, documentTag, filename);
+    if (regexResult.content) {
+      const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
+      if (suffix) {
+        this.logger.logInternal(`Recovered ${documentTag} ${suffix}`);
+      }
+      await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
       return texLocation;
     }
+    this.logger.debugInternal(
+      `No ${documentTag} found in output file using fallback method`,
+    );
 
     const parser = new XMLParser(XML_PARSER_OPTIONS);
     const root = parser.parse(outputContent);
@@ -174,59 +179,41 @@ export class XmlOutputManager {
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
-    const tryFallbackExtraction = async (): Promise<
-      OutputFileInfo[] | null
-    > => {
-      const fallbackDocs = this.extractMultipleDocumentsbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackDocs) {
-        this.warnPartialExtraction(
-          outputLocation,
-          expectedDocumentCount,
-          fallbackDocs.length,
-        );
-        return this.processMultipleLatexDocuments(
-          fallbackDocs,
-          outputLocation,
-          round,
-        );
-      }
-      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
-      return null;
-    };
+    let documents: Array<{ content: string; name: string }> | null = null;
 
     try {
       const parser = new XMLParser(XML_PARSER_OPTIONS);
       const root = parser.parse(outputContent);
-
-      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
-      if (documents) {
-        this.warnPartialExtraction(
-          outputLocation,
-          expectedDocumentCount,
-          documents.length,
-        );
-        return this.processMultipleLatexDocuments(
-          documents,
-          outputLocation,
-          round,
+      documents = extractContentFromXMLbyTagMultiple(root, documentTag);
+      if (!documents) {
+        this.logger.debugInternal(
+          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
         );
       }
-
-      this.logger.debugInternal(
-        `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-      );
-      return (await tryFallbackExtraction()) ?? [];
     } catch (err) {
       this.logger.debugInternal(
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
       );
-      const result = await tryFallbackExtraction();
-      if (result) return result;
-      throw err;
     }
+
+    if (!documents) {
+      documents = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+    }
+
+    if (!documents) {
+      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
+      return [];
+    }
+
+    this.warnPartialExtraction(
+      outputLocation,
+      expectedDocumentCount,
+      documents.length,
+    );
+    return this.processMultipleLatexDocuments(documents, outputLocation, round);
   }
 
   async processMultipleLatexDocuments(
@@ -291,11 +278,7 @@ export class XmlOutputManager {
     );
 
     const xmlContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    let original = '';
-    const nameMatch = xmlContent.match(DOCUMENT_NAME_REGEX);
-    if (nameMatch && nameMatch[1]) {
-      original = nameMatch[1].trim();
-    }
+    const original = xmlContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
 
     return {
       source: original || this.agentConfig.inputFile,
