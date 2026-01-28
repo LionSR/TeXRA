@@ -2,8 +2,8 @@ export {
   RemoteAgentListItemSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
-} from './types.js';
+} from './types';
 
-export { RemoteAgentLoader } from './RemoteAgentLoader.js';
+export { RemoteAgentLoader } from './RemoteAgentLoader';
 
-export { selectAgentInMainView } from './remoteAgentUtils.js';
+export { selectAgentInMainView } from './remoteAgentUtils';
