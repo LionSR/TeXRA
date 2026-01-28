@@ -44,11 +44,10 @@ export class ToolUseCycleNode<C> extends Node<
 
   async exec(prepRes: CyclePrepResult): Promise<CycleExecResult> {
     if (prepRes.shouldSkip) {
-      const recoveredTodos = prepRes.workspaceState.todos.todos;
-      if (recoveredTodos.length > 0) {
+      if (prepRes.workspaceState.todos.todos.length > 0) {
         bus.emit('updateTodos', {
           streamId: this.services.streamId,
-          todos: recoveredTodos,
+          todos: prepRes.workspaceState.todos.todos,
         });
       }
       return { kind: 'skipped' };

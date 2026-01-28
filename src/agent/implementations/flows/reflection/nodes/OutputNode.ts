@@ -61,21 +61,18 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
-    const { baseFiles, shouldEnsureXmlStructure } = this.services;
-    const { currentRound, outputLocation, endTurn } = shared;
-
-    if (!outputLocation) {
+    if (!shared.outputLocation) {
       throw new Error(
         'Output location not set - ResponseCycleNode must run first',
       );
     }
 
     return {
-      currentRound,
-      outputLocation,
-      endTurn,
-      baseFiles,
-      ensureXmlStructure: shouldEnsureXmlStructure,
+      currentRound: shared.currentRound,
+      outputLocation: shared.outputLocation,
+      endTurn: shared.endTurn,
+      baseFiles: this.services.baseFiles,
+      ensureXmlStructure: this.services.shouldEnsureXmlStructure,
     };
   }
 

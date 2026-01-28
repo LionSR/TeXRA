@@ -36,7 +36,10 @@ export interface AgentLogStage {
   run<T>(fn: () => Promise<T>): Promise<T>;
   within<T>(fn: () => Promise<T>): Promise<T>;
   end(status?: EndGroupStatus): void;
-  stage(label: string, options?: AgentLoggerStageOptions): Promise<AgentLogStage>;
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage>;
 }
 
 class AgentLogStageHandle implements AgentLogStage {
