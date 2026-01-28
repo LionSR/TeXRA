@@ -10,7 +10,7 @@ import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerTo
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 
-/** Internal schema for thinking blocks. */
+/** Schema for thinking blocks (used by model handlers). */
 const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
@@ -18,7 +18,7 @@ const ThinkingBlockSchema = z.object({
   data: z.string().optional(),
 });
 
-type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
+export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
 /** Internal schema for response assembly state. */
 const ResponseAssemblyStateSchema = z.object({
