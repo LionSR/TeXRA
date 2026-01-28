@@ -258,7 +258,7 @@ export class OutputHandler implements IOutputHandler {
     const roundOutputs = this.ensureRound(currRound);
     const mapping = precomputedMapping ?? this.getRoundMapping(currRound);
 
-    const infos = await Promise.all(
+    return Promise.all(
       roundOutputs.map(async (output) => {
         const location = output.location;
         const locationPath = getComparablePath(location);
@@ -289,15 +289,13 @@ export class OutputHandler implements IOutputHandler {
         };
       }),
     );
-
-    return infos;
   }
 
   public getRoundMapping(currRound: number): RoundFileMapping {
-    const currentData = this.rounds.get(currRound);
-    const currentOutputs = currentData?.outputs ?? [];
-    const prevData = currRound > 0 ? this.rounds.get(currRound - 1) : undefined;
-    const prevOutputs = prevData?.outputs ?? [];
+    const currentOutputs = this.rounds.get(currRound)?.outputs ?? [];
+    const prevOutputs =
+      (currRound > 0 ? this.rounds.get(currRound - 1)?.outputs : undefined) ??
+      [];
 
     return this.lineageCalculator.calculateMapping(currentOutputs, prevOutputs);
   }
@@ -446,11 +444,11 @@ export class OutputHandler implements IOutputHandler {
         data.rawOutput ??= outputLocation;
         const rawLocation = data.rawOutput;
 
-        if (
+        const hasMultipleOutputs =
           this.agentConfig.useMultipleOutputs &&
-          Array.isArray(this.agentConfig.outputFiles) &&
-          this.agentConfig.outputFiles.length > 0
-        ) {
+          this.agentConfig.outputFiles?.length > 0;
+
+        if (hasMultipleOutputs) {
           await this.fileProcessor.processMultipleOutputs(
             outputLocation,
             currRound,
