@@ -82,20 +82,19 @@ function computePreliminaryStreamId(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
 ): StreamTabId {
-  const { agent, model, inputFile, useMultipleOutputs } = configPayload;
-
-  if (!agent || !model) {
+  if (!configPayload.agent || !configPayload.model) {
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  const agentEntry = getAgent(agent);
+  const agentEntry = getAgent(configPayload.agent);
   const agentCategory = agentEntry?.category ?? AgentCategory.Workflow;
 
-  return getStreamTabId(agent, model, inputFile ?? '', {
-    agentCategory,
-    executionId,
-    useMultipleOutputs,
-  });
+  return getStreamTabId(
+    configPayload.agent,
+    configPayload.model,
+    configPayload.inputFile ?? '',
+    { agentCategory, executionId, useMultipleOutputs: configPayload.useMultipleOutputs },
+  );
 }
 
 export async function getAgentPath(
@@ -223,7 +222,7 @@ async function resolveAgentBase(
       : await (await parentStage.stage('Init')).run(buildVars);
 
   const userVarChannels: UserVariableChannels = {
-    input: Object.freeze({ ...baseVars }),
+    input: Object.freeze(baseVars),
     transient: { ...baseVars },
   };
 
@@ -453,10 +452,14 @@ export async function executeAgent(
 
       const interruptCallbacks = createInterruptCallbacks();
 
+      const flowContext = {
+        ...ctx,
+        ...interruptCallbacks,
+      };
+
       if (setting.agentCategory === AgentCategory.ToolUse) {
         const result = await runToolUseFlow({
-          ...ctx,
-          ...interruptCallbacks,
+          ...flowContext,
           getUsageRecorder: () => (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: ctx.setting as AgentToolUseSetting,
@@ -467,8 +470,7 @@ export async function executeAgent(
       }
 
       const result = await runReflectionFlow({
-        ...ctx,
-        ...interruptCallbacks,
+        ...flowContext,
         getUsageRecorder: () => (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
@@ -516,8 +518,6 @@ export async function executeMergeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      const interruptCallbacks = createInterruptCallbacks();
-
       const fileService = new TaskRunFileService(executionId);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
         inputFile,
@@ -527,14 +527,13 @@ export async function executeMergeAgent(
 
       const result = await runReflectionFlow({
         ...ctx,
-        ...interruptCallbacks,
+        ...createInterruptCallbacks(),
         getUsageRecorder: () => (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
         parentStage: ctx.parentStage,
       });
-
       return result.status;
     });
   });
@@ -559,7 +558,10 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  const interruptCallbacks = createInterruptCallbacks();
+  const flowContext = {
+    ...ctx,
+    ...createInterruptCallbacks(),
+  };
 
   await runFlowWithLifecycle(
     ctx,
@@ -570,8 +572,7 @@ export async function resumeToolUseFromSnapshot(
 
       const result = await runToolUseFlow(
         {
-          ...ctx,
-          ...interruptCallbacks,
+          ...flowContext,
           getUsageRecorder: () => (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
@@ -581,7 +582,6 @@ export async function resumeToolUseFromSnapshot(
         },
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-
       return result.status;
     },
   );

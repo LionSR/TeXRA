@@ -164,17 +164,14 @@ class ResponsePrepNode<C> extends BaseNode<
     const interrupted = checkInterruption();
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
-    const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(prompt.systemPrompt, userVars);
+      : await getSystemPromptWithRules(prompt.systemPrompt, {
+          ...userVarChannels.input,
+          ...userVarChannels.transient,
+        });
 
-    return {
-      interrupted,
-      exists,
-      systemPrompt,
-      outputLocation,
-    };
+    return { interrupted, exists, systemPrompt, outputLocation };
   }
 
   async post(
@@ -419,7 +416,7 @@ class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
-    const { workspace } = this.services;
+    const { assembly } = this.services.workspace;
     return {
       shouldStop: shared.shouldStop,
       responseObject: shared.responseObject,
@@ -427,8 +424,8 @@ class ResponseProcessNode<C> extends BaseNode<
       messages: shared.messages,
       outputLocation: shared.outputLocation!,
       outputExists: shared.outputExists,
-      lastResponse: workspace.assembly.lastResponse,
-      accumulatedOutput: workspace.assembly.accumulatedOutput,
+      lastResponse: assembly.lastResponse,
+      accumulatedOutput: assembly.accumulatedOutput,
     };
   }
 
@@ -720,12 +717,11 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    const { checkInterruption } = this.services;
-
     const shouldSkip =
       shared.shouldStop || !shared.stopReason || !shared.processedResponse;
 
-    const interrupted = !shouldSkip && Boolean(await checkInterruption());
+    const interrupted =
+      !shouldSkip && Boolean(await this.services.checkInterruption());
 
     return {
       shouldSkip,
