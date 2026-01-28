@@ -9,7 +9,6 @@ import {
   EXECUTION_STATUS,
   END_GROUP_STATUS,
   type EndGroupStatus,
-  type StreamTabId,
 } from '@shared/schemas';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import {

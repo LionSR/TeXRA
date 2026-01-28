@@ -11,56 +11,46 @@ import {
   type TaskState,
 } from '@logger/TaskState';
 
-/**
- * Convert a TaskState payload into a full main view state snapshot.
- */
+/** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
   taskState: TaskState,
 ): MainViewPersistedState {
-  const defaults = MainViewPersistedStateSchema.parse({});
   const { agentConfig } = taskState;
   const isToolUse = isToolUseTaskState(taskState);
   const isWorkflow = isWorkflowTaskState(taskState);
   const activeFiles = isWorkflow ? taskState.activeFiles : undefined;
   const toolConfig = agentConfig.toolConfig ?? {};
 
-  const nextState: MainViewPersistedState = {
-    ...defaults,
+  // Build partial state from agentConfig and toolConfig, then parse with schema
+  // to apply prefault defaults for any missing fields
+  return MainViewPersistedStateSchema.parse({
     sessionType: isToolUse ? 'toolUse' : 'workflow',
-    workflowAgent: isToolUse ? defaults.workflowAgent : agentConfig.agent,
-    toolUseAgent: isToolUse ? agentConfig.agent : defaults.toolUseAgent,
-    model: agentConfig.model ?? defaults.model,
-    instruction: agentConfig.instruction ?? defaults.instruction,
-    inputFile: agentConfig.inputFile ?? defaults.inputFile,
-    referenceFile: agentConfig.referenceFile ?? defaults.referenceFile,
-    auxiliaryFile: agentConfig.auxiliaryFile ?? defaults.auxiliaryFile,
-    mediaFile: agentConfig.mediaFile ?? defaults.mediaFile,
-    editedFile: agentConfig.editedFile ?? defaults.editedFile,
-    inputFiles: agentConfig.inputFiles ?? defaults.inputFiles,
-    referenceFiles: agentConfig.referenceFiles ?? defaults.referenceFiles,
-    auxiliaryFiles: agentConfig.auxiliaryFiles ?? defaults.auxiliaryFiles,
-    mediaFiles: agentConfig.mediaFiles ?? defaults.mediaFiles,
-    outputFiles: agentConfig.outputFiles ?? defaults.outputFiles,
-    inputFilesVisible: activeFiles?.input ?? defaults.inputFilesVisible,
-    referenceFilesVisible:
-      activeFiles?.reference ?? defaults.referenceFilesVisible,
-    auxiliaryFilesVisible:
-      activeFiles?.auxiliary ?? defaults.auxiliaryFilesVisible,
-    mediaFilesVisible: activeFiles?.media ?? defaults.mediaFilesVisible,
-    outputFilesVisible: activeFiles?.output ?? defaults.outputFilesVisible,
-    outputFilesActive: activeFiles?.output ?? defaults.outputFilesActive,
-    autoExtractFigure:
-      toolConfig.autoExtractFigure ?? defaults.autoExtractFigure,
-    autoExtractTikzFigure:
-      toolConfig.autoExtractTikzFigure ?? defaults.autoExtractTikzFigure,
-    autoCompileInputPdf:
-      toolConfig.autoCompileInputPdf ?? defaults.autoCompileInputPdf,
-    attachTeXCount: toolConfig.attachTeXCount ?? defaults.attachTeXCount,
-    attachDiagnostics:
-      toolConfig.attachDiagnostics ?? defaults.attachDiagnostics,
-    agent: agentConfig.agent ?? defaults.agent,
+    workflowAgent: isToolUse ? undefined : agentConfig.agent,
+    toolUseAgent: isToolUse ? agentConfig.agent : undefined,
+    model: agentConfig.model,
+    instruction: agentConfig.instruction,
+    inputFile: agentConfig.inputFile,
+    referenceFile: agentConfig.referenceFile,
+    auxiliaryFile: agentConfig.auxiliaryFile,
+    mediaFile: agentConfig.mediaFile,
+    editedFile: agentConfig.editedFile,
+    inputFiles: agentConfig.inputFiles,
+    referenceFiles: agentConfig.referenceFiles,
+    auxiliaryFiles: agentConfig.auxiliaryFiles,
+    mediaFiles: agentConfig.mediaFiles,
+    outputFiles: agentConfig.outputFiles,
+    inputFilesVisible: activeFiles?.input,
+    referenceFilesVisible: activeFiles?.reference,
+    auxiliaryFilesVisible: activeFiles?.auxiliary,
+    mediaFilesVisible: activeFiles?.media,
+    outputFilesVisible: activeFiles?.output,
+    outputFilesActive: activeFiles?.output,
+    autoExtractFigure: toolConfig.autoExtractFigure,
+    autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
+    autoCompileInputPdf: toolConfig.autoCompileInputPdf,
+    attachTeXCount: toolConfig.attachTeXCount,
+    attachDiagnostics: toolConfig.attachDiagnostics,
+    agent: agentConfig.agent,
     isToolUseAgent: isToolUse,
-  };
-
-  return MainViewPersistedStateSchema.parse(nextState);
+  });
 }

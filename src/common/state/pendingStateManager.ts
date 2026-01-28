@@ -1,6 +1,6 @@
 import type { MainViewPersistedState } from '@shared/schemas';
 
-interface PendingStateData {
+export interface PendingStateData {
   state: MainViewPersistedState;
   executeImmediately?: boolean;
 }

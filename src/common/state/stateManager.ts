@@ -1,7 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Simple enums for commonly used state keys
 export enum WorkspaceStateKey {
   AGENT_HISTORY = 'texra.agentHistory',
   STREAM_TABS = 'texra.streamTabs',
@@ -24,39 +23,19 @@ export enum GlobalStateKey {
   MEMORY_ENABLED = 'texra.memory.enabled',
 }
 
-// Prefix used for per-instruction suppression flags
+/** Prefix used for per-instruction suppression flags */
 export const INSTRUCTION_PREFIX = 'instruction.';
 
-/**
- * State manager class that wraps VS Code's Memento
- */
-class StateManagerImpl {
-  constructor(private memento: vscode.Memento) {}
+/** Workspace state manager (initialized via initializeStateManagers) */
+export let workspaceSM: vscode.Memento;
 
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    // Use arguments.length to distinguish between no default and undefined default
-    return arguments.length === 1
-      ? this.memento.get<T>(key)
-      : this.memento.get<T>(key, defaultValue as T);
-  }
+/** Global state manager (initialized via initializeStateManagers) */
+export let globalSM: vscode.Memento;
 
-  update<T>(key: string, value: T): Thenable<void> {
-    return this.memento.update(key, value);
-  }
-}
-
-// Export the state managers that will be initialized
-export let workspaceSM: StateManagerImpl;
-export let globalSM: StateManagerImpl;
-
-/**
- * Initialize the state managers with the extension context
- */
+/** Initialize the state managers with the extension context */
 export function initializeStateManagers(
   context: vscode.ExtensionContext,
 ): void {
-  workspaceSM = new StateManagerImpl(context.workspaceState);
-  globalSM = new StateManagerImpl(context.globalState);
+  workspaceSM = context.workspaceState;
+  globalSM = context.globalState;
 }
