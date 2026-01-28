@@ -60,6 +60,16 @@ export function getInterruptible(
 }
 
 /**
+ * Type guard: ToolUseFlowContext has a session with appendFollowUp method.
+ */
+function isToolUseFlowContext(
+  entry: IInterruptible | undefined,
+): entry is ToolUseFlowContext<unknown> {
+  const session = (entry as ToolUseFlowContext<unknown> | undefined)?.session;
+  return session !== undefined && typeof session.appendFollowUp === 'function';
+}
+
+/**
  * Get a tool-use flow context by stream ID.
  * Returns undefined if the entry is not a ToolUseFlowContext.
  */
@@ -67,12 +77,7 @@ export function getToolUseFlowContext(
   streamTabId: StreamTabId,
 ): ToolUseFlowContext<unknown> | undefined {
   const entry = registry.get(streamTabId);
-  // Type guard: ToolUseFlowContext has a session with appendFollowUp method
-  const session = (entry as ToolUseFlowContext<unknown> | undefined)?.session;
-  if (session && typeof session.appendFollowUp === 'function') {
-    return entry as ToolUseFlowContext<unknown>;
-  }
-  return undefined;
+  return isToolUseFlowContext(entry) ? entry : undefined;
 }
 
 /**

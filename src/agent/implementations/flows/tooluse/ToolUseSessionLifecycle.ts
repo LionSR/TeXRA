@@ -5,8 +5,6 @@
  */
 
 import { STREAM_STATUS } from '@shared/schemas';
-import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
-
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { StreamTabId } from '@shared/schemas';
@@ -49,11 +47,9 @@ export interface IToolUseSession {
  * the flow - this class only handles follow-up queue and stream status.
  */
 export class ToolUseSessionLifecycle implements IToolUseSession {
-  private readonly followUps: FollowUpQueue;
+  private readonly followUps = ToolUseFollowUpQueue.acquire(this.streamTabId);
 
-  constructor(private readonly streamTabId: StreamTabId) {
-    this.followUps = ToolUseFollowUpQueue.acquire(streamTabId);
-  }
+  constructor(private readonly streamTabId: StreamTabId) {}
 
   appendFollowUp(text: string): void {
     this.followUps.enqueue(text);
