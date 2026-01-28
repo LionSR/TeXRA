@@ -94,13 +94,16 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
+    const saved = this.storage.get<Record<string, unknown> | null>(
       this.storageKey,
       {},
     );
 
-    if (Object.keys(saved).length > 0) {
-      await this.populateFromRecord(saved);
+    const record =
+      saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+
+    if (Object.keys(record).length > 0) {
+      await this.populateFromRecord(record);
     } else {
       this.items.clear();
     }
