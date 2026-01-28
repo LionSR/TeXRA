@@ -25,6 +25,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
+import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -111,43 +112,22 @@ export class TextEditorTool extends defineTool({
     switch (command) {
       case 'view':
         return this.view(filePath, input.view_range ?? undefined);
-      case 'create':
-        if (!input.file_text) {
-          throw new ToolError(
-            'Parameter `file_text` is required for command: create',
-          );
-        }
+      case 'create': {
+        const fileText = requireField(input.file_text, 'file_text', command);
         logger.info(CHANNEL, `create: ${filePath}`);
-        return this.create(filePath, input.file_text);
-      case 'str_replace':
-        if (!input.old_str) {
-          throw new ToolError(
-            'Parameter `old_str` is required for command: str_replace',
-          );
-        }
-        logger.info(
-          CHANNEL,
-          `str_replace: ${input.old_str} -> ${input.new_str}`,
-        );
-        return this.strReplace(filePath, input.old_str, input.new_str ?? '');
-
-      case 'insert':
-        // eslint-disable-next-line eqeqeq
-        if (input.insert_line == null) {
-          throw new ToolError(
-            'Parameter `insert_line` is required for command: insert',
-          );
-        }
-        if (!input.new_str) {
-          throw new ToolError(
-            'Parameter `new_str` is required for command: insert',
-          );
-        }
-        logger.info(
-          CHANNEL,
-          `insert: ${input.insert_line} -> ${input.new_str}`,
-        );
-        return this.insert(filePath, input.insert_line, input.new_str);
+        return this.create(filePath, fileText);
+      }
+      case 'str_replace': {
+        const oldStr = requireField(input.old_str, 'old_str', command);
+        logger.info(CHANNEL, `str_replace: ${oldStr} -> ${input.new_str}`);
+        return this.strReplace(filePath, oldStr, input.new_str ?? '');
+      }
+      case 'insert': {
+        const insertLine = requireField(input.insert_line, 'insert_line', command);
+        const newStr = requireField(input.new_str, 'new_str', command);
+        logger.info(CHANNEL, `insert: ${insertLine} -> ${newStr}`);
+        return this.insert(filePath, insertLine, newStr);
+      }
       case 'undo_edit':
         // Claude 4 models don't support undo_edit command
         if (this.apiType === 'text_editor_20250429') {

@@ -474,12 +474,18 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         `OAuth callback URI (web): ${callbackInfo.fullUrl}`,
       );
       return callbackInfo.vscodeState
-        ? { redirectTo: callbackInfo.baseUrl, queryParams: { state: callbackInfo.vscodeState } }
+        ? {
+            redirectTo: callbackInfo.baseUrl,
+            queryParams: { state: callbackInfo.vscodeState },
+          }
         : { redirectTo: callbackInfo.baseUrl };
     }
 
     const redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
-    logger.info('SupabaseAuthProvider', `OAuth callback URI (desktop): ${redirectTo}`);
+    logger.info(
+      'SupabaseAuthProvider',
+      `OAuth callback URI (desktop): ${redirectTo}`,
+    );
     return { redirectTo };
   }
 

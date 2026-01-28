@@ -173,7 +173,10 @@ export class DiffCommandExecutor {
       this.channel,
       'Bibliography compilation failed with --flatten, retrying without --flatten',
     );
-    logger.debug(this.channel, `Retrying ${commandType} without --flatten flag`);
+    logger.debug(
+      this.channel,
+      `Retrying ${commandType} without --flatten flag`,
+    );
 
     const result = await executeCommand(commandBuilder(false), execOptions);
 

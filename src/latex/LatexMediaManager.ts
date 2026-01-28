@@ -30,11 +30,6 @@ const LATEX_CONCURRENCY = 4;
  */
 type PathInput = string | FileLocation;
 
-/** Convert PathInput to FileLocation, handling both string and FileLocation inputs */
-function toFileLocation(input: PathInput): FileLocation {
-  return typeof input === 'string' ? pathToLocation(input) : input;
-}
-
 /**
  * Handles LaTeX related media extraction and compilation for agents.
  */
@@ -284,7 +279,10 @@ export class LatexMediaManager {
     }
 
     if (extraMediaFiles.length > 0) {
-      workspaceState.media.addMediaFiles(extraMediaFiles.map(toFileLocation));
+      const fileLocations = extraMediaFiles.map((input) =>
+        typeof input === 'string' ? pathToLocation(input) : input,
+      );
+      workspaceState.media.addMediaFiles(fileLocations);
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {

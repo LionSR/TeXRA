@@ -238,7 +238,9 @@ export class ServerSideKeyService {
   }
 
   async canUseServerSideKeysForModel(modelName: string): Promise<boolean> {
-    return (await this.canUseServerSideKeys()) && this.canUseModelSync(modelName);
+    return (
+      (await this.canUseServerSideKeys()) && this.canUseModelSync(modelName)
+    );
   }
 
   canUseModelSync(modelName: string): boolean {

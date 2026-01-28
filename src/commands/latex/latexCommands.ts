@@ -2,7 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+  showLoggedMessage,
+} from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
@@ -14,16 +18,26 @@ import { runIndentTeX } from '@housekeeping';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-export function registerLatexCommands(context: vscode.ExtensionContext) {
+export const latexCommands = {
+  indentCurrentTeX: 'texra.indentCurrentTeX',
+  getTeXCount: 'texra.getTeXCount',
+  indentTeX: 'texra.indentTeX',
+  applyReplacements: 'texra.applyReplacements',
+};
+
+export function registerLatexCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'texra.indentCurrentTeX',
+      latexCommands.indentCurrentTeX,
       handleIndentCurrentTeX,
     ),
-    vscode.commands.registerCommand('texra.getTeXCount', handleGetTeXCount),
-    vscode.commands.registerCommand('texra.indentTeX', runIndentTeX),
     vscode.commands.registerCommand(
-      'texra.applyReplacements',
+      latexCommands.getTeXCount,
+      handleGetTeXCount,
+    ),
+    vscode.commands.registerCommand(latexCommands.indentTeX, runIndentTeX),
+    vscode.commands.registerCommand(
+      latexCommands.applyReplacements,
       handleApplyReplacements,
     ),
   );
@@ -88,7 +102,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
             'LaTeX file indented successfully',
           );
         } else {
-          vscode.window.showErrorMessage('Failed to indent LaTeX file');
+          await showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
         }
       },
     );
@@ -175,7 +189,7 @@ async function handleGetTeXCount(): Promise<void> {
               const message =
                 errors[0] ??
                 'Failed to get tex count. Please verify the file path.';
-              vscode.window.showErrorMessage(message);
+              await showLoggedMessage(CHANNEL, message);
             }
           },
         );

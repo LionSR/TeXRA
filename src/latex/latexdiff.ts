@@ -77,21 +77,6 @@ export class LaTeXdiffService {
     return { success: false, message };
   }
 
-  private logDiffMultipleError(
-    context: string,
-    err: unknown,
-  ): LaTeXdiffMultipleResult {
-    const message = formatError(context, err);
-    logger.error(this.channel, message, {
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
-    return {
-      success: false,
-      results: { success: [], failed: [] },
-      message,
-    };
-  }
-
   async runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
@@ -168,13 +153,12 @@ export class LaTeXdiffService {
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
-      const result = this.logDiffError('Error running LaTeX diff', err);
       logger.debug(
         this.channel,
         `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
-      return result;
+      return this.logDiffError('Error running LaTeX diff', err);
     }
   }
 
@@ -273,7 +257,15 @@ export class LaTeXdiffService {
         message: summary,
       };
     } catch (err) {
-      return this.logDiffMultipleError('Error in runDiffVcMultiple', err);
+      const message = formatError('Error in runDiffVcMultiple', err);
+      logger.error(this.channel, message, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
+      return {
+        success: false,
+        results: { success: [], failed: [] },
+        message,
+      };
     }
   }
 
