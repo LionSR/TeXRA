@@ -7,7 +7,6 @@ export function scrollToBottom(element: HTMLElement | null): void {
     return;
   }
 
-  // Handle VS Code webview scroll elements
   const vsElement = element as HTMLElement & {
     scrollPos?: number;
     scrollMax?: number;
@@ -20,8 +19,5 @@ export function scrollToBottom(element: HTMLElement | null): void {
     return;
   }
 
-  // Handle standard DOM elements
-  if ('scrollTop' in element && 'scrollHeight' in element) {
-    element.scrollTop = element.scrollHeight;
-  }
+  element.scrollTop = element.scrollHeight;
 }

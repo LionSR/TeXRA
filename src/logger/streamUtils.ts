@@ -26,14 +26,14 @@ export function getStreamTabId(
   if (options.agentCategory === AgentCategory.ToolUse) {
     const shortId =
       options.executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
-    return `${cleanAgent ?? 'toolUse'}@${model}#${shortId}`;
+    return `${cleanAgent}@${model}#${shortId}`;
   }
 
   // Workflow agents use file path for deduplication
   const agentName = options.useMultipleOutputs
     ? getMultipleName(cleanAgent)
     : cleanAgent;
-  // Normalize backslashes for consistent IDs across platforms and CSS selectors
-  const filePath = (inputFile ?? '').replaceAll('\\', '/');
+  // Normalize backslashes for consistent IDs across platforms
+  const filePath = inputFile.replaceAll('\\', '/');
   return `${agentName}@${model}: ${filePath}`;
 }

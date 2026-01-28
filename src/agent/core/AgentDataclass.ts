@@ -88,7 +88,10 @@ function normalizeAgentSettingInput(input: unknown): unknown {
 
   if (rest.agentCategory !== undefined) {
     if (agentType !== undefined) {
-      logger.debug('AgentDataclass', `Stripping legacy agentType: ${agentType}`);
+      logger.debug(
+        'AgentDataclass',
+        `Stripping legacy agentType: ${agentType}`,
+      );
     }
     return rest;
   }

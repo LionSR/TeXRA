@@ -2,7 +2,6 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/** Type guard for non-array plain objects. */
 export function isPlainObject(
   value: unknown,
 ): value is Record<string, unknown> {
@@ -38,21 +37,14 @@ export function formatRelativeTime(timestamp: number): string {
 export function formatUpdatedDate(
   value: string | number | Date | null | undefined,
 ): string {
-  if (!value) {
-    return 'Updated: unknown';
-  }
+  if (!value) return 'Updated: unknown';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Updated: unknown';
-  }
+  if (Number.isNaN(date.getTime())) return 'Updated: unknown';
   return `Updated ${DATE_TIME_FORMATTER.format(date)}`;
 }
 
 export function formatLineCount(count: number): string {
-  if (count === 1) {
-    return '1 line';
-  }
-  return `${count} lines`;
+  return count === 1 ? '1 line' : `${count} lines`;
 }
 
 export function formatBytes(bytes: number): string {
