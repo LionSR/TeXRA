@@ -195,10 +195,9 @@ class ToolUsePrepNode<C> extends BaseNode<
 
     // Check for queued follow-ups to inject before the model call
     let queuedFollowUp: string | null = null;
-    const session = this.services.session;
-    if (session?.hasQueuedFollowUp()) {
+    if (this.services.session?.hasQueuedFollowUp()) {
       // Drain without waiting (we know there's something)
-      queuedFollowUp = await session.waitForFollowUp(() => false);
+      queuedFollowUp = await this.services.session.waitForFollowUp(() => false);
     }
 
     return { interrupted, queuedFollowUp };

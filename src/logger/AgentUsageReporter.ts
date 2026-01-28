@@ -8,11 +8,6 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 
-/**
- * Bridges usage statistics from model handlers into log transport events.
- * Usage data flows through without modification - cost and token counts
- * are already computed upstream in the model handlers.
- */
 export class AgentUsageReporter {
   constructor(
     private readonly logger: AgentLogger,
