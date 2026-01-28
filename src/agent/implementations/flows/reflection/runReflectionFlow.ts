@@ -27,8 +27,14 @@ import {
   getExecutionStore,
   type ExecutionKVStore,
 } from '@agent/storage/ExecutionKVStore';
-import { OutputHandler } from '@agent/output/OutputHandler';
-import type { IOutputHandler } from '@agent/output/IOutputHandler';
+import {
+  createOutputState,
+  createDiffManager,
+  createXmlManager,
+  setActiveRun,
+  type OutputState,
+  type OutputDependencies,
+} from '@agent/output/outputUtils';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -202,14 +208,19 @@ export async function runReflectionFlow<C = unknown>(
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 
-  const outputHandler: IOutputHandler = new OutputHandler(
-    setting,
-    config,
+  // Create output state and dependencies for utility functions
+  const outputState: OutputState = createOutputState();
+  const outputDeps: OutputDependencies = {
+    agentSetting: setting,
+    agentConfig: config,
     baseFiles,
     logger,
     fileService,
     executionId,
-  );
+    streamId,
+  };
+  const xmlManager = createXmlManager(outputDeps);
+  const diffManager = createDiffManager(outputState, outputDeps);
 
   const promptBuilder = new PromptBuilder(
     prompt,
@@ -253,8 +264,8 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // Set active run for output handler
-  outputHandler.setActiveRun(storageKey);
+  // Set active run for output state
+  setActiveRun(outputState, outputDeps, storageKey);
 
   try {
     // Register for interrupt handling
@@ -331,7 +342,10 @@ export async function runReflectionFlow<C = unknown>(
     services = {
       ...input,
       getUsageRecorder,
-      outputHandler,
+      outputState,
+      outputDeps,
+      xmlManager,
+      diffManager,
       latexMediaManager,
       promptBuilder,
       fileService,
