@@ -1,10 +1,3 @@
-/**
- * Shared request panel styles for progress view prompts.
- *
- * Ports legacy progressView request styles (approval, retry, workflow proposals)
- * into Lit-compatible CSS for shadow DOM usage.
- */
-
 import { css, type CSSResult } from 'lit';
 
 export const requestPanelStyles: CSSResult = css`
@@ -52,7 +45,7 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--vscode-editorHoverWidget-background);
     padding: var(--spacing-large);
     gap: var(--spacing-medium);
-    position: relative; /* Required for ::before pseudo-element positioning */
+    position: relative;
   }
 
   .approval-request__details,

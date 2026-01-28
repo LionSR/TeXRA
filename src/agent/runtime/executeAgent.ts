@@ -271,6 +271,11 @@ function acquireStreamOrThrow(
   );
 }
 
+function isApiKeyError(err: unknown): boolean {
+  const msg = toErrorMessage(err);
+  return msg.includes('Missing API key') || msg.includes('API key not found');
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
@@ -282,23 +287,18 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(flowStatus);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
-      StreamStatusService.set(
-        streamId,
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-      );
+      const status =
+        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+      StreamStatusService.set(streamId, status);
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (err) {
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
-    const rawMsg = toErrorMessage(err);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
-    if (
-      rawMsg.includes('Missing API key') ||
-      rawMsg.includes('API key not found')
-    ) {
+    if (isApiKeyError(err)) {
       await showApiKeyErrorNotification();
     } else {
       vscode.window.showErrorMessage(errorMsg);
@@ -312,18 +312,22 @@ async function runFlowWithLifecycle(
   }
 }
 
+function getOutputInfo(config: AgentConfig): string {
+  const outputFiles = config.outputFiles ?? [];
+  if (config.useMultipleOutputs && outputFiles.length > 1) {
+    return `to ${outputFiles.length} files`;
+  }
+  if (outputFiles[0]) {
+    return `to ${path.basename(outputFiles[0])}`;
+  }
+  return '';
+}
+
 function showAgentNotification(config: AgentConfig): void {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
-  const outputFiles = config.outputFiles ?? [];
-
-  let outputInfo = '';
-  if (config.useMultipleOutputs && outputFiles.length > 1) {
-    outputInfo = `to ${outputFiles.length} files`;
-  } else if (outputFiles[0]) {
-    outputInfo = `to ${path.basename(outputFiles[0])}`;
-  }
+  const outputInfo = getOutputInfo(config);
 
   void vscode.window
     .showInformationMessage(

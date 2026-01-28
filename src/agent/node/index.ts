@@ -12,12 +12,12 @@ export type Action = string;
  *
  * Type parameters:
  * - S: Shared state type (mutable, flows through nodes)
- * - P: Params type (per-execution, can vary per batch item)
+ * - P: Params type (per-execution parameters)
  * - Svc: Services type (immutable dependencies, set once)
  *
  * Architecture:
  * - shared: Mutable state passed through prep/post
- * - _params: Per-execution parameters (merged in batch flows)
+ * - _params: Per-execution parameters
  * - _services: Immutable dependencies (propagated by Flow)
  */
 class BaseNode<
@@ -284,42 +284,6 @@ class Flow<
   }
   async exec(prepRes: unknown): Promise<unknown> {
     throw new Error("Flow can't exec.");
-  }
-}
-class BatchFlow<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-  NP extends NonIterableObject[] = NonIterableObject[],
-> extends Flow<S, P, Svc> {
-  async _run(shared: S): Promise<Action | undefined> {
-    const batchParams = await this.prep(shared);
-    for (const bp of batchParams) {
-      const mergedParams = { ...this._params, ...bp };
-      await this._orchestrate(shared, mergedParams);
-    }
-    return await this.post(shared, batchParams, undefined);
-  }
-  async prep(shared: S): Promise<NP> {
-    const empty: readonly NonIterableObject[] = [];
-    return empty as NP;
-  }
-}
-class ParallelBatchFlow<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-  NP extends NonIterableObject[] = NonIterableObject[],
-> extends BatchFlow<S, P, Svc, NP> {
-  async _run(shared: S): Promise<Action | undefined> {
-    const batchParams = await this.prep(shared);
-    await Promise.all(
-      batchParams.map((bp) => {
-        const mergedParams = { ...this._params, ...bp };
-        return this._orchestrate(shared, mergedParams);
-      }),
-    );
-    return await this.post(shared, batchParams, undefined);
   }
 }
 export { BaseNode, Node, BatchNode, ParallelBatchNode, Flow };

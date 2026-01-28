@@ -44,20 +44,27 @@ export class AgentUsageReporter {
     storageKey: StorageKey,
     groupId?: string,
   ): void {
+    const {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    } = stats;
+
     bus.emit('updateStreamUsage', {
       streamId: this.streamId,
       storageKey,
       usage: {
-        inputTokens: stats.inputTokens,
-        outputTokens: stats.outputTokens,
-        cost: stats.cost,
-        cacheReadInputTokens: stats.cacheReadInputTokens,
-        cacheCreationInputTokens: stats.cacheCreationInputTokens,
+        inputTokens,
+        outputTokens,
+        cost,
+        cacheReadInputTokens,
+        cacheCreationInputTokens,
       },
     });
 
     if (this.agentCategory === AgentCategory.Workflow) {
-      // Use groupId if provided (round-specific), otherwise fall back to storageKey
       this.logger.statistics(stats, groupId ?? storageKey);
     }
   }

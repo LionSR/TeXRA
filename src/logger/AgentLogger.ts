@@ -183,35 +183,23 @@ export class AgentLogger {
     });
   }
 
-  /** Log a debug message. Falls back to current group ID if not specified. */
   debug(message: string, options: LogOptions = {}): void {
     this.log('debug', message, options);
   }
 
-  /** Log an info message. Falls back to current group ID if not specified. */
   info(message: string, options: LogOptions = {}): void {
     this.log('info', message, options);
   }
 
-  /** Log a warning message. Falls back to current group ID if not specified. */
   warn(message: string, options: LogOptions = {}): void {
     this.log('warn', message, options);
   }
 
-  /** Log an error message. Falls back to current group ID if not specified. */
   error(message: string, options: LogOptions = {}): void {
     this.log('error', message, options);
   }
 
-  /**
-   * Log a structured error with consistent formatting.
-   * Single source of truth for ERROR message type logging.
-   *
-   * @param message - Human-readable error description
-   * @param err - The error object to format
-   * @param context - Optional context (operation, model)
-   * @param groupId - Optional group ID for progress view
-   */
+  /** Log a structured error with consistent formatting. */
   logError(
     message: string,
     err: unknown,
@@ -226,14 +214,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a progress status update.
-   * Single source of truth for PROGRESS_STATUS message type logging.
-   *
-   * @param message - Status message
-   * @param context - Optional context (operation, model)
-   * @param groupId - Optional group ID for progress view
-   */
   logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       groupId,
@@ -242,15 +222,7 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a structured error with pre-formatted error data.
-   * Use this when error data is already structured (e.g., RetryErrorInfo).
-   * For raw errors, use logError() instead.
-   *
-   * @param message - Human-readable error description
-   * @param errorData - Pre-structured error data
-   * @param groupId - Optional group ID for progress view
-   */
+  /** Log a structured error with pre-formatted error data. */
   logErrorData(message: string, errorData: unknown, groupId?: string): void {
     this.error(message, {
       groupId,
@@ -259,10 +231,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log an internal/system message (hidden in normal mode, shown in debug).
-   * Single source of truth for INTERNAL message type.
-   */
   logInternal(message: string, groupId?: string): void {
     this.info(message, {
       groupId,
@@ -270,10 +238,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log an internal debug message (hidden in normal mode, shown in debug).
-   * Single source of truth for INTERNAL message type at debug level.
-   */
   debugInternal(message: string, groupId?: string): void {
     this.debug(message, {
       groupId,
@@ -281,10 +245,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log scratchpad/thinking content.
-   * Single source of truth for SCRATCHPAD message type.
-   */
   logScratchpad(content: string, groupId?: string): void {
     this.info(content, {
       groupId,
@@ -292,14 +252,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a context management event (compaction, context clearing, etc.).
-   * Single source of truth for CONTEXT_MANAGEMENT message type.
-   *
-   * @param message - Human-readable summary of the action
-   * @param data - Structured data about the context management action
-   * @param groupId - Optional group ID for progress view
-   */
   logContextManagement(
     message: string,
     data?: ContextManagementData,
@@ -312,15 +264,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log current context state (utilization percentage).
-   * Single source of truth for CONTEXT_STATE message type.
-   * Used to update UI with current context usage after token counting.
-   *
-   * @param inputTokens - Current input tokens in context
-   * @param contextWindow - Maximum context window size
-   * @param groupId - Optional group ID for progress view
-   */
   logContextState(
     inputTokens: number,
     contextWindow: number,
@@ -344,28 +287,20 @@ export class AgentLogger {
     );
   }
 
-  /**
-   * Log a list of files that were processed.
-   * @param files - Array of FileListEntry objects conforming to FileListEntrySchema
-   */
   fileList(files: FileListEntry[], groupId?: string): void {
-    const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.logFileListData(summary, files, groupId);
+    this.info(`Loaded ${files.length} file${files.length === 1 ? '' : 's'}`, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: files,
+    });
   }
 
-  /**
-   * Log files being loaded for a specific category (input, reference, auxiliary, media).
-   * Creates a FILE_LIST entry with a descriptive category label.
-   * Empty arrays are handled gracefully (no-op).
-   */
   logFileCategory(
     category: string,
     files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
     groupId?: string,
   ): void {
-    if (files.length === 0) {
-      return;
-    }
+    if (files.length === 0) return;
 
     const entries: FileListEntry[] = files.map((f) => ({
       path: f.path,
@@ -374,32 +309,15 @@ export class AgentLogger {
       sourceDisplay: category,
     }));
     const loadedCount = entries.filter((e) => e.ok).length;
-    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
-
-    this.logFileListData(summary, entries, groupId);
-  }
-
-  /** Internal helper for FILE_LIST logging - shared by fileList and logFileCategory */
-  private logFileListData(
-    summary: string,
-    files: FileListEntry[],
-    groupId?: string,
-  ): void {
-    this.info(summary, {
+    this.info(`Loading ${category} (${loadedCount}/${files.length})`, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
-      data: files,
+      data: entries,
     });
   }
 
-  /**
-   * Log missing output information.
-   */
   missingOutputs(info: unknown, groupId?: string): void {
-    const missing =
-      info && typeof info === 'object' && 'missing' in info
-        ? (info as { missing: unknown }).missing
-        : undefined;
+    const missing = (info as { missing?: unknown[] } | null)?.missing;
     const count = Array.isArray(missing) ? missing.length : 0;
     this.info(`${count} output file${count === 1 ? '' : 's'} missing`, {
       groupId,
@@ -408,62 +326,35 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log latexdiff results.
-   */
   latexDiff(results: unknown[], groupId?: string): void {
-    const summary = `Latexdiff results: ${results.length}`;
-    this.info(summary, {
+    this.info(`Latexdiff results: ${results.length}`, {
       groupId,
       messageType: MESSAGE_TYPES.LATEXDIFF,
       data: results,
     });
   }
 
-  /**
-   * Log statistics information (only shown in debug mode).
-   */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
-    const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.info(summary, {
-      groupId,
-      messageType: MESSAGE_TYPES.STATISTICS,
-      data: stats,
-    });
+    this.info(
+      `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`,
+      {
+        groupId,
+        messageType: MESSAGE_TYPES.STATISTICS,
+        data: stats,
+      },
+    );
   }
 
-  /**
-   * Log a user follow-up message.
-   */
   userMessage(message: string, groupId?: string): void {
-    this.info(message, {
-      groupId,
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
+    this.info(message, { groupId, messageType: MESSAGE_TYPES.USER_MESSAGE });
   }
 
-  /**
-   * Log a tool use event for display in the progress view.
-   * Single source of truth for TOOL_USE message type.
-   */
   logToolUse(data: unknown, groupId?: string): void {
-    this.info('', {
-      groupId,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data,
-    });
+    this.info('', { groupId, messageType: MESSAGE_TYPES.TOOL_USE, data });
   }
 
-  /**
-   * Log a web search result for display in the progress view.
-   * Single source of truth for WEB_SEARCH message type.
-   */
   logWebSearch(data: unknown, groupId?: string): void {
-    this.info('', {
-      groupId,
-      messageType: MESSAGE_TYPES.WEB_SEARCH,
-      data,
-    });
+    this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_SEARCH, data });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {

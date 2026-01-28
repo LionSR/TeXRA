@@ -1,24 +1,6 @@
-/**
- * Shared select/dropdown styles for Shadow DOM components.
- *
- * Provides consistent styling for:
- * - Select group layouts with icons
- * - vscode-single-select components
- * - vscode-option states (disabled, tool-use, requires-key)
- * - Codicon icon styling in select contexts
- *
- * @example
- * import { selectStyles } from '@shared/styles/selectStyles';
- *
- * class MyComponent extends LitElement {
- *   static styles = [designTokens, selectStyles, css`...`];
- * }
- */
-
 import { css, type CSSResult } from 'lit';
 
 export const selectStyles: CSSResult = css`
-  /* Select group layout - icon + dropdown combo */
   .select-group {
     display: flex;
     align-items: center;
@@ -37,7 +19,6 @@ export const selectStyles: CSSResult = css`
     max-width: 10rem;
   }
 
-  /* Agent select specific widths */
   .agent-select-controls {
     flex: 1;
     min-width: 10rem;
@@ -51,12 +32,10 @@ export const selectStyles: CSSResult = css`
     max-width: 14rem;
   }
 
-  /* vscode-option base styling */
   vscode-option {
     font-family: var(--vscode-font-family);
   }
 
-  /* Disabled/unavailable option states */
   vscode-option.disabled-option,
   vscode-option.disabled-model,
   vscode-option.disabled-agent,
@@ -66,12 +45,10 @@ export const selectStyles: CSSResult = css`
     font-style: italic;
   }
 
-  /* Tool-use indicator */
   vscode-option[data-tool-use='true'] {
     font-style: italic;
   }
 
-  /* Clickable icon states */
   .clickable {
     cursor: pointer;
   }
@@ -84,12 +61,10 @@ export const selectStyles: CSSResult = css`
     color: var(--button-hover-background, var(--vscode-button-hoverBackground));
   }
 
-  /* Listbox max-height constraint for long lists */
   vscode-single-select::part(listbox) {
     max-height: var(--height-large, 300px);
   }
 
-  /* API key missing indicator in model options */
   .api-key-missing {
     color: var(--vscode-errorForeground);
     opacity: 1;
