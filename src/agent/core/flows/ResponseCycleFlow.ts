@@ -820,18 +820,14 @@ class ResponseContinuationNode<C> extends BaseNode<
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(
         shared.messages,
-        round,
         workspace,
         setting,
-        config,
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
         shared.messages,
-        round,
         workspace,
         setting,
-        config,
       );
     }
 

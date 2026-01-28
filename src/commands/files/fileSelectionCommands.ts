@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
-import { getFilterExtensions } from '@common/files/fileTypeUtils';
+import { getFilterExtensions } from '@common/files';
 import { fileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';

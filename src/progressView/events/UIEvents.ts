@@ -8,7 +8,6 @@
 
 // Type imports
 import type {
-  ProgressEvent,
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
@@ -61,7 +60,7 @@ export type UICallbacks = RetryCallbacks &
   AgentProposalCallbacks;
 
 /** Helper to register an event with error handling wrapper. */
-function registerEvent<K extends ProgressEvent>(
+function registerEvent<K extends keyof ProgressEventPayloads>(
   bus: ProgressEventBusLike,
   event: K,
   handler: (payload: ProgressEventPayloads[K]) => void,

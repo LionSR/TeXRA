@@ -215,19 +215,15 @@ export interface IModelHandler<
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /** Handle continuation for models without prefill. */
   addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /** Prepare output files and prefill content. */

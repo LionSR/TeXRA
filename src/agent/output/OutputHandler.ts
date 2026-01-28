@@ -375,19 +375,21 @@ export class OutputHandler implements IOutputHandler {
       mapping?: RoundFileMapping;
     },
   ): Promise<void> {
-    const { endTurn, stage, mapping } = options;
     await this.withOutputStage(
       `Finalize r${currRound}`,
-      stage,
+      options.stage,
       async (scope) => {
         const data = this.ensureRoundData(currRound);
         data.rawOutput ??= outputFile;
 
-        const fileInfos = await this.gatherOutputFileInfo(currRound, mapping);
+        const fileInfos = await this.gatherOutputFileInfo(
+          currRound,
+          options.mapping,
+        );
         data.outputs = fileInfos;
         const storageKey = this.getStorageKey();
 
-        if (endTurn) {
+        if (options.endTurn) {
           try {
             await this.validateExpectedOutputs(outputFile, currRound, scope);
             this.logger.debug(

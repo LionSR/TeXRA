@@ -101,12 +101,10 @@ export class XmlOutputManager {
     thinkingTag: string = 'scratchpad',
   ): Promise<FileLocation> {
     const { name } = path.parse(outputLocation.absolutePath);
-    const texFilename = `${name}.tex`;
-
     const outputDir = getFileDirectory(outputLocation);
     const texRelativePath = outputDir
-      ? path.join(outputDir, texFilename)
-      : texFilename;
+      ? path.join(outputDir, `${name}.tex`)
+      : `${name}.tex`;
 
     const texLocation = this.fileService.createLocation(texRelativePath);
 

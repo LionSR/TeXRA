@@ -22,7 +22,6 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ExtendedCompletionUsage,
@@ -794,10 +793,8 @@ export class ModelHandlerOpenAI<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: any[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.defaultAddContinueWithPrefill();
   }
@@ -805,10 +802,8 @@ export class ModelHandlerOpenAI<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: any[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -889,13 +884,10 @@ export class ModelHandlerOpenAI<
         workspaceState.assembly.accumulatedOutput,
       );
     }
-    const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
-      state,
       workspaceState,
       agentSetting,
-      agentConfig,
     );
 
     endTurn = false;

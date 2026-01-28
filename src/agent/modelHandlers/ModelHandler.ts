@@ -154,6 +154,22 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Returns true if the handler is operating in tool-use mode.
+   * Used to enable context management and other tool-use-specific behaviors.
+   */
+  protected isToolUseMode(): boolean {
+    return this.agentCategory === AgentCategory.ToolUse;
+  }
+
+  /**
+   * Returns true if the handler is operating in workflow mode.
+   * Used for workflow-specific behaviors like background mode eligibility.
+   */
+  protected isWorkflowMode(): boolean {
+    return this.agentCategory === AgentCategory.Workflow;
+  }
+
+  /**
    * Enables or disables streaming of model output text.
    */
   public setOutputStreaming(enabled: boolean): void {
@@ -609,10 +625,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /**
@@ -621,10 +635,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /**

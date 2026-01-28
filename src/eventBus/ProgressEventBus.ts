@@ -22,13 +22,13 @@ import type {
 } from '@shared/schemas';
 
 /** Payload for events scoped to a specific run (stream + storage key). */
-export interface RunScopedPayload {
+interface RunScopedPayload {
   streamId: StreamTabId;
   storageKey: StorageKey;
   executionId?: ExecutionId;
 }
 
-export interface SetActiveStreamPayload {
+interface SetActiveStreamPayload {
   streamId: StreamTabId | null;
   agentCategory?: AgentCategory;
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
@@ -37,7 +37,7 @@ export interface SetActiveStreamPayload {
   hasMultipleOutputs?: boolean;
 }
 
-export interface SetTaskStatePayload {
+interface SetTaskStatePayload {
   streamId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
