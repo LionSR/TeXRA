@@ -136,7 +136,6 @@ interface UploadedAnthropicAttachment {
   mediaType?: string;
 }
 
-
 /** Type guard for any thinking-related content block param */
 const isAnyThinkingBlockParam = (
   block: ContentBlockParam,
@@ -146,7 +145,6 @@ const isAnyThinkingBlockParam = (
 /** Type guard for tool use blocks in Beta API responses */
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
-
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -1586,7 +1584,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.assignCacheControlToLatest(lastMessage.content);
       }
     }
-    return;
   }
 
   updateMessageContentWithoutPrefill(
@@ -1607,80 +1604,55 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    // Handle continuation after cutoff
+    // Handle continuation after cutoff - append to the previous assistant message
     if (this.containCutOffMessage(lastMessage.content)) {
-      this.handleCutoffContinuation(
-        messages,
-        secondLastMessage,
-        bestConnector,
-        newResponse,
+      this.logger.debug(
+        'Last message is a user message asking to continue after cutoff',
       );
+
+      if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
+        return;
+      }
+
+      if (Array.isArray(secondLastMessage.content)) {
+        const thinkingCount = secondLastMessage.content.filter(
+          isAnyThinkingBlockParam,
+        ).length;
+        if (thinkingCount > 0) {
+          this.logger.debug(
+            `Using ${thinkingCount} existing thinking blocks from previous message`,
+          );
+        }
+
+        secondLastMessage.content.push({
+          type: 'text',
+          text: bestConnector + newResponse,
+        } as ContentBlockParam);
+        this.assignCacheControlToLatest(secondLastMessage.content);
+      }
+
+      messages.pop();
       return;
     }
 
     // Handle new request - create a new assistant message
-    this.handleNewAssistantMessage(messages, workspaceState);
-  }
-
-  /** Handle continuation after a cutoff by appending to the previous assistant message. */
-  private handleCutoffContinuation(
-    messages: MessageParam[],
-    secondLastMessage: MessageParam | undefined,
-    bestConnector: string,
-    newResponse: string,
-  ): void {
-    this.logger.debug(
-      'Last message is a user message asking to continue after cutoff',
-    );
-
-    if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
-      return;
-    }
-
-    // Log existing thinking blocks
-    if (Array.isArray(secondLastMessage.content)) {
-      const thinkingCount = secondLastMessage.content.filter(
-        isAnyThinkingBlockParam,
-      ).length;
-      if (thinkingCount > 0) {
-        this.logger.debug(
-          `Using ${thinkingCount} existing thinking blocks from previous message`,
-        );
-      }
-
-      // Append text content and update cache control
-      secondLastMessage.content.push({
-        type: 'text',
-        text: bestConnector + newResponse,
-      } as ContentBlockParam);
-      this.assignCacheControlToLatest(secondLastMessage.content);
-    }
-
-    // Remove the user continuation prompt
-    messages.pop();
-  }
-
-  /** Handle a new request by creating a fresh assistant message. */
-  private handleNewAssistantMessage(
-    messages: MessageParam[],
-    workspaceState: AgentWorkspaceState,
-  ): void {
     this.logger.debug('Creating new assistant message for fresh request');
     const content: ContentBlockParam[] = [];
 
-    // Include thinking blocks from workspaceState if available
     const thinkingBlocks = workspaceState.reasoning.thinkingBlocks;
     if (thinkingBlocks.length > 0) {
       this.logger.debug(
         `Adding ${thinkingBlocks.length} thinking blocks to new assistant message`,
       );
       content.push(
-        ...(thinkingBlocks as (ThinkingBlockParam | RedactedThinkingBlockParam)[]),
+        ...(thinkingBlocks as (
+          | ThinkingBlockParam
+          | RedactedThinkingBlockParam
+        )[]),
       );
       workspaceState.resetReasoning();
     }
 
-    // Add the text content
     content.push({
       type: 'text',
       text: workspaceState.assembly.accumulatedOutput,
@@ -1739,7 +1711,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Extract all thinking blocks from the response
-    const thinkingBlocks: (BetaThinkingBlock | BetaRedactedThinkingBlock)[] = [];
+    const thinkingBlocks: (BetaThinkingBlock | BetaRedactedThinkingBlock)[] =
+      [];
     let regularThinkingContent: string | null = null;
 
     if (responseObject.content && Array.isArray(responseObject.content)) {
@@ -1883,8 +1856,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.reasoning.thinkingBlocks.length > 0
       ) {
         content.push(
-          ...(workspaceState.reasoning
-            .thinkingBlocks as AnthropicThinkingContentParam[]),
+          ...(workspaceState.reasoning.thinkingBlocks as (
+            | ThinkingBlockParam
+            | RedactedThinkingBlockParam
+          )[]),
         );
         workspaceState.resetReasoning();
       }

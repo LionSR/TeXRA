@@ -19,14 +19,9 @@ export function getBasename(filePath: string | undefined | null): string {
   if (!filePath) return '';
 
   const normalized = normalizeFilePath(filePath);
-
-  // Remove trailing slashes except for root
   const cleaned = normalized.replace(/\/+$/, '') || '/';
 
-  // Handle root path
   if (cleaned === '/') return '';
 
-  // Split and get last part
-  const parts = cleaned.split('/');
-  return parts.at(-1) ?? '';
+  return cleaned.split('/').at(-1) ?? '';
 }
