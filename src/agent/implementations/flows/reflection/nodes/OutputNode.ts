@@ -3,12 +3,20 @@
  *
  * Processes output files, handles latexdiff, and finalizes round artifacts.
  * Non-critical operations can fail gracefully (logged as warnings).
+ *
+ * This node is responsible for:
+ * - Event emission (bus.emit('addOutputFiles', ...), bus.emit('updateMissingOutputs', ...))
+ * - File opening logic (openBuildDisplayIfTex)
+ * - Validation decisions (when to validate and how to handle results)
  */
 
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import type { RoundOutput } from '@shared/schemas';
@@ -81,6 +89,7 @@ export class OutputNode<C = unknown> extends Node<
       logger,
       baseFiles,
       shouldEnsureXmlStructure,
+      streamId,
     } = this.services;
     const { shared, outputLocation } = prepRes;
     const { currentRound, endTurn } = shared;
@@ -121,15 +130,58 @@ export class OutputNode<C = unknown> extends Node<
       }
     }
 
-    await tryOperation(
-      'Round finalization',
-      () =>
-        outputHandler.finalizeRound(outputLocation, currentRound, {
-          endTurn,
-          mapping,
-        }),
-      logger,
+    // Finalize round and get data for event emission/file opening
+    const finalizeResult = await outputHandler.finalizeRound(
+      outputLocation,
+      currentRound,
+      { endTurn, mapping },
     );
+
+    // Emit addOutputFiles event (moved from OutputHandler)
+    bus.emit('addOutputFiles', {
+      streamId,
+      storageKey: finalizeResult.storageKey,
+      filesByRound: { [currentRound]: finalizeResult.fileInfos },
+    });
+
+    // Open files that haven't been opened yet (moved from OutputHandler)
+    for (const location of finalizeResult.filesToOpen) {
+      await tryOperation(
+        `Open file ${location.absolutePath}`,
+        () => openBuildDisplayIfTex(location, { preserveFocus: true }),
+        logger,
+      );
+    }
+
+    // Validate expected outputs if turn ended (moved from OutputHandler)
+    if (endTurn) {
+      await tryOperation(
+        'Validate expected outputs',
+        async () => {
+          const validationResult = await outputHandler.validateExpectedOutputs(
+            outputLocation,
+            currentRound,
+            finalizeResult.stage,
+          );
+
+          // Emit updateMissingOutputs event
+          bus.emit('updateMissingOutputs', {
+            streamId,
+            storageKey: validationResult.storageKey,
+            filesByRound: { [currentRound]: validationResult.missing },
+          });
+
+          // Show instruction if there are missing outputs
+          if (validationResult.missing.length > 0) {
+            await showInstructionWithSuppress(
+              'missingOutputsInfo',
+              'Missing output files detected',
+            );
+          }
+        },
+        logger,
+      );
+    }
 
     // Get round artifacts - this is critical, throw if it fails
     return await outputHandler.getRoundArtifacts(currentRound);
