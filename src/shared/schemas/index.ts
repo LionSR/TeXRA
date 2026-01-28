@@ -3,7 +3,6 @@ export * from './identifiers';
 export * from './agent';
 export * from './errors';
 export * from './usage';
-export * from './proposalFields';
 export * from './contextManagement';
 
 // Layer 2: Depends on layer 1 only
@@ -20,11 +19,6 @@ export * from './diffResult';
 // Layer 4: MainView schemas (consolidated)
 export * from './mainView';
 export * as mainViewMessages from './mainView';
-export type {
-  MainViewMessage,
-  ModelOptionData,
-  AgentOptionData,
-} from './mainView';
 
 // Layer 5: ProgressView schemas (consolidated)
 export * from './progressView';

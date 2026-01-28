@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import { StreamTabIdSchema } from './identifiers';
 
 const todoStatusValues = ['pending', 'in_progress', 'completed'] as const;
