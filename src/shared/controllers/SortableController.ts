@@ -1,13 +1,6 @@
-/**
- * Lit reactive controller for managing Sortable.js drag-and-drop reordering.
- *
- * Encapsulates Sortable.js lifecycle management and provides a clean interface
- * for file list reordering in Lit components.
- */
-
 // Third-party imports
-import Sortable from 'sortablejs';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
+import Sortable from 'sortablejs';
 
 export interface SortableControllerConfig {
   /** Animation duration in ms (default: 150) */
@@ -102,23 +95,16 @@ export class SortableController implements ReactiveController {
     this.sortable = null;
   }
 
-  private handleSortEnd(event: unknown): void {
-    const { oldIndex, newIndex } = (event ?? {}) as {
-      oldIndex?: number;
-      newIndex?: number;
-    };
+  private handleSortEnd(event: { oldIndex?: number; newIndex?: number }): void {
+    const { oldIndex, newIndex } = event;
     if (oldIndex === undefined || newIndex === undefined) {
       return;
     }
 
-    const current = [...this.getItems()];
-    const [moved] = current.splice(oldIndex, 1);
-    current.splice(newIndex, 0, moved);
+    const items = [...this.getItems()];
+    const [moved] = items.splice(oldIndex, 1);
+    items.splice(newIndex, 0, moved);
 
-    this.onReorder({
-      oldIndex,
-      newIndex,
-      items: current,
-    });
+    this.onReorder({ oldIndex, newIndex, items });
   }
 }

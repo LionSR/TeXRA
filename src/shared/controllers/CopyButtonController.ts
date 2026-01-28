@@ -1,18 +1,11 @@
-/**
- * Lit reactive controller for managing copy button feedback state.
- *
- * Provides declarative state management for copy buttons, replacing
- * the imperative copyWithFeedback utility for Lit components.
- */
-
-// Local imports - shared utilities
+// Third-party imports
 import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
 } from '@shared/utils/clipboard';
-
-// Third-party imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
+
+// Local imports
 
 export interface CopyButtonConfig {
   /** Default button title/tooltip */
@@ -83,7 +76,10 @@ export class CopyButtonController implements ReactiveController {
   }
 
   hostDisconnected(): void {
-    // Clean up any pending timeout
+    this.clearResetTimer();
+  }
+
+  private clearResetTimer(): void {
     if (this._resetTimeoutId !== null) {
       window.clearTimeout(this._resetTimeoutId);
       this._resetTimeoutId = null;
@@ -109,23 +105,15 @@ export class CopyButtonController implements ReactiveController {
   /**
    * Copy text to clipboard and show success feedback.
    * Automatically resets to default state after the configured delay.
-   *
-   * @param text - Text to copy to clipboard
-   * @returns true if copy succeeded, false otherwise
    */
   copy = async (text: string): Promise<boolean> => {
-    const trimmed = typeof text === 'string' ? text.trim() : '';
+    const trimmed = text.trim();
     if (!trimmed) {
       return false;
     }
 
-    // Clear any pending reset timer
-    if (this._resetTimeoutId !== null) {
-      window.clearTimeout(this._resetTimeoutId);
-      this._resetTimeoutId = null;
-    }
+    this.clearResetTimer();
 
-    // Reset to default state first (in case of rapid clicks)
     if (this._copied) {
       this._copied = false;
       this.host.requestUpdate();
@@ -136,11 +124,9 @@ export class CopyButtonController implements ReactiveController {
       return false;
     }
 
-    // Show success state
     this._copied = true;
     this.host.requestUpdate();
 
-    // Schedule reset to default state
     this._resetTimeoutId = window.setTimeout(() => {
       this._copied = false;
       this._resetTimeoutId = null;

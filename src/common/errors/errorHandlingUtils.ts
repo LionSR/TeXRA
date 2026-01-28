@@ -1,69 +1,14 @@
-/**
- * Utility functions for consistent error logging and formatting across the TeXRA extension.
- *
- * This module provides a standardized approach to error handling that:
- * - Ensures consistent error message formatting
- * - Centralizes logging logic
- * - Provides both silent logging and user-visible error display
- * - Handles various error types (Error objects, strings, primitives, etc.)
- *
- * ## Error Utility Guide
- *
- * | Function | Returns | Use Case |
- * |----------|---------|----------|
- * | `toErrorMessage(err)` | `string` (always) | Guaranteed string conversion for logging |
- * | `formatError(prefix, err)` | `string` | Combine prefix with error message |
- * | `logErrorMessage(...)` | `string` | Log and return formatted error |
- * | `showLoggedErrorMessage(...)` | `Promise<string>` | Log and show to user |
- *
- * For optional extraction or serialization, see `@utils/core/stringCore`:
- * - `extractErrorMessage(err)` - returns `string | undefined`
- * - `serializeError(err)` - converts Error to plain object
- *
- * @fileoverview Error handling utilities for consistent logging and user feedback
- * @author TeXRA.ai
- */
-
-// Third-party imports
 import * as vscode from 'vscode';
+
 import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
-// Local imports - logging
-
-/**
- * Valid documentation identifiers for error messages.
- * This ensures type safety when referencing documentation sections.
- */
+/** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
-/** Maximum length for error details before truncation */
 const MAX_ERROR_LENGTH = 500;
 
-/**
- * Format an error with a prefix for logging or user messages.
- *
- * This is the core formatting function used by all other error handling utilities.
- * It handles various error types consistently:
- * - Error objects: uses the .message property
- * - Primitives (string, number, boolean, null, undefined): converts to string
- * - Objects and arrays: converts to string representation
- *
- * @param prefix - The error message prefix (e.g., "Failed to save file", "API request failed")
- * @param err - The error to format (can be Error object, string, or any other type)
- * @returns A formatted error message in the format "prefix: error_detail"
- *
- * @example
- * ```typescript
- * const error = new Error("File not found");
- * const formatted = formatError("Failed to read config", error);
- * // Returns: "Failed to read config: File not found"
- *
- * const stringError = "Invalid parameter";
- * const formatted2 = formatError("Validation failed", stringError);
- * // Returns: "Validation failed: Invalid parameter"
- * ```
- */
+/** Format an error with a prefix for logging or user messages. */
 export function formatError(prefix: string, err: unknown): string {
   const detail = toErrorMessage(err);
   if (detail.length > MAX_ERROR_LENGTH) {
@@ -72,14 +17,7 @@ export function formatError(prefix: string, err: unknown): string {
   return `${prefix}: ${detail}`;
 }
 
-/**
- * Normalize any thrown value into a user-friendly error message string.
- *
- * Unlike {@link formatError}, this helper only returns the detail portion of
- * the message, making it suitable for composing custom prefixes or structured
- * payloads. Centralizing the coercion keeps error messaging consistent across
- * flows and model handlers.
- */
+/** Normalize any thrown value into a user-friendly error message string. */
 export function toErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;

@@ -1,8 +1,5 @@
 import { css, type CSSResult } from 'lit';
 
-/**
- * Design tokens as CSS custom properties for shadow DOM components.
- */
 export const designTokens: CSSResult = css`
   :host {
     /* Text colors */
@@ -78,9 +75,6 @@ export const designTokens: CSSResult = css`
   }
 `;
 
-/**
- * Shared animation keyframes.
- */
 export const animationStyles: CSSResult = css`
   @keyframes pulse-scale {
     0%,

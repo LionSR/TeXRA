@@ -25,9 +25,7 @@ interface RoundCompletePrepInput {
   continueRounds: boolean;
 }
 
-type RoundCompleteExecResult =
-  | { kind: 'continue' }
-  | { kind: 'finalize'; reason: string };
+type RoundCompleteExecResult = { kind: 'continue' } | { kind: 'finalize' };
 
 // ============================================================================
 // Node Implementation
@@ -57,19 +55,19 @@ export class RoundCompleteNode<C = unknown> extends Node<
     // Check for interruption
     if (checkInterruption()) {
       logger.debug('Interruption requested - finalizing');
-      return { kind: 'finalize', reason: 'interrupted' };
+      return { kind: 'finalize' };
     }
 
     // Check if continue flag is false
     if (!continueRounds) {
       logger.debug('Continue flag is false - finalizing');
-      return { kind: 'finalize', reason: 'continue_false' };
+      return { kind: 'finalize' };
     }
 
     // Check if we've completed all rounds (single source of truth for bounds)
     if (isRoundAtOrBeyondLimit(nextRound, totalRounds)) {
       logger.debug(`Completed all ${totalRounds} rounds - finalizing`);
-      return { kind: 'finalize', reason: 'all_rounds_complete' };
+      return { kind: 'finalize' };
     }
 
     // Continue to next round (display as 1-indexed for user-friendly logging)

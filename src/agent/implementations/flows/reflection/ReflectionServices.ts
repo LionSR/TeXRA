@@ -84,8 +84,5 @@ export interface ReflectionServices<
   readonly getUsageRecorder: () => RoundFinalizedCallback;
 }
 
-/**
- * Flow params type for reflection flows.
- * Alias for base FlowParams - reserved for future use.
- */
+/** Flow params type for reflection flows. Alias for base FlowParams. */
 export type { FlowParams as ReflectionFlowParams };
