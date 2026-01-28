@@ -17,8 +17,6 @@ export interface InterruptCallbacks {
  * Encapsulates interrupt state with type-safe access and abort controller management.
  */
 export interface InterruptManager {
-  /** Get the current abort controller. */
-  getAbortController: () => AbortController | null;
   /** Get interrupt-related fields for flow input. */
   asFlowInput: () => InterruptCallbacks;
 }
@@ -44,7 +42,6 @@ export function createInterruptManager(): InterruptManager {
   };
 
   return {
-    getAbortController: () => abortController,
     asFlowInput: () => callbacks,
   };
 }

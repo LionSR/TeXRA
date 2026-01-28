@@ -356,7 +356,6 @@ export async function runReflectionFlow<C = unknown>(
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      parentStage,
       baseFiles,
     };
     pf.setServices(services);
