@@ -9,6 +9,26 @@ import {
 import type { OutputFileInfo } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
 
+/** Invert a Map<sourceKey, targetLocation> into Map<targetPath, sourceLocation>. */
+function invertMapping(
+  forwardMapping: Map<string, FileLocation>,
+  sourceLocations: FileLocation[],
+): Map<string, FileLocation> {
+  const result = new Map<string, FileLocation>();
+  const sourceByPath = new Map(
+    sourceLocations.map((f) => [getComparablePath(f), f]),
+  );
+
+  for (const [sourcePath, targetLoc] of forwardMapping) {
+    const sourceLoc = sourceByPath.get(sourcePath);
+    if (sourceLoc) {
+      result.set(getComparablePath(targetLoc), sourceLoc);
+    }
+  }
+
+  return result;
+}
+
 /** Calculates file lineage and mappings between base files and round outputs. */
 export class FileLineageCalculator {
   constructor(private readonly baseFiles: FileLocation[]) {}
@@ -25,7 +45,13 @@ export class FileLineageCalculator {
       prevLocations,
       currentLocations,
     );
-    const originByOutput = this.calculateOriginMapping(currentOutputs);
+
+    const originByOutput = new Map<string, FileLocation | undefined>();
+    for (const entry of currentOutputs) {
+      const matchingBase = this.findMatchingBaseFile(entry.source);
+      const outputPath = getComparablePath(entry.location);
+      originByOutput.set(outputPath, matchingBase);
+    }
 
     return { baseToOutput, prevToOutput, originByOutput };
   }
@@ -39,20 +65,7 @@ export class FileLineageCalculator {
       currentLocations,
       'contains',
     );
-
-    const result = new Map<string, FileLocation>();
-    const baseByPath = new Map(
-      this.baseFiles.map((f) => [getComparablePath(f), f]),
-    );
-
-    for (const [basePath, outputLoc] of forwardMapping) {
-      const baseLoc = baseByPath.get(basePath);
-      if (baseLoc) {
-        result.set(getComparablePath(outputLoc), baseLoc);
-      }
-    }
-
-    return result;
+    return invertMapping(forwardMapping, this.baseFiles);
   }
 
   /** Map output paths to previous round files using 'basename' strategy with round number stripping. */
@@ -70,34 +83,7 @@ export class FileLineageCalculator {
       'basename',
       true,
     );
-
-    const result = new Map<string, FileLocation>();
-    const prevByPath = new Map(
-      prevLocations.map((f) => [getComparablePath(f), f]),
-    );
-
-    for (const [prevPath, outputLoc] of forwardMapping) {
-      const prevLoc = prevByPath.get(prevPath);
-      if (prevLoc) {
-        result.set(getComparablePath(outputLoc), prevLoc);
-      }
-    }
-
-    return result;
-  }
-
-  private calculateOriginMapping(
-    currentOutputs: OutputFileInfo[],
-  ): Map<string, FileLocation | undefined> {
-    const originByOutput = new Map<string, FileLocation | undefined>();
-
-    for (const entry of currentOutputs) {
-      const matchingBase = this.findMatchingBaseFile(entry.source);
-      const outputPath = getComparablePath(entry.location);
-      originByOutput.set(outputPath, matchingBase);
-    }
-
-    return originByOutput;
+    return invertMapping(forwardMapping, prevLocations);
   }
 
   /**
@@ -106,35 +92,29 @@ export class FileLineageCalculator {
    */
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
-    let priority2Match: FileLocation | undefined;
-    let priority3Match: FileLocation | undefined;
-    let priority4Match: FileLocation | undefined;
 
-    for (const baseLoc of this.baseFiles) {
-      const baseName = this.getBaseName(baseLoc);
-      const baseNameNoExt = path.parse(baseName).name;
+    const candidates: Array<{ match: (b: string, bNoExt: string) => boolean }> =
+      [
+        { match: (b) => b === source },
+        { match: (_, bNoExt) => bNoExt === sourceNoExt },
+        { match: (_, bNoExt) => bNoExt === source },
+        { match: (b) => b === sourceNoExt },
+      ];
 
-      if (baseName === source) {
-        return baseLoc;
-      }
-
-      if (!priority2Match && baseNameNoExt === sourceNoExt) {
-        priority2Match = baseLoc;
-      } else if (!priority3Match && baseNameNoExt === source) {
-        priority3Match = baseLoc;
-      } else if (!priority4Match && baseName === sourceNoExt) {
-        priority4Match = baseLoc;
+    for (const { match } of candidates) {
+      for (const baseLoc of this.baseFiles) {
+        const baseName = path.basename(
+          baseLoc.kind !== 'external'
+            ? baseLoc.relativePath
+            : baseLoc.absolutePath,
+        );
+        const baseNameNoExt = path.parse(baseName).name;
+        if (match(baseName, baseNameNoExt)) {
+          return baseLoc;
+        }
       }
     }
 
-    return priority2Match ?? priority3Match ?? priority4Match;
-  }
-
-  private getBaseName(location: FileLocation): string {
-    return path.basename(
-      location.kind !== 'external'
-        ? location.relativePath
-        : location.absolutePath,
-    );
+    return undefined;
   }
 }

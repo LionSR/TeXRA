@@ -2,7 +2,6 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import type {
   FileLocation,
   OutputFileInfo,
-  OutputXmlSummary,
   RoundOutput,
   StorageKey,
 } from '@shared/schemas';
@@ -26,9 +25,6 @@ export interface IOutputHandler {
     documentTag: string,
   ): Promise<void>;
 
-  /** Ensure storage for a round and return its outputs. */
-  ensureRound(round: number): OutputFileInfo[];
-
   /** Determine whether a round has generated outputs. */
   hasRoundOutputs(round: number): boolean;
 
@@ -39,21 +35,8 @@ export interface IOutputHandler {
     stage?: AgentLogStage,
   ): Promise<void>;
 
-  /** Gather mapping and diff stats for output files of a round. */
-  gatherOutputFileInfo(
-    currRound: number,
-    precomputedMapping?: RoundFileMapping,
-  ): Promise<OutputFileInfo[]>;
-
   /** Retrieve the cached mapping metadata for a round. */
   getRoundMapping(currRound: number): RoundFileMapping;
-
-  /** Validate expected output files for the given round. */
-  validateExpectedOutputs(
-    outputLocation: FileLocation,
-    currRound: number,
-    stage?: AgentLogStage,
-  ): Promise<void>;
 
   /** Finalize processing for a round. */
   finalizeRound(
@@ -67,7 +50,6 @@ export interface IOutputHandler {
   ): Promise<void>;
 
   getRoundArtifacts(round: number): Promise<RoundOutput>;
-  getRoundXmlSummary(round: number): OutputXmlSummary;
 
   /**
    * Set the active storage key for this handler.

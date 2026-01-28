@@ -91,28 +91,13 @@ export class OutputFileProcessor {
       await cleanupLatexBackups(rawLocation, logger);
       await this.captureXmlSummary(currRound, rawLocation, [], scope);
     } catch (err) {
-      await this.handleOutputProcessingError(
-        err,
-        currRound,
-        rawLocation,
-        scope,
-      );
+      logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
+      this.ctx.setRoundOutputs(currRound, []);
+      await cleanupLatexBackups(rawLocation, logger);
+      await this.captureXmlSummary(currRound, rawLocation, [], scope);
     }
-  }
-
-  private async handleOutputProcessingError(
-    err: unknown,
-    currRound: number,
-    rawLocation: FileLocation,
-    scope: AgentLogStage,
-  ): Promise<void> {
-    this.ctx.logger.debug(
-      `Error processing output file: ${toErrorMessage(err)}`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
-    this.ctx.setRoundOutputs(currRound, []);
-    await cleanupLatexBackups(rawLocation, this.ctx.logger);
-    await this.captureXmlSummary(currRound, rawLocation, [], scope);
   }
 
   async processSingleOutput(
@@ -138,21 +123,14 @@ export class OutputFileProcessor {
 
       const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
       let shouldProcessXml = false;
-      switch (xmlMode) {
-        case 'always':
-          shouldProcessXml = true;
-          break;
-        case 'scratchpadOnly': {
-          const hasDocumentTag = Boolean(agentSetting.documentTag);
-          const hasScratchpadPrefill =
-            agentSetting.prefills?.some((p) =>
-              SCRATCHPAD_TAG_PATTERN.test(p),
-            ) ?? false;
-          shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
-          break;
-        }
-        case 'never':
-          break;
+      if (xmlMode === 'always') {
+        shouldProcessXml = true;
+      } else if (xmlMode === 'scratchpadOnly') {
+        const hasDocumentTag = Boolean(agentSetting.documentTag);
+        const hasScratchpadPrefill =
+          agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+          false;
+        shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
       }
 
       if (shouldProcessXml) {
