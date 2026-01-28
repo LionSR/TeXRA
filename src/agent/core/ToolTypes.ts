@@ -1,17 +1,12 @@
 /**
  * Core tool type definitions for the agent system.
  *
- * This module provides the SINGLE SOURCE OF TRUTH for tool-related interfaces
- * used across the agent and tools packages. It defines:
+ * Provides interfaces for tool implementations and registries:
+ * - ITool: Contract for all tool implementations
+ * - IToolRegistry: Minimal interface for tool lookup (get/has)
+ * - MapToolRegistry: Map-backed registry implementation
  *
- * 1. ITool - Interface contract for all tool implementations
- * 2. IToolRegistry - Interface for tool lookup and enumeration
- * 3. Re-exports of ToolResult and related types from tools/result
- *
- * This enables:
- * - Dependency injection (agents accept IToolRegistry instead of concrete types)
- * - Cleaner separation between agent core and tool implementations
- * - Testability (mock registries can be injected)
+ * Re-exports ToolResult types from @tools/result and ToolDefinition from @model.
  */
 
 // Import types for local use in interfaces
@@ -55,48 +50,24 @@ export interface ITool {
 }
 
 /**
- * Interface for tool registries that provide tool lookup and enumeration.
+ * Interface for tool registries that provide tool lookup.
  *
  * This abstraction allows:
  * - Dependency injection of custom tool sets
- * - Filtering tools at runtime
  * - Testing with mock tools
  */
 export interface IToolRegistry {
-  /** Number of tools in the registry */
-  readonly size: number;
-
   /**
    * Get a tool by name.
-   * @param name - The tool name
    * @returns The tool if found, undefined otherwise
    */
   get(name: string): ITool | undefined;
 
   /**
    * Check if a tool exists in the registry.
-   * @param name - The tool name
    * @returns True if the tool exists
    */
   has(name: string): boolean;
-
-  /**
-   * Get all tool names in the registry.
-   * @returns Iterator of tool names
-   */
-  keys(): IterableIterator<string>;
-
-  /**
-   * Get all tools in the registry.
-   * @returns Iterator of tool values
-   */
-  values(): IterableIterator<ITool>;
-
-  /**
-   * Get all tools in the registry.
-   * @returns Iterator of [name, tool] pairs
-   */
-  entries(): IterableIterator<[string, ITool]>;
 }
 
 /**
