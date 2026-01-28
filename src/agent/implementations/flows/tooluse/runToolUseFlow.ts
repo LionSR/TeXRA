@@ -26,7 +26,7 @@ import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 
 import { getDefaultToolRegistry } from '@tools/registry';
-import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';
+import { createToolUseFlow, type ToolUseRunShared } from './ToolUseFlow';
 import {
   resolveTools,
   type ToolUseFlowContextInit,
@@ -180,7 +180,7 @@ export async function runToolUseFlow<C = unknown>(
     };
 
     // Create PersistedFlow with the start node
-    const startNode = createToolUseRunFlow<C>().start;
+    const startNode = createToolUseFlow<C>().start;
     const pf = new PersistedFlow<
       ToolUseRunShared,
       Record<string, unknown>,
