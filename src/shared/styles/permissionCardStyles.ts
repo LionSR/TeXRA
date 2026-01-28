@@ -1,23 +1,3 @@
-/**
- * Shared permission card styles for Shadow DOM components.
- *
- * Provides styling for:
- * - Centered permission card with dimmed backdrop
- * - Header, body, and action layout
- * - Action buttons (primary/secondary)
- * - File paths and diff info
- * - Feedback forms
- *
- * Used by: PermissionCard
- *
- * @example
- * import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
- *
- * class MyComponent extends LitElement {
- *   static styles = [designTokens, permissionCardStyles, css`...`];
- * }
- */
-
 import { css, type CSSResult } from 'lit';
 
 export const permissionCardStyles: CSSResult = css`

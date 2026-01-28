@@ -1,10 +1,3 @@
-/**
- * Shared Lit reactive controllers.
- *
- * These controllers encapsulate reusable stateful behavior for Lit components,
- * following the reactive controller pattern for lifecycle management.
- */
-
 export {
   CopyButtonController,
   type CopyButtonConfig,

@@ -1,10 +1,5 @@
-// Third-party imports
 import { css, type CSSResult } from 'lit';
 
-/**
- * Common view styles shared across Lit webviews.
- * Mirrors core rules from common.css for shadow DOM usage.
- */
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;
@@ -134,7 +129,4 @@ export const commonViewStyles: CSSResult = css`
     margin-top: calc(var(--spacing-xlarge) * 2);
     color: var(--color-text-secondary);
   }
-
-  /* Note: Badge base styles are in @shared/styles/badgeStyles.ts
-     Use badgeStyles for components that need badge functionality */
 `;
