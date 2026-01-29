@@ -84,6 +84,7 @@ export async function runToolUseFlow<C = unknown>(
     ...input,
     session: sessionLifecycle,
     resolvedTools,
+    toolRegistry: registry,
     snapshot,
     getUsageRecorder: input.getUsageRecorder ?? (() => async () => {}),
   };
