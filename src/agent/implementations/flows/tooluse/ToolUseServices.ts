@@ -4,15 +4,14 @@
  * Extends BaseFlowContextInit with:
  * - Narrowed setting type (AgentToolUseSetting)
  * - Required getUsageRecorder (narrowed from optional)
- * - Tool-use specific services (session, resolvedTools, etc.)
+ * - Tool-use specific services (session, resolvedTools, toolRegistry, etc.)
  *
  * Services are injected via flow.setServices() and accessed via this.services.
- * Note: toolRegistry is used only in runToolUseFlow to resolve tools before
- * creating services, so it's not included here.
  */
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type {
   BaseFlowContextInit,
@@ -27,6 +26,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
   readonly resolvedTools: ToolDefinition[];
+  /** Tool registry for looking up tools during execution. */
+  readonly toolRegistry: IToolRegistry;
   /** Resume snapshot for session recovery (null for fresh start). */
   readonly snapshot: ToolUseSessionSnapshot | null;
   /** Narrowed from optional to required for tool-use flows */
