@@ -12,17 +12,18 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, query, state } from 'lit/decorators.js';
+import { z } from 'zod';
 
 // Local imports - side-effect: register component
 import './TaskGroupList';
 
 // Local imports - shared webview
-import { postMessage } from '@shared/vscode';
+import { postMessage, vscode } from '@shared/vscode';
 
 // Local imports - shared utilities
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import { WebviewStateManager } from '@shared/state/WebviewStateManager';
+import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared styles
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
@@ -48,10 +49,11 @@ import type { TaskGroupList } from './TaskGroupList';
 // Local imports - shared schemas
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 
-type LogListState = {
-  groupToggleStates?: Array<[string, boolean]>;
-  [key: string]: unknown;
-};
+const LogListStateSchema = z.object({
+  groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).catch([]),
+});
+
+type LogListState = z.infer<typeof LogListStateSchema>;
 
 @customElement('log-list')
 export class LogList extends LitElement {
@@ -89,15 +91,18 @@ export class LogList extends LitElement {
   private taskGroupList?: TaskGroupList;
 
   // Non-reactive state
-  private stateManager: WebviewStateManager<LogListState>;
+  private stateManager = new PersistedState(
+    createWebviewStorage(vscode),
+    'logListState',
+    LogListStateSchema,
+  );
   private toggleStates: ToggleStateStore;
 
   constructor() {
     super();
-    this.stateManager = new WebviewStateManager<LogListState>();
     const previous = this.stateManager.getState();
     this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
-    if (Array.isArray(previous?.groupToggleStates)) {
+    if (previous.groupToggleStates.length > 0) {
       this.toggleStates.load(previous.groupToggleStates);
     }
   }

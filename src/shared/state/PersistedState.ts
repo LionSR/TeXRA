@@ -1,29 +1,49 @@
 import { z } from 'zod';
 
 /**
- * Storage interface that works for both:
- * - Backend: vscode.Memento (via StateStorage wrapper)
- * - Frontend: vscode.getState/setState (via WebviewStorage adapter)
+ * Minimal storage interface for state persistence.
+ * Works with both backend (Memento) and frontend (webview) storage.
  */
-export interface Storage {
+export interface StateStorage {
   get(key: string): unknown;
   set(key: string, value: unknown): void;
 }
 
 /**
- * Adapter for webview storage (vscode.getState/setState).
- * Stores all keys in a single state object.
+ * Create storage adapter for backend (vscode.Memento wrapper).
+ *
+ * @example
+ * import { workspaceSM } from '@common/state';
+ * const storage = createBackendStorage(workspaceSM);
+ */
+export function createBackendStorage(memento: {
+  get(key: string): unknown;
+  update(key: string, value: unknown): Thenable<void>;
+}): StateStorage {
+  return {
+    get: (key) => memento.get(key),
+    set: (key, value) => void memento.update(key, value),
+  };
+}
+
+/**
+ * Create storage adapter for webview (vscode.getState/setState).
+ * All keys share a single state object.
+ *
+ * @example
+ * import { vscode } from '@shared/vscode';
+ * const storage = createWebviewStorage(vscode);
  */
 export function createWebviewStorage(vscode: {
   getState(): unknown;
   setState(state: unknown): void;
-}): Storage {
+}): StateStorage {
   return {
-    get(key: string): unknown {
+    get: (key) => {
       const state = (vscode.getState() as Record<string, unknown>) ?? {};
       return state[key];
     },
-    set(key: string, value: unknown): void {
+    set: (key, value) => {
       const state = (vscode.getState() as Record<string, unknown>) ?? {};
       vscode.setState({ ...state, [key]: value });
     },
@@ -31,62 +51,41 @@ export function createWebviewStorage(vscode: {
 }
 
 /**
- * Adapter for workspace/global storage (vscode.Memento).
- */
-export function createMementoStorage(memento: {
-  get<T>(key: string): T | undefined;
-  update(key: string, value: unknown): Thenable<void>;
-}): Storage {
-  return {
-    get(key: string): unknown {
-      return memento.get(key);
-    },
-    set(key: string, value: unknown): void {
-      void memento.update(key, value);
-    },
-  };
-}
-
-/**
  * Unified state persistence with Zod schema validation.
  *
- * Works for both frontend (webview) and backend (extension host) by
- * accepting a Storage interface. Use the adapters above to create
- * the appropriate storage for your context.
+ * Works identically for both backend and frontend - only the storage differs:
+ * - Backend: `createBackendStorage(workspaceSM)` → workspace-scoped, persists across sessions
+ * - Frontend: `createWebviewStorage(vscode)` → webview-scoped, transient UI state
  *
- * The schema MUST use .catch() or .default() for all fields to provide
- * fallback values when storage is empty or contains invalid data.
- *
- * @example
- * // Frontend (webview)
- * import { vscode } from '@shared/vscode';
- *
- * const PrefsSchema = z.object({
- *   filter: z.string().catch('all'),
- *   sort: z.string().catch('time'),
- * });
- *
- * const prefs = new PersistedState(
- *   createWebviewStorage(vscode),
- *   'prefs',
- *   PrefsSchema,
- * );
+ * The schema MUST use .catch() for all fields to provide fallback values.
  *
  * @example
- * // Backend (extension host)
- * import { workspaceSM } from '@common/state';
- *
+ * // Backend (user preferences - persist across sessions)
  * const prefs = new PersistedState(
- *   createMementoStorage(workspaceSM),
+ *   createBackendStorage(workspaceSM),
  *   WorkspaceStateKey.VIEW_PREFS,
- *   PrefsSchema,
+ *   z.object({ filter: z.string().catch('all') }),
  * );
+ *
+ * @example
+ * // Frontend (UI state - transient, fast)
+ * const ui = new PersistedState(
+ *   createWebviewStorage(vscode),
+ *   'toggleStates',
+ *   z.object({ expanded: z.array(z.string()).catch([]) }),
+ * );
+ *
+ * @example
+ * // Both use identical API
+ * prefs.get('filter');        // Get single field
+ * prefs.getState();           // Get all state
+ * prefs.update({ filter: 'active' }); // Partial update
  */
 export class PersistedState<T extends Record<string, unknown>> {
   private state: T;
 
   constructor(
-    private readonly storage: Storage,
+    private readonly storage: StateStorage,
     private readonly key: string,
     private readonly schema: z.ZodType<T>,
   ) {
@@ -94,8 +93,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   }
 
   private load(): T {
-    const saved = this.storage.get(this.key);
-    return this.schema.parse(saved);
+    return this.schema.parse(this.storage.get(this.key));
   }
 
   /** Get current state (shallow copy) */

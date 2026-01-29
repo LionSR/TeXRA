@@ -4,9 +4,12 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 
+import { z } from 'zod';
+
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { WebviewStateManager } from '@shared/state';
+import { vscode } from '@shared/vscode';
+import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared schemas
 import {
@@ -30,11 +33,13 @@ import {
   type StreamState,
 } from './store';
 
-/** Persisted preferences for the progress view. */
-interface ProgressViewPreferences extends Record<string, unknown> {
-  streamFilter: StreamFilter;
-  streamSort: StreamSort;
-}
+/** Schema for persisted preferences. */
+const ProgressViewPrefsSchema = z.object({
+  streamFilter: z.string().catch('all') as z.ZodType<StreamFilter>,
+  streamSort: z.string().catch('time') as z.ZodType<StreamSort>,
+});
+
+type ProgressViewPreferences = z.infer<typeof ProgressViewPrefsSchema>;
 
 // Local imports - event handlers
 import {
@@ -139,10 +144,11 @@ export class ProgressApp extends BaseWebviewApp {
   private toolUseContentRef = createRef<ToolUseStreamContent>();
   private workflowContentRef = createRef<WorkflowStreamContent>();
 
-  private prefsManager = new WebviewStateManager<ProgressViewPreferences>({
-    streamFilter: 'all',
-    streamSort: 'time',
-  });
+  private prefsManager = new PersistedState(
+    createWebviewStorage(vscode),
+    'progressViewPrefs',
+    ProgressViewPrefsSchema,
+  );
 
   constructor() {
     super();
