@@ -15,11 +15,6 @@ export type {
 
 // Config types and schemas
 export { AgentConfigSchema, type AgentConfig } from './AgentConfig';
-export {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-  type ToolConfig,
-} from './ToolConfig';
 
 // State classes - commonly instantiated
 export { AgentWorkspaceState } from './AgentWorkspaceState';
