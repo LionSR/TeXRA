@@ -7,8 +7,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared webview
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { postMessage } from '@shared/vscode';
-import { WebviewStateManager } from '@shared/state';
+import { postMessage, vscode } from '@shared/vscode';
+import { PersistedState, createWebviewStorage } from '@shared/state';
 
 // Local imports - shared utilities
 import { capitalize } from '@shared/utils/string';
@@ -197,11 +197,11 @@ export class MainApp extends BaseWebviewApp {
   // Note: model/agent selects are inside InstructionPanel's shadow DOM.
   // Decoration is now handled declaratively in selectTemplates.ts via Lit templates.
 
-  private readonly stateManager =
-    new WebviewStateManager<MainViewPersistedState>(
-      DEFAULT_STATE,
-      MainViewPersistedStateSchema,
-    );
+  private readonly stateManager = new PersistedState(
+    createWebviewStorage(vscode),
+    'mainViewState',
+    MainViewPersistedStateSchema,
+  );
   private saveBlockCount = 0;
   private placeholderTimer: number | null = null;
 

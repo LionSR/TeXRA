@@ -1,8 +1,7 @@
 export { ToggleStateStore } from './ToggleStateStore';
-export { WebviewStateManager } from './WebviewStateManager';
 export {
   PersistedState,
+  createBackendStorage,
   createWebviewStorage,
-  createMementoStorage,
-  type Storage,
+  type StateStorage,
 } from './PersistedState';
