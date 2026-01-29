@@ -11,6 +11,8 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { UIFileFieldsSchema } from './fileFields';
+import { ToolConfigFieldsSchema } from './toolConfig';
 
 // ============================================================
 // Session and File Type Schemas
@@ -76,24 +78,17 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 // Persisted State Schema
 // ============================================================
 
-export const MainViewPersistedStateSchema = z.object({
+// Composes: UIFileFieldsSchema (file fields) + ToolConfigFieldsSchema (tool options)
+export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
+  ToolConfigFieldsSchema,
+).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('chat'),
   model: z.string().prefault('gemini3p'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
-  inputFile: z.string().prefault(''),
-  referenceFile: z.string().prefault(''),
-  auxiliaryFile: z.string().prefault(''),
-  mediaFile: z.string().prefault(''),
-  editedFile: z.string().prefault(''),
   baseFile: z.string().prefault(''),
-  inputFiles: z.array(z.string()).prefault([]),
-  referenceFiles: z.array(z.string()).prefault([]),
-  auxiliaryFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
   inputFilesVisible: z.boolean().prefault(false),
   referenceFilesVisible: z.boolean().prefault(false),
   auxiliaryFilesVisible: z.boolean().prefault(false),
@@ -101,11 +96,6 @@ export const MainViewPersistedStateSchema = z.object({
   outputFilesVisible: z.boolean().prefault(false),
   outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
-  autoExtractFigure: z.boolean().prefault(false),
-  autoExtractTikzFigure: z.boolean().prefault(false),
-  autoCompileInputPdf: z.boolean().prefault(false),
-  attachTeXCount: z.boolean().prefault(false),
-  attachDiagnostics: z.boolean().prefault(false),
   agent: z.string().prefault(''),
   isToolUseAgent: z.boolean().prefault(true),
   openedFiles: z.array(z.string()).nullish(),
@@ -168,13 +158,8 @@ export const FileSelectConfigSchema = z.object({
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
-export const CheckboxValuesSchema = MainViewPersistedStateSchema.pick({
-  autoExtractFigure: true,
-  autoExtractTikzFigure: true,
-  autoCompileInputPdf: true,
-  attachTeXCount: true,
-  attachDiagnostics: true,
-});
+// Bottom-up: Use ToolConfigFieldsSchema directly instead of picking from the composed parent
+export const CheckboxValuesSchema = ToolConfigFieldsSchema;
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
 
 export const SingleFilesSchema = z.object({

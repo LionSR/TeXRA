@@ -215,7 +215,6 @@ export const logEntryStyles = css`
 
   .banner-content {
     margin: 0;
-    white-space: pre-wrap;
   }
 
   .banner-details:not([open]) .banner-content {

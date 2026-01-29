@@ -5,7 +5,10 @@ import {
   type AgentConfigInput,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from '@agent/core/ToolConfig';
+import {
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigSchema,
+} from '@shared/schemas/toolConfig';
 import * as logger from '@logger/logUtils';
 import {
   isPastedImage,
