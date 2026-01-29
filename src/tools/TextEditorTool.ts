@@ -123,7 +123,11 @@ export class TextEditorTool extends defineTool({
         return this.strReplace(filePath, oldStr, input.new_str ?? '');
       }
       case 'insert': {
-        const insertLine = requireField(input.insert_line, 'insert_line', command);
+        const insertLine = requireField(
+          input.insert_line,
+          'insert_line',
+          command,
+        );
         const newStr = requireField(input.new_str, 'new_str', command);
         logger.info(CHANNEL, `insert: ${insertLine} -> ${newStr}`);
         return this.insert(filePath, insertLine, newStr);

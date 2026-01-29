@@ -4,9 +4,9 @@ export {
   ReasoningEffort,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MODEL_CAPABILITIES,
-} from './ModelConfig.js';
-export type { ModelConfig, ModelCapabilities } from './ModelConfig.js';
+} from './ModelConfig';
+export type { ModelConfig, ModelCapabilities } from './ModelConfig';
 
 // ToolDefinition - schema, type, and utilities
-export { ToolDefinitionSchema, hasZodSchema } from './ToolDefinition.js';
-export type { ToolDefinition } from './ToolDefinition.js';
+export { ToolDefinitionSchema, hasZodSchema } from './ToolDefinition';
+export type { ToolDefinition } from './ToolDefinition';
