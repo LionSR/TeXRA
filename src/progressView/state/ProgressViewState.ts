@@ -64,9 +64,9 @@ export type ActiveStreamId = StreamTabId | '';
 
 /** Schema for consolidated progress view preferences. */
 const ProgressViewPrefsSchema = z.object({
-  activeStream: z.string().catch('') as z.ZodType<ActiveStreamId>,
-  streamSortOrder: z.string().catch('time'),
-  agentCategoryFilter: AgentCategoryFilterSchema.catch('all'),
+  activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
+  streamSortOrder: z.string().prefault('time'),
+  agentCategoryFilter: AgentCategoryFilterSchema.prefault('all'),
 });
 
 type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;

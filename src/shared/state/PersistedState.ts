@@ -59,14 +59,15 @@ export function createWebviewStorage(vscode: {
  * - Backend: `createBackendStorage(workspaceSM)` → workspace-scoped, persists across sessions
  * - Frontend: `createWebviewStorage(vscode)` → webview-scoped, transient UI state
  *
- * The schema MUST use .catch() for all fields to provide fallback values.
+ * Schemas should use .prefault() or .catch() for fields to provide defaults.
+ * If storage returns undefined or invalid data, falls back to schema defaults.
  *
  * @example
  * // Backend (user preferences - persist across sessions)
  * const prefs = new PersistedState(
  *   createBackendStorage(workspaceSM),
  *   WorkspaceStateKey.VIEW_PREFS,
- *   z.object({ filter: z.string().catch('all') }),
+ *   z.object({ filter: z.string().prefault('all') }),
  * );
  *
  * @example
@@ -74,7 +75,7 @@ export function createWebviewStorage(vscode: {
  * const ui = new PersistedState(
  *   createWebviewStorage(vscode),
  *   'toggleStates',
- *   z.object({ expanded: z.array(z.string()).catch([]) }),
+ *   z.object({ expanded: z.array(z.string()).prefault([]) }),
  * );
  *
  * @example
@@ -95,7 +96,13 @@ export class PersistedState<T extends Record<string, unknown>> {
   }
 
   private load(): T {
-    return this.schema.parse(this.storage.get(this.key));
+    const stored = this.storage.get(this.key);
+    const result = this.schema.safeParse(stored);
+    if (result.success) {
+      return result.data;
+    }
+    // Fall back to schema defaults (parse undefined/empty object)
+    return this.schema.parse({});
   }
 
   /** Get current state (shallow copy) */
