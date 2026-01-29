@@ -27,13 +27,6 @@ export type { ValidationResult } from './outputValidation';
 export { summarizeRound, getRoundOutput } from './roundSummary';
 export type { RoundSummary } from './roundSummary';
 
-// Manager factories
-export {
-  createDiffManager,
-  createXmlManager,
-  ensureXmlStructure,
-} from './managerFactories';
-
 // Types
 export type { RoundFileMapping } from './types';
 

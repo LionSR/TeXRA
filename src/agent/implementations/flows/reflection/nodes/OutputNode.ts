@@ -18,7 +18,6 @@ import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import { summarizeRound, getRoundOutput } from '@agent/output/roundSummary';
-import { ensureXmlStructure } from '@agent/output/managerFactories';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -115,8 +114,7 @@ export class OutputNode<C = unknown> extends Node<
         await tryOperation(
           'XML structure',
           () =>
-            ensureXmlStructure(
-              xmlManager,
+            xmlManager.ensureCorrectXmlStructure(
               outputLocation,
               setting.documentTag ?? 'document',
             ),
