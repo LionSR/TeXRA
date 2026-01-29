@@ -1,5 +1,6 @@
 // Local imports
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import { StorageRecordSchema } from './schemaUtils';
 
 export interface StateStorage {
   get<T>(key: string): T | undefined;
@@ -69,6 +70,20 @@ export abstract class PersistentMapManager<K extends string, V> {
     this.items = new Map(entries);
   }
 
+  /**
+   * Get or create an entry with lazy initialization.
+   * Returns existing value or creates new one using factory function.
+   * Note: Does NOT persist - call save() after modifications.
+   */
+  protected getOrCreateEntry(key: K, factory: () => V): V {
+    let value = this.items.get(key);
+    if (!value) {
+      value = factory();
+      this.items.set(key, value);
+    }
+    return value;
+  }
+
   /** Serialize a value before saving. Override for custom serialization. */
   protected serialize(value: V, _key: K): unknown {
     return value;
@@ -81,16 +96,17 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
-      this.storageKey,
-      {},
-    );
-
-    if (Object.keys(saved).length > 0) {
-      await this.populateFromRecord(saved);
+    const record = this.loadRecord();
+    if (Object.keys(record).length > 0) {
+      await this.populateFromRecord(record);
     } else {
       this.items.clear();
     }
+  }
+
+  /** Load record from storage with null/invalid fallback */
+  protected loadRecord(): Record<string, unknown> {
+    return StorageRecordSchema.parse(this.storage.get(this.storageKey));
   }
 
   /** Save current state to persistence */
