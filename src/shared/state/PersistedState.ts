@@ -30,6 +30,8 @@ export function createBackendStorage(memento: {
  * Create storage adapter for webview (vscode.getState/setState).
  * All keys share a single state object.
  *
+ * Caches state in memory to avoid repeated getState() calls on rapid updates.
+ *
  * @example
  * import { vscode } from '@shared/vscode';
  * const storage = createWebviewStorage(vscode);
@@ -38,14 +40,14 @@ export function createWebviewStorage(vscode: {
   getState(): unknown;
   setState(state: unknown): void;
 }): StateStorage {
+  // Cache full state - read once, update in memory
+  let cache = (vscode.getState() as Record<string, unknown>) ?? {};
+
   return {
-    get: (key) => {
-      const state = (vscode.getState() as Record<string, unknown>) ?? {};
-      return state[key];
-    },
+    get: (key) => cache[key],
     set: (key, value) => {
-      const state = (vscode.getState() as Record<string, unknown>) ?? {};
-      vscode.setState({ ...state, [key]: value });
+      cache = { ...cache, [key]: value };
+      vscode.setState(cache);
     },
   };
 }
