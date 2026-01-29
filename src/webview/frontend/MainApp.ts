@@ -1129,6 +1129,7 @@ export class MainApp extends BaseWebviewApp {
     }
     this.sessionType = sessionType;
     this.saveState();
+    postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE);
     if (value) {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
