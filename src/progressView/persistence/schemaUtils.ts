@@ -119,6 +119,11 @@ export function createSingleValueRunMapSchema<T>(
   return z.unknown().transform((data): Map<string, T> => {
     if (!isPlainObject(data)) return new Map();
 
+    const legacyResult = itemSchema.safeParse(data);
+    if (legacyResult.success && !isEmpty?.(legacyResult.data)) {
+      return new Map([['default', legacyResult.data]]);
+    }
+
     const runMap = new Map<string, T>();
     for (const [runId, value] of Object.entries(data)) {
       if (!isPlainObject(value)) continue;
