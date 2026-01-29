@@ -1,5 +1,10 @@
+import { z } from 'zod';
+
 // Local imports
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+
+/** Schema for storage records with null/invalid fallback to empty object */
+const StorageRecordSchema = z.record(z.string(), z.unknown()).catch({});
 
 export interface StateStorage {
   get<T>(key: string): T | undefined;
@@ -94,16 +99,17 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
-      this.storageKey,
-      {},
-    );
-
-    if (Object.keys(saved).length > 0) {
-      await this.populateFromRecord(saved);
+    const record = this.loadRecord();
+    if (Object.keys(record).length > 0) {
+      await this.populateFromRecord(record);
     } else {
       this.items.clear();
     }
+  }
+
+  /** Load record from storage with null/invalid fallback */
+  private loadRecord(): Record<string, unknown> {
+    return StorageRecordSchema.parse(this.storage.get(this.storageKey));
   }
 
   /** Save current state to persistence */

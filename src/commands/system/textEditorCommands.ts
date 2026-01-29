@@ -18,7 +18,9 @@ export const textEditorCommands = {
   testTextEditor: 'texra.testTextEditor',
 };
 
-export function registerTextEditorCommands(context: vscode.ExtensionContext): void {
+export function registerTextEditorCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       textEditorCommands.testTextEditor,

@@ -40,15 +40,17 @@ export interface CycleStateSlices extends BaseCycleStateSlices {
 // ---------------------------------------------------------------------------
 
 /** Options for response cycle execution (workflow flows). */
-export interface ResponseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
+export interface ResponseCycleOptions<
+  C = unknown,
+> extends AgentCycleBaseOptions<C> {
   config: AgentConfig;
   fileService: TaskRunFileService;
 }
 
 /** Options for tool-use cycle execution (interactive flows). */
-export interface ToolUseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
+export interface ToolUseCycleOptions<
+  C = unknown,
+> extends AgentCycleBaseOptions<C> {
   toolRegistry: IToolRegistry;
   modelName?: string;
   agentName?: string;

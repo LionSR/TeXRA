@@ -48,7 +48,8 @@ export class ToolUseWaitNode<C> extends Node<
     _prepRes: void,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, streamId, logger, modelHandler } = this.services;
+    const { onFollowUpConsumed, streamId, logger, modelHandler } =
+      this.services;
 
     if (execRes.kind === 'stop') {
       return FlowTransition.DEFAULT;
