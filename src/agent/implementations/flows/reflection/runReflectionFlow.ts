@@ -146,7 +146,8 @@ function deriveConfig(
   // Compute total rounds: max(setting.rounds, userRequest.length)
   const { userRequest } = prompt;
   const requestCount = Array.isArray(userRequest) ? userRequest.length : 0;
-  const effectiveRequestCount = userRequest && !Array.isArray(userRequest) ? 1 : requestCount;
+  const effectiveRequestCount =
+    userRequest && !Array.isArray(userRequest) ? 1 : requestCount;
   const totalRounds = Math.max(setting.rounds ?? 2, effectiveRequestCount);
 
   return {

@@ -313,14 +313,11 @@ export class ProgressViewState {
   }
 
   private loadActiveRunIds(): void {
-    const stored = this.storage.get<Record<string, string | null>>(
-      WorkspaceStateKey.ACTIVE_RUN_IDS,
-      {},
-    );
+    const stored = this.loadRecord(WorkspaceStateKey.ACTIVE_RUN_IDS);
 
     // Restore active run IDs into consolidated ephemeral state
     for (const [stream, runId] of Object.entries(stored)) {
-      if (runId) {
+      if (typeof runId === 'string' && runId.length > 0) {
         this.getOrCreateSession(stream as StreamTabId).activeRunId =
           normalizeRunId(runId);
       }
