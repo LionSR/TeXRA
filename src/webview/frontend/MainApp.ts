@@ -292,6 +292,9 @@ export class MainApp extends BaseWebviewApp {
     [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (data) =>
       this.handleShowApiKeyBanner(data),
     [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
+      if (this.shouldForceApiKeyBanner()) {
+        return;
+      }
       this.apiKeyBanner = { visible: false };
     },
     [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (data) =>
@@ -1131,12 +1134,6 @@ export class MainApp extends BaseWebviewApp {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
         agent: value,
       });
-      // Hide banner when a valid agent is selected.
-      // Previously checked classList.contains('disabled-option') but that
-      // required access to select element which is in InstructionPanel's
-      // shadow DOM. If the backend needs to show the banner for disabled
-      // agents, it should send a message.
-      postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     }
   }
 
@@ -1676,6 +1673,14 @@ export class MainApp extends BaseWebviewApp {
 
   private handleComponentModelChange(e: CustomEvent<ModelChangeDetail>): void {
     this.handleModelChange(e.detail.value);
+  }
+
+  private shouldForceApiKeyBanner(): boolean {
+    if (this.apiKeyBanner.requiresKey) {
+      return true;
+    }
+    const option = this.modelOptions.find((item) => item.value === this.model);
+    return option?.requiresKey ?? false;
   }
 
   private handleComponentInstructionInput(

@@ -109,7 +109,15 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load record from storage with null/invalid fallback */
   private loadRecord(): Record<string, unknown> {
-    return StorageRecordSchema.parse(this.storage.get(this.storageKey));
+    const stored = this.storage.get(this.storageKey);
+    const result = StorageRecordSchema.safeParse(stored);
+    if (!result.success) {
+      console.warn(
+        `[PersistentMapManager] Invalid storage data for ${this.storageKey}, resetting.`,
+      );
+      return {};
+    }
+    return result.data;
   }
 
   /** Save current state to persistence */
