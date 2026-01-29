@@ -9,10 +9,7 @@
 
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type {
-  OutputState,
-  OutputDependencies,
-} from '@agent/output/outputUtils';
+import type { OutputState, OutputDependencies } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { PromptBuilder } from '@utils/prompt';
