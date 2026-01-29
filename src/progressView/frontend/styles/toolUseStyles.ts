@@ -32,7 +32,7 @@ export const toolUseStyles = css`
   .tool-use-sublabel {
     font-weight: 500;
     color: var(--vscode-foreground);
-    opacity: 0.8;
+    opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
   }
 
@@ -71,7 +71,7 @@ export const toolUseStyles = css`
     position: absolute;
     left: 0;
     inset-block: 0;
-    width: 3px;
+    width: var(--border-thick);
     background: var(--vscode-editorWarning-foreground, #ff8c00);
     border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
   }
@@ -93,7 +93,7 @@ export const toolUseStyles = css`
   :is(.tool-user-feedback, .tool-error-content) {
     padding: var(--spacing-small);
     border-radius: var(--border-radius-small);
-    border-left: 3px solid;
+    border-left: var(--border-thick) solid;
   }
 
   .tool-user-feedback {
