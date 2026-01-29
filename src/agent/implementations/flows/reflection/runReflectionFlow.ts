@@ -30,10 +30,12 @@ import {
 import {
   createOutputState,
   setActiveRun,
+  getOutputFilesByRound,
   type OutputState,
   type OutputDependencies,
 } from '@agent/output/outputState';
-import { createDiffManager, createXmlManager } from '@agent/output/managerFactories';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -218,8 +220,16 @@ export async function runReflectionFlow<C = unknown>(
     executionId,
     streamId,
   };
-  const xmlManager = createXmlManager(outputDeps);
-  const diffManager = createDiffManager(outputState, outputDeps);
+  // Create managers directly (no factory indirection)
+  const xmlManager = new XmlOutputManager(setting, config, logger, fileService);
+  const diffManager = new LatexDiffManager(
+    setting,
+    () => getOutputFilesByRound(outputState),
+    baseFiles,
+    logger,
+    streamId,
+    fileService,
+  );
 
   const promptBuilder = new PromptBuilder(
     prompt,
