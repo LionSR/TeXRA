@@ -25,6 +25,9 @@ import {
   tripleNestedMapToRecord,
 } from '@progressView/persistence/serializationUtils';
 
+/** Schema for storage records with null/invalid fallback to empty object */
+const StorageRecordSchema = z.record(z.string(), z.unknown()).catch({});
+
 /** Schema for missing output paths (string arrays per round) */
 const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
 
@@ -290,11 +293,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
-      WorkspaceStateKey.MISSING_OUTPUTS,
-      {},
-    );
-
+    const saved = this.loadStorageRecord(WorkspaceStateKey.MISSING_OUTPUTS);
     if (Object.keys(saved).length > 0) {
       this._missingOutputs = this.deserializeMissingOutputs(saved);
       return;
@@ -354,10 +353,7 @@ export class OutputFilesManager extends PersistentMapManager<
     }
 
     const legacyKey = `${WorkspaceStateKey.MISSING_OUTPUTS}.${workspacePath}`;
-    const legacy = this.storage.get<{
-      [key: string]: { [key: number]: string[] };
-    }>(legacyKey, {});
-
+    const legacy = this.loadStorageRecord(legacyKey);
     if (Object.keys(legacy).length === 0) {
       return false;
     }
@@ -368,13 +364,20 @@ export class OutputFilesManager extends PersistentMapManager<
     > = {};
 
     for (const [stream, rounds] of Object.entries(legacy)) {
-      converted[stream] = { [normalizeRunId(null)]: rounds };
+      converted[stream] = {
+        [normalizeRunId(null)]: rounds as { [key: number]: string[] },
+      };
     }
 
     this._missingOutputs = this.deserializeMissingOutputs(converted);
     await this.saveMissingOutputs();
     await this.storage.update(legacyKey, undefined as never);
     return true;
+  }
+
+  /** Load record from storage with null/invalid fallback */
+  private loadStorageRecord(key: string): Record<string, unknown> {
+    return StorageRecordSchema.parse(this.storage.get(key));
   }
 
   protected override serialize(

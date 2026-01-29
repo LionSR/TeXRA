@@ -36,7 +36,9 @@ import type { ToolUseServices } from './ToolUseServices';
  * Follows same pattern as RunReflectionFlowInput: extends BaseFlowContextInit
  * and adds flow-specific fields. toolRegistry is a separate parameter.
  */
-export interface RunToolUseFlowInput<C = unknown> extends BaseFlowContextInit<C> {
+export interface RunToolUseFlowInput<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;
@@ -119,9 +121,7 @@ export async function runToolUseFlow<C = unknown>(
       // Migrate legacy nested format to flat format if needed
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (migrationResult === null) {
-        logger.warn(
-          'Failed to parse flow record shared state, starting fresh',
-        );
+        logger.warn('Failed to parse flow record shared state, starting fresh');
         await kv.delete(`flow:${executionId}`);
         flowRecord = null;
       } else if (migrationResult.migrated) {

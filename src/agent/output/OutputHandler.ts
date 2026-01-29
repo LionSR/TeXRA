@@ -33,7 +33,11 @@ import { FileLineageCalculator } from './FileLineageCalculator';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
 import { XmlOutputManager } from './XmlOutputManager';
-import type { IOutputHandler, FinalizeRoundResult, ValidationResult } from './IOutputHandler';
+import type {
+  IOutputHandler,
+  FinalizeRoundResult,
+  ValidationResult,
+} from './IOutputHandler';
 import type { RoundFileMapping } from './types';
 
 const RoundDataSchema = z.object({

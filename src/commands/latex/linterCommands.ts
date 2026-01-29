@@ -64,11 +64,7 @@ export async function handleShowLinterMessages(): Promise<void> {
       },
     );
   } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'Error showing linter messages',
-      err,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error showing linter messages', err);
   }
 }
 
@@ -137,11 +133,7 @@ export async function handleFixLinterIssues(): Promise<void> {
       },
     );
   } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'Error fixing linter issues',
-      err,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error fixing linter issues', err);
   }
 }
 
