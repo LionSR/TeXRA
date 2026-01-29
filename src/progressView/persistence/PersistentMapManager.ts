@@ -1,10 +1,6 @@
-import { z } from 'zod';
-
 // Local imports
+import { StorageRecordSchema } from '@shared/schemas';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
-
-/** Schema for storage records with null/invalid fallback to empty object */
-const StorageRecordSchema = z.record(z.string(), z.unknown()).catch({});
 
 export interface StateStorage {
   get<T>(key: string): T | undefined;
