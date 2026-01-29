@@ -9,12 +9,15 @@ export enum WorkspaceStateKey {
   MISSING_OUTPUTS = 'texra.missingOutputs',
   RUN_INSTRUCTIONS = 'texra.runInstructions',
   ACTIVE_RUN_IDS = 'texra.activeRunIds',
-  ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   TASK_STATES = 'texra.taskStates',
   EXECUTION_IDS = 'texra.executionIds',
   USAGE_STATS = 'texra.usageStats',
-  STREAM_SORT_ORDER = 'texra.streamSortOrder',
-  STREAM_AGENT_FILTER = 'texra.streamAgentFilter',
+  /** Consolidated progress view preferences (replaces individual keys) */
+  PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
+  // Legacy keys (kept for reference, no longer used):
+  // ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
+  // STREAM_SORT_ORDER = 'texra.streamSortOrder',
+  // STREAM_AGENT_FILTER = 'texra.streamAgentFilter',
 }
 
 export enum GlobalStateKey {
