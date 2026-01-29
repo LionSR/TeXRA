@@ -5,11 +5,19 @@
  * reporting missing files for user notification.
  */
 
-import { MESSAGE_TYPES, type FileLocation, type StorageKey } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type FileLocation,
+  type StorageKey,
+} from '@shared/schemas';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { flexibleFS } from '@utils/files';
 
-import { getStorageKey, type OutputState, type OutputDependencies } from './outputState';
+import {
+  getStorageKey,
+  type OutputState,
+  type OutputDependencies,
+} from './outputState';
 
 // ============================================================================
 // Types
