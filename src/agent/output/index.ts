@@ -2,30 +2,16 @@
 export {
   createOutputState,
   setActiveRun,
-  getStorageKey,
-  ensureRoundData,
   hasRoundOutputs,
-  ensureRound,
   getOutputFilesByRound,
 } from './outputState';
-export type { OutputState, OutputDependencies, RoundData } from './outputState';
+export type { OutputState, OutputDependencies } from './outputState';
 
-// XML extraction
+// Processing pipeline
 export { extractFilesFromXml } from './xmlExtraction';
-
-// Diff computation
-export { computeOutputDiffStats } from './diffComputation';
-
-// Lineage mapping
 export { traceFileLineage } from './lineageMapping';
-
-// Validation
-export { checkExpectedOutputs } from './outputValidation';
-export type { ValidationResult } from './outputValidation';
-
-// Round summary
+export { checkExpectedOutputs, type ValidationResult } from './outputValidation';
 export { summarizeRound, getRoundOutput } from './roundSummary';
-export type { RoundSummary } from './roundSummary';
 
 // Types
 export type { RoundFileMapping } from './types';
