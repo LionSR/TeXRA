@@ -9,14 +9,121 @@ This PRD captures a **UI regression audit** between the current branch and the m
 baseline. The focus is on **missing UI elements, CSS regressions, and logic regressions** in
 MainView and ProgressView.
 
-> **Status: ⬜ Not Started**
+> **Status: 🟢 Critical Issues Resolved (2026-01-29)** - L1, L2, L4 all fixed
 
 ### Baseline for comparison
 
-The main branch is not available locally in this environment. For this audit we use the last
-shared commit available in the repository history (`73262434`) as the **main branch proxy**.
-Any regressions listed below should be verified against the actual main branch once it is
-available, but the items are grounded in current code paths and style modules.
+Compared branch `claude/review-lit-native-phases-skw5W` against `main` branch.
+PR contains 685 files changed (+44829/-38366 lines) - major Lit migration effort.
+
+---
+
+## Critical Logic Regressions (Queued Messages)
+
+> **Severity: 🔴 CRITICAL** - Data loss when switching tabs
+
+### L1) Queued follow-ups not cleared on stream switch (CRITICAL) ✅ FIXED
+
+- **Area:** ProgressView
+- **Type:** Logic regression
+- **Impact:** Critical
+- **Status:** ✅ **FIXED** - The `'clear'` action in `updateLogContent` clears all frontend
+  `streamStates` (including `queuedFollowUps`) via `ctx.setState((prev) => ({ ...prev, streamStates: new Map() }))`.
+- **Location:**
+  - `src/progressView/events/ProgressEventHandler.ts:342-348` (`clearStreamSurface()`)
+  - `src/progressView/frontend/messageDispatcher.ts:205-208` (frontend handler)
+
+### L2) Queued follow-ups not sent on stream activation (CRITICAL) ✅ FIXED
+
+- **Area:** ProgressView
+- **Type:** Logic regression
+- **Impact:** Critical
+- **Status:** ✅ **FIXED in this PR** (lines 323-326 of ProgressEventHandler.ts)
+- **Fix applied:** `refreshStreamSurface()` now calls:
+  ```typescript
+  this.webviewUpdater.updateQueuedFollowUps(
+    stream,
+    ToolUseFollowUpQueue.getAll(stream),
+  );
+  ```
+- **Note:** The docstring in `FollowUpEventHandlers.ts:12` is now stale and should be updated.
+  It says "refreshStreamSurface doesn't refresh follow-ups" which is no longer true.
+
+### L3) Schema defaults hide data loss (HIGH)
+
+- **Area:** Shared
+- **Type:** Logic regression
+- **Impact:** High
+- **Current behavior:** `queuedFollowUps: z.array(z.string()).prefault([])` means missing data
+  silently becomes empty array instead of erroring. Combined with L1 and L2, the frontend shows
+  empty queued messages even when they exist on the backend.
+- **Location:**
+  - `src/shared/schemas/streamState.ts:46`
+- **Impact:** Silent data loss - messages exist on backend but don't appear in frontend
+
+### L4) No cleanup of queued messages on stream deletion (MEDIUM) ✅ FIXED
+
+- **Area:** ProgressView
+- **Type:** Logic regression
+- **Impact:** Medium
+- **Current behavior:** ~~When a stream is deleted, `clearStream()` removes all data but queued
+  messages for that stream are never explicitly cleared in the UI.~~ Fixed: `ToolUseFollowUpQueue.release(streamId)` now called in both `handleDeleteStream()` and `handleDeleteAll()`.
+- **Location:**
+  - `src/progressView/ProgressViewMessageHandler.ts:262-280` (`handleDeleteStream()`)
+
+---
+
+## UI Regressions (New Findings 2026-01-29)
+
+### U1) Inverted aria-hidden logic in QueuedFollowUps (MEDIUM)
+
+- **Area:** ProgressView
+- **Type:** Accessibility regression
+- **Impact:** Medium
+- **Current behavior:** Line 100 has `aria-hidden=${visible ? 'false' : 'true'}` which is
+  correct, but needs verification that the `visible` computed property works as expected.
+- **Location:** `src/progressView/frontend/components/QueuedFollowUps.ts:100`
+
+### U2) Missing null check in BannerGroup provider rendering (MEDIUM)
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Medium
+- **Current behavior:** Line 225 uses `providerLabel` from `charAt(0).toUpperCase()`. If
+  provider is null/undefined, this will throw an error.
+- **Location:** `src/webview/frontend/components/BannerGroup.ts:225`
+- **Fix:** Add null check before rendering API key banner
+
+### U3) FollowUpInput visibility pattern may break event listeners (MEDIUM)
+
+- **Area:** ProgressView
+- **Type:** Logic regression
+- **Impact:** Medium
+- **Current behavior:** Lines 181-182 return `nothing` when not visible. This removes the
+  component from DOM entirely, which could break parent event listener attachment if the parent
+  expects the component to always be present.
+- **Location:** `src/progressView/frontend/components/FollowUpInput.ts:181-182`
+
+### U4) CSS selector timing with data-mode attribute (LOW)
+
+- **Area:** ProgressView
+- **Type:** CSS regression
+- **Impact:** Low
+- **Current behavior:** FollowupSection CSS selectors depend on `data-mode` attribute (lines
+  132-175). If `mode` property change isn't synchronized properly, buttons/sections won't
+  appear/disappear correctly.
+- **Location:** `src/progressView/frontend/components/FollowupSection.ts:132-175, 229`
+
+### U5) SortableController timing in OutputFilesSection (LOW)
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Low
+- **Current behavior:** Lines 46-57 initialize SortableController but `@query()` selector
+  might not find element if render hasn't completed. Drag-and-drop might not initialize.
+- **Location:** `src/webview/frontend/components/OutputFilesSection.ts:46-57`
+
+---
 
 ## Regression inventory (observed)
 
@@ -135,10 +242,11 @@ available, but the items are grounded in current code paths and style modules.
 
 ## Goals
 
-1. Restore missing styling hooks and class-level layout styles.
-2. Reintroduce UI logic guards for banners that should not silently disappear.
-3. Align ProgressView spacing and highlighting with the main branch baseline.
-4. Ship a regression-free UI without reintroducing deleted CSS files.
+1. **Fix critical queued message persistence** (L1, L2) - highest priority
+2. Restore missing styling hooks and class-level layout styles.
+3. Reintroduce UI logic guards for banners that should not silently disappear.
+4. Align ProgressView spacing and highlighting with the main branch baseline.
+5. Ship a regression-free UI without reintroducing deleted CSS files.
 
 ## Non-goals
 
@@ -146,6 +254,26 @@ available, but the items are grounded in current code paths and style modules.
 - Reintroducing removed CSS files that were intentionally consolidated.
 
 ## Requirements
+
+### R0: Fix queued message persistence (CRITICAL) ✅ ALL FIXED
+
+> **Priority: P0** - ✅ All critical issues resolved
+
+**R0.1: Clear queued follow-ups on stream switch-away** ✅ FIXED
+
+- The `'clear'` action in `updateLogContent` clears all frontend `streamStates`
+- Frontend handler at `messageDispatcher.ts:205-208` sets `streamStates: new Map()`
+- This clears queuedFollowUps along with all other stream state
+
+**R0.2: Send queued follow-ups on stream activation** ✅ FIXED
+
+- Already implemented at lines 323-326 of `ProgressEventHandler.ts`
+- Uses `ToolUseFollowUpQueue.getAll(stream)` to fetch messages
+
+**R0.3: Update stale docstring** ⬜ NOT STARTED (low priority)
+
+- `FollowUpEventHandlers.ts:12` says "refreshStreamSurface doesn't refresh follow-ups"
+- This is no longer true after R0.2 fix - should be updated or removed
 
 ### R1: Output files toolbar sizing
 
@@ -173,6 +301,11 @@ available, but the items are grounded in current code paths and style modules.
 - Add a forced-visible state (or equivalent backend-triggered lock) for the API key banner
   until resolution.
 
+### R6: BannerGroup null safety
+
+- Add null check for provider before rendering API key banner
+- Location: `src/webview/frontend/components/BannerGroup.ts:225`
+
 ## UX notes
 
 - Any UI change should be visually verified in VS Code’s dark and light themes.
@@ -185,3 +318,37 @@ available, but the items are grounded in current code paths and style modules.
    a fixed pixel value for consistency across themes?
 3. Does the baseline for badge padding need to be strictly preserved, or can we standardize a
    smaller size and adjust adjacent spacing?
+
+---
+
+## Fix Priority Summary (2026-01-29)
+
+| Priority | Issue                                            | Severity    | Effort | Status                  |
+| -------- | ------------------------------------------------ | ----------- | ------ | ----------------------- |
+| **P0**   | L1: clearStreamSurface missing queuedFollowUps   | 🔴 Critical | Low    | ✅ Fixed (clear action) |
+| **P0**   | L2: refreshStreamSurface missing queuedFollowUps | 🔴 Critical | Low    | ✅ Fixed in PR          |
+| **P1**   | L3: Schema defaults hide data loss               | 🟠 High     | Low    | ⚠️ By design (see note) |
+| **P1**   | U2: BannerGroup null check                       | 🟠 High     | Low    | ⬜ Not Started          |
+| **P2**   | L4: Stream deletion cleanup                      | 🟡 Medium   | Low    | ✅ Fixed                |
+| **P2**   | U3: FollowUpInput visibility pattern             | 🟡 Medium   | Medium | ⬜ Not Started          |
+| **P3**   | U1: aria-hidden verification                     | 🟢 Low      | Low    | ⬜ Not Started          |
+| **P3**   | U4: CSS selector timing                          | 🟢 Low      | Low    | ⬜ Not Started          |
+| **P3**   | U5: SortableController timing                    | 🟢 Low      | Low    | ⬜ Not Started          |
+| **P3**   | Stale docstring in FollowUpEventHandlers.ts      | 🟢 Low      | Low    | ⬜ Not Started          |
+
+### Recommended Fix Order
+
+1. ~~**L1** - Fix `clearStreamSurface()` to clear queued follow-ups~~ ✅ Done (clear action handles it)
+2. **U2** - Add null safety to BannerGroup
+3. ~~**L4** - Clean up queued messages on stream deletion~~ ✅ Done
+4. **Stale docstring** - Update `FollowUpEventHandlers.ts:12` (L2 is now fixed)
+5. **L3** - Consider removing `.prefault([])` or adding explicit validation (by design - may keep)
+6. **U3** - Evaluate FollowUpInput visibility pattern
+
+### Remaining Files to Modify
+
+```
+src/progressView/events/FollowUpEventHandlers.ts      # Stale docstring (low priority)
+src/webview/frontend/components/BannerGroup.ts        # U2
+src/progressView/frontend/components/FollowUpInput.ts # U3 (evaluate)
+```
