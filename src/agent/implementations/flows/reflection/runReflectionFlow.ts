@@ -29,12 +29,11 @@ import {
 } from '@agent/storage/ExecutionKVStore';
 import {
   createOutputState,
-  createDiffManager,
-  createXmlManager,
   setActiveRun,
   type OutputState,
   type OutputDependencies,
-} from '@agent/output/outputUtils';
+} from '@agent/output/outputState';
+import { createDiffManager, createXmlManager } from '@agent/output/managerFactories';
 import {
   registerInterruptible,
   unregisterInterruptible,

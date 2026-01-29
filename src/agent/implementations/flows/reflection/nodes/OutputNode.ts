@@ -13,15 +13,12 @@
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  calculateRoundMapping,
-  ensureXmlStructure,
-  finalizeRoundData,
-  getRoundArtifacts,
-  hasRoundOutputs,
-  processRoundOutputs,
-  validateOutputsExist,
-} from '@agent/output/outputUtils';
+import { hasRoundOutputs } from '@agent/output/outputState';
+import { extractFilesFromXml } from '@agent/output/xmlExtraction';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, getRoundOutput } from '@agent/output/roundSummary';
+import { ensureXmlStructure } from '@agent/output/managerFactories';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -130,7 +127,7 @@ export class OutputNode<C = unknown> extends Node<
       await tryOperation(
         'Output processing',
         () =>
-          processRoundOutputs(
+          extractFilesFromXml(
             outputState,
             outputDeps,
             xmlManager,
@@ -141,18 +138,24 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        mapping = calculateRoundMapping(outputState, baseFiles, currentRound);
+        mapping = traceFileLineage(outputState, baseFiles, currentRound);
 
         await tryOperation(
           'Latexdiff',
-          () => this.handleLatexdiff(currentRound, baseFiles, mapping!, diffManager),
+          () =>
+            this.handleLatexdiff(
+              currentRound,
+              baseFiles,
+              mapping!,
+              diffManager,
+            ),
           logger,
         );
       }
     }
 
-    // Finalize round and get data for event emission/file opening
-    const finalizeResult = await finalizeRoundData(
+    // Summarize round and get data for event emission/file opening
+    const roundSummary = await summarizeRound(
       outputState,
       outputDeps,
       outputLocation,
@@ -163,12 +166,12 @@ export class OutputNode<C = unknown> extends Node<
     // Emit addOutputFiles event
     bus.emit('addOutputFiles', {
       streamId,
-      storageKey: finalizeResult.storageKey,
-      filesByRound: { [currentRound]: finalizeResult.fileInfos },
+      storageKey: roundSummary.storageKey,
+      filesByRound: { [currentRound]: roundSummary.fileInfos },
     });
 
     // Open files that haven't been opened yet
-    for (const location of finalizeResult.filesToOpen) {
+    for (const location of roundSummary.filesToOpen) {
       await tryOperation(
         `Open file ${location.absolutePath}`,
         () => openBuildDisplayIfTex(location, { preserveFocus: true }),
@@ -181,12 +184,12 @@ export class OutputNode<C = unknown> extends Node<
       await tryOperation(
         'Validate expected outputs',
         async () => {
-          const validationResult = await validateOutputsExist(
+          const validationResult = await checkExpectedOutputs(
             outputState,
             outputDeps,
             outputLocation,
             currentRound,
-            finalizeResult.stage,
+            roundSummary.stage,
           );
 
           // Emit updateMissingOutputs event
@@ -208,8 +211,8 @@ export class OutputNode<C = unknown> extends Node<
       );
     }
 
-    // Get round artifacts - this is critical, throw if it fails
-    return await getRoundArtifacts(outputState, baseFiles, currentRound);
+    // Get round output - this is critical, throw if it fails
+    return await getRoundOutput(outputState, baseFiles, currentRound);
   }
 
   async execFallback(
