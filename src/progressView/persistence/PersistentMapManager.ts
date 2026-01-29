@@ -2,7 +2,11 @@
 import { StorageRecordSchema } from '@shared/schemas';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 
-export interface StateStorage {
+/**
+ * Storage interface matching vscode.Memento API.
+ * Used by PersistentMapManager for workspace state persistence.
+ */
+export interface MementoStorage {
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   update<T>(key: string, value: T): Thenable<void>;
@@ -14,10 +18,10 @@ export interface StateStorage {
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
-  protected readonly storage: StateStorage;
+  protected readonly storage: MementoStorage;
   protected readonly storageKey: WorkspaceStateKey;
 
-  constructor(storageKey: WorkspaceStateKey, storage?: StateStorage) {
+  constructor(storageKey: WorkspaceStateKey, storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
     if (!resolvedStorage) {
       throw new Error('workspace state manager is not initialized');
