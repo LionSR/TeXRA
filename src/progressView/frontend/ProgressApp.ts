@@ -35,8 +35,8 @@ import {
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
-  streamFilter: z.string().catch('all') as z.ZodType<StreamFilter>,
-  streamSort: z.string().catch('time') as z.ZodType<StreamSort>,
+  streamFilter: z.string().prefault('all') as z.ZodType<StreamFilter>,
+  streamSort: z.string().prefault('time') as z.ZodType<StreamSort>,
 });
 
 type ProgressViewPreferences = z.infer<typeof ProgressViewPrefsSchema>;
