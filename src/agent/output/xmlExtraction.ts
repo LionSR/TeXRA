@@ -5,7 +5,11 @@
  * and multiple output scenarios.
  */
 
-import { MESSAGE_TYPES, type FileLocation, type StorageKey } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type FileLocation,
+  type StorageKey,
+} from '@shared/schemas';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 
@@ -70,47 +74,52 @@ export async function extractFilesFromXml(
   currRound: number,
   stage?: AgentLogStage,
 ): Promise<void> {
-  await withOutputStage(deps, `Process files r${currRound}`, stage, async () => {
-    await prepareRunWorkspaceIfNeeded(state, deps);
+  await withOutputStage(
+    deps,
+    `Process files r${currRound}`,
+    stage,
+    async () => {
+      await prepareRunWorkspaceIfNeeded(state, deps);
 
-    const data = ensureRoundData(state, currRound);
-    data.rawOutput ??= outputLocation;
-    const rawLocation = data.rawOutput;
+      const data = ensureRoundData(state, currRound);
+      data.rawOutput ??= outputLocation;
+      const rawLocation = data.rawOutput;
 
-    const processingContext: ProcessingContext = {
-      agentSetting: deps.agentSetting,
-      baseFiles: deps.baseFiles,
-      streamId: deps.streamId,
-      logger: deps.logger,
-      xmlManager,
-      setRoundOutputs: (round: number, outputs) => {
-        const roundData = ensureRoundData(state, round);
-        roundData.outputs = outputs;
-      },
-      ensureRoundData: (round: number) => ensureRoundData(state, round),
-    };
+      const processingContext: ProcessingContext = {
+        agentSetting: deps.agentSetting,
+        baseFiles: deps.baseFiles,
+        streamId: deps.streamId,
+        logger: deps.logger,
+        xmlManager,
+        setRoundOutputs: (round: number, outputs) => {
+          const roundData = ensureRoundData(state, round);
+          roundData.outputs = outputs;
+        },
+        ensureRoundData: (round: number) => ensureRoundData(state, round),
+      };
 
-    const fileProcessor = new OutputFileProcessor(processingContext);
-    const storageKey: StorageKey = getStorageKey(state);
+      const fileProcessor = new OutputFileProcessor(processingContext);
+      const storageKey: StorageKey = getStorageKey(state);
 
-    const hasMultipleOutputs =
-      deps.agentConfig.useMultipleOutputs &&
-      deps.agentConfig.outputFiles?.length > 0;
+      const hasMultipleOutputs =
+        deps.agentConfig.useMultipleOutputs &&
+        deps.agentConfig.outputFiles?.length > 0;
 
-    if (hasMultipleOutputs) {
-      await fileProcessor.processMultipleOutputs(
+      if (hasMultipleOutputs) {
+        await fileProcessor.processMultipleOutputs(
+          outputLocation,
+          currRound,
+          rawLocation,
+        );
+        return;
+      }
+
+      await fileProcessor.processSingleOutput(
         outputLocation,
         currRound,
         rawLocation,
+        storageKey,
       );
-      return;
-    }
-
-    await fileProcessor.processSingleOutput(
-      outputLocation,
-      currRound,
-      rawLocation,
-      storageKey,
-    );
-  });
+    },
+  );
 }
