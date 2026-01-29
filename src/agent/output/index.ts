@@ -10,7 +10,10 @@ export type { OutputState, OutputDependencies } from './outputState';
 // Processing pipeline
 export { extractFilesFromXml } from './xmlExtraction';
 export { traceFileLineage } from './lineageMapping';
-export { checkExpectedOutputs, type ValidationResult } from './outputValidation';
+export {
+  checkExpectedOutputs,
+  type ValidationResult,
+} from './outputValidation';
 export { summarizeRound, getRoundOutput } from './roundSummary';
 
 // Types

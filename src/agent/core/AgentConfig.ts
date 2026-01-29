@@ -1,27 +1,18 @@
 import { z } from 'zod';
 
+import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
+import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
-import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /** Pure object schema without refinements for use with .partial(). */
-const AgentConfigFieldsSchema = z.object({
+const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault('correct'),
   model: z.string().prefault('gemini3p'),
   instruction: z.string().prefault(''),
   useMultipleOutputs: z.boolean().prefault(false),
-  inputFile: z.string().prefault(''),
-  inputFiles: z.array(z.string()).prefault([]),
-  referenceFile: z.string().nullable().prefault(null),
-  referenceFiles: z.array(z.string()).prefault([]),
-  auxiliaryFile: z.string().nullable().prefault(null),
-  auxiliaryFiles: z.array(z.string()).prefault([]),
-  mediaFile: z.string().nullable().prefault(null),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
-  editedFile: z.string().nullable().prefault(null),
   editedFiles: z.array(z.string()).prefault([]),
-  toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
+  toolConfig: ToolConfigSchema,
 });
 
 /** Lift legacy session.agentCategory to top level for backward compatibility. */

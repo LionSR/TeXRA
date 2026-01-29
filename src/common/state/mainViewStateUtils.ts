@@ -22,7 +22,8 @@ export function buildMainViewState(
   const toolConfig = agentConfig.toolConfig ?? {};
 
   // Build partial state from agentConfig and toolConfig, then parse with schema
-  // to apply prefault defaults for any missing fields
+  // to apply prefault defaults for any missing fields.
+  // Note: UIFileFieldsSchema uses catch('') for nullable fields from AgentConfig.
   return MainViewPersistedStateSchema.parse({
     sessionType: isToolUse ? 'toolUse' : 'workflow',
     workflowAgent: isToolUse ? undefined : agentConfig.agent,
