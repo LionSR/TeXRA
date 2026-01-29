@@ -36,6 +36,7 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 import {
@@ -271,9 +272,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear pending task groups, approvals, and YOLO state to prevent memory leaks
+    // Clear pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
+    ToolUseFollowUpQueue.release(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
     this.provider.updateWebview({ forceRebuild: true });
@@ -292,9 +294,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Clear all pending task groups, approvals, and YOLO state to prevent memory leaks
+    // Clear all pending task groups, approvals, queued follow-ups, and YOLO state to prevent memory leaks
     this.provider.eventHandler.clearAllPendingTaskGroups();
     cleanupAllApprovals();
+    for (const streamId of this.provider.state.streamTabs.keys()) {
+      ToolUseFollowUpQueue.release(streamId);
+    }
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });

@@ -9,7 +9,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
@@ -27,7 +27,7 @@ export class TaskGroupManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.TASK_GROUPS, storage);
     this.logger = new AgentLogger('TaskGroupManager');
   }

@@ -37,7 +37,7 @@ import { RunInstructionManager } from '@progressView/managers/RunInstructionMana
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
 import { TaskGroupManager } from '@progressView/managers/TaskGroupManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
-import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
@@ -84,10 +84,10 @@ export class ProgressViewState {
   private _streamStates = new Map<StreamTabId, StreamState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
-  private readonly storage: StateStorage;
+  private readonly storage: MementoStorage;
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
     if (!resolvedStorage) {
       throw new Error('workspace state manager is not initialized');
