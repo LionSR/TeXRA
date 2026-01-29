@@ -4,6 +4,8 @@ export * from './storage';
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './agent';
+export * from './fileFields';
+export * from './toolConfig';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
