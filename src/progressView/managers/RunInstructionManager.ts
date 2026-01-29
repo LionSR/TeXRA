@@ -7,7 +7,7 @@ import {
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
@@ -24,7 +24,7 @@ export class RunInstructionManager extends PersistentMapManager<
   StreamTabId,
   InstructionMap
 > {
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.RUN_INSTRUCTIONS, storage);
   }
 

@@ -10,6 +10,7 @@ import {
 } from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
@@ -319,6 +320,10 @@ export class ProgressEventHandler {
     });
 
     this.webviewUpdater.updateTodos(stream, todos);
+    this.webviewUpdater.updateQueuedFollowUps(
+      stream,
+      ToolUseFollowUpQueue.getAll(stream),
+    );
 
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
@@ -327,6 +332,13 @@ export class ProgressEventHandler {
     return activeRunId;
   }
 
+  /**
+   * Clear the stream surface when no stream is active.
+   * The 'clear' action on updateLogContent clears all frontend streamStates,
+   * including queuedFollowUps. Queued follow-ups are restored when switching
+   * to a valid stream via refreshStreamSurface(), which fetches from
+   * ToolUseFollowUpQueue (the backend source of truth).
+   */
   private clearStreamSurface(clearInstruction: boolean): void {
     this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
     this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
