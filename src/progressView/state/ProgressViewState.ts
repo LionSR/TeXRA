@@ -5,6 +5,7 @@ import {
   ContextStateDataSchema,
   createStreamState,
   StorageKeySchema,
+  StorageRecordSchema,
   TodoItemSchema,
   type AgentCategoryFilter,
   type ContextStateData,
@@ -16,6 +17,10 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import {
+  PersistedState,
+  createBackendStorage,
+} from '@shared/state/PersistedState';
 import { isPlainObject } from '@shared/utils/string';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -34,7 +39,6 @@ import { TaskGroupManager } from '@progressView/managers/TaskGroupManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import { getConfig } from '@utils/config';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -58,11 +62,14 @@ type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
 /** Active stream identifier, or empty string when no stream is selected. */
 export type ActiveStreamId = StreamTabId | '';
 
-const PROGRESS_VIEW_DEFAULTS = {
-  activeStream: '' as ActiveStreamId,
-  streamSortOrder: 'time',
-  agentCategoryFilter: 'all' as AgentCategoryFilter,
-} as const;
+/** Schema for consolidated progress view preferences. */
+const ProgressViewPrefsSchema = z.object({
+  activeStream: z.string().catch('') as z.ZodType<ActiveStreamId>,
+  streamSortOrder: z.string().catch('time'),
+  agentCategoryFilter: AgentCategoryFilterSchema.catch('all'),
+});
+
+type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
 
 /** Core state management for the progress view. */
 export class ProgressViewState {
@@ -71,10 +78,7 @@ export class ProgressViewState {
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
-  private _activeStream: ActiveStreamId = PROGRESS_VIEW_DEFAULTS.activeStream;
-  private _streamSortOrder: string = PROGRESS_VIEW_DEFAULTS.streamSortOrder;
-  private _agentCategoryFilter: AgentCategoryFilter =
-    PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
+  private _prefs!: PersistedState<ProgressViewPrefs>;
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private _streamStates = new Map<StreamTabId, StreamState>();
@@ -91,6 +95,11 @@ export class ProgressViewState {
 
     this.storage = resolvedStorage;
     this.logger = new AgentLogger('ProgressViewState');
+    this._prefs = new PersistedState(
+      createBackendStorage(resolvedStorage),
+      WorkspaceStateKey.PROGRESS_VIEW_PREFS,
+      ProgressViewPrefsSchema,
+    );
     this._streamTabs = new StreamTabsManager(resolvedStorage);
     this._taskGroups = new TaskGroupManager(resolvedStorage);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
@@ -115,12 +124,11 @@ export class ProgressViewState {
   }
 
   get activeStream(): ActiveStreamId {
-    return this._activeStream;
+    return this._prefs.get('activeStream');
   }
 
   set activeStream(stream: ActiveStreamId) {
-    this._activeStream = stream;
-    this.saveActiveStream();
+    this._prefs.update({ activeStream: stream });
   }
 
   /**
@@ -130,7 +138,7 @@ export class ProgressViewState {
    * during temporary filter mismatches.
    */
   resolveActiveStream(availableStreams: StreamTabId[]): StreamTabId {
-    const currentActive = this._activeStream;
+    const currentActive = this._prefs.get('activeStream');
 
     if (availableStreams.includes(currentActive)) {
       return currentActive;
@@ -139,35 +147,30 @@ export class ProgressViewState {
     const resolved = availableStreams[0];
 
     if (resolved && resolved !== currentActive) {
-      this._activeStream = resolved;
-      this.saveActiveStream();
+      this._prefs.update({ activeStream: resolved });
     }
 
     return resolved || currentActive;
   }
 
   get streamSortOrder(): string {
-    return this._streamSortOrder;
+    return this._prefs.get('streamSortOrder');
   }
 
   set streamSortOrder(order: string) {
-    this._streamSortOrder = order;
-    this.saveStreamSortOrder();
+    this._prefs.update({ streamSortOrder: order });
   }
 
   get agentCategoryFilter(): AgentCategoryFilter {
-    return this._agentCategoryFilter;
+    return this._prefs.get('agentCategoryFilter');
   }
 
   set agentCategoryFilter(filter: AgentCategoryFilter) {
     if (!AgentCategoryFilterSchema.safeParse(filter).success) {
-      this.logger.warn(
-        `Invalid agent filter: ${filter}, defaulting to '${PROGRESS_VIEW_DEFAULTS.agentCategoryFilter}'`,
-      );
-      filter = PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
+      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
+      filter = 'all';
     }
-    this._agentCategoryFilter = filter;
-    this.saveAgentCategoryFilter();
+    this._prefs.update({ agentCategoryFilter: filter });
   }
 
   private getOrCreateSession(stream: StreamTabId): StreamSessionState {
@@ -393,10 +396,10 @@ export class ProgressViewState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
-    if (this._activeStream === stream) {
-      this._activeStream =
-        this._streamTabs.keys()[0] || PROGRESS_VIEW_DEFAULTS.activeStream;
-      this.saveActiveStream();
+    if (this._prefs.get('activeStream') === stream) {
+      this._prefs.update({
+        activeStream: this._streamTabs.keys()[0] || '',
+      });
     }
 
     if (removedState) {
@@ -424,8 +427,7 @@ export class ProgressViewState {
     this._executionIds.clear();
     this._sessionState.clear();
     this._streamStates.clear();
-    this._activeStream = PROGRESS_VIEW_DEFAULTS.activeStream;
-    this.saveActiveStream();
+    this._prefs.reset();
     this.saveTaskStates();
     this.saveExecutionIds();
     this.saveActiveRunIds();
@@ -447,11 +449,10 @@ export class ProgressViewState {
 
     this.logger.info('[Persistence] Managers loaded');
 
-    this.loadActiveStream();
+    // Prefs loaded automatically via PersistedState constructor
+    this.validateActiveStream();
     this.loadTaskStates();
     this.loadExecutionIds();
-    this.loadStreamSortOrder();
-    this.loadAgentCategoryFilter();
     this.loadActiveRunIds();
 
     this.logger.info(
@@ -459,16 +460,15 @@ export class ProgressViewState {
     );
   }
 
-  private loadActiveStream(): void {
-    const savedActiveStream = this.storage.get<string>(
-      WorkspaceStateKey.ACTIVE_STREAM_TAB,
-      PROGRESS_VIEW_DEFAULTS.activeStream,
-    );
-
-    this._activeStream =
-      savedActiveStream && this._streamTabs.has(savedActiveStream)
-        ? savedActiveStream
-        : (this._streamTabs.keys()[0] ?? PROGRESS_VIEW_DEFAULTS.activeStream);
+  /** Validate activeStream against available streams after load */
+  private validateActiveStream(): void {
+    const savedActiveStream = this._prefs.get('activeStream');
+    if (!savedActiveStream || !this._streamTabs.has(savedActiveStream)) {
+      const fallback = this._streamTabs.keys()[0] ?? '';
+      if (fallback !== savedActiveStream) {
+        this._prefs.update({ activeStream: fallback });
+      }
+    }
   }
 
   private loadTaskStates(): void {
@@ -543,17 +543,7 @@ export class ProgressViewState {
   }
 
   private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
-    const value = this.storage.get<Record<string, unknown>>(key, {});
-    return typeof value === 'object' && value && !Array.isArray(value)
-      ? value
-      : {};
-  }
-
-  private saveActiveStream(): void {
-    void this.storage.update(
-      WorkspaceStateKey.ACTIVE_STREAM_TAB,
-      this._activeStream,
-    );
+    return StorageRecordSchema.parse(this.storage.get(key));
   }
 
   private saveTaskStates(): void {
@@ -574,41 +564,5 @@ export class ProgressViewState {
   private saveExecutionIds(): void {
     const executionIdsObj = mapToRecord(this._executionIds);
     void this.storage.update(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
-  }
-
-  private loadStreamSortOrder(): void {
-    const configDefault = getConfig(
-      'texra.progressBoard.streamSortOrder',
-      PROGRESS_VIEW_DEFAULTS.streamSortOrder,
-    );
-    this._streamSortOrder = this.storage.get(
-      WorkspaceStateKey.STREAM_SORT_ORDER,
-      configDefault,
-    );
-  }
-
-  private saveStreamSortOrder(): void {
-    void this.storage.update(
-      WorkspaceStateKey.STREAM_SORT_ORDER,
-      this._streamSortOrder,
-    );
-  }
-
-  private loadAgentCategoryFilter(): void {
-    const savedFilter = this.storage.get<string>(
-      WorkspaceStateKey.STREAM_AGENT_FILTER,
-      PROGRESS_VIEW_DEFAULTS.agentCategoryFilter,
-    );
-    const parsed = AgentCategoryFilterSchema.safeParse(savedFilter);
-    this._agentCategoryFilter = parsed.success
-      ? parsed.data
-      : PROGRESS_VIEW_DEFAULTS.agentCategoryFilter;
-  }
-
-  private saveAgentCategoryFilter(): void {
-    void this.storage.update(
-      WorkspaceStateKey.STREAM_AGENT_FILTER,
-      this._agentCategoryFilter,
-    );
   }
 }
