@@ -13,7 +13,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import {
   RoundKeySchema,
@@ -77,7 +77,7 @@ export class OutputFilesManager extends PersistentMapManager<
   private missingOutputsLoadPromise: Promise<void> | null = null;
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
     this.logger = new AgentLogger('OutputFilesManager');
   }

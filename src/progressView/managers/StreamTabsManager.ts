@@ -7,7 +7,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createArraySchema } from '@progressView/persistence/schemaUtils';
 
@@ -25,7 +25,7 @@ export class StreamTabsManager extends PersistentMapManager<
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage);
     this.logger = new AgentLogger('StreamTabsManager');
   }
