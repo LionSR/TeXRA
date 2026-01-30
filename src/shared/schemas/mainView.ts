@@ -665,12 +665,6 @@ const withNotifyWhenEmpty = <T extends string>(command: T) =>
     notifyWhenEmpty: z.boolean().nullish(),
   });
 
-const withOptionalFiles = <T extends string>(command: T) =>
-  z.object({
-    command: z.literal(command),
-    files: z.array(z.string()).optional(),
-  });
-
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
@@ -780,25 +774,22 @@ const FileOperationMessages = [
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
     fileType: ExtendedFileTypeSchema,
   }),
-  withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
+  // Note: Use withFilesArray (required files) directly instead of
+  // withOptionalFiles + .extend() override pattern
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
     fileType: z.literal('input'),
-    files: z.array(z.string()),
   }),
-  withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES).extend({
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES).extend({
     fileType: z.literal('reference'),
-    files: z.array(z.string()),
   }),
-  withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES).extend({
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES).extend({
     fileType: z.literal('auxiliary'),
-    files: z.array(z.string()),
   }),
-  withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
     fileType: z.literal('media'),
-    files: z.array(z.string()),
   }),
-  withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES).extend({
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES).extend({
     fileType: z.literal('output'),
-    files: z.array(z.string()),
   }),
 ] as const;
 
