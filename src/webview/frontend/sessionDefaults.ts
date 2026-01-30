@@ -9,7 +9,7 @@ export interface SessionDefaults {
   outputFilesActive?: boolean;
 }
 
-export const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
+export const SESSION_DEFAULTS = {
   workflow: {
     fileInputEnabled: true,
     resetFiles: true,
@@ -24,4 +24,4 @@ export const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
     fileInputEnabled: false,
     resetFiles: false,
   },
-};
+} satisfies Record<SessionType, SessionDefaults>;
