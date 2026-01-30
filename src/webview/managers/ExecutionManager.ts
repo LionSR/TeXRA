@@ -140,8 +140,8 @@ export class ExecutionManager {
   handleMultipleOperation(message: CommandMessage): void {
     const outputFiles = message.outputFiles ?? [];
     const operation = message.command.startsWith('pack')
-      ? 'Packing'
-      : 'Cleaning';
+      ? 'packing'
+      : 'cleaning';
     logger.info(
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,

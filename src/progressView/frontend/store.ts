@@ -68,8 +68,3 @@ export function getStreamState(
     createStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
   );
 }
-
-/**
- * Get the effective run ID for display (selected or active).
- * Only meaningful for workflow streams; tool-use streams don't have run selection.
- */

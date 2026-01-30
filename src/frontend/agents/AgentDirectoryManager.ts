@@ -255,7 +255,7 @@ export class AgentDirectoryManager {
    * Windows path.relative() produces backslashes, but minimatch expects forward slashes.
    */
   private normalizePath(p: string): string {
-    return p.replace(/\\/g, '/');
+    return p.replaceAll('\\', '/');
   }
 
   private ensureAgentDirectoryWatcherConfig(): void {

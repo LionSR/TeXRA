@@ -531,21 +531,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const agentCategory =
-      proposal.agentCategory === 'toolUse'
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
-
     const isWorkflow = proposal.agentCategory === 'workflow';
+    const agentCategory = isWorkflow
+      ? AgentCategory.Workflow
+      : AgentCategory.ToolUse;
+
     const hasFiles = (arr?: string[]): boolean => (arr?.length ?? 0) > 0;
 
-    const activeFiles = {
-      input: isWorkflow && hasFiles(proposal.inputFiles),
-      reference: isWorkflow && hasFiles(proposal.referenceFiles),
-      auxiliary: isWorkflow && hasFiles(proposal.auxiliaryFiles),
-      media: isWorkflow && hasFiles(proposal.mediaFiles),
-      output: isWorkflow && hasFiles(proposal.outputFiles),
-    };
+    const activeFiles = isWorkflow
+      ? {
+          input: hasFiles(proposal.inputFiles),
+          reference: hasFiles(proposal.referenceFiles),
+          auxiliary: hasFiles(proposal.auxiliaryFiles),
+          media: hasFiles(proposal.mediaFiles),
+          output: hasFiles(proposal.outputFiles),
+        }
+      : {
+          input: false,
+          reference: false,
+          auxiliary: false,
+          media: false,
+          output: false,
+        };
 
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
@@ -936,12 +943,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private findOutputDirectory(
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string | undefined {
-    for (const infos of runOutputs.values()) {
-      for (const info of infos) {
-        const kind = info.location.kind;
-        if (kind === 'runStorage' || kind === 'workspace') {
-          return path.dirname(info.location.absolutePath);
-        }
+    for (const info of [...runOutputs.values()].flat()) {
+      const kind = info.location.kind;
+      if (kind === 'runStorage' || kind === 'workspace') {
+        return path.dirname(info.location.absolutePath);
       }
     }
     return undefined;

@@ -142,13 +142,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Override streaming config to disable streaming when background mode is enabled.
    * Background responses use polling for completed results, incompatible with streaming.
-   * @returns false if background mode is enabled, otherwise delegates to base
    */
   public override getStreamingConfig(): boolean {
-    if (this.isBackgroundModeActive()) {
-      return false;
-    }
-    return super.getStreamingConfig();
+    return !this.isBackgroundModeActive() && super.getStreamingConfig();
   }
 
   /**
@@ -170,16 +166,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Determines if background mode should be enabled for this request.
    * Background mode is only supported for GPT 5 series models when running
    * workflow agents (CoT or Direct), not tool-use agents.
-   * @returns true if background mode is eligible for this model and agent type
    */
   private isBackgroundModeEligible(): boolean {
     const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
-    if (!isGpt5) {
-      return false;
-    }
-
-    // Background mode is only eligible for Workflow agents
-    return this.isWorkflowMode();
+    return isGpt5 && this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
