@@ -1,16 +1,5 @@
-// Local imports
-import {
-  isToolUseState,
-  isWorkflowState,
-  type ProgressState,
-  type StreamSort,
-  type StreamState,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-} from './store';
-import type { FrontendEventHandlerContext } from './eventHandlers';
-
-// Local imports - shared schemas
+// Shared imports
+import { sortStreams } from '@shared/streams/streamSort';
 import type {
   InstructionUpdate,
   LogMessageData,
@@ -19,6 +8,16 @@ import type {
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
+
+// Local imports
+import {
+  isToolUseState,
+  isWorkflowState,
+  type ProgressState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from './store';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 
 /**
  * Updates a nested Record<runId, Record<round, T[]>> structure.
@@ -63,41 +62,6 @@ export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
   return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
-function compareByAgent(a: StreamTabInfo, b: StreamTabInfo): number {
-  return (a.agent ?? '').localeCompare(b.agent ?? '');
-}
-
-function compareByInputFile(a: StreamTabInfo, b: StreamTabInfo): number {
-  return (a.inputFile ?? '').localeCompare(b.inputFile ?? '');
-}
-
-function compareByTime(a: StreamTabInfo, b: StreamTabInfo): number {
-  const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
-  const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
-  return bTime - aTime;
-}
-
-// Comparator functions for stream sorting - avoid creating functions on each sort call
-const streamComparators: Record<
-  StreamSort,
-  (a: StreamTabInfo, b: StreamTabInfo) => number
-> = {
-  agent: compareByAgent,
-  inputFile: compareByInputFile,
-  time: compareByTime,
-};
-
-/**
- * Sort streams by the specified criteria.
- * Returns sorted copy without mutating original.
- */
-function sortStreams(
-  streams: StreamTabInfo[],
-  sort: StreamSort,
-): StreamTabInfo[] {
-  return [...streams].sort(streamComparators[sort] ?? streamComparators.time);
-}
-
 /** Run group info for the run selector */
 export interface RunGroup {
   id: string;
@@ -140,39 +104,6 @@ export function hasOutputFiles(
     }
   }
   return false;
-}
-
-/**
- * Resolve the best run ID when none is explicitly selected.
- *
- * Resolution priority:
- * 1. Explicit selection (selectedRunId or activeRunId from backend) - workflow only
- * 2. Latest root task group by startTime (any stream type)
- *
- * Note: Unlike `getEffectiveRunId` (which only returns explicit selections),
- * this function falls back to finding the latest task group when no run is
- * explicitly selected. Use this for operations that need a run context even
- * when none is explicitly selected (e.g., updating instructions).
- */
-export function resolveActiveRunId(streamState: StreamState): string | null {
-  // Only workflow streams have selectedRunId/activeRunId
-  if (isWorkflowState(streamState)) {
-    if (streamState.selectedRunId) return streamState.selectedRunId;
-    if (streamState.activeRunId) return streamState.activeRunId;
-  }
-
-  // Find latest root task group - use reduce to avoid extra array allocations
-  let latestId: string | null = null;
-  let latestTime = -1;
-
-  for (const group of streamState.taskGroups) {
-    if (!group.parentGroupId && group.startTime > latestTime) {
-      latestId = group.id;
-      latestTime = group.startTime;
-    }
-  }
-
-  return latestId;
 }
 
 /**

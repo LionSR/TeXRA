@@ -14,24 +14,18 @@ const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
 export class WatcherManager {
-  private disposables: vscode.FileSystemWatcher[] = [];
-  private validationHandles: NodeJS.Timeout[] = [];
   private static readonly VALIDATION_DELAY = 300;
+  private validationHandles: NodeJS.Timeout[] = [];
   private disposed = false;
-
-  // Debounced refresh using perfect-debounce
-  // Wrapped with disposed check since perfect-debounce doesn't expose cancel
+  private agentWatcher: vscode.Disposable | undefined;
   private triggerRefresh: () => void;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    // Wrap callback with disposed check to prevent execution after dispose
     this.triggerRefresh = debounce(() => {
-      if (!this.disposed) {
-        this.refresh();
-      }
+      if (!this.disposed) this.refresh();
     }, DEBOUNCE_WATCHER_MS);
   }
 
@@ -49,18 +43,6 @@ export class WatcherManager {
       this.dispose();
       // Re-enable after dispose() set it to true - allows new watchers to trigger refresh
       this.disposed = false;
-
-      const builtInAgentsPath = await agentDirectories.builtIn();
-      const builtInToolUsePath = await agentDirectories.builtInToolUse();
-      const customAgentsPath = await agentDirectories.custom();
-
-      const pathsToWatch = [builtInAgentsPath, builtInToolUsePath];
-      if (customAgentsPath) {
-        pathsToWatch.push(customAgentsPath);
-      }
-
-      const isCustomPath = (watchPath: string): boolean =>
-        path.resolve(watchPath) === path.resolve(customAgentsPath ?? '');
 
       const scheduleYamlValidation = (uri: vscode.Uri) => {
         if (path.extname(uri.fsPath).toLowerCase() !== '.yaml') {
@@ -80,35 +62,17 @@ export class WatcherManager {
         this.validationHandles.push(handle);
       };
 
-      for (const watchPath of pathsToWatch) {
-        if (!watchPath) continue;
-
-        const pattern = new vscode.RelativePattern(watchPath, '**/*');
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          pattern,
-          false,
-          false,
-          false,
-        );
-        this.disposables.push(watcher);
-
-        const refreshAndValidate = (uri: vscode.Uri) => {
+      this.agentWatcher = agentDirectories.watchAgentDirectories({
+        pattern: '**/*',
+        onEvent: (event) => {
           this.triggerRefresh();
-          scheduleYamlValidation(uri);
-        };
+          if (event.source === 'custom' && event.type !== 'delete') {
+            scheduleYamlValidation(event.uri);
+          }
+        },
+      });
 
-        watcher.onDidCreate(refreshAndValidate);
-        watcher.onDidDelete(this.triggerRefresh);
-        // Only validate YAML on change for custom agents (built-in are read-only)
-        watcher.onDidChange(
-          isCustomPath(watchPath) ? refreshAndValidate : this.triggerRefresh,
-        );
-      }
-
-      logger.info(
-        CHANNEL,
-        `File system watchers set up for: ${pathsToWatch.filter(Boolean).join(', ')}`,
-      );
+      logger.info(CHANNEL, 'Shared agent directory watcher enabled.');
     } catch (error) {
       logger.error(CHANNEL, `Error setting up file system watcher: ${error}`);
     }
@@ -119,7 +83,7 @@ export class WatcherManager {
     this.disposed = true;
     this.validationHandles.forEach((h) => clearTimeout(h));
     this.validationHandles = [];
-    this.disposables.forEach((d) => d.dispose());
-    this.disposables = [];
+    this.agentWatcher?.dispose();
+    this.agentWatcher = undefined;
   }
 }

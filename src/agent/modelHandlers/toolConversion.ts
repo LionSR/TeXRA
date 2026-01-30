@@ -166,9 +166,7 @@ export function toAnthropicTools(
  * See: https://ai.google.dev/gemini-api/docs/live-tools
  */
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
-  if (defs.length === 0) {
-    return [];
-  }
+  if (defs.length === 0) return [];
 
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,

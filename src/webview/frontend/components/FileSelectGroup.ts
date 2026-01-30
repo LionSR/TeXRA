@@ -17,6 +17,7 @@ import { SortableController } from '@shared/controllers';
 import { codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
+import { SESSION_DEFAULTS } from '../sessionDefaults';
 import {
   fileStateContext,
   type FileStateContextValue,
@@ -82,20 +83,13 @@ export class FileSelectGroup extends LitElement {
   }
 
   private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    const isAutoExtract = type === 'autoExtract';
-    const wasOpen = isAutoExtract
-      ? this.autoExtractMenuOpen
-      : this.toolConfigMenuOpen;
+    const wasOpen =
+      type === 'autoExtract'
+        ? this.autoExtractMenuOpen
+        : this.toolConfigMenuOpen;
     // Close both menus first, then toggle the requested one
-    this.autoExtractMenuOpen = false;
-    this.toolConfigMenuOpen = false;
-    if (!wasOpen) {
-      if (isAutoExtract) {
-        this.autoExtractMenuOpen = true;
-      } else {
-        this.toolConfigMenuOpen = true;
-      }
-    }
+    this.autoExtractMenuOpen = type === 'autoExtract' && !wasOpen;
+    this.toolConfigMenuOpen = type === 'toolConfig' && !wasOpen;
   }
 
   private handleFileChange(value: string): void {
@@ -192,20 +186,20 @@ export class FileSelectGroup extends LitElement {
     return this.fileState?.multiFilesVisible[key] ?? false;
   }
 
-  private get isToolUseSession(): boolean {
-    return this.fileState?.sessionType === SESSION_TYPES.TOOL_USE;
+  private get isFileInputDisabled(): boolean {
+    const sessionType = this.fileState?.sessionType ?? SESSION_TYPES.WORKFLOW;
+    return !SESSION_DEFAULTS[sessionType].fileInputEnabled;
   }
 
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
     // Check both light DOM and shadow DOM for focus containment
     const containsFocus =
-      nextTarget &&
+      nextTarget !== null &&
       (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
-    if (!containsFocus) {
-      this.autoExtractMenuOpen = false;
-      this.toolConfigMenuOpen = false;
-    }
+    if (containsFocus) return;
+    this.autoExtractMenuOpen = false;
+    this.toolConfigMenuOpen = false;
   }
 
   private renderFileOptions(): TemplateResult {
@@ -262,7 +256,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachTeXCount"
               ?checked=${this.currentCheckboxValues.attachTeXCount}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachTeXCount',
@@ -274,7 +268,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachDiagnostics"
               ?checked=${this.currentCheckboxValues.attachDiagnostics}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachDiagnostics',

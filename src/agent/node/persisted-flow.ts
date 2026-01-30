@@ -69,10 +69,8 @@ export class PersistedFlow<
   }
 
   /**
-   * Serialize shared state for storage using structuredClone.
-   * Shared state must be plain JSON (no class instances).
-   *
-   * Note: Cast is safe because structuredClone produces plain JSON.
+   * Deep clone shared state for storage.
+   * Shared state should be serializable (no class instances, functions, or symbols).
    */
   protected serializeShared(shared: S): Record<string, unknown> {
     return structuredClone(shared) as Record<string, unknown>;

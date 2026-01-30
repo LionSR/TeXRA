@@ -79,6 +79,20 @@ export async function updateConfig<T>(
 }
 
 /**
+ * Checks if a configuration setting has been explicitly set by the user
+ * (global, workspace, or workspace folder), rather than using defaults.
+ */
+export function isConfigExplicitlySet(key: string): boolean {
+  const inspection = vscode.workspace.getConfiguration().inspect(key);
+  if (!inspection) return false;
+  return (
+    inspection.globalValue !== undefined ||
+    inspection.workspaceValue !== undefined ||
+    inspection.workspaceFolderValue !== undefined
+  );
+}
+
+/**
  * Register a listener for configuration changes on the given keys.
  *
  * @param context Extension context used to dispose the listener

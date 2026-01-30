@@ -19,8 +19,7 @@ export function traceFileLineage(
 ): RoundFileMapping {
   const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
   const prevOutputs =
-    (currRound > 0 ? state.rounds.get(currRound - 1)?.outputs : undefined) ??
-    [];
+    currRound > 0 ? (state.rounds.get(currRound - 1)?.outputs ?? []) : [];
 
   const lineageCalculator = new FileLineageCalculator(baseFiles);
   return lineageCalculator.calculateMapping(currentOutputs, prevOutputs);

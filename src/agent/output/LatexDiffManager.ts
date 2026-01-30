@@ -78,11 +78,7 @@ export class LatexDiffManager {
   private async ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!targetLocation) {
-      return;
-    }
-
-    if (!(await flexibleFS.exists(targetLocation))) {
+    if (!targetLocation || !(await flexibleFS.exists(targetLocation))) {
       return;
     }
 

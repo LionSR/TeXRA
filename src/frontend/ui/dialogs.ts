@@ -85,17 +85,12 @@ export interface FileSelectionResult {
 export async function selectFileFromWorkspace(
   options: FileDialogOptions,
 ): Promise<FileSelectionResult | null> {
-  if (!WorkspaceFS.getPath()) {
-    vscode.window.showErrorMessage('No workspace folder open');
-    return null;
-  }
-
+  // selectFile handles workspace check internally via computeDefaultUri
   const relativePath = await selectFile(options);
+  if (!relativePath) return null;
 
-  if (!relativePath) {
-    return null;
-  }
-
-  const absolutePath = WorkspaceFS.fullPath(relativePath);
-  return { relativePath, absolutePath };
+  return {
+    relativePath,
+    absolutePath: WorkspaceFS.fullPath(relativePath),
+  };
 }

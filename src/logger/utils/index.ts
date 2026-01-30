@@ -7,6 +7,8 @@ const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   [LOG_LEVELS.DEBUG]: '🔍',
 };
 
-export function getColorForLevel(level: string): string {
-  return EMOJI_BY_LEVEL[level.toLowerCase() as LogLevel] ?? '•';
+const DEFAULT_EMOJI = '•';
+
+export function getColorForLevel(level: LogLevel): string {
+  return EMOJI_BY_LEVEL[level] ?? DEFAULT_EMOJI;
 }

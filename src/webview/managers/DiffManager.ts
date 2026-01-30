@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import { mainViewMessages } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { fetchRecentCommits } from '@frontend/git/recentCommits';
 import * as logger from '@logger/logUtils';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
@@ -13,53 +14,69 @@ export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   handleLatexdiff(message: unknown): void {
-    const parsed = mainViewMessages.LatexdiffMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiff message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffMessageSchema,
+      message,
+      'latexdiff',
+    );
+    if (!data) return;
     void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.editedFile,
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.editedFile,
     );
   }
 
   handleLatexdiffvc(message: unknown): void {
-    const parsed = mainViewMessages.LatexdiffvcMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiffvc message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffvcMessageSchema,
+      message,
+      'latexdiffvc',
+    );
+    if (!data) return;
     void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.commitHash,
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.commitHash,
     );
   }
 
   handleLatexdiffvcOperation(message: unknown): void {
-    const parsed =
-      mainViewMessages.LatexdiffvcOperationMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiffvc operation message', {
-        data: parsed.error,
-      });
-      return;
-    }
-    void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.commitHash,
-      parsed.data.clean,
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffvcOperationMessageSchema,
+      message,
+      'latexdiffvc operation',
     );
+    if (!data) return;
+    void vscode.commands.executeCommand(
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.commitHash,
+      data.clean,
+    );
+  }
+
+  /** Parse message with schema, logging warning on failure */
+  private parseMessage<T>(
+    schema: {
+      safeParse: (
+        data: unknown,
+      ) => { success: true; data: T } | { success: false; error: unknown };
+    },
+    message: unknown,
+    context: string,
+  ): T | null {
+    const result = schema.safeParse(message);
+    if (!result.success) {
+      logger.warn(CHANNEL, `Invalid ${context} message`, {
+        data: result.error,
+      });
+      return null;
+    }
+    return result.data;
   }
 
   async handleRequestRecentCommits(message: unknown): Promise<void> {
@@ -72,37 +89,18 @@ export class DiffManager extends BaseWebviewManager {
       return;
     }
 
-    const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
-      : [];
-
-    const shouldNotify =
-      parsed.data.notifyWhenEmpty && (commits.length === 0 || !isGitRepo);
-    if (shouldNotify) {
-      const infoMessage = isGitRepo
-        ? 'No recent commits found for this repository.'
-        : 'This workspace is not a Git repository.';
-      logger.info(CHANNEL, infoMessage);
-      vscode.window.showInformationMessage(infoMessage);
-    }
-
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits,
-      isGitRepo: Boolean(isGitRepo),
-    });
+    // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
+    await this.postRecentCommits(parsed.data.notifyWhenEmpty ?? undefined);
   }
 
   async handleRefreshCommits(): Promise<void> {
-    const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
-      : [];
+    await this.postRecentCommits();
+  }
+
+  private async postRecentCommits(notifyWhenEmpty?: boolean): Promise<void> {
+    const { commits, isGitRepo } = await fetchRecentCommits({
+      notifyWhenEmpty,
+    });
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,

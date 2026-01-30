@@ -45,16 +45,24 @@ export function resolveVisibleModel(model: string): string {
   return visibleModels[0];
 }
 
+/** Context window formatting thresholds */
+const MILLION = 1_000_000;
+const THOUSAND = 1_000;
+
 /** Format context window number for display. */
-function formatContext(context: number): string {
-  if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`;
-  if (context >= 1000) return `${Math.round(context / 1000)}K`;
+function formatContext(context: number | undefined): string | undefined {
+  if (context === undefined) return undefined;
+  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
+  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
   return context.toString();
 }
 
 /** Format cost values for display. */
-function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (inputPrice === undefined || outputPrice === undefined) return '';
+function formatCost(
+  inputPrice: number | undefined,
+  outputPrice: number | undefined,
+): string | undefined {
+  if (inputPrice === undefined || outputPrice === undefined) return undefined;
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
@@ -128,11 +136,8 @@ async function buildModelOptionData(
   }
 
   const available = await isModelAvailable(model, config, ctx);
-  const contextStr = config.contextWindow
-    ? formatContext(config.contextWindow)
-    : undefined;
-  const costStr =
-    formatCost(config.inputPrice, config.outputPrice) || undefined;
+  const contextStr = formatContext(config.contextWindow);
+  const costStr = formatCost(config.inputPrice, config.outputPrice);
 
   return {
     value: model,
