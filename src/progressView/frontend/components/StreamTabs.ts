@@ -326,7 +326,9 @@ export class StreamTabs extends LitElement {
           </div>
           <div class="tab-meta">
             <span class="last-active"
-              >${formatRelativeTime(stream.lastTimestamp ?? 0)}</span
+              >${stream.lastTimestamp
+                ? formatRelativeTime(stream.lastTimestamp)
+                : ''}</span
             >
             <span class="model">${stream.model ?? ''}</span>
             <i
@@ -426,8 +428,6 @@ export class StreamTabs extends LitElement {
   }
 
   private normalizeStatus(status?: string): string {
-    return !status || status === STREAM_STATUS.READY
-      ? STREAM_STATUS.STOPPED
-      : status;
+    return status ?? STREAM_STATUS.READY;
   }
 }
