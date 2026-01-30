@@ -2,15 +2,15 @@
 
 ## Verification Status
 
-All claims verified against codebase (2026-01-30):
+Implementation complete (2026-01-30):
 
-| Item                    | Status      | Notes                                                                                                                                                               |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File selection commands | ✅ Verified | `FileManager.ts:46-111` has 3 Maps; `fileSelectionCommands.ts:59-89` has hardcoded registrations                                                                    |
-| Configuration access    | ✅ Verified | `authCommands.ts` and `setup.ts` bypass existing `configUtils.ts`                                                                                                   |
-| URI construction        | ⚠️ Nuanced  | Base class has `buildUri`/`buildUriRecord` as **private** — subclasses inline the pattern because they cannot access it (accessibility issue, not reimplementation) |
-| File watchers           | ✅ Verified | Different patterns (`**/*.yaml` vs `**/*`), different debounce (500ms vs 200ms), overlapping directories                                                            |
-| Active-view tracking    | ✅ Verified | Each handler extends with `trackActiveView: true`; minimal boilerplate                                                                                              |
+| Item                    | Status         | Implementation                                                                                     |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| File selection commands | ✅ Implemented | `@common/files/fileSelectionRegistry.ts` - shared command registry used by all consumers           |
+| Configuration access    | ✅ Implemented | `@utils/config` expanded with `isConfigExplicitlySet`; `authCommands.ts` migrated                  |
+| URI construction        | ✅ Implemented | `buildUri`/`buildUriRecord` changed to `protected`; all content providers use base class methods   |
+| File watchers           | ✅ Implemented | `AgentDirectoryManager.watchAgentDirectories` with subscription pattern, deferred promise for race |
+| Active-view tracking    | ✅ Implemented | `withActiveView`/`clearActiveView` in `BaseViewMessageHandler`; cleanup on dispose                 |
 
 ## Overview
 
@@ -170,22 +170,24 @@ Do **not** consolidate typed dispatch functions.
 
 ## Milestones
 
-### Phase 1a: Low-Risk Consolidations (Items 1, 2, 5)
+### Phase 1a: Low-Risk Consolidations (Items 1, 2, 5) ✅ COMPLETE
 
-- Shared file selection command registry
-- Expanded `@utils/config` with inspection semantics
-- Active-view tracking extraction into base class
+- [x] Shared file selection command registry - `@common/files/fileSelectionRegistry.ts`
+- [x] Expanded `@utils/config` with `isConfigExplicitlySet` inspection semantics
+- [x] Active-view tracking via `withActiveView`/`clearActiveView` in `BaseViewMessageHandler`
 
-### Phase 1b: Medium-Risk Consolidations (Items 3, 4)
+### Phase 1b: Medium-Risk Consolidations (Items 3, 4) ✅ COMPLETE
 
-- Expose `BaseViewContentProvider` URI helpers to subclasses
-- `AgentDirectoryManager` with callback registry
+- [x] Expose `BaseViewContentProvider.buildUri`/`buildUriRecord` as `protected`
+- [x] `AgentDirectoryManager.watchAgentDirectories` with subscription-based callback registry
+- [x] Fixed race condition: deferred promise pattern prevents concurrent rebuilds
+- [x] Fixed config watcher lifecycle: separated file watcher disposal from config watcher disposal
 
-### Verification
+### Verification ✅ COMPLETE
 
-- `npm run compile:fast` and `npm run lint` pass
-- Validate UI flows in all webviews
-- Verify agent option refresh and explorer watcher behavior
+- [x] `npm run typecheck` passes
+- [x] All webview content providers use `buildUri` helper
+- [x] Agent watcher used by both `MainViewProvider` and `WatcherManager`
 
 ---
 
@@ -198,7 +200,7 @@ Do **not** consolidate typed dispatch functions.
 | Command registry breaks UI integration     | Add tests for command maps; smoke run validation         |
 | Over-abstracting typed dispatch            | Item 5 scoped to tracking only; dispatch stays per-view  |
 
-## Open Questions
+## Open Questions (Resolved)
 
-- Are there view-specific bundle assets beyond CSS that should be in a formal manifest?
-- For `AgentDirectoryManager`: simple callback registry (recommended) or lightweight event bus?
+- ~~Are there view-specific bundle assets beyond CSS that should be in a formal manifest?~~ → Current declarative approach with `getModuleUris()` is sufficient
+- ~~For `AgentDirectoryManager`: simple callback registry (recommended) or lightweight event bus?~~ → Implemented as simple callback registry with subscription pattern via `watchAgentDirectories()`

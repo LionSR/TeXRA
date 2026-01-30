@@ -6,7 +6,6 @@ import {
 } from '@shared/schemas/toolConfig';
 import type { AgentConfigInput } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { buildFileOperationPayload } from '@common/files';
 import { validateExecutionRequest } from '@common/execution/executionRequests';
 import * as logger from '@logger/logUtils';
 import {
@@ -130,46 +129,29 @@ export class ExecutionManager {
   }
 
   handleSingleOperation(message: CommandMessage): void {
-    const payload = buildFileOperationPayload({
-      kind: 'mainView',
-      data: {
-        inputFile: message.inputFile,
-        agent: message.agent,
-        model: message.model,
-      },
-    });
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
-      payload.inputFile,
-      payload.agent,
-      payload.model,
+      message.inputFile,
+      message.agent,
+      message.model,
     );
   }
 
   handleMultipleOperation(message: CommandMessage): void {
-    const payload = buildFileOperationPayload({
-      kind: 'mainView',
-      data: {
-        inputFile: message.inputFile,
-        agent: message.agent,
-        model: message.model,
-        outputFiles: message.outputFiles,
-      },
-    });
+    const outputFiles = message.outputFiles ?? [];
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
-    const files = payload.outputFiles.join(', ');
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,
     );
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
-      payload.inputFile,
-      payload.agent,
-      payload.model,
-      payload.outputFiles,
+      message.inputFile,
+      message.agent,
+      message.model,
+      outputFiles,
     );
   }
 }
