@@ -5,12 +5,12 @@
 
 ## Overview
 
-This PRD documents **17 additional UI or logic regressions** identified during a follow-up audit.
+This PRD documents **20 additional UI or logic regressions** identified during a follow-up audit.
 These items are **not covered** in the existing regression audit document.
 The focus is on **missing or degraded UI behavior, incorrect state transitions, and logic regressions**
 across MainView, ProgressView, HistoryView, ProfileView, and shared state handling.
 
-> **Status: 🟢 ALL FIXED (2026-01-30)** - All real issues have been fixed and pushed
+> **Status: 🟡 IN PROGRESS (2026-01-30)** - NEW-7/8/9 fixes pending commit
 
 ### Baseline for comparison
 
@@ -269,6 +269,67 @@ for verification.
 - **Status:** ✅ **FIXED** - Changed from `--vscode-errorForeground` (red) to `--vscode-icon-foreground` with hover effect
 - **Location:** `src/webview/frontend/styles/fileSelectStyles.ts:168-176`
 - **Commit:** `61fd61638`
+
+### NEW-7) UPDATE\_\*\_FILES schema missing files field (CRITICAL) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Critical (file updates rejected by backend)
+- **Status:** ✅ **FIXED** - Added `files: z.array(z.string())` to all UPDATE\_\*\_FILES schemas
+- **Root cause:** Schema only had `command` and `fileType` fields, but frontend sends `files` array
+- **Symptom:** `Unknown command: updateInputFiles` and validation errors in logs
+- **Location:** `src/shared/schemas/mainView.ts:755-779`
+
+### NEW-8) updateMultiFiles missing fileType field (CRITICAL) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Critical (file updates rejected by backend)
+- **Status:** ✅ **FIXED** - Added `fileType` to message payload
+- **Root cause:** Frontend sent `{ files }` but schema expected `{ fileType, files }`
+- **Location:** `src/webview/frontend/MainApp.ts:525-534`
+
+### NEW-9) Output files reordering not working (MEDIUM) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** UI regression
+- **Impact:** Medium (can't drag-and-drop to reorder output files)
+- **Status:** ✅ **FIXED** - Added `updated()` lifecycle to reinitialize Sortable when list becomes visible
+- **Root cause:** When output list is conditionally rendered with `when()`, the DOM element is destroyed and recreated, but SortableController's `this.sortable` was still set from the old element, so it never reinitialized
+- **Location:** `src/webview/frontend/components/OutputFilesSection.ts:75-82`
+
+---
+
+---
+
+## PR Review Bot Comments Analysis (2026-01-30)
+
+Three review comments were left by automated bots. Investigation results:
+
+### BOT-1) Codicon font exclusion breaks icons (cursor[bot]) ✅ FALSE POSITIVE
+
+- **Claim:** The pattern `**/codicon.ttf` in `.vscodeignore:42` excludes the font, breaking all icons
+- **Status:** ✅ **FALSE POSITIVE** - Verified by inspecting `releases/texra-0.35.8.vsix`:
+  - The font IS included at `extension/node_modules/@vscode/codicons/dist/codicon.ttf`
+  - The negation pattern `!node_modules/@vscode/codicons/dist/**` takes precedence
+  - All webviews load the font correctly via VS Code webview URI
+- **No action needed**
+
+### BOT-2) Unused vscodeignore pattern (cursor[bot]) ✅ FALSE POSITIVE
+
+- **Claim:** Pattern `!src/shared/styles/*.css` matches no files since directory only has `.ts` files
+- **Status:** ✅ **FALSE POSITIVE** - The directory contains `src/shared/styles/tokens.css`
+- **No action needed**
+
+### BOT-3) Pre-run instruction storage under 'default' key (chatgpt-codex-connector[bot]) ⚠️ LOW RISK
+
+- **Claim:** Instructions stored under `'default'` key when runId is null won't migrate when a real runId arrives
+- **Location:** `src/progressView/frontend/messageDispatcher.ts:394`
+- **Status:** ⚠️ **LOW RISK** - Technically valid concern, but:
+  - Backend at `ProgressEventHandler.ts:272-277` always passes `runId` when sending instruction updates
+  - Instructions are only sent when there's an active run context (`taskState` exists)
+  - The `'default'` fallback is defensive and unlikely to be triggered in practice
+- **Recommendation:** Monitor for issues. If users report missing instructions, add migration logic to `ADD_TASK_GROUP` handler.
 
 ---
 
