@@ -337,9 +337,10 @@ export class AgentDirectoryManager {
         .join(', ')}`,
     );
 
-    // Signal completion and clear the promise
-    this.watcherSetupPromise = null;
+    // Signal completion then clear the promise
+    // Order matters: resolve first so waiters see directories set before promise clears
     resolveSetup!();
+    this.watcherSetupPromise = null;
   }
 
   private dispatchAgentEvent(
