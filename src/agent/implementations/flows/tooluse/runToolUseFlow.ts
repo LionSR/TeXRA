@@ -104,6 +104,13 @@ export async function runToolUseFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
+  // Declare shared outside try block so it's accessible in finally for cleanup decisions
+  const shared: ToolUseRunShared = {
+    conversation: [],
+    shouldSkipCycle: false,
+    stateSlices: null,
+  };
+
   try {
     registerInterruptible(streamId, flowContext);
     onSetup?.(flowContext as ToolUseFlowContext<unknown>);
@@ -132,12 +139,6 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    const shared: ToolUseRunShared = {
-      conversation: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
-
     const startNode = createToolUseFlow<C>().start;
     const pf = new PersistedFlow<
       ToolUseRunShared,
@@ -153,24 +154,16 @@ export async function runToolUseFlow<C = unknown>(
     throw error;
   } finally {
     // Preserve flow record if user cancelled retry (for resume), otherwise delete
-    try {
-      const kv = getExecutionStore(executionId);
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      const migrationResult = flowRecord?.shared
-        ? migrateSharedState(flowRecord.shared)
-        : null;
-      const userCancelledRetry =
-        migrationResult?.data?.userCancelledRetry === true;
-
-      if (userCancelledRetry) {
-        logger.debug(
-          'Flow record preserved for resume after retry cancellation',
-        );
-      } else {
+    // Use the local shared object directly - it's updated in place during pf.run()
+    if (shared.userCancelledRetry) {
+      logger.debug('Flow record preserved for resume after retry cancellation');
+    } else {
+      try {
+        const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
+      } catch {
+        // Ignore cleanup errors
       }
-    } catch {
-      // Ignore cleanup errors
     }
 
     flowContext.dispose();
