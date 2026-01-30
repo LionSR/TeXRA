@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
+import { codiconStyles } from '@shared/styles';
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 import { MainViewEvents } from '../events';
 
@@ -24,122 +25,125 @@ import type {
 
 @customElement('banner-group')
 export class BannerGroup extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
+  static override styles = [
+    codiconStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .api-key-banner,
-    .agent-config-banner,
-    .dependency-banner,
-    .getting-started-banner {
-      border-radius: var(--border-radius);
-      padding: var(--spacing-small) var(--spacing-medium);
-      margin-bottom: var(--spacing-large);
-    }
+      .api-key-banner,
+      .agent-config-banner,
+      .dependency-banner,
+      .getting-started-banner {
+        border-radius: var(--border-radius);
+        padding: var(--spacing-small) var(--spacing-medium);
+        margin-bottom: var(--spacing-large);
+      }
 
-    .api-key-banner,
-    .agent-config-banner,
-    .dependency-banner {
-      background-color: var(--vscode-inputValidation-warningBackground);
-      color: var(--vscode-inputValidation-warningForeground);
-      border: 1px solid var(--vscode-inputValidation-warningBorder);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+      .api-key-banner,
+      .agent-config-banner,
+      .dependency-banner {
+        background-color: var(--vscode-inputValidation-warningBackground);
+        color: var(--vscode-inputValidation-warningForeground);
+        border: 1px solid var(--vscode-inputValidation-warningBorder);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-    .getting-started-banner {
-      background-color: var(--vscode-inputValidation-infoBackground);
-      color: var(--vscode-inputValidation-infoForeground);
-      border: 1px solid var(--vscode-inputValidation-infoBorder);
-      line-height: 1.5;
-    }
+      .getting-started-banner {
+        background-color: var(--vscode-inputValidation-infoBackground);
+        color: var(--vscode-inputValidation-infoForeground);
+        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        line-height: 1.5;
+      }
 
-    .getting-started-banner a {
-      color: var(--color-text-link);
-      text-decoration: none;
-    }
+      .getting-started-banner a {
+        color: var(--color-text-link);
+        text-decoration: none;
+      }
 
-    .getting-started-banner a:hover {
-      text-decoration: underline;
-    }
+      .getting-started-banner a:hover {
+        text-decoration: underline;
+      }
 
-    .actions {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-small);
-    }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
 
-    .dependency-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--spacing-small);
-    }
+      .dependency-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-small);
+      }
 
-    .missing-tools {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-tiny);
-    }
+      .missing-tools {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
 
-    .login-banner {
-      background: linear-gradient(
-        135deg,
-        var(--vscode-inputValidation-infoBackground) 0%,
-        color-mix(
-            in srgb,
-            var(--vscode-inputValidation-infoBackground) 80%,
-            var(--vscode-button-background)
-          )
-          100%
-      );
-      color: var(--vscode-inputValidation-infoForeground);
-      border: 1px solid var(--vscode-inputValidation-infoBorder);
-      border-radius: var(--border-radius);
-      padding: var(--spacing-medium);
-      margin-bottom: var(--spacing-large);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: var(--spacing-medium);
-    }
+      .login-banner {
+        background: linear-gradient(
+          135deg,
+          var(--vscode-inputValidation-infoBackground) 0%,
+          color-mix(
+              in srgb,
+              var(--vscode-inputValidation-infoBackground) 80%,
+              var(--vscode-button-background)
+            )
+            100%
+        );
+        color: var(--vscode-inputValidation-infoForeground);
+        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        border-radius: var(--border-radius);
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-large);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
 
-    .login-banner-content {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-medium);
-      flex: 1;
-    }
+      .login-banner-content {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+        flex: 1;
+      }
 
-    .login-banner-icon {
-      font-size: 1.5em;
-      color: var(--vscode-button-background);
-      display: flex;
-      align-items: center;
-    }
+      .login-banner-icon {
+        font-size: 1.5em;
+        color: var(--vscode-button-background);
+        display: flex;
+        align-items: center;
+      }
 
-    .login-banner-text {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-tiny);
-    }
+      .login-banner-text {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
 
-    .login-banner-title {
-      font-weight: 600;
-      font-size: 1em;
-    }
+      .login-banner-title {
+        font-weight: 600;
+        font-size: 1em;
+      }
 
-    .login-banner-description {
-      font-size: 0.9em;
-      opacity: 0.9;
-    }
+      .login-banner-description {
+        font-size: 0.9em;
+        opacity: 0.9;
+      }
 
-    .login-banner .actions {
-      flex-shrink: 0;
-    }
-  `;
+      .login-banner .actions {
+        flex-shrink: 0;
+      }
+    `,
+  ];
 
   /** API key banner state */
   @property({ type: Object }) apiKeyBanner: ApiKeyBannerState = {

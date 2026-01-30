@@ -66,7 +66,7 @@ Five high-impact dual paths to refactor:
 ### Design Principle: Prefer Helpers Over Wrappers
 
 Per CLAUDE.md guidelines, avoid unnecessary abstraction layers. Each proposal below should result in
-shared *helper functions* rather than coordinator/dispatcher classes unless the shared logic is
+shared _helper functions_ rather than coordinator/dispatcher classes unless the shared logic is
 substantial enough to justify a class. If a proposed abstraction would only forward calls, inline it.
 
 ### 1) Shared Execution Helpers
