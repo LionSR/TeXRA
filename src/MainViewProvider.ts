@@ -18,12 +18,7 @@ import { consumePendingState } from '@common/state';
 // Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import {
-  watchConfig,
-  getConfig,
-  DEBOUNCE_OPTIONS_MS,
-  DEBOUNCE_STATE_SAVE_MS,
-} from '@utils/config';
+import { watchConfig, getConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 import { getServerSideKeyService } from '@/auth/serverKeys';
@@ -88,7 +83,7 @@ export class MainViewProvider
     // Watch for agent configuration changes - only refresh agent options
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.toolUseAgents'],
+      ['texra.agents', 'texra.toolUseAgents', 'texra.explorer.agentsDirectory'],
       this.debouncedRefreshAgentOptions,
     );
 
@@ -192,9 +187,8 @@ export class MainViewProvider
   private setupAgentWatcher() {
     this.agentWatcher = agentDirectories.watchAgentDirectories({
       pattern: '**/*.yaml',
-      debounceMs: DEBOUNCE_STATE_SAVE_MS,
       onEvent: () => {
-        void this.refreshAgentOptions();
+        this.debouncedRefreshAgentOptions();
       },
     });
 

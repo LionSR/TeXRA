@@ -1,11 +1,11 @@
 // Local imports - logger state
 import type { WorkflowTaskState } from '@logger/TaskState';
 
-// Local imports - shared schemas
-import type { StreamTabId } from '@shared/schemas';
-
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
+
+// Local imports - shared schemas
+import type { StreamTabId } from '@shared/schemas';
 
 export type FileOperation = 'pack' | 'clean';
 
@@ -38,7 +38,6 @@ export interface FileOperationPayload {
 
 export function buildFileOperationPayload(
   input: FileOperationInput,
-  _operation: FileOperation,
 ): FileOperationPayload {
   if (input.kind === 'mainView') {
     const outputFiles = input.data.outputFiles ?? [];

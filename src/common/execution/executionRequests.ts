@@ -22,15 +22,6 @@ export type ExecutionValidationResult =
   | { valid: true; request: ValidatedExecutionRequest }
   | { valid: false; message: string; issue?: z.ZodIssue };
 
-export function buildExecutionRequest(
-  params: ExecutionRequest,
-): ExecutionRequest {
-  return {
-    config: params.config,
-    executionId: params.executionId,
-  };
-}
-
 export function validateExecutionRequest(
   request: ExecutionRequest,
 ): ExecutionValidationResult {
