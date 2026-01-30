@@ -693,10 +693,9 @@ export async function handleProgressViewToolEditApprovalAction(
     }
 
     case 'reject': {
-      const userMessage = payload.feedback?.trim();
       entry.settle({
         accepted: false,
-        userMessage: userMessage || undefined,
+        userMessage: payload.feedback?.trim() || undefined,
       });
       break;
     }

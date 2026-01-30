@@ -250,7 +250,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Pass a block to set it as the cache target, or undefined/null to clear.
    */
   private updateCacheControlTarget(
-    block: CacheControlEligibleBlock | undefined | null,
+    block: CacheControlEligibleBlock | null | undefined,
   ): void {
     // Clear existing cache_control if switching to different block
     if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
@@ -377,7 +377,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
       this.updateCacheControlTarget(target);
-    } else if (Array.isArray(content) && content.length > 0) {
+    } else if (content?.length) {
       this.logger.debug(
         'No eligible content block available for Anthropic cache control marker',
       );

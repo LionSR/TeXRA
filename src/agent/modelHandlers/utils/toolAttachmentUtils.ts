@@ -166,10 +166,8 @@ export function describeAttachments(
   attachments: ToolFileAttachment[],
 ): string[] {
   return attachments.map((file) => {
-    const filePath = isNonEmptyString(file.path) ? file.path : 'attachment';
-    const mimeType = isNonEmptyString(file.mimeType)
-      ? file.mimeType
-      : DEFAULT_ATTACHMENT_MIME_TYPE;
+    const filePath = file.path || 'attachment';
+    const mimeType = file.mimeType || DEFAULT_ATTACHMENT_MIME_TYPE;
     return `- ${filePath} (${mimeType})`;
   });
 }
@@ -225,11 +223,15 @@ export function formatAttachmentSummaryFromNotes(
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {
-  if (attachment.bytes?.length) return Buffer.from(attachment.bytes);
-  if (attachment.base64Data?.length)
+  if (attachment.bytes?.length) {
+    return Buffer.from(attachment.bytes);
+  }
+  if (attachment.base64Data?.length) {
     return Buffer.from(attachment.base64Data, 'base64');
-  if (attachment.path?.length) return WorkspaceFS.readBytes(attachment.path);
-
+  }
+  if (attachment.path?.length) {
+    return WorkspaceFS.readBytes(attachment.path);
+  }
   throw new Error('Attachment did not include bytes, base64 data, or a path.');
 }
 

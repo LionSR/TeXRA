@@ -42,24 +42,21 @@ const CleanConfigSchema = CleanParamsSchema.extend({
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  const status = result.status;
-  const isError = status === 'missingParams' || status === 'error';
-
-  let message: string;
-  if (status === 'success') {
-    message = `Cleanup complete for ${inputFile}`;
-  } else if (status === 'noFiles') {
-    message = `No files found to clean for ${inputFile}`;
-  } else if (status === 'missingParams') {
-    message = 'Missing required parameters for clean';
-  } else {
-    message = `Error during cleanup: ${result.error}`;
-  }
-
-  if (isError) {
-    vscode.window.showErrorMessage(message);
-  } else {
-    vscode.window.showInformationMessage(message);
+  switch (result.status) {
+    case 'success':
+      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to clean for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for clean');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      break;
   }
 }
 

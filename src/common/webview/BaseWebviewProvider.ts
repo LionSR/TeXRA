@@ -29,6 +29,7 @@ export abstract class BaseWebviewProvider {
       message: unknown,
       webviewView: vscode.WebviewView | vscode.WebviewPanel,
     ): Promise<void> | void;
+    clearActiveView?(): void;
   };
 
   constructor(protected readonly context: vscode.ExtensionContext) {}
@@ -115,6 +116,7 @@ export abstract class BaseWebviewProvider {
     this._viewDisposables.forEach((d) => d.dispose());
     this._viewDisposables = [];
     this._view = undefined;
+    this.messageHandler.clearActiveView?.();
   }
 
   public dispose(): void {

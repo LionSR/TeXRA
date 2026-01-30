@@ -15,14 +15,11 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      mainViewBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'webview',
-          'bundle.js',
-        ),
-      ),
+      mainViewBundleUri: this.buildUri(webview, [
+        'dist',
+        'webview',
+        'bundle.js',
+      ]),
     };
   }
 }

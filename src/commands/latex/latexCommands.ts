@@ -154,43 +154,34 @@ async function handleGetTeXCount(): Promise<void> {
               channel: CHANNEL,
             });
 
-            if (output) {
-              // Extract key statistics using regex
-              const wordMatch = output.match(/Words in text:\s*(\d+)/);
-              const headerMatch = output.match(/Words in headers:\s*(\d+)/);
-              const captionMatch = output.match(
-                /Words in float captions:\s*(\d+)/,
-              );
-              const mathInlineMatch = output.match(
-                /Number of inline math:\s*(\d+)/,
-              );
-              const mathDisplayMatch = output.match(
-                /Number of displayed math:\s*(\d+)/,
-              );
-
-              const stats = [
-                wordMatch ? `Text: ${wordMatch[1]} words` : null,
-                headerMatch ? `Headers: ${headerMatch[1]}` : null,
-                captionMatch ? `Captions: ${captionMatch[1]}` : null,
-                mathInlineMatch ? `Inline math: ${mathInlineMatch[1]}` : null,
-                mathDisplayMatch
-                  ? `Display math: ${mathDisplayMatch[1]}`
-                  : null,
-              ]
-                .filter((item): item is string => item !== null)
-                .map((label) => ({ label }));
-
-              // Show results in QuickPick
-              await vscode.window.showQuickPick(stats, {
-                placeHolder: 'TeXCount Results (press Esc to dismiss)',
-                canPickMany: false,
-              });
-            } else {
+            if (!output) {
               const message =
                 errors[0] ??
                 'Failed to get tex count. Please verify the file path.';
               await showLoggedMessage(CHANNEL, message);
+              return;
             }
+
+            // Extract key statistics using regex patterns
+            const patterns: [RegExp, string][] = [
+              [/Words in text:\s*(\d+)/, 'Text: $1 words'],
+              [/Words in headers:\s*(\d+)/, 'Headers: $1'],
+              [/Words in float captions:\s*(\d+)/, 'Captions: $1'],
+              [/Number of inline math:\s*(\d+)/, 'Inline math: $1'],
+              [/Number of displayed math:\s*(\d+)/, 'Display math: $1'],
+            ];
+
+            const stats = patterns
+              .map(([pattern, template]) => {
+                const match = output.match(pattern);
+                return match ? { label: template.replace('$1', match[1]) } : null;
+              })
+              .filter((item): item is { label: string } => item !== null);
+
+            await vscode.window.showQuickPick(stats, {
+              placeHolder: 'TeXCount Results (press Esc to dismiss)',
+              canPickMany: false,
+            });
           },
         );
       },

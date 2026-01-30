@@ -1,46 +1,35 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports - shared schemas
+import { sortStreams } from '@shared/streams/streamSort';
+
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter } from '@shared/schemas';
+import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from '@shared/schemas';
-
-const sortComparators: Record<
-  string,
-  (a: StreamTabInfo, b: StreamTabInfo) => number
-> = {
-  time: (a, b) =>
-    (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
-    (a.lastTimestamp ?? a.creationTimestamp ?? 0),
-  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
-};
 
 /**
  * Check if a session category matches the given filter.
- * Returns the category to use (defaulting to Workflow) or null if filtered out.
+ * Returns the resolved category (defaulting to Workflow) or null if filtered out.
  */
 function matchesFilter(
   category: AgentCategory | undefined,
   filter: AgentCategoryFilter,
 ): AgentCategory | null {
+  const resolved = category ?? AgentCategory.Workflow;
+
   if (filter === 'all') {
-    return category ?? AgentCategory.Workflow;
+    return resolved;
   }
 
-  if (!category) {
-    return null;
-  }
-
-  const expectedCategory =
+  const expected =
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 
-  return category === expectedCategory ? category : null;
+  return resolved === expected ? resolved : null;
 }
 
 /**
@@ -109,10 +98,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, statuses, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  const comparator = sortComparators[state.streamSortOrder];
-  if (comparator) {
-    infos.sort(comparator);
-  }
-
-  return infos;
+  return sortStreams(infos, state.streamSortOrder);
 }

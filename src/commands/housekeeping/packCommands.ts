@@ -43,46 +43,35 @@ const PackMultipleSchema = BasePackSchema.extend({
 
 // --- Helpers ---
 
-const PACK_RESULT_MESSAGES: Record<
-  Exclude<FileOpResult['status'], 'success'>,
-  { template: string; isError: boolean }
-> = {
-  noFiles: {
-    template: 'No files found to pack for {inputFile}',
-    isError: false,
-  },
-  missingParams: {
-    template: 'Missing required parameters for pack',
-    isError: true,
-  },
-  error: { template: 'Error during packing: {error}', isError: true },
-};
-
 function showPackResult(result: FileOpResult, inputFile: string): void {
-  if (result.status === 'success') {
-    const folder = result.outputFolder;
-    if (!folder) return;
-    vscode.window
-      .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-      .then((sel) => {
-        if (sel === 'Open Folder') {
-          void vscode.commands.executeCommand(
-            'revealFileInOS',
-            vscode.Uri.file(WorkspaceFS.fullPath(folder)),
-          );
-        }
-      });
-    return;
+  switch (result.status) {
+    case 'success': {
+      const folder = result.outputFolder;
+      if (!folder) return;
+      vscode.window
+        .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
+        .then((sel) => {
+          if (sel === 'Open Folder') {
+            void vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(WorkspaceFS.fullPath(folder)),
+            );
+          }
+        });
+      break;
+    }
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to pack for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for pack');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
+      break;
   }
-
-  const { template, isError } = PACK_RESULT_MESSAGES[result.status];
-  const text = template
-    .replace('{inputFile}', inputFile)
-    .replace('{error}', result.error ?? '');
-  const showMessage = isError
-    ? vscode.window.showErrorMessage
-    : vscode.window.showInformationMessage;
-  showMessage(text);
 }
 
 interface PackParams {

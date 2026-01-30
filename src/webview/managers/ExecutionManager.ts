@@ -1,18 +1,16 @@
 import * as vscode from 'vscode';
 
 import {
-  AgentConfigSchema,
-  type AgentConfigInput,
-} from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+import type { AgentConfigInput } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { validateExecutionRequest } from '@common/execution/executionRequests';
 import * as logger from '@logger/logUtils';
 import {
-  isPastedImage,
   getPastedImageFullPath,
+  isPastedImage,
 } from '@utils/files/pastedImageUtils';
 import { capitalize } from '@utils/text/stringUtils';
 import type { z } from 'zod';
@@ -85,35 +83,36 @@ export class ExecutionManager {
       : ToolConfigSchema.parse(message);
 
     // Schema provides defaults via .prefault(), we only override conditional fields
-    const parseResult = AgentConfigSchema.safeParse({
-      ...message,
-      agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-      outputFiles,
-      useMultipleOutputs:
-        !isToolUse &&
-        (Boolean(message.outputFilesActive) || outputFiles.length > 1),
-      toolConfig,
-      mediaFile: mapMedia(message.mediaFile ?? null),
-      mediaFiles: (message.mediaFiles ?? [])
-        .map(mapMedia)
-        .filter((f: string | null): f is string => f !== null),
-      editedFile: null,
-    });
+    const request = {
+      config: {
+        ...message,
+        agentCategory: isToolUse
+          ? AgentCategory.ToolUse
+          : AgentCategory.Workflow,
+        outputFiles,
+        useMultipleOutputs:
+          !isToolUse &&
+          (Boolean(message.outputFilesActive) || outputFiles.length > 1),
+        toolConfig,
+        mediaFile: mapMedia(message.mediaFile ?? null),
+        mediaFiles: (message.mediaFiles ?? [])
+          .map(mapMedia)
+          .filter((f: string | null): f is string => f !== null),
+        editedFile: null,
+      },
+    };
 
-    if (!parseResult.success) {
-      const issue = parseResult.error.issues[0];
-      const errorPath = issue?.path.join('.') || 'unknown';
-      vscode.window.showErrorMessage(
-        `Invalid configuration (${errorPath}): ${issue?.message ?? 'validation failed'}`,
-      );
+    const validation = validateExecutionRequest(request);
+    if (!validation.valid) {
+      vscode.window.showErrorMessage(validation.message);
       logger.error(
         CHANNEL,
-        `AgentConfig validation failed: ${parseResult.error.message}`,
+        `AgentConfig validation failed: ${validation.message}`,
       );
       return;
     }
 
-    await vscode.commands.executeCommand('texra.execute', parseResult.data);
+    await vscode.commands.executeCommand('texra.execute', validation.request);
   }
 
   handleFileOperation(message: CommandMessage): void {
@@ -139,20 +138,20 @@ export class ExecutionManager {
   }
 
   handleMultipleOperation(message: CommandMessage): void {
+    const outputFiles = message.outputFiles ?? [];
     const operation = message.command.startsWith('pack')
-      ? 'Packing'
-      : 'Cleaning';
-    const files = message.outputFiles?.join(', ') ?? '';
+      ? 'packing'
+      : 'cleaning';
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,
     );
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.agent,
       message.model,
-      message.outputFiles,
+      outputFiles,
     );
   }
 }
