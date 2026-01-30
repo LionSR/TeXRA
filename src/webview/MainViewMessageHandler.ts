@@ -112,19 +112,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           this.viewName,
         ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
-        if (m.customDirSet) {
-          const dir = await agentDirectories.custom();
-          if (dir) {
-            await vscode.commands.executeCommand(
-              'revealFileInOS',
-              vscode.Uri.file(dir),
-            );
-          }
-        } else {
+        if (!m.customDirSet) {
           await safeExecuteCommand(
             'workbench.action.openSettings',
             [SETTINGS_QUERY.AGENT_DIRECTORY],
             this.viewName,
+          );
+          return;
+        }
+        const dir = await agentDirectories.custom();
+        if (dir) {
+          await vscode.commands.executeCommand(
+            'revealFileInOS',
+            vscode.Uri.file(dir),
           );
         }
       },

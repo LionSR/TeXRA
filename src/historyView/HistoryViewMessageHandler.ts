@@ -29,18 +29,25 @@ type MessageFor<C extends HistoryViewInboundMessage['command']> = Extract<
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
-  private readonly handlerRegistry: HistoryViewInboundHandlerRegistry = {
-    [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () => this.handleGetHistoryData(),
-    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (data) => this.handleRerunAgent(data),
-    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
-      this.handleRestoreAgent(data),
-    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
-      this.handleDeleteAgent(data),
-    [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
-  };
+  private readonly handlerRegistry: HistoryViewInboundHandlerRegistry;
 
   constructor(_context: vscode.ExtensionContext) {
     super('HistoryView', { trackActiveView: true });
+    this.handlerRegistry = this.createHandlerRegistry();
+  }
+
+  private createHandlerRegistry(): HistoryViewInboundHandlerRegistry {
+    return {
+      [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
+        this.handleGetHistoryData(),
+      [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (data) =>
+        this.handleRerunAgent(data),
+      [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
+        this.handleRestoreAgent(data),
+      [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
+        this.handleDeleteAgent(data),
+      [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
+    };
   }
 
   public override async handleMessage(

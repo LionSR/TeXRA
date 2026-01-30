@@ -37,5 +37,5 @@ export function sortStreams(
   streams: StreamTabInfo[],
   sort: StreamSort,
 ): StreamTabInfo[] {
-  return [...streams].sort(streamComparators[sort] ?? streamComparators.time);
+  return [...streams].sort(streamComparators[sort]);
 }

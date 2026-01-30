@@ -153,27 +153,20 @@ export class FileManager extends BaseWebviewManager {
         FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
       )) ?? [];
     this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
-    this.postMessage({
-      command:
-        refreshedInputFiles.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const listTypeMap: Record<string, 'reference' | 'auxiliary' | 'media'> = {
-      Reference: 'reference',
-      Auxiliary: 'auxiliary',
-      Media: 'media',
-    };
-    const listType = listTypeMap[fileType];
-    const files = listType ? await fileLister.list(listType) : [];
+    const listType = fileType.toLowerCase() as
+      | 'reference'
+      | 'auxiliary'
+      | 'media';
+    const files = await fileLister.list(listType);
     this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
@@ -186,24 +179,19 @@ export class FileManager extends BaseWebviewManager {
         )
       : [];
     this.postFileUpdate('Edited', files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
     this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
       additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
     });
-    this.postMessage({
-      command:
-        files.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(files.length === 0);
   }
 
   async handleRequestDefaultOutputFiles(
@@ -268,29 +256,24 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const [input, reference, auxiliary, media] = await Promise.all([
-      fileLister.list('input'),
-      fileLister.list('reference'),
-      fileLister.list('auxiliary'),
-      fileLister.list('media'),
-    ]);
-    const refreshedFiles = { input, reference, auxiliary, media };
+    const [inputFiles, referenceFiles, auxiliaryFiles, mediaFiles] =
+      await Promise.all([
+        fileLister.list('input'),
+        fileLister.list('reference'),
+        fileLister.list('auxiliary'),
+        fileLister.list('media'),
+      ]);
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
-      inputFiles: refreshedFiles.input,
-      referenceFiles: refreshedFiles.reference,
-      auxiliaryFiles: refreshedFiles.auxiliary,
-      mediaFiles: refreshedFiles.media,
+      inputFiles,
+      referenceFiles,
+      auxiliaryFiles,
+      mediaFiles,
     });
 
     await this.updateBaseFileSelect();
-    this.postMessage({
-      command:
-        refreshedFiles.input.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(inputFiles.length === 0);
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
@@ -424,15 +407,19 @@ export class FileManager extends BaseWebviewManager {
 
   async handleAddOpenedFiles(fileType: string): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
-    const allowedExtensions = getIncludedExtensions(
-      fileType as ExtensionCategory,
-    ).map((ext) => ext.replace('.', '').toLowerCase());
+    const allowedExtensions = new Set(
+      getIncludedExtensions(fileType as ExtensionCategory).map((ext) =>
+        ext.replace('.', '').toLowerCase(),
+      ),
+    );
+
     const filteredFiles =
-      allowedExtensions.length > 0
-        ? openedFiles.filter((file) => {
-            const ext = path.extname(file).toLowerCase().replace('.', '');
-            return allowedExtensions.includes(ext);
-          })
+      allowedExtensions.size > 0
+        ? openedFiles.filter((file) =>
+            allowedExtensions.has(
+              path.extname(file).toLowerCase().replace('.', ''),
+            ),
+          )
         : openedFiles;
 
     this.postMessage({
@@ -496,6 +483,15 @@ export class FileManager extends BaseWebviewManager {
       command: `set${fileType}File`,
       files,
       ...(options.additionalPayload ?? {}),
+    });
+  }
+
+  /** Post show/hide getting started banner based on condition */
+  private postGettingStartedBanner(show: boolean): void {
+    this.postMessage({
+      command: show
+        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

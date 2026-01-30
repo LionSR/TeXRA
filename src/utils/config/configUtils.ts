@@ -84,11 +84,11 @@ export async function updateConfig<T>(
  */
 export function isConfigExplicitlySet(key: string): boolean {
   const inspection = vscode.workspace.getConfiguration().inspect(key);
-  return Boolean(
-    inspection &&
-    (inspection.globalValue !== undefined ||
-      inspection.workspaceValue !== undefined ||
-      inspection.workspaceFolderValue !== undefined),
+  if (!inspection) return false;
+  return (
+    inspection.globalValue !== undefined ||
+    inspection.workspaceValue !== undefined ||
+    inspection.workspaceFolderValue !== undefined
   );
 }
 

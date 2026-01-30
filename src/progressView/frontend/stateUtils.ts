@@ -1,17 +1,5 @@
-// Local imports - shared schemas
+// Shared imports
 import { sortStreams } from '@shared/streams/streamSort';
-
-// Local imports - progress view
-import {
-  isToolUseState,
-  isWorkflowState,
-  type ProgressState,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-} from './store';
-import type { FrontendEventHandlerContext } from './eventHandlers';
-
-// Local imports - shared schemas
 import type {
   InstructionUpdate,
   LogMessageData,
@@ -20,6 +8,16 @@ import type {
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
+
+// Local imports
+import {
+  isToolUseState,
+  isWorkflowState,
+  type ProgressState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from './store';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 
 /**
  * Updates a nested Record<runId, Record<round, T[]>> structure.
