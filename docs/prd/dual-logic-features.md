@@ -366,7 +366,7 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 - [ ] Shared `StreamContent` component (deferred)
 - [ ] Recording flow helper (deferred - low impact)
 
-## Cleanup ✅ COMPLETE
+## Cleanup
 
 - [x] Delete old per-view validation logic - replaced with `executeValidated` helper
 - [x] Delete `getEffectiveRunId` / `resolveActiveRunId` - replaced by `resolveRunId`
@@ -377,6 +377,8 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 - [x] Added `model` field to `POLISH_INSTRUCTION_TEXT` schema (was missing, caused validation failures)
 - [x] Added `MultiFileCategory` type for type-safe multi-file command maps
 - [x] Removed unnecessary `PASTED_PREFIX` re-export from `pastedImageUtils.ts`
+- [x] Fix Windows path separators in `AgentDirectoryManager` minimatch calls - normalize to forward slashes
+- [x] Add `satisfies` to `SESSION_DEFAULTS` per project conventions
 
 ---
 
@@ -392,6 +394,35 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 
 ---
 
+# Code Review Findings (2026-01-30)
+
+Issues reported during code review and their verification status:
+
+## Verified as NOT Bugs
+
+| Issue | Location | Verdict | Explanation |
+|-------|----------|---------|-------------|
+| ExecutionManager argument shape change | `ExecutionManager.ts` | ✅ Not a bug | `texra.execute` explicitly supports both raw config and wrapped `{ config, executionId? }` format (see `executeCommand.ts:37-45`) |
+| handleInputFileSelected clears wrong category | `FileManager.ts:130-142` | ✅ Intentional | Function updates Edited files when Input file changes; clearing Edited when Input is empty is correct (no base to filter by) |
+| Race condition in ensureAgentWatchers | `AgentDirectoryManager.ts:299-301` | ✅ Theoretical only | Both operations execute synchronously in same microtask; promise callbacks queue for next microtask after null assignment |
+| minimatch dependency | `package.json` | ✅ Already exists | `"minimatch": "^10.1.1"` is already a production dependency |
+
+## Valid Suggestions (Style/Cleanup)
+
+| Issue | Location | Status | Notes |
+|-------|----------|--------|-------|
+| SESSION_DEFAULTS should use `satisfies` | `sessionDefaults.ts:12` | ✅ Fixed | Changed to use `satisfies` pattern |
+| Consolidate file selection Maps | `fileSelectionRegistry.ts` | 📝 Backlog | Three Maps could get out of sync; single declarative structure preferred |
+| `?? undefined` coercion | `DiffManager.ts:77` | ✅ Not a bug | Schema uses `.nullish()` (returns `null`); coercion converts to `undefined` for function signature |
+
+## Real Bugs Found
+
+| Issue | Location | Status | Fix |
+|-------|----------|--------|-----|
+| Windows path separators with minimatch | `AgentDirectoryManager.ts:230` | ✅ Fixed | Added `normalizePath()` helper to convert backslashes to forward slashes before minimatch |
+
+---
+
 # Risks & Mitigations
 
 | Risk                                  | Mitigation                                                          |
@@ -400,6 +431,7 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 | Shared helpers become too broad       | Start with functions, not classes; follow anti-abstraction guidance |
 | Consolidation introduces regressions  | Delete old code only after parity verified via tests                |
 | Over-abstracting follow-up components | Keep `follow-up-input` and `followup-section` separate by design    |
+| Cross-platform path handling          | Normalize paths to forward slashes before glob matching             |
 
 ---
 
