@@ -143,7 +143,7 @@ export class FollowupSection extends LitElement {
         display: flex;
       }
 
-      .followup-initial-question vscode-text-area {
+      .followup-initial-question vscode-textarea {
         width: 100%;
       }
 

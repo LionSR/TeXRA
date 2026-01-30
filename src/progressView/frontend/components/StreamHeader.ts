@@ -412,9 +412,9 @@ export class StreamHeader extends LitElement {
   }
 
   private resolveStatus(): string {
-    const status =
-      this.streamState?.status || this.stream?.status || STREAM_STATUS.READY;
-    return status === STREAM_STATUS.READY ? STREAM_STATUS.STOPPED : status;
+    return (
+      this.streamState?.status || this.stream?.status || STREAM_STATUS.READY
+    );
   }
 
   private getStatusLabel(status: string): string {
