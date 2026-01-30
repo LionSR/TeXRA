@@ -12,10 +12,10 @@ import { buildInitialToolUsePrompts } from '@utils/prompt';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, PrepareResult } from './types';
 
-/** Result type for prepare node execution. */
+/** Result type for prepare node execution - success or error from execFallback. */
 type PrepareExecResult =
   | { kind: 'success'; result: PrepareResult }
-  | { kind: 'error'; error: unknown };
+  | { kind: 'error'; error: Error };
 
 export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
@@ -90,7 +90,7 @@ export class ToolUsePrepareNode<C> extends Node<
   async execFallback(
     _prepRes: unknown,
     error: Error,
-  ): Promise<{ kind: 'error'; error: unknown }> {
+  ): Promise<{ kind: 'error'; error: Error }> {
     return { kind: 'error', error };
   }
 
@@ -100,10 +100,7 @@ export class ToolUsePrepareNode<C> extends Node<
     execRes: PrepareExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
-      if (execRes.error instanceof Error) {
-        throw execRes.error;
-      }
-      throw new Error(String(execRes.error));
+      throw execRes.error;
     }
 
     const {
