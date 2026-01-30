@@ -16,4 +16,5 @@ export {
   type FileSelectionCommand,
   type FileSelectionCommandId,
   type FileSelectionResponseCommand,
+  type MultiFileCategory,
 } from './fileSelectionRegistry';

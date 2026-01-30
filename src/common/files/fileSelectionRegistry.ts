@@ -75,10 +75,22 @@ export const FILE_SELECTION_RESPONSES = new Map<
   ],
 ]);
 
-export const MULTIPLE_FILE_COMMANDS = new Map<
-  string,
+/** File categories that support multiple file selection */
+export type MultiFileCategory =
+  | 'input'
+  | 'reference'
+  | 'auxiliary'
+  | 'media'
+  | 'output';
+
+/**
+ * Commands for multi-file selection operations.
+ * Note: 'edited' is in ExtendedFileType but not here (no multi-select for edited).
+ */
+export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
+  MultiFileCategory,
   { selectCommand: string; responseCommand: string }
->([
+> = new Map([
   [
     'input',
     {

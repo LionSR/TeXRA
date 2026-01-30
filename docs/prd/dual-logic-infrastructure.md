@@ -188,6 +188,8 @@ Do **not** consolidate typed dispatch functions.
 - [x] `npm run typecheck` passes
 - [x] All webview content providers use `buildUri` helper
 - [x] Agent watcher used by both `MainViewProvider` and `WatcherManager`
+- [x] Race condition fixed: `ensureAgentWatchers` sets promise before `getAllLocal()`
+- [x] `buildAgentWatchers` simplified to synchronous (no async needed)
 
 ---
 

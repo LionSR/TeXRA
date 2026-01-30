@@ -275,19 +275,31 @@ export class AgentDirectoryManager {
 
   private async ensureAgentWatchers(): Promise<void> {
     // Wait for any in-progress setup to complete
-    while (this.watcherSetupPromise) {
+    if (this.watcherSetupPromise) {
       await this.watcherSetupPromise;
+      return; // After waiting, watchers are set up - no need to rebuild
     }
 
-    const directories = await this.getAllLocal();
-    if (
-      this.watcherDirectories &&
-      this.sameDirectories(this.watcherDirectories, directories)
-    ) {
-      return;
-    }
+    // Set promise immediately to prevent concurrent callers from proceeding
+    let resolveSetup: () => void;
+    this.watcherSetupPromise = new Promise((resolve) => {
+      resolveSetup = resolve;
+    });
 
-    await this.buildAgentWatchers(directories);
+    try {
+      const directories = await this.getAllLocal();
+      if (
+        this.watcherDirectories &&
+        this.sameDirectories(this.watcherDirectories, directories)
+      ) {
+        return;
+      }
+
+      this.buildAgentWatchers(directories);
+    } finally {
+      resolveSetup!();
+      this.watcherSetupPromise = null;
+    }
   }
 
   private async refreshAgentWatchers(): Promise<void> {
@@ -297,17 +309,10 @@ export class AgentDirectoryManager {
     await this.ensureAgentWatchers();
   }
 
-  private async buildAgentWatchers(
+  private buildAgentWatchers(
     directories: Array<{ directory: string; source: AgentSource }>,
-  ): Promise<void> {
-    // Create a deferred promise to prevent race conditions.
-    // Set the promise synchronously BEFORE disposing old watchers.
-    let resolveSetup: () => void;
-    this.watcherSetupPromise = new Promise((resolve) => {
-      resolveSetup = resolve;
-    });
-
-    // Now safe to dispose old watchers
+  ): void {
+    // Dispose old watchers
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.watcherDirectories = directories;
@@ -336,11 +341,6 @@ export class AgentDirectoryManager {
         .map((dir) => dir.directory)
         .join(', ')}`,
     );
-
-    // Signal completion then clear the promise
-    // Order matters: resolve first so waiters see directories set before promise clears
-    resolveSetup!();
-    this.watcherSetupPromise = null;
   }
 
   private dispatchAgentEvent(
