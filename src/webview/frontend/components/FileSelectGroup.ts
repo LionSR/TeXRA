@@ -10,7 +10,6 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
@@ -145,6 +144,11 @@ export class FileSelectGroup extends LitElement {
 
   private handleCheckboxChange(id: string, checked: boolean): void {
     this.dispatchEvent(MainViewEvents.checkboxChange({ id, checked }));
+  }
+
+  private handleSelectChange(event: Event): void {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    this.handleFileChange(target?.value ?? '');
   }
 
   private handleFocus(): void {
@@ -469,19 +473,14 @@ export class FileSelectGroup extends LitElement {
           id=${this.selectId}
           .value=${this.currentSelectedValue}
           @focus=${this.handleFocus}
-          @change=${(event: Event) => {
-            const target = event.currentTarget as HTMLInputElement;
-            this.handleFileChange(target.value);
-          }}
+          @change=${this.handleSelectChange}
         >
           ${this.renderFileOptions()}
         </vscode-single-select>
         <div
           id="${this.listId}Container"
           class="multiple-files-container"
-          style=${styleMap({
-            display: this.currentListVisible ? 'block' : 'none',
-          })}
+          ?hidden=${!this.currentListVisible}
         >
           <div class="multiple-files-content">
             <div id=${this.listId} class="multiple-files-list">

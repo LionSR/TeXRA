@@ -52,7 +52,9 @@ export class AgentsTable extends LitElement {
       ? 'codicon-check'
       : 'codicon-close';
     // Normalize category for CSS class (e.g., "toolUse" -> "tooluse")
-    const categoryClass = (agent.category || '').toLowerCase().replace('-', '');
+    const categoryClass = (agent.category || '')
+      .toLowerCase()
+      .replaceAll('-', '');
 
     return html`
       <tr class="agent-row">
