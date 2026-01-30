@@ -49,7 +49,9 @@ async function computeDiffStats(
       }
     }
     return { added, removed };
-  } catch {
+  } catch (err) {
+    // Log the failure for debugging - don't swallow silently
+    console.debug?.('Failed to compute diff stats:', err);
     return {};
   }
 }
@@ -76,13 +78,14 @@ export async function computeOutputDiffStats(
 
       const baseLocation = mapping.baseToOutput.get(locationPath) ?? null;
       const originalLocation = mapping.originByOutput.get(locationPath) ?? null;
-      const originalIsDifferentFile =
+
+      const useOriginalAsDiffBase =
+        !baseLocation &&
         originalLocation &&
         getComparablePath(originalLocation) !== locationPath;
-      let diffBaseLocation = baseLocation;
-      if (!diffBaseLocation && originalIsDifferentFile) {
-        diffBaseLocation = originalLocation;
-      }
+      const diffBaseLocation = useOriginalAsDiffBase
+        ? originalLocation
+        : baseLocation;
 
       const stats = await computeDiffStats(diffBaseLocation, location);
 

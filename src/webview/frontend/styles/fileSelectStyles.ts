@@ -166,9 +166,14 @@ export const multiFilesStyles = css`
   }
 
   .remove-button {
-    color: var(--vscode-errorForeground);
+    color: var(--vscode-icon-foreground, var(--vscode-foreground));
     cursor: pointer;
     flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  .remove-button:hover {
+    opacity: 1;
   }
 
   .file-list-placeholder {

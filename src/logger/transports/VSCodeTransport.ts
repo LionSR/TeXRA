@@ -62,7 +62,6 @@ export class VSCodeTransport extends Transport {
         name: groupName,
         startTime: Date.now(),
         status: 'running',
-        endTime: undefined,
         parentGroupId,
       });
     }
@@ -80,7 +79,7 @@ export class VSCodeTransport extends Transport {
   }
 
   private writeToChannel(
-    level: string,
+    level: LogLevel,
     message: string,
     timestamp: string,
     structuredData: unknown,
@@ -99,7 +98,7 @@ export class VSCodeTransport extends Transport {
   }
 
   private emitLogEvent(event: {
-    level: string;
+    level: LogLevel;
     message: string;
     timestamp: string;
     groupId: string | undefined;
@@ -112,8 +111,10 @@ export class VSCodeTransport extends Transport {
       event.messageType,
     );
 
-    const level = event.level as LogLevel;
-    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
+    const { shouldEmit, debugMode } = getEmitFilter({
+      level: event.level,
+      messageType,
+    });
     if (!shouldEmit) return;
 
     bus.emit('addLogMessage', {
@@ -121,7 +122,7 @@ export class VSCodeTransport extends Transport {
       logMessage: {
         id: randomUUID(),
         text: event.message,
-        level,
+        level: event.level,
         timestamp: new Date(event.timestamp).getTime(),
         groupId: event.groupId,
         messageType,

@@ -121,13 +121,8 @@ export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
 ): boolean {
-  if (settings.endTag && fileContent.includes(settings.endTag)) {
-    return true;
-  }
-  return (
-    settings.documentTag !== '' &&
-    fileContent.includes(`</${settings.documentTag}>`)
-  );
+  const endTag = settings.endTag || `</${settings.documentTag}>`;
+  return endTag !== '' && fileContent.includes(endTag);
 }
 
 export const AgentPromptSchema = z.strictObject({

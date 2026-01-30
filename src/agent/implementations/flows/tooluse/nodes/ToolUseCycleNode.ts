@@ -50,8 +50,6 @@ export class ToolUseCycleNode<C> extends Node<
       modelHandler,
       getUsageRecorder,
       config,
-      session,
-      onFollowUpConsumed,
     } = this.services;
 
     if (prepRes.shouldSkip) {
@@ -89,8 +87,6 @@ export class ToolUseCycleNode<C> extends Node<
       onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
-      session,
-      onFollowUpConsumed,
     });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {

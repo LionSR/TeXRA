@@ -14,8 +14,10 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
+import { codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
+import { SESSION_DEFAULTS } from '../sessionDefaults';
 import {
   fileStateContext,
   type FileStateContextValue,
@@ -29,6 +31,7 @@ import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [
+    codiconStyles,
     ...fileSelectStyles,
     css`
       :host {
@@ -80,20 +83,13 @@ export class FileSelectGroup extends LitElement {
   }
 
   private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    const isAutoExtract = type === 'autoExtract';
-    const wasOpen = isAutoExtract
-      ? this.autoExtractMenuOpen
-      : this.toolConfigMenuOpen;
+    const wasOpen =
+      type === 'autoExtract'
+        ? this.autoExtractMenuOpen
+        : this.toolConfigMenuOpen;
     // Close both menus first, then toggle the requested one
-    this.autoExtractMenuOpen = false;
-    this.toolConfigMenuOpen = false;
-    if (!wasOpen) {
-      if (isAutoExtract) {
-        this.autoExtractMenuOpen = true;
-      } else {
-        this.toolConfigMenuOpen = true;
-      }
-    }
+    this.autoExtractMenuOpen = type === 'autoExtract' && !wasOpen;
+    this.toolConfigMenuOpen = type === 'toolConfig' && !wasOpen;
   }
 
   private handleFileChange(value: string): void {
@@ -190,20 +186,20 @@ export class FileSelectGroup extends LitElement {
     return this.fileState?.multiFilesVisible[key] ?? false;
   }
 
-  private get isToolUseSession(): boolean {
-    return this.fileState?.sessionType === SESSION_TYPES.TOOL_USE;
+  private get isFileInputDisabled(): boolean {
+    const sessionType = this.fileState?.sessionType ?? SESSION_TYPES.WORKFLOW;
+    return !SESSION_DEFAULTS[sessionType].fileInputEnabled;
   }
 
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
     // Check both light DOM and shadow DOM for focus containment
     const containsFocus =
-      nextTarget &&
+      nextTarget !== null &&
       (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
-    if (!containsFocus) {
-      this.autoExtractMenuOpen = false;
-      this.toolConfigMenuOpen = false;
-    }
+    if (containsFocus) return;
+    this.autoExtractMenuOpen = false;
+    this.toolConfigMenuOpen = false;
   }
 
   private renderFileOptions(): TemplateResult {
@@ -260,7 +256,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachTeXCount"
               ?checked=${this.currentCheckboxValues.attachTeXCount}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachTeXCount',
@@ -272,7 +268,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachDiagnostics"
               ?checked=${this.currentCheckboxValues.attachDiagnostics}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachDiagnostics',
@@ -477,17 +473,18 @@ export class FileSelectGroup extends LitElement {
         >
           ${this.renderFileOptions()}
         </vscode-single-select>
-        <div
-          id="${this.listId}Container"
-          class="multiple-files-container"
-          ?hidden=${!this.currentListVisible}
-        >
-          <div class="multiple-files-content">
-            <div id=${this.listId} class="multiple-files-list">
-              ${this.renderFileList()}
+        ${when(
+          this.currentListVisible,
+          () => html`
+            <div id="${this.listId}Container" class="multiple-files-container">
+              <div class="multiple-files-content">
+                <div id=${this.listId} class="multiple-files-list">
+                  ${this.renderFileList()}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          `,
+        )}
       </div>
     `;
   }

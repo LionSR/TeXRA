@@ -46,9 +46,36 @@ export class HistoryItem extends LitElement {
 
   private markInstance: Mark | null = null;
   private previousHighlightedIndex: number | null = null;
+  private previousItemId: string | undefined = undefined;
 
   @queryAll('mark')
   private markElements!: HTMLElement[];
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.clearMarkInstance();
+  }
+
+  protected override willUpdate(
+    changedProperties: Map<PropertyKey, unknown>,
+  ): void {
+    // Clear mark instance when item changes to avoid stale highlights
+    if (changedProperties.has('item')) {
+      const newItemId = this.item?.id;
+      if (this.previousItemId !== newItemId) {
+        this.clearMarkInstance();
+        this.previousItemId = newItemId;
+      }
+    }
+  }
+
+  private clearMarkInstance(): void {
+    if (this.markInstance) {
+      this.markInstance.unmark();
+      this.markInstance = null;
+    }
+    this.previousHighlightedIndex = null;
+  }
 
   private handleAction(action: string): void {
     if (!this.item) return;

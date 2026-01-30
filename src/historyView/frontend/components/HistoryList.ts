@@ -201,7 +201,8 @@ export class HistoryList extends LitElement {
       getMarks: () => HTMLElement[];
     }
   > {
-    return this.historyItemElements ?? [];
+    // @queryAll returns NodeList, not Array - convert for .map() support
+    return Array.from(this.historyItemElements ?? []);
   }
 
   private handleToggle(

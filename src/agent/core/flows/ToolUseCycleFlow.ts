@@ -84,7 +84,7 @@ function parseToolInput(
   }
 }
 
-/** Check if an error is a Zod validation error. */
+/** Type guard for Zod validation errors. */
 function isZodError(error: unknown): error is z.ZodError {
   return error instanceof z.ZodError;
 }
@@ -311,15 +311,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const successRes = handleInvocationResult(
-      execRes,
-      shared,
-      { lastError: shared.lastError },
-      {
-        logger: this.services.logger,
-        operationName: this.getOperationName(),
-      },
-    );
+    const successRes = handleInvocationResult(execRes, shared, shared, {
+      logger: this.services.logger,
+      operationName: this.getOperationName(),
+    });
 
     if (!successRes) {
       return FlowTransition.COMPLETE;
@@ -465,11 +460,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: {
-      shouldStop: boolean;
-      response?: unknown;
-      responseTimeMs?: number;
-    },
+    _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;

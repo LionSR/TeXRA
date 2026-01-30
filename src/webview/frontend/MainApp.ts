@@ -48,6 +48,7 @@ import {
   type SessionType,
   parseSessionType,
 } from './constants';
+import { SESSION_DEFAULTS } from './sessionDefaults';
 import { mainViewStyles } from './styles';
 import {
   dispatchMainViewMessage,
@@ -526,10 +527,10 @@ export class MainApp extends BaseWebviewApp {
     this.multiFiles = { ...this.multiFiles, [listId]: files };
     this.saveState();
 
-    const type = listId.replace('Files', '') as MultipleFileType;
-    const command = FILE_UPDATE_COMMANDS[type];
+    const fileType = listId.replace('Files', '') as MultipleFileType;
+    const command = FILE_UPDATE_COMMANDS[fileType];
     if (command) {
-      postMessage(command, { files });
+      postMessage(command, { fileType, files });
     }
   }
 
@@ -630,12 +631,7 @@ export class MainApp extends BaseWebviewApp {
     if (!listId) return;
 
     const existing = this.multiFiles[listId] ?? [];
-    const merged = [...existing];
-    files.forEach((file) => {
-      if (!merged.includes(file)) {
-        merged.push(file);
-      }
-    });
+    const merged = this.mergeUnique(existing, files);
 
     this.multiFiles = { ...this.multiFiles, [listId]: merged };
     this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
@@ -740,8 +736,7 @@ export class MainApp extends BaseWebviewApp {
     const listId = normalizedType as keyof MultiFiles;
     if (!(listId in this.multiFiles)) return;
 
-    const files = message.files ?? [];
-    let filesToAdd = files;
+    let filesToAdd = message.files ?? [];
 
     if (message.shouldFilter) {
       const singleFileKey = `${normalizedType.replace('Files', '')}File`;
@@ -753,12 +748,7 @@ export class MainApp extends BaseWebviewApp {
     }
 
     const existing = this.multiFiles[listId] ?? [];
-    const merged = [...existing];
-    filesToAdd.forEach((file) => {
-      if (!merged.includes(file)) {
-        merged.push(file);
-      }
-    });
+    const merged = this.mergeUnique(existing, filesToAdd);
     this.multiFiles = { ...this.multiFiles, [listId]: merged };
     this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
     this.saveState();
@@ -928,9 +918,9 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private clearForNewSession(): void {
-    const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
     this.instruction = '';
-    if (!isToolUse) {
+    const defaults = SESSION_DEFAULTS[this.sessionType];
+    if (defaults.resetFiles) {
       this.singleFiles = {
         inputFile: '',
         referenceFile: '',
@@ -953,13 +943,15 @@ export class MainApp extends BaseWebviewApp {
         mediaFiles: false,
         outputFiles: false,
       };
-      this.checkboxValues = {
-        ...this.checkboxValues,
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
-      };
-      this.outputFilesActive = false;
+      if (defaults.checkboxOverrides) {
+        this.checkboxValues = {
+          ...this.checkboxValues,
+          ...defaults.checkboxOverrides,
+        };
+      }
+      if (defaults.outputFilesActive !== undefined) {
+        this.outputFilesActive = defaults.outputFilesActive;
+      }
     }
     this.saveState();
   }
@@ -1018,7 +1010,14 @@ export class MainApp extends BaseWebviewApp {
     if (this.defaultOutputFiles.length > 0) {
       return this.defaultOutputFiles;
     }
-    return [inputFile];
+    // Include both the single input file and multiple input files
+    const files = [inputFile];
+    for (const file of this.multiFiles.inputFiles) {
+      if (!files.includes(file)) {
+        files.push(file);
+      }
+    }
+    return files;
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
@@ -1038,7 +1037,8 @@ export class MainApp extends BaseWebviewApp {
     const currentFileKey = listId.replace('Files', 'File');
     const currentFile =
       this.singleFiles[currentFileKey as keyof typeof this.singleFiles];
-    const fileType = capitalize(listId);
+    // Convert listId (e.g., 'inputFiles') to fileType (e.g., 'input')
+    const fileType = listId.replace('Files', '');
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
       fileType,
       currentFile,
@@ -1339,25 +1339,23 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handlePackClean(action: 'pack' | 'clean'): void {
-    const outputFiles = this.multiFiles.outputFiles ?? [];
-    const useMultiple = this.outputFilesActive && outputFiles.length > 0;
-    let command: string;
-    if (action === 'pack') {
-      command = useMultiple
-        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-        : MAIN_VIEW_COMMANDS.PACK_SINGLE;
-    } else {
-      command = useMultiple
-        ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
-        : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
-    }
-
     if (!this.singleFiles.inputFile || !this.model) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select all required fields (input file, agent, and model)',
       });
       return;
     }
+
+    const outputFiles = this.multiFiles.outputFiles ?? [];
+    const useMultiple = this.outputFilesActive && outputFiles.length > 0;
+    const isPack = action === 'pack';
+    const command = useMultiple
+      ? isPack
+        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+        : MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
+      : isPack
+        ? MAIN_VIEW_COMMANDS.PACK_SINGLE
+        : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
 
     postMessage(command, {
       inputFile: this.singleFiles.inputFile,
@@ -1369,7 +1367,7 @@ export class MainApp extends BaseWebviewApp {
       outputFiles: useMultiple ? outputFiles : undefined,
     });
 
-    const actionLabel = action === 'pack' ? 'Pack' : 'Clean';
+    const actionLabel = capitalize(action);
     const summary = useMultiple
       ? `${actionLabel}ing multiple files: ${[this.singleFiles.inputFile, ...outputFiles].join(', ')}`
       : `${actionLabel}ing single file: ${this.singleFiles.inputFile}`;
@@ -1439,39 +1437,36 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private handleApiKeyBannerAction(action: 'set' | 'guide'): void {
-    const provider = this.apiKeyBanner.provider;
+    const { provider } = this.apiKeyBanner;
     if (action === 'set') {
-      if (provider) {
-        postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY, { provider });
-      } else {
-        postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
-      }
+      const command = provider
+        ? MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY
+        : MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY;
+      postMessage(command, provider ? { provider } : undefined);
       return;
     }
-
-    if (provider) {
-      postMessage(MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL, { provider });
-    } else {
-      postMessage(MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE);
-    }
+    const command = provider
+      ? MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL
+      : MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE;
+    postMessage(command, provider ? { provider } : undefined);
   }
 
   private handleAgentConfigAction(action: 'edit' | 'dir' | 'docs'): void {
-    if (action === 'edit') {
-      postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
-        sessionType: this.sessionType,
-      });
-      return;
+    switch (action) {
+      case 'edit':
+        postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
+          sessionType: this.sessionType,
+        });
+        break;
+      case 'dir':
+        postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, {
+          customDirSet: this.agentConfigBanner.customDirSet,
+        });
+        break;
+      case 'docs':
+        postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS);
+        break;
     }
-
-    if (action === 'dir') {
-      postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, {
-        customDirSet: this.agentConfigBanner.customDirSet,
-      });
-      return;
-    }
-
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS);
   }
 
   // =========================================================================
@@ -1917,6 +1912,17 @@ export class MainApp extends BaseWebviewApp {
       return false;
     }
     return current.every((value, index) => Object.is(value, next[index]));
+  }
+
+  /** Merge arrays, appending only items not already present */
+  private mergeUnique(existing: string[], additions: string[]): string[] {
+    const merged = [...existing];
+    for (const item of additions) {
+      if (!merged.includes(item)) {
+        merged.push(item);
+      }
+    }
+    return merged;
   }
 
   render(): TemplateResult {
