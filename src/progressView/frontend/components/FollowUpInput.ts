@@ -178,10 +178,6 @@ export class FollowUpInput extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (!this.visible) {
-      return nothing;
-    }
-
     return html`
       <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
         <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
