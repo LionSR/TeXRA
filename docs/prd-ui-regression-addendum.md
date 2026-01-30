@@ -8,39 +8,44 @@
 This addendum captures UI and logic regressions identified after comparing the current branch
 with the `main` baseline. Items were generated via AI-assisted code analysis and then
 **manually verified** against the source code. Items that could not be confirmed as actual
-regressions (e.g., standard UX practices, factually incorrect claims) have been removed.
+regressions or were factually incorrect have been removed.
 
 **Scope:** MainView, ProgressView, HistoryView, ProfileView, and shared webview state utilities.
 
 **Verification methodology:** Each item was checked by reading the referenced source file,
-confirming the line numbers match the described code, and assessing whether the behavior
-constitutes a regression vs. `main` or is standard/intentional practice.
+confirming the described behavior exists at the cited line numbers, and cross-referencing
+against `main` where possible. Items are marked as Confirmed (behavior verified in code),
+Speculative (plausible but depends on upstream guarantees), or removed (see Removed Items table).
+Multiple review passes were performed to eliminate inaccurate claims.
 
 ---
 
 ## Logic Regressions (State, Ordering, or Data Loss)
 
-### L10) Webview storage cache overwrites other keys (HIGH)
+### L10) Webview storage cache divergence across instances (HIGH)
 
 - **Area:** Shared state
 - **Type:** Logic regression
 - **Impact:** High (silent UI state loss)
-- **Current behavior:** Each `createWebviewStorage()` instance caches `getState()` once and writes
-  updates by spreading its **own** cache. When multiple adapters are used, the last writer can
-  overwrite keys from other adapters with stale cache data.
-- **Location:** `src/shared/state/PersistedState.ts:39-53`
-- **Why it regressed:** Webview state writes were previously centralized; caching now happens per
-  adapter instance.
-- **Status:** Confirmed
+- **Current behavior:** Each call to `createWebviewStorage()` creates an independent closure
+  with its own `cache` variable, initialized from `vscode.getState()` at creation time. The
+  ProgressView creates at least two instances (one in `ProgressApp.ts:148`, another in
+  `LogList.ts:94`), each maintaining separate caches. When one instance calls `set()`, it
+  spreads its own (potentially stale) cache and writes via `vscode.setState()`, overwriting
+  any keys that the other instance has updated since initialization.
+- **Location:** `src/shared/state/PersistedState.ts:43-52`
+- **Callers:** `ProgressApp.ts:148`, `LogList.ts:94`, `MainApp.ts:202`, `historyView/frontend/state.ts:18`
+- **Status:** Confirmed — multiple instances verified in the codebase
 
 ### L11) Webview storage cache never refreshes after external updates (MEDIUM)
 
 - **Area:** Shared state
 - **Type:** Logic regression
 - **Impact:** Medium (stale UI state)
-- **Current behavior:** `createWebviewStorage()` never re-reads `vscode.getState()` after the initial
-  call, so updates made by other code paths (or legacy `vscode.setState` calls) are invisible.
-- **Location:** `src/shared/state/PersistedState.ts:44-51`
+- **Current behavior:** `createWebviewStorage()` reads `vscode.getState()` once at creation
+  time (line 44) and never re-reads it. Updates made by other `createWebviewStorage()` instances
+  or direct `vscode.setState()` calls are invisible to existing instances.
+- **Location:** `src/shared/state/PersistedState.ts:44`
 - **Status:** Confirmed
 
 ### L12) LogList scrolls on every update when user is near bottom (LOW)
@@ -53,68 +58,52 @@ constitutes a regression vs. `main` or is standard/intentional practice.
   checks scroll position before scrolling. However, any reactive change (toggle, filter) that
   triggers `updated()` will snap to bottom if the user happens to be near the end.
 - **Location:** `src/progressView/frontend/components/LogList.ts:140-143`
-- **Status:** Confirmed (severity reduced from original — behavior is guarded, not unconditional)
+- **Status:** Confirmed (behavior is guarded, not unconditional)
 
-### L13) LogList toggle state shared across streams/runs (MEDIUM)
-
-- **Area:** ProgressView
-- **Type:** Logic regression
-- **Impact:** Medium (collapse/expand state leaks between sessions)
-- **Current behavior:** Toggle state is stored under a single `logListState` key without stream/run
-  scoping, so collapsing a group in one stream affects all other streams.
-- **Location:** `src/progressView/frontend/components/LogList.ts:149-178`
-- **Status:** Confirmed
-
-### L14) TaskGroup sorting assumes numeric timestamps (MEDIUM — speculative)
+### L14) TaskGroup sorting assumes numeric timestamps (LOW — speculative)
 
 - **Area:** ProgressView
 - **Type:** Potential logic regression
-- **Impact:** Medium (incorrect ordering — if type invariant is violated)
-- **Current behavior:** `buildGroupTree()` sorts by `startTime` and `timestamp` using numeric
-  subtraction. If values arrive as strings or `undefined`, sort results become `NaN` and ordering
-  becomes unstable.
-- **Location:** `src/progressView/frontend/components/TaskGroupList.ts:129-192`
-- **Status:** Speculative — types may enforce numeric values upstream. Flagged as defensive concern,
-  not a confirmed regression. Verify whether upstream schemas guarantee numeric timestamps.
+- **Impact:** Low (incorrect ordering — only if type invariant is violated)
+- **Current behavior:** `buildGroupTree()` sorts by `startTime` using numeric subtraction
+  (line 171: `a.startTime - b.startTime`, lines 183-187: `aTime - bTime`). If values were
+  to arrive as strings or `undefined`, sort results would become `NaN` and ordering unstable.
+- **Location:** `src/progressView/frontend/components/TaskGroupList.ts:171, 183-187`
+- **Status:** Speculative — types may enforce numeric values upstream via Zod schemas. This is
+  a defensive concern, not a confirmed regression. Only relevant if upstream schemas change.
 
-### L15) TaskGroupHeader can throw on invalid startTime (MEDIUM)
-
-- **Area:** ProgressView
-- **Type:** Logic regression
-- **Impact:** Medium (render crash)
-- **Current behavior:** `Intl.DateTimeFormat.format()` throws on invalid dates. If `startTime` is
-  missing or malformed, the entire component render can fail.
-- **Location:** `src/progressView/frontend/components/TaskGroupHeader.ts:57-81`
-- **Status:** Confirmed
-
-### L16) TaskGroupHeader duration uses unchecked numeric subtraction (LOW)
+### L15) TaskGroupHeader displays "Invalid Date" on malformed startTime (LOW — speculative)
 
 - **Area:** ProgressView
-- **Type:** Logic regression
+- **Type:** Potential logic regression
+- **Impact:** Low (bad display string, not a crash)
+- **Current behavior:** `new Date(group.startTime)` on line 60 creates a Date object, and
+  `formatter.format(date)` on line 62 renders it. If `startTime` is missing or malformed,
+  `format()` does **not** throw — it returns an "Invalid Date" string. The UI would show
+  "Invalid Date" rather than crashing.
+- **Location:** `src/progressView/frontend/components/TaskGroupHeader.ts:60-62`
+- **Status:** Speculative — depends on upstream type guarantees. Not a crash risk as
+  originally described.
+
+### L16) TaskGroupHeader duration uses unchecked numeric subtraction (LOW — speculative)
+
+- **Area:** ProgressView
+- **Type:** Potential logic regression
 - **Impact:** Low (NaN duration display)
-- **Current behavior:** `group.endTime - group.startTime` assumes both values are numbers. If
-  either is a string, duration becomes `NaN`, producing a bad UI string.
-- **Location:** `src/progressView/frontend/components/TaskGroupHeader.ts:63-65`
-- **Status:** Confirmed
-
-### L17) Completion sound tied to `r\d+` name format (LOW — future-proofing)
-
-- **Area:** ProgressView
-- **Type:** Future-proofing concern
-- **Impact:** Low (feature silently stops working if naming convention changes)
-- **Current behavior:** Completion sound only plays when `group.name` matches `/^r\d+$/`. If run
-  names become human-readable (e.g., `Run 1`), sound never plays.
-- **Location:** `src/progressView/frontend/components/TaskGroupList.ts:102-123`
-- **Status:** Not a regression vs. `main` — same behavior exists on main. Flagged as a
-  future-proofing concern only.
+- **Current behavior:** `group.endTime - group.startTime` (line 64) assumes both values are
+  numbers. If either is non-numeric, duration becomes `NaN`. The guard `group.endTime ?` on
+  line 63 prevents display when `endTime` is falsy but not when it's a non-numeric truthy value.
+- **Location:** `src/progressView/frontend/components/TaskGroupHeader.ts:63-64`
+- **Status:** Speculative — same upstream type dependency as L14/L15.
 
 ### L19) History search can race on rapid input (MEDIUM)
 
 - **Area:** HistoryView
 - **Type:** Logic regression
 - **Impact:** Medium (stale highlight/match counts)
-- **Current behavior:** `applySearchToItems()` is async and is invoked on every keystroke without
-  cancellation. Older promises can resolve after newer ones, overwriting match counts and
+- **Current behavior:** `applySearchToItems()` is async (lines 163-189) and is invoked on every
+  keystroke via `performSearch()` without cancellation. There is no AbortController or
+  sequence check — older promises can resolve after newer ones, overwriting match counts and
   highlighted indices with stale results.
 - **Location:** `src/historyView/frontend/components/HistoryList.ts:163-189`
 - **Status:** Confirmed
@@ -124,10 +113,10 @@ constitutes a regression vs. `main` or is standard/intentional practice.
 - **Area:** HistoryView
 - **Type:** Logic regression
 - **Impact:** Low (search highlights missing until next update)
-- **Current behavior:** `performSearch()` runs in `willUpdate()` before the new item list has
-  rendered, so `@queryAll('history-item')` can be stale. Highlights can fail until the next
-  render cycle.
-- **Location:** `src/historyView/frontend/components/HistoryList.ts:65-87`
+- **Current behavior:** `performSearch()` runs in `willUpdate()` (lines 76-79) before the new
+  item list has rendered, so `@queryAll('history-item')` can return stale DOM elements. Highlights
+  can fail until the next render cycle.
+- **Location:** `src/historyView/frontend/components/HistoryList.ts:76-79`
 - **Status:** Confirmed (timing issue, minor impact)
 
 ---
@@ -213,6 +202,8 @@ The following items from the original draft were removed after verification:
 
 | ID  | Reason for removal                                                                                                     |
 | --- | ---------------------------------------------------------------------------------------------------------------------- |
+| L13 | **Factually incorrect.** Toggle state IS scoped per stream — key is `logListState:${streamId}` at LogList.ts:168.      |
+| L17 | **Not a regression.** Same behavior exists on `main`. Completion sound tied to `r\d+` format is pre-existing.          |
 | L18 | **Factually incorrect.** RunSelector sorts `bTime - aTime` (newest-first), not oldest-first.                           |
 | U10 | **Intended behavior.** Collapsible opens when messages exist — this is correct UX.                                     |
 | U14 | **Standard practice.** Trimming whitespace in search inputs is normal behavior, not a regression.                      |
@@ -223,7 +214,13 @@ The following items from the original draft were removed after verification:
 
 ## Next Steps
 
-- Prioritize **L10** and **L19** first due to state loss and search correctness impact.
-- Address **U12** (IME handling) and **U13** (uncontrolled search input) as medium-priority UX fixes.
-- Validate speculative items (L14, L17) by checking upstream type guarantees before investing fix effort.
-- Resolve remaining UI regressions with Lit-native patterns (no external CSS files).
+- Prioritize **L10/L11** first — multiple `createWebviewStorage()` instances per webview cause
+  cache divergence and potential silent state loss.
+- Address **L19** (search race condition) — add cancellation or sequence tracking to
+  `applySearchToItems()`.
+- Fix **U12** (IME handling) — add `event.isComposing` check to `handleKeydown()`.
+- Fix **U13** (uncontrolled search input) — bind `.value` property on the textfield.
+- Remaining LOW items (L12, L14–L16, L20, U11, U15, U16, U18, U19) can be addressed as part
+  of regular maintenance.
+- Speculative items (L14, L15, L16) should be validated against upstream Zod schemas before
+  investing fix effort — if schemas enforce numeric timestamps, these are non-issues.
