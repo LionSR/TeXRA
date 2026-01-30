@@ -537,17 +537,18 @@ export class MainApp extends BaseWebviewApp {
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
-    if (message.optionsData) {
-      this.modelOptions = message.optionsData;
-    }
+    if (!message.optionsData) return;
+
+    this.modelOptions = message.optionsData;
+
     // Validate selected model exists in new options
-    if (this.model && message.optionsData) {
-      const hasModel = message.optionsData.some(
-        (opt) => opt.value === this.model,
-      );
-      if (!hasModel) {
-        this.model = '';
-      }
+    const hasModel = message.optionsData.some(
+      (opt) => opt.value === this.model,
+    );
+    if (!hasModel) {
+      // Select first non-disabled model instead of clearing
+      const firstEnabled = message.optionsData.find((opt) => !opt.disabled);
+      this.model = firstEnabled?.value ?? message.optionsData[0]?.value ?? '';
     }
   }
 
@@ -560,13 +561,11 @@ export class MainApp extends BaseWebviewApp {
     if (optionsData.workflow) {
       this.workflowAgentOptions = optionsData.workflow;
       // Validate selected workflow agent
-      if (this.workflowAgent) {
-        const hasAgent = optionsData.workflow.some(
-          (opt) => opt.value === this.workflowAgent,
-        );
-        if (!hasAgent) {
-          this.workflowAgent = '';
-        }
+      const hasAgent = optionsData.workflow.some(
+        (opt) => opt.value === this.workflowAgent,
+      );
+      if (!hasAgent) {
+        this.workflowAgent = optionsData.workflow[0]?.value ?? '';
       }
     }
 
@@ -574,13 +573,11 @@ export class MainApp extends BaseWebviewApp {
     if (optionsData.toolUse) {
       this.toolUseAgentOptions = optionsData.toolUse;
       // Validate selected tool-use agent
-      if (this.toolUseAgent) {
-        const hasAgent = optionsData.toolUse.some(
-          (opt) => opt.value === this.toolUseAgent,
-        );
-        if (!hasAgent) {
-          this.toolUseAgent = '';
-        }
+      const hasAgent = optionsData.toolUse.some(
+        (opt) => opt.value === this.toolUseAgent,
+      );
+      if (!hasAgent) {
+        this.toolUseAgent = optionsData.toolUse[0]?.value ?? '';
       }
     }
   }

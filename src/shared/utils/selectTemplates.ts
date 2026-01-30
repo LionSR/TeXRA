@@ -9,18 +9,6 @@ import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
-function renderPlaceholder(
-  text: string,
-  selectedValue: string,
-  placeholderValue = '',
-): TemplateResult {
-  return html`<vscode-option
-    value=${placeholderValue}
-    ?selected=${selectedValue === placeholderValue}
-    >${text}</vscode-option
-  >`;
-}
-
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
@@ -70,10 +58,8 @@ function renderAgentOption(
 export function renderAgentOptions(
   options: AgentOptionData[],
   selectedValue: string,
-  placeholder = 'Select agent',
 ): TemplateResult {
   return html`
-    ${renderPlaceholder(placeholder, selectedValue)}
     ${repeat(
       options,
       (opt) => opt.value,
@@ -119,10 +105,8 @@ function renderModelOption(
 export function renderModelOptions(
   options: ModelOptionData[],
   selectedValue: string,
-  placeholder = 'Select model',
 ): TemplateResult {
   return html`
-    ${renderPlaceholder(placeholder, selectedValue)}
     ${repeat(
       options,
       (opt) => opt.value,
