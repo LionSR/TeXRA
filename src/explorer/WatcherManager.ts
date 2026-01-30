@@ -14,24 +14,18 @@ const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
 export class WatcherManager {
-  private validationHandles: NodeJS.Timeout[] = [];
   private static readonly VALIDATION_DELAY = 300;
+  private validationHandles: NodeJS.Timeout[] = [];
   private disposed = false;
   private agentWatcher: vscode.Disposable | undefined;
-
-  // Debounced refresh using perfect-debounce
-  // Wrapped with disposed check since perfect-debounce doesn't expose cancel
   private triggerRefresh: () => void;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    // Wrap callback with disposed check to prevent execution after dispose
     this.triggerRefresh = debounce(() => {
-      if (!this.disposed) {
-        this.refresh();
-      }
+      if (!this.disposed) this.refresh();
     }, DEBOUNCE_WATCHER_MS);
   }
 
