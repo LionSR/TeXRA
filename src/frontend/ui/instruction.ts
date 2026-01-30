@@ -30,7 +30,10 @@ export async function showInstructionWithSuppress(
   const buttons = actions.map((a) => a.title);
   if (showSuppress) buttons.push(NEVER_REMIND);
 
-  const choice = await vscode.window.showInformationMessage(message, ...buttons);
+  const choice = await vscode.window.showInformationMessage(
+    message,
+    ...buttons,
+  );
   if (!choice) return;
 
   if (showSuppress && choice === NEVER_REMIND) {
