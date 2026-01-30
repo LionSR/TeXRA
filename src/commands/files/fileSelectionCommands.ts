@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
-import { getFilterExtensions } from '@common/files';
+import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
 import { fileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -60,30 +60,61 @@ export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.selectInputFile', selectInputFile),
-    vscode.commands.registerCommand('texra.selectInputFiles', selectInputFiles),
     vscode.commands.registerCommand(
-      'texra.selectReferenceFiles',
+      FILE_SELECTION_COMMAND_IDS.selectInputFile,
+      selectInputFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectReferenceFile,
+      selectReferenceFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFile,
+      selectAuxiliaryFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectInputFiles,
+      selectInputFiles,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectReferenceFiles,
       selectReferenceFiles,
     ),
     vscode.commands.registerCommand(
-      'texra.selectAuxiliaryFiles',
+      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFiles,
       selectAuxiliaryFiles,
     ),
-    vscode.commands.registerCommand('texra.selectMediaFiles', selectMediaFiles),
-    vscode.commands.registerCommand('texra.selectMediaFile', selectMediaFile),
     vscode.commands.registerCommand(
-      'texra.selectOutputFiles',
+      FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
+      selectMediaFiles,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectMediaFile,
+      selectMediaFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
       selectOutputFiles,
     ),
-    vscode.commands.registerCommand('texra.selectEditedFile', selectEditedFile),
-    vscode.commands.registerCommand('texra.getCurrentFile', getCurrentFile),
-    vscode.commands.registerCommand('texra.selectBaseFile', selectBaseFile),
-    vscode.commands.registerCommand('texra.refreshInputFiles', () =>
-      fileLister.list('input'),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectEditedFile,
+      selectEditedFile,
     ),
-    vscode.commands.registerCommand('texra.refreshBaseFiles', () =>
-      fileLister.list('input'),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
+      getCurrentFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectBaseFile,
+      selectBaseFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
+      () => fileLister.list('input'),
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
+      () => fileLister.list('input'),
     ),
   );
 }
@@ -93,6 +124,22 @@ const selectInputFile = createPicker({
   openLabel: 'Select File',
   filters: () => ({
     'Text files': getFilterExtensions('input'),
+  }),
+});
+
+const selectReferenceFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Ref File',
+  filters: () => ({
+    'Text files': getFilterExtensions('reference'),
+  }),
+});
+
+const selectAuxiliaryFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Auxiliary File',
+  filters: () => ({
+    'Text files': getFilterExtensions('auxiliary'),
   }),
 });
 

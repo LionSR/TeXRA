@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { mainViewMessages } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
+import { fetchRecentCommits } from '@frontend/git/recentCommits';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
 
@@ -72,22 +73,9 @@ export class DiffManager extends BaseWebviewManager {
       return;
     }
 
-    const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
-      : [];
-
-    const shouldNotify =
-      parsed.data.notifyWhenEmpty && (commits.length === 0 || !isGitRepo);
-    if (shouldNotify) {
-      const infoMessage = isGitRepo
-        ? 'No recent commits found for this repository.'
-        : 'This workspace is not a Git repository.';
-      logger.info(CHANNEL, infoMessage);
-      vscode.window.showInformationMessage(infoMessage);
-    }
+    const { commits, isGitRepo } = await fetchRecentCommits({
+      notifyWhenEmpty: parsed.data.notifyWhenEmpty ?? undefined,
+    });
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
@@ -97,12 +85,7 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   async handleRefreshCommits(): Promise<void> {
-    const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
-      : [];
+    const { commits, isGitRepo } = await fetchRecentCommits();
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,

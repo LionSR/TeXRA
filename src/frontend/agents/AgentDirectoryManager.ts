@@ -3,20 +3,50 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { minimatch } from 'minimatch';
 
 // Local imports
 import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
+import { debounce } from '@utils/core';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
+type AgentDirectoryEventType = 'create' | 'change' | 'delete';
+
+export interface AgentDirectoryWatcherEvent {
+  type: AgentDirectoryEventType;
+  uri: vscode.Uri;
+  relativePath: string;
+  directory: string;
+  source: AgentSource;
+}
+
+export interface AgentDirectoryWatcherOptions {
+  pattern?: string;
+  debounceMs: number;
+  onEvent: (event: AgentDirectoryWatcherEvent) => void;
+}
+
+interface AgentDirectoryWatcherSubscription {
+  pattern: string;
+  handleEvent: (event: AgentDirectoryWatcherEvent) => void;
+}
+
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
+  private watcherDisposables: vscode.FileSystemWatcher[] = [];
+  private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
+  private watcherDirectories: Array<{
+    directory: string;
+    source: AgentSource;
+  }> | null = null;
+  private watcherSetupPromise: Promise<void> | null = null;
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
@@ -188,6 +218,102 @@ export class AgentDirectoryManager {
     });
 
     return selectedPath;
+  }
+
+  watchAgentDirectories(
+    options: AgentDirectoryWatcherOptions,
+  ): vscode.Disposable {
+    this.ensureInitialized();
+    const pattern = options.pattern ?? '**/*';
+    const debounced = debounce(
+      (event: AgentDirectoryWatcherEvent) => options.onEvent(event),
+      options.debounceMs,
+    );
+    const subscription: AgentDirectoryWatcherSubscription = {
+      pattern,
+      handleEvent: (event) => {
+        if (minimatch(event.relativePath, pattern, { dot: true })) {
+          debounced(event);
+        }
+      },
+    };
+
+    this.watcherSubscriptions.add(subscription);
+    void this.ensureAgentWatchers();
+
+    return {
+      dispose: () => {
+        this.watcherSubscriptions.delete(subscription);
+        if (this.watcherSubscriptions.size === 0) {
+          this.disposeAgentWatchers();
+        }
+      },
+    };
+  }
+
+  private async ensureAgentWatchers(): Promise<void> {
+    if (this.watcherSetupPromise) {
+      await this.watcherSetupPromise;
+      return;
+    }
+
+    this.watcherSetupPromise = (async () => {
+      const directories = await this.getAllLocal();
+      this.watcherDirectories = directories;
+
+      for (const entry of directories) {
+        const pattern = new vscode.RelativePattern(entry.directory, '**/*');
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          pattern,
+          false,
+          false,
+          false,
+        );
+        this.watcherDisposables.push(watcher);
+
+        const dispatch = (type: AgentDirectoryEventType) => (uri: vscode.Uri) =>
+          this.dispatchAgentEvent(entry, type, uri);
+
+        watcher.onDidCreate(dispatch('create'));
+        watcher.onDidChange(dispatch('change'));
+        watcher.onDidDelete(dispatch('delete'));
+      }
+
+      logger.info(
+        CHANNEL,
+        `Agent directory watchers enabled: ${directories
+          .map((dir) => dir.directory)
+          .join(', ')}`,
+      );
+    })();
+
+    await this.watcherSetupPromise;
+  }
+
+  private dispatchAgentEvent(
+    entry: { directory: string; source: AgentSource },
+    type: AgentDirectoryEventType,
+    uri: vscode.Uri,
+  ): void {
+    const relativePath = path.relative(entry.directory, uri.fsPath);
+    const event: AgentDirectoryWatcherEvent = {
+      type,
+      uri,
+      relativePath,
+      directory: entry.directory,
+      source: entry.source,
+    };
+
+    for (const subscription of this.watcherSubscriptions) {
+      subscription.handleEvent(event);
+    }
+  }
+
+  private disposeAgentWatchers(): void {
+    this.watcherDisposables.forEach((watcher) => watcher.dispose());
+    this.watcherDisposables = [];
+    this.watcherDirectories = null;
+    this.watcherSetupPromise = null;
   }
 }
 

@@ -13,14 +13,11 @@ export class MemoryViewContentProvider extends BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      memoryBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'memoryView',
-          'bundle.js',
-        ),
-      ),
+      memoryBundleUri: this.buildUri(webview, [
+        'dist',
+        'memoryView',
+        'bundle.js',
+      ]),
     };
   }
 }
