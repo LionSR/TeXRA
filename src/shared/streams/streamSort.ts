@@ -1,7 +1,11 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
-export type StreamSort = 'time' | 'agent' | 'inputFile';
+export const StreamSortSchema = z.enum(['time', 'agent', 'inputFile']);
+export type StreamSort = z.infer<typeof StreamSortSchema>;
 
 export type StreamComparator = (a: StreamTabInfo, b: StreamTabInfo) => number;
 

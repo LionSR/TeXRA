@@ -274,7 +274,8 @@ export class AgentDirectoryManager {
   }
 
   private async ensureAgentWatchers(): Promise<void> {
-    if (this.watcherSetupPromise) {
+    // Wait for any in-progress setup to complete
+    while (this.watcherSetupPromise) {
       await this.watcherSetupPromise;
     }
 
@@ -299,36 +300,46 @@ export class AgentDirectoryManager {
   private async buildAgentWatchers(
     directories: Array<{ directory: string; source: AgentSource }>,
   ): Promise<void> {
-    this.disposeAgentWatchers();
+    // Create a deferred promise to prevent race conditions.
+    // Set the promise synchronously BEFORE disposing old watchers.
+    let resolveSetup: () => void;
+    this.watcherSetupPromise = new Promise((resolve) => {
+      resolveSetup = resolve;
+    });
+
+    // Now safe to dispose old watchers
+    this.watcherDisposables.forEach((watcher) => watcher.dispose());
+    this.watcherDisposables = [];
     this.watcherDirectories = directories;
-    this.watcherSetupPromise = (async () => {
-      for (const entry of directories) {
-        const pattern = new vscode.RelativePattern(entry.directory, '**/*');
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          pattern,
-          false,
-          false,
-          false,
-        );
-        this.watcherDisposables.push(watcher);
 
-        const dispatch = (type: AgentDirectoryEventType) => (uri: vscode.Uri) =>
-          this.dispatchAgentEvent(entry, type, uri);
-
-        watcher.onDidCreate(dispatch('create'));
-        watcher.onDidChange(dispatch('change'));
-        watcher.onDidDelete(dispatch('delete'));
-      }
-
-      logger.info(
-        CHANNEL,
-        `Agent directory watchers enabled: ${directories
-          .map((dir) => dir.directory)
-          .join(', ')}`,
+    for (const entry of directories) {
+      const pattern = new vscode.RelativePattern(entry.directory, '**/*');
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        pattern,
+        false,
+        false,
+        false,
       );
-    })();
+      this.watcherDisposables.push(watcher);
 
-    await this.watcherSetupPromise;
+      const dispatch = (type: AgentDirectoryEventType) => (uri: vscode.Uri) =>
+        this.dispatchAgentEvent(entry, type, uri);
+
+      watcher.onDidCreate(dispatch('create'));
+      watcher.onDidChange(dispatch('change'));
+      watcher.onDidDelete(dispatch('delete'));
+    }
+
+    logger.info(
+      CHANNEL,
+      `Agent directory watchers enabled: ${directories
+        .map((dir) => dir.directory)
+        .join(', ')}`,
+    );
+
+    // Signal completion and clear the promise
+    this.watcherSetupPromise = null;
+    resolveSetup!();
   }
 
   private dispatchAgentEvent(
@@ -350,11 +361,23 @@ export class AgentDirectoryManager {
     }
   }
 
-  private disposeAgentWatchers(): void {
+  /**
+   * Dispose only the file system watchers, preserving config watcher.
+   * Used during rebuilds when directories change.
+   */
+  private disposeFileWatchers(): void {
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.watcherDirectories = null;
     this.watcherSetupPromise = null;
+  }
+
+  /**
+   * Dispose all watchers including the config listener.
+   * Used when all subscriptions are removed.
+   */
+  private disposeAgentWatchers(): void {
+    this.disposeFileWatchers();
     if (this.watcherConfigDisposable) {
       this.watcherConfigDisposable.dispose();
       this.watcherConfigDisposable = null;
