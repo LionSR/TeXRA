@@ -2,9 +2,10 @@
 import * as path from 'path';
 
 // Local imports
+import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 import { StorageFS } from './storageFS';
 
-export const PASTED_PREFIX = 'pasted_';
+export { PASTED_PREFIX };
 export const PASTED_DIR = 'pasted';
 
 /**

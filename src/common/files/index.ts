@@ -8,3 +8,20 @@ export {
   isTexFile,
   LATEX_EXTENSIONS,
 } from './fileTypeUtils';
+export {
+  FILE_SELECTION_COMMANDS,
+  FILE_SELECTION_COMMAND_IDS,
+  FILE_SELECTION_RESPONSES,
+  MULTIPLE_FILE_COMMANDS,
+  type FileSelectionCommand,
+  type FileSelectionCommandId,
+  type FileSelectionResponseCommand,
+} from './fileSelectionRegistry';
+export {
+  buildFileOperationPayload,
+  type FileOperation,
+  type FileOperationInput,
+  type FileOperationPayload,
+  type MainViewFileOperationInput,
+  type ProgressViewFileOperationInput,
+} from './fileOperationPayload';
