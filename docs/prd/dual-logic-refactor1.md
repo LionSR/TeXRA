@@ -6,8 +6,8 @@ Reduce the most impactful duplicated logic paths by consolidating parallel imple
 that currently split responsibility across multiple files. The goal is to simplify maintenance,
 reduce change amplification, and make future feature work less error-prone.
 
-This PRD distinguishes between *accidental duplication* (same logic copy-pasted, should be
-consolidated) and *structural similarity* (similar patterns with intentionally distinct typed
+This PRD distinguishes between _accidental duplication_ (same logic copy-pasted, should be
+consolidated) and _structural similarity_ (similar patterns with intentionally distinct typed
 contracts, which may be fine as-is). Only accidental duplication is targeted for consolidation.
 
 ## Problem Statement
@@ -45,7 +45,7 @@ The following shared base classes already exist and should be leveraged rather t
 - **`configUtils`** (`src/utils/config/configUtils.ts`): Wraps `vscode.workspace.getConfiguration`
   for centralized read/write access.
 
-Refactors below describe the *delta* from what these base classes already provide.
+Refactors below describe the _delta_ from what these base classes already provide.
 
 ## Dual Logic Paths & Refactor Plans
 
@@ -98,6 +98,7 @@ usage, leading to inconsistent defaults and inspection behavior.
 **Refactor plan**
 
 Expand `@utils/config` to include standardized helpers for:
+
 - Scoped config access (e.g., `getConfig('texra.auth', 'apiKey')`)
 - Explicit-value inspection (checking if a value is explicitly set vs. using the default),
   covering the `inspect()` semantics currently used in `setup.ts`
@@ -169,14 +170,15 @@ different purposes:
   (`src/explorer/WatcherManager.ts`)
 
 Note: The current split (MainViewProvider owns UI-relevant watching, WatcherManager owns
-explorer-relevant watching) represents a valid separation of *concerns*. The issue is the
-duplicated *mechanism* — two separate `FileSystemWatcher` instances monitoring overlapping
+explorer-relevant watching) represents a valid separation of _concerns_. The issue is the
+duplicated _mechanism_ — two separate `FileSystemWatcher` instances monitoring overlapping
 directories.
 
 **Refactor plan**
 
 Introduce a shared `AgentDirectoryManager` that owns the `FileSystemWatcher` lifecycle and exposes
 a callback registry for subscribers. Each subscriber configures its own:
+
 - Glob pattern filtering (UI may watch fewer patterns than explorer)
 - Debounce interval
 - Handler callback (refresh UI vs. validate YAML vs. refresh explorer)
