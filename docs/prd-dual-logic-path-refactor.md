@@ -77,6 +77,7 @@ Originally listed as a duplicated path, but on review MainView and ProfileView h
 ## Validation Strategy
 
 Since `npm test` is not viable in this project (it attempts to download a VS Code test environment), validation relies on:
+
 - `npm run typecheck` to verify no type regressions.
 - `npm run lint` for zero errors.
 - `npm run compile:fast` for successful builds.
