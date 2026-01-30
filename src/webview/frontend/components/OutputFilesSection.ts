@@ -73,6 +73,17 @@ export class OutputFilesSection extends LitElement {
     return this.fileState?.outputFilesActive ?? false;
   }
 
+  /** Track previous expanded state to detect visibility changes */
+  private wasExpanded = false;
+
+  protected override updated(): void {
+    // Reinitialize Sortable when list becomes visible (element is recreated)
+    if (this.currentExpanded && !this.wasExpanded) {
+      this.sortableController.reinitialize();
+    }
+    this.wasExpanded = this.currentExpanded;
+  }
+
   private handleToggle(): void {
     this.dispatchEvent(MainViewEvents.toggleList({ listId: 'outputFiles' }));
   }
