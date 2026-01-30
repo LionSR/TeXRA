@@ -73,10 +73,7 @@ type SelectMultipleFilesMessage = MessageFor<
 
 type GetCurrentFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
-> & {
-  fileType?: string;
-  baseFile?: string;
-};
+>;
 
 type UpdateFilesMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES
@@ -84,9 +81,7 @@ type UpdateFilesMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES
   | typeof MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES
   | typeof MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES
-> & {
-  files?: string[];
-};
+>;
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
