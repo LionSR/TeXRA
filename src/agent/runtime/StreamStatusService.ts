@@ -8,6 +8,14 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
 
+/** Statuses that prevent acquiring a new stream lock. */
+const BLOCKED_STATUSES = new Set<StreamStatus>([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.RESUMING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.WAITING,
+]);
+
 interface SetOptions {
   emit?: boolean;
 }
@@ -19,16 +27,9 @@ export const StreamStatusService = {
 
   tryAcquire(stream: StreamTabId): boolean {
     const current = statusMemory.get(stream);
-
-    if (
-      current === STREAM_STATUS.RUNNING ||
-      current === STREAM_STATUS.RESUMING ||
-      current === STREAM_STATUS.INITIALIZING ||
-      current === STREAM_STATUS.WAITING
-    ) {
+    if (current && BLOCKED_STATUSES.has(current)) {
       return false;
     }
-
     this.set(stream, STREAM_STATUS.INITIALIZING);
     return true;
   },

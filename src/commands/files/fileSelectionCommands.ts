@@ -199,23 +199,19 @@ const selectEditedFile = createPicker({
 
 async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)
-  const currentFile = vscode.window.activeTextEditor?.document;
-  if (currentFile && currentFile.uri.scheme === 'file') {
-    return WorkspaceFS.relativePath(currentFile.uri.fsPath);
+  const doc = vscode.window.activeTextEditor?.document;
+  if (doc?.uri.scheme === 'file') {
+    return WorkspaceFS.relativePath(doc.uri.fsPath);
   }
+
   // Fallback to active tab (for media files like images, PDFs)
-  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-  if (activeTab?.input) {
-    const input = activeTab.input;
-    if (
-      (input instanceof vscode.TabInputText ||
-        input instanceof vscode.TabInputCustom) &&
-      input.uri.scheme === 'file'
-    ) {
-      return WorkspaceFS.relativePath(input.uri.fsPath);
-    }
-  }
-  return null;
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  const isFileInput =
+    (input instanceof vscode.TabInputText ||
+      input instanceof vscode.TabInputCustom) &&
+    input.uri.scheme === 'file';
+
+  return isFileInput ? WorkspaceFS.relativePath(input.uri.fsPath) : null;
 }
 
 const selectBaseFile = createPicker({

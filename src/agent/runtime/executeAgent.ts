@@ -330,35 +330,32 @@ async function runFlowWithLifecycle(
 }
 
 function getOutputInfo(config: AgentConfig): string {
-  const outputFiles = config.outputFiles ?? [];
-  if (config.useMultipleOutputs && outputFiles.length > 1) {
+  const { outputFiles = [], useMultipleOutputs } = config;
+  if (useMultipleOutputs && outputFiles.length > 1) {
     return `to ${outputFiles.length} files`;
   }
-  if (outputFiles[0]) {
-    return `to ${path.basename(outputFiles[0])}`;
-  }
-  return '';
+  const firstOutput = outputFiles[0];
+  return firstOutput ? `to ${path.basename(firstOutput)}` : '';
 }
 
-function showAgentNotification(config: AgentConfig): void {
+async function showAgentNotification(config: AgentConfig): Promise<void> {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
   const outputInfo = getOutputInfo(config);
 
-  void vscode.window
-    .showInformationMessage(
-      `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-      {
-        modal: false,
-        detail:
-          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-      },
-      'Show ProgressBoard',
-    )
-    .then(
-      (sel) => sel && vscode.commands.executeCommand('texra.showProgressView'),
-    );
+  const selection = await vscode.window.showInformationMessage(
+    `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+    {
+      modal: false,
+      detail:
+        'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+    },
+    'Show ProgressBoard',
+  );
+  if (selection) {
+    await vscode.commands.executeCommand('texra.showProgressView');
+  }
 }
 
 async function showApiKeyErrorNotification(): Promise<void> {
