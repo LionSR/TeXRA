@@ -841,9 +841,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return this.refreshPromise;
     }
 
-    this.refreshPromise = (session.useCustomRefresh
-      ? this.refreshViaCustomEndpoint(session)
-      : this.refreshViaSupabase(session)
+    this.refreshPromise = (
+      session.useCustomRefresh
+        ? this.refreshViaCustomEndpoint(session)
+        : this.refreshViaSupabase(session)
     )
       .catch((error) => {
         logger.error(
