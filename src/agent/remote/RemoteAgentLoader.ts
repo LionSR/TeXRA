@@ -38,37 +38,36 @@ function mapHttpError(
   isLastCandidate: boolean,
   errorText: string,
 ): string {
-  if (status === StatusCodes.UNAUTHORIZED) {
-    return 'Session expired. Sign in again to continue.';
-  }
+  switch (status) {
+    case StatusCodes.UNAUTHORIZED:
+      return 'Session expired. Sign in again to continue.';
 
-  if (status === StatusCodes.FORBIDDEN) {
-    return `Access denied to agent "${agentName}". Upgrade your account for access.`;
-  }
+    case StatusCodes.FORBIDDEN:
+      return `Access denied to agent "${agentName}". Upgrade your account for access.`;
 
-  if (status === StatusCodes.NOT_FOUND) {
-    if (!isLastCandidate) {
-      logger.debug(
-        CHANNEL,
-        `Agent variant "${candidateName}" not found, trying next candidate`,
-      );
-      return `Agent variant "${candidateName}" not found`;
-    }
-    return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
-  }
+    case StatusCodes.NOT_FOUND:
+      if (!isLastCandidate) {
+        logger.debug(
+          CHANNEL,
+          `Agent variant "${candidateName}" not found, trying next candidate`,
+        );
+        return `Agent variant "${candidateName}" not found`;
+      }
+      return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
 
-  if (
-    status === StatusCodes.INTERNAL_SERVER_ERROR &&
-    errorText.includes('Failed to load agent configuration')
-  ) {
-    return (
-      `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
-      `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
-      `Please contact the TeXRA team if this agent should be available.`
-    );
-  }
+    case StatusCodes.INTERNAL_SERVER_ERROR:
+      if (errorText.includes('Failed to load agent configuration')) {
+        return (
+          `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+          `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+          `Please contact the TeXRA team if this agent should be available.`
+        );
+      }
+      return `Failed to load agent: ${StatusCodes[status]} - ${errorText}`;
 
-  return `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`;
+    default:
+      return `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`;
+  }
 }
 
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */

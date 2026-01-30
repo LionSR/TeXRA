@@ -17,6 +17,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 import {
   PersistedState,
   createBackendStorage,
@@ -65,7 +66,7 @@ export type ActiveStreamId = StreamTabId | '';
 /** Schema for consolidated progress view preferences. */
 const ProgressViewPrefsSchema = z.object({
   activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
-  streamSortOrder: z.string().prefault('time'),
+  streamSortOrder: StreamSortSchema.prefault('time'),
   agentCategoryFilter: AgentCategoryFilterSchema.prefault('all'),
 });
 
@@ -153,11 +154,11 @@ export class ProgressViewState {
     return resolved || currentActive;
   }
 
-  get streamSortOrder(): string {
+  get streamSortOrder(): StreamSort {
     return this._prefs.get('streamSortOrder');
   }
 
-  set streamSortOrder(order: string) {
+  set streamSortOrder(order: StreamSort) {
     this._prefs.update({ streamSortOrder: order });
   }
 
@@ -536,7 +537,7 @@ export class ProgressViewState {
         typeof entry[1] === 'string' && entry[1].length > 0,
     );
 
-    this._executionIds = entries.length > 0 ? new Map(entries) : new Map();
+    this._executionIds = new Map(entries);
     if (entries.length > 0) {
       this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
     }

@@ -10,18 +10,17 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
   protected override getModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
-    const distPath = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'dist',
-      'progressView',
-    );
     return {
-      progressBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(distPath, 'bundle.js'),
-      ),
-      progressStyleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(distPath, 'index.css'),
-      ),
+      progressBundleUri: this.buildUri(webview, [
+        'dist',
+        'progressView',
+        'bundle.js',
+      ]),
+      progressStyleUri: this.buildUri(webview, [
+        'dist',
+        'progressView',
+        'index.css',
+      ]),
     };
   }
 }

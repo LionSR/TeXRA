@@ -43,7 +43,7 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
-  private buildUri(
+  protected buildUri(
     webview: vscode.Webview,
     pathSegments: string[],
   ): vscode.Uri {
@@ -52,7 +52,7 @@ export abstract class BaseViewContentProvider {
     );
   }
 
-  private buildUriRecord(
+  protected buildUriRecord(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
     basePath: string[],

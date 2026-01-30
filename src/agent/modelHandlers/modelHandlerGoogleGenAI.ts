@@ -91,14 +91,16 @@ import type {
 } from './types/IModelHandler';
 
 function isTextPart(part: Part): part is Part & { text: string } {
-  return typeof (part as { text?: unknown }).text === 'string';
+  return typeof part.text === 'string';
 }
 
 /** Extract concatenated text from parts, excluding thought parts */
 function extractNonThinkingText(parts: Part[], trim = false): string {
   const text = parts
-    .filter((part): part is Part & { text: string } => isTextPart(part))
-    .filter((part) => !part.thought)
+    .filter(
+      (part): part is Part & { text: string } =>
+        isTextPart(part) && !part.thought,
+    )
     .map((part) => part.text)
     .join('');
   return trim ? text.trim() : text;

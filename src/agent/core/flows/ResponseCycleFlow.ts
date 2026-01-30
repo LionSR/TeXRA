@@ -2,7 +2,6 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-import { RetryErrorInfoSchema, type RetryErrorInfo } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   AgentFileLocationSchema,
@@ -143,22 +142,23 @@ export function assertCycleFieldsPopulated<T extends object>(
 // intentionally visible to downstream nodes so that debug metadata and model
 // results accumulate over the course of the flow.
 
+/** Prep result for ResponsePrepNode - captures interruption status and initial state. */
+interface ResponsePrepResult {
+  interrupted: boolean;
+  exists: boolean;
+  systemPrompt?: string;
+}
+
 /**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
- *
- * Services accessed via `this.services` following PocketFlow service injection.
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  async prep(shared: ResponseCycleShared): Promise<{
-    interrupted: boolean;
-    exists: boolean;
-    systemPrompt?: string;
-  }> {
+  async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
     const exists = await flexibleFS.exists(shared.outputLocation!);
@@ -174,11 +174,7 @@ class ResponsePrepNode<C> extends BaseNode<
 
   async post(
     shared: ResponseCycleShared,
-    prepRes: {
-      interrupted: boolean;
-      exists: boolean;
-      systemPrompt?: string;
-    },
+    prepRes: ResponsePrepResult,
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       resetCycleState(shared, ['responseObject', 'processedResponse']);
@@ -665,31 +661,25 @@ class ResponseProcessNode<C> extends BaseNode<
  * - Single finalization point in the flow graph
  * - No guard flags needed (graph ensures single execution)
  */
+/**
+ * Finalizes the response cycle by recording round statistics.
+ * All flow exit paths route through this node to ensure proper cleanup.
+ */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  async prep(_shared: ResponseCycleShared): Promise<void> {}
-
   /**
    * Finalize the round by recording stats and invoking callback.
-   * This is the single finalization point for ResponseCycleFlow.
+   * Side effects in exec() are appropriate here since finalization IS the purpose.
    */
-  async exec(_prepRes: void): Promise<void> {
+  async exec(): Promise<void> {
     const { round, run, onRoundFinalized } = this.services;
     run.recordRound(round);
     if (onRoundFinalized) {
       await onRoundFinalized(run);
     }
-  }
-
-  async post(
-    _shared: ResponseCycleShared,
-    _prepRes: void,
-    _execRes: void,
-  ): Promise<string | undefined> {
-    return undefined;
   }
 }
 

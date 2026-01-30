@@ -165,18 +165,19 @@ export class FileLister {
 
     // Extract the base name without round suffix (e.g., "paper_r2" -> "paper")
     const baseNameWithoutRound =
-      baseFileName.match(/^(.*?)(?:_r\d+)?$/)?.[1] ?? baseFileName;
+      baseFileName.match(/^(.+?)(?:_r\d+)?$/)?.[1] ?? baseFileName;
 
     return files.filter((file) => {
       const fileBase = path.basename(file, path.extname(file));
+      // Exclude the exact file we're comparing against
       if (fileBase === baseFileName) return false;
 
-      // Match files that start with the base name or have round suffixes
-      if (fileBase.startsWith(baseFileName)) return true;
-      if (fileBase.startsWith(baseNameWithoutRound) && /_r\d+/.test(fileBase)) {
-        return true;
-      }
-      return false;
+      // Match files that start with the base name (e.g., "paper_edited", "paper_v2")
+      // or have round suffixes on the base name (e.g., "paper_r1", "paper_r3")
+      return (
+        fileBase.startsWith(baseFileName) ||
+        (fileBase.startsWith(baseNameWithoutRound) && /_r\d+/.test(fileBase))
+      );
     });
   }
 }

@@ -39,46 +39,28 @@ const convertFencedLatexBlock: ReplacementFunction = (
 
 function hasBalancedBraces(value: string): boolean {
   let depth = 0;
-
   for (const char of value) {
     if (char === '{') {
       depth += 1;
-      continue;
-    }
-
-    if (char === '}') {
-      if (depth === 0) {
-        return false;
-      }
-
+    } else if (char === '}') {
+      if (depth === 0) return false;
       depth -= 1;
     }
   }
-
   return depth === 0;
 }
 
-const createCaptionTrimmer = (
+function createCaptionTrimmer(
   command: '\\caption' | '\\caption*',
-): ReplacementFunction => {
+): ReplacementFunction {
   return (match, content) => {
-    if (typeof content !== 'string') {
-      return match;
-    }
-
-    if (!hasBalancedBraces(content) || /[\r\n]/.test(content)) {
-      return match;
-    }
+    if (typeof content !== 'string') return match;
+    if (!hasBalancedBraces(content) || /[\r\n]/.test(content)) return match;
 
     const trimmed = content.replace(/^[\t ]+/, '').replace(/[\t ]+$/, '');
-
-    if (trimmed === content) {
-      return match;
-    }
-
-    return `${command}{${trimmed}}`;
+    return trimmed === content ? match : `${command}{${trimmed}}`;
   };
-};
+}
 
 // ===== Regex replacements =====
 
