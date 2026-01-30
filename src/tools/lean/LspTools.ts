@@ -378,7 +378,7 @@ Types:
 
 Goal results include a goalState payload with:
 - count: number of goals
-- isComplete: true when count is 0 (proof complete at that position)
+- status: "noGoals" when count is 0 (proof may be complete, or cursor may be outside a tactic block), "open" when goals remain
 - goals: raw goal list from Lean
 
 Line and column are 1-indexed.
@@ -435,7 +435,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
       return {
         summary: 'No goals',
         output: 'No goals at this position. The proof may be complete here.',
-        goalState: { goals: [], count: 0, isComplete: true },
+        goalState: { goals: [], count: 0, status: 'noGoals' as const },
       };
     }
 
@@ -443,7 +443,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     return {
       summary: `${goalCount} goal${goalCount > 1 ? 's' : ''}`,
       output: data.rendered,
-      goalState: { goals: data.goals, count: goalCount, isComplete: false },
+      goalState: { goals: data.goals, count: goalCount, status: 'open' as const },
     };
   }
 
