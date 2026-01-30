@@ -31,6 +31,14 @@ workspace state schemas.
 - Any changes to persisted workspace state formats.
 - Rewriting flows that are intentionally distinct for UI/UX reasons.
 
+## Suggested Implementation Order
+
+Items 1 and 2 are both High priority and share overlapping concepts (config assembly and
+active-file derivation). Item 1 (Agent Config Assembly) should land first since the shared
+config builder it introduces provides the foundation that Item 2 (Active File Inference) can
+build upon. Items 3–5 are independent Medium-priority items that can proceed in any order
+after Items 1–2.
+
 ---
 
 # Audit Items
@@ -43,12 +51,13 @@ workspace state schemas.
 
 - MainView execution builds `AgentConfig` in `ExecutionManager.handleExecute`, mapping UI fields
   (agent category, tool config, output files, media files) and validating before execution.
-  【F:src/webview/managers/ExecutionManager.ts†L46-L116】
+  `src/webview/managers/ExecutionManager.ts:46-116`
 - ProgressView rebuilds `AgentConfig` when setting up agent proposals, duplicating the mapping
   of input/output fields and active flags before restoring state.
-  【F:src/progressView/ProgressViewMessageHandler.ts†L524-L589】
+  `src/progressView/ProgressViewMessageHandler.ts:524-597`
 - Follow-up execution also reconstructs agent configs, output files, and `useMultipleOutputs`
-  in a separate helper (`buildFollowupTaskState`).【F:src/progressView/ProgressViewMessageHandler.ts†L1120-L1226】
+  in a separate helper (`buildFollowupTaskState`).
+  `src/progressView/ProgressViewMessageHandler.ts:1120-1226`
 
 **Refactor Proposal:**
 
@@ -72,11 +81,15 @@ Introduce a shared `@common/execution` helper (e.g., `buildExecutionConfig`) tha
 **Current State:**
 
 - History restore builds `TaskState.activeFiles` by computing per-file flags based on file arrays
-  and `useMultipleOutputs` in `agentConfigToTaskState`.【F:src/utils/config/configConversion.ts†L15-L57】
+  and `useMultipleOutputs` in `agentConfigToTaskState` (helper `isFileTypeActive` at L16–29,
+  main function at L34–64).
+  `src/utils/config/configConversion.ts:16-64`
 - ProgressView proposal setup re-derives active flags from file arrays with local `hasFiles`
-  logic, independent of the conversion helper.【F:src/progressView/ProgressViewMessageHandler.ts†L534-L578】
+  logic, independent of the conversion helper.
+  `src/progressView/ProgressViewMessageHandler.ts:539-579`
 - Follow-up task construction mutates active flags again based on outputs-as-references and
-  attach-outputs state.【F:src/progressView/ProgressViewMessageHandler.ts†L1217-L1226】
+  attach-outputs state.
+  `src/progressView/ProgressViewMessageHandler.ts:1217-1226`
 
 **Refactor Proposal:**
 
@@ -99,10 +112,11 @@ Add a shared `deriveActiveFiles` helper in `@common/state` that can:
 **Current State:**
 
 - MainView `ExecutionManager.handleMultipleOperation` dispatches pack/clean with a direct
-  `outputFiles` list from the UI message.【F:src/webview/managers/ExecutionManager.ts†L140-L155】
+  `outputFiles` list from the UI message.
+  `src/webview/managers/ExecutionManager.ts:140-156`
 - ProgressView `handleFileOperation` recomputes output files by merging declared outputs and
   generated paths, then decides `useMultipleOutputs` based on several heuristics.
-  【F:src/progressView/ProgressViewMessageHandler.ts†L879-L909】
+  `src/progressView/ProgressViewMessageHandler.ts:879-910`
 
 **Refactor Proposal:**
 
@@ -126,10 +140,12 @@ Create a shared `resolveOutputFilesForOperation` helper that:
 
 - HistoryView restore builds a `TaskState` from `AgentConfig` and calls `texra.restoreState`.
   The conversion logic lives in `agentConfigToTaskState`.
-  【F:src/historyView/HistoryViewMessageHandler.ts†L120-L129】【F:src/utils/config/configConversion.ts†L31-L57】
+  `src/historyView/HistoryViewMessageHandler.ts:120-129`
+  `src/utils/config/configConversion.ts:34-64`
 - `texra.restoreState` then converts the `TaskState` to a MainView snapshot using
   `buildMainViewState` and posts it to the webview or pending state store.
-  【F:src/commands/history/stateRestoreCommand.ts†L33-L63】【F:src/common/state/mainViewStateUtils.ts†L14-L56】
+  `src/commands/history/stateRestoreCommand.ts:33-67`
+  `src/common/state/mainViewStateUtils.ts:15-57`
 
 **Refactor Proposal:**
 
@@ -138,6 +154,12 @@ Add a single `restoreAgentConfig` helper that owns:
 - `AgentConfig → TaskState` conversion
 - `TaskState → MainViewPersistedState` conversion
 - Optional immediate execution toggle
+
+**Tradeoff Note:** The current two-step pipeline (`AgentConfig → TaskState → MainViewPersistedState`)
+currently has only two callers (HistoryView and `texra.restoreState`). If HistoryView remains the
+only consumer that starts from `AgentConfig`, the existing composition of `agentConfigToTaskState` +
+`restoreState` may already be the right level of abstraction. A wrapper is only justified if
+additional restore entry points emerge or if the two-step sequence needs shared validation logic.
 
 **Acceptance Criteria:**
 
@@ -153,9 +175,11 @@ Add a single `restoreAgentConfig` helper that owns:
 **Current State:**
 
 - Follow-up instruction rendering assembles file context strings directly from `AgentConfig`
-  and `WorkspaceFS` in `renderFollowupInstruction`.【F:src/progressView/ProgressViewMessageHandler.ts†L1229-L1263】
+  and `WorkspaceFS` in `renderFollowupInstruction`.
+  `src/progressView/ProgressViewMessageHandler.ts:1229-1263`
 - Text enhancement builds a separate file context string from `FileContext` in
-  `polishTextWithAI`, including custom formatting and file lists.【F:src/utils/text/textEnhancementUtils.ts†L40-L169】
+  `polishTextWithAI`, including custom formatting and file lists.
+  `src/utils/text/textEnhancementUtils.ts:107-340`
 
 **Refactor Proposal:**
 
@@ -163,6 +187,12 @@ Create a shared file-context formatter that:
 
 - Accepts a normalized `FileContext` (or `AgentConfig`) and outputs a string block.
 - Supports labels and array formatting once in one place.
+
+**Risk Note:** The two formatting paths may be intentionally distinct — follow-up instruction
+rendering and text enhancement serve different audiences and purposes. Before consolidating,
+verify whether the formatting differences are accidental drift or deliberate design choices.
+If differences are intentional, document them and narrow the shared formatter to only the
+truly common subset.
 
 **Acceptance Criteria:**
 
