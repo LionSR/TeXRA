@@ -260,7 +260,6 @@ export class InstructionPanel extends LitElement {
     return renderAgentOptions(
       session.workflowAgentOptions,
       session.workflowAgent,
-      'Select agent',
     );
   }
 
@@ -272,7 +271,6 @@ export class InstructionPanel extends LitElement {
     return renderAgentOptions(
       session.toolUseAgentOptions,
       session.toolUseAgent,
-      'Select agent',
     );
   }
 
@@ -281,11 +279,7 @@ export class InstructionPanel extends LitElement {
     if (!session) {
       return html``;
     }
-    return renderModelOptions(
-      session.modelOptions,
-      session.model,
-      'Select model',
-    );
+    return renderModelOptions(session.modelOptions, session.model);
   }
 
   override render(): TemplateResult {
