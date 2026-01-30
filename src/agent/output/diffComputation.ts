@@ -49,7 +49,9 @@ async function computeDiffStats(
       }
     }
     return { added, removed };
-  } catch {
+  } catch (err) {
+    // Log the failure for debugging - don't swallow silently
+    console.debug?.('Failed to compute diff stats:', err);
     return {};
   }
 }

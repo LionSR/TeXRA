@@ -782,18 +782,23 @@ const FileOperationMessages = [
   }),
   withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
     fileType: z.literal('input'),
+    files: z.array(z.string()),
   }),
   withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES).extend({
     fileType: z.literal('reference'),
+    files: z.array(z.string()),
   }),
   withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES).extend({
     fileType: z.literal('auxiliary'),
+    files: z.array(z.string()),
   }),
   withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
     fileType: z.literal('media'),
+    files: z.array(z.string()),
   }),
   withOptionalFiles(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES).extend({
     fileType: z.literal('output'),
+    files: z.array(z.string()),
   }),
 ] as const;
 
