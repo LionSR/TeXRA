@@ -92,19 +92,13 @@ export class LogList extends LitElement {
 
   // Non-reactive state
   private storage = createWebviewStorage(vscode);
-  private stateManager: PersistedState<LogListState>;
+  private stateManager?: PersistedState<LogListState>;
   private toggleStates: ToggleStateStore;
   private activeStreamId: string | null = null;
 
   constructor() {
     super();
-    this.stateManager = new PersistedState(
-      this.storage,
-      'logListState',
-      LogListStateSchema,
-    );
     this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
-    this.initializeState(null);
   }
 
   override connectedCallback(): void {
@@ -153,6 +147,9 @@ export class LogList extends LitElement {
   // ============================================================
 
   private saveToggleStates(): void {
+    if (!this.stateManager) {
+      return;
+    }
     try {
       this.stateManager.update({
         groupToggleStates: this.toggleStates.entries(),
@@ -163,13 +160,17 @@ export class LogList extends LitElement {
   }
 
   private initializeState(streamId: string | null): void {
-    const storageKey = streamId ? `logListState:${streamId}` : 'logListState';
+    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
+    if (!streamId) {
+      this.stateManager = undefined;
+      return;
+    }
+    const storageKey = `logListState:${streamId}`;
     this.stateManager = new PersistedState(
       this.storage,
       storageKey,
       LogListStateSchema,
     );
-    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates.length > 0) {
       this.toggleStates.load(previous.groupToggleStates);
