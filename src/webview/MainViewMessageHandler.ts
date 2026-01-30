@@ -4,14 +4,11 @@ import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import { loadOptions } from '@frontend/agents/optionsLoader';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
-import {
-  RecordingManager,
-  wireRecordingFlow,
-} from '@common/managers/RecordingManager';
+import { RecordingManager } from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
@@ -33,7 +30,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
-    this.recordingManager = wireRecordingFlow(context, {
+    this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,

@@ -26,23 +26,7 @@ logger.initialize(CHANNEL);
 type PolishInstructionMessage = Extract<
   MainViewInboundMessage,
   { command: typeof MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT }
-> & {
-  agent?: string;
-  inputFile?: string;
-  inputFiles?: string[];
-  referenceFile?: string;
-  referenceFiles?: string[];
-  auxiliaryFile?: string;
-  auxiliaryFiles?: string[];
-  mediaFile?: string;
-  mediaFiles?: string[];
-  outputFiles?: string[];
-  inputFilesActive?: boolean;
-  referenceFilesActive?: boolean;
-  auxiliaryFilesActive?: boolean;
-  mediaFilesActive?: boolean;
-  outputFilesActive?: boolean;
-};
+>;
 
 type ClipboardImageMessage = Extract<
   MainViewInboundMessage,
