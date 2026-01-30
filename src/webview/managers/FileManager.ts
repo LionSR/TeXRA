@@ -5,12 +5,19 @@ import { workspace } from 'vscode';
 
 import { normalizeFilePath } from '@shared/utils/path';
 import { getAgent } from '@agent/index';
+import {
+  ExtensionCategory,
+  FILE_SELECTION_COMMANDS,
+  FILE_SELECTION_COMMAND_IDS,
+  FILE_SELECTION_RESPONSES,
+  MULTIPLE_FILE_COMMANDS,
+  getIncludedExtensions,
+  type FileSelectionCommand,
+  type FileSelectionResponseCommand,
+  type MultiFileCategory,
+} from '@common/files';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import {
-  getIncludedExtensions,
-  ExtensionCategory,
-} from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -21,19 +28,61 @@ import {
 } from '@utils/files';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type {
-  FileSelectionMessage,
-  FileSelectedMessage,
-  RequestInputFileMessage,
-  RequestFileMessage,
-  RequestEditedFileMessage,
-  RequestBaseFileMessage,
-  RequestDefaultOutputFilesMessage,
-  SetMultipleFilesMessage,
-  SelectMultipleFilesMessage,
-  GetCurrentFileMessage,
-  UpdateFilesMessage,
-} from '../types/messages';
+import type { ExtendedFileType, MainViewInboundMessage } from '@shared/schemas';
+
+type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+  MainViewInboundMessage,
+  { command: C }
+>;
+
+type FileSelectionMessage = MessageFor<FileSelectionCommand>;
+
+type FileSelectedMessage = MessageFor<FileSelectionResponseCommand>;
+
+type RequestInputFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE
+>;
+
+type RequestFileMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
+>;
+
+type RequestEditedFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE
+>;
+
+type RequestBaseFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
+>;
+
+type RequestDefaultOutputFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES
+>;
+
+type SetMultipleFilesMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
+>;
+
+type SelectMultipleFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
+>;
+
+type GetCurrentFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
+>;
+
+type UpdateFilesMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES
+>;
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
@@ -42,73 +91,6 @@ type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
   additionalPayload?: Record<string, unknown>;
 };
-
-const FILE_SELECTION_COMMANDS = new Map<string, string>([
-  [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE, 'texra.selectInputFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE, 'texra.selectReferenceFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE, 'texra.selectAuxiliaryFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE, 'texra.selectMediaFile'],
-]);
-
-const FILE_SELECTION_RESPONSES = new Map<string, string>([
-  [
-    MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
-    MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
-    MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
-    MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
-    MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-  ],
-]);
-
-const MULTIPLE_FILE_COMMANDS = new Map<
-  string,
-  { selectCommand: string; responseCommand: string }
->([
-  [
-    'input',
-    {
-      selectCommand: 'texra.selectInputFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-    },
-  ],
-  [
-    'reference',
-    {
-      selectCommand: 'texra.selectReferenceFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
-    },
-  ],
-  [
-    'auxiliary',
-    {
-      selectCommand: 'texra.selectAuxiliaryFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
-    },
-  ],
-  [
-    'media',
-    {
-      selectCommand: 'texra.selectMediaFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-    },
-  ],
-  [
-    'output',
-    {
-      selectCommand: 'texra.selectOutputFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
-    },
-  ],
-]);
 
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
@@ -135,7 +117,7 @@ export class FileManager extends BaseWebviewManager {
 
   async handleEditedFileSelection(): Promise<void> {
     const editedFile = await vscode.commands.executeCommand<string>(
-      'texra.selectEditedFile',
+      FILE_SELECTION_COMMAND_IDS.selectEditedFile,
     );
     if (editedFile) {
       this.postMessage({
@@ -146,6 +128,10 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleInputFileSelected(message: FileSelectedMessage): Promise<void> {
+    if (!message.filePath) {
+      this.postFileUpdate('Edited', []);
+      return;
+    }
     const baseFileNameForInput = path.basename(
       message.filePath,
       path.extname(message.filePath),
@@ -164,30 +150,23 @@ export class FileManager extends BaseWebviewManager {
   ): Promise<void> {
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
-        'texra.refreshInputFiles',
+        FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
       )) ?? [];
     this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
-    this.postMessage({
-      command:
-        refreshedInputFiles.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const listTypeMap: Record<string, 'reference' | 'auxiliary' | 'media'> = {
-      Reference: 'reference',
-      Auxiliary: 'auxiliary',
-      Media: 'media',
-    };
-    const listType = listTypeMap[fileType];
-    const files = listType ? await fileLister.list(listType) : [];
+    const listType = fileType.toLowerCase() as
+      | 'reference'
+      | 'auxiliary'
+      | 'media';
+    const files = await fileLister.list(listType);
     this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
@@ -200,24 +179,19 @@ export class FileManager extends BaseWebviewManager {
         )
       : [];
     this.postFileUpdate('Edited', files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
     this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
       additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
     });
-    this.postMessage({
-      command:
-        files.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(files.length === 0);
   }
 
   async handleRequestDefaultOutputFiles(
@@ -242,7 +216,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
-    if (message.files && message.files.length > 0) {
+    if (message.files.length > 0) {
       this.postMessage({ command: message.command, files: message.files });
     }
   }
@@ -251,7 +225,8 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    const commands = MULTIPLE_FILE_COMMANDS.get(fileType);
+    // Cast needed: ExtendedFileType includes 'edited' but multi-select doesn't
+    const commands = MULTIPLE_FILE_COMMANDS.get(fileType as MultiFileCategory);
     if (!commands) {
       logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
       return;
@@ -281,35 +256,30 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const [input, reference, auxiliary, media] = await Promise.all([
-      fileLister.list('input'),
-      fileLister.list('reference'),
-      fileLister.list('auxiliary'),
-      fileLister.list('media'),
-    ]);
-    const refreshedFiles = { input, reference, auxiliary, media };
+    const [inputFiles, referenceFiles, auxiliaryFiles, mediaFiles] =
+      await Promise.all([
+        fileLister.list('input'),
+        fileLister.list('reference'),
+        fileLister.list('auxiliary'),
+        fileLister.list('media'),
+      ]);
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
-      inputFiles: refreshedFiles.input,
-      referenceFiles: refreshedFiles.reference,
-      auxiliaryFiles: refreshedFiles.auxiliary,
-      mediaFiles: refreshedFiles.media,
+      inputFiles,
+      referenceFiles,
+      auxiliaryFiles,
+      mediaFiles,
     });
 
     await this.updateBaseFileSelect();
-    this.postMessage({
-      command:
-        refreshedFiles.input.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-    });
+    this.postGettingStartedBanner(inputFiles.length === 0);
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
     const fileType = message.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
-      'texra.getCurrentFile',
+      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
     );
 
     if (!currentOpenFile) {
@@ -437,15 +407,19 @@ export class FileManager extends BaseWebviewManager {
 
   async handleAddOpenedFiles(fileType: string): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
-    const allowedExtensions = getIncludedExtensions(
-      fileType as ExtensionCategory,
-    ).map((ext) => ext.replace('.', '').toLowerCase());
+    const allowedExtensions = new Set(
+      getIncludedExtensions(fileType as ExtensionCategory).map((ext) =>
+        ext.replace('.', '').toLowerCase(),
+      ),
+    );
+
     const filteredFiles =
-      allowedExtensions.length > 0
-        ? openedFiles.filter((file) => {
-            const ext = path.extname(file).toLowerCase().replace('.', '');
-            return allowedExtensions.includes(ext);
-          })
+      allowedExtensions.size > 0
+        ? openedFiles.filter((file) =>
+            allowedExtensions.has(
+              path.extname(file).toLowerCase().replace('.', ''),
+            ),
+          )
         : openedFiles;
 
     this.postMessage({
@@ -509,6 +483,15 @@ export class FileManager extends BaseWebviewManager {
       command: `set${fileType}File`,
       files,
       ...(options.additionalPayload ?? {}),
+    });
+  }
+
+  /** Post show/hide getting started banner based on condition */
+  private postGettingStartedBanner(show: boolean): void {
+    this.postMessage({
+      command: show
+        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

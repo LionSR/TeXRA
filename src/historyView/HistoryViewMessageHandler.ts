@@ -29,48 +29,54 @@ type MessageFor<C extends HistoryViewInboundMessage['command']> = Extract<
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
-  private readonly handlerRegistry: HistoryViewInboundHandlerRegistry = {
-    [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () => this.handleGetHistoryData(),
-    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (data) => this.handleRerunAgent(data),
-    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
-      this.handleRestoreAgent(data),
-    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
-      this.handleDeleteAgent(data),
-    [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
-  };
+  private readonly handlerRegistry: HistoryViewInboundHandlerRegistry;
 
   constructor(_context: vscode.ExtensionContext) {
     super('HistoryView', { trackActiveView: true });
+    this.handlerRegistry = this.createHandlerRegistry();
+  }
+
+  private createHandlerRegistry(): HistoryViewInboundHandlerRegistry {
+    return {
+      [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
+        this.handleGetHistoryData(),
+      [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (data) =>
+        this.handleRerunAgent(data),
+      [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
+        this.handleRestoreAgent(data),
+      [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
+        this.handleDeleteAgent(data),
+      [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
+    };
   }
 
   public override async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchHistoryViewInbound(
-      message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
-    );
-
-    if (
-      !handled &&
-      message &&
-      typeof message === 'object' &&
-      'command' in message
-    ) {
-      this.logger.warn(
-        this.channel,
-        `Unhandled command: ${(message as { command: string }).command}`,
+    await this.withActiveView(webviewView, async () => {
+      const handled = dispatchHistoryViewInbound(
+        message,
+        this.handlerRegistry,
+        (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        },
       );
-    }
+
+      if (
+        !handled &&
+        message &&
+        typeof message === 'object' &&
+        'command' in message
+      ) {
+        this.logger.warn(
+          this.channel,
+          `Unhandled command: ${(message as { command: string }).command}`,
+        );
+      }
+    });
   }
 
   // ============================================================

@@ -174,9 +174,12 @@ async function promptInput(
     password,
     ignoreFocusOut: true,
   });
-  const trimmed = val?.trim();
+  const trimmed = val?.trim() ?? '';
   if (!trimmed) {
-    if (val !== undefined) vscode.window.showWarningMessage('Clone cancelled.');
+    // Show cancellation message only if user dismissed with empty string (not Escape)
+    if (val !== undefined) {
+      vscode.window.showWarningMessage('Clone cancelled.');
+    }
     return null;
   }
   return trimmed;
@@ -188,39 +191,47 @@ async function getGitToken(
   title: string,
   validate?: (t: string) => boolean,
 ): Promise<{ remote: string; sensitive: string[] } | null> {
-  const isValid = (t: string): boolean => !validate || validate(t);
+  const isValid = (t: string): boolean => validate?.(t) ?? true;
+
+  // Try stored token first
   const stored = (await secrets.get(key))?.trim() ?? '';
-  let token = isValid(stored) ? stored : '';
-
-  if (!token && stored) await secrets.delete(key);
-
-  if (!token) {
-    const input = await promptInput(
-      title,
-      'Enter your Git authentication token.',
-      true,
-    );
-    if (!input) return null;
-    if (!isValid(input)) {
-      vscode.window.showErrorMessage('Invalid token format.');
-      return null;
-    }
-    token = input;
-    await secrets.store(key, token);
+  if (stored && isValid(stored)) {
+    const encoded = encodeURIComponent(stored);
+    return { remote: `git:${encoded}`, sensitive: [stored, encoded] };
   }
 
-  const encoded = encodeURIComponent(token);
-  return { remote: `git:${encoded}`, sensitive: [token, encoded] };
+  // Clear invalid stored token
+  if (stored) {
+    await secrets.delete(key);
+  }
+
+  // Prompt for new token
+  const input = await promptInput(
+    title,
+    'Enter your Git authentication token.',
+    true,
+  );
+  if (!input) {
+    return null;
+  }
+  if (!isValid(input)) {
+    vscode.window.showErrorMessage('Invalid token format.');
+    return null;
+  }
+
+  await secrets.store(key, input);
+  const encoded = encodeURIComponent(input);
+  return { remote: `git:${encoded}`, sensitive: [input, encoded] };
 }
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
 async function checkClonePreconditions(
   workspacePath: string,
-): Promise<{ ok: true } | { ok: false }> {
+): Promise<boolean> {
   if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
     vscode.window.showErrorMessage('Git not found in PATH.');
-    return { ok: false };
+    return false;
   }
 
   let entries: [string, vscode.FileType][];
@@ -229,15 +240,15 @@ async function checkClonePreconditions(
   } catch (e) {
     vscode.window.showErrorMessage('Cannot read workspace folder.');
     logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
-    return { ok: false };
+    return false;
   }
 
-  if (entries.some(([n]) => !IGNORED_FILES.has(n))) {
+  if (entries.some(([name]) => !IGNORED_FILES.has(name))) {
     vscode.window.showErrorMessage('Workspace folder must be empty.');
-    return { ok: false };
+    return false;
   }
 
-  return { ok: true };
+  return true;
 }
 
 async function cloneOverleafProject(
@@ -279,8 +290,8 @@ async function cloneOverleafProject(
   );
   if (!creds) return;
 
-  const preconditions = await checkClonePreconditions(workspacePath);
-  if (!preconditions.ok) return;
+  const canClone = await checkClonePreconditions(workspacePath);
+  if (!canClone) return;
 
   const remote = `https://${creds.remote}@${parsed.host}${parsed.path}`;
   const label = parsed.isOverleaf ? 'Overleaf' : 'ShareLaTeX';

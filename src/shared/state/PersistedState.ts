@@ -131,7 +131,7 @@ export class PersistedState<T extends Record<string, unknown>> {
 
   /** Reset to schema defaults */
   reset(): void {
-    this.state = this.schema.parse(undefined);
+    this.state = this.schema.parse({});
     this.storage.set(this.key, this.state);
   }
 

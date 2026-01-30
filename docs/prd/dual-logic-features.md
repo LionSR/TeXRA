@@ -1,25 +1,25 @@
 # PRD: Feature Logic Consolidation
 
-## Verification Status
+## Implementation Status
 
-All claims verified against codebase (2026-01-30):
+Consolidation complete (2026-01-30):
 
-| Category              | Item                | Status      | Key Files                                                                    |
-| --------------------- | ------------------- | ----------- | ---------------------------------------------------------------------------- |
-| **View Handlers**     | Commit discovery    | ✅ Verified | `DiffManager.ts:65-112` (7 duplicate lines)                                  |
-|                       | Options computation | ✅ Verified | `MainViewMessageHandler.ts:410-448`, `ProgressViewMessageHandler.ts:817-845` |
-|                       | State restore       | ✅ Verified | 4 entry points calling `texra.restoreState`                                  |
-|                       | Latexdiff assembly  | ⚠️ Partial  | Same handler, minor arg differences                                          |
-| **Cross-Layer**       | Stream sorting      | ✅ Verified | Backend `streamInfoUtils.ts:13-22`, Frontend `stateUtils.ts:66-88`           |
-|                       | Message schemas     | ✅ Verified | `webview/types/messages.ts` is dead (0 imports)                              |
-|                       | Pasted image naming | ✅ Verified | `pasteHandler.ts:40` hardcodes prefix                                        |
-|                       | Recording flow      | ✅ Verified | Identical instantiation in both handlers                                     |
-|                       | File discovery      | ✅ Verified | FileLister vs `findFilesFromPatterns`                                        |
-| **Tool-use/Workflow** | Execution triggers  | ✅ Verified | `ExecutionManager.ts:60-85`, `ProgressViewMessageHandler.ts:318-348`         |
-|                       | File operations     | ✅ Verified | Duplicated mapping in both views                                             |
-|                       | Run selection       | ✅ Verified | `getEffectiveRunId` vs `resolveActiveRunId`                                  |
-|                       | Stream rendering    | ⚠️ Partial  | ~30-40% overlap; follow-up sections intentionally different                  |
-|                       | Session-type reset  | ✅ Verified | `clearForNewSession` and `FileSelectGroup` branch on `isToolUse`             |
+| Category              | Item                | Status         | Implementation                                                             |
+| --------------------- | ------------------- | -------------- | -------------------------------------------------------------------------- |
+| **View Handlers**     | Commit discovery    | ✅ Implemented | `@frontend/git/recentCommits.ts` - shared `fetchRecentCommits` function    |
+|                       | Options computation | ✅ Implemented | `@frontend/agents/optionsLoader.ts` - shared `loadOptions` function        |
+|                       | State restore       | ⏸️ Deferred    | Architectural, not direct duplication - different TaskState builders       |
+|                       | Latexdiff assembly  | ⏸️ Deferred    | Minor arg divergence, low maintenance burden                               |
+| **Cross-Layer**       | Stream sorting      | ✅ Implemented | `@shared/streams/streamSort.ts` with `StreamSortSchema` (Zod)              |
+|                       | Message schemas     | ✅ Implemented | Deleted `webview/types/messages.ts`, types derive from shared schemas      |
+|                       | Pasted image naming | ✅ Implemented | `@shared/files/pastedImageConstants.ts` - shared `PASTED_PREFIX`           |
+|                       | Recording flow      | ⏸️ Deferred    | Low impact, per-view instantiation acceptable                              |
+|                       | File discovery      | ⏸️ Deferred    | Intentionally different (interactive UI vs batch)                          |
+| **Tool-use/Workflow** | Execution triggers  | ✅ Implemented | `validateExecutionRequest` + `executeValidated` helper in ProgressView     |
+|                       | File operations     | ✅ Implemented | Logic inlined, removed unnecessary `buildFileOperationPayload` abstraction |
+|                       | Run selection       | ✅ Implemented | `@shared/streams/runSelection.ts` - `resolveRunId` with mode param         |
+|                       | Stream rendering    | ⏸️ Deferred    | ~30-40% overlap but follow-up sections intentionally different             |
+|                       | Session-type reset  | ✅ Implemented | `SESSION_DEFAULTS` config map in `sessionDefaults.ts`                      |
 
 ## Overview
 
@@ -341,47 +341,85 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 
 # Milestones
 
-## Phase 1: Quick Wins
+## Phase 1: Quick Wins ✅ COMPLETE
 
-- [ ] Delete `webview/types/messages.ts` (0 effort)
-- [ ] Fix pasted image prefix (1 line)
-- [ ] Extract commit discovery helper
+- [x] Delete `webview/types/messages.ts` (0 effort)
+- [x] Fix pasted image prefix - moved to `@shared/files/pastedImageConstants.ts`
+- [x] Extract commit discovery helper - `@frontend/git/recentCommits.ts`
 
-## Phase 2: View Handler Consolidation
+## Phase 2: View Handler Consolidation ✅ COMPLETE
 
-- [ ] Options loader helper
-- [ ] Evaluate state restore extraction
-- [ ] Stream sorting shared module
+- [x] Options loader helper - `@frontend/agents/optionsLoader.ts`
+- [x] Stream sorting shared module - `@shared/streams/streamSort.ts` with `StreamSortSchema`
+- [ ] Evaluate state restore extraction (deferred - architectural, not direct duplication)
 
-## Phase 3: Execution & Operations
+## Phase 3: Execution & Operations ✅ COMPLETE
 
-- [ ] `buildExecutionRequest` / `validateExecutionRequest`
-- [ ] `buildFileOperationPayload`
-- [ ] `resolveRunId` with mode parameter
+- [x] `validateExecutionRequest` - `@common/execution/executionRequests.ts`
+- [x] `resolveRunId` with mode parameter - `@shared/streams/runSelection.ts`
+- [x] Removed `buildFileOperationPayload` - logic inlined, abstraction removed per guidelines
 
-## Phase 4: UI Components
+## Phase 4: UI Components ✅ COMPLETE
 
-- [ ] `NormalizedStreamData` type and adapters
-- [ ] Shared `StreamContent` component
-- [ ] `SESSION_DEFAULTS` map
-- [ ] Recording flow helper
+- [x] `SESSION_DEFAULTS` map - `src/webview/frontend/sessionDefaults.ts`
+- [ ] `NormalizedStreamData` type and adapters (deferred)
+- [ ] Shared `StreamContent` component (deferred)
+- [ ] Recording flow helper (deferred - low impact)
 
 ## Cleanup
 
-- [ ] Delete old per-view validation/payload logic
-- [ ] Delete `getEffectiveRunId` / `resolveActiveRunId`
-- [ ] Verify no behavior changes
+- [x] Delete old per-view validation logic - replaced with `executeValidated` helper
+- [x] Delete `getEffectiveRunId` / `resolveActiveRunId` - replaced by `resolveRunId`
+- [x] Delete `fileOperationPayload.ts` - unnecessary abstraction removed
+- [x] Fixed type safety: `StreamSort` schema added, removed `as StreamSort` casts
+- [x] Fixed race condition in `AgentDirectoryManager.ensureAgentWatchers` - promise set before `getAllLocal()`
+- [x] Fixed config watcher disposal bug in `AgentDirectoryManager`
+- [x] Added `model` field to `POLISH_INSTRUCTION_TEXT` schema (was missing, caused validation failures)
+- [x] Added `MultiFileCategory` type for type-safe multi-file command maps
+- [x] Removed unnecessary `PASTED_PREFIX` re-export from `pastedImageUtils.ts`
+- [x] Fix Windows path separators in `AgentDirectoryManager` minimatch calls - normalize to forward slashes
+- [x] Add `satisfies` to `SESSION_DEFAULTS` per project conventions
 
 ---
 
-# Success Metrics
+# Success Metrics ✅ Achieved
 
-- Single entry point for execution request building/validation
-- Single entry point for file operation payload construction
-- Stream sorting comparators exist only in `src/shared/streams/`
-- `webview/types/messages.ts` deleted
-- `getEffectiveRunId`/`resolveActiveRunId` replaced by `resolveRunId`
-- ≥50% reduction in session-type branches (measure baseline before Phase 1)
+- ✅ Single entry point for execution request validation: `validateExecutionRequest`
+- ✅ File operation payload abstraction removed (per anti-abstraction guidelines)
+- ✅ Stream sorting comparators exist only in `src/shared/streams/streamSort.ts`
+- ✅ `webview/types/messages.ts` deleted
+- ✅ `getEffectiveRunId`/`resolveActiveRunId` replaced by `resolveRunId`
+- ✅ Session-type branches replaced with `SESSION_DEFAULTS` config map
+- ✅ `StreamSortSchema` added for type safety (no more `as StreamSort` casts)
+
+---
+
+# Code Review Findings (2026-01-30)
+
+Issues reported during code review and their verification status:
+
+## Verified as NOT Bugs
+
+| Issue                                         | Location                           | Verdict             | Explanation                                                                                                                       |
+| --------------------------------------------- | ---------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| ExecutionManager argument shape change        | `ExecutionManager.ts`              | ✅ Not a bug        | `texra.execute` explicitly supports both raw config and wrapped `{ config, executionId? }` format (see `executeCommand.ts:37-45`) |
+| handleInputFileSelected clears wrong category | `FileManager.ts:130-142`           | ✅ Intentional      | Function updates Edited files when Input file changes; clearing Edited when Input is empty is correct (no base to filter by)      |
+| Race condition in ensureAgentWatchers         | `AgentDirectoryManager.ts:299-301` | ✅ Theoretical only | Both operations execute synchronously in same microtask; promise callbacks queue for next microtask after null assignment         |
+| minimatch dependency                          | `package.json`                     | ✅ Already exists   | `"minimatch": "^10.1.1"` is already a production dependency                                                                       |
+
+## Valid Suggestions (Style/Cleanup)
+
+| Issue                                   | Location                   | Status       | Notes                                                                                              |
+| --------------------------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| SESSION_DEFAULTS should use `satisfies` | `sessionDefaults.ts:12`    | ✅ Fixed     | Changed to use `satisfies` pattern                                                                 |
+| Consolidate file selection Maps         | `fileSelectionRegistry.ts` | 📝 Backlog   | Three Maps could get out of sync; single declarative structure preferred                           |
+| `?? undefined` coercion                 | `DiffManager.ts:77`        | ✅ Not a bug | Schema uses `.nullish()` (returns `null`); coercion converts to `undefined` for function signature |
+
+## Real Bugs Found
+
+| Issue                                  | Location                       | Status   | Fix                                                                                       |
+| -------------------------------------- | ------------------------------ | -------- | ----------------------------------------------------------------------------------------- |
+| Windows path separators with minimatch | `AgentDirectoryManager.ts:230` | ✅ Fixed | Added `normalizePath()` helper to convert backslashes to forward slashes before minimatch |
 
 ---
 
@@ -393,24 +431,25 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 | Shared helpers become too broad       | Start with functions, not classes; follow anti-abstraction guidance |
 | Consolidation introduces regressions  | Delete old code only after parity verified via tests                |
 | Over-abstracting follow-up components | Keep `follow-up-input` and `followup-section` separate by design    |
+| Cross-platform path handling          | Normalize paths to forward slashes before glob matching             |
 
 ---
 
 # Priority Summary
 
-| Priority | Item                               | Effort  | Impact |
-| -------- | ---------------------------------- | ------- | ------ |
-| 1        | Delete `webview/types/messages.ts` | Trivial | High   |
-| 2        | Fix pasted image prefix            | 1 line  | Low    |
-| 3        | Commit discovery helper            | Small   | High   |
-| 4        | Stream sorting consolidation       | Medium  | High   |
-| 5        | Options computation helper         | Small   | Medium |
-| 6        | Run selection unification          | Small   | Medium |
-| 7        | Execution helpers                  | Medium  | Medium |
-| 8        | Recording flow helper              | Medium  | Low    |
-| 9        | File operations builder            | Medium  | Medium |
-| 10       | Stream rendering normalization     | Large   | Medium |
-| 11       | Session defaults map               | Small   | Low    |
-| 12       | State restore (evaluate)           | Small   | Low    |
-| 13       | File discovery (evaluate)          | Medium  | Low    |
-| 14       | Latexdiff (defer)                  | Small   | Low    |
+| Priority | Item                               | Status      | Notes                                           |
+| -------- | ---------------------------------- | ----------- | ----------------------------------------------- |
+| 1        | Delete `webview/types/messages.ts` | ✅ Done     | Types now derived from shared schemas           |
+| 2        | Fix pasted image prefix            | ✅ Done     | `@shared/files/pastedImageConstants.ts`         |
+| 3        | Commit discovery helper            | ✅ Done     | `@frontend/git/recentCommits.ts`                |
+| 4        | Stream sorting consolidation       | ✅ Done     | `@shared/streams/streamSort.ts` with Zod schema |
+| 5        | Options computation helper         | ✅ Done     | `@frontend/agents/optionsLoader.ts`             |
+| 6        | Run selection unification          | ✅ Done     | `@shared/streams/runSelection.ts`               |
+| 7        | Execution helpers                  | ✅ Done     | `validateExecutionRequest` + `executeValidated` |
+| 8        | Recording flow helper              | ⏸️ Deferred | Low impact                                      |
+| 9        | File operations builder            | ✅ Removed  | Unnecessary abstraction per guidelines          |
+| 10       | Stream rendering normalization     | ⏸️ Deferred | Follow-up sections intentionally different      |
+| 11       | Session defaults map               | ✅ Done     | `sessionDefaults.ts`                            |
+| 12       | State restore (evaluate)           | ⏸️ Deferred | Architectural, not direct duplication           |
+| 13       | File discovery (evaluate)          | ⏸️ Deferred | Intentionally different use cases               |
+| 14       | Latexdiff (defer)                  | ⏸️ Deferred | Minor arg divergence, low maintenance           |

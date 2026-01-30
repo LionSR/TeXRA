@@ -205,7 +205,7 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffMultipleResult> {
     try {
-      if (!inputLocations || inputLocations.length === 0) {
+      if (inputLocations.length === 0) {
         const message = 'No input files provided';
         logger.warn(this.channel, message);
         return {

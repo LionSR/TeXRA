@@ -54,30 +54,29 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchProfileViewInbound(
-      message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
-    );
-
-    if (
-      !handled &&
-      message &&
-      typeof message === 'object' &&
-      'command' in message
-    ) {
-      this.logger.warn(
-        this.channel,
-        `Unhandled command: ${(message as { command: string }).command}`,
+    await this.withActiveView(webviewView, async () => {
+      const handled = dispatchProfileViewInbound(
+        message,
+        this.handlerRegistry,
+        (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        },
       );
-    }
+
+      if (
+        !handled &&
+        message &&
+        typeof message === 'object' &&
+        'command' in message
+      ) {
+        this.logger.warn(
+          this.channel,
+          `Unhandled command: ${(message as { command: string }).command}`,
+        );
+      }
+    });
   }
 
   // ============================================================

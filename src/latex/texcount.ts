@@ -96,7 +96,7 @@ async function detectChineseMode(
   if (hasChinese) {
     logger.debug(
       channel,
-      `Chinese packages detected in ${fileLocation.absolutePath}, enabling Chinese character counting`,
+      `Chinese packages detected in ${fileLocation.absolutePath}`,
     );
   }
   return hasChinese;
@@ -218,10 +218,13 @@ async function getSummedCount(
   }
 
   if (validPaths.length === 0) {
-    if (errors.length === 0) {
-      errors.push('No valid LaTeX files were provided for texcount sum mode.');
-    }
-    return { output: null, errors };
+    return {
+      output: null,
+      errors:
+        errors.length > 0
+          ? errors
+          : ['No valid LaTeX files were provided for texcount sum mode.'],
+    };
   }
 
   const args: string[] = ['-sum'];

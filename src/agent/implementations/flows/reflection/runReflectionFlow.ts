@@ -21,8 +21,14 @@
 
 import * as path from 'path';
 
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
-import type { EndGroupStatus } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type EndGroupStatus,
+  type ExecutionStatus,
+  type RoundOutput,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   getExecutionStore,
   type ExecutionKVStore,
@@ -44,20 +50,13 @@ import {
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
-import {
-  toEndStatus,
-  ERROR_STATUS,
-  COMPLETED_STATUS,
-} from '../common/FlowLifecycle';
 import type { AgentLogStage } from '@logger/AgentLogger';
-
 import {
   TaskRunFileService,
   WorkspaceFS,
@@ -69,12 +68,15 @@ import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
 
 import {
+  toEndStatus,
+  ERROR_STATUS,
+  COMPLETED_STATUS,
+} from '../common/FlowLifecycle';
+import {
   createReflectionFlow,
   type ReflectionFlowShared,
 } from './ReflectionFlow';
 import { ReflectionFlowStateSchema } from './ReflectionFlowState';
-import type { StreamTabId, StorageKey } from '@shared/schemas';
-import type { RoundOutput } from '@shared/schemas';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -150,12 +152,17 @@ function deriveConfig(
     }
   }
 
-  // Compute total rounds: max(setting.rounds, userRequest.length)
+  // Compute total rounds: max(setting.rounds, userRequest count)
   const { userRequest } = prompt;
-  const requestCount = Array.isArray(userRequest) ? userRequest.length : 0;
-  const effectiveRequestCount =
-    userRequest && !Array.isArray(userRequest) ? 1 : requestCount;
-  const totalRounds = Math.max(setting.rounds ?? 2, effectiveRequestCount);
+  let requestCount: number;
+  if (Array.isArray(userRequest)) {
+    requestCount = userRequest.length;
+  } else if (userRequest) {
+    requestCount = 1;
+  } else {
+    requestCount = 0;
+  }
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
     useScratchpad,

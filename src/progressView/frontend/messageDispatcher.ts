@@ -18,6 +18,7 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -25,7 +26,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
   updateNestedRounds,
-  resolveActiveRunId,
   prependInstructionForToolUse,
 } from './stateUtils';
 import {
@@ -337,25 +337,25 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
       status: data.status,
-      ...(data.status === 'waiting' ? { shouldFocusFollowUp: true } : {}),
+      ...(data.status === 'waiting' && { shouldFocusFollowUp: true }),
     }));
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
-    const isActiveStream = stream === ctx.getState().activeStreamId;
+    const state = ctx.getState();
+    const isActiveStream = stream === state.activeStreamId;
 
     ctx.setStreamState(stream, (prev) => ({
       ...prev,
       status,
-      ...(isActiveStream && status === 'waiting'
-        ? { shouldFocusFollowUp: true }
-        : {}),
+      ...(isActiveStream &&
+        status === 'waiting' && { shouldFocusFollowUp: true }),
     }));
 
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: prev.streams.map((item) =>
+    ctx.setState(() => ({
+      ...state,
+      streams: state.streams.map((item) =>
         item.name === stream
           ? {
               ...item,
@@ -391,7 +391,8 @@ const handlers: HandlerRegistry = {
 
     updateWorkflowState(ctx, stream, (prev) => {
       // Use provided runId from backend if available, otherwise resolve from state
-      const runId = providedRunId ?? resolveActiveRunId(prev) ?? 'default';
+      const runId =
+        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
