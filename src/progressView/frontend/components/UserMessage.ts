@@ -34,7 +34,7 @@ export class UserMessage extends LitElement {
 
       .user-message {
         background-color: var(--vscode-editor-selectionBackground);
-        border-left: 3px solid var(--color-text-link);
+        border-left: var(--border-thick) solid var(--color-text-link);
         padding: var(--spacing-small) var(--spacing-medium);
         max-width: 85%;
         margin-left: var(--spacing-xlarge);
