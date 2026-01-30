@@ -311,15 +311,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const successRes = handleInvocationResult(
-      execRes,
-      shared,
-      { lastError: shared.lastError },
-      {
-        logger: this.services.logger,
-        operationName: this.getOperationName(),
-      },
-    );
+    const successRes = handleInvocationResult(execRes, shared, shared, {
+      logger: this.services.logger,
+      operationName: this.getOperationName(),
+    });
 
     if (!successRes) {
       return FlowTransition.COMPLETE;

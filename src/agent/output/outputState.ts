@@ -17,7 +17,7 @@ import {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import {
   TaskRunFileService,
   getComparablePath,
@@ -68,6 +68,27 @@ export function createOutputState(): OutputState {
     storageKey: null,
     runPreparation: null,
   };
+}
+
+// ============================================================================
+// Stage Helper
+// ============================================================================
+
+/**
+ * Wraps an operation in an output processing stage for logging.
+ * Shared helper to avoid duplication across output processing modules.
+ */
+export async function withOutputStage<T>(
+  deps: OutputDependencies,
+  label: string,
+  parentStage: AgentLogStage | undefined,
+  fn: (stage: AgentLogStage) => Promise<T>,
+): Promise<T> {
+  const stage = await deps.logger.stage(`Output: ${label}`, {
+    parent: parentStage,
+    skip: true,
+  });
+  return stage.run(() => fn(stage));
 }
 
 // ============================================================================
@@ -147,6 +168,10 @@ export function setActiveRun(
   deps.fileService.updateRunContext(deps.executionId);
 
   if (storageKey === state.storageKey) return;
+
+  // Clear reference to old preparation - allows GC even if it's still running
+  // The old operation will complete but its result is discarded
+  state.runPreparation = null;
 
   state.storageKey = storageKey;
   state.openedOutputs.clear();
