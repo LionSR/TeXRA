@@ -43,7 +43,8 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   getTreeItem(element: FileItem): vscode.TreeItem {
-    const isFile = element.collapsibleState === vscode.TreeItemCollapsibleState.None;
+    const isFile =
+      element.collapsibleState === vscode.TreeItemCollapsibleState.None;
     if (element.editing) {
       element.contextValue = 'editing';
     } else if (element.isBuiltIn) {
@@ -131,8 +132,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       }
 
       return items.sort((a, b) => {
-        const aIsFolder = a.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
-        const bIsFolder = b.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+        const aIsFolder =
+          a.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+        const bIsFolder =
+          b.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
         if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
         return String(a.label ?? '').localeCompare(String(b.label ?? ''));
       });
