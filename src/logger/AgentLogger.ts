@@ -365,54 +365,40 @@ export class AgentLogger {
     let buffer = '';
     let messageCreated = false;
 
+    const emitMessage = (): void => {
+      if (!shouldEmit) return;
+
+      if (messageCreated) {
+        bus.emit('updateLogMessage', {
+          streamId,
+          logMessage: { id, text: buffer, groupId, messageType: type },
+        });
+      } else {
+        bus.emit('addLogMessage', {
+          streamId,
+          logMessage: {
+            id,
+            text: buffer,
+            level,
+            timestamp: Date.now(),
+            groupId,
+            messageType: type,
+            verbose: debugMode,
+          },
+        });
+        messageCreated = true;
+      }
+    };
+
     return {
       append: (text: string) => {
         if (!text) return;
         buffer += text;
-        if (!shouldEmit) return;
-
-        if (messageCreated) {
-          bus.emit('updateLogMessage', {
-            streamId,
-            logMessage: { id, text: buffer, groupId, messageType: type },
-          });
-        } else {
-          bus.emit('addLogMessage', {
-            streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              level,
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-              verbose: debugMode,
-            },
-          });
-          messageCreated = true;
-        }
+        emitMessage();
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
-
-        if (shouldEmit) {
-          const event = messageCreated ? 'updateLogMessage' : 'addLogMessage';
-          bus.emit(event, {
-            streamId,
-            logMessage: messageCreated
-              ? { id, text: buffer, groupId, messageType: type }
-              : {
-                  id,
-                  text: buffer,
-                  level,
-                  timestamp: Date.now(),
-                  groupId,
-                  messageType: type,
-                  verbose: debugMode,
-                },
-          });
-        }
-
+        emitMessage();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
