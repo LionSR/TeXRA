@@ -119,6 +119,7 @@ export function createSingleValueRunMapSchema<T>(
   return z.unknown().transform((data): Map<string, T> => {
     if (!isPlainObject(data)) return new Map();
 
+    // Try new format first (per backward-compatibility guidance: new format first)
     const runMap = new Map<string, T>();
     for (const [runId, value] of Object.entries(data)) {
       if (!isPlainObject(value)) continue;
@@ -127,6 +128,14 @@ export function createSingleValueRunMapSchema<T>(
         runMap.set(runId, result.data);
       }
     }
+    if (runMap.size > 0) return runMap;
+
+    // Fall back to legacy single-value format
+    const legacyResult = itemSchema.safeParse(data);
+    if (legacyResult.success && !isEmpty?.(legacyResult.data)) {
+      return new Map([['default', legacyResult.data]]);
+    }
+
     return runMap;
   }) as z.ZodType<Map<string, T>>;
 }

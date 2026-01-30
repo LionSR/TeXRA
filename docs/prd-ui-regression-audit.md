@@ -56,8 +56,10 @@ PR contains 685 files changed (+44829/-38366 lines) - major Lit migration effort
 ### L3) Schema defaults hide data loss (HIGH)
 
 - **Area:** Shared
-- **Type:** Logic regression
+- **Type:** Design decision (risk accepted)
 - **Impact:** High
+- **Status:** ⚠️ **By design** - The prefault is intentional for recovery; keep unless data
+  integrity requirements change.
 - **Current behavior:** `queuedFollowUps: z.array(z.string()).prefault([])` means missing data
   silently becomes empty array instead of erroring. Combined with L1 and L2, the frontend shows
   empty queued messages even when they exist on the backend.
@@ -253,13 +255,14 @@ PR contains 685 files changed (+44829/-38366 lines) - major Lit migration effort
 ### SP-3) Race condition between cache init and first message (HIGH)
 
 - **Area:** Shared State
-- **Type:** Logic regression
+- **Type:** Design decision (not a regression)
 - **Impact:** High
-- **Current behavior:** PersistedState constructor loads state synchronously from cache. But cache
-  is initialized once at `createWebviewStorage` construction. If backend sends UPDATE_STREAMS before
-  cache is populated, frontend starts with empty state.
+- **Status:** ✅ **By design** - `WEBVIEW_READY` gating ensures the backend sends state after the
+  webview initializes and storage cache is ready.
+- **Current behavior:** PersistedState constructor loads state synchronously from cache, and the
+  backend waits on the readiness signal before sending `UPDATE_STREAMS`.
 - **Location:** `src/shared/state/PersistedState.ts:86-98`
-- **Fix:** Ensure message ordering or add cache reload trigger
+- **Note:** If message ordering changes in the future, revisit with a reload trigger.
 
 ### SP-4) pendingLogUpdates not namespaced by stream (HIGH)
 
@@ -277,12 +280,14 @@ PR contains 685 files changed (+44829/-38366 lines) - major Lit migration effort
 ### SP-5) PersistedState.reload() never called (MEDIUM)
 
 - **Area:** Shared State
-- **Type:** Logic regression
+- **Type:** Design decision (not a regression)
 - **Impact:** Medium
-- **Current behavior:** The `reload()` method exists but is never called anywhere in the codebase.
-  When backend state changes, frontend never reloads from storage.
+- **Status:** ✅ **By design** - `reload()` is a manual escape hatch and the current data flow relies
+  on backend-driven messages instead of storage reloads.
+- **Current behavior:** The `reload()` method exists but is never called; state refreshes through
+  explicit message updates instead.
 - **Location:** `src/shared/state/PersistedState.ts:129-131`
-- **Fix:** Call `reload()` when state update messages arrive
+- **Note:** Keep method for manual recovery or future tooling hooks.
 
 ### SP-6) MementoStorage rename inconsistency (LOW)
 
