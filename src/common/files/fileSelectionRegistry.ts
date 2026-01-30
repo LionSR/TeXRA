@@ -34,6 +34,12 @@ export type FileSelectionResponseCommand =
   | typeof MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED
   | typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED;
 
+/**
+ * Maps webview message commands (e.g., 'selectInputFile') to VS Code command IDs
+ * (e.g., 'texra.selectInputFile'). These are different namespaces:
+ * - MAIN_VIEW_COMMANDS: Internal webview message names
+ * - FILE_SELECTION_COMMAND_IDS: VS Code registered command IDs
+ */
 export const FILE_SELECTION_COMMANDS = new Map<FileSelectionCommand, string>([
   [
     MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
