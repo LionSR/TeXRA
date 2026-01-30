@@ -808,6 +808,7 @@ const InstructionMessages = [
     command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
     text: z.string(),
     agent: z.string().optional(),
+    model: z.string().optional(),
     inputFile: z.string().optional(),
     inputFiles: z.array(z.string()).optional(),
     referenceFile: z.string().optional(),
