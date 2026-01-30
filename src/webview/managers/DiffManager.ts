@@ -74,6 +74,7 @@ export class DiffManager extends BaseWebviewManager {
     }
 
     const { commits, isGitRepo } = await fetchRecentCommits({
+      // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
       notifyWhenEmpty: parsed.data.notifyWhenEmpty ?? undefined,
     });
 
