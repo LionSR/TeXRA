@@ -1,23 +1,11 @@
 // Standard library imports
 import { strict as assert } from 'assert';
-import * as vscode from 'vscode';
 
 // Local imports
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { getEmitFilter } from '@logger/filterUtils';
 
 describe('getEmitFilter', () => {
-  let originalConfig: any;
-
-  beforeEach(() => {
-    // Store original config
-    originalConfig = vscode.workspace.getConfiguration('texra.logger');
-  });
-
-  afterEach(() => {
-    // Restore original config if needed
-  });
-
   describe('debug mode filtering', () => {
     it('filters debug-level messages when debug mode is off', () => {
       // Mock debug mode off (default)

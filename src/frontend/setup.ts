@@ -14,7 +14,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { getConfig, updateConfig } from '@utils/config';
+import { getConfig, isConfigExplicitlySet, updateConfig } from '@utils/config';
 
 /**
  * Version number for the default model list.
@@ -113,19 +113,6 @@ const DEFAULT_MODELS = [
   'qwen3max',
   'grok4',
 ];
-
-/**
- * Checks if a configuration setting has been explicitly set by the user
- * (at global or workspace level), rather than using package.json defaults.
- */
-function isConfigExplicitlySet(key: string): boolean {
-  const inspection = vscode.workspace.getConfiguration().inspect(key);
-  return (
-    inspection?.globalValue !== undefined ||
-    inspection?.workspaceValue !== undefined ||
-    inspection?.workspaceFolderValue !== undefined
-  );
-}
 
 /**
  * Refreshes the model list when MODEL_LIST_VERSION changes.

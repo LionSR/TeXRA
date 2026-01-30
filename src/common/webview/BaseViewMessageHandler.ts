@@ -88,11 +88,25 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Set the active webview reference.
-   * For subclasses that override handleMessage and need to track the view.
+   * Clear the tracked active view (when tracking is enabled).
    */
-  protected setActiveView(view: T): void {
-    this._activeView = view;
+  public clearActiveView(): void {
+    if (this._options.trackActiveView) {
+      this._activeView = undefined;
+    }
+  }
+
+  /**
+   * Track the active webview reference for custom handlers.
+   */
+  protected async withActiveView(
+    webviewView: T,
+    handler: () => Promise<void> | void,
+  ): Promise<void> {
+    if (this._options.trackActiveView) {
+      this._activeView = webviewView;
+    }
+    await handler();
   }
 
   /**
