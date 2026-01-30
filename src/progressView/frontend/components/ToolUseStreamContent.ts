@@ -31,7 +31,7 @@ import {
 } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, type Ref } from 'lit/directives/ref.js';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
 import { getRunGroups, type RunGroup } from '../stateUtils';
@@ -57,11 +57,13 @@ import type { PermissionState } from './PermissionCard';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Local imports - sibling components
-import './StreamContent';
-import type {
-  NormalizedStreamData,
-  StreamContentSection,
-} from './StreamContent';
+import './StreamHeader';
+import './RequestPanels';
+import './TodoList';
+import './TaskGroupList';
+import './LogList';
+import './UsagePanel';
+import './FollowUpInput';
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
@@ -127,41 +129,37 @@ export class ToolUseStreamContent extends LitElement {
       return html``;
     }
 
-    const sections: StreamContentSection[] = [
-      { type: 'requestPanels', permissions: this.filteredPermissions },
-      { type: 'todoList', todos: currentState.todos },
-      { type: 'logList' },
-      {
-        type: 'usagePanel',
-        usage: null,
-        contextState: currentState.contextState ?? null,
-      },
-      {
-        type: 'followUpInput',
-        ref: this.followUpRef,
-        visible: true,
-        value: currentState.followUpText,
-        queuedMessages: currentState.queuedFollowUps,
-        shouldFocus: currentState.shouldFocusFollowUp ?? false,
-        polishedText: currentState.polishedText ?? null,
-        transcribedText: currentState.transcribedText ?? null,
-        recording: currentState.recording ?? false,
-        onFocusComplete: () => this.handleFocusComplete(),
-      },
-    ];
+    return html`
+      <stream-header
+        .stream=${streamInfo}
+        .streamState=${currentState}
+        .runId=${null}
+        .runs=${this.runGroups}
+        .yoloActive=${Boolean(currentState.toolEditBypass)}
+      ></stream-header>
 
-    const data: NormalizedStreamData = {
-      header: {
-        stream: streamInfo,
-        streamState: currentState,
-        runId: null,
-        runs: this.runGroups,
-        yoloActive: Boolean(currentState.toolEditBypass),
-      },
-      sections,
-    };
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
-    return html` <stream-content .data=${data}></stream-content> `;
+      <todo-list .todos=${currentState.todos}></todo-list>
+
+      <log-list></log-list>
+
+      <usage-panel
+        .contextState=${currentState.contextState ?? null}
+      ></usage-panel>
+
+      <follow-up-input
+        ${ref(this.followUpRef)}
+        .visible=${true}
+        .value=${currentState.followUpText}
+        .queuedMessages=${currentState.queuedFollowUps}
+        .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
+        .polishedText=${currentState.polishedText ?? null}
+        .transcribedText=${currentState.transcribedText ?? null}
+        .recording=${currentState.recording ?? false}
+        @focus-complete=${this.handleFocusComplete}
+      ></follow-up-input>
+    `;
   }
 
   /**

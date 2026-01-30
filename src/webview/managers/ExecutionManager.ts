@@ -1,20 +1,17 @@
 import * as vscode from 'vscode';
 
-import type { AgentConfigInput } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+import type { AgentConfigInput } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { buildFileOperationPayload } from '@common/files';
+import { validateExecutionRequest } from '@common/execution/executionRequests';
 import * as logger from '@logger/logUtils';
 import {
-  buildExecutionRequest,
-  validateExecutionRequest,
-} from '@common/execution/executionRequests';
-import { buildFileOperationPayload } from '@common/files';
-import {
-  isPastedImage,
   getPastedImageFullPath,
+  isPastedImage,
 } from '@utils/files/pastedImageUtils';
 import { capitalize } from '@utils/text/stringUtils';
 import type { z } from 'zod';
@@ -87,7 +84,7 @@ export class ExecutionManager {
       : ToolConfigSchema.parse(message);
 
     // Schema provides defaults via .prefault(), we only override conditional fields
-    const request = buildExecutionRequest({
+    const request = {
       config: {
         ...message,
         agentCategory: isToolUse
@@ -104,7 +101,7 @@ export class ExecutionManager {
           .filter((f: string | null): f is string => f !== null),
         editedFile: null,
       },
-    });
+    };
 
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
@@ -133,18 +130,14 @@ export class ExecutionManager {
   }
 
   handleSingleOperation(message: CommandMessage): void {
-    const operation = message.command.startsWith('pack') ? 'pack' : 'clean';
-    const payload = buildFileOperationPayload(
-      {
-        kind: 'mainView',
-        data: {
-          inputFile: message.inputFile,
-          agent: message.agent,
-          model: message.model,
-        },
+    const payload = buildFileOperationPayload({
+      kind: 'mainView',
+      data: {
+        inputFile: message.inputFile,
+        agent: message.agent,
+        model: message.model,
       },
-      operation,
-    );
+    });
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
       payload.inputFile,
@@ -154,20 +147,18 @@ export class ExecutionManager {
   }
 
   handleMultipleOperation(message: CommandMessage): void {
-    const commandType = message.command.startsWith('pack') ? 'pack' : 'clean';
-    const payload = buildFileOperationPayload(
-      {
-        kind: 'mainView',
-        data: {
-          inputFile: message.inputFile,
-          agent: message.agent,
-          model: message.model,
-          outputFiles: message.outputFiles,
-        },
+    const payload = buildFileOperationPayload({
+      kind: 'mainView',
+      data: {
+        inputFile: message.inputFile,
+        agent: message.agent,
+        model: message.model,
+        outputFiles: message.outputFiles,
       },
-      commandType,
-    );
-    const operation = commandType === 'pack' ? 'Packing' : 'Cleaning';
+    });
+    const operation = message.command.startsWith('pack')
+      ? 'Packing'
+      : 'Cleaning';
     const files = payload.outputFiles.join(', ');
     logger.info(
       CHANNEL,

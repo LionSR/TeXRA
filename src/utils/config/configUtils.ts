@@ -34,21 +34,6 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 }
 
 /**
- * Gets a configuration value from a specific section/key pair.
- *
- * @param section Configuration section (e.g., 'texra.auth')
- * @param key Configuration key within the section
- * @param defaultValue Optional default value if configuration is not found
- */
-export function getScopedConfig<T>(
-  section: string,
-  key: string,
-  defaultValue?: T,
-): T {
-  return vscode.workspace.getConfiguration(section).get(key, defaultValue as T);
-}
-
-/**
  * Updates a configuration value in VS Code settings.
  *
  * Path conventions:

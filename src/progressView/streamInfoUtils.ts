@@ -1,15 +1,16 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports - shared schemas
+import { sortStreams, type StreamSort } from '@shared/streams/streamSort';
+
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter } from '@shared/schemas';
-import { sortStreams, type StreamSort } from '@shared/streams/streamSort';
+import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from '@shared/schemas';
 
 /**
  * Check if a session category matches the given filter.

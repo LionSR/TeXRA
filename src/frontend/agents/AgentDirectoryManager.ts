@@ -9,8 +9,7 @@ import { minimatch } from 'minimatch';
 import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { getConfig, updateConfig } from '@utils/config';
-import { debounce } from '@utils/core';
+import { getConfig, updateConfig, watchConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
@@ -29,7 +28,6 @@ export interface AgentDirectoryWatcherEvent {
 
 export interface AgentDirectoryWatcherOptions {
   pattern?: string;
-  debounceMs: number;
   onEvent: (event: AgentDirectoryWatcherEvent) => void;
 }
 
@@ -42,6 +40,7 @@ export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
   private watcherDisposables: vscode.FileSystemWatcher[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
+  private watcherConfigDisposable: vscode.Disposable | null = null;
   private watcherDirectories: Array<{
     directory: string;
     source: AgentSource;
@@ -225,21 +224,18 @@ export class AgentDirectoryManager {
   ): vscode.Disposable {
     this.ensureInitialized();
     const pattern = options.pattern ?? '**/*';
-    const debounced = debounce(
-      (event: AgentDirectoryWatcherEvent) => options.onEvent(event),
-      options.debounceMs,
-    );
     const subscription: AgentDirectoryWatcherSubscription = {
       pattern,
       handleEvent: (event) => {
         if (minimatch(event.relativePath, pattern, { dot: true })) {
-          debounced(event);
+          options.onEvent(event);
         }
       },
     };
 
     this.watcherSubscriptions.add(subscription);
     void this.ensureAgentWatchers();
+    this.ensureAgentDirectoryWatcherConfig();
 
     return {
       dispose: () => {
@@ -251,16 +247,61 @@ export class AgentDirectoryManager {
     };
   }
 
-  private async ensureAgentWatchers(): Promise<void> {
-    if (this.watcherSetupPromise) {
-      await this.watcherSetupPromise;
+  private ensureAgentDirectoryWatcherConfig(): void {
+    if (this.watcherConfigDisposable || !this.context) {
       return;
     }
 
-    this.watcherSetupPromise = (async () => {
-      const directories = await this.getAllLocal();
-      this.watcherDirectories = directories;
+    this.watcherConfigDisposable = watchConfig(
+      this.context,
+      'texra.explorer.agentsDirectory',
+      () => {
+        void this.refreshAgentWatchers();
+      },
+    );
+  }
 
+  private sameDirectories(
+    current: Array<{ directory: string; source: AgentSource }>,
+    next: Array<{ directory: string; source: AgentSource }>,
+  ): boolean {
+    if (current.length !== next.length) return false;
+    return current.every(
+      (entry, index) =>
+        entry.directory === next[index].directory &&
+        entry.source === next[index].source,
+    );
+  }
+
+  private async ensureAgentWatchers(): Promise<void> {
+    if (this.watcherSetupPromise) {
+      await this.watcherSetupPromise;
+    }
+
+    const directories = await this.getAllLocal();
+    if (
+      this.watcherDirectories &&
+      this.sameDirectories(this.watcherDirectories, directories)
+    ) {
+      return;
+    }
+
+    await this.buildAgentWatchers(directories);
+  }
+
+  private async refreshAgentWatchers(): Promise<void> {
+    if (this.watcherSubscriptions.size === 0) {
+      return;
+    }
+    await this.ensureAgentWatchers();
+  }
+
+  private async buildAgentWatchers(
+    directories: Array<{ directory: string; source: AgentSource }>,
+  ): Promise<void> {
+    this.disposeAgentWatchers();
+    this.watcherDirectories = directories;
+    this.watcherSetupPromise = (async () => {
       for (const entry of directories) {
         const pattern = new vscode.RelativePattern(entry.directory, '**/*');
         const watcher = vscode.workspace.createFileSystemWatcher(
@@ -314,6 +355,10 @@ export class AgentDirectoryManager {
     this.watcherDisposables = [];
     this.watcherDirectories = null;
     this.watcherSetupPromise = null;
+    if (this.watcherConfigDisposable) {
+      this.watcherConfigDisposable.dispose();
+      this.watcherConfigDisposable = null;
+    }
   }
 }
 
