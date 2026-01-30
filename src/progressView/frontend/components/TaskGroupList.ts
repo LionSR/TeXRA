@@ -85,6 +85,13 @@ export class TaskGroupList extends LitElement {
     }
   }
 
+  /** Scroll to bottom only when the user is already near the end. */
+  scrollToBottomIfNearEnd(threshold = 32): void {
+    if (!this.scrollContainer) return;
+    if (!this.isNearBottom(threshold)) return;
+    scrollToBottom(this.scrollContainer);
+  }
+
   override willUpdate(changedProperties: Map<string, unknown>): void {
     if (changedProperties.has('groups')) {
       this.checkForCompletedRuns();
@@ -93,6 +100,7 @@ export class TaskGroupList extends LitElement {
 
   /** Play sound when a run group completes */
   private checkForCompletedRuns(): void {
+    const knownGroups = new Set(this.groups.map((group) => group.id));
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = /^r\d+$/.test(group.name);
@@ -106,6 +114,11 @@ export class TaskGroupList extends LitElement {
       }
 
       this.previousStatuses.set(group.id, group.status);
+    }
+    for (const key of this.previousStatuses.keys()) {
+      if (!knownGroups.has(key)) {
+        this.previousStatuses.delete(key);
+      }
     }
   }
 
@@ -128,9 +141,15 @@ export class TaskGroupList extends LitElement {
     }
 
     // Sort messages by timestamp and index by groupId
-    const sortedMessages = [...this.messages].sort(
-      (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
+    const messageOrder = new Map(
+      this.messages.map((message, index) => [message.id, index]),
     );
+    const sortedMessages = [...this.messages].sort((a, b) => {
+      const aTime = a.timestamp ?? Number.MAX_SAFE_INTEGER;
+      const bTime = b.timestamp ?? Number.MAX_SAFE_INTEGER;
+      if (aTime !== bTime) return aTime - bTime;
+      return (messageOrder.get(a.id) ?? 0) - (messageOrder.get(b.id) ?? 0);
+    });
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungroupedMessages: LogMessageData[] = [];
 
@@ -156,9 +175,17 @@ export class TaskGroupList extends LitElement {
     }
 
     // Get root groups (no parent), sorted by start time
+    const groupOrder = new Map(
+      this.groups.map((group, index) => [group.id, index]),
+    );
     const tree = this.groups
       .filter((g) => !g.parentGroupId)
-      .sort((a, b) => a.startTime - b.startTime)
+      .sort((a, b) => {
+        const aTime = a.startTime ?? Number.MAX_SAFE_INTEGER;
+        const bTime = b.startTime ?? Number.MAX_SAFE_INTEGER;
+        if (aTime !== bTime) return aTime - bTime;
+        return (groupOrder.get(a.id) ?? 0) - (groupOrder.get(b.id) ?? 0);
+      })
       .map(buildNode);
 
     return [tree, ungroupedMessages];
@@ -187,6 +214,25 @@ export class TaskGroupList extends LitElement {
   private isExpanded(groupId: string): boolean {
     if (!this.toggleStates) return true;
     return this.toggleStates.get(groupId) !== true;
+  }
+
+  private isNearBottom(threshold: number): boolean {
+    if (!this.scrollContainer) return false;
+    const vsElement = this.scrollContainer as HTMLElement & {
+      scrollPos?: number;
+      scrollMax?: number;
+    };
+    if (
+      typeof vsElement.scrollPos === 'number' &&
+      typeof vsElement.scrollMax === 'number'
+    ) {
+      return vsElement.scrollMax - vsElement.scrollPos <= threshold;
+    }
+    const remaining =
+      this.scrollContainer.scrollHeight -
+      this.scrollContainer.scrollTop -
+      this.scrollContainer.clientHeight;
+    return remaining <= threshold;
   }
 
   /** Handle group toggle events */
