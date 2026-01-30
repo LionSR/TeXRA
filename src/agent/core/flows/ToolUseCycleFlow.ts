@@ -460,11 +460,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: {
-      shouldStop: boolean;
-      response?: unknown;
-      responseTimeMs?: number;
-    },
+    _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;

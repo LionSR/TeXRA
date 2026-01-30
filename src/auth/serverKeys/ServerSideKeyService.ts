@@ -244,12 +244,8 @@ export class ServerSideKeyService {
   }
 
   canUseModelSync(modelName: string): boolean {
-    if (!this.userTier) {
-      return false;
-    }
-    if (this.hasFullAccess()) {
-      return true;
-    }
+    if (!this.userTier) return false;
+    if (this.hasFullAccess()) return true;
     return this.tierService.isModelAvailable(this.userTier, modelName);
   }
 
