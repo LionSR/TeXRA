@@ -5,11 +5,12 @@
 
 ## Overview
 
-This PRD documents **20 additional UI or logic regressions** identified in a fresh audit of the
-current branch. Each issue is double-checked against implementation details (no false positives),
-with concrete code references and **root-cause fixes** instead of band-aid workarounds.
+This PRD documents **15 distinct UI or logic regressions** (20 affected locations) identified in a
+fresh audit of the current branch. Six Shadow DOM `target.closest()` issues are consolidated into
+one systemic item (P5–P10). Each issue includes code references verified against the current source
+and **root-cause fixes** instead of band-aid workarounds.
 
-> **Status: 🟡 IN PROGRESS (2026-02-02)**
+> **Status: 🟡 IN PROGRESS (2026-01-30)**
 
 ### Baseline for comparison
 
@@ -25,7 +26,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (state updates)
 - **Type:** Logic regression
 - **Impact:** High (clears data for other runs when resetting a single run)
-- **Location:** `src/progressView/frontend/stateUtils.ts:22-55`
+- **Location:** `src/progressView/frontend/stateUtils.ts:26-54`
 - **Root cause:** `updateNestedRounds()` uses `const base = reset ? {} : current` even when
   `runId` is provided, wiping all other runs.
 - **Fix (root):** When `reset` is true and `runId` is provided, only clear the specific run's
@@ -36,7 +37,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (tool-use logs)
 - **Type:** Logic regression
 - **Impact:** High (user sees blank log until a message arrives)
-- **Location:** `src/progressView/frontend/stateUtils.ts:61-92`
+- **Location:** `src/progressView/frontend/stateUtils.ts:119-145`
 - **Root cause:** `prependInstructionForToolUse()` exits early when `messages.length === 0`, so
   the synthetic userMessage is never inserted for empty log batches.
 - **Fix (root):** Allow injection even when the message list is empty by creating a new array
@@ -47,7 +48,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (stream switching)
 - **Type:** UX regression
 - **Impact:** High (active stream becomes blank when filter is changed)
-- **Location:** `src/progressView/frontend/ProgressApp.ts:214-233`
+- **Location:** `src/progressView/frontend/ProgressApp.ts:248-258`
 - **Root cause:** `getActiveStreamInfo()` searches within `getFilteredStreams()` instead of
   the full stream list, so filtered-out streams return `null` and clear the content area.
 - **Fix (root):** Resolve the active stream from the full stream list and keep rendering it
@@ -58,73 +59,32 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (workflow stream content)
 - **Type:** Logic regression
 - **Impact:** Medium (usage/files missing for single/default runs)
-- **Location:** `src/progressView/frontend/components/WorkflowStreamContent.ts:149-171`
+- **Location:** `src/progressView/frontend/components/WorkflowStreamContent.ts:154-168`
 - **Root cause:** `computeRunValues()` uses `runId ? ... : null/{}` for usage and files but
   uses `runKey ?? 'default'` for instructions. When `runId` is `null`, default-run usage/files
   are ignored.
 - **Fix (root):** Use the same `runKey` fallback for `usage` and `files` (e.g., `const runKey = runId ?? 'default'`).
 
-### P5) Stream tab select/delete clicks fail inside Shadow DOM (HIGH)
+### P5–P10) `target.closest()` fails inside Shadow DOM — systemic issue across 6 locations (HIGH)
 
-- **Area:** ProgressView (stream tabs)
-- **Type:** UI regression
-- **Impact:** High (clicks on tab action buttons don’t register)
-- **Location:** `src/progressView/frontend/components/StreamTabs.ts:368-392`
-- **Root cause:** `handleTabClick()` uses `target.closest(...)`, which fails when the click
-  originates inside `vscode-toolbar-button` shadow DOM.
-- **Fix (root):** Traverse `event.composedPath()` to find the element with `data-stream` and
-  `data-action` (same pattern as `LogList.findTargetInPath()`).
+- **Area:** ProgressView (multiple components)
+- **Type:** UI regression (systemic)
+- **Impact:** High (clicks on interactive elements silently fail)
+- **Root cause:** Multiple click/change handlers use `target.closest(selector)`, which does not
+  traverse Shadow DOM boundaries. When clicks originate inside `vscode-toolbar-button` or
+  `vscode-radio` shadow roots, the closest ancestor lookup fails and the event is silently dropped.
+- **Fix (root):** Replace all `target.closest()` usages with `event.composedPath()` traversal
+  (same pattern as `LogList.findTargetInPath()`). A shared utility could centralize this.
+- **Affected locations:**
 
-### P6) Sort button clicks fail inside Shadow DOM (MEDIUM)
-
-- **Area:** ProgressView (stream tabs)
-- **Type:** UI regression
-- **Impact:** Medium (sorting buttons feel unresponsive)
-- **Location:** `src/progressView/frontend/components/StreamTabs.ts:395-409`
-- **Root cause:** `handleSortClick()` uses `target.closest('[data-sort]')`, which doesn’t
-  traverse Shadow DOM boundaries.
-- **Fix (root):** Replace with `event.composedPath()` lookup for an element containing `data-sort`.
-
-### P7) Toolbar actions fail inside Shadow DOM (HIGH)
-
-- **Area:** ProgressView (stream header)
-- **Type:** UI regression
-- **Impact:** High (critical toolbar actions ignored)
-- **Location:** `src/progressView/frontend/components/StreamHeader.ts:432-446`
-- **Root cause:** `handleToolbarClick()` uses `target.closest('[data-command]')`, which misses
-  clicks inside `vscode-toolbar-button` shadow roots.
-- **Fix (root):** Walk `event.composedPath()` and locate the first element with `data-command`.
-
-### P8) File action buttons fail inside Shadow DOM (HIGH)
-
-- **Area:** ProgressView (file list)
-- **Type:** UI regression
-- **Impact:** High (compare/merge/accept buttons don’t work)
-- **Location:** `src/progressView/frontend/components/FileList.ts:286-298`
-- **Root cause:** `handleFileClick()` uses `target.closest('[data-command]')`, which doesn’t
-  cross Shadow DOM boundaries.
-- **Fix (root):** Use `event.composedPath()` to find the data-command element reliably.
-
-### P9) Request panel menu actions fail inside Shadow DOM (MEDIUM)
-
-- **Area:** ProgressView (approval/request panels)
-- **Type:** UI regression
-- **Impact:** Medium (menu actions appear to do nothing)
-- **Location:** `src/progressView/frontend/components/RequestPanels.ts:761-785`
-- **Root cause:** `handleMenuClick()` uses `target.closest('vscode-context-menu-item')`, which
-  doesn’t reach the host element when clicks originate inside Shadow DOM.
-- **Fix (root):** Resolve the menu item using `event.composedPath()` and match on node type/class.
-
-### P10) Radio change extraction fails under Shadow DOM (MEDIUM)
-
-- **Area:** ProgressView (filters)
-- **Type:** Logic regression
-- **Impact:** Medium (filter changes occasionally ignored)
-- **Location:** `src/progressView/frontend/utils.ts:11-20`
-- **Root cause:** `getRadioValue()` relies on `target.closest('vscode-radio')`, which doesn’t
-  cross Shadow DOM boundaries.
-- **Fix (root):** Find the radio element via `event.composedPath()` and fall back to
-  `event.currentTarget.value` if needed.
+  | ID  | Component     | Handler              | Location                                                        | Severity |
+  | --- | ------------- | -------------------- | --------------------------------------------------------------- | -------- |
+  | P5  | StreamTabs    | `handleTabClick`     | `src/progressView/frontend/components/StreamTabs.ts:370-391`    | HIGH     |
+  | P6  | StreamTabs    | `handleSortClick`    | `src/progressView/frontend/components/StreamTabs.ts:399-410`    | MEDIUM   |
+  | P7  | StreamHeader  | `handleToolbarClick` | `src/progressView/frontend/components/StreamHeader.ts:435-445`  | HIGH     |
+  | P8  | FileList      | `handleFileClick`    | `src/progressView/frontend/components/FileList.ts:286-300`      | HIGH     |
+  | P9  | RequestPanels | `handleMenuClick`    | `src/progressView/frontend/components/RequestPanels.ts:780-802` | MEDIUM   |
+  | P10 | utils (radio) | `getRadioValue`      | `src/progressView/frontend/utils.ts:14-20`                      | MEDIUM   |
 
 ### P11) Follow-up buttons remain enabled with invalid selections (MEDIUM)
 
@@ -153,7 +113,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (latexdiff results)
 - **Type:** UI regression
 - **Impact:** Low (stale DOM reuse in multi-round diffs)
-- **Location:** `src/progressView/frontend/components/LatexdiffResults.ts:109-123`
+- **Location:** `src/progressView/frontend/components/LatexdiffResults.ts:155-159`
 - **Root cause:** `repeat()` key uses only `${entry.baseFile}-${entry.revisedFile}` which
   collides when the same file appears across rounds.
 - **Fix (root):** Include `runId` and/or round identifiers in the key (e.g., `${runId}-${baseRound}-${revisedRound}-${diffFile}`).
@@ -163,7 +123,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (queued follow-ups)
 - **Type:** UI regression
 - **Impact:** Low (DOM reuse glitches when messages reorder)
-- **Location:** `src/progressView/frontend/components/QueuedFollowUps.ts:99-121`
+- **Location:** `src/progressView/frontend/components/QueuedFollowUps.ts:106-108`
 - **Root cause:** Keys use `index` + message prefix, which changes when items are inserted/removed
   and collides for similar prefixes.
 - **Fix (root):** Use stable IDs (hash of full message + timestamp/sequence) or include full
@@ -174,8 +134,8 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (follow-up setup)
 - **Type:** Logic regression
 - **Impact:** High (options bleed between streams)
-- **Location:** `src/progressView/frontend/store.ts:23-41`,
-  `src/progressView/frontend/messageDispatcher.ts:516-526`
+- **Location:** `src/progressView/frontend/store.ts:32-39`,
+  `src/progressView/frontend/messageDispatcher.ts:539-546`
 - **Root cause:** `ProgressState` stores `followupOptions` as a single value, and inbound
   `SET_FOLLOWUP_OPTIONS` overwrites it without a stream key.
 - **Fix (root):** Store follow-up options per stream ID (e.g., `Map<streamId, options>` or
@@ -197,7 +157,7 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** ProgressView (stream tabs)
 - **Type:** UX regression
 - **Impact:** Low (spurious delete-all commands when nothing exists)
-- **Location:** `src/progressView/frontend/components/StreamTabs.ts:307-346`
+- **Location:** `src/progressView/frontend/components/StreamTabs.ts:285-290`
 - **Root cause:** The “Clear all” button is always enabled regardless of `streams.length`.
 - **Fix (root):** Disable the button when there are no streams (or hide it altogether).
 
@@ -235,34 +195,31 @@ Items already captured in prior regression PRDs are excluded.
 - **Area:** HistoryView
 - **Type:** Logic regression
 - **Impact:** Medium (stale match counts and highlights)
-- **Location:** `src/historyView/frontend/components/HistoryList.ts:68-166`
+- **Location:** `src/historyView/frontend/components/HistoryList.ts:163-189`
 - **Root cause:** `applySearchToItems()` is asynchronous but has no cancellation/versioning,
   so slower searches can overwrite newer results when the term changes quickly.
 - **Fix (root):** Add a request counter/abort token and ignore stale search responses.
 
 ---
 
-## Verification Summary (2026-02-02)
+## Verification Summary (2026-01-30)
 
-| Issue   | Status       | Severity | Notes                                  |
-| ------- | ------------ | -------- | -------------------------------------- |
-| **P1**  | ✅ Confirmed | HIGH     | Reset wipes unrelated runs             |
-| **P2**  | ✅ Confirmed | HIGH     | Instruction not injected for empty log |
-| **P3**  | ✅ Confirmed | HIGH     | Filter hides active stream content     |
-| **P4**  | ✅ Confirmed | MEDIUM   | Default run usage/files omitted        |
-| **P5**  | ✅ Confirmed | HIGH     | Shadow DOM breaks tab actions          |
-| **P6**  | ✅ Confirmed | MEDIUM   | Shadow DOM breaks sort actions         |
-| **P7**  | ✅ Confirmed | HIGH     | Shadow DOM breaks toolbar actions      |
-| **P8**  | ✅ Confirmed | HIGH     | Shadow DOM breaks file actions         |
-| **P9**  | ✅ Confirmed | MEDIUM   | Shadow DOM breaks context menu         |
-| **P10** | ✅ Confirmed | MEDIUM   | Radio value extraction unreliable      |
-| **P11** | ✅ Confirmed | MEDIUM   | Buttons enabled without validation     |
-| **P12** | ✅ Confirmed | MEDIUM   | Polish spinner sticks on failure       |
-| **P13** | ✅ Confirmed | LOW      | Non-unique diff keys                   |
-| **P14** | ✅ Confirmed | LOW      | Unstable queue keys                    |
-| **P15** | ✅ Confirmed | HIGH     | Options bleed between streams          |
-| **P16** | ✅ Confirmed | MEDIUM   | Follow-up state leak                   |
-| **P17** | ✅ Confirmed | LOW      | Clear-all enabled when empty           |
-| **M1**  | ✅ Confirmed | MEDIUM   | Sortable dies after collapse           |
-| **M2**  | ✅ Confirmed | MEDIUM   | Menus stay open on outside click       |
-| **H1**  | ✅ Confirmed | MEDIUM   | Search results race                    |
+Status legend: ✅ Confirmed (code path verified) · 🔍 Needs test (code inspection suggests issue, no reproduction test)
+
+| Issue      | Status                  | Severity | Notes                                     |
+| ---------- | ----------------------- | -------- | ----------------------------------------- |
+| **P1**     | ✅ Confirmed            | HIGH     | Reset wipes unrelated runs (line 48)      |
+| **P2**     | 🔍 Needs test           | HIGH     | Instruction skipped for empty log         |
+| **P3**     | 🔍 Needs test           | HIGH     | Filter hides active stream content        |
+| **P4**     | 🔍 Needs test           | MEDIUM   | Default run usage/files omitted           |
+| **P5–P10** | ✅ Confirmed (systemic) | HIGH     | Shadow DOM breaks `target.closest()` (×6) |
+| **P11**    | 🔍 Needs test           | MEDIUM   | Buttons enabled without validation        |
+| **P12**    | 🔍 Needs test           | MEDIUM   | Polish spinner sticks on failure          |
+| **P13**    | ✅ Confirmed            | LOW      | Non-unique diff keys                      |
+| **P14**    | ✅ Confirmed            | LOW      | Unstable queue keys                       |
+| **P15**    | ✅ Confirmed            | HIGH     | Options bleed between streams             |
+| **P16**    | 🔍 Needs test           | MEDIUM   | Follow-up state leak                      |
+| **P17**    | ✅ Confirmed            | LOW      | Clear-all enabled when empty              |
+| **M1**     | 🔍 Needs test           | MEDIUM   | Sortable dies after collapse              |
+| **M2**     | 🔍 Needs test           | MEDIUM   | Menus stay open on outside click          |
+| **H1**     | ✅ Confirmed            | MEDIUM   | Search results race (no abort token)      |
