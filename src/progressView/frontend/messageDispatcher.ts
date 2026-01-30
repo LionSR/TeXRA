@@ -189,9 +189,8 @@ const handlers: HandlerRegistry = {
     const nextActiveStreamId =
       state.activeStreamId === streamId ? null : state.activeStreamId;
 
-    if (state.activeStreamId === streamId) {
-      clearPendingLogUpdatesForStream(streamId);
-    }
+    // Always clear pending log updates for deleted stream, not just active stream
+    clearPendingLogUpdatesForStream(streamId);
 
     ctx.setState(() => ({
       ...state,

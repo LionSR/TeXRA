@@ -74,35 +74,35 @@ const MULTIPLE_FILE_COMMANDS = new Map<
   { selectCommand: string; responseCommand: string }
 >([
   [
-    'InputFiles',
+    'input',
     {
       selectCommand: 'texra.selectInputFiles',
       responseCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
     },
   ],
   [
-    'ReferenceFiles',
+    'reference',
     {
       selectCommand: 'texra.selectReferenceFiles',
       responseCommand: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
     },
   ],
   [
-    'AuxiliaryFiles',
+    'auxiliary',
     {
       selectCommand: 'texra.selectAuxiliaryFiles',
       responseCommand: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
     },
   ],
   [
-    'MediaFiles',
+    'media',
     {
       selectCommand: 'texra.selectMediaFiles',
       responseCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
     },
   ],
   [
-    'OutputFiles',
+    'output',
     {
       selectCommand: 'texra.selectOutputFiles',
       responseCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
@@ -258,7 +258,7 @@ export class FileManager extends BaseWebviewManager {
     }
     try {
       const selectedFiles =
-        fileType === 'OutputFiles'
+        fileType === 'output'
           ? await this.selectOutputFiles(currentFile)
           : await vscode.commands.executeCommand<string[]>(
               commands.selectCommand,

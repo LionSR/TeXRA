@@ -51,8 +51,12 @@ export function createInitialState(): ProgressState {
 
 /**
  * Get stream state for a stream ID.
- * If state doesn't exist, creates a default workflow state.
- * Pass agentCategory to create the correct discriminated type.
+ * If state doesn't exist, creates a new state based on agentCategory.
+ *
+ * IMPORTANT: Always pass agentCategory when creating new stream state.
+ * If agentCategory is undefined, defaults to WORKFLOW which may cause
+ * tool-use streams to render incorrectly. Callers should look up the
+ * category from streamInfo before calling this function.
  */
 export function getStreamState(
   state: ProgressState,
