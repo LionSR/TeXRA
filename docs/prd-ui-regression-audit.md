@@ -649,38 +649,38 @@ All event consumers listen to new names:
 
 ## Fix Priority Summary (2026-01-29)
 
-| Priority | Issue                                             | Severity     | Effort | Status                        |
-| -------- | ------------------------------------------------- | ------------ | ------ | ----------------------------- |
-| ~~P0~~   | SP-1: Webview cache design                        | ~~Critical~~ | -      | ✅ BY DESIGN                  |
-| ~~P0~~   | SP-2: StreamStates transient                      | ~~Critical~~ | -      | ✅ BY DESIGN                  |
-| **P0**   | L1: clearStreamSurface missing queuedFollowUps    | 🔴 Critical  | Low    | ✅ Fixed (clear action)       |
-| **P0**   | L2: refreshStreamSurface missing queuedFollowUps  | 🔴 Critical  | Low    | ✅ Fixed in PR                |
-| ~~P1~~   | SP-3: Race condition cache init vs message        | ~~High~~     | -      | ✅ BY DESIGN (WEBVIEW_READY)  |
-| **P1**   | SP-4: pendingLogUpdates not namespaced            | 🟠 High      | Low    | ✅ Already fixed (namespaced) |
-| **P1**   | L3: Schema defaults hide data loss                | 🟠 High      | Low    | ⚠️ By design (see note)       |
-| **P1**   | U2: BannerGroup null check                        | 🟠 High      | Low    | ⬜ Not Started                |
-| **P2**   | L4: Stream deletion cleanup                       | 🟡 Medium    | Low    | ✅ Fixed                      |
-| ~~P2~~   | SP-5: PersistedState.reload() utility             | 🟡 Medium    | -      | ✅ BY DESIGN (optional)       |
-| **P2**   | HV-L1: HistoryView search state not persisted     | 🟡 Medium    | Medium | ⬜ NEW - Needs testing        |
-| **P2**   | HV-L2: Toggle state sync timing                   | 🟡 Medium    | Medium | ⬜ NEW - Needs testing        |
-| **P2**   | PV-L1: ProfileView Shadow DOM event propagation   | 🟡 Medium    | Low    | ⬜ NEW - Needs testing        |
-| **P2**   | PV-U1: Model access `<details>` styling           | 🟡 Medium    | Low    | ⬜ NEW - Visual check         |
-| **P2**   | CTRL-1: CopyButtonController timer collision      | 🟡 Medium    | Low    | ⬜ NEW - Document             |
-| **P2**   | U3: FollowUpInput visibility pattern              | 🟡 Medium    | Medium | ⬜ Not Started                |
-| **P2**   | L8: Legacy usage stats normalization removed      | 🟡 Medium    | Medium | ⚠️ REAL - Needs fix           |
-| ~~P2~~   | U7: Hard-coded border in UserMessage              | 🟡 Medium    | Low    | ✅ False positive (new)       |
-| ~~P2~~   | L5: StorageRecordSchema silent fallback           | 🟡 Medium    | Low    | ✅ False positive (new)       |
-| ~~P2~~   | L6: Preference .catch() hides corruption          | 🟡 Medium    | Low    | ✅ False positive             |
-| ~~P2~~   | L7: Pending log updates cache edge cases          | 🟡 Medium    | Medium | ✅ False positive (new)       |
-| ~~P2~~   | L9: Permission type renames in event bus          | 🟡 Medium    | Low    | ✅ False positive             |
-| **P2**   | U6: Multiple Outputs toggle disappears on restore | 🟡 Medium    | Medium | ✅ Not a bug (by design)      |
-| **P3**   | SP-6: MementoStorage rename inconsistency         | 🟢 Low       | Low    | ⬜ NEW - Code quality         |
-| **P3**   | CTRL-2: RecordingButtonController empty method    | 🟢 Low       | Low    | ⬜ NEW - Remove method        |
-| **P3**   | U1: aria-hidden verification                      | 🟢 Low       | Low    | ⬜ Not Started                |
-| **P3**   | U4: CSS selector timing                           | 🟢 Low       | Low    | ⬜ Not Started                |
-| **P3**   | U5: SortableController timing                     | 🟢 Low       | Low    | ⬜ Not Started                |
-| ~~P3~~   | U8: Hard-coded max-width in UserMessage           | 🟢 Low       | Low    | ✅ False positive (new)       |
-| **P3**   | Stale docstring in FollowUpEventHandlers.ts       | 🟢 Low       | Low    | ⬜ Not Started                |
+| Priority | Issue                                             | Severity     | Effort | Status                                |
+| -------- | ------------------------------------------------- | ------------ | ------ | ------------------------------------- |
+| ~~P0~~   | SP-1: Webview cache design                        | ~~Critical~~ | -      | ✅ BY DESIGN                          |
+| ~~P0~~   | SP-2: StreamStates transient                      | ~~Critical~~ | -      | ✅ BY DESIGN                          |
+| **P0**   | L1: clearStreamSurface missing queuedFollowUps    | 🔴 Critical  | Low    | ✅ Fixed (clear action)               |
+| **P0**   | L2: refreshStreamSurface missing queuedFollowUps  | 🔴 Critical  | Low    | ✅ Fixed in PR                        |
+| ~~P1~~   | SP-3: Race condition cache init vs message        | ~~High~~     | -      | ✅ BY DESIGN (WEBVIEW_READY)          |
+| **P1**   | SP-4: pendingLogUpdates not namespaced            | 🟠 High      | Low    | ✅ Already fixed (namespaced)         |
+| **P1**   | L3: Schema defaults hide data loss                | 🟠 High      | Low    | ⚠️ By design (see note)               |
+| **P1**   | U2: BannerGroup null check                        | 🟠 High      | Low    | ⬜ Not Started                        |
+| **P2**   | L4: Stream deletion cleanup                       | 🟡 Medium    | Low    | ✅ Fixed                              |
+| ~~P2~~   | SP-5: PersistedState.reload() utility             | 🟡 Medium    | -      | ✅ BY DESIGN (optional)               |
+| **P2**   | HV-L1: HistoryView search state not persisted     | 🟡 Medium    | Medium | ⬜ NEW - Needs testing                |
+| **P2**   | HV-L2: Toggle state sync timing                   | 🟡 Medium    | Medium | ⬜ NEW - Needs testing                |
+| **P2**   | PV-L1: ProfileView Shadow DOM event propagation   | 🟡 Medium    | Low    | ⬜ NEW - Needs testing                |
+| **P2**   | PV-U1: Model access `<details>` styling           | 🟡 Medium    | Low    | ⬜ NEW - Visual check                 |
+| **P2**   | CTRL-1: CopyButtonController timer collision      | 🟡 Medium    | Low    | ⬜ NEW - Document                     |
+| **P2**   | U3: FollowUpInput visibility pattern              | 🟡 Medium    | Medium | ⬜ Not Started                        |
+| **P2**   | L8: Legacy usage stats normalization removed      | 🟡 Medium    | Medium | ⚠️ REAL - Needs fix                   |
+| ~~P2~~   | U7: Hard-coded border in UserMessage              | 🟡 Medium    | Low    | ✅ False positive (new)               |
+| ~~P2~~   | L5: StorageRecordSchema silent fallback           | 🟡 Medium    | Low    | ✅ False positive (new)               |
+| ~~P2~~   | L6: Preference .catch() hides corruption          | 🟡 Medium    | Low    | ✅ False positive                     |
+| ~~P2~~   | L7: Pending log updates cache edge cases          | 🟡 Medium    | Medium | ✅ False positive (new)               |
+| ~~P2~~   | L9: Permission type renames in event bus          | 🟡 Medium    | Low    | ✅ False positive                     |
+| **P2**   | U6: Multiple Outputs toggle disappears on restore | 🟡 Medium    | Medium | ✅ Not a bug (by design)              |
+| **P3**   | SP-6: MementoStorage rename inconsistency         | 🟢 Low       | Low    | ⬜ NEW - Code quality                 |
+| **P3**   | CTRL-2: RecordingButtonController empty method    | 🟢 Low       | Low    | ✅ Documented (required by interface) |
+| **P3**   | U1: aria-hidden verification                      | 🟢 Low       | Low    | ⬜ Not Started                        |
+| **P3**   | U4: CSS selector timing                           | 🟢 Low       | Low    | ⬜ Not Started                        |
+| **P3**   | U5: SortableController timing                     | 🟢 Low       | Low    | ⬜ Not Started                        |
+| ~~P3~~   | U8: Hard-coded max-width in UserMessage           | 🟢 Low       | Low    | ✅ False positive (new)               |
+| **P3**   | Stale docstring in FollowUpEventHandlers.ts       | 🟢 Low       | Low    | ⬜ Not Started                        |
 
 ### Recommended Fix Order
 

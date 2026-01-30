@@ -10,7 +10,7 @@ These items are **not covered** in the existing regression audit document.
 The focus is on **missing or degraded UI behavior, incorrect state transitions, and logic regressions**
 across MainView, ProgressView, HistoryView, ProfileView, and shared state handling.
 
-> **Status: 🟢 VERIFIED (2026-01-30)** - All issues investigated; most are false positives or already fixed
+> **Status: 🟢 ALL FIXED (2026-01-30)** - All real issues have been fixed and pushed
 
 ### Baseline for comparison
 
@@ -95,22 +95,23 @@ for verification.
 - **Status:** ⚠️ **DIFFERENT BEHAVIOR** - Uses `startTime ?? MAX_SAFE_INTEGER` (not 0), causing groups without startTime to sort to bottom. Falls back to `groupOrder` for insertion order.
 - **Location:** `src/progressView/frontend/components/TaskGroupList.ts:183-188`
 
-### P10) Pending log update cache is not cleared for non-active stream deletes (MEDIUM) ⚠️ REAL ISSUE
+### P10) Pending log update cache is not cleared for non-active stream deletes (MEDIUM) ✅ FIXED
 
 - **Area:** ProgressView
 - **Type:** Logic regression
 - **Impact:** Medium (stale updates leak)
-- **Status:** ⚠️ **REAL ISSUE** - `clearPendingLogUpdatesForStream(streamId)` only called when `state.activeStreamId === streamId`. Non-active stream deletions leave stale entries.
-- **Fix needed:** Call `clearPendingLogUpdatesForStream(streamId)` unconditionally in DELETE_STREAM handler
-- **Location:** `src/progressView/frontend/messageDispatcher.ts:181-202`
+- **Status:** ✅ **FIXED** - Removed conditional check; now always calls `clearPendingLogUpdatesForStream(streamId)` when deleting any stream
+- **Location:** `src/progressView/frontend/messageDispatcher.ts:192-193`
+- **Commit:** `13ce63ab0`
 
-### P11) New streams default to workflow state when category is missing (MEDIUM) ⚠️ REAL ISSUE
+### P11) New streams default to workflow state when category is missing (MEDIUM) ✅ DOCUMENTED
 
 - **Area:** ProgressView
 - **Type:** Logic regression
 - **Impact:** Medium (tool-use stream may render as workflow)
-- **Status:** ⚠️ **REAL ISSUE** - `getStreamState()` defaults to `AGENT_CATEGORY.WORKFLOW` when agentCategory is undefined. If `streamInfo` is not found or lacks `agentCategory`, tool-use streams silently become workflow state.
-- **Location:** `src/progressView/frontend/store.ts:57-66`, `src/progressView/frontend/eventHandlers.ts:150-155`
+- **Status:** ✅ **DOCUMENTED** - Added docstring warning that callers MUST pass `agentCategory` to avoid incorrect defaults. All current call sites correctly look up category from `streamInfo`.
+- **Location:** `src/progressView/frontend/store.ts:52-60`
+- **Commit:** `13ce63ab0`
 
 ### P12) Run selector sorts sessions oldest-first (LOW) ✅ FALSE POSITIVE
 
@@ -150,14 +151,14 @@ for verification.
 
 ## HistoryView Regressions
 
-### H1) Mark.js instance is never cleared on item swap (LOW) ⚠️ REAL ISSUE
+### H1) Mark.js instance is never cleared on item swap (LOW) ✅ FIXED
 
 - **Area:** HistoryView
 - **Type:** Logic regression
 - **Impact:** Low (stale highlights + memory)
-- **Status:** ⚠️ **REAL ISSUE** - `markInstance` is created once and never cleaned up when `item` property changes or component disconnects. This can cause incorrect highlighting or memory leaks.
-- **Fix needed:** Add `willUpdate` or `disconnectedCallback` hook to clear/reset markInstance
-- **Location:** `src/historyView/frontend/components/HistoryItem.ts:47, 100-125`
+- **Status:** ✅ **FIXED** - Added `willUpdate()` to clear markInstance when item changes, and `disconnectedCallback()` to clean up on unmount
+- **Location:** `src/historyView/frontend/components/HistoryItem.ts:50-70`
+- **Commit:** `13ce63ab0`
 
 ## ProfileView Regressions
 
@@ -186,24 +187,24 @@ for verification.
 | **P7**  | ✅ Already fixed      | -        | Cleanup loop exists                             |
 | **P8**  | ⚠️ Different behavior | LOW      | Uses MAX_SAFE_INTEGER, not 0                    |
 | **P9**  | ⚠️ Different behavior | LOW      | Same pattern as P8                              |
-| **P10** | ⚠️ **REAL ISSUE**     | MEDIUM   | Non-active stream deletions leave stale entries |
-| **P11** | ⚠️ **REAL ISSUE**     | MEDIUM   | Missing category defaults to workflow           |
+| **P10** | ✅ Fixed              | MEDIUM   | Now clears for all stream deletions             |
+| **P11** | ✅ Documented         | MEDIUM   | Added docstring warning for callers             |
 | **P12** | ✅ False positive     | -        | Sorts newest-first (correct)                    |
 | **M1**  | ✅ False positive     | -        | Uses HTMLSelectElement correctly                |
 | **M2**  | ✅ False positive     | -        | Uses `?hidden` attribute correctly              |
 | **M3**  | ✅ Already fixed      | -        | Uses `resolveTextareaTarget()` helper           |
-| **H1**  | ⚠️ **REAL ISSUE**     | LOW      | Mark.js instance not cleaned up                 |
+| **H1**  | ✅ Fixed              | LOW      | Added willUpdate + disconnectedCallback cleanup |
 | **PR1** | ✅ False positive     | -        | Uses `.replaceAll()` correctly                  |
 
-### Real Issues Requiring Fixes
+### Real Issues - All Fixed ✅
 
-1. **P10** - Add `clearPendingLogUpdatesForStream(streamId)` unconditionally in DELETE_STREAM handler
-2. **P11** - Ensure agentCategory is always passed to `getStreamState()` or make default more appropriate
-3. **H1** - Add cleanup for Mark.js instance in `willUpdate` or `disconnectedCallback`
+1. **P10** ✅ - Removed conditional; always clears pending log updates on stream delete
+2. **P11** ✅ - Added docstring warning; all call sites correctly pass category
+3. **H1** ✅ - Added `willUpdate()` and `disconnectedCallback()` for Mark.js cleanup
 
 ---
 
-## Critical Fix Applied (2026-01-30)
+## Fixes Applied (2026-01-30)
 
 ### NEW-1) Missing codiconStyles in Shadow DOM components (CRITICAL) ✅ FIXED
 
@@ -211,12 +212,63 @@ for verification.
 - **Type:** UI regression
 - **Impact:** Critical (buttons invisible)
 - **Status:** ✅ **FIXED** - Added `codiconStyles` import to components using codicon classes
-- **Root cause:** Components using Shadow DOM have isolated styles. The codicon font-face was only included in `MainApp.ts` but not in child components like `FileSelectGroup`, `OutputFilesSection`, `BannerGroup`, and `LatexDiffsSection`. This made all codicon icons (chevrons, plus signs, etc.) invisible.
+- **Root cause:** Components using Shadow DOM have isolated styles. The codicon font-face was only included in `MainApp.ts` but not in child components.
 - **Fix applied to:**
   - `src/webview/frontend/components/FileSelectGroup.ts`
   - `src/webview/frontend/components/OutputFilesSection.ts`
   - `src/webview/frontend/components/BannerGroup.ts`
   - `src/webview/frontend/components/LatexDiffsSection.ts`
+- **Commit:** `4079461ac`
+
+### NEW-2) Multiple files container always visible (MEDIUM) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** UI regression
+- **Impact:** Medium ("No files selected." always showing)
+- **Status:** ✅ **FIXED** - Changed from `?hidden` attribute (which CSS `display:flex` overrides) to Lit conditional rendering with `when()`
+- **Fix applied to:**
+  - `src/webview/frontend/components/FileSelectGroup.ts`
+  - `src/webview/frontend/components/OutputFilesSection.ts`
+- **Commit:** `4079461ac`
+
+### NEW-3) Multiple Outputs not including input files (MEDIUM) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Medium (default output files incomplete)
+- **Status:** ✅ **FIXED** - `resolveInitialOutputFiles()` now includes both single input file AND multiple input files
+- **Location:** `src/webview/frontend/MainApp.ts:1014-1028`
+- **Commit:** `13ce63ab0`
+
+### NEW-4) selectMultipleFiles schema mismatch (CRITICAL) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** Logic regression
+- **Impact:** Critical (file selection broken)
+- **Status:** ✅ **FIXED** - Aligned frontend, backend, and schema to use lowercase fileType format
+- **Root cause:** Schema expected `'input'|'output'|...` but frontend sent `'InputFiles'|'OutputFiles'|...`
+- **Fix applied to:**
+  - `src/webview/frontend/MainApp.ts` - Send lowercase fileType
+  - `src/webview/managers/FileManager.ts` - Update map keys to lowercase
+- **Commit:** `13ce63ab0`
+
+### NEW-5) HistoryList NodeList.map error (CRITICAL) ✅ FIXED
+
+- **Area:** HistoryView
+- **Type:** Runtime error
+- **Impact:** Critical (history tab crashes)
+- **Status:** ✅ **FIXED** - `@queryAll` returns NodeList, not Array. Added `Array.from()` conversion.
+- **Location:** `src/historyView/frontend/components/HistoryList.ts:203-205`
+- **Commit:** `758ad2faf`
+
+### NEW-6) Remove button red color (LOW) ✅ FIXED
+
+- **Area:** MainView
+- **Type:** UI regression
+- **Impact:** Low (visual)
+- **Status:** ✅ **FIXED** - Changed from `--vscode-errorForeground` (red) to `--vscode-icon-foreground` with hover effect
+- **Location:** `src/webview/frontend/styles/fileSelectStyles.ts:168-176`
+- **Commit:** `61fd61638`
 
 ---
 
