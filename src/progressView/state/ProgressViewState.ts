@@ -537,7 +537,7 @@ export class ProgressViewState {
         typeof entry[1] === 'string' && entry[1].length > 0,
     );
 
-    this._executionIds = entries.length > 0 ? new Map(entries) : new Map();
+    this._executionIds = new Map(entries);
     if (entries.length > 0) {
       this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
     }

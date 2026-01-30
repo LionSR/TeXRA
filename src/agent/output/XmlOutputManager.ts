@@ -149,20 +149,20 @@ export class XmlOutputManager {
     expectedCount: number,
     extractedCount: number,
   ): void {
-    if (expectedCount > 0 && expectedCount > extractedCount) {
-      // Generate placeholder names for the missing documents
-      const missingCount = expectedCount - extractedCount;
-      const missing = Array.from(
-        { length: missingCount },
-        (_, i) => `<unextracted document ${i + 1}>`,
-      );
-
-      this.logger.missingOutputs({
-        missing,
-        xmlFile: outputLocation.absolutePath,
-        documentTag: this.agentSetting.documentTag,
-      });
+    if (expectedCount <= extractedCount) {
+      return;
     }
+    const missingCount = expectedCount - extractedCount;
+    const missing = Array.from(
+      { length: missingCount },
+      (_, i) => `<unextracted document ${i + 1}>`,
+    );
+
+    this.logger.missingOutputs({
+      missing,
+      xmlFile: outputLocation.absolutePath,
+      documentTag: this.agentSetting.documentTag,
+    });
   }
 
   async splitScratchpadMultipleOutputXml(
@@ -315,16 +315,17 @@ export class XmlOutputManager {
   }
 
   private removeTrailingEndDocument(content: string, fileName: string): string {
-    const trimmedContent = content.trimEnd();
+    const trimmed = content.trimEnd();
 
-    if (
-      !trimmedContent.includes('\\begin{document}') &&
-      trimmedContent.endsWith('\\end{document}')
-    ) {
-      this.logger.debug(`Removed trailing \\end{document} from ${fileName}`);
-      return trimmedContent.replace(/\\end{document}\s*$/, '');
+    const hasEndWithoutBegin =
+      !trimmed.includes('\\begin{document}') &&
+      trimmed.endsWith('\\end{document}');
+
+    if (!hasEndWithoutBegin) {
+      return trimmed;
     }
 
-    return trimmedContent;
+    this.logger.debug(`Removed trailing \\end{document} from ${fileName}`);
+    return trimmed.replace(/\\end{document}\s*$/, '');
   }
 }

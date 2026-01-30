@@ -83,20 +83,13 @@ export class FileSelectGroup extends LitElement {
   }
 
   private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    const isAutoExtract = type === 'autoExtract';
-    const wasOpen = isAutoExtract
-      ? this.autoExtractMenuOpen
-      : this.toolConfigMenuOpen;
+    const wasOpen =
+      type === 'autoExtract'
+        ? this.autoExtractMenuOpen
+        : this.toolConfigMenuOpen;
     // Close both menus first, then toggle the requested one
-    this.autoExtractMenuOpen = false;
-    this.toolConfigMenuOpen = false;
-    if (!wasOpen) {
-      if (isAutoExtract) {
-        this.autoExtractMenuOpen = true;
-      } else {
-        this.toolConfigMenuOpen = true;
-      }
-    }
+    this.autoExtractMenuOpen = type === 'autoExtract' && !wasOpen;
+    this.toolConfigMenuOpen = type === 'toolConfig' && !wasOpen;
   }
 
   private handleFileChange(value: string): void {
@@ -202,12 +195,11 @@ export class FileSelectGroup extends LitElement {
     const nextTarget = event.relatedTarget as Node | null;
     // Check both light DOM and shadow DOM for focus containment
     const containsFocus =
-      nextTarget &&
+      nextTarget !== null &&
       (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
-    if (!containsFocus) {
-      this.autoExtractMenuOpen = false;
-      this.toolConfigMenuOpen = false;
-    }
+    if (containsFocus) return;
+    this.autoExtractMenuOpen = false;
+    this.toolConfigMenuOpen = false;
   }
 
   private renderFileOptions(): TemplateResult {

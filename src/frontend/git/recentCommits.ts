@@ -19,7 +19,9 @@ export async function fetchRecentCommits(
     (await vscode.commands.executeCommand<boolean>('texra.isGitRepository')) ??
     false;
   const commits = isGitRepo
-    ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
+    ? ((await vscode.commands.executeCommand<string[]>(
+        'texra.getRecentCommits',
+      )) ?? [])
     : [];
 
   if (options.notifyWhenEmpty && (commits.length === 0 || !isGitRepo)) {

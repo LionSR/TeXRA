@@ -337,25 +337,25 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
       status: data.status,
-      ...(data.status === 'waiting' ? { shouldFocusFollowUp: true } : {}),
+      ...(data.status === 'waiting' && { shouldFocusFollowUp: true }),
     }));
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
-    const isActiveStream = stream === ctx.getState().activeStreamId;
+    const state = ctx.getState();
+    const isActiveStream = stream === state.activeStreamId;
 
     ctx.setStreamState(stream, (prev) => ({
       ...prev,
       status,
-      ...(isActiveStream && status === 'waiting'
-        ? { shouldFocusFollowUp: true }
-        : {}),
+      ...(isActiveStream &&
+        status === 'waiting' && { shouldFocusFollowUp: true }),
     }));
 
-    ctx.setState((prev) => ({
-      ...prev,
-      streams: prev.streams.map((item) =>
+    ctx.setState(() => ({
+      ...state,
+      streams: state.streams.map((item) =>
         item.name === stream
           ? {
               ...item,

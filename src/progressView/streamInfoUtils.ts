@@ -14,24 +14,22 @@ import type { ProgressViewState } from './state/ProgressViewState';
 
 /**
  * Check if a session category matches the given filter.
- * Returns the category to use (defaulting to Workflow) or null if filtered out.
+ * Returns the resolved category (defaulting to Workflow) or null if filtered out.
  */
 function matchesFilter(
   category: AgentCategory | undefined,
   filter: AgentCategoryFilter,
 ): AgentCategory | null {
+  const resolved = category ?? AgentCategory.Workflow;
+
   if (filter === 'all') {
-    return category ?? AgentCategory.Workflow;
+    return resolved;
   }
 
-  if (!category) {
-    return null;
-  }
-
-  const expectedCategory =
+  const expected =
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 
-  return category === expectedCategory ? category : null;
+  return resolved === expected ? resolved : null;
 }
 
 /**
