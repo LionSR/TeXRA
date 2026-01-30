@@ -58,11 +58,14 @@ import type {
 import type { PermissionState } from './PermissionCard';
 
 // Local imports - sibling components
-import './StreamContent';
-import type {
-  NormalizedStreamData,
-  StreamContentSection,
-} from './StreamContent';
+import './StreamHeader';
+import './InstructionPanel';
+import './TaskGroupList';
+import './LogList';
+import './UsagePanel';
+import './FileList';
+import './FollowupSection';
+import './RequestPanels';
 
 /** Derived values for the currently selected run */
 interface RunDerivedValues {
@@ -174,42 +177,36 @@ export class WorkflowStreamContent extends LitElement {
       return html``;
     }
 
-    const sections: StreamContentSection[] = [
-      { type: 'instruction', instruction },
-      { type: 'requestPanels', permissions: this.filteredPermissions },
-      { type: 'logList' },
-      {
-        type: 'usagePanel',
-        usage,
-        contextState: state.contextState ?? null,
-      },
-      {
-        type: 'fileList',
-        filesByRound: files,
-        showRoundHeaders: true,
-      },
-      {
-        type: 'followupSection',
-        agentCategory: streamInfo.agentCategory,
-        status: state.status ?? streamInfo.status ?? '',
-        hasOutputFiles: hasFiles,
-        options: this.currentFollowupOptions,
-        mode: state.followupMode,
-        streamModel: streamInfo.model ?? null,
-      },
-    ];
+    return html`
+      <stream-header
+        .stream=${streamInfo}
+        .streamState=${state}
+        .runId=${runId}
+        .runs=${this.runGroups}
+        .yoloActive=${false}
+      ></stream-header>
 
-    const data: NormalizedStreamData = {
-      header: {
-        stream: streamInfo,
-        streamState: state,
-        runId,
-        runs: this.runGroups,
-        yoloActive: false,
-      },
-      sections,
-    };
+      <instruction-panel .instruction=${instruction}></instruction-panel>
 
-    return html` <stream-content .data=${data}></stream-content> `;
+      <request-panels .permissions=${this.filteredPermissions}></request-panels>
+
+      <log-list></log-list>
+
+      <usage-panel
+        .usage=${usage}
+        .contextState=${state.contextState ?? null}
+      ></usage-panel>
+
+      <file-list .filesByRound=${files} .showRoundHeaders=${true}></file-list>
+
+      <followup-section
+        .agentCategory=${streamInfo.agentCategory}
+        .status=${state.status ?? streamInfo.status ?? ''}
+        .hasOutputFiles=${hasFiles}
+        .options=${this.currentFollowupOptions}
+        .mode=${state.followupMode}
+        .streamModel=${streamInfo.model ?? null}
+      ></followup-section>
+    `;
   }
 }

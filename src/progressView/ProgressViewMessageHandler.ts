@@ -11,27 +11,22 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import {
-  buildExecutionRequest,
-  validateExecutionRequest,
-} from '@common/execution/executionRequests';
 import { buildFileOperationPayload } from '@common/files';
-import {
-  RecordingManager,
-  wireRecordingFlow,
-} from '@common/managers/RecordingManager';
+import { validateExecutionRequest } from '@common/execution/executionRequests';
+import { RecordingManager } from '@common/managers/RecordingManager';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-import { loadOptions } from '@frontend/agents/optionsLoader';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
@@ -44,7 +39,6 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   createExternalLocation,
   createFileMapping,
@@ -94,7 +88,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ) {
     super('ProgressView', { trackActiveView: true });
 
-    this.recordingManager = wireRecordingFlow(context, {
+    this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
@@ -332,10 +326,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isWorkflowTaskState(taskState)) {
       const executionId = this.provider.state.getExecutionId(streamId);
       if (executionId) {
-        const request = buildExecutionRequest({
+        const request = {
           config: taskState.agentConfig,
           executionId,
-        });
+        };
         const validation = validateExecutionRequest(request);
         if (!validation.valid) {
           this.logger.error(this.channel, validation.message);
@@ -346,7 +340,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
-    const request = buildExecutionRequest({ config: taskState.agentConfig });
+    const request = { config: taskState.agentConfig };
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
@@ -362,7 +356,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!taskState) {
       return;
     }
-    const request = buildExecutionRequest({ config: taskState.agentConfig });
+    const request = { config: taskState.agentConfig };
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
@@ -890,18 +884,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }),
     ];
 
-    const operation = command === 'texra.pack' ? 'pack' : 'clean';
-    const payload = buildFileOperationPayload(
-      {
-        kind: 'progressView',
-        data: {
-          taskState,
-          streamId,
-          generatedPaths,
-        },
+    const payload = buildFileOperationPayload({
+      kind: 'progressView',
+      data: {
+        taskState,
+        streamId,
+        generatedPaths,
       },
-      operation,
-    );
+    });
 
     await vscode.commands.executeCommand(command, payload);
   }
@@ -1298,7 +1288,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
-      const request = buildExecutionRequest({
+      const request = {
         config: {
           agent: 'merge',
           model,
@@ -1310,7 +1300,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           instruction: '',
           useMultipleOutputs: true,
         },
-      });
+      };
       const validation = validateExecutionRequest(request);
       if (!validation.valid) {
         this.logger.error(this.channel, validation.message);

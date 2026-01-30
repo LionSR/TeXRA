@@ -1,9 +1,11 @@
-// Local imports
+// Local imports - shared schemas
+import { sortStreams } from '@shared/streams/streamSort';
+
+// Local imports - progress view
 import {
   isToolUseState,
   isWorkflowState,
   type ProgressState,
-  type StreamState,
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from './store';
@@ -57,10 +59,9 @@ export function updateNestedRounds<T>(
  * Get filtered streams based on current filter setting.
  */
 export function getFilteredStreams(state: ProgressState): StreamTabInfo[] {
-  if (state.streamFilter === 'all') return state.streams;
-  return state.streams.filter(
-    (stream) => stream.agentCategory === state.streamFilter,
-  );
+  const sorted = sortStreams(state.streams, state.streamSort);
+  if (state.streamFilter === 'all') return sorted;
+  return sorted.filter((stream) => stream.agentCategory === state.streamFilter);
 }
 
 /** Run group info for the run selector */

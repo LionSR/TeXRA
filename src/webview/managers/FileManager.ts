@@ -5,8 +5,6 @@ import { workspace } from 'vscode';
 
 import { normalizeFilePath } from '@shared/utils/path';
 import { getAgent } from '@agent/index';
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   ExtensionCategory,
   FILE_SELECTION_COMMANDS,
@@ -14,7 +12,11 @@ import {
   FILE_SELECTION_RESPONSES,
   MULTIPLE_FILE_COMMANDS,
   getIncludedExtensions,
+  type FileSelectionCommand,
+  type FileSelectionResponseCommand,
 } from '@common/files';
+import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -23,22 +25,14 @@ import {
   parseLatexDiffMetadata,
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
-import type { ExtendedFileType, MainViewInboundMessage } from '@shared/schemas';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type {
-  FileSelectionCommand,
-  FileSelectionResponseCommand,
-} from '@common/files';
+import type { ExtendedFileType, MainViewInboundMessage } from '@shared/schemas';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
   { command: C }
 >;
-
-type WithNotifyWhenEmpty = {
-  notifyWhenEmpty?: boolean;
-};
 
 type FileSelectionMessage = MessageFor<FileSelectionCommand>;
 
@@ -46,50 +40,36 @@ type FileSelectedMessage = MessageFor<FileSelectionResponseCommand>;
 
 type RequestInputFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE
-> &
-  WithNotifyWhenEmpty;
+>;
 
 type RequestFileMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE
   | typeof MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE
   | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
-> &
-  WithNotifyWhenEmpty;
+>;
 
 type RequestEditedFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE
-> &
-  WithNotifyWhenEmpty & {
-    baseFile?: string;
-  };
+>;
 
 type RequestBaseFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
-> &
-  WithNotifyWhenEmpty & {
-    preserveBaseFile?: boolean;
-  };
+>;
 
 type RequestDefaultOutputFilesMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES
-> & {
-  agent?: string;
-};
+>;
 
 type SetMultipleFilesMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
   | typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES
   | typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES
   | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
-> & {
-  files?: string[];
-};
+>;
 
-type SelectMultipleFilesMessage = {
-  command: typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES;
-  fileType: ExtendedFileType;
-  currentFile?: string;
-};
+type SelectMultipleFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
+>;
 
 type GetCurrentFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
@@ -153,6 +133,7 @@ export class FileManager extends BaseWebviewManager {
 
   async handleInputFileSelected(message: FileSelectedMessage): Promise<void> {
     if (!message.filePath) {
+      this.postFileUpdate('Edited', []);
       return;
     }
     const baseFileNameForInput = path.basename(
@@ -251,7 +232,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
-    if (message.files && message.files.length > 0) {
+    if (message.files.length > 0) {
       this.postMessage({ command: message.command, files: message.files });
     }
   }
