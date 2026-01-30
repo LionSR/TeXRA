@@ -1018,7 +1018,14 @@ export class MainApp extends BaseWebviewApp {
     if (this.defaultOutputFiles.length > 0) {
       return this.defaultOutputFiles;
     }
-    return [inputFile];
+    // Include both the single input file and multiple input files
+    const files = [inputFile];
+    for (const file of this.multiFiles.inputFiles) {
+      if (!files.includes(file)) {
+        files.push(file);
+      }
+    }
+    return files;
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
@@ -1038,7 +1045,8 @@ export class MainApp extends BaseWebviewApp {
     const currentFileKey = listId.replace('Files', 'File');
     const currentFile =
       this.singleFiles[currentFileKey as keyof typeof this.singleFiles];
-    const fileType = capitalize(listId);
+    // Convert listId (e.g., 'inputFiles') to fileType (e.g., 'input')
+    const fileType = listId.replace('Files', '');
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
       fileType,
       currentFile,
