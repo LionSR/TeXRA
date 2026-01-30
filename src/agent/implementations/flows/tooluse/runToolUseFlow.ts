@@ -113,7 +113,7 @@ export async function runToolUseFlow<C = unknown>(
 
   try {
     registerInterruptible(streamId, flowContext);
-    onSetup?.(flowContext as ToolUseFlowContext<unknown>);
+    onSetup?.(flowContext);
 
     const kv: ExecutionKVStore = getExecutionStore(executionId);
     let flowRecord: FlowRecord | null = null;

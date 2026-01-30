@@ -44,9 +44,9 @@ export class MediaExtractionNode<C = unknown> extends Node<
       if (config.mediaFile) {
         extraMediaFiles.push(fileService.createLocation(config.mediaFile));
       }
-      for (const p of config.mediaFiles) {
-        extraMediaFiles.push(fileService.createLocation(p));
-      }
+      extraMediaFiles.push(
+        ...config.mediaFiles.map((p) => fileService.createLocation(p)),
+      );
     }
 
     return {

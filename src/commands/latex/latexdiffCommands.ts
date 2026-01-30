@@ -53,12 +53,11 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 async function ensureLatexdiffToolInstalled(
   tool: LatexdiffTool,
 ): Promise<boolean> {
-  if (await checkToolInstalled(tool)) {
-    return true;
+  const installed = await checkToolInstalled(tool);
+  if (!installed) {
+    logger.warn(CHANNEL, `${tool} is not installed; command will not run.`);
   }
-
-  logger.warn(CHANNEL, `${tool} is not installed; command will not run.`);
-  return false;
+  return installed;
 }
 
 /**
@@ -172,8 +171,9 @@ async function handleLatexdiff(
   inputFile: string,
   baseFile: string,
   editedFile: string,
-) {
-  if (!(baseFile || inputFile)) {
+): Promise<void> {
+  const fileToUse = baseFile ?? inputFile;
+  if (!fileToUse) {
     await showLoggedMessageWithDocs(
       CHANNEL,
       'No base file specified for latexdiff',
@@ -192,7 +192,6 @@ async function handleLatexdiff(
     return;
   }
 
-  const fileToUse = baseFile ?? inputFile;
   await withLatexdiffTool(
     'latexdiff',
     'Error creating LaTeX diff',
@@ -229,7 +228,7 @@ async function handleLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
-) {
+): Promise<void> {
   const fileToUse = baseFile ?? inputFile;
   await withLatexdiffTool(
     'latexdiff-vc',
@@ -542,13 +541,13 @@ async function runLatexdiffFromMetadata(params: {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
   // Get file description for display - trust source field, fall back to basename
-  const getFileLabel = (info: OutputFileInfo): string => {
-    if (info.source) return info.source;
-    const loc = info.location;
-    return loc.kind === 'workspace' || loc.kind === 'runStorage'
-      ? path.basename(loc.relativePath)
-      : path.basename(loc.absolutePath);
-  };
+  const getFileLabel = (info: OutputFileInfo): string =>
+    info.source ??
+    path.basename(
+      info.location.kind === 'external'
+        ? info.location.absolutePath
+        : info.location.relativePath,
+    );
 
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
@@ -583,13 +582,11 @@ async function runLatexdiffFromMetadata(params: {
       });
 
       const key =
-        info.location.kind === 'workspace' ||
-        info.location.kind === 'runStorage'
-          ? info.location.relativePath
-          : info.location.absolutePath;
-      let group = groupedByRelative.get(key);
-      if (!group) {
-        group = [];
+        info.location.kind === 'external'
+          ? info.location.absolutePath
+          : info.location.relativePath;
+      const group = groupedByRelative.get(key) ?? [];
+      if (!groupedByRelative.has(key)) {
         groupedByRelative.set(key, group);
       }
       group.push({ round, info });
@@ -623,11 +620,11 @@ async function runLatexdiffFromMetadata(params: {
 
   const results: DiffRunResult[] = [...immediateResults];
   const operationCount = operations.length;
+  const incrementPct = operationCount > 0 ? 100 / operationCount : 0;
 
-  for (let index = 0; index < operations.length; index += 1) {
-    const operation = operations[index];
+  for (const operation of operations) {
     progress.report({
-      increment: operationCount > 0 ? 100 / operationCount : 0,
+      increment: incrementPct,
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
