@@ -233,14 +233,6 @@ interface InvocationResultHandlerOptions {
   operationName: string;
 }
 
-function markFlowStopped(state: {
-  shouldStop: boolean;
-  endTurn: boolean;
-}): void {
-  state.shouldStop = true;
-  state.endTurn = false;
-}
-
 /** Returns narrowed success result or null (flow stopped). Records error for failures. */
 export function handleInvocationResult<T extends { response: unknown }>(
   result: InvocationResult<T>,
@@ -257,13 +249,15 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (result.kind === 'cancelled') {
     retryState.lastError = undefined;
-    markFlowStopped(state);
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 
   if (result.kind === 'failed') {
     retryState.lastError = { message: result.message, retryable: false };
-    markFlowStopped(state);
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 
@@ -273,7 +267,8 @@ export function handleInvocationResult<T extends { response: unknown }>(
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
     };
-    markFlowStopped(state);
+    state.shouldStop = true;
+    state.endTurn = false;
     return null;
   }
 

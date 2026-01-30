@@ -400,25 +400,25 @@ Issues reported during code review and their verification status:
 
 ## Verified as NOT Bugs
 
-| Issue | Location | Verdict | Explanation |
-|-------|----------|---------|-------------|
-| ExecutionManager argument shape change | `ExecutionManager.ts` | ✅ Not a bug | `texra.execute` explicitly supports both raw config and wrapped `{ config, executionId? }` format (see `executeCommand.ts:37-45`) |
-| handleInputFileSelected clears wrong category | `FileManager.ts:130-142` | ✅ Intentional | Function updates Edited files when Input file changes; clearing Edited when Input is empty is correct (no base to filter by) |
-| Race condition in ensureAgentWatchers | `AgentDirectoryManager.ts:299-301` | ✅ Theoretical only | Both operations execute synchronously in same microtask; promise callbacks queue for next microtask after null assignment |
-| minimatch dependency | `package.json` | ✅ Already exists | `"minimatch": "^10.1.1"` is already a production dependency |
+| Issue                                         | Location                           | Verdict             | Explanation                                                                                                                       |
+| --------------------------------------------- | ---------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| ExecutionManager argument shape change        | `ExecutionManager.ts`              | ✅ Not a bug        | `texra.execute` explicitly supports both raw config and wrapped `{ config, executionId? }` format (see `executeCommand.ts:37-45`) |
+| handleInputFileSelected clears wrong category | `FileManager.ts:130-142`           | ✅ Intentional      | Function updates Edited files when Input file changes; clearing Edited when Input is empty is correct (no base to filter by)      |
+| Race condition in ensureAgentWatchers         | `AgentDirectoryManager.ts:299-301` | ✅ Theoretical only | Both operations execute synchronously in same microtask; promise callbacks queue for next microtask after null assignment         |
+| minimatch dependency                          | `package.json`                     | ✅ Already exists   | `"minimatch": "^10.1.1"` is already a production dependency                                                                       |
 
 ## Valid Suggestions (Style/Cleanup)
 
-| Issue | Location | Status | Notes |
-|-------|----------|--------|-------|
-| SESSION_DEFAULTS should use `satisfies` | `sessionDefaults.ts:12` | ✅ Fixed | Changed to use `satisfies` pattern |
-| Consolidate file selection Maps | `fileSelectionRegistry.ts` | 📝 Backlog | Three Maps could get out of sync; single declarative structure preferred |
-| `?? undefined` coercion | `DiffManager.ts:77` | ✅ Not a bug | Schema uses `.nullish()` (returns `null`); coercion converts to `undefined` for function signature |
+| Issue                                   | Location                   | Status       | Notes                                                                                              |
+| --------------------------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| SESSION_DEFAULTS should use `satisfies` | `sessionDefaults.ts:12`    | ✅ Fixed     | Changed to use `satisfies` pattern                                                                 |
+| Consolidate file selection Maps         | `fileSelectionRegistry.ts` | 📝 Backlog   | Three Maps could get out of sync; single declarative structure preferred                           |
+| `?? undefined` coercion                 | `DiffManager.ts:77`        | ✅ Not a bug | Schema uses `.nullish()` (returns `null`); coercion converts to `undefined` for function signature |
 
 ## Real Bugs Found
 
-| Issue | Location | Status | Fix |
-|-------|----------|--------|-----|
+| Issue                                  | Location                       | Status   | Fix                                                                                       |
+| -------------------------------------- | ------------------------------ | -------- | ----------------------------------------------------------------------------------------- |
 | Windows path separators with minimatch | `AgentDirectoryManager.ts:230` | ✅ Fixed | Added `normalizePath()` helper to convert backslashes to forward slashes before minimatch |
 
 ---

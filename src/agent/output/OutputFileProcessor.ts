@@ -77,17 +77,22 @@ export class OutputFileProcessor {
       logger.debug(
         `No processed files were generated from ${outputLocation.absolutePath}`,
       );
-      this.ctx.setRoundOutputs(currRound, []);
-      await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, []);
+      await this.handleEmptyOutput(currRound, rawLocation);
     } catch (err) {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
       });
-      this.ctx.setRoundOutputs(currRound, []);
-      await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, []);
+      await this.handleEmptyOutput(currRound, rawLocation);
     }
+  }
+
+  private async handleEmptyOutput(
+    round: number,
+    rawLocation: FileLocation,
+  ): Promise<void> {
+    this.ctx.setRoundOutputs(round, []);
+    await cleanupLatexBackups(rawLocation, this.ctx.logger);
+    await this.captureXmlSummary(round, rawLocation, []);
   }
 
   async processSingleOutput(
@@ -241,18 +246,18 @@ export class OutputFileProcessor {
   private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
     const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
 
-    if (xmlMode === 'always') {
-      return true;
+    switch (xmlMode) {
+      case 'always':
+        return true;
+      case 'scratchpadOnly': {
+        const hasDocumentTag = Boolean(agentSetting.documentTag);
+        const hasScratchpadPrefill =
+          agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+          false;
+        return hasDocumentTag || hasScratchpadPrefill;
+      }
+      default:
+        return false;
     }
-
-    if (xmlMode === 'scratchpadOnly') {
-      const hasDocumentTag = Boolean(agentSetting.documentTag);
-      const hasScratchpadPrefill =
-        agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-        false;
-      return hasDocumentTag || hasScratchpadPrefill;
-    }
-
-    return false;
   }
 }

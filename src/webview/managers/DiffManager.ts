@@ -14,53 +14,69 @@ export class DiffManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
   handleLatexdiff(message: unknown): void {
-    const parsed = mainViewMessages.LatexdiffMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiff message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffMessageSchema,
+      message,
+      'latexdiff',
+    );
+    if (!data) return;
     void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.editedFile,
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.editedFile,
     );
   }
 
   handleLatexdiffvc(message: unknown): void {
-    const parsed = mainViewMessages.LatexdiffvcMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiffvc message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffvcMessageSchema,
+      message,
+      'latexdiffvc',
+    );
+    if (!data) return;
     void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.commitHash,
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.commitHash,
     );
   }
 
   handleLatexdiffvcOperation(message: unknown): void {
-    const parsed =
-      mainViewMessages.LatexdiffvcOperationMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logger.warn(CHANNEL, 'Invalid latexdiffvc operation message', {
-        data: parsed.error,
-      });
-      return;
-    }
-    void vscode.commands.executeCommand(
-      `texra.${parsed.data.command}`,
-      parsed.data.inputFile,
-      parsed.data.baseFile,
-      parsed.data.commitHash,
-      parsed.data.clean,
+    const data = this.parseMessage(
+      mainViewMessages.LatexdiffvcOperationMessageSchema,
+      message,
+      'latexdiffvc operation',
     );
+    if (!data) return;
+    void vscode.commands.executeCommand(
+      `texra.${data.command}`,
+      data.inputFile,
+      data.baseFile,
+      data.commitHash,
+      data.clean,
+    );
+  }
+
+  /** Parse message with schema, logging warning on failure */
+  private parseMessage<T>(
+    schema: {
+      safeParse: (
+        data: unknown,
+      ) => { success: true; data: T } | { success: false; error: unknown };
+    },
+    message: unknown,
+    context: string,
+  ): T | null {
+    const result = schema.safeParse(message);
+    if (!result.success) {
+      logger.warn(CHANNEL, `Invalid ${context} message`, {
+        data: result.error,
+      });
+      return null;
+    }
+    return result.data;
   }
 
   async handleRequestRecentCommits(message: unknown): Promise<void> {
@@ -73,20 +89,18 @@ export class DiffManager extends BaseWebviewManager {
       return;
     }
 
-    const { commits, isGitRepo } = await fetchRecentCommits({
-      // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
-      notifyWhenEmpty: parsed.data.notifyWhenEmpty ?? undefined,
-    });
-
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits,
-      isGitRepo: Boolean(isGitRepo),
-    });
+    // Convert null to undefined (schema uses .nullish(), function expects boolean | undefined)
+    await this.postRecentCommits(parsed.data.notifyWhenEmpty ?? undefined);
   }
 
   async handleRefreshCommits(): Promise<void> {
-    const { commits, isGitRepo } = await fetchRecentCommits();
+    await this.postRecentCommits();
+  }
+
+  private async postRecentCommits(notifyWhenEmpty?: boolean): Promise<void> {
+    const { commits, isGitRepo } = await fetchRecentCommits({
+      notifyWhenEmpty,
+    });
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,

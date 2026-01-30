@@ -138,7 +138,6 @@ export function getOutputFilesByRound(state: OutputState): {
 
 /** Collects support files from agent config for workspace preparation. */
 function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
-  const extras = new Map<string, FileLocation>();
   const allPaths = [
     agentConfig.referenceFile,
     ...agentConfig.referenceFiles,
@@ -150,6 +149,7 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
     ...agentConfig.inputFiles,
   ];
 
+  const extras = new Map<string, FileLocation>();
   for (const value of allPaths) {
     if (!value) continue;
     const location = typeof value === 'string' ? pathToLocation(value) : value;
