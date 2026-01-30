@@ -60,8 +60,10 @@ export class ExplorerOperations {
    */
   private isBuiltInPath(targetPath: string): boolean {
     return (
-      (!!this.builtInAgentsPath && targetPath.startsWith(this.builtInAgentsPath)) ||
-      (!!this.builtInToolUsePath && targetPath.startsWith(this.builtInToolUsePath))
+      (!!this.builtInAgentsPath &&
+        targetPath.startsWith(this.builtInAgentsPath)) ||
+      (!!this.builtInToolUsePath &&
+        targetPath.startsWith(this.builtInToolUsePath))
     );
   }
 
@@ -287,7 +289,11 @@ export class ExplorerOperations {
         `Successfully deleted ${itemType}: ${item.resourceUri.fsPath}`,
       );
     } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, `Failed to delete ${itemType}`, err);
+      await showLoggedErrorMessage(
+        CHANNEL,
+        `Failed to delete ${itemType}`,
+        err,
+      );
     }
   }
 
@@ -295,17 +301,26 @@ export class ExplorerOperations {
     if (!item) return;
 
     if (path.extname(item.resourceUri.fsPath).toLowerCase() !== '.yaml') {
-      vscode.window.showInformationMessage('Only YAML files can be added as agents.');
+      vscode.window.showInformationMessage(
+        'Only YAML files can be added as agents.',
+      );
       return;
     }
 
     try {
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Window, title: 'Validating agent YAML...' },
+        {
+          location: vscode.ProgressLocation.Window,
+          title: 'Validating agent YAML...',
+        },
         () => validateYamlAndPromptAdd(item.resourceUri.fsPath, true, false),
       );
     } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Failed to add agent to configuration', err);
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to add agent to configuration',
+        err,
+      );
     }
   }
 }

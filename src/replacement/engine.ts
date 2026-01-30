@@ -64,7 +64,9 @@ class ReplacementEngineImpl implements ReplacementEngine {
    */
   applyNonRegex(text: string): string {
     const processed = applyReplacements(text, getAllReplacements()).trim();
-    return shouldWrapCritiqueInAlign() ? wrapCritiqueInAlign(processed) : processed;
+    return shouldWrapCritiqueInAlign()
+      ? wrapCritiqueInAlign(processed)
+      : processed;
   }
 
   /**
@@ -236,9 +238,12 @@ export function applyReplacements(
   },
 ): string {
   // Apply Unicode replacements in math environments unless disabled
-  let result = options?.processMathUnicode === false ? text : replaceMathUnicode(text);
+  let result =
+    options?.processMathUnicode === false ? text : replaceMathUnicode(text);
 
-  const categories = Array.isArray(replacements) ? replacements : [replacements];
+  const categories = Array.isArray(replacements)
+    ? replacements
+    : [replacements];
 
   for (const category of categories) {
     if (category.isRegex) {
