@@ -463,7 +463,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Calculate thinking budget based on max_tokens constraint
       // budget_tokens must be less than max_tokens
       const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
-      const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
+      const defaultBudget = useStreaming ? 32768 : 4096; // streaming allows larger thinking budget
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
       options.thinking = {
@@ -486,8 +486,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
-      // Reset betas to only include the output beta for this specific model
-      options.betas = [SONNET_37_OUTPUT_BETA];
+      // Add the output beta while preserving existing betas (e.g., interleaved thinking, context management)
+      this.ensureBeta(options, SONNET_37_OUTPUT_BETA);
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models

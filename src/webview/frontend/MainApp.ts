@@ -527,10 +527,10 @@ export class MainApp extends BaseWebviewApp {
     this.multiFiles = { ...this.multiFiles, [listId]: files };
     this.saveState();
 
-    const type = listId.replace('Files', '') as MultipleFileType;
-    const command = FILE_UPDATE_COMMANDS[type];
+    const fileType = listId.replace('Files', '') as MultipleFileType;
+    const command = FILE_UPDATE_COMMANDS[fileType];
     if (command) {
-      postMessage(command, { files });
+      postMessage(command, { fileType, files });
     }
   }
 

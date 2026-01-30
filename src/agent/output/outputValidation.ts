@@ -15,6 +15,7 @@ import { flexibleFS } from '@utils/files';
 
 import {
   getStorageKey,
+  withOutputStage,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -29,23 +30,6 @@ export interface ValidationResult {
   currRound: number;
   missing: string[];
   xmlExists: boolean;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-async function withOutputStage<T>(
-  deps: OutputDependencies,
-  label: string,
-  parentStage: AgentLogStage | undefined,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const stage = await deps.logger.stage(`Output: ${label}`, {
-    parent: parentStage,
-    skip: true,
-  });
-  return stage.run(fn);
 }
 
 // ============================================================================
@@ -64,7 +48,7 @@ export async function checkExpectedOutputs(
     deps,
     `Validate expected r${currRound}`,
     stage,
-    async (): Promise<ValidationResult> => {
+    async (_scope): Promise<ValidationResult> => {
       const storageKey = getStorageKey(state);
       const expected = deps.agentConfig.outputFiles;
       if (!expected || expected.length === 0) {
