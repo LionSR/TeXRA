@@ -18,6 +18,7 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -25,7 +26,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
   updateNestedRounds,
-  resolveActiveRunId,
   prependInstructionForToolUse,
 } from './stateUtils';
 import {
@@ -391,7 +391,8 @@ const handlers: HandlerRegistry = {
 
     updateWorkflowState(ctx, stream, (prev) => {
       // Use provided runId from backend if available, otherwise resolve from state
-      const runId = providedRunId ?? resolveActiveRunId(prev) ?? 'default';
+      const runId =
+        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,

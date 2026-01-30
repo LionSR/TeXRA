@@ -13,14 +13,11 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      historyBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'historyView',
-          'bundle.js',
-        ),
-      ),
+      historyBundleUri: this.buildUri(webview, [
+        'dist',
+        'historyView',
+        'bundle.js',
+      ]),
     };
   }
 }

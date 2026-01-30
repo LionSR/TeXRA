@@ -48,6 +48,7 @@ import {
   type SessionType,
   parseSessionType,
 } from './constants';
+import { SESSION_DEFAULTS } from './sessionDefaults';
 import { mainViewStyles } from './styles';
 import {
   dispatchMainViewMessage,
@@ -928,9 +929,9 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private clearForNewSession(): void {
-    const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
     this.instruction = '';
-    if (!isToolUse) {
+    const defaults = SESSION_DEFAULTS[this.sessionType];
+    if (defaults.resetFiles) {
       this.singleFiles = {
         inputFile: '',
         referenceFile: '',
@@ -953,13 +954,15 @@ export class MainApp extends BaseWebviewApp {
         mediaFiles: false,
         outputFiles: false,
       };
-      this.checkboxValues = {
-        ...this.checkboxValues,
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
-      };
-      this.outputFilesActive = false;
+      if (defaults.checkboxOverrides) {
+        this.checkboxValues = {
+          ...this.checkboxValues,
+          ...defaults.checkboxOverrides,
+        };
+      }
+      if (defaults.outputFilesActive !== undefined) {
+        this.outputFilesActive = defaults.outputFilesActive;
+      }
     }
     this.saveState();
   }
