@@ -101,6 +101,9 @@ export class PersistedState<T extends Record<string, unknown>> {
     if (result.success) {
       return result.data;
     }
+    console.warn(
+      `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
+    );
     // Fall back to schema defaults (parse undefined/empty object)
     return this.schema.parse({});
   }
