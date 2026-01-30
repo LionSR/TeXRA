@@ -34,6 +34,13 @@ export class OutputFilesSection extends LitElement {
       :host {
         display: block;
       }
+
+      .file-select-actions vscode-toolbar-button {
+        width: var(--height-control);
+        height: var(--height-control);
+        min-width: var(--height-control);
+        min-height: var(--height-control);
+      }
     `,
   ];
 

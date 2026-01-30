@@ -163,10 +163,11 @@ export class BannerGroup extends LitElement {
   @property({ type: Boolean }) loginBannerVisible = false;
 
   private handleApiKeyAction(action: 'set' | 'guide'): void {
+    const provider = this.apiKeyBanner.provider ?? '';
     this.dispatchEvent(
       MainViewEvents.apiKeyAction({
         action,
-        provider: this.apiKeyBanner.provider,
+        provider,
       }),
     );
   }
@@ -214,14 +215,15 @@ export class BannerGroup extends LitElement {
   private renderApiKeyBanner(): TemplateResult | typeof nothing {
     if (!this.apiKeyBanner.visible) return nothing;
 
-    const providerLabel = this.apiKeyBanner.provider
-      ? `${this.apiKeyBanner.provider.charAt(0).toUpperCase()}${this.apiKeyBanner.provider.slice(1)}`
+    const provider = this.apiKeyBanner.provider ?? '';
+    const providerLabel = provider
+      ? `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
       : '';
 
     return html`
       <div id="apiKeyBanner" class="api-key-banner">
         <span>
-          ${this.apiKeyBanner.provider
+          ${provider
             ? html`<strong>${providerLabel}</strong> API key missing.`
             : 'TeXRA requires an API key to run.'}
         </span>
@@ -231,14 +233,14 @@ export class BannerGroup extends LitElement {
             icon="key"
             @click=${() => this.handleApiKeyAction('set')}
           >
-            ${this.apiKeyBanner.provider ? 'Set Key' : 'Set API Key'}
+            ${provider ? 'Set Key' : 'Set API Key'}
           </vscode-toolbar-button>
           <vscode-toolbar-button
             id="apiKeyGuideButton"
             icon="book"
             @click=${() => this.handleApiKeyAction('guide')}
           >
-            ${this.apiKeyBanner.provider ? 'Get Key' : 'API Key Guide'}
+            ${provider ? 'Get Key' : 'API Key Guide'}
           </vscode-toolbar-button>
         </div>
       </div>

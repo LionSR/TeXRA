@@ -39,7 +39,7 @@ export class RunSelector extends LitElement {
     const sortedRuns = [...this.runs].sort((a, b) => {
       const aTime = this.toTime(a.startTime);
       const bTime = this.toTime(b.startTime);
-      return aTime !== bTime ? aTime - bTime : a.id.localeCompare(b.id);
+      return aTime !== bTime ? bTime - aTime : a.id.localeCompare(b.id);
     });
 
     return html`

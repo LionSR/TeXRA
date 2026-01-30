@@ -3,7 +3,7 @@ import { css, type CSSResult } from 'lit';
 export const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
     border-radius: var(--border-radius);
     font-size: var(--font-size-sm);
     font-weight: 500;
