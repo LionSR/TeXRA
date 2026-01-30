@@ -91,20 +91,14 @@ export class LogList extends LitElement {
   private taskGroupList?: TaskGroupList;
 
   // Non-reactive state
-  private stateManager = new PersistedState(
-    createWebviewStorage(vscode),
-    'logListState',
-    LogListStateSchema,
-  );
+  private storage = createWebviewStorage(vscode);
+  private stateManager?: PersistedState<LogListState>;
   private toggleStates: ToggleStateStore;
+  private activeStreamId: string | null = null;
 
   constructor() {
     super();
-    const previous = this.stateManager.getState();
     this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
-    if (previous.groupToggleStates.length > 0) {
-      this.toggleStates.load(previous.groupToggleStates);
-    }
   }
 
   override connectedCallback(): void {
@@ -122,6 +116,15 @@ export class LogList extends LitElement {
     super.disconnectedCallback();
   }
 
+  protected willUpdate(): void {
+    const streamId = this.streamContext?.streamInfo?.name ?? null;
+    if (streamId === this.activeStreamId) {
+      return;
+    }
+    this.activeStreamId = streamId;
+    this.initializeState(streamId);
+  }
+
   override render(): TemplateResult {
     return html`
       <task-group-list
@@ -135,8 +138,8 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    // Scroll to bottom after render via public method on child component
-    this.taskGroupList?.scrollToBottom();
+    // Scroll to bottom after render if the user is already near the end
+    this.taskGroupList?.scrollToBottomIfNearEnd();
   }
 
   // ============================================================
@@ -144,12 +147,33 @@ export class LogList extends LitElement {
   // ============================================================
 
   private saveToggleStates(): void {
+    if (!this.stateManager) {
+      return;
+    }
     try {
       this.stateManager.update({
         groupToggleStates: this.toggleStates.entries(),
       });
     } catch (error) {
       console.error('[LogList] Failed to save toggle states', error);
+    }
+  }
+
+  private initializeState(streamId: string | null): void {
+    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
+    if (!streamId) {
+      this.stateManager = undefined;
+      return;
+    }
+    const storageKey = `logListState:${streamId}`;
+    this.stateManager = new PersistedState(
+      this.storage,
+      storageKey,
+      LogListStateSchema,
+    );
+    const previous = this.stateManager.getState();
+    if (previous.groupToggleStates.length > 0) {
+      this.toggleStates.load(previous.groupToggleStates);
     }
   }
 

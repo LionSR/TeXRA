@@ -9,7 +9,6 @@
  * 1. No active stream filtering: Unlike TodoEventHandlers, this does NOT filter
  *    by active stream. Follow-up updates are sent for any stream because:
  *    - Follow-ups represent user messages waiting to be processed
- *    - refreshStreamSurface doesn't refresh follow-ups when switching streams
  *    - The frontend handles display logic based on which stream is visible
  *
  * 2. No state storage: Unlike TodoEventHandlers which stores state via
