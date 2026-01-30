@@ -514,31 +514,29 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       ?.split(':')[1];
 
     // Route to appropriate auth flow based on provider
-    switch (requestedProvider) {
-      case 'github-browser':
-        logger.info(
-          'SupabaseAuthProvider',
-          'Using browser-based GitHub auth (Supabase OAuth flow)',
-        );
-        return this.createSessionViaSupabaseOAuth('github');
-
-      case 'github':
-      case undefined:
-        // Default to VS Code's built-in GitHub auth - works everywhere and is simpler
-        logger.info(
-          'SupabaseAuthProvider',
-          'Using VS Code GitHub auth (works on desktop and Codespaces)',
-        );
-        return this.createSessionViaVSCodeGitHub();
-
-      default:
-        // Other providers (Google) use traditional Supabase OAuth flow
-        return this.createSessionViaSupabaseOAuth(
-          isOAuthProvider(requestedProvider)
-            ? requestedProvider
-            : DEFAULT_OAUTH_PROVIDER,
-        );
+    if (requestedProvider === 'github-browser') {
+      logger.info(
+        'SupabaseAuthProvider',
+        'Using browser-based GitHub auth (Supabase OAuth flow)',
+      );
+      return this.createSessionViaSupabaseOAuth('github');
     }
+
+    if (!requestedProvider || requestedProvider === 'github') {
+      // Default to VS Code's built-in GitHub auth - works everywhere and is simpler
+      logger.info(
+        'SupabaseAuthProvider',
+        'Using VS Code GitHub auth (works on desktop and Codespaces)',
+      );
+      return this.createSessionViaVSCodeGitHub();
+    }
+
+    // Other providers (Google) use traditional Supabase OAuth flow
+    return this.createSessionViaSupabaseOAuth(
+      isOAuthProvider(requestedProvider)
+        ? requestedProvider
+        : DEFAULT_OAUTH_PROVIDER,
+    );
   }
 
   /**
@@ -843,24 +841,21 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return this.refreshPromise;
     }
 
-    const doRefresh = async (): Promise<SupabaseSession | null> => {
-      try {
-        if (session.useCustomRefresh) {
-          return this.refreshViaCustomEndpoint(session);
-        }
-        return this.refreshViaSupabase(session);
-      } catch (error) {
+    this.refreshPromise = (session.useCustomRefresh
+      ? this.refreshViaCustomEndpoint(session)
+      : this.refreshViaSupabase(session)
+    )
+      .catch((error) => {
         logger.error(
           'SupabaseAuthProvider',
           `Error refreshing session: ${toErrorMessage(error)}`,
         );
         return null;
-      }
-    };
+      })
+      .finally(() => {
+        this.refreshPromise = null;
+      });
 
-    this.refreshPromise = doRefresh().finally(() => {
-      this.refreshPromise = null;
-    });
     return this.refreshPromise;
   }
 

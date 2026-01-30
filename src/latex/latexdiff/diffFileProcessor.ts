@@ -127,12 +127,7 @@ export class DiffFileProcessor {
   }
 
   private needsNewlineBefore(line: string): boolean {
-    for (const pkg of PACKAGES_NEEDING_NEWLINE) {
-      if (line.includes(pkg)) {
-        return true;
-      }
-    }
-    return false;
+    return [...PACKAGES_NEEDING_NEWLINE].some((pkg) => line.includes(pkg));
   }
 
   private async processTikzPictureEndings(

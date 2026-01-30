@@ -148,11 +148,12 @@ export function buildBashApprovalRejectedResult(
 ): ToolResult {
   const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
   const message = `User rejected bash command: ${preview}`;
+  const feedback = userMessage?.trim();
   return {
     output: message,
     summary: message,
     error: message,
     isError: true,
-    ...(userMessage?.trim() ? { userInstruction: userMessage.trim() } : {}),
+    ...(feedback ? { userInstruction: feedback } : {}),
   };
 }

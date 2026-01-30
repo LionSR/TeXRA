@@ -4,11 +4,15 @@ import * as vscode from 'vscode';
 // Local imports
 import { INSTRUCTION_PREFIX, globalSM } from '@common/state';
 
+const NEVER_REMIND = 'Never remind again';
+
 /**
  * Show an instruction message that can be permanently dismissed.
  *
  * @param key Unique key for the instruction
  * @param message Message to display to the user
+ * @param actions Optional action buttons with callbacks
+ * @param showSuppress Whether to show the "Never remind again" option
  */
 export async function showInstructionWithSuppress(
   key: string,
@@ -16,25 +20,24 @@ export async function showInstructionWithSuppress(
   actions: { title: string; callback: () => Thenable<void> | void }[] = [],
   showSuppress = true,
 ): Promise<void> {
-  if (showSuppress) {
-    const dismissed = globalSM.get<boolean>(`${INSTRUCTION_PREFIX}${key}`);
-    if (dismissed) {
-      return;
-    }
+  const stateKey = `${INSTRUCTION_PREFIX}${key}`;
+
+  // Check if user previously dismissed this instruction
+  if (showSuppress && globalSM.get<boolean>(stateKey)) {
+    return;
   }
 
-  const never = 'Never remind again';
   const buttons = actions.map((a) => a.title);
-  const choice = await vscode.window.showInformationMessage(
-    message,
-    ...buttons,
-    ...(showSuppress ? [never] : []),
-  );
+  if (showSuppress) buttons.push(NEVER_REMIND);
 
-  if (showSuppress && choice === never) {
-    await globalSM.update(`${INSTRUCTION_PREFIX}${key}`, true);
-  } else if (choice) {
-    const action = actions.find((a) => a.title === choice);
-    await action?.callback();
+  const choice = await vscode.window.showInformationMessage(message, ...buttons);
+  if (!choice) return;
+
+  if (showSuppress && choice === NEVER_REMIND) {
+    await globalSM.update(stateKey, true);
+    return;
   }
+
+  const action = actions.find((a) => a.title === choice);
+  await action?.callback();
 }
