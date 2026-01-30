@@ -5,7 +5,6 @@ import * as path from 'path';
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 import { StorageFS } from './storageFS';
 
-export { PASTED_PREFIX };
 export const PASTED_DIR = 'pasted';
 
 /**

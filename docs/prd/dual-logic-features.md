@@ -372,8 +372,11 @@ const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
 - [x] Delete `getEffectiveRunId` / `resolveActiveRunId` - replaced by `resolveRunId`
 - [x] Delete `fileOperationPayload.ts` - unnecessary abstraction removed
 - [x] Fixed type safety: `StreamSort` schema added, removed `as StreamSort` casts
-- [x] Fixed race condition in `AgentDirectoryManager.ensureAgentWatchers`
+- [x] Fixed race condition in `AgentDirectoryManager.ensureAgentWatchers` - promise set before `getAllLocal()`
 - [x] Fixed config watcher disposal bug in `AgentDirectoryManager`
+- [x] Added `model` field to `POLISH_INSTRUCTION_TEXT` schema (was missing, caused validation failures)
+- [x] Added `MultiFileCategory` type for type-safe multi-file command maps
+- [x] Removed unnecessary `PASTED_PREFIX` re-export from `pastedImageUtils.ts`
 
 ---
 
