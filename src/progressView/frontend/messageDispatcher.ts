@@ -66,6 +66,19 @@ const pendingLogUpdates = new Map<string, Partial<LogMessageData>>();
 // Helper functions
 // ============================================================
 
+function getPendingLogKey(streamId: string, logId: string): string {
+  return `${streamId}:${logId}`;
+}
+
+function clearPendingLogUpdatesForStream(streamId: string): void {
+  const prefix = `${streamId}:`;
+  for (const key of pendingLogUpdates.keys()) {
+    if (key.startsWith(prefix)) {
+      pendingLogUpdates.delete(key);
+    }
+  }
+}
+
 function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
@@ -177,7 +190,7 @@ const handlers: HandlerRegistry = {
       state.activeStreamId === streamId ? null : state.activeStreamId;
 
     if (state.activeStreamId === streamId) {
-      pendingLogUpdates.clear();
+      clearPendingLogUpdatesForStream(streamId);
     }
 
     ctx.setState(() => ({
@@ -212,6 +225,9 @@ const handlers: HandlerRegistry = {
 
     ctx.setStreamState(stream, (prev) => {
       const isClear = action === 'clear';
+      if (isClear) {
+        clearPendingLogUpdatesForStream(stream);
+      }
       const {
         activeRunId,
         runInstructions,
@@ -262,14 +278,17 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.APPEND_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
-    const pendingUpdate = logId ? pendingLogUpdates.get(logId) : null;
+    const pendingUpdate =
+      logId && data.stream
+        ? pendingLogUpdates.get(getPendingLogKey(data.stream, logId))
+        : null;
 
     const mergedLogMessage = pendingUpdate
       ? { ...data.logMessage, ...pendingUpdate }
       : data.logMessage;
 
     if (logId && pendingUpdate) {
-      pendingLogUpdates.delete(logId);
+      pendingLogUpdates.delete(getPendingLogKey(data.stream, logId));
     }
 
     ctx.setStreamState(data.stream, (prev) => ({
@@ -281,13 +300,21 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
     const state = ctx.getState();
-    const streamState = getStreamState(state, data.stream);
+    const streamInfo = state.streams.find(
+      (stream) => stream.name === data.stream,
+    );
+    const streamState = getStreamState(
+      state,
+      data.stream,
+      streamInfo?.agentCategory,
+    );
     const logExists = streamState.logs.some((entry) => entry.id === logId);
 
     if (!logExists) {
       if (logId) {
-        const existingUpdate = pendingLogUpdates.get(logId) ?? {};
-        pendingLogUpdates.set(logId, {
+        const key = getPendingLogKey(data.stream, logId);
+        const existingUpdate = pendingLogUpdates.get(key) ?? {};
+        pendingLogUpdates.set(key, {
           ...existingUpdate,
           ...data.logMessage,
         });

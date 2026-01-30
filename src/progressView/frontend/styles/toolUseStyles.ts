@@ -147,8 +147,8 @@ export const toolUseStyles = css`
   }
 
   :is(.diff-inline-del, .diff-inline-add) {
-    border-radius: var(--border-radius-small);
-    padding: 0 var(--spacing-tiny);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-tiny) var(--spacing-small);
   }
 
   .diff-inline-del {
