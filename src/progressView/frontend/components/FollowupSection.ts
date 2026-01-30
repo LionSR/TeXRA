@@ -375,12 +375,10 @@ export class FollowupSection extends LitElement {
       this.mode === 'chat'
         ? this.toolUseAgentOptions
         : this.workflowAgentOptions;
-    // renderAgentOptions includes placeholder, no need to add manually
     return renderAgentOptions(agentOptions, this.selectedAgent);
   }
 
   private renderModelSelect(): TemplateResult {
-    // renderModelOptions includes placeholder, no need to add manually
     return renderModelOptions(this.modelOptions, this.selectedModel);
   }
 
