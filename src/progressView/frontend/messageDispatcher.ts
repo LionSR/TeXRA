@@ -176,9 +176,7 @@ const handlers: HandlerRegistry = {
     const nextActiveStreamId =
       state.activeStreamId === streamId ? null : state.activeStreamId;
 
-    if (state.activeStreamId === streamId) {
-      pendingLogUpdates.clear();
-    }
+    pendingLogUpdates.clear();
 
     ctx.setState(() => ({
       ...state,
@@ -281,7 +279,14 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_LOG]: (data, ctx) => {
     const logId = data.logMessage.id;
     const state = ctx.getState();
-    const streamState = getStreamState(state, data.stream);
+    const streamInfo = state.streams.find(
+      (stream) => stream.name === data.stream,
+    );
+    const streamState = getStreamState(
+      state,
+      data.stream,
+      streamInfo?.agentCategory,
+    );
     const logExists = streamState.logs.some((entry) => entry.id === logId);
 
     if (!logExists) {

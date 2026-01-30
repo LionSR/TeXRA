@@ -5,7 +5,7 @@
 
 ## Overview
 
-This PRD documents **20 additional UI or logic regressions** identified during a follow-up audit.
+This PRD documents **17 additional UI or logic regressions** identified during a follow-up audit.
 These items are **not covered** in the existing regression audit document.
 The focus is on **missing or degraded UI behavior, incorrect state transitions, and logic regressions**
 across MainView, ProgressView, HistoryView, ProfileView, and shared state handling.
@@ -47,6 +47,7 @@ for verification.
 - **Impact:** Medium (Ready state never shown)
 - **Current behavior:** `normalizeStatus()` maps READY → STOPPED, so the tab
   never displays the Ready indicator.
+- **Note:** Shares the READY normalization root cause with P4.
 - **Location:** `src/progressView/frontend/components/StreamTabs.ts:428-430`
 
 ### P4) READY status is normalized to STOPPED in stream header (MEDIUM)
@@ -56,6 +57,7 @@ for verification.
 - **Impact:** Medium (status tooltip and indicator never show Ready)
 - **Current behavior:** `resolveStatus()` maps READY → STOPPED, hiding the Ready state
   in the header and status tooltip.
+- **Note:** Shares the READY normalization root cause with P3.
 - **Location:** `src/progressView/frontend/components/StreamHeader.ts:415-417`
 
 ### P5) Log list always auto-scrolls to bottom on update (HIGH)
@@ -163,29 +165,9 @@ for verification.
   actual target can be a `vscode-textarea` wrapper, so `.value` may be missing.
 - **Location:** `src/webview/frontend/components/InstructionPanel.ts:218-236`
 
-### M4) Placeholder rotations don’t pause when user types (LOW)
-
-- **Area:** MainView
-- **Type:** UX regression
-- **Impact:** Low (placeholder changes while editing)
-- **Current behavior:** Placeholder rotation is time-based, with no guard to pause
-  when the user begins typing, causing distracting label changes.
-- **Location:** `src/webview/frontend/store.ts:109-120`
-
----
-
 ## HistoryView Regressions
 
-### H1) searchAction property uses string coercion with null default (MEDIUM)
-
-- **Area:** HistoryView
-- **Type:** Logic regression
-- **Impact:** Medium (search navigation triggers unexpectedly)
-- **Current behavior:** `searchAction` is declared as `@property({ type: String })`
-  with a default of `null`, which can coerce to `'null'` and cause false triggers.
-- **Location:** `src/historyView/frontend/components/HistoryList.ts:39-50`
-
-### H2) Mark.js instance is never cleared on item swap (LOW)
+### H1) Mark.js instance is never cleared on item swap (LOW)
 
 - **Area:** HistoryView
 - **Type:** Logic regression
@@ -196,16 +178,7 @@ for verification.
 
 ## ProfileView Regressions
 
-### PR1) Undefined visibility labels render as “undefined” (LOW)
-
-- **Area:** ProfileView
-- **Type:** UI regression
-- **Impact:** Low (confusing label)
-- **Current behavior:** `normalizeVisibility()` wraps undefined in an array, so the
-  UI shows “undefined” in the visibility badge.
-- **Location:** `src/profileView/frontend/components/AgentsTable.ts:46-75`
-
-### PR2) Category class normalization drops hyphens only (LOW)
+### PR1) Category class normalization drops hyphens only (LOW)
 
 - **Area:** ProfileView
 - **Type:** UI regression

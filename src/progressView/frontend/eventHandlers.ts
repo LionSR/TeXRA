@@ -133,7 +133,8 @@ export function handleFollowUpChange(
   ctx: FrontendEventHandlerContext,
 ): void {
   const { value } = event.detail;
-  const streamId = ctx.getState().activeStreamId;
+  const state = ctx.getState();
+  const streamId = state.activeStreamId;
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
@@ -146,7 +147,12 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   const streamId = state.activeStreamId;
   if (!streamId) return;
 
-  const streamState = getStreamState(state, streamId);
+  const streamInfo = state.streams.find((stream) => stream.name === streamId);
+  const streamState = getStreamState(
+    state,
+    streamId,
+    streamInfo?.agentCategory,
+  );
   if (!isToolUseState(streamState)) return;
 
   const text = streamState.followUpText?.trim() ?? '';
@@ -167,7 +173,12 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
   const streamId = state.activeStreamId;
   if (!streamId) return;
 
-  const streamState = getStreamState(state, streamId);
+  const streamInfo = state.streams.find((stream) => stream.name === streamId);
+  const streamState = getStreamState(
+    state,
+    streamId,
+    streamInfo?.agentCategory,
+  );
   if (!isToolUseState(streamState)) return;
 
   const text = streamState.followUpText?.trim() ?? '';

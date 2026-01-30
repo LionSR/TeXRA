@@ -265,7 +265,11 @@ export class ProgressApp extends BaseWebviewApp {
       return;
     }
 
-    const streamState = getStreamState(this.appState, activeStream.name);
+    const streamState = getStreamState(
+      this.appState,
+      activeStream.name,
+      activeStream.agentCategory,
+    );
     const isToolUse = isToolUseState(streamState);
     const runId = isToolUse ? null : getEffectiveRunId(streamState);
 
@@ -284,7 +288,14 @@ export class ProgressApp extends BaseWebviewApp {
     updater: (prev: StreamState) => StreamState,
   ): void {
     const nextStates = new Map(this.appState.streamStates);
-    const current = getStreamState(this.appState, streamId);
+    const streamInfo = this.appState.streams.find(
+      (stream) => stream.name === streamId,
+    );
+    const current = getStreamState(
+      this.appState,
+      streamId,
+      streamInfo?.agentCategory,
+    );
     nextStates.set(streamId, updater(current));
     this.appState = { ...this.appState, streamStates: nextStates };
   }
