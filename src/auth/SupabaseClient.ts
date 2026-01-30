@@ -163,15 +163,11 @@ export class SupabaseClient {
    */
   static async getUser(): Promise<User | null> {
     const token = await this.getAccessToken();
-    if (!token) {
-      return null;
-    }
+    if (!token) return null;
 
     try {
       const { data, error } = await this.getClient().auth.getUser(token);
-      if (error || !data.user) {
-        return null;
-      }
+      if (error || !data.user) return null;
       return data.user;
     } catch (error) {
       logger.error(
@@ -197,15 +193,10 @@ export class SupabaseClient {
    * Tier is reserved for future API key access levels.
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
-    const defaultContext: UserAuthContext = {
-      permissions: [],
-      tier: 'free',
-    };
+    const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
 
     const tokens = await this.getSessionTokens();
-    if (!tokens) {
-      return defaultContext;
-    }
+    if (!tokens) return defaultContext;
 
     try {
       const client = this.getClient();

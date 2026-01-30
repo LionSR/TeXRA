@@ -36,8 +36,6 @@ export class ToggleStateStore {
   }
 
   load(data: Array<[string, boolean]>): void {
-    if (Array.isArray(data)) {
-      this.states = new Map(data);
-    }
+    this.states = new Map(data);
   }
 }
