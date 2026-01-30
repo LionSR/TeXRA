@@ -14,6 +14,7 @@ import {
   getIncludedExtensions,
   type FileSelectionCommand,
   type FileSelectionResponseCommand,
+  type MultiFileCategory,
 } from '@common/files';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -236,7 +237,8 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    const commands = MULTIPLE_FILE_COMMANDS.get(fileType);
+    // Cast needed: ExtendedFileType includes 'edited' but multi-select doesn't
+    const commands = MULTIPLE_FILE_COMMANDS.get(fileType as MultiFileCategory);
     if (!commands) {
       logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
       return;
