@@ -17,6 +17,7 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { resolveRunId } from '@shared/streams/runSelection';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -24,7 +25,6 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - progress view frontend
 import {
   createInitialState,
-  getEffectiveRunId,
   getStreamState,
   isToolUseState,
   type ProgressState,
@@ -271,7 +271,7 @@ export class ProgressApp extends BaseWebviewApp {
       activeStream.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
-    const runId = isToolUse ? null : getEffectiveRunId(streamState);
+    const runId = resolveRunId(streamState, { mode: 'strict' });
 
     this.streamContextValue = {
       streamInfo: activeStream,

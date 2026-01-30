@@ -4,14 +4,16 @@ import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import { computeAgentOptionsData } from '@agent/index';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
+import {
+  RecordingManager,
+  wireRecordingFlow,
+} from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
@@ -31,7 +33,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
-    this.recordingManager = new RecordingManager(context, {
+    this.recordingManager = wireRecordingFlow(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
@@ -48,28 +50,27 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     message: unknown,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.fileManager.attachWebview(webviewView);
-    this.instructionManager.attachWebview(webviewView);
-    this.diffManager.attachWebview(webviewView);
+    await this.withActiveView(webviewView, async () => {
+      this.fileManager.attachWebview(webviewView);
+      this.instructionManager.attachWebview(webviewView);
+      this.diffManager.attachWebview(webviewView);
 
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
+      const handled = dispatchMainViewInbound(
+        message,
+        this.createHandlerRegistry(webviewView),
+        (error) => {
+          this.logger.error(
+            this.channel,
+            `Error handling message: ${toErrorMessage(error)}`,
+          );
+        },
+      );
 
-    const handled = dispatchMainViewInbound(
-      message,
-      this.createHandlerRegistry(webviewView),
-      (error) => {
-        this.logger.error(
-          this.channel,
-          `Error handling message: ${toErrorMessage(error)}`,
-        );
-      },
-    );
-
-    if (!handled) {
-      // Fall back to base class for unhandled messages
-      await super.handleMessage(message, webviewView);
-    }
+      if (!handled) {
+        // Fall back to base class for unhandled messages
+        await super.handleMessage(message, webviewView);
+      }
+    });
   }
 
   private createHandlerRegistry(
@@ -414,20 +415,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(undefined, webviewView);
     try {
-      const [modelOptionsData, agentOptionsData, authStatus] =
-        await Promise.all([
-          computeModelOptionsData(),
-          computeAgentOptionsData(),
-          getAuthStatus(),
-        ]);
+      const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
+        loadOptions(),
+        getAuthStatus(),
+      ]);
 
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptionsData,
+        optionsData: modelOptions,
       });
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: agentOptionsData,
+        optionsData: agentOptions,
       });
 
       // Show login banner if not authenticated and banner not dismissed

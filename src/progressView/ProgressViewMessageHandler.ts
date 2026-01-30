@@ -8,7 +8,7 @@ import {
 } from '@shared/schemas/progressView';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
+import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
@@ -16,14 +16,22 @@ import {
   BaseViewMessageHandler,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
+import {
+  buildExecutionRequest,
+  validateExecutionRequest,
+} from '@common/execution/executionRequests';
+import { buildFileOperationPayload } from '@common/files';
+import {
+  RecordingManager,
+  wireRecordingFlow,
+} from '@common/managers/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
@@ -37,8 +45,6 @@ import {
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { getConfig } from '@utils/config';
-import { isNonEmptyString } from '@utils/core';
 import {
   createExternalLocation,
   createFileMapping,
@@ -88,7 +94,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ) {
     super('ProgressView', { trackActiveView: true });
 
-    this.recordingManager = new RecordingManager(context, {
+    this.recordingManager = wireRecordingFlow(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
@@ -208,30 +214,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchProgressViewInbound(
-      message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
-    );
-
-    if (
-      !handled &&
-      message &&
-      typeof message === 'object' &&
-      'command' in message
-    ) {
-      this.logger.warn(
-        this.channel,
-        `Unhandled command: ${(message as { command: string }).command}`,
+    await this.withActiveView(webviewView, async () => {
+      const handled = dispatchProgressViewInbound(
+        message,
+        this.handlerRegistry,
+        (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        },
       );
-    }
+
+      if (
+        !handled &&
+        message &&
+        typeof message === 'object' &&
+        'command' in message
+      ) {
+        this.logger.warn(
+          this.channel,
+          `Unhandled command: ${(message as { command: string }).command}`,
+        );
+      }
+    });
   }
 
   // ============================================================
@@ -327,14 +332,27 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isWorkflowTaskState(taskState)) {
       const executionId = this.provider.state.getExecutionId(streamId);
       if (executionId) {
-        await safeExecuteCommand('texra.execute', [
-          { config: taskState.agentConfig, executionId },
-        ]);
+        const request = buildExecutionRequest({
+          config: taskState.agentConfig,
+          executionId,
+        });
+        const validation = validateExecutionRequest(request);
+        if (!validation.valid) {
+          this.logger.error(this.channel, validation.message);
+          return;
+        }
+        await safeExecuteCommand('texra.execute', [validation.request]);
         return;
       }
     }
 
-    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+    const request = buildExecutionRequest({ config: taskState.agentConfig });
+    const validation = validateExecutionRequest(request);
+    if (!validation.valid) {
+      this.logger.error(this.channel, validation.message);
+      return;
+    }
+    await safeExecuteCommand('texra.execute', [validation.request]);
   }
 
   private async handleRunNew(
@@ -344,7 +362,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!taskState) {
       return;
     }
-    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+    const request = buildExecutionRequest({ config: taskState.agentConfig });
+    const validation = validateExecutionRequest(request);
+    if (!validation.valid) {
+      this.logger.error(this.channel, validation.message);
+      return;
+    }
+    await safeExecuteCommand('texra.execute', [validation.request]);
   }
 
   private async handleRetryStreamRequest(
@@ -819,21 +843,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!view) return;
 
     try {
-      const [agentOptionsData, modelOptionsData] = await Promise.all([
-        computeAgentOptionsData(),
-        computeModelOptionsData(),
-      ]);
-
-      const defaultMergeModel = getConfig<string>(
-        'texra.merge.defaultModel',
-        'gemini3f',
-      );
+      const { agentOptions, modelOptions, defaultMergeModel } =
+        await loadOptions();
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        workflowAgentsData: agentOptionsData.workflow,
-        toolUseAgentsData: agentOptionsData.toolUse,
-        modelOptionsData,
+        workflowAgentsData: agentOptions.workflow,
+        toolUseAgentsData: agentOptions.toolUse,
+        modelOptionsData: modelOptions,
         defaultMergeModel,
       });
     } catch (error) {
@@ -866,34 +883,27 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const storageKey = this.provider.state.getActiveRunId(streamId);
-    const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
-      streamId,
-      { storageKey, workspaceOnly: true },
+    const generatedPaths = [
+      ...this.provider.state.outputFiles.getKnownFilePaths(streamId, {
+        storageKey,
+        workspaceOnly: true,
+      }),
+    ];
+
+    const operation = command === 'texra.pack' ? 'pack' : 'clean';
+    const payload = buildFileOperationPayload(
+      {
+        kind: 'progressView',
+        data: {
+          taskState,
+          streamId,
+          generatedPaths,
+        },
+      },
+      operation,
     );
 
-    // Collect all output files from declared config and generated paths
-    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
-    const allFiles = [
-      ...(Array.isArray(declaredOutputs) ? declaredOutputs : []),
-      ...generatedPaths,
-    ].filter(isNonEmptyString);
-    const outputFilesArray = [...new Set(allFiles)];
-
-    // Priority: explicit config > activeFiles flag > infer from file count
-    const useMultipleOutputs =
-      taskState.agentConfig.useMultipleOutputs ??
-      taskState.activeFiles.output ??
-      outputFilesArray.length > 1;
-
-    await vscode.commands.executeCommand(command, {
-      streamId,
-      agent: taskState.agentConfig.agent,
-      model: taskState.agentConfig.model,
-      inputFile: taskState.agentConfig.inputFile,
-      outputFiles: useMultipleOutputs ? outputFilesArray : [],
-      useMultipleOutputs,
-      skipProgressViewClear: true,
-    });
+    await vscode.commands.executeCommand(command, payload);
   }
 
   private async withToolbarTaskState(
@@ -1288,21 +1298,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
-      await safeExecuteCommand('texra.execute', [
-        {
-          config: {
-            agent: 'merge',
-            model,
-            inputFile: baseFiles[0],
-            inputFiles: baseFiles.slice(1),
-            editedFile: editedFiles[0],
-            editedFiles: editedFiles.slice(1),
-            outputFiles: baseFiles,
-            instruction: '',
-            useMultipleOutputs: true,
-          },
+      const request = buildExecutionRequest({
+        config: {
+          agent: 'merge',
+          model,
+          inputFile: baseFiles[0],
+          inputFiles: baseFiles.slice(1),
+          editedFile: editedFiles[0],
+          editedFiles: editedFiles.slice(1),
+          outputFiles: baseFiles,
+          instruction: '',
+          useMultipleOutputs: true,
         },
-      ]);
+      });
+      const validation = validateExecutionRequest(request);
+      if (!validation.valid) {
+        this.logger.error(this.channel, validation.message);
+        return;
+      }
+      await safeExecuteCommand('texra.execute', [validation.request]);
     }
   }
 
