@@ -32,7 +32,8 @@ make behavior predictable across the extension and webviews, and lower maintenan
    - Two schema sources makes it easy to update one and forget the other.
 
 3. **File discovery implemented via two different systems**
-   - `FileLister` uses `getFilesRecursively` with VS Code APIs and custom filtering.
+   - `FileLister` (in `src/frontend/files/fileLister.ts`) uses `getFilesRecursively` with
+     VS Code APIs and custom filtering.
    - Housekeeping uses `findFilesFromPatterns` with globbing over workspace paths.
    - Divergent filtering/normalization rules create inconsistent results.
 
@@ -58,27 +59,48 @@ make behavior predictable across the extension and webviews, and lower maintenan
 
 ### 2) Unify webview message schemas
 
-- Make `src/shared/schemas/mainView.ts` the single source of truth.
-- Replace `src/webview/types/messages.ts` with imports from `@shared/schemas`.
+- `src/shared/schemas/mainView.ts` already exists and partially defines message schemas.
+  The consolidation work is to make it the **complete** single source of truth by migrating
+  all message type definitions currently in `src/webview/types/messages.ts` into the shared
+  schema file, then removing the webview-local copy.
+- All unified schemas must be **Zod-based**, consistent with the project convention that Zod
+  schemas are the single source of truth for data structures (see CLAUDE.md). TypeScript types
+  should be derived via `z.infer<>` rather than manually defined.
+- Replace `src/webview/types/messages.ts` with re-exports from `@shared/schemas`.
 - If local-only schemas are needed, place them under `src/shared/schemas` and re-export.
 
 ### 3) Centralize file discovery
 
-- Introduce a `FileDiscoveryService` in `src/frontend/files` that wraps both glob-based
-  and VS Code API search behind a single interface.
-- Migrate housekeeping utilities to use the same ignore/normalization rules as FileLister.
+- `src/frontend/files/` already contains `fileLister.ts`, `listing.ts`, and `index.ts`.
+  Rather than introducing a new wrapper class, the consolidation should **extend the existing
+  `FileLister`** to also serve the housekeeping use case. This avoids adding an unnecessary
+  abstraction layer (per CLAUDE.md guidance against trivial wrappers).
+- Concretely: extract the ignore/normalization rules from `FileLister` into shared helpers
+  that housekeeping utilities can also call, then migrate housekeeping call sites to use
+  those shared helpers directly.
 - Standardize path normalization (symlink preservation, hidden file rules) in one helper.
+- **Design decision (resolved):** Use VS Code `workspace.findFiles` as the primary API for
+  both interactive and housekeeping flows. Fall back to direct globbing only if profiling
+  shows a measurable performance regression in housekeeping batch operations. This avoids
+  maintaining two discovery mechanisms.
 
 ### 4) Single pasted-image helper
 
-- Add a `createPastedImageName(mimeType)` helper in `pastedImageUtils.ts`.
+- Add a `createPastedImageName(mimeType)` helper to the **existing**
+  `src/utils/files/pastedImageUtils.ts` file (not a new file). This follows the CLAUDE.md
+  convention of editing existing files rather than creating new ones.
 - Reuse the shared prefix and MIME extension mapping across frontend/backend.
 - Keep the frontend responsible for data reading, but delegate naming to the shared helper.
 
-### 5) Shared recording flow abstraction
+### 5) Shared recording flow helper
 
-- Create a `RecordingFlow` helper that wires `RecordingManager` to view commands.
-- MainView and ProgressView supply only view-specific labels and command mappings.
+- Both views currently contain ~10-15 lines of similar `RecordingManager` wiring and command
+  registration. This is enough duplication to justify a small shared helper, but the helper
+  should remain a plain function (not a class or service) to avoid unnecessary abstraction
+  per CLAUDE.md guidelines.
+- Create a `wireRecordingFlow(context, manager, commandMap)` function that handles the
+  common wiring. MainView and ProgressView supply only view-specific labels and command
+  mappings.
 - Consolidate UI recording state updates in shared controller utilities.
 
 ## Milestones
@@ -107,16 +129,22 @@ make behavior predictable across the extension and webviews, and lower maintenan
 - Housekeeping file discovery matches FileLister outputs for the same inputs.
 - Recording flows share the same command wiring and state transitions.
 
+### Measurable Acceptance Criteria
+
+- `grep -r "PASTED_PREFIX"` returns hits in exactly one file (the shared helper).
+- Stream sorting comparators exist only in `src/shared/streams/`.
+- `src/webview/types/messages.ts` contains only re-exports from `@shared/schemas`, no
+  standalone type definitions.
+- No duplicate `RecordingManager` instantiation patterns across view message handlers.
+
 ## Risks & Mitigations
 
-- **Risk:** Refactors touch multiple subsystems.  
+- **Risk:** Refactors touch multiple subsystems.
   **Mitigation:** Stage changes by milestone, with diff-friendly commits.
-- **Risk:** Inconsistent behavior during migration.  
+- **Risk:** Inconsistent behavior during migration.
   **Mitigation:** Add tests to shared utilities and run manual smoke checks.
 
 ## Open Questions
 
-- Should file discovery always use VS Code APIs, or is globbing required for performance
-  in specific housekeeping flows?
 - Is there any user-facing dependency on pasted image names beyond the prefix?
 - Should recording flow UI state live in a shared controller to avoid per-view drift?
