@@ -17,8 +17,10 @@ import {
   BaseViewMessageHandler,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { buildFileOperationPayload } from '@common/files';
-import { validateExecutionRequest } from '@common/execution/executionRequests';
+import {
+  validateExecutionRequest,
+  type ExecutionRequest,
+} from '@common/execution/executionRequests';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -326,27 +328,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isWorkflowTaskState(taskState)) {
       const executionId = this.provider.state.getExecutionId(streamId);
       if (executionId) {
-        const request = {
+        await this.executeValidated({
           config: taskState.agentConfig,
           executionId,
-        };
-        const validation = validateExecutionRequest(request);
-        if (!validation.valid) {
-          this.logger.error(this.channel, validation.message);
-          return;
-        }
-        await safeExecuteCommand('texra.execute', [validation.request]);
+        });
         return;
       }
     }
 
-    const request = { config: taskState.agentConfig };
-    const validation = validateExecutionRequest(request);
-    if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
-      return;
-    }
-    await safeExecuteCommand('texra.execute', [validation.request]);
+    await this.executeValidated({ config: taskState.agentConfig });
   }
 
   private async handleRunNew(
@@ -356,13 +346,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!taskState) {
       return;
     }
-    const request = { config: taskState.agentConfig };
-    const validation = validateExecutionRequest(request);
-    if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
-      return;
-    }
-    await safeExecuteCommand('texra.execute', [validation.request]);
+    await this.executeValidated({ config: taskState.agentConfig });
   }
 
   private async handleRetryStreamRequest(
@@ -871,29 +855,51 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Helper methods
   // ============================================================
 
+  /**
+   * Validate and execute an agent request.
+   * Returns true if execution started, false if validation failed.
+   */
+  private async executeValidated(request: ExecutionRequest): Promise<boolean> {
+    const validation = validateExecutionRequest(request);
+    if (!validation.valid) {
+      this.logger.error(this.channel, validation.message);
+      return false;
+    }
+    await safeExecuteCommand('texra.execute', [validation.request]);
+    return true;
+  }
+
   private async handleFileOperation(
     streamId: StreamTabId,
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const storageKey = this.provider.state.getActiveRunId(streamId);
-    const generatedPaths = [
-      ...this.provider.state.outputFiles.getKnownFilePaths(streamId, {
-        storageKey,
-        workspaceOnly: true,
-      }),
-    ];
+    const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
+      streamId,
+      { storageKey, workspaceOnly: true },
+    );
 
-    const payload = buildFileOperationPayload({
-      kind: 'progressView',
-      data: {
-        taskState,
-        streamId,
-        generatedPaths,
-      },
+    // Collect all output files from declared config and generated paths
+    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
+    const allFiles = [...declaredOutputs, ...generatedPaths].filter(Boolean);
+    const outputFiles = [...new Set(allFiles)];
+
+    // Priority: explicit config > activeFiles flag > infer from file count
+    const useMultipleOutputs =
+      taskState.agentConfig.useMultipleOutputs ??
+      taskState.activeFiles.output ??
+      outputFiles.length > 1;
+
+    await vscode.commands.executeCommand(command, {
+      streamId,
+      agent: taskState.agentConfig.agent,
+      model: taskState.agentConfig.model,
+      inputFile: taskState.agentConfig.inputFile,
+      outputFiles: useMultipleOutputs ? outputFiles : [],
+      useMultipleOutputs,
+      skipProgressViewClear: true,
     });
-
-    await vscode.commands.executeCommand(command, payload);
   }
 
   private async withToolbarTaskState(
@@ -1288,7 +1294,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const baseFiles = filePairs.map((p) => p.baseFile);
       const editedFiles = filePairs.map((p) => p.editedFile);
 
-      const request = {
+      await this.executeValidated({
         config: {
           agent: 'merge',
           model,
@@ -1300,13 +1306,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           instruction: '',
           useMultipleOutputs: true,
         },
-      };
-      const validation = validateExecutionRequest(request);
-      if (!validation.valid) {
-        this.logger.error(this.channel, validation.message);
-        return;
-      }
-      await safeExecuteCommand('texra.execute', [validation.request]);
+      });
     }
   }
 

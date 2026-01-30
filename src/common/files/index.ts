@@ -17,11 +17,3 @@ export {
   type FileSelectionCommandId,
   type FileSelectionResponseCommand,
 } from './fileSelectionRegistry';
-export {
-  buildFileOperationPayload,
-  type FileOperation,
-  type FileOperationInput,
-  type FileOperationPayload,
-  type MainViewFileOperationInput,
-  type ProgressViewFileOperationInput,
-} from './fileOperationPayload';

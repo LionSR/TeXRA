@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - shared schemas
-import { sortStreams, type StreamSort } from '@shared/streams/streamSort';
+import { sortStreams } from '@shared/streams/streamSort';
 
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
@@ -100,5 +100,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, statuses, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  return sortStreams(infos, state.streamSortOrder as StreamSort);
+  return sortStreams(infos, state.streamSortOrder);
 }
