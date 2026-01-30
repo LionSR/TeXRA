@@ -4,20 +4,28 @@
  * Uses discriminated union validation at dispatch point (single safeParse)
  * with typed handler registry for type-safe message handling.
  */
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   dispatchHistoryViewInbound,
   type HistoryViewInboundHandlerRegistry,
   type HistoryViewInboundMessage,
 } from '@shared/schemas/historyViewMessages';
+
+// Local imports - common
 import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, HISTORY_VIEW_COMMANDS } from '@common/webview';
 import {
   AgentHistoryManager,
   type AgentHistoryItem,
 } from '@common/history/AgentHistoryManager';
+
+// Local imports - utils
 import { agentConfigToTaskState } from '@utils/config/configConversion';
+
+// Local imports - commands
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 
 // Type helper for extracting specific message types
@@ -47,17 +55,15 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchHistoryViewInbound(
+    const handled = await this.handleMessageWithDispatch(
       message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
+      webviewView,
+      () =>
+        dispatchHistoryViewInbound(message, this.handlerRegistry, (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        }),
     );
 
     if (

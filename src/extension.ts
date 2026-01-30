@@ -289,6 +289,7 @@ export async function activate(context: vscode.ExtensionContext) {
   watchConfig(context, 'texra.explorer.agentsDirectory', () => {
     watcherManager.setup();
     folderExplorer.refresh();
+    void agentDirectories.refreshWatchers();
   });
 
   const welcomeKey = 'texra.welcomeShown';

@@ -1,5 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
 import { BaseViewContentProvider } from '@common/webview';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
@@ -15,14 +17,11 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      mainViewBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'webview',
-          'bundle.js',
-        ),
-      ),
+      mainViewBundleUri: this.buildUri(webview, [
+        'dist',
+        'webview',
+        'bundle.js',
+      ]),
     };
   }
 }

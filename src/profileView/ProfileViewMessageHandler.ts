@@ -4,18 +4,26 @@
  * Uses discriminated union validation at dispatch point (single safeParse)
  * with typed handler registry for type-safe message handling.
  */
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   dispatchProfileViewInbound,
   type ProfileViewInboundHandlerRegistry,
   type ProfileViewInboundMessage,
   type RemoteAgent,
 } from '@shared/schemas/profileViewMessages';
+
+// Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
+
+// Local imports - common
 import { BaseViewMessageHandler, PROFILE_VIEW_COMMANDS } from '@common/webview';
+
+// Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
@@ -54,17 +62,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchProfileViewInbound(
+    const handled = await this.handleMessageWithDispatch(
       message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
+      webviewView,
+      () =>
+        dispatchProfileViewInbound(message, this.handlerRegistry, (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        }),
     );
 
     if (

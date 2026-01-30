@@ -55,17 +55,11 @@ import type {
 } from '@shared/schemas';
 
 // Local imports - progress view component types
+import type { NormalizedStreamData } from './StreamContent';
 import type { PermissionState } from './PermissionCard';
 
 // Local imports - sibling components
-import './StreamHeader';
-import './InstructionPanel';
-import './TaskGroupList';
-import './LogList';
-import './UsagePanel';
-import './FileList';
-import './FollowupSection';
-import './RequestPanels';
+import './StreamContent';
 
 /** Derived values for the currently selected run */
 interface RunDerivedValues {
@@ -177,36 +171,44 @@ export class WorkflowStreamContent extends LitElement {
       return html``;
     }
 
-    return html`
-      <stream-header
-        .stream=${streamInfo}
-        .streamState=${state}
-        .runId=${runId}
-        .runs=${this.runGroups}
-        .yoloActive=${false}
-      ></stream-header>
+    const data = {
+      header: {
+        stream: streamInfo,
+        streamState: state,
+        runId,
+        runs: this.runGroups,
+        yoloActive: false,
+      },
+      permissions: this.filteredPermissions,
+      usage,
+      contextState: state.contextState ?? null,
+      sections: [
+        {
+          type: 'instruction',
+          placement: 'preRequest',
+          instruction,
+        },
+        {
+          type: 'files',
+          placement: 'postUsage',
+          filesByRound: files,
+          showRoundHeaders: true,
+        },
+        {
+          type: 'followupSection',
+          placement: 'postUsage',
+          followUp: {
+            agentCategory: streamInfo.agentCategory,
+            status: state.status ?? streamInfo.status ?? '',
+            hasOutputFiles: hasFiles,
+            options: this.currentFollowupOptions,
+            mode: state.followupMode,
+            streamModel: streamInfo.model ?? null,
+          },
+        },
+      ],
+    } satisfies NormalizedStreamData;
 
-      <instruction-panel .instruction=${instruction}></instruction-panel>
-
-      <request-panels .permissions=${this.filteredPermissions}></request-panels>
-
-      <log-list></log-list>
-
-      <usage-panel
-        .usage=${usage}
-        .contextState=${state.contextState ?? null}
-      ></usage-panel>
-
-      <file-list .filesByRound=${files} .showRoundHeaders=${true}></file-list>
-
-      <followup-section
-        .agentCategory=${streamInfo.agentCategory}
-        .status=${state.status ?? streamInfo.status ?? ''}
-        .hasOutputFiles=${hasFiles}
-        .options=${this.currentFollowupOptions}
-        .mode=${state.followupMode}
-        .streamModel=${streamInfo.model ?? null}
-      ></followup-section>
-    `;
+    return html`<stream-content .data=${data}></stream-content>`;
   }
 }

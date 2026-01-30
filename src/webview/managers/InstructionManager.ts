@@ -10,6 +10,8 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
@@ -17,13 +19,24 @@ import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
+
+// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
-import type {
-  PolishInstructionMessage,
-  ClipboardImageMessage,
-} from '../types/messages';
+import type { MainViewInboundMessage } from '@shared/schemas';
+
+type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+  MainViewInboundMessage,
+  { command: C }
+>;
+
+type PolishInstructionMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT
+>;
+type ClipboardImageMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE
+>;
 
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);

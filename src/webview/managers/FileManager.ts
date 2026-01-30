@@ -1,39 +1,49 @@
+// Standard library imports
 import * as path from 'path';
 
+// Third-party imports
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
+// Local imports - shared utilities
 import { normalizeFilePath } from '@shared/utils/path';
+
+// Local imports - agent
 import { getAgent } from '@agent/index';
+
+// Local imports - common
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getIncludedExtensions,
   ExtensionCategory,
 } from '@common/files/fileTypeUtils';
+import {
+  FILE_SELECTION_COMMANDS,
+  FILE_SELECTION_COMMAND_IDS,
+  FILE_SELECTION_RESPONSES,
+  MULTIPLE_FILE_COMMANDS,
+} from '@common/files/fileSelectionRegistry';
+
+// Local imports - frontend
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
 
+// Local imports - webview managers
 import { BaseWebviewManager } from './BaseWebviewManager';
-import type {
-  FileSelectionMessage,
-  FileSelectedMessage,
-  RequestInputFileMessage,
-  RequestFileMessage,
-  RequestEditedFileMessage,
-  RequestBaseFileMessage,
-  RequestDefaultOutputFilesMessage,
-  SetMultipleFilesMessage,
-  SelectMultipleFilesMessage,
-  GetCurrentFileMessage,
-  UpdateFilesMessage,
-} from '../types/messages';
+
+// Local imports - types
+import type { MainViewInboundMessage } from '@shared/schemas';
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
@@ -43,72 +53,64 @@ type FileUpdateOptions = {
   additionalPayload?: Record<string, unknown>;
 };
 
-const FILE_SELECTION_COMMANDS = new Map<string, string>([
-  [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE, 'texra.selectInputFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE, 'texra.selectReferenceFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE, 'texra.selectAuxiliaryFile'],
-  [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE, 'texra.selectMediaFile'],
-]);
+type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+  MainViewInboundMessage,
+  { command: C }
+>;
 
-const FILE_SELECTION_RESPONSES = new Map<string, string>([
-  [
-    MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE,
-    MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
-    MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
-    MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
-    MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-  ],
-]);
+type FileSelectionMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE
+  | typeof MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE
+  | typeof MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE
+  | typeof MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE
+  | typeof MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE
+>;
 
-const MULTIPLE_FILE_COMMANDS = new Map<
-  string,
-  { selectCommand: string; responseCommand: string }
->([
-  [
-    'input',
-    {
-      selectCommand: 'texra.selectInputFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-    },
-  ],
-  [
-    'reference',
-    {
-      selectCommand: 'texra.selectReferenceFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
-    },
-  ],
-  [
-    'auxiliary',
-    {
-      selectCommand: 'texra.selectAuxiliaryFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
-    },
-  ],
-  [
-    'media',
-    {
-      selectCommand: 'texra.selectMediaFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-    },
-  ],
-  [
-    'output',
-    {
-      selectCommand: 'texra.selectOutputFiles',
-      responseCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
-    },
-  ],
-]);
+type FileSelectedMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED
+  | typeof MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED
+  | typeof MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED
+  | typeof MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED
+  | typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED
+>;
+
+type RequestInputFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE
+>;
+type RequestFileMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
+>;
+type RequestEditedFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE
+>;
+type RequestBaseFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
+>;
+type RequestDefaultOutputFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES
+>;
+type SetMultipleFilesMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES
+>;
+type SelectMultipleFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
+>;
+type GetCurrentFileMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
+>;
+type UpdateFilesMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES
+>;
 
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
@@ -129,18 +131,6 @@ export class FileManager extends BaseWebviewManager {
       this.postMessage({
         command: responseCommand,
         filePath: file,
-      });
-    }
-  }
-
-  async handleEditedFileSelection(): Promise<void> {
-    const editedFile = await vscode.commands.executeCommand<string>(
-      'texra.selectEditedFile',
-    );
-    if (editedFile) {
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
-        filePath: editedFile,
       });
     }
   }
@@ -309,7 +299,7 @@ export class FileManager extends BaseWebviewManager {
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
     const fileType = message.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
-      'texra.getCurrentFile',
+      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
     );
 
     if (!currentOpenFile) {

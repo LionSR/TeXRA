@@ -203,6 +203,7 @@ export type MultiFilesVisible = z.infer<typeof MultiFilesVisibleSchema>;
 
 export const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
+  fileInputEnabled: z.boolean(),
   checkboxValues: CheckboxValuesSchema,
   singleFiles: SingleFilesSchema,
   fileOptions: FileOptionsSchema,
@@ -659,6 +660,12 @@ const withOptionalFilePath = <T extends string>(command: T) =>
 const withFilesArray = <T extends string>(command: T) =>
   z.object({ command: z.literal(command), files: z.array(z.string()) });
 
+const withNotifyWhenEmpty = <T extends string>(command: T) =>
+  z.object({
+    command: z.literal(command),
+    notifyWhenEmpty: z.boolean().optional(),
+  });
+
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
@@ -716,7 +723,8 @@ const FileSelectionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
-    fileType: ExtendedFileTypeSchema,
+    fileType: MultipleFileTypeSchema,
+    currentFile: z.string().optional(),
   }),
 ] as const;
 
@@ -729,13 +737,24 @@ const FileSelectedMessages = [
 ] as const;
 
 const RequestFileMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES),
+  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE),
+  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE),
+  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE),
+  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),
+    notifyWhenEmpty: z.boolean().optional(),
+    baseFile: z.string().optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE),
+    notifyWhenEmpty: z.boolean().optional(),
+    preserveBaseFile: z.boolean().optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES),
+    agent: z.string().optional(),
+  }),
 ] as const;
 
 const SetFilesMessages = [
@@ -745,8 +764,18 @@ const SetFilesMessages = [
   withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
 ] as const;
 
+const CurrentFileTypeSchema = z.enum([
+  ...FileTypeSchema.options,
+  'base',
+  'edited',
+]);
+
 const FileOperationMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE),
+    fileType: CurrentFileTypeSchema.optional(),
+    baseFile: z.string().optional(),
+  }),
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
@@ -755,30 +784,50 @@ const FileOperationMessages = [
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES),
     fileType: z.literal('input'),
+    files: z.array(z.string()).optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES),
     fileType: z.literal('reference'),
+    files: z.array(z.string()).optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES),
     fileType: z.literal('auxiliary'),
+    files: z.array(z.string()).optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES),
     fileType: z.literal('media'),
+    files: z.array(z.string()).optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES),
     fileType: z.literal('output'),
+    files: z.array(z.string()).optional(),
   }),
 ] as const;
 
 const InstructionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION),
-  z.looseObject({
+  z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
     text: z.string(),
+    agent: z.string().optional(),
+    inputFile: z.string().optional(),
+    inputFiles: z.array(z.string()).optional(),
+    referenceFile: z.string().optional(),
+    referenceFiles: z.array(z.string()).optional(),
+    auxiliaryFile: z.string().optional(),
+    auxiliaryFiles: z.array(z.string()).optional(),
+    mediaFile: z.string().optional(),
+    mediaFiles: z.array(z.string()).optional(),
+    outputFiles: z.array(z.string()).optional(),
+    inputFilesActive: z.boolean().optional(),
+    referenceFilesActive: z.boolean().optional(),
+    auxiliaryFilesActive: z.boolean().optional(),
+    mediaFilesActive: z.boolean().optional(),
+    outputFilesActive: z.boolean().optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE),

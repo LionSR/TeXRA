@@ -1,10 +1,13 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports - shared utilities
+import { PASTED_PREFIX } from '@shared/utils/pastedImageConstants';
+
 // Local imports
 import { StorageFS } from './storageFS';
 
-export const PASTED_PREFIX = 'pasted_';
+export { PASTED_PREFIX };
 export const PASTED_DIR = 'pasted';
 
 /**
