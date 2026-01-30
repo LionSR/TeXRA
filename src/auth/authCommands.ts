@@ -1,6 +1,16 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - profile view
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - utils
+import { getConfig } from '@utils/config';
+
+// Local imports - auth
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
@@ -30,9 +40,7 @@ type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 const EMAIL_LOGIN_ENABLED = false;
 
 function isVSCodeGitHubEnabled(): boolean {
-  return vscode.workspace
-    .getConfiguration('texra.auth')
-    .get('enableVSCodeGitHub', false);
+  return getConfig<boolean>('texra.auth', 'enableVSCodeGitHub', false);
 }
 
 async function getExistingSession(): Promise<

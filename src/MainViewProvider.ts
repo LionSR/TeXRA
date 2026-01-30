@@ -40,7 +40,7 @@ export class MainViewProvider
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private agentWatcher: vscode.FileSystemWatcher | undefined;
+  private agentWatcher: vscode.Disposable | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
@@ -192,37 +192,13 @@ export class MainViewProvider
   private setupAgentWatcher() {
     // Watch for YAML changes in agent directories (custom agents)
     // This refreshes the agent dropdown when agents are added/removed/modified
-    const agentPattern = '**/*.yaml';
-    this.agentWatcher = vscode.workspace.createFileSystemWatcher(agentPattern);
-
-    // Cache of agent directory paths for filtering
-    let agentDirPaths: string[] = [];
-
-    // Update cache (called directly for init, debounced for file changes)
-    const updateAgentDirs = async () => {
-      const dirs = await agentDirectories.getAllLocal();
-      agentDirPaths = dirs.map((d) => d.directory);
-    };
-
-    // Initialize cache immediately (not debounced)
-    void updateAgentDirs();
-
-    // Debounced refresh - updates dirs and options on file changes
-    const debouncedAgentFileRefresh = debounce(async () => {
-      await updateAgentDirs();
-      await this.refreshAgentOptions();
-    }, DEBOUNCE_STATE_SAVE_MS);
-
-    // Filter and debounce agent file changes
-    const onAgentFileChange = (uri: vscode.Uri) => {
-      if (agentDirPaths.some((dir) => uri.fsPath.startsWith(dir))) {
-        void debouncedAgentFileRefresh();
-      }
-    };
-
-    this.agentWatcher.onDidCreate(onAgentFileChange);
-    this.agentWatcher.onDidChange(onAgentFileChange);
-    this.agentWatcher.onDidDelete(onAgentFileChange);
+    this.agentWatcher = agentDirectories.registerWatcher({
+      pattern: '**/*.yaml',
+      debounceMs: DEBOUNCE_STATE_SAVE_MS,
+      onEvent: () => {
+        void this.refreshAgentOptions();
+      },
+    });
 
     this.context.subscriptions.push(this.agentWatcher);
   }

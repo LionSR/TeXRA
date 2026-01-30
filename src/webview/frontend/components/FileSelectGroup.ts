@@ -16,7 +16,6 @@ import { when } from 'lit/directives/when.js';
 import { SortableController } from '@shared/controllers';
 import { codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
-import { SESSION_TYPES } from '../constants';
 import {
   fileStateContext,
   type FileStateContextValue,
@@ -192,8 +191,8 @@ export class FileSelectGroup extends LitElement {
     return this.fileState?.multiFilesVisible[key] ?? false;
   }
 
-  private get isToolUseSession(): boolean {
-    return this.fileState?.sessionType === SESSION_TYPES.TOOL_USE;
+  private get fileInputEnabled(): boolean {
+    return this.fileState?.fileInputEnabled ?? true;
   }
 
   private handleFocusOut(event: FocusEvent): void {
@@ -262,7 +261,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachTeXCount"
               ?checked=${this.currentCheckboxValues.attachTeXCount}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${!this.fileInputEnabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachTeXCount',
@@ -274,7 +273,7 @@ export class FileSelectGroup extends LitElement {
             <vscode-checkbox
               id="attachDiagnostics"
               ?checked=${this.currentCheckboxValues.attachDiagnostics}
-              ?disabled=${this.isToolUseSession}
+              ?disabled=${!this.fileInputEnabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachDiagnostics',

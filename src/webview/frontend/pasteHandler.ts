@@ -6,6 +6,7 @@ import {
   resolveTextareaTarget,
   insertTextAtCursor,
 } from '@shared/utils/textarea';
+import { PASTED_PREFIX } from '@shared/utils/pastedImageConstants';
 import { postMessage } from '@shared/vscode';
 
 // Local imports - webview commands
@@ -38,7 +39,7 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 function generatePastedImageName(extension: string): string {
   const timestamp = Date.now();
   const random = nanoid(6);
-  return `pasted_${timestamp}_${random}.${extension}`;
+  return `${PASTED_PREFIX}${timestamp}_${random}.${extension}`;
 }
 
 function getExtensionFromMimeType(mimeType: string): string {

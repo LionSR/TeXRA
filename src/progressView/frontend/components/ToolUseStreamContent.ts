@@ -31,7 +31,7 @@ import {
 } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
+import { createRef, type Ref } from 'lit/directives/ref.js';
 
 // Local imports - progress view utilities
 import { getRunGroups, type RunGroup } from '../stateUtils';
@@ -43,9 +43,6 @@ import {
   type StreamContextValue,
 } from '../contexts/streamContexts';
 
-// Local imports - progress view events
-import { ProgressEvents } from '../events';
-
 // Local imports - progress view store (type-only)
 import type { ToolUseStreamState } from '../store';
 
@@ -53,17 +50,12 @@ import type { ToolUseStreamState } from '../store';
 import type { StreamTabInfo } from '@shared/schemas';
 
 // Local imports - progress view component types
+import type { NormalizedStreamData } from './StreamContent';
 import type { PermissionState } from './PermissionCard';
 import type { FollowUpInput } from './FollowUpInput';
 
 // Local imports - sibling components
-import './StreamHeader';
-import './RequestPanels';
-import './TodoList';
-import './TaskGroupList';
-import './LogList';
-import './UsagePanel';
-import './FollowUpInput';
+import './StreamContent';
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends LitElement {
@@ -129,37 +121,41 @@ export class ToolUseStreamContent extends LitElement {
       return html``;
     }
 
-    return html`
-      <stream-header
-        .stream=${streamInfo}
-        .streamState=${currentState}
-        .runId=${null}
-        .runs=${this.runGroups}
-        .yoloActive=${Boolean(currentState.toolEditBypass)}
-      ></stream-header>
+    const data = {
+      header: {
+        stream: streamInfo,
+        streamState: currentState,
+        runId: null,
+        runs: this.runGroups,
+        yoloActive: Boolean(currentState.toolEditBypass),
+      },
+      permissions: this.filteredPermissions,
+      usage: null,
+      contextState: currentState.contextState ?? null,
+      sections: [
+        {
+          type: 'todos',
+          placement: 'postRequest',
+          todos: currentState.todos,
+        },
+        {
+          type: 'followupInput',
+          placement: 'postUsage',
+          followUp: {
+            visible: true,
+            value: currentState.followUpText,
+            queuedMessages: currentState.queuedFollowUps,
+            shouldFocus: currentState.shouldFocusFollowUp ?? false,
+            polishedText: currentState.polishedText ?? null,
+            transcribedText: currentState.transcribedText ?? null,
+            recording: currentState.recording ?? false,
+          },
+          followUpRef: this.followUpRef,
+        },
+      ],
+    } satisfies NormalizedStreamData;
 
-      <request-panels .permissions=${this.filteredPermissions}></request-panels>
-
-      <todo-list .todos=${currentState.todos}></todo-list>
-
-      <log-list></log-list>
-
-      <usage-panel
-        .contextState=${currentState.contextState ?? null}
-      ></usage-panel>
-
-      <follow-up-input
-        ${ref(this.followUpRef)}
-        .visible=${true}
-        .value=${currentState.followUpText}
-        .queuedMessages=${currentState.queuedFollowUps}
-        .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
-        .polishedText=${currentState.polishedText ?? null}
-        .transcribedText=${currentState.transcribedText ?? null}
-        .recording=${currentState.recording ?? false}
-        @focus-complete=${this.handleFocusComplete}
-      ></follow-up-input>
-    `;
+    return html` <stream-content .data=${data}></stream-content> `;
   }
 
   /**
@@ -169,13 +165,5 @@ export class ToolUseStreamContent extends LitElement {
    */
   getFollowUpRef(): FollowUpInput | undefined {
     return this.followUpRef.value;
-  }
-
-  /**
-   * Handle focus-complete event from FollowUpInput.
-   * Dispatches event to reset the shouldFocusFollowUp state.
-   */
-  private handleFocusComplete(): void {
-    this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }
 }

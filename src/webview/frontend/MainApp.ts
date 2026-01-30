@@ -84,6 +84,8 @@ import {
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
 } from './store';
+// Local imports - session defaults
+import { SESSION_DEFAULTS } from './sessionDefaults';
 
 // Type imports
 import type {
@@ -928,38 +930,19 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private clearForNewSession(): void {
-    const isToolUse = this.sessionType === SESSION_TYPES.TOOL_USE;
+    const defaults = SESSION_DEFAULTS[this.sessionType];
     this.instruction = '';
-    if (!isToolUse) {
-      this.singleFiles = {
-        inputFile: '',
-        referenceFile: '',
-        auxiliaryFile: '',
-        mediaFile: '',
-        editedFile: '',
-        baseFile: '',
-      };
-      this.multiFiles = {
-        inputFiles: [],
-        referenceFiles: [],
-        auxiliaryFiles: [],
-        mediaFiles: [],
-        outputFiles: [],
-      };
-      this.multiFilesVisible = {
-        inputFiles: false,
-        referenceFiles: false,
-        auxiliaryFiles: false,
-        mediaFiles: false,
-        outputFiles: false,
-      };
+    if (defaults.resetFiles) {
+      this.singleFiles = { ...defaults.singleFiles };
+      this.multiFiles = { ...defaults.multiFiles };
+      this.multiFilesVisible = { ...defaults.multiFilesVisible };
       this.checkboxValues = {
         ...this.checkboxValues,
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
+        autoExtractFigure: defaults.checkboxValues.autoExtractFigure,
+        autoExtractTikzFigure: defaults.checkboxValues.autoExtractTikzFigure,
+        autoCompileInputPdf: defaults.checkboxValues.autoCompileInputPdf,
       };
-      this.outputFilesActive = false;
+      this.outputFilesActive = defaults.outputFilesActive;
     }
     this.saveState();
   }
@@ -1757,8 +1740,10 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private buildFileStateContext(): FileStateContextValue {
+    const defaults = SESSION_DEFAULTS[this.sessionType];
     return {
       sessionType: this.sessionType,
+      fileInputEnabled: defaults.fileInputEnabled,
       checkboxValues: this.checkboxValues,
       singleFiles: { ...this.singleFiles },
       fileOptions: {

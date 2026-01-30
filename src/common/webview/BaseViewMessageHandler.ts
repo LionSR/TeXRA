@@ -88,11 +88,35 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Set the active webview reference.
-   * For subclasses that override handleMessage and need to track the view.
+   * Clear the active view reference when a webview is disposed.
    */
-  protected setActiveView(view: T): void {
-    this._activeView = view;
+  public handleWebviewDisposed(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): void {
+    if (this._activeView === view) {
+      this._activeView = undefined;
+    }
+  }
+
+  protected async handleMessageWithDispatch(
+    message: unknown,
+    webviewView: T,
+    dispatch: () => boolean,
+    options: { fallbackToBase?: boolean } = {},
+  ): Promise<boolean> {
+    if (this._options.trackActiveView) {
+      this._activeView = webviewView;
+    }
+
+    const handled = dispatch();
+    if (!handled && options.fallbackToBase) {
+      await BaseViewMessageHandler.prototype.handleMessage.call(
+        this,
+        message,
+        webviewView,
+      );
+    }
+    return handled;
   }
 
   /**

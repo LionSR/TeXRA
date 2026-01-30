@@ -9,7 +9,7 @@
  * dispatchMessage(raw, ctx);
  */
 
-// External imports
+// Local imports - shared schemas
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
@@ -17,7 +17,11 @@ import {
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
 } from '@shared/schemas';
+// Local imports - shared streams
+import { resolveRunId } from '@shared/streams/runSelection';
+// Local imports - shared utils
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+// Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -25,7 +29,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
   updateNestedRounds,
-  resolveActiveRunId,
   prependInstructionForToolUse,
 } from './stateUtils';
 import {
@@ -391,7 +394,8 @@ const handlers: HandlerRegistry = {
 
     updateWorkflowState(ctx, stream, (prev) => {
       // Use provided runId from backend if available, otherwise resolve from state
-      const runId = providedRunId ?? resolveActiveRunId(prev) ?? 'default';
+      const runId =
+        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,

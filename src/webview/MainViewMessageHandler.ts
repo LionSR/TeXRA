@@ -1,22 +1,33 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import { computeAgentOptionsData } from '@agent/index';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MAIN_VIEW_COMMANDS } from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
+import type { RecordingManager } from '@common/managers/RecordingManager';
+import { wireRecordingFlow } from '@common/managers/recordingFlow';
+
+// Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+
+// Local imports - utils
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
+
+// Local imports - commands
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
+// Local imports - webview managers
 import { DiffManager } from './managers/DiffManager';
 import { ExecutionManager } from './managers/ExecutionManager';
 import { FileManager } from './managers/FileManager';
@@ -31,7 +42,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
-    this.recordingManager = new RecordingManager(context, {
+    this.recordingManager = wireRecordingFlow(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
@@ -52,24 +63,22 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.instructionManager.attachWebview(webviewView);
     this.diffManager.attachWebview(webviewView);
 
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchMainViewInbound(
+    await this.handleMessageWithDispatch(
       message,
-      this.createHandlerRegistry(webviewView),
-      (error) => {
-        this.logger.error(
-          this.channel,
-          `Error handling message: ${toErrorMessage(error)}`,
-        );
-      },
+      webviewView,
+      () =>
+        dispatchMainViewInbound(
+          message,
+          this.createHandlerRegistry(webviewView),
+          (error) => {
+            this.logger.error(
+              this.channel,
+              `Error handling message: ${toErrorMessage(error)}`,
+            );
+          },
+        ),
+      { fallbackToBase: true },
     );
-
-    if (!handled) {
-      // Fall back to base class for unhandled messages
-      await super.handleMessage(message, webviewView);
-    }
   }
 
   private createHandlerRegistry(
@@ -154,8 +163,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
-        this.fileManager.handleEditedFileSelection(),
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: (m) =>
+        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
         this.fileManager.handleSelectMultipleFiles(m),
 
@@ -355,13 +364,13 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
         this.executionManager.handleHousekeeping(m),
       [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        this.executionManager.handleOutputOperation(m),
       [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        this.executionManager.handleOutputOperation(m),
       [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+        this.executionManager.handleOutputOperation(m),
       [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+        this.executionManager.handleOutputOperation(m),
 
       // Navigation messages
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
@@ -414,20 +423,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(undefined, webviewView);
     try {
-      const [modelOptionsData, agentOptionsData, authStatus] =
-        await Promise.all([
-          computeModelOptionsData(),
-          computeAgentOptionsData(),
-          getAuthStatus(),
-        ]);
+      const [options, authStatus] = await Promise.all([
+        loadOptions(),
+        getAuthStatus(),
+      ]);
 
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptionsData,
+        optionsData: options.modelOptionsData,
       });
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: agentOptionsData,
+        optionsData: options.agentOptionsData,
       });
 
       // Show login banner if not authenticated and banner not dismissed

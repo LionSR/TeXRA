@@ -4,15 +4,19 @@
  * Uses discriminated union validation at dispatch point (single safeParse)
  * with typed handler registry for type-safe message handling.
  */
+// Standard library imports
 import * as path from 'path';
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   dispatchMemoryViewInbound,
   type MemoryViewInboundHandlerRegistry,
   type MemoryViewInboundMessage,
   type MemoryViewItem,
 } from '@shared/schemas/memoryViewMessages';
+// Local imports - common
 import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MEMORY_VIEW_COMMANDS } from '@common/webview';
 import {
@@ -67,17 +71,15 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchMemoryViewInbound(
+    const handled = await this.handleMessageWithDispatch(
       message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
+      webviewView,
+      () =>
+        dispatchMemoryViewInbound(message, this.handlerRegistry, (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        }),
     );
 
     if (

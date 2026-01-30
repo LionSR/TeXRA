@@ -1,25 +1,18 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - progress view
+// Local imports - shared streams
+import { sortStreams, type StreamSort } from '@shared/streams/streamSort';
+
+// Local imports - agent
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter } from '@shared/schemas';
 
-// Type imports
+// Local imports - shared schemas
+import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+
+// Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from '@shared/schemas';
-
-const sortComparators: Record<
-  string,
-  (a: StreamTabInfo, b: StreamTabInfo) => number
-> = {
-  time: (a, b) =>
-    (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
-    (a.lastTimestamp ?? a.creationTimestamp ?? 0),
-  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
-};
 
 /**
  * Check if a session category matches the given filter.
@@ -109,10 +102,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, statuses, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  const comparator = sortComparators[state.streamSortOrder];
-  if (comparator) {
-    infos.sort(comparator);
-  }
-
-  return infos;
+  return sortStreams(infos, state.streamSortOrder as StreamSort);
 }

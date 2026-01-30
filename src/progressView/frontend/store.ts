@@ -1,4 +1,4 @@
-// Local imports
+// Local imports - shared schemas
 import {
   AGENT_CATEGORY,
   createStreamState,
@@ -11,6 +11,9 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
+// Local imports - shared streams
+import type { StreamSort } from '@shared/streams/streamSort';
+
 // Re-export schema types for components (single source of truth)
 export {
   isToolUseState,
@@ -22,7 +25,7 @@ export {
 } from '@shared/schemas';
 
 export type StreamFilter = AgentCategoryFilter;
-export type StreamSort = 'time' | 'agent' | 'inputFile';
+export type { StreamSort };
 
 export type { ContextState };
 
@@ -67,13 +70,4 @@ export function getStreamState(
     state.streamStates.get(streamId) ??
     createStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
   );
-}
-
-/**
- * Get the effective run ID for display (selected or active).
- * Only meaningful for workflow streams; tool-use streams don't have run selection.
- */
-export function getEffectiveRunId(streamState: StreamState): string | null {
-  if (streamState.kind !== AGENT_CATEGORY.WORKFLOW) return null;
-  return streamState.selectedRunId ?? streamState.activeRunId;
 }

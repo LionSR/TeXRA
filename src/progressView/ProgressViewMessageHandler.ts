@@ -1,34 +1,53 @@
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+
+// Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { getAgent, computeAgentOptionsData } from '@agent/index/agentRegistry';
+import { getAgent } from '@agent/index/agentRegistry';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
+import type { RecordingManager } from '@common/managers/RecordingManager';
+import { wireRecordingFlow } from '@common/managers/recordingFlow';
+import { buildExecutionRequest } from '@common/agent/executionRequestUtils';
+import { buildFileOperationPayload } from '@common/files/fileOperationPayload';
+
+// Local imports - frontend
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+
+// Local imports - logger
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+// Local imports - progress view templates
 import {
   CHAT_INSTRUCTION_TEMPLATE,
   WORKFLOW_CONTEXT_TEMPLATE,
   type FollowupInstructionVars,
 } from '@progressView/templates/followupInstructionTemplates';
+
+// Local imports - tools
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -36,8 +55,8 @@ import {
   handleProgressViewToolEditApprovalAction,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { getConfig } from '@utils/config';
+
+// Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import {
   createExternalLocation,
@@ -52,8 +71,11 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+
+// Local imports - shared schemas
 import type { OutputFileInfo, StorageKey, StreamTabId } from '@shared/schemas';
 
+// Local imports - progress view
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 // Type helper for extracting specific message types
@@ -87,8 +109,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     context: vscode.ExtensionContext,
   ) {
     super('ProgressView', { trackActiveView: true });
-
-    this.recordingManager = new RecordingManager(context, {
+    this.recordingManager = wireRecordingFlow(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
@@ -208,17 +229,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    // Track active view for handlers that need webview access
-    this.setActiveView(webviewView);
-
-    const handled = dispatchProgressViewInbound(
+    const handled = await this.handleMessageWithDispatch(
       message,
-      this.handlerRegistry,
-      (error) => {
-        this.logger.debug(this.channel, 'Message validation failed', {
-          data: error,
-        });
-      },
+      webviewView,
+      () =>
+        dispatchProgressViewInbound(message, this.handlerRegistry, (error) => {
+          this.logger.debug(this.channel, 'Message validation failed', {
+            data: error,
+          });
+        }),
     );
 
     if (
@@ -327,14 +346,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (isWorkflowTaskState(taskState)) {
       const executionId = this.provider.state.getExecutionId(streamId);
       if (executionId) {
-        await safeExecuteCommand('texra.execute', [
-          { config: taskState.agentConfig, executionId },
-        ]);
+        const request = buildExecutionRequest(
+          taskState.agentConfig,
+          executionId,
+        );
+        await safeExecuteCommand('texra.execute', [request]);
         return;
       }
     }
 
-    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+    const request = buildExecutionRequest(taskState.agentConfig);
+    await safeExecuteCommand('texra.execute', [request]);
   }
 
   private async handleRunNew(
@@ -344,7 +366,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!taskState) {
       return;
     }
-    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+    const request = buildExecutionRequest(taskState.agentConfig);
+    await safeExecuteCommand('texra.execute', [request]);
   }
 
   private async handleRetryStreamRequest(
@@ -819,15 +842,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!view) return;
 
     try {
-      const [agentOptionsData, modelOptionsData] = await Promise.all([
-        computeAgentOptionsData(),
-        computeModelOptionsData(),
-      ]);
-
-      const defaultMergeModel = getConfig<string>(
-        'texra.merge.defaultModel',
-        'gemini3f',
-      );
+      const { agentOptionsData, modelOptionsData, defaultMergeModel } =
+        await loadOptions();
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
@@ -885,15 +901,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       taskState.activeFiles.output ??
       outputFilesArray.length > 1;
 
-    await vscode.commands.executeCommand(command, {
+    const payload = buildFileOperationPayload({
       streamId,
       agent: taskState.agentConfig.agent,
       model: taskState.agentConfig.model,
       inputFile: taskState.agentConfig.inputFile,
-      outputFiles: useMultipleOutputs ? outputFilesArray : [],
+      outputFiles: outputFilesArray,
       useMultipleOutputs,
       skipProgressViewClear: true,
     });
+
+    await vscode.commands.executeCommand(command, payload);
   }
 
   private async withToolbarTaskState(

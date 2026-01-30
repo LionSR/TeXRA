@@ -15,8 +15,32 @@ import * as vscode from 'vscode';
  * @param defaultValue Optional default value if configuration is not found
  * @returns The configuration value or default value
  */
-export function getConfig<T>(path: string, defaultValue?: T): T {
-  const parts = path.split('.');
+export function getConfig<T>(path: string, defaultValue?: T): T;
+export function getConfig<T>(section: string, key: string, defaultValue?: T): T;
+export function getConfig<T>(
+  pathOrSection: string,
+  keyOrDefault?: string | T,
+  defaultValue?: T,
+): T {
+  if (typeof keyOrDefault === 'string' && defaultValue !== undefined) {
+    const value = vscode.workspace
+      .getConfiguration(pathOrSection)
+      .get<T>(keyOrDefault);
+    return value !== undefined ? value : (defaultValue as T);
+  }
+
+  if (typeof keyOrDefault === 'string' && defaultValue === undefined) {
+    const inspection = vscode.workspace
+      .getConfiguration(pathOrSection)
+      .inspect(keyOrDefault);
+    if (inspection) {
+      return vscode.workspace
+        .getConfiguration(pathOrSection)
+        .get<T>(keyOrDefault) as T;
+    }
+  }
+
+  const parts = pathOrSection.split('.');
 
   // Try multiple namespaces in order of priority (using === undefined to preserve null values)
   let result: unknown = vscode.workspace
@@ -24,13 +48,13 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
     .get(parts.slice(1).join('.'));
 
   if (result === undefined) {
-    result = vscode.workspace.getConfiguration('texra').get(path);
+    result = vscode.workspace.getConfiguration('texra').get(pathOrSection);
   }
   if (result === undefined) {
-    result = vscode.workspace.getConfiguration().get(`texra.${path}`);
+    result = vscode.workspace.getConfiguration().get(`texra.${pathOrSection}`);
   }
 
-  return result !== undefined ? (result as T) : (defaultValue as T);
+  return result !== undefined ? (result as T) : (keyOrDefault as T);
 }
 
 /**
@@ -76,6 +100,19 @@ export async function updateConfig<T>(
   }
 
   await vscode.workspace.getConfiguration().update(key, value, target);
+}
+
+/**
+ * Returns true if a configuration key has been explicitly set by the user
+ * at any scope (global, workspace, or workspace folder).
+ */
+export function isConfigExplicitlySet(key: string): boolean {
+  const inspection = vscode.workspace.getConfiguration().inspect(key);
+  return (
+    inspection?.globalValue !== undefined ||
+    inspection?.workspaceValue !== undefined ||
+    inspection?.workspaceFolderValue !== undefined
+  );
 }
 
 /**

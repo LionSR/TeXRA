@@ -1,20 +1,37 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import {
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigSchema,
+} from '@shared/schemas/toolConfig';
+
+// Local imports - agent
 import {
   AgentConfigSchema,
   type AgentConfigInput,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+
+// Local imports - common
 import {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-} from '@shared/schemas/toolConfig';
+  buildExecutionRequest,
+  validateExecutionRequest,
+} from '@common/agent/executionRequestUtils';
+import { buildFileOperationPayload } from '@common/files/fileOperationPayload';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import {
-  isPastedImage,
   getPastedImageFullPath,
+  isPastedImage,
 } from '@utils/files/pastedImageUtils';
 import { capitalize } from '@utils/text/stringUtils';
+
+// Third-party imports - types
 import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
@@ -50,27 +67,34 @@ export class ExecutionManager {
     // IMPORTANT: Validate required fields before schema parsing.
     // AgentConfigSchema uses .prefault() for agent/model (see AgentConfig.ts:96-97),
     // which would silently provide defaults instead of failing on missing values.
-    if (!message.agent || !message.model) {
+    const validation = validateExecutionRequest({
+      agent: message.agent,
+      model: message.model,
+      inputFile: message.inputFile,
+      isToolUse: message.isToolUseAgent,
+    });
+    if (!validation.ok) {
+      if (validation.action) {
+        const selection = await vscode.window.showErrorMessage(
+          validation.message ?? 'Execution validation failed.',
+          validation.action.label,
+        );
+        if (selection === validation.action.label) {
+          void vscode.commands.executeCommand(
+            validation.action.command,
+            ...(validation.action.args ?? []),
+          );
+        }
+        return;
+      }
+
       vscode.window.showErrorMessage(
-        'Agent and model selection required. Please select both before running.',
+        validation.message ?? 'Execution validation failed.',
       );
       return;
     }
 
     const isToolUse = Boolean(message.isToolUseAgent);
-
-    // Tool-use agents don't need input file validation
-    if (!isToolUse && !message.inputFile) {
-      const openDocs = 'File Management Guide';
-      const choice = await vscode.window.showErrorMessage(
-        'Please select an input file.',
-        openDocs,
-      );
-      if (choice === openDocs) {
-        void vscode.commands.executeCommand('texra.openDoc', 'file-management');
-      }
-      return;
-    }
 
     // Map media file paths (pasted images need full path resolution)
     const mapMedia = (f: string | null): string | null =>
@@ -113,7 +137,8 @@ export class ExecutionManager {
       return;
     }
 
-    await vscode.commands.executeCommand('texra.execute', parseResult.data);
+    const request = buildExecutionRequest(parseResult.data);
+    await vscode.commands.executeCommand('texra.execute', request);
   }
 
   handleFileOperation(message: CommandMessage): void {
@@ -129,30 +154,26 @@ export class ExecutionManager {
     void vscode.commands.executeCommand(`texra.${message.command}`);
   }
 
-  handleSingleOperation(message: CommandMessage): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.agent,
-      message.model,
-    );
-  }
+  handleOutputOperation(message: CommandMessage): void {
+    const isPack = message.command.startsWith('pack');
+    const payload = buildFileOperationPayload({
+      inputFile: message.inputFile ?? '',
+      agent: message.agent ?? '',
+      model: message.model ?? '',
+      outputFiles: message.outputFiles ?? [],
+      useMultipleOutputs: message.command.includes('Multiple'),
+    });
 
-  handleMultipleOperation(message: CommandMessage): void {
-    const operation = message.command.startsWith('pack')
-      ? 'Packing'
-      : 'Cleaning';
-    const files = message.outputFiles?.join(', ') ?? '';
+    const operation = isPack ? 'Packing' : 'Cleaning';
+    const files = payload.outputFiles.join(', ');
     logger.info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${files}`,
+      `${capitalize(operation)} output files: ${payload.inputFile}${files ? `, ${files}` : ''}`,
     );
+
     void vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.agent,
-      message.model,
-      message.outputFiles,
+      isPack ? 'texra.pack' : 'texra.clean',
+      payload,
     );
   }
 }

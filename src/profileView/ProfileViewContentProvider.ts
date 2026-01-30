@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - profile view
+// Local imports - common
 import { BaseViewContentProvider } from '@common/webview';
 
 export class ProfileViewContentProvider extends BaseViewContentProvider {
@@ -13,14 +13,11 @@ export class ProfileViewContentProvider extends BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      profileBundleUri: webview.asWebviewUri(
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'profileView',
-          'bundle.js',
-        ),
-      ),
+      profileBundleUri: this.buildUri(webview, [
+        'dist',
+        'profileView',
+        'bundle.js',
+      ]),
     };
   }
 }
