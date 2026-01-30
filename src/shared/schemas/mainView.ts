@@ -755,22 +755,27 @@ const FileOperationMessages = [
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES),
     fileType: z.literal('input'),
+    files: z.array(z.string()),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES),
     fileType: z.literal('reference'),
+    files: z.array(z.string()),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES),
     fileType: z.literal('auxiliary'),
+    files: z.array(z.string()),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES),
     fileType: z.literal('media'),
+    files: z.array(z.string()),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES),
     fileType: z.literal('output'),
+    files: z.array(z.string()),
   }),
 ] as const;
 
