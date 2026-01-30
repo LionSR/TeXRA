@@ -7,6 +7,7 @@ import { css } from 'lit';
 
 // Shared styles
 import { animationStyles } from '@shared/styles/litStyles';
+import { commonViewStyles } from '@shared/styles/commonViewStyles';
 
 // Import and re-export individual style modules
 import { logEntryStyles } from './logEntryStyles';
@@ -57,6 +58,7 @@ export const layoutStyles = css`
  */
 export const logStyles = [
   animationStyles,
+  commonViewStyles,
   layoutStyles,
   logEntryStyles,
   groupStyles,
