@@ -21,6 +21,7 @@ import type { XmlOutputManager } from './XmlOutputManager';
 import {
   ensureRoundData,
   getStorageKey,
+  withOutputStage,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -28,19 +29,6 @@ import {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-async function withOutputStage<T>(
-  deps: OutputDependencies,
-  label: string,
-  parentStage: AgentLogStage | undefined,
-  fn: (stage: AgentLogStage) => Promise<T>,
-): Promise<T> {
-  const stage = await deps.logger.stage(`Output: ${label}`, {
-    parent: parentStage,
-    skip: true,
-  });
-  return stage.run(() => fn(stage));
-}
 
 /** Waits for run workspace preparation to complete. */
 async function prepareRunWorkspaceIfNeeded(

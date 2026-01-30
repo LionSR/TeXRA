@@ -18,6 +18,7 @@ import { computeOutputDiffStats } from './diffComputation';
 import {
   ensureRoundData,
   getStorageKey,
+  withOutputStage,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -36,23 +37,6 @@ export interface RoundSummary {
   outputFile: FileLocation;
   endTurn: boolean;
   stage?: AgentLogStage;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-async function withOutputStage<T>(
-  deps: OutputDependencies,
-  label: string,
-  parentStage: AgentLogStage | undefined,
-  fn: (stage: AgentLogStage) => Promise<T>,
-): Promise<T> {
-  const stage = await deps.logger.stage(`Output: ${label}`, {
-    parent: parentStage,
-    skip: true,
-  });
-  return stage.run(() => fn(stage));
 }
 
 // ============================================================================
