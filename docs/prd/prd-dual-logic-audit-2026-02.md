@@ -1,16 +1,16 @@
-# PRD: Dual Logic Path Audit - February 2026
+# PRD: Dual Logic Path Audit
 
 ## Implementation Status
 
 Proposed (not started):
 
-| Item | Area                       | Status      | Notes                                               |
-| ---- | -------------------------- | ----------- | --------------------------------------------------- |
-| 1    | Text polishing flows       | 📝 Proposed | Consolidate MainView + ProgressView polish behavior |
-| 2    | Latexdiff command dispatch | 📝 Proposed | Shared helper for latexdiff + compare actions       |
-| 3    | Task state restore         | 📝 Proposed | Shared restore helper across History + Progress     |
-| 4    | MainView option refresh    | 📝 Proposed | Single publisher for agent/model options            |
-| 5    | Pack/Clean output payloads | 📝 Proposed | Shared output-file payload builder                  |
+| Item | Area                       | Status   | Notes                                               |
+| ---- | -------------------------- | -------- | --------------------------------------------------- |
+| 1    | Text polishing flows       | Proposed | Consolidate MainView + ProgressView polish behavior |
+| 2    | Latexdiff command dispatch | Proposed | Shared helper for latexdiff + compare actions       |
+| 3    | Task state restore         | Proposed | Shared restore helper across History + Progress     |
+| 4    | MainView option refresh    | Proposed | Single publisher for agent/model options            |
+| 5    | Pack/Clean output payloads | Proposed | Shared output-file payload builder                  |
 
 ## Overview
 
@@ -40,7 +40,7 @@ helpers without changing user-visible behavior or workspace state schemas.
 
 ## 1. Text Polishing Flows (MainView vs ProgressView)
 
-**Priority:** High
+**Priority:** High — both views call `polishTextWithAI` with independently assembled context and divergent error handling; this is the most frequently exercised dual path.
 
 **Current State:**
 
@@ -56,7 +56,8 @@ These tend to drift when polishing input structures or success/error payloads ev
 
 **Refactor:**
 
-Create a shared helper (e.g., `@frontend/text/polishText.ts`) that accepts:
+Create a shared helper (e.g., `@frontend/ui/polishText.ts` — note: `@frontend/text/` does not exist;
+`@frontend/ui/` is an existing directory) that accepts:
 
 - a `FileContext`
 - a `text` string
@@ -75,37 +76,49 @@ Both managers call the same helper, only passing their view-specific postMessage
 
 ## 2. Latexdiff Command Dispatch (MainView vs ProgressView)
 
-**Priority:** High
+**Priority:** High — both views dispatch `texra.latexdiff` with positional args but assemble them independently, creating drift risk on every argument change.
 
 **Current State:**
 
-- `DiffManager` issues latexdiff/latexdiff-vc commands for the MainView. (src/webview/managers/DiffManager.ts)
-- `ProgressViewMessageHandler` issues latexdiff commands for compare/preview actions. (src/progressView/ProgressViewMessageHandler.ts)
+- `DiffManager` dispatches `texra.latexdiff` and `texra.latexdiffvc` (dynamic via `data.command`)
+  with positional arguments (inputFile, baseFile, editedFile/commitHash).
+  (src/webview/managers/DiffManager.ts)
+- `ProgressViewMessageHandler` dispatches:
+  - `texra.latexdiff` with positional args for compare/preview actions (`handleComparePrevious`,
+    `handleLatexdiffFile`).
+  - `texra.runLatexdiff` with a single object parameter for stream-based diff execution
+    (`handleDiffStream`). This is a **distinct command** with different semantics (agent context,
+    stream ID, output-by-round data) and is **not** a duplicate of `texra.latexdiff`.
+  (src/progressView/ProgressViewMessageHandler.ts)
 
 **Problem:**
 
-Command execution is duplicated with slightly different guardrails (base file checks, argument
-ordering, and error handling). Any change to latexdiff argument rules requires updating both.
+The positional-arg `texra.latexdiff` dispatch is duplicated across both views with different
+guardrails (base file checks, argument ordering, error handling). `texra.runLatexdiff` is a
+complementary entry point unique to ProgressView and is not part of the duplication.
 
 **Refactor:**
 
-Create a shared `runLatexdiffCommand` helper in `@frontend/latex` that:
+Create a shared `dispatchLatexdiff` helper in `@frontend/latex/` that:
 
 - validates required base/revision inputs
-- normalizes argument order for latexdiff/latexdiff-vc
+- normalizes argument order for `texra.latexdiff` / `texra.latexdiffvc`
 - provides a shared logging hook for missing inputs
+
+Note: `texra.runLatexdiff` (stream-based) remains in ProgressView since it is not duplicated.
 
 **Acceptance Criteria:**
 
-- MainView and ProgressView call the shared latexdiff helper.
+- Both views call the shared helper for positional-arg latexdiff dispatches.
 - Error/guard behavior remains consistent across views.
 - Latexdiff command argument order is defined in one place.
+- `texra.runLatexdiff` dispatch is left in place (not consolidated).
 
 ---
 
 ## 3. Task State Restore (HistoryView vs ProgressView)
 
-**Priority:** Medium
+**Priority:** Medium — the execution flow is identical but the sourcing logic differs; lower drift frequency than items 1-2.
 
 **Current State:**
 
@@ -133,7 +146,7 @@ Each view resolves its source task state, then calls the helper for execution an
 
 ## 4. MainView Option Refresh (Commands vs Provider)
 
-**Priority:** Medium
+**Priority:** Medium — duplication is confined to two call sites with stable payloads; low historical drift.
 
 **Current State:**
 
@@ -159,7 +172,7 @@ flags for what to refresh (agents/models). Both command handlers and provider us
 
 ## 5. Pack/Clean Output File Payloads (MainView vs ProgressView)
 
-**Priority:** Medium
+**Priority:** Medium — output-file aggregation rules change infrequently but impact correctness when they do.
 
 **Current State:**
 
@@ -194,17 +207,30 @@ Both managers call this helper before invoking pack/clean commands.
 | Risk                                            | Mitigation                                                                 |
 | ----------------------------------------------- | -------------------------------------------------------------------------- |
 | Over-consolidation hides view-specific behavior | Keep view-specific UI messaging inside managers; extract only shared logic |
-| Drift during refactor                           | Add unit coverage for shared helpers where practical                       |
+| Drift during refactor                           | Add unit tests for each shared helper (see validation below)               |
+| Large batch refactor introduces regressions     | Extract and validate one helper per PR (see milestones)                    |
 
 ## Milestones
 
-### Phase 1: Extraction & Shared Helpers
+Each item should be extracted and validated in its own PR to reduce risk per change.
 
-- [ ] Create shared helpers for each item
-- [ ] Update MainView/ProgressView/HistoryView to use helpers
+### Per-item workflow
 
-### Phase 2: Validation
+1. **Extract** shared helper and update call sites.
+2. **Add unit tests** for the shared helper covering success, error, and edge-case paths.
+3. **Validate:**
+   - `npm run compile:fast` and `npm run lint` pass.
+   - Manual verification of the affected flow(s):
+     - Item 1: Trigger polish from MainView and ProgressView; confirm identical results.
+     - Item 2: Run latexdiff and compare-previous from both views.
+     - Item 3: Restore a task from HistoryView and ProgressView.
+     - Item 4: Refresh agent/model options via command palette and config change.
+     - Item 5: Run pack and clean from both views; verify output payloads match.
 
-- [ ] `npm run compile:fast`
-- [ ] `npm run lint`
-- [ ] Manual spot checks for polish/latexdiff/restore flows
+### Suggested order
+
+1. Text polishing flows (Item 1)
+2. Latexdiff command dispatch (Item 2)
+3. Pack/Clean output payloads (Item 5)
+4. Task state restore (Item 3)
+5. MainView option refresh (Item 4)
