@@ -41,6 +41,7 @@ amplification without touching user-facing behavior or persisted workspace state
 
 - Only one helper builds and posts main view option payloads.
 - Manual refresh commands and webview-ready path use the same helper.
+- Grep for `postMessage.*modelOptions\|agentOptions` shows a single call site (the helper).
 
 ---
 
@@ -57,12 +58,14 @@ amplification without touching user-facing behavior or persisted workspace state
 **Refactor:**
 
 - Consolidate open/reveal behavior into a single helper in `@frontend/vscode`.
-- `openFileCommands.openFile()` delegates to the shared helper instead of duplicating editor logic.
+- `openFileCommands.openFile()` becomes a thin wrapper that delegates to the shared helper instead of
+  duplicating editor logic. The command registration and public API remain unchanged.
 
 **Acceptance Criteria:**
 
-- One canonical open-and-reveal implementation exists.
-- Command and programmatic open flows behave identically.
+- One canonical open-and-reveal implementation exists in `@frontend/vscode`.
+- `openFileCommands.openFile()` delegates to it with no inline editor-reuse or reveal logic.
+- Command and programmatic open flows produce identical editor behavior for the same inputs.
 
 ---
 
@@ -85,7 +88,8 @@ amplification without touching user-facing behavior or persisted workspace state
 **Acceptance Criteria:**
 
 - File list assembly and rendering exist in exactly one helper module.
-- Both components render the same markup and labels without duplication.
+- Both components call the shared helper; grep confirms no remaining inline `combine()` calls for
+  file list assembly in either component.
 
 ---
 
@@ -110,7 +114,8 @@ amplification without touching user-facing behavior or persisted workspace state
 **Acceptance Criteria:**
 
 - A single helper controls the reject-with-feedback decision flow.
-- PermissionCard and RequestPanels use the same shared behavior.
+- PermissionCard and RequestPanels delegate feedback gating to the shared helper; neither component
+  contains its own open/submit state machine.
 
 ---
 
@@ -132,9 +137,16 @@ amplification without touching user-facing behavior or persisted workspace state
 **Acceptance Criteria:**
 
 - HistoryView and ProgressView use the same formatting helper for display timestamps.
-- Timestamp formatting behavior is defined in one module.
+- Timestamp formatting behavior is defined in one module under `@shared/utils/`.
+- Grep for `toLocaleString` in HistoryView returns zero matches after migration.
 
 ---
+
+## Sequencing
+
+All five items are independent and can be implemented in any order or in parallel. Items 3 and 4 both
+touch `PermissionCard` and `RequestPanels` but modify different methods (file list rendering vs.
+feedback handling), so concurrent work is feasible with minimal merge-conflict risk.
 
 ## Risks & Mitigations
 
