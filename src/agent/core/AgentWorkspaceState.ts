@@ -200,6 +200,7 @@ type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
 /** Internal schema for server tool content state. */
 const ServerToolContentStateSchema = z.object({
+  // ServerToolContentBlock is internal state from SDK responses, validated upstream by the SDK
   contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
   lastAssistantContent: z.array(z.unknown()).prefault(() => []),
 });
