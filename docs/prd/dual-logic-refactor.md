@@ -8,7 +8,7 @@ ProgressView, and run-selection flows without altering user-facing behaviors.
 
 ## Problem Statement
 
-The codebase contains multiple “dual logic paths” where the same feature is implemented separately
+The codebase contains multiple "dual logic paths" where the same feature is implemented separately
 for tool-use and workflow flows (or for MainView vs ProgressView). This increases drift, makes
 features harder to ship, and complicates reasoning about the system.
 
@@ -32,7 +32,7 @@ Five high-impact dual paths to refactor:
    - `getEffectiveRunId` returns explicit selections for workflow streams.
    - `resolveActiveRunId` provides fallback behavior to the latest root group when no selection is
      available.
-   - Impact: two different “run selection” semantics in the same view, which risks mismatched
+   - Impact: two different "run selection" semantics in the same view, which risks mismatched
      behavior across components.
 
 4. **Tool-use vs workflow stream rendering (ProgressView)**
@@ -44,7 +44,7 @@ Five high-impact dual paths to refactor:
 5. **Session-type state reset and file handling (MainView)**
    - `MainApp.clearForNewSession` performs tool-use-specific resets by branching on session type.
    - Multiple session-type branches in `MainApp` and `FileSelectGroup` (e.g., disabling file inputs)
-     create duplicated “session-type behavior” logic split between components.
+     create duplicated "session-type behavior" logic split between components.
    - Impact: MainView behavior changes require coordinated edits across multiple session-specific
      branches.
 
@@ -63,79 +63,138 @@ Five high-impact dual paths to refactor:
 
 ## Proposed Solution
 
-### 1) Execution Orchestrator
+### Design Principle: Prefer Helpers Over Wrappers
 
-Create a shared execution controller (e.g., `ExecutionCoordinator`) that:
+Per CLAUDE.md guidelines, avoid unnecessary abstraction layers. Each proposal below should result in
+shared *helper functions* rather than coordinator/dispatcher classes unless the shared logic is
+substantial enough to justify a class. If a proposed abstraction would only forward calls, inline it.
 
-- Accepts a unified `ExecutionRequest` from both MainView and ProgressView.
-- Owns validation, tool-use/workflow branching, and resume behavior.
-- Exposes a single `execute(request)` API so both views share the same logic.
+### 1) Shared Execution Helpers
 
-### 2) File Operation Router
+Extract shared validation and request-building logic into helper functions (in `@common`) that both
+MainView and ProgressView call directly:
 
-Introduce a shared command router (e.g., `FileOperationDispatcher`) that:
+- `buildExecutionRequest(params)` — normalizes tool-use/workflow config, resume state, and execution
+  ID into a unified `ExecutionRequest`.
+- `validateExecutionRequest(request)` — shared validation (model availability, required fields).
 
-- Receives view-agnostic file operation requests.
-- Builds a consistent command payload from run state or MainView inputs.
-- Provides helpers for `pack`, `clean`, `merge`, `compare`, and `diff`.
+Both views call these helpers then dispatch `texra.execute` themselves. This avoids a coordinator
+class that would be a thin pass-through. Promote to a class only if shared pre/post-execution logic
+(e.g., telemetry, error normalization) grows beyond two helpers.
+
+**Location:** `@common` (imported by both webview and progressView extension-host code).
+
+### 2) Shared File Operation Payload Builder
+
+Introduce a `buildFileOperationPayload(runState, operation)` function (not a dispatcher class) that:
+
+- Maps run state or MainView inputs into a consistent command payload.
+- Covers `pack`, `clean`, `merge`, `compare`, and `diff` operations.
+- Each view calls the builder, then issues the command through its own message handler.
+
+Promote to a `FileOperationDispatcher` class only if operation-specific pre/post logic accumulates
+beyond simple payload construction.
+
+**Location:** `@common`.
 
 ### 3) Run Selection Strategy
 
 Replace ad-hoc run selection with a single helper:
 
 ```ts
-resolveRunId(state, { mode: 'strict' | 'fallback' });
+resolveRunId(state, { mode: 'strict' | 'fallback' }): string | undefined;
 ```
 
-- `strict`: current `getEffectiveRunId` semantics.
-- `fallback`: current `resolveActiveRunId` semantics.
+- `strict`: returns only explicitly selected run IDs (current `getEffectiveRunId` semantics).
+  Returns `undefined` when no explicit selection exists.
+- `fallback`: returns explicit selection if available, otherwise falls back to latest root group
+  (current `resolveActiveRunId` semantics). Never returns `undefined` for non-empty state.
 
-### 4) Shared Stream Content Shell
+**Authoritative behavior:** `strict` mode is authoritative. Components that currently use
+`resolveActiveRunId` are convenience consumers that should clearly opt in to fallback behavior via
+the `mode` parameter. When both helpers are called in the same flow, the `strict` result takes
+precedence — `fallback` is only used when no explicit selection exists and a reasonable default is
+acceptable (e.g., initial page load). This means callers must consciously choose their mode; the
+unified function makes the semantic difference explicit rather than hiding it behind two separate
+function names.
 
-Factor a shared `StreamContentShell` component (or mixin) that:
+### 4) Shared Stream Content via Data Normalization
 
-- Owns common layout (header, permissions, log list, usage panel, follow-up shell).
-- Accepts a typed adapter for tool-use/workflow-specific sections (instruction panel, file list).
+Normalize the stream data model upstream so a single renderer can handle both tool-use and workflow
+streams. This follows the repo's "fix the data model, not the renderer" principle:
 
-### 5) MainView Session State Adapter
+- Define a `NormalizedStreamData` type that contains common fields (header info, permissions, log
+  entries, usage stats, follow-up state) plus a `sections: StreamSection[]` discriminated union for
+  type-specific content (tool-use instruction panel vs workflow file list).
+- Create `normalizeToolUseStream(raw)` and `normalizeWorkflowStream(raw)` adapter functions that
+  produce `NormalizedStreamData`.
+- Build a single `StreamContent` component that renders `NormalizedStreamData`.
 
-Create a `SessionStateAdapter` that:
+This is a data-adapter approach (normalize model → single renderer), not a render-props/slot pattern.
+The adapters live at the data boundary; the renderer has zero type-branching.
 
-- Centralizes session-type resets and field defaults.
-- Provides a clear API for `resetForSessionType(sessionType)`.
-- Exposes a derived view model for file-selection enablement.
+### 5) Session-Type Defaults Map
+
+Replace `SessionStateAdapter` with a simple defaults lookup:
+
+```ts
+const SESSION_DEFAULTS: Record<SessionType, SessionDefaults> = {
+  'tool-use': { fileInputEnabled: false, ... },
+  'workflow': { fileInputEnabled: true, ... },
+};
+
+function getSessionDefaults(type: SessionType): SessionDefaults {
+  return SESSION_DEFAULTS[type];
+}
+```
+
+`clearForNewSession` applies the defaults from this map instead of branching. No class needed —
+a lookup table and a single function suffice for the current scope.
+
+**Location:** `@common` or co-located with `MainApp` if only consumed there.
 
 ## Milestones
 
-1. **Phase 1: Execution and file operations**
-   - Implement `ExecutionCoordinator` and `FileOperationDispatcher`.
-   - Migrate MainView and ProgressView to use shared APIs.
+### Phase 1: Execution and file operations
 
-2. **Phase 2: Run selection unification**
-   - Replace `getEffectiveRunId` / `resolveActiveRunId` usage with shared helper.
-   - Add targeted unit tests for strict vs fallback behavior.
+- Extract `buildExecutionRequest`, `validateExecutionRequest`, and `buildFileOperationPayload`.
+- Migrate MainView and ProgressView to use shared helpers.
+- **Cleanup:** Delete old per-view validation/payload logic once migration is verified. Do not
+  leave deprecated wrappers — per CLAUDE.md, delete unused code entirely.
+- **Tests:** Unit tests for `buildExecutionRequest`, `validateExecutionRequest`, and
+  `buildFileOperationPayload` covering both tool-use and workflow inputs.
 
-3. **Phase 3: UI component consolidation**
-   - Build `StreamContentShell` + adapters.
-   - Extract `SessionStateAdapter` and migrate MainView.
+### Phase 2: Run selection unification
+
+- Replace `getEffectiveRunId` / `resolveActiveRunId` usage with `resolveRunId(state, { mode })`.
+- **Cleanup:** Delete `getEffectiveRunId` and `resolveActiveRunId` after migration.
+- **Tests:** Unit tests for strict vs fallback behavior, including edge cases (empty state,
+  missing selection, stale IDs).
+
+### Phase 3: UI component consolidation
+
+- Implement `NormalizedStreamData` type and adapter functions.
+- Build unified `StreamContent` component.
+- Extract `SESSION_DEFAULTS` map and migrate `clearForNewSession`.
+- **Cleanup:** Delete `ToolUseStreamContent` and `WorkflowStreamContent` after migration.
+- **Tests:** Unit tests for stream normalization adapters. Snapshot or integration tests for
+  `StreamContent` rendering both stream types.
 
 ## Success Metrics
 
-- Single entry point for `texra.execute` orchestration.
-- Single entry point for file operation dispatch.
-- Eliminate duplicate run selection helpers.
+- Single entry point for `texra.execute` request building and validation.
+- Single entry point for file operation payload construction.
+- `getEffectiveRunId` and `resolveActiveRunId` fully replaced by `resolveRunId`.
 - Reduced number of session-type branches in MainView and ProgressView components.
+  - **Baseline target:** measure current branch count before Phase 1; aim for ≥50% reduction by
+    Phase 3 completion.
 
 ## Risks & Mitigations
 
 - **Risk:** Consolidation could introduce regressions in view-specific behavior.
-  - **Mitigation:** Phase rollout, keep existing APIs until parity verified.
+  - **Mitigation:** Phase rollout; delete old code only after parity is verified via tests.
 
 - **Risk:** Shared abstractions add indirection without reducing complexity.
-  - **Mitigation:** Only extract logic that appears in multiple locations and removes duplication.
-
-## Open Questions
-
-- Which existing run-selection behaviors should be considered authoritative when modes conflict?
-- Should `ExecutionCoordinator` live under `@frontend` or `@common`, given both view origins?
-- Can ProgressView stream rendering share a shell without affecting performance?
+  - **Mitigation:** Start with plain functions, not classes. Promote to a class only when shared
+    logic exceeds simple data transformation. Review each abstraction against CLAUDE.md's
+    "Flattening Abstraction Layers" and "Discouraged Factory Patterns" guidelines.
