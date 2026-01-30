@@ -70,7 +70,6 @@ export class WatcherManager {
 
       this.agentWatcher = agentDirectories.watchAgentDirectories({
         pattern: '**/*',
-        debounceMs: DEBOUNCE_WATCHER_MS,
         onEvent: (event) => {
           this.triggerRefresh();
           if (event.source === 'custom' && event.type !== 'delete') {

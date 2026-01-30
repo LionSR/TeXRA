@@ -22,15 +22,6 @@ export interface RecordingManagerConfig {
   progressTitle?: string;
 }
 
-export type RecordingCommandMap = RecordingManagerConfig;
-
-export function wireRecordingFlow(
-  context: vscode.ExtensionContext,
-  commands: RecordingCommandMap,
-): RecordingManager {
-  return new RecordingManager(context, commands);
-}
-
 export class RecordingManager {
   constructor(
     private readonly context: vscode.ExtensionContext,
