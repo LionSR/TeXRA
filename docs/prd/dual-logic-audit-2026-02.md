@@ -2,7 +2,7 @@
 
 ## Implementation Status
 
-Proposal drafted (2026-02-XX). No implementation yet.
+Proposal drafted (2026-02-01). No implementation yet.
 
 | Area                  | Item                                       | Status   |
 | --------------------- | ------------------------------------------ | -------- |
@@ -37,28 +37,34 @@ state schemas.
 
 ## 1. MainView Options Refresh (Provider vs Commands)
 
-**Priority:** High
+**Priority:** High — this is the most frequently exercised refresh path (every agent/model
+change triggers it), so drift here causes the most user-visible inconsistency.
 
 **Current State:**
 
 - `MainViewProvider` refreshes agent/model options and posts messages directly.
 - `mainViewCommands` repeats the same refresh logic for command-palette entry points.
-- `@frontend/agents/optionsLoader.ts` already exists but is not used here.
+- `@frontend/agents/optionsLoader.ts` already provides `loadOptions()`, which calls
+  `computeModelOptionsData()` and `computeAgentOptionsData()` in parallel and returns an
+  `OptionsPayload`. This is not currently wired into either refresh path.
 
 This creates two separate refresh paths that must stay in sync (error handling, refresh timing,
 message payload structure).
 
 **Refactor:**
 
-- Introduce a shared `MainViewOptionsRefresher` (or reuse `loadOptions`) that encapsulates:
-  - `refresh()` for agent index
-  - `computeAgentOptionsData` / `computeModelOptionsData`
-  - webview message posting
-- Use the shared path from both `MainViewProvider` and `mainViewCommands`.
+- **Primary recommendation:** Reuse `loadOptions()` from `@frontend/agents/optionsLoader.ts` as the
+  single source of truth for options computation. Both `MainViewProvider` and `mainViewCommands`
+  should call `loadOptions()` and post the resulting payload.
+- Do **not** introduce a new `MainViewOptionsRefresher` class — per project guidelines on flattening
+  abstraction layers and avoiding discouraged factory patterns, adding a new wrapper around an
+  existing function is unnecessary indirection. A new class is only justified if `loadOptions`
+  genuinely cannot serve the purpose (e.g., requires lifecycle state that a pure function cannot
+  capture).
 
 **Acceptance Criteria:**
 
-- `MainViewProvider` and `mainViewCommands` both use the shared options refresher.
+- `MainViewProvider` and `mainViewCommands` both call `loadOptions()` for options data.
 - Only one place constructs and posts the agent/model options payloads.
 
 **Evidence:**
@@ -66,12 +72,15 @@ message payload structure).
 - `MainViewProvider.refreshAgentOptions` / `refreshModelOptions` / `refreshOptionsAndView` duplicate
   the same flow of refresh + compute + post message.
 - `mainViewCommands.refresh*` repeats the same logic with the same payloads.
+- `loadOptions()` already performs the identical computation but is unused here.
 
 ---
 
 ## 2. File Watcher Extensions vs File Type Registry
 
-**Priority:** High
+**Priority:** High — hardcoded extension lists silently drift from the canonical registry,
+causing files to be watched but not listed (or vice versa). This is a frequent source of
+subtle bugs when new file types are added.
 
 **Current State:**
 
@@ -103,7 +112,8 @@ creating inconsistent file refresh behavior.
 
 ## 3. Secondary Panel Orchestration (History/Profile/Memory)
 
-**Priority:** Medium
+**Priority:** Medium — reduces three near-identical methods to one, but the savings are modest
+(~5 lines each). Prioritized below Targets 1–2 because the duplication is less likely to drift.
 
 **Current State:**
 
@@ -111,8 +121,25 @@ creating inconsistent file refresh behavior.
   `MemoryViewProvider.showMemoryView` all do the same pattern:
   1. `createOrShowPanel(...)`
   2. if existing, send data to webview
+- Note: `MemoryViewProvider` sends two messages (`sendMemoryData` + `sendMemoryEnabled`) in its
+  refresh callback, making it slightly different from the other two.
 
 The logic is duplicated across three providers.
+
+**Trade-off with project guidelines:** CLAUDE.md states *"three similar lines of code is better
+than a premature abstraction"* and discourages helpers for one-time operations. This target is
+at exactly that boundary — three providers with a 5-line pattern. The justification for
+consolidation is:
+
+1. The pattern is mechanical (create-or-show + conditional refresh) with no view-specific logic
+   beyond the refresh callback.
+2. If additional secondary panels are added (e.g., a future Glossary or Citations panel), the
+   pattern would need to be copied again.
+3. `createOrShowPanel` already lives in `BaseWebviewProvider`, so the helper is a natural
+   extension of existing base-class responsibility.
+
+If the team judges that three instances do not warrant the abstraction, this target can be
+deferred or dropped without affecting the other four.
 
 **Refactor:**
 
@@ -134,7 +161,10 @@ The logic is duplicated across three providers.
 
 ## 4. Single-Bundle Content Providers (URI Map Duplication)
 
-**Priority:** Medium
+**Priority:** Medium — four identical implementations differing only in a string key make this
+the clearest mechanical deduplication target with near-zero risk of behavioral change.
+(Note: `ProgressViewContentProvider` also adds a CSS URI, so the helper must support optional
+style bundles.)
 
 **Current State:**
 
@@ -163,7 +193,9 @@ This is a duplicate logic path for a standardized pattern.
 
 ## 5. Schema Dispatch Boilerplate in Message Handlers
 
-**Priority:** Medium
+**Priority:** Medium — the three handlers are currently in perfect lockstep with zero
+divergence, making consolidation safe today. However, if handlers are *intentionally* decoupled
+to allow independent evolution, consolidation would reduce that flexibility.
 
 **Current State:**
 
@@ -176,6 +208,12 @@ This is a duplicate logic path for a standardized pattern.
 
 This increases maintenance cost for any change in dispatch mechanics.
 
+**Divergence analysis:** As of this writing, the three `handleMessage` implementations are
+character-for-character identical (aside from the specific `dispatch*Inbound` function name).
+There is no historical evidence of intentional divergence — all three were introduced together
+and have been updated in lockstep. If a future handler needs custom pre/post-dispatch logic,
+the shared helper should accept optional hooks rather than requiring a full override.
+
 **Refactor:**
 
 - Add a reusable dispatch helper in `BaseViewMessageHandler` that accepts:
@@ -183,6 +221,8 @@ This increases maintenance cost for any change in dispatch mechanics.
   - `handlerRegistry`
   - `view`
 - Keep per-view schemas and handler registries unchanged.
+- If a handler later needs custom behavior, it can override `handleMessage` directly (the
+  shared helper is a convenience, not a constraint).
 
 **Acceptance Criteria:**
 
@@ -198,11 +238,13 @@ This increases maintenance cost for any change in dispatch mechanics.
 
 ## Risks & Mitigations
 
-| Risk                                            | Mitigation                                                        |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| Abstraction becomes too generic                 | Keep helpers narrowly scoped to the repeated patterns only.       |
-| Behavior drift in webview updates               | Add targeted tests or manual checks for each view before release. |
-| Over-consolidation breaks view-specific nuances | Allow opt-out per view (e.g., custom overrides).                  |
+| Risk                                            | Mitigation                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Abstraction becomes too generic                 | Keep helpers narrowly scoped to the repeated patterns only.                  |
+| Behavior drift in webview updates               | Add targeted tests or manual checks for each view before release.            |
+| Over-consolidation breaks view-specific nuances | Shared helpers accept callbacks/hooks for view-specific logic; any provider  |
+|                                                 | can override the base method directly to opt out without recreating the full |
+|                                                 | duplication (only the divergent provider departs from the shared path).      |
 
 ## Open Questions
 
