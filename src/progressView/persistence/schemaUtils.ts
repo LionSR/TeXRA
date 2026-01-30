@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared utilities
+import { isPlainObject } from '@shared/utils/string';
+
 // =============================================================================
 // Generic Schema Factories for Persistence
 // =============================================================================
@@ -50,11 +53,6 @@ export function createArraySchema<T>(itemSchema: z.ZodType<T>): z.ZodType<T[]> {
  * Coerces and validates integer round keys from string record keys.
  */
 export const RoundKeySchema = z.coerce.number().int();
-
-/** Type guard for non-null plain objects */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 /**
  * Factory for creating round map schemas that transform { roundNum: items[] } to Map<number, T[]>.

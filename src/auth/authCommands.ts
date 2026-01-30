@@ -48,37 +48,36 @@ interface SignInOption {
   method: AuthMethod;
 }
 
+/** All possible sign-in options - filtered at runtime based on feature flags. */
+const ALL_SIGN_IN_OPTIONS: readonly SignInOption[] = [
+  {
+    label: '$(globe) Google',
+    description: 'Sign in with Google',
+    method: 'google',
+  },
+  {
+    label: '$(github) GitHub',
+    description: 'Sign in with GitHub via web browser',
+    method: 'github-browser',
+  },
+  {
+    label: '$(mail) Email',
+    description: 'Sign in with a magic link sent to your email',
+    method: 'email',
+  },
+  {
+    label: '$(github) GitHub (VS Code)',
+    description: 'Sign in using VS Code GitHub authentication',
+    method: 'github',
+  },
+];
+
 function getSignInOptions(): SignInOption[] {
-  const options: SignInOption[] = [
-    {
-      label: '$(globe) Google',
-      description: 'Sign in with Google',
-      method: 'google',
-    },
-    {
-      label: '$(github) GitHub',
-      description: 'Sign in with GitHub via web browser',
-      method: 'github-browser',
-    },
-  ];
-
-  if (EMAIL_LOGIN_ENABLED) {
-    options.push({
-      label: '$(mail) Email',
-      description: 'Sign in with a magic link sent to your email',
-      method: 'email',
-    });
-  }
-
-  if (isVSCodeGitHubEnabled()) {
-    options.push({
-      label: '$(github) GitHub (VS Code)',
-      description: 'Sign in using VS Code GitHub authentication',
-      method: 'github',
-    });
-  }
-
-  return options;
+  return ALL_SIGN_IN_OPTIONS.filter((option) => {
+    if (option.method === 'email') return EMAIL_LOGIN_ENABLED;
+    if (option.method === 'github') return isVSCodeGitHubEnabled();
+    return true;
+  });
 }
 
 export async function signIn(): Promise<void> {
