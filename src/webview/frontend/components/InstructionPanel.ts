@@ -20,6 +20,7 @@ import {
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
+import { resolveTextareaTarget } from '@shared/utils/textarea';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -221,8 +222,8 @@ export class InstructionPanel extends LitElement {
     const handled = await handleImagePaste(event, this.instructionTextarea);
     if (handled) {
       // Get updated value from textarea after image paste
-      const target = event.target as HTMLTextAreaElement;
-      const updatedValue = target.value ?? '';
+      const { textarea } = resolveTextareaTarget(this.instructionTextarea);
+      const updatedValue = textarea?.value ?? '';
       this.dispatchEvent(
         MainViewEvents.instructionInput({ value: updatedValue }),
       );
