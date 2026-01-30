@@ -9,10 +9,11 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, query } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { styleMap } from 'lit/directives/style-map.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
+import { codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,
@@ -27,6 +28,7 @@ import {
 @customElement('output-files-section')
 export class OutputFilesSection extends LitElement {
   static override styles = [
+    codiconStyles,
     fileSelectLayoutStyles,
     toggleStyles,
     multiFilesStyles,
@@ -154,19 +156,18 @@ export class OutputFilesSection extends LitElement {
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
-        <div
-          id="outputFilesContainer"
-          class="multiple-files-container"
-          style=${styleMap({
-            display: this.currentExpanded ? 'block' : 'none',
-          })}
-        >
-          <div class="multiple-files-content">
-            <div id="outputFiles" class="multiple-files-list">
-              ${this.renderFileList()}
+        ${when(
+          this.currentExpanded,
+          () => html`
+            <div id="outputFilesContainer" class="multiple-files-container">
+              <div class="multiple-files-content">
+                <div id="outputFiles" class="multiple-files-list">
+                  ${this.renderFileList()}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          `,
+        )}
       </div>
     `;
   }

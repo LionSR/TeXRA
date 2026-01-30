@@ -14,6 +14,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
+import { codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import {
@@ -29,6 +30,7 @@ import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [
+    codiconStyles,
     ...fileSelectStyles,
     css`
       :host {
@@ -477,17 +479,18 @@ export class FileSelectGroup extends LitElement {
         >
           ${this.renderFileOptions()}
         </vscode-single-select>
-        <div
-          id="${this.listId}Container"
-          class="multiple-files-container"
-          ?hidden=${!this.currentListVisible}
-        >
-          <div class="multiple-files-content">
-            <div id=${this.listId} class="multiple-files-list">
-              ${this.renderFileList()}
+        ${when(
+          this.currentListVisible,
+          () => html`
+            <div id="${this.listId}Container" class="multiple-files-container">
+              <div class="multiple-files-content">
+                <div id=${this.listId} class="multiple-files-list">
+                  ${this.renderFileList()}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          `,
+        )}
       </div>
     `;
   }
