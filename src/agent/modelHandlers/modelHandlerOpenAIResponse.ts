@@ -109,8 +109,10 @@ interface UploadedOpenAIResponseAttachment {
 }
 
 // Conservative heuristic token estimates for non-text input content.
-const APPROX_IMAGE_TOKEN_ESTIMATE = 500;
-const APPROX_FILE_TOKEN_ESTIMATE = 1000;
+// OpenAI vision inputs can cost 85-1105+ tokens depending on resolution/tile count,
+// so we bias upward to avoid context window overflow.
+const APPROX_IMAGE_TOKEN_ESTIMATE = 1100;
+const APPROX_FILE_TOKEN_ESTIMATE = 1200;
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -840,10 +842,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
   private applyTokenHeuristics(
-    params: ResponseCreateParamsBase,
+    maxOutputTokens: number | undefined,
     messages: ResponseInputItem[],
     systemPrompt?: string,
-  ): number | null {
+  ): {
+    approximateInputTokens: number | null;
+    adjustedMaxOutputTokens?: number;
+  } {
     try {
       const approximateInputTokens = this.calculateApproximateTokens(
         messages,
@@ -862,15 +867,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       const availableTokens =
         this.config.contextWindow - approximateInputTokens;
-      const currentMax = params.max_output_tokens;
-      if (typeof currentMax === 'number' && availableTokens < currentMax) {
+      if (
+        typeof maxOutputTokens === 'number' &&
+        availableTokens < maxOutputTokens
+      ) {
+        const heuristicBuffer = this.getHeuristicTokenBuffer();
         const utilizationPercent =
           (approximateInputTokens / this.config.contextWindow) * 100;
         const reducedMaxTokens = computeReducedMaxTokens(
           availableTokens,
-          HEURISTIC_TOKEN_BUFFER,
+          heuristicBuffer,
         );
-        params.max_output_tokens = reducedMaxTokens;
 
         const isOverflow = availableTokens <= 0;
         const detailsMsg = isOverflow
@@ -878,19 +885,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           : 'OpenAI Response: max_output_tokens reduced to fit context window';
         const logMsg = isOverflow
           ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
-          : `Approximate token count (${approximateInputTokens}) + max_output_tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
+          : `Approximate token count (${approximateInputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
 
         this.logger.logContextManagement(logMsg, {
           action: 'max_tokens_reduced',
           tokensBefore: approximateInputTokens,
           contextWindow: this.config.contextWindow,
           utilizationBefore: utilizationPercent,
-          originalMaxTokens: currentMax,
+          originalMaxTokens: maxOutputTokens,
           reducedMaxTokens,
+          heuristicBuffer,
           details: detailsMsg,
         });
+        return {
+          approximateInputTokens,
+          adjustedMaxOutputTokens: reducedMaxTokens,
+        };
       }
-      return approximateInputTokens;
+      return { approximateInputTokens };
     } catch (err) {
       if (isContextWindowError(err)) {
         throw err;
@@ -899,7 +911,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
       );
     }
-    return null;
+    return { approximateInputTokens: null };
+  }
+
+  private getHeuristicTokenBuffer(): number {
+    return Math.min(
+      HEURISTIC_TOKEN_BUFFER,
+      Math.max(200, Math.floor(this.config.contextWindow * 0.1)),
+    );
   }
 
   private calculateApproximateTokens(
@@ -1035,17 +1054,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
+    const baseMaxOutputTokens = this.config.maxOutputTokens;
+    const { approximateInputTokens, adjustedMaxOutputTokens } =
+      this.applyTokenHeuristics(baseMaxOutputTokens, newMessages, systemPrompt);
     const params: ResponseCreateParamsBase = {
       model: this.config.fullName,
       input: newMessages,
-      max_output_tokens: this.config.maxOutputTokens,
+      max_output_tokens: adjustedMaxOutputTokens ?? baseMaxOutputTokens,
       store: true,
     };
-    const approximateInputTokens = this.applyTokenHeuristics(
-      params,
-      newMessages,
-      systemPrompt,
-    );
 
     if (useBackgroundResponses) {
       this.logger.debug(
@@ -1355,6 +1372,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       usage.input_tokens = inputTokens;
       usage.output_tokens = outputTokens;
       usage.total_tokens = inputTokens + outputTokens;
+      if (approximateInputTokens == null) {
+        this.logger.warn(
+          'Response usage missing and token estimation failed; defaulting input token count to 0.',
+          {
+            data: {
+              responseId: responseObject.id,
+            },
+          },
+        );
+      }
       this.logger.warn(
         'Response usage missing; using heuristic token estimates.',
         {
