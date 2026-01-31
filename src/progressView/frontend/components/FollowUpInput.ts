@@ -108,6 +108,7 @@ export class FollowUpInput extends LitElement {
   // Reactive properties for Lit-native patterns (Phase 9e)
   @property({ type: Boolean }) shouldFocus = false;
   @property({ type: String }) polishedText: string | null = null;
+  @property({ type: Number }) polishRevision = 0;
   @property({ type: String }) transcribedText: string | null = null;
   @property({ type: Boolean }) recording = false;
 
@@ -139,6 +140,10 @@ export class FollowUpInput extends LitElement {
       this.polishing = false;
       this.updateValue(this.polishedText);
       this.focusInput({ scrollIntoView: true });
+    }
+
+    if (changedProperties.has('polishRevision')) {
+      this.polishing = false;
     }
 
     // React to transcribedText property change
