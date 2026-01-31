@@ -22,6 +22,9 @@ import { ProgressEvents } from '../events';
 import { findClosestInComposedPath } from '../utils';
 import type { StreamState } from '../store';
 
+// Side-effect import to register the run-selector custom element
+import './RunSelector';
+
 // Local imports - shared schemas
 import type { StreamTabInfo } from '@shared/schemas';
 
