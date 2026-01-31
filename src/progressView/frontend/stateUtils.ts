@@ -45,8 +45,8 @@ export function updateNestedRounds<T>(
   if (!rounds) return current;
 
   // Merge rounds into the run
-  const base = reset ? {} : current;
-  const existingRounds = base[runId] ?? {};
+  const base = reset ? { ...current } : current;
+  const existingRounds = reset ? {} : (base[runId] ?? {});
   return {
     ...base,
     [runId]: { ...existingRounds, ...rounds },

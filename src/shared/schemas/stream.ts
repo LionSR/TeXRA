@@ -57,7 +57,7 @@ export const StreamTabInfoSchema = z.object({
   lastTimestamp: z.number().optional(),
   inputFile: z.string().optional(),
   creationTimestamp: z.number().optional(),
-  status: z.string().optional(),
+  status: StreamStatusSchema.nullish(),
   executionId: ExecutionIdSchema.optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;

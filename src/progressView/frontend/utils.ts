@@ -12,9 +12,24 @@ export type VSCodeValueElement = HTMLElement & { value?: string };
  * Prefers the clicked radio element's value, falls back to group value.
  */
 export function getRadioValue<T extends string>(event: Event): T | null {
-  const target = event.target as Element | null;
-  const radio = target?.closest('vscode-radio');
+  const radio = getComposedPathElement(event, 'vscode-radio');
   const radioGroup = event.currentTarget as VSCodeValueElement | null;
   const value = radio?.getAttribute('value') || radioGroup?.value;
   return (value as T) || null;
+}
+
+/**
+ * Find the first matching element in a composed event path.
+ */
+export function getComposedPathElement<T extends Element>(
+  event: Event,
+  selector: string,
+): T | null {
+  const path = event.composedPath?.() ?? [];
+  for (const entry of path) {
+    if (entry instanceof Element && entry.matches(selector)) {
+      return entry as T;
+    }
+  }
+  return null;
 }

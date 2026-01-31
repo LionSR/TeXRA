@@ -1,5 +1,11 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -34,6 +40,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
+import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view component types
 import type { PermissionState } from './PermissionCard';
@@ -58,6 +65,23 @@ export class RequestPanels extends LitElement {
 
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (!changedProperties.has('permissions')) {
+      return;
+    }
+
+    const activeKeys = new Set(
+      this.permissions.map((permission) => this.getPermissionKey(permission)),
+    );
+    const nextFeedbackKeys = new Set(
+      [...this.feedbackOpenKeys].filter((key) => activeKeys.has(key)),
+    );
+    this.feedbackOpenKeys = nextFeedbackKeys;
+    if (this.openDiffMenuKey && !activeKeys.has(this.openDiffMenuKey)) {
+      this.openDiffMenuKey = null;
+    }
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -778,10 +802,10 @@ export class RequestPanels extends LitElement {
   };
 
   private handleMenuClick = (event: CustomEvent): void => {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    const menuItem = target.closest('vscode-context-menu-item');
+    const menuItem = getComposedPathElement<HTMLElement>(
+      event,
+      'vscode-context-menu-item',
+    );
     if (!menuItem) return;
 
     const kind = menuItem.dataset.permissionKind as
