@@ -748,7 +748,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await vscode.commands.executeCommand(
       'texra.compare',
       pathToLocation(''), // inputFile unused
-      pathToLocation(previousFile || ''),
+      pathToLocation(previousFile),
       pathToLocation(file),
     );
   }
