@@ -9,6 +9,7 @@
 ## Overview
 
 This PRD consolidates **all Round 3 UI and logic regressions** from the following source documents:
+
 - `prd-ui-regression-audit-round3-1.md` (key collisions, IME, accessibility)
 - `prd-ui-regression-audit-round3-2.md` (backend sync issues)
 - `prd-ui-regression-audit-round3-3.md` (INITIALIZING status, schema validation)
@@ -18,11 +19,11 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 
 ### Summary by Severity
 
-| Severity | Count | Primary Areas |
-|----------|-------|---------------|
-| **HIGH** | 10    | Backend sync, data loss, button availability |
-| **MEDIUM** | 20  | State leaks, UX regressions, filter issues |
-| **LOW** | 15    | Key collisions, accessibility gaps, styling |
+| Severity   | Count | Primary Areas                               |
+| ---------- | ----- | ------------------------------------------- |
+| **HIGH**   | 13    | Backend sync, data loss, Shadow DOM, KaTeX  |
+| **MEDIUM** | 20    | State leaks, UX regressions, filter issues  |
+| **LOW**    | 15    | Key collisions, accessibility gaps, styling |
 
 ---
 
@@ -152,7 +153,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
     left: 0;
     z-index: 100;
     min-width: 150px;
-    display: block;  /* <-- ADD THIS */
+    display: block; /* <-- ADD THIS */
   }
   ```
 
@@ -172,6 +173,70 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
   - FileList `handleFileClick` (lines 286-300)
   - RequestPanels `handleMenuClick` (lines 780-802)
   - utils `getRadioValue` (lines 14-20)
+
+### H-12) Follow-up instructions lost when switching stream tabs
+
+- **Area:** ProgressView
+- **Type:** Logic regression
+- **Impact:** HIGH — User-typed follow-up text disappears on tab switch
+- **Location:** `src/progressView/frontend/messageDispatcher.ts` (`updateStreamInfo()`, lines 113-139)
+- **Root cause:** When the backend sends `UPDATE_STREAMS` with `streamStates` after a tab switch,
+  `updateStreamInfo()` completely overwrites the frontend state with backend state. The backend
+  state doesn't include `followUpText` (frontend-only field), so it gets lost.
+- **Code Evidence:**
+  ```typescript
+  // Line 129-130: Backend state completely replaces frontend state
+  if (backendState) {
+    nextStates.set(stream.name, { ...backendState, info: stream });
+  }
+  ```
+  This loses `followUpText` which exists in existing frontend state.
+- **Fix:** Preserve frontend-only fields when merging with backend state:
+  ```typescript
+  if (backendState) {
+    const existing = nextStates.get(stream.name);
+    const frontendOnlyFields =
+      existing && isToolUseState(existing)
+        ? { followUpText: existing.followUpText }
+        : {};
+    nextStates.set(stream.name, {
+      ...backendState,
+      ...frontendOnlyFields,
+      info: stream,
+    });
+  }
+  ```
+
+### H-13) KaTeX math rendering broken in Shadow DOM components
+
+- **Area:** ProgressView
+- **Type:** UI regression
+- **Impact:** HIGH — Math equations display as raw LaTeX or broken formatting
+- **Location:**
+  - `src/progressView/frontend/index.ts` (line 2)
+  - All Shadow DOM components using `logStyles`
+- **Root cause:** The KaTeX CSS is imported as a global stylesheet in `index.ts`:
+  ```typescript
+  import 'katex/dist/katex.min.css';
+  ```
+  This adds styles to the Light DOM document, but Shadow DOM components are encapsulated and
+  don't inherit global styles. The KaTeX rendering rules (fonts, spacing, layout) don't penetrate
+  the shadow boundary.
+- **Code Evidence:**
+  - `index.ts` line 2 imports KaTeX CSS globally
+  - `logStyles.ts` only includes custom `markdownStyles` with `.katex-mathml { display: none; }`
+  - No adoption of external KaTeX stylesheet in Shadow DOM components
+- **Fix Options:**
+  1. **Recommended:** Convert KaTeX CSS to adoptable stylesheet and adopt in Shadow DOM:
+     ```typescript
+     // In logStyles.ts or shared styles
+     import katexStyles from 'katex/dist/katex.min.css?inline';
+     const katexSheet = new CSSStyleSheet();
+     katexSheet.replaceSync(katexStyles);
+     // Then adopt in components: this.shadowRoot.adoptedStyleSheets.push(katexSheet)
+     ```
+  2. **Alternative:** Import KaTeX CSS as Lit css template (requires build tooling change)
+  3. **Alternative:** Use `::part()` selectors (but KaTeX doesn't expose parts)
 
 ---
 
@@ -361,6 +426,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 - **Code Evidence:** vscode-context-menu source shows `this._wrapperEl.focus()` on show.
   FileSelectGroup's `handleFocusOut` only checks `this.contains()` and `this.shadowRoot?.contains()`.
 - **Fix:** Use `event.composedPath()` to check containment across shadow DOM boundaries:
+
   ```typescript
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
@@ -436,56 +502,64 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 ## Implementation Priority
 
 ### Phase 1: Critical Data Integrity (HIGH)
+
 1. H-1, H-2, H-3, H-6 – Backend sync issues (fix together)
 2. H-4, H-5 – Run reset/clear data loss
 3. H-7, H-8 – INITIALIZING status + sort crash
+4. H-12 – Follow-up text lost on tab switch
 
 ### Phase 2: UX Blocking Issues (HIGH)
-4. H-9 – Follow-up options leak
-5. H-10, H-11 – Shadow DOM issues (dropdown, target.closest)
+
+5. H-9 – Follow-up options leak
+6. H-10, H-11 – Shadow DOM issues (dropdown, target.closest)
+7. H-13 – KaTeX broken in Shadow DOM
 
 ### Phase 3: State Management (MEDIUM)
+
 6. M-4 through M-15 – Various state issues
 7. M-16, M-17, M-18 – INITIALIZING styling + schema validation
 8. M-19, M-20 – Search input + schema validation
 
 ### Phase 4: Polish (LOW)
+
 9. L-1 through L-15 – Key collisions, accessibility, styling
 
 ---
 
 ## Source File Mapping
 
-| Merged ID | Original Source | Original ID |
-|-----------|-----------------|-------------|
-| H-1 | round3-2/4 | M1 |
-| H-2 | round3-2/4 | M2 |
-| H-3 | round3-2/4 | M5 |
-| H-4 | round3-2/4 | P1 |
-| H-5 | round3-2/4 | P2 |
-| H-6 | round3-2/4 | M8 |
-| H-7 | round3-3 | P3 |
-| H-8 | round3-3 | P5 |
-| H-9 | round3-3 | P6 |
-| H-10 | round3-1 | P11 (NEW) |
-| H-11 | original round3 | P5-P10 |
-| M-1 | round3-2/4 | M3 |
-| M-2 | round3-2/4 | M4 |
-| M-3 | round3-1/2/4 | M1/M7 |
-| M-4 | round3-1 | P1 |
-| M-5 | round3-1 | P2 |
-| M-6 | round3-1 | P3 |
-| M-7 | round3-1 | P5 |
-| M-8 | round3-1 | P10 |
-| M-9 | round3-2/4 | P3 |
-| M-10 | round3-2/3/4 | P4/P7 |
-| M-11 | round3-2/4 | P5 |
-| M-12 | round3-2/4 | P6 |
-| M-13 | round3-2/4 | P7 |
-| M-14 | round3-2/4 | P8 |
-| M-15 | round3-2/4 | P10 |
-| M-16 | round3-3 | P1 |
-| M-17 | round3-3 | P2 |
-| M-18 | round3-3 | P4 |
-| M-19 | round3-1 | H1 |
-| M-20 | round3-3 | S1 |
+| Merged ID | Original Source  | Original ID |
+| --------- | ---------------- | ----------- |
+| H-1       | round3-2/4       | M1          |
+| H-2       | round3-2/4       | M2          |
+| H-3       | round3-2/4       | M5          |
+| H-4       | round3-2/4       | P1          |
+| H-5       | round3-2/4       | P2          |
+| H-6       | round3-2/4       | M8          |
+| H-7       | round3-3         | P3          |
+| H-8       | round3-3         | P5          |
+| H-9       | round3-3         | P6          |
+| H-10      | round3-1         | P11 (NEW)   |
+| H-11      | original round3  | P5-P10      |
+| M-1       | round3-2/4       | M3          |
+| M-2       | round3-2/4       | M4          |
+| M-3       | round3-1/2/4     | M1/M7       |
+| M-4       | round3-1         | P1          |
+| M-5       | round3-1         | P2          |
+| M-6       | round3-1         | P3          |
+| M-7       | round3-1         | P5          |
+| M-8       | round3-1         | P10         |
+| M-9       | round3-2/4       | P3          |
+| M-10      | round3-2/3/4     | P4/P7       |
+| M-11      | round3-2/4       | P5          |
+| M-12      | round3-2/4       | P6          |
+| M-13      | round3-2/4       | P7          |
+| M-14      | round3-2/4       | P8          |
+| M-15      | round3-2/4       | P10         |
+| M-16      | round3-3         | P1          |
+| M-17      | round3-3         | P2          |
+| M-18      | round3-3         | P4          |
+| M-19      | round3-1         | H1          |
+| M-20      | round3-3         | S1          |
+| H-12      | new (2026-01-31) | -           |
+| H-13      | new (2026-01-31) | -           |
