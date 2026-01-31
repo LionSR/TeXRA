@@ -176,6 +176,7 @@ export const requestPanelStyles: CSSResult = css`
     left: 0;
     z-index: 100;
     min-width: 150px;
+    display: block;
   }
 
   .approval-request__actions .diff-dropdown .diff-dropdown-menu:not([show]) {

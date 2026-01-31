@@ -128,7 +128,7 @@ export class TodoList extends LitElement {
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
-            (todo) => `${todo.content}-${todo.status}`,
+            (todo, index) => `${index}-${todo.content}-${todo.status}`,
             (todo) => this.renderTodo(todo),
           )}
         </div>

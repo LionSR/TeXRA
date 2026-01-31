@@ -44,6 +44,7 @@ const STATUS_LABELS: Record<string, string> = {
   [STREAM_STATUS.READY]: 'Ready',
   [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
   [STREAM_STATUS.RESUMING]: 'Resuming',
+  [STREAM_STATUS.INITIALIZING]: 'Initializing',
 };
 
 /**
@@ -51,6 +52,10 @@ const STATUS_LABELS: Record<string, string> = {
  * Maps status to array of button IDs that should be enabled.
  */
 const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
+  [STREAM_STATUS.INITIALIZING]: [
+    ELEMENT_IDS.STOP_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+  ],
   [STREAM_STATUS.RUNNING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
@@ -433,9 +438,13 @@ export class StreamHeader extends LitElement {
   }
 
   private handleToolbarClick(event: MouseEvent) {
-    const target = event.target as Element | null;
-    if (!target) return;
-    const button = target.closest('[data-command]') as HTMLElement | null;
+    const button = event
+      .composedPath()
+      .find(
+        (entry) =>
+          entry instanceof HTMLElement && entry.hasAttribute('data-command'),
+      ) as HTMLElement | undefined;
+    if (!button) return;
     if (!button || button.hasAttribute('disabled')) return;
 
     const command = button.dataset.command;

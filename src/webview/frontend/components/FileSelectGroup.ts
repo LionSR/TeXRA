@@ -9,6 +9,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -68,10 +69,15 @@ export class FileSelectGroup extends LitElement {
       ),
   );
 
+  /** Track previous expanded state to detect visibility changes */
+  private wasExpanded = false;
+
   protected override updated(changedProps: Map<string, unknown>): void {
-    if (changedProps.has('config')) {
+    const isExpanded = this.currentListVisible;
+    if (changedProps.has('config') || (isExpanded && !this.wasExpanded)) {
       this.sortableController.reinitialize();
     }
+    this.wasExpanded = isExpanded;
   }
 
   private get listId(): string {
@@ -193,11 +199,14 @@ export class FileSelectGroup extends LitElement {
 
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
-    // Check both light DOM and shadow DOM for focus containment
-    const containsFocus =
-      nextTarget !== null &&
-      (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
-    if (containsFocus) return;
+    if (nextTarget === null) {
+      this.autoExtractMenuOpen = false;
+      this.toolConfigMenuOpen = false;
+      return;
+    }
+
+    const staysInComponent = event.composedPath().includes(this);
+    if (staysInComponent) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
   }
@@ -242,7 +251,8 @@ export class FileSelectGroup extends LitElement {
           toggleable
           aria-haspopup="true"
           aria-expanded=${this.toolConfigMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
+          class=${classMap({ 'has-options': hasChecked })}
+          ?checked=${this.toolConfigMenuOpen}
           @click=${() => this.toggleMenu('toolConfig')}
         >
           <i class="codicon ${chevronClass}"></i>
@@ -301,7 +311,8 @@ export class FileSelectGroup extends LitElement {
           toggleable
           aria-haspopup="true"
           aria-expanded=${this.autoExtractMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
+          class=${classMap({ 'has-options': hasChecked })}
+          ?checked=${this.autoExtractMenuOpen}
           @click=${() => this.toggleMenu('autoExtract')}
         >
           <i class="codicon ${chevronClass}"></i>
@@ -362,11 +373,12 @@ export class FileSelectGroup extends LitElement {
       (file) => html`
         <div class="file-item" data-path=${file}>
           <span class="file-name">${file}</span>
-          <span
+          <button
             class="remove-button codicon codicon-trash"
-            role="button"
+            type="button"
+            aria-label="Remove file"
             @click=${() => this.handleRemoveFile(file)}
-          ></span>
+          ></button>
         </div>
       `,
     )}`;
@@ -425,14 +437,16 @@ export class FileSelectGroup extends LitElement {
               title=${config.emptyTitle}
               @click=${this.handleEmptyFile}
             ></vscode-toolbar-button>
-            <span
+            <button
               id=${toggleId}
               class="toggle-icon"
               title=${config.toggleTitle}
+              type="button"
+              aria-label=${config.toggleTitle}
               @click=${this.handleToggleList}
             >
               <i class="codicon ${chevronClass}"></i>
-            </span>
+            </button>
             <vscode-toolbar-button
               id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
                 1,
