@@ -1,252 +1,214 @@
-# PRD: Dual-Logic Consolidation Audit (2026-02)
+# PRD: Dual-Logic Consolidation (2026-02)
 
 ## Implementation Status
 
-Proposal drafted (2026-02-01). No implementation yet.
-
-| Area                  | Item                                       | Status   |
-| --------------------- | ------------------------------------------ | -------- |
-| **MainView**          | Options refresh pathways                   | Proposed |
-| **Files**             | File watcher extension lists               | Proposed |
-| **Panels**            | History/Profile/Memory panel orchestration | Proposed |
-| **Content Providers** | Single-bundle URI mapping                  | Proposed |
-| **Message Handling**  | Schema dispatch boilerplate                | Proposed |
+| Item | Severity | Status | Notes |
+|------|----------|--------|-------|
+| File watcher extensions | HIGH | Proposed | Active bug — .bib/.bbl/.sty not watched |
+| useMultipleOutputs divergence | HIGH | Proposed | Different algorithms in 3 code paths |
+| MainView options refresh | MEDIUM | Proposed | loadOptions() exists but unused in providers |
+| Workflow proposal file lists | MEDIUM | Proposed | ~50 lines identical code in 2 components |
 
 ## Overview
 
-This PRD documents the **five most impactful dual-logic paths** that should be consolidated.
-These are cases where the same feature logic is implemented in multiple places, increasing
-maintenance cost and the chance of drift.
-
-The goal is to reduce duplication without changing user-visible behavior or saved workspace
-state schemas.
+This PRD consolidates three prior dual-logic audit documents into validated, actionable items.
+Items were verified against the codebase — only issues confirmed as real problems with
+concrete fixes are included. Items that would add abstraction without meaningful benefit
+have been removed per CLAUDE.md guidelines.
 
 ## Goals
 
-- Remove duplicate logic that already has a clear single source of truth.
-- Make future changes require edits in one place instead of many.
-- Keep refactors internal (no UI redesigns or state schema changes).
+- Fix actual bugs caused by logic drift (file watcher, useMultipleOutputs)
+- Wire existing helpers into unused code paths (loadOptions)
+- Avoid introducing new abstraction layers
 
 ## Non-Goals
 
-- Changing workspace state schemas or stored data.
-- Re-architecting webview types or message schemas.
-- Introducing new abstraction layers unless they reduce duplication meaningfully.
+- Creating wrapper classes or coordinator patterns
+- Abstracting ~10-line patterns that work correctly (showXView, getModuleUris, dispatch)
+- Changing workspace state schemas
 
 ---
 
-## 1. MainView Options Refresh (Provider vs Commands)
+## 1. File Watcher Extensions — Fix Hardcoded List
 
-**Priority:** High — this is the most frequently exercised refresh path (every agent/model
-change triggers it), so drift here causes the most user-visible inconsistency.
+**Severity:** HIGH — Active bug causing user-visible problems
+**Complexity:** LOW — ~10 lines
 
-**Current State:**
+**Problem:**
+`MainViewProvider.setupFileWatcher` (line 176) hardcodes file extensions:
+```
+**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,heic,heif,webp,wav,mp3,m4a,aiff,aac,ogg,flac}
+```
 
-- `MainViewProvider` refreshes agent/model options and posts messages directly.
-- `mainViewCommands` repeats the same refresh logic for command-palette entry points.
-- `@frontend/agents/optionsLoader.ts` already provides `loadOptions()`, which calls
-  `computeModelOptionsData()` and `computeAgentOptionsData()` in parallel and returns an
-  `OptionsPayload`. This is not currently wired into either refresh path.
+**Missing from watcher but in VS Code config:**
+- `.sty` (auxiliary — style files)
+- `.bib`, `.bbl` (reference — bibliography files)
 
-This creates two separate refresh paths that must stay in sync (error handling, refresh timing,
-message payload structure).
+**Impact:** Users adding/modifying bibliography or style files won't see real-time file
+list updates. They must manually trigger refresh.
 
-**Refactor:**
+**Root cause:** The canonical extension registry (`getIncludedExtensions` in
+`@common/files/fileTypeUtils.ts`) is not used here.
 
-- **Primary recommendation:** Reuse `loadOptions()` from `@frontend/agents/optionsLoader.ts` as the
-  single source of truth for options computation. Both `MainViewProvider` and `mainViewCommands`
-  should call `loadOptions()` and post the resulting payload.
-- Do **not** introduce a new `MainViewOptionsRefresher` class — per project guidelines on flattening
-  abstraction layers and avoiding discouraged factory patterns, adding a new wrapper around an
-  existing function is unnecessary indirection. A new class is only justified if `loadOptions`
-  genuinely cannot serve the purpose (e.g., requires lifecycle state that a pure function cannot
-  capture).
+**Fix:**
+```typescript
+// In MainViewProvider.setupFileWatcher, replace hardcoded string with:
+const allExtensions = [
+  ...getFilterExtensions('input'),
+  ...getFilterExtensions('reference'),
+  ...getFilterExtensions('auxiliary'),
+  ...getFilterExtensions('media'),
+  ...getFilterExtensions('audio'),
+  ...getFilterExtensions('edited'),
+];
+const filePattern = `**/*.{${[...new Set(allExtensions)].join(',')}}`;
+```
+
+**Files:**
+- `src/MainViewProvider.ts:176` — hardcoded glob
+- `src/common/files/fileTypeUtils.ts:32-40` — `getIncludedExtensions()` / `getFilterExtensions()`
 
 **Acceptance Criteria:**
-
-- `MainViewProvider` and `mainViewCommands` both call `loadOptions()` for options data.
-- Only one place constructs and posts the agent/model options payloads.
-
-**Evidence:**
-
-- `MainViewProvider.refreshAgentOptions` / `refreshModelOptions` / `refreshOptionsAndView` duplicate
-  the same flow of refresh + compute + post message.
-- `mainViewCommands.refresh*` repeats the same logic with the same payloads.
-- `loadOptions()` already performs the identical computation but is unused here.
+- File watcher pattern built dynamically from config
+- Adding extensions to VS Code settings affects both file listing and watching
 
 ---
 
-## 2. File Watcher Extensions vs File Type Registry
+## 2. useMultipleOutputs Logic Divergence
 
-**Priority:** High — hardcoded extension lists silently drift from the canonical registry,
-causing files to be watched but not listed (or vice versa). This is a frequent source of
-subtle bugs when new file types are added.
+**Severity:** HIGH — Different behavior between initial vs follow-up execution
+**Complexity:** MEDIUM
 
-**Current State:**
+**Problem:**
+Three code paths derive `useMultipleOutputs` with different algorithms:
 
-- `MainViewProvider.setupFileWatcher` hardcodes a long list of extensions in a glob pattern.
-- `getIncludedExtensions` in `@common/files/fileTypeUtils` is already the canonical registry for
-  file-type inclusion logic used elsewhere (file listing, filtering, etc.).
+| Location | Algorithm |
+|----------|-----------|
+| `ExecutionManager.handleExecute:80` | `!isToolUse && (outputFilesActive \|\| outputFiles.length > 1)` |
+| `buildFollowupTaskState:1180` | `(attachAgentOutputs && outputFiles.length > 1) \|\| originalConfig.useMultipleOutputs` |
+| `handleAgentProposalSetup` | No output handling (relies on original) |
 
-This is a dual-logic path: the file watcher can drift from the centralized extension registry,
-creating inconsistent file refresh behavior.
+**Additional issue:** Only `ExecutionManager` validates against `AgentConfigSchema`.
+ProposalSetup and BuildFollowup skip validation entirely.
 
-**Refactor:**
+**Impact:** Follow-up executions could behave differently than initial executions for
+identical inputs, especially when output counts change.
 
-- Build the file watcher pattern dynamically from `getIncludedExtensions(...)` for each category
-  (input/reference/auxiliary/media/audio/edited).
-- Consolidate file extension inclusion into the shared file-type registry.
+**Fix approach:**
+1. Extract `deriveUseMultipleOutputs(config, flags)` helper with single algorithm
+2. Add schema validation to ProposalSetup and BuildFollowup paths
+3. Document if any algorithm differences are intentional
+
+**Files:**
+- `src/webview/managers/ExecutionManager.ts:46-116`
+- `src/progressView/ProgressViewMessageHandler.ts:524-597, 1120-1226`
+- `src/utils/config/configConversion.ts:16-64` — existing `isFileTypeActive` helper
 
 **Acceptance Criteria:**
-
-- `MainViewProvider` derives its file watcher extension list from `getIncludedExtensions`.
-- Adding/removing extensions in config or code affects both file listing and file watching
-  consistently.
-
-**Evidence:**
-
-- Hardcoded file extension list exists in `MainViewProvider.setupFileWatcher`.
-- `getIncludedExtensions` already centralizes allowed extensions.
+- Single derivation algorithm (or documented intentional differences)
+- All execution paths validate config before dispatch
 
 ---
 
-## 3. Secondary Panel Orchestration (History/Profile/Memory)
+## 3. MainView Options Refresh — Wire loadOptions()
 
-**Priority:** Medium — reduces three near-identical methods to one, but the savings are modest
-(~5 lines each). Prioritized below Targets 1–2 because the duplication is less likely to drift.
+**Severity:** MEDIUM — Maintenance burden, latent inconsistency bug
+**Complexity:** LOW
 
-**Current State:**
+**Problem:**
+`loadOptions()` in `@frontend/agents/optionsLoader.ts` already does parallel computation
+of agent/model options but is not used by:
+- `MainViewProvider.refreshAgentOptions/refreshModelOptions` (lines 124-171)
+- `mainViewCommands.refreshAgentOptions/refreshModelOptions` (lines 43-116)
 
-- `HistoryViewProvider.showHistoryView`, `ProfileViewProvider.showProfileView`, and
-  `MemoryViewProvider.showMemoryView` all do the same pattern:
-  1. `createOrShowPanel(...)`
-  2. if existing, send data to webview
-- Note: `MemoryViewProvider` sends two messages (`sendMemoryData` + `sendMemoryEnabled`) in its
-  refresh callback, making it slightly different from the other two.
+Both paths duplicate the compute + postMessage pattern with different error handling.
 
-The logic is duplicated across three providers.
+**Latent bug:** `refreshAgentOptions` calls `refresh()` (agent index refresh) but
+`refreshModelOptions` does not — inconsistent behavior.
 
-**Trade-off with project guidelines:** CLAUDE.md states *"three similar lines of code is better
-than a premature abstraction"* and discourages helpers for one-time operations. This target is
-at exactly that boundary — three providers with a 5-line pattern. The justification for
-consolidation is:
+**Fix approach:**
+1. Have both `MainViewProvider` and `mainViewCommands` call `loadOptions()`
+2. Add error handling callback parameter to `loadOptions()` for view-specific UX
+3. Ensure both refresh agent index when either changes
 
-1. The pattern is mechanical (create-or-show + conditional refresh) with no view-specific logic
-   beyond the refresh callback.
-2. If additional secondary panels are added (e.g., a future Glossary or Citations panel), the
-   pattern would need to be copied again.
-3. `createOrShowPanel` already lives in `BaseWebviewProvider`, so the helper is a natural
-   extension of existing base-class responsibility.
-
-If the team judges that three instances do not warrant the abstraction, this target can be
-deferred or dropped without affecting the other four.
-
-**Refactor:**
-
-- Add a helper to `BaseWebviewProvider` that accepts:
-  - panel metadata (view type, title, view path)
-  - a callback to refresh data if already open
-- Replace the three view-specific `showXView` methods with the shared helper.
+**Files:**
+- `src/MainViewProvider.ts:124-171`
+- `src/commands/system/mainViewCommands.ts:43-116`
+- `src/frontend/agents/optionsLoader.ts:16-32`
 
 **Acceptance Criteria:**
-
-- The History/Profile/Memory panels use a shared panel-open helper.
-- View-specific data refresh remains in dedicated callbacks.
-
-**Evidence:**
-
-- Identical panel open + data refresh pattern exists across three providers.
+- Both provider and commands use `loadOptions()`
+- Consistent refresh behavior for agent and model options
 
 ---
 
-## 4. Single-Bundle Content Providers (URI Map Duplication)
+## 4. Workflow Proposal File Lists — Identical Render Logic
 
-**Priority:** Medium — four identical implementations differing only in a string key make this
-the clearest mechanical deduplication target with near-zero risk of behavioral change.
-(Note: `ProgressViewContentProvider` also adds a CSS URI, so the helper must support optional
-style bundles.)
+**Severity:** MEDIUM — ~50 lines of byte-for-byte identical code
+**Complexity:** LOW
 
-**Current State:**
+**Problem:**
+Two components have identical file list rendering:
+- `PermissionCard.renderWorkflowFiles()` (lines 285-334)
+- `RequestPanels.renderProposalFiles()` (lines 495-550)
 
-- `MainViewContentProvider`, `HistoryViewContentProvider`, `MemoryViewContentProvider`, and
-  `ProfileViewContentProvider` all implement identical `getModuleUris` logic, differing only
-  in the bundle folder name and key.
+Both include:
+- Identical `combine()` helper function
+- Same category order (Input, Reference, Auxiliary, Media, Output)
+- Same template structure and click handlers
 
-This is a duplicate logic path for a standardized pattern.
+**Fix:**
+Create shared helper in `src/progressView/frontend/components/helpers/workflowFilesList.ts`:
+- `buildWorkflowFileLists(proposal)` — assembles file categories
+- `renderWorkflowFilesList(fileLists, options)` — renders with configurable class names
 
-**Refactor:**
-
-- Add a helper in `BaseViewContentProvider` to build single-bundle URI maps based on a
-  `viewKey` and `bundleKey` configuration.
-- Replace explicit `getModuleUris` overrides with configuration-driven defaults.
+**Files:**
+- `src/progressView/frontend/components/PermissionCard.ts:285-334`
+- `src/progressView/frontend/components/RequestPanels.ts:495-550`
 
 **Acceptance Criteria:**
-
-- Single-bundle content providers no longer repeat manual `buildUri` calls.
-- Updating bundle paths or file names is done in one shared helper.
-
-**Evidence:**
-
-- The four single-bundle content providers build identical `dist/<view>/bundle.js` URIs.
+- Both components call shared helper
+- No duplicate `combine()` function remains
 
 ---
 
-## 5. Schema Dispatch Boilerplate in Message Handlers
+## Issues Removed (Not Worth Abstracting)
 
-**Priority:** Medium — the three handlers are currently in perfect lockstep with zero
-divergence, making consolidation safe today. However, if handlers are *intentionally* decoupled
-to allow independent evolution, consolidation would reduce that flexibility.
+The following items from prior audits were evaluated and removed:
 
-**Current State:**
-
-- `HistoryViewMessageHandler`, `MemoryViewMessageHandler`, and `ProfileViewMessageHandler`
-  share identical message-handling boilerplate:
-  - `withActiveView(...)`
-  - `dispatch*Inbound(...)`
-  - identical validation error logging
-  - identical "Unhandled command" warning
-
-This increases maintenance cost for any change in dispatch mechanics.
-
-**Divergence analysis:** As of this writing, the three `handleMessage` implementations are
-character-for-character identical (aside from the specific `dispatch*Inbound` function name).
-There is no historical evidence of intentional divergence — all three were introduced together
-and have been updated in lockstep. If a future handler needs custom pre/post-dispatch logic,
-the shared helper should accept optional hooks rather than requiring a full override.
-
-**Refactor:**
-
-- Add a reusable dispatch helper in `BaseViewMessageHandler` that accepts:
-  - `dispatchFn`
-  - `handlerRegistry`
-  - `view`
-- Keep per-view schemas and handler registries unchanged.
-- If a handler later needs custom behavior, it can override `handleMessage` directly (the
-  shared helper is a convenience, not a constraint).
-
-**Acceptance Criteria:**
-
-- History/Memory/Profile handlers delegate to a shared dispatch helper.
-- Logging and unhandled-command behavior remains consistent across views.
-
-**Evidence:**
-
-- The three message handlers have identical `handleMessage` bodies except for the
-  dispatch function used.
+| Item | Reason |
+|------|--------|
+| Open-file behavior | 3 functions serve different purposes (command, tool reuse, linting). Not duplication — intentionally distinct APIs |
+| Timestamp formatting | 1 line using toLocaleString vs utility. Inconsistency, not duplication. Not worth a shared helper |
+| Permission rejection feedback flow | Only 2 components (~15 lines each), different state shapes (boolean vs Set). Premature abstraction |
+| Secondary panel orchestration (showXView) | 3 providers, ~10 lines each, slight differences. At "premature abstraction" boundary per CLAUDE.md |
+| Content provider getModuleUris | 5-line pattern × 4 files, never changes, zero drift risk |
+| Schema dispatch boilerplate | Handlers are identical but intentionally decoupled for independent evolution |
+| Text polishing flows | Core logic (polishTextWithAI) is already shared; differences are intentional UX |
+| Latexdiff assembly | Minor arg divergence, underlying command handles both patterns |
+| State restore pipeline | Architectural difference, not direct code duplication |
+| File context formatting | Different formatting is intentional for different audiences |
 
 ---
 
 ## Risks & Mitigations
 
-| Risk                                            | Mitigation                                                                   |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| Abstraction becomes too generic                 | Keep helpers narrowly scoped to the repeated patterns only.                  |
-| Behavior drift in webview updates               | Add targeted tests or manual checks for each view before release.            |
-| Over-consolidation breaks view-specific nuances | Shared helpers accept callbacks/hooks for view-specific logic; any provider  |
-|                                                 | can override the base method directly to opt out without recreating the full |
-|                                                 | duplication (only the divergent provider departs from the shared path).      |
+| Risk | Mitigation |
+|------|------------|
+| File watcher change breaks extension loading | Test with various file types after change |
+| useMultipleOutputs unification changes behavior | Document current behavior first, add tests |
+| loadOptions() error handling differs by context | Add callback parameter, not forced uniformity |
 
-## Open Questions
+---
 
-- Should the shared MainView options refresher live in `@frontend/agents/` or `@common/webview`?
-- Is it worth standardizing `showXView` naming if we move logic into `BaseWebviewProvider`?
+## Supersedes
+
+This PRD supersedes and consolidates:
+- `docs/prd/prd-dual-logic-audit-2026-02.md` (deleted)
+- `docs/prd/dual-logic-impact-audit.md` (deleted)
+- `docs/prd-dual-logic-audit-2026-02.md` (deleted)
+
+Related completed PRDs (kept for reference):
+- `docs/prd/dual-logic-features.md` — ✅ Complete
+- `docs/prd/dual-logic-infrastructure.md` — ✅ Complete
