@@ -410,7 +410,7 @@ export class WebviewUpdater {
    */
   updateAll(
     state: ProgressViewState,
-    statuses?: Map<string, string>,
+    statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
     const streams = buildStreamInfos(

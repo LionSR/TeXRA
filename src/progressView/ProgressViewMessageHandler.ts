@@ -178,8 +178,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenMemoryView(),
 
       // Followup task
-      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: () =>
-        this.handleGetFollowupOptions(),
+      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: (data) =>
+        this.handleGetFollowupOptions(data),
       [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]: (data) =>
         this.handleSetupFollowup(data),
       [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: (data) =>
@@ -277,6 +277,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
+    this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
     this.provider.updateWebview({ forceRebuild: true });
@@ -301,6 +302,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }
+    this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -478,12 +480,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             });
           } else if (result.error) {
             await vscode.window.showErrorMessage(result.error);
+            this.postToActiveView({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+              error: result.error,
+            });
           }
         } catch (error) {
           const messageText = toErrorMessage(error);
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
+          this.postToActiveView({
+            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+            error: messageText,
+          });
           this.logger.error(
             this.channel,
             `Error polishing follow-up: ${messageText}`,
@@ -682,28 +692,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
   ): Promise<void> {
     const { file, base } = data;
-    const streamId = this.provider.state.activeStream;
-    if (streamId && file) {
-      try {
-        const fileLocation = createExternalLocation(file);
-        const content = await flexibleFS.read(fileLocation);
-        this.modelOutputBackups.set(file, { content, streamId });
-      } catch {
-        // Ignore backup errors
-      }
-    }
-
     await this.executeWithBaseFile(
       file,
       base,
       'Compare original',
-      (targetFile, baseFile) =>
-        vscode.commands.executeCommand(
+      async (targetFile, baseFile) => {
+        const streamId = this.provider.state.activeStream;
+        if (streamId && targetFile) {
+          try {
+            const fileLocation = createExternalLocation(targetFile);
+            const content = await flexibleFS.read(fileLocation);
+            this.modelOutputBackups.set(
+              this.getModelOutputBackupKey(streamId, targetFile),
+              { content, streamId },
+            );
+          } catch {
+            // Ignore backup errors
+          }
+        }
+
+        await vscode.commands.executeCommand(
           'texra.compare',
           pathToLocation(''), // inputFile unused
           pathToLocation(baseFile),
           pathToLocation(targetFile),
-        ),
+        );
+      },
     );
   }
 
@@ -712,6 +726,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const { file, base, prev } = data;
     const previousFile = prev ?? base;
+
+    if (!previousFile) {
+      this.logger.warn(
+        this.channel,
+        'Compare previous requested without base',
+        {
+          data: { file },
+        },
+      );
+      return;
+    }
 
     if (previousFile) {
       await vscode.commands.executeCommand(
@@ -734,7 +759,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.ACCEPT_FILE>,
   ): Promise<void> {
     const { file, base } = data;
-    const backup = file ? this.modelOutputBackups.get(file) : null;
+    const streamId = this.provider.state.activeStream;
+    const backupKey =
+      file && streamId ? this.getModelOutputBackupKey(streamId, file) : null;
+    const backup = backupKey ? this.modelOutputBackups.get(backupKey) : null;
     let currentContent: string | null = null;
 
     if (backup) {
@@ -775,7 +803,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     if (file) {
-      this.modelOutputBackups.delete(file);
+      if (backupKey) {
+        this.modelOutputBackups.delete(backupKey);
+      }
+    }
+  }
+
+  private getModelOutputBackupKey(streamId: StreamTabId, file: string): string {
+    return `${streamId}:${file}`;
+  }
+
+  private clearModelOutputBackups(streamId: StreamTabId): void {
+    const prefix = `${streamId}:`;
+    for (const key of this.modelOutputBackups.keys()) {
+      if (key.startsWith(prefix)) {
+        this.modelOutputBackups.delete(key);
+      }
     }
   }
 
@@ -823,7 +866,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Followup task handlers
   // ============================================================
 
-  private async handleGetFollowupOptions(): Promise<void> {
+  private async handleGetFollowupOptions(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS>,
+  ): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
@@ -833,6 +878,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+        stream: data.stream,
         workflowAgentsData: agentOptions.workflow,
         toolUseAgentsData: agentOptions.toolUse,
         modelOptionsData: modelOptions,

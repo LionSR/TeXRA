@@ -18,10 +18,10 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
+import { STREAM_STATUS } from './constants';
 import {
   updateToolUseState,
   updateWorkflowState,
@@ -83,7 +83,7 @@ function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
 ): void {
-  ctx.setPermissions([...ctx.getPermissions(), permission]);
+  ctx.setPermissions([permission, ...ctx.getPermissions()]);
 }
 
 function removePrompt(
@@ -121,13 +121,23 @@ function updateStreamInfo(
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
+      clearPendingLogUpdatesForStream(key);
     }
   }
 
   for (const stream of streams) {
     const backendState = backendStates?.[stream.name];
     if (backendState) {
-      nextStates.set(stream.name, { ...backendState, info: stream });
+      const existing = nextStates.get(stream.name);
+      const frontendOnlyFields =
+        existing && isToolUseState(existing)
+          ? { followUpText: existing.followUpText }
+          : {};
+      nextStates.set(stream.name, {
+        ...backendState,
+        ...frontendOnlyFields,
+        info: stream,
+      });
     } else {
       const existing =
         nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
@@ -164,17 +174,30 @@ const handlers: HandlerRegistry = {
   // Stream management
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
     const previousState = ctx.getState();
-    const activeStream = data.activeStream ?? null;
+    const activeStream = data.activeStream || null;
     const updated = updateStreamInfo(
       previousState,
       data.streams,
       data.streamStates,
     );
+    const validStreamIds = new Set(data.streams.map((stream) => stream.name));
+    const fallbackStreamId = data.streams.at(0)?.name ?? null;
+    const nextActiveStreamId = activeStream
+      ? validStreamIds.has(activeStream)
+        ? activeStream
+        : fallbackStreamId
+      : fallbackStreamId;
+    const nextFollowupOptions = new Map(
+      [...previousState.followupOptionsByStream].filter(([streamId]) =>
+        validStreamIds.has(streamId),
+      ),
+    );
 
     ctx.setState(() => ({
       ...updated,
-      activeStreamId: activeStream || null,
+      activeStreamId: nextActiveStreamId,
       streamFilter: data.agentFilter,
+      followupOptionsByStream: nextFollowupOptions,
     }));
   },
 
@@ -197,6 +220,11 @@ const handlers: HandlerRegistry = {
       streams: nextStreams,
       streamStates: nextStates,
       activeStreamId: nextActiveStreamId,
+      followupOptionsByStream: new Map(
+        [...state.followupOptionsByStream].filter(
+          ([streamKey]) => streamKey !== streamId,
+        ),
+      ),
     }));
   },
 
@@ -207,6 +235,7 @@ const handlers: HandlerRegistry = {
       streams: [],
       streamStates: new Map(),
       activeStreamId: null,
+      followupOptionsByStream: new Map(),
     }));
   },
 
@@ -253,6 +282,17 @@ const handlers: HandlerRegistry = {
       };
 
       if (isWorkflowState(prev)) {
+        if (isClear) {
+          return {
+            ...baseUpdate,
+            activeRunId: null,
+            selectedRunId: null,
+            runInstructions: {},
+            runUsage: {},
+            runFiles: {},
+            runMissingOutputs: {},
+          };
+        }
         return {
           ...baseUpdate,
           activeRunId: activeRunId ?? prev.activeRunId,
@@ -388,11 +428,15 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
     const { stream, instruction, runId: providedRunId } = data;
     if (!stream) return;
+    if (!providedRunId) {
+      console.warn(
+        '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
+      );
+      return;
+    }
 
     updateWorkflowState(ctx, stream, (prev) => {
-      // Use provided runId from backend if available, otherwise resolve from state
-      const runId =
-        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
+      const runId = providedRunId;
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
@@ -434,18 +478,37 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP]: (data, ctx) => {
     const { streamId, id, status, endTime } = data.update;
-    ctx.setStreamState(streamId, (prev) => ({
-      ...prev,
-      taskGroups: prev.taskGroups.map((group) =>
-        group.id === id
-          ? {
-              ...group,
-              status: status ?? group.status,
-              endTime: endTime ?? group.endTime,
-            }
-          : group,
-      ),
-    }));
+    ctx.setStreamState(streamId, (prev) => {
+      const existingGroup = prev.taskGroups.find((group) => group.id === id);
+      if (!existingGroup) {
+        return {
+          ...prev,
+          taskGroups: [
+            ...prev.taskGroups,
+            {
+              id,
+              name: id,
+              startTime: Date.now(),
+              status: status ?? STREAM_STATUS.RUNNING,
+              endTime,
+            },
+          ],
+        };
+      }
+
+      return {
+        ...prev,
+        taskGroups: prev.taskGroups.map((group) =>
+          group.id === id
+            ? {
+                ...group,
+                status: status ?? group.status,
+                endTime: endTime ?? group.endTime,
+              }
+            : group,
+        ),
+      };
+    });
   },
 
   // Tool-use specific
@@ -516,6 +579,17 @@ const handlers: HandlerRegistry = {
     }));
   },
 
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
+    const streamId = ctx.getState().activeStreamId;
+    if (!streamId) return;
+
+    updateToolUseState(ctx, streamId, (prev) => ({
+      ...prev,
+      polishedText: prev.followUpText ?? '',
+      shouldFocusFollowUp: true,
+    }));
+  },
+
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (data, ctx) => {
     const streamId = ctx.getState().activeStreamId;
     if (!streamId) return;
@@ -537,11 +611,17 @@ const handlers: HandlerRegistry = {
     setActiveStreamRecording(ctx, false),
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
-    const { command: _command, ...options } = data;
+    const { command: _command, stream, ...options } = data;
+    if (!stream) {
+      return;
+    }
 
     ctx.setState((prev) => ({
       ...prev,
-      followupOptions: options,
+      followupOptionsByStream: new Map(prev.followupOptionsByStream).set(
+        stream,
+        options,
+      ),
     }));
   },
 };
