@@ -18,7 +18,6 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -83,7 +82,7 @@ function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
 ): void {
-  ctx.setPermissions([...ctx.getPermissions(), permission]);
+  ctx.setPermissions([permission, ...ctx.getPermissions()]);
 }
 
 function removePrompt(
@@ -121,6 +120,7 @@ function updateStreamInfo(
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
+      clearPendingLogUpdatesForStream(key);
     }
   }
 
@@ -164,17 +164,29 @@ const handlers: HandlerRegistry = {
   // Stream management
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
     const previousState = ctx.getState();
-    const activeStream = data.activeStream ?? null;
+    const activeStream = data.activeStream ?? previousState.activeStreamId;
     const updated = updateStreamInfo(
       previousState,
       data.streams,
       data.streamStates,
     );
+    const knownStreams = new Set(data.streams.map((stream) => stream.name));
+    const nextFollowupOptions = new Map(updated.followupOptionsByStream);
+    for (const key of nextFollowupOptions.keys()) {
+      if (!knownStreams.has(key)) {
+        nextFollowupOptions.delete(key);
+      }
+    }
+    const nextActiveStreamId =
+      activeStream && knownStreams.has(activeStream)
+        ? activeStream
+        : (data.streams[0]?.name ?? null);
 
     ctx.setState(() => ({
       ...updated,
-      activeStreamId: activeStream || null,
+      activeStreamId: nextActiveStreamId,
       streamFilter: data.agentFilter,
+      followupOptionsByStream: nextFollowupOptions,
     }));
   },
 
@@ -184,6 +196,8 @@ const handlers: HandlerRegistry = {
 
     const nextStates = new Map(state.streamStates);
     nextStates.delete(streamId);
+    const nextFollowupOptions = new Map(state.followupOptionsByStream);
+    nextFollowupOptions.delete(streamId);
 
     const nextStreams = state.streams.filter((s) => s.name !== streamId);
     const nextActiveStreamId =
@@ -197,6 +211,7 @@ const handlers: HandlerRegistry = {
       streams: nextStreams,
       streamStates: nextStates,
       activeStreamId: nextActiveStreamId,
+      followupOptionsByStream: nextFollowupOptions,
     }));
   },
 
@@ -207,6 +222,7 @@ const handlers: HandlerRegistry = {
       streams: [],
       streamStates: new Map(),
       activeStreamId: null,
+      followupOptionsByStream: new Map(),
     }));
   },
 
@@ -216,7 +232,11 @@ const handlers: HandlerRegistry = {
 
     if (!stream && action === 'clear') {
       pendingLogUpdates.clear();
-      ctx.setState((prev) => ({ ...prev, streamStates: new Map() }));
+      ctx.setState((prev) => ({
+        ...prev,
+        streamStates: new Map(),
+        followupOptionsByStream: new Map(),
+      }));
       return;
     }
 
@@ -253,6 +273,17 @@ const handlers: HandlerRegistry = {
       };
 
       if (isWorkflowState(prev)) {
+        if (isClear) {
+          return {
+            ...baseUpdate,
+            activeRunId: null,
+            selectedRunId: null,
+            runInstructions: {},
+            runUsage: {},
+            runFiles: {},
+            runMissingOutputs: {},
+          };
+        }
         return {
           ...baseUpdate,
           activeRunId: activeRunId ?? prev.activeRunId,
@@ -390,9 +421,13 @@ const handlers: HandlerRegistry = {
     if (!stream) return;
 
     updateWorkflowState(ctx, stream, (prev) => {
-      // Use provided runId from backend if available, otherwise resolve from state
-      const runId =
-        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
+      if (!providedRunId) {
+        console.warn(
+          '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
+        );
+        return prev;
+      }
+      const runId = providedRunId;
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
@@ -436,15 +471,26 @@ const handlers: HandlerRegistry = {
     const { streamId, id, status, endTime } = data.update;
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
-      taskGroups: prev.taskGroups.map((group) =>
-        group.id === id
-          ? {
-              ...group,
-              status: status ?? group.status,
-              endTime: endTime ?? group.endTime,
-            }
-          : group,
-      ),
+      taskGroups: prev.taskGroups.some((group) => group.id === id)
+        ? prev.taskGroups.map((group) =>
+            group.id === id
+              ? {
+                  ...group,
+                  status: status ?? group.status,
+                  endTime: endTime ?? group.endTime,
+                }
+              : group,
+          )
+        : [
+            ...prev.taskGroups,
+            {
+              id,
+              name: id,
+              startTime: Date.now(),
+              status: status ?? 'running',
+              ...(endTime && { endTime }),
+            },
+          ],
     }));
   },
 
@@ -527,6 +573,10 @@ const handlers: HandlerRegistry = {
     }));
   },
 
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (_data, ctx) => {
+    ctx.getFollowUpRef()?.clearPolishState();
+  },
+
   [PROGRESS_VIEW_COMMANDS.RECORDING_STARTED]: (_data, ctx) =>
     setActiveStreamRecording(ctx, true),
 
@@ -538,11 +588,14 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
     const { command: _command, ...options } = data;
+    const streamId = ctx.getState().activeStreamId;
+    if (!streamId) return;
 
-    ctx.setState((prev) => ({
-      ...prev,
-      followupOptions: options,
-    }));
+    ctx.setState((prev) => {
+      const next = new Map(prev.followupOptionsByStream);
+      next.set(streamId, options);
+      return { ...prev, followupOptionsByStream: next };
+    });
   },
 };
 

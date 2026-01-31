@@ -18,6 +18,7 @@ import { HistoryViewEvents } from '../events';
 export class SearchBar extends LitElement {
   static override styles = [designTokens, codiconStyles, historyViewStyles];
 
+  @property({ type: String }) searchTerm = '';
   @property({ type: String }) matchCount = '';
 
   private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -66,6 +67,7 @@ export class SearchBar extends LitElement {
           class="search-input"
           type="search"
           placeholder="Search history items..."
+          .value=${this.searchTerm}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
         ></vscode-textfield>

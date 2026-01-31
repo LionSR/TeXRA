@@ -13,20 +13,27 @@ export interface OptionsPayload {
   defaultMergeModel: string;
 }
 
-export async function loadOptions(): Promise<OptionsPayload> {
-  const [modelOptions, agentOptions] = await Promise.all([
-    computeModelOptionsData(),
-    computeAgentOptionsData(),
-  ]);
+export async function loadOptions(
+  onError?: (error: unknown) => void,
+): Promise<OptionsPayload | null> {
+  try {
+    const [modelOptions, agentOptions] = await Promise.all([
+      computeModelOptionsData(),
+      computeAgentOptionsData(),
+    ]);
 
-  const defaultMergeModel = getConfig<string>(
-    'texra.merge.defaultModel',
-    'gemini3f',
-  );
+    const defaultMergeModel = getConfig<string>(
+      'texra.merge.defaultModel',
+      'gemini3f',
+    );
 
-  return {
-    agentOptions,
-    modelOptions,
-    defaultMergeModel,
-  };
+    return {
+      agentOptions,
+      modelOptions,
+      defaultMergeModel,
+    };
+  } catch (error) {
+    onError?.(error);
+    return null;
+  }
 }

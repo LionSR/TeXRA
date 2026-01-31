@@ -35,7 +35,7 @@ export interface ProgressState {
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   streamStates: Map<StreamTabId, StreamState>;
-  followupOptions: FollowupOptionsState | null;
+  followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
 export function createInitialState(): ProgressState {
@@ -45,7 +45,7 @@ export function createInitialState(): ProgressState {
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),
-    followupOptions: null,
+    followupOptionsByStream: new Map(),
   };
 }
 

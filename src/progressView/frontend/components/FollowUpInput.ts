@@ -171,7 +171,7 @@ export class FollowUpInput extends LitElement {
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
   private handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.emitSend();
     }
@@ -274,6 +274,9 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
+    if (!this.value.trim()) {
+      return;
+    }
     this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
   }
@@ -284,5 +287,9 @@ export class FollowUpInput extends LitElement {
 
   private updateValue(value: string): void {
     this.dispatchEvent(ProgressEvents.followupChange({ value }));
+  }
+
+  clearPolishState(): void {
+    this.polishing = false;
   }
 }

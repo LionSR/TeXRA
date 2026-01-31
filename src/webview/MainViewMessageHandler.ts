@@ -412,18 +412,24 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(undefined, webviewView);
     try {
-      const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
-        loadOptions(),
+      const [options, authStatus] = await Promise.all([
+        loadOptions((error) => {
+          this.logger.error(
+            this.channel,
+            `Failed to load options: ${toErrorMessage(error)}`,
+          );
+        }),
         getAuthStatus(),
       ]);
+      if (!options) return;
 
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptions,
+        optionsData: options.modelOptions,
       });
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: agentOptions,
+        optionsData: options.agentOptions,
       });
 
       // Show login banner if not authenticated and banner not dismissed

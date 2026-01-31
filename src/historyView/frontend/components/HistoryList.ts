@@ -49,6 +49,7 @@ export class HistoryList extends LitElement {
 
   /** Match counts per item, keyed by item.id - used to compute highlighted index */
   @state() private matchCounts: Map<string, number> = new Map();
+  @state() private searchVersion = 0;
 
   @queryAll('history-item')
   private historyItemElements!: Array<
@@ -96,6 +97,7 @@ export class HistoryList extends LitElement {
   // === Internal search operations (called from willUpdate) ===
 
   private performClearSearch(): void {
+    this.searchVersion += 1;
     this.matchCounts = new Map();
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
@@ -111,6 +113,7 @@ export class HistoryList extends LitElement {
       this.updateMatchCount();
       return;
     }
+    this.searchVersion += 1;
     void this.applySearchToItems(term);
   }
 
@@ -161,12 +164,16 @@ export class HistoryList extends LitElement {
   }
 
   private async applySearchToItems(term: string): Promise<void> {
+    const currentVersion = this.searchVersion;
     const historyItems = this.getHistoryItems();
     const counts = await Promise.all(
       historyItems.map(
         (item) => item.applySearch?.(term) ?? Promise.resolve(0),
       ),
     );
+    if (currentVersion !== this.searchVersion) {
+      return;
+    }
 
     // Store match counts per item for computing highlighted indices
     const newMatchCounts = new Map<string, number>();

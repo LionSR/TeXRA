@@ -270,6 +270,11 @@ export const FollowUpTextTranscribedMessageSchema = z.object({
   text: z.string(),
 });
 
+export const FollowUpTextPolishErrorMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
+  error: z.string().optional(),
+});
+
 export const ProgressRecordingStartedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RECORDING_STARTED),
 });
@@ -334,6 +339,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     ResolveAgentProposalMessageSchema,
     FollowUpTextPolishedMessageSchema,
     FollowUpTextTranscribedMessageSchema,
+    FollowUpTextPolishErrorMessageSchema,
     ProgressRecordingStartedMessageSchema,
     ProgressRecordingStoppedMessageSchema,
     ProgressRecordingErrorMessageSchema,

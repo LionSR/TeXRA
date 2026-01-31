@@ -117,11 +117,12 @@ export class OutputFilesSection extends LitElement {
       (file) => html`
         <div class="file-item" data-path=${file}>
           <span class="file-name">${file}</span>
-          <span
+          <button
+            type="button"
             class="remove-button codicon codicon-trash"
-            role="button"
+            aria-label=${`Remove ${file}`}
             @click=${() => this.handleRemoveFile(file)}
-          ></span>
+          ></button>
         </div>
       `,
     )}`;
@@ -136,14 +137,15 @@ export class OutputFilesSection extends LitElement {
       <div class="file-select" data-expanded=${String(this.currentExpanded)}>
         <div class="file-select-header">
           <div class="file-select-label-group">
-            <span
+            <button
+              type="button"
               id="toggleOutputFiles"
               class="toggle-icon"
               title="Show or hide additional files for the agent's output"
               @click=${this.handleToggle}
             >
               <i class="codicon ${chevronClass}"></i>
-            </span>
+            </button>
             <span
               class="optional-label"
               title="List the files that should receive the agent's output"

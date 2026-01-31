@@ -7,7 +7,11 @@ import { sortStreams } from '@shared/streams/streamSort';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import type {
+  AgentCategoryFilter,
+  StreamStatus,
+  StreamTabInfo,
+} from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -80,7 +84,7 @@ function buildStreamInfo(
     lastTimestamp,
     inputFile,
     creationTimestamp,
-    status: statuses?.get(id),
+    status: statuses?.get(id) as StreamStatus | undefined,
     executionId: state.getExecutionId(id),
   };
 }

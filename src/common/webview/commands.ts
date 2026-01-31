@@ -215,6 +215,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   POLISH_FOLLOW_UP: 'polishFollowUp',
   FOLLOW_UP_TEXT_POLISHED: 'followUpTextPolished',
   FOLLOW_UP_TEXT_TRANSCRIBED: 'followUpTextTranscribed',
+  FOLLOW_UP_TEXT_POLISH_ERROR: 'followUpTextPolishError',
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
   RECORDING_STOPPED: 'recordingStopped',

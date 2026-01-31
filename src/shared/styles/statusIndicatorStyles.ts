@@ -50,6 +50,14 @@ export const statusIndicatorStyles: CSSResult = css`
     animation: pulse-scale 1.5s infinite;
   }
 
+  .status-indicator.is-initializing,
+  .tab-status.is-initializing {
+    background-color: var(--vscode-descriptionForeground);
+    box-shadow: 0 0 4px var(--vscode-descriptionForeground);
+    opacity: 0.85;
+    animation: pulse-scale 2.5s infinite;
+  }
+
   .status-indicator.is-ready,
   .tab-status.is-ready {
     background-color: var(--vscode-descriptionForeground);
@@ -76,5 +84,9 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-text.is-waiting,
   .status-text.is-resuming {
     color: var(--vscode-textLink-foreground);
+  }
+
+  .status-text.is-initializing {
+    color: var(--vscode-descriptionForeground);
   }
 `;

@@ -14,10 +14,12 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 // Local imports - shared schemas
 import {
   AGENT_CATEGORY,
+  AgentCategoryFilterSchema,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { resolveRunId } from '@shared/streams/runSelection';
+import { StreamSortSchema } from '@shared/streams/streamSort';
 
 // Local imports - webview commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -35,8 +37,8 @@ import {
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
-  streamFilter: z.string().prefault('all') as z.ZodType<StreamFilter>,
-  streamSort: z.string().prefault('time') as z.ZodType<StreamSort>,
+  streamFilter: AgentCategoryFilterSchema.catch('all'),
+  streamSort: StreamSortSchema.catch('time'),
 });
 
 type ProgressViewPreferences = z.infer<typeof ProgressViewPrefsSchema>;
@@ -247,11 +249,8 @@ export class ProgressApp extends BaseWebviewApp {
 
   private getActiveStreamInfo(): StreamTabInfo | null {
     if (!this.appState.activeStreamId) return null;
-    // Search in filtered streams to respect current filter
-    // This ensures we don't show content for streams hidden by filter
-    const filteredStreams = getFilteredStreams(this.appState);
     return (
-      filteredStreams.find(
+      this.appState.streams.find(
         (stream) => stream.name === this.appState.activeStreamId,
       ) ?? null
     );
@@ -271,13 +270,15 @@ export class ProgressApp extends BaseWebviewApp {
       activeStream.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
-    const runId = resolveRunId(streamState, { mode: 'strict' });
+    const runId = resolveRunId(streamState, { mode: 'fallback' });
+    const followupOptions =
+      this.appState.followupOptionsByStream.get(activeStream.name) ?? null;
 
     this.streamContextValue = {
       streamInfo: activeStream,
       streamState,
       runId,
-      followupOptions: this.appState.followupOptions,
+      followupOptions,
       isToolUse,
     };
     this.permissionsContextValue = this.permissions;

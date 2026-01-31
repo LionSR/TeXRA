@@ -55,6 +55,8 @@ export class FileSelectGroup extends LitElement {
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
 
+  private wasExpanded = false;
+
   private sortableController = new SortableController(
     this,
     () => this.fileListElement,
@@ -69,9 +71,11 @@ export class FileSelectGroup extends LitElement {
   );
 
   protected override updated(changedProps: Map<string, unknown>): void {
-    if (changedProps.has('config')) {
+    const isExpanded = this.currentListVisible;
+    if (changedProps.has('config') || (isExpanded && !this.wasExpanded)) {
       this.sortableController.reinitialize();
     }
+    this.wasExpanded = isExpanded;
   }
 
   private get listId(): string {
@@ -192,12 +196,8 @@ export class FileSelectGroup extends LitElement {
   }
 
   private handleFocusOut(event: FocusEvent): void {
-    const nextTarget = event.relatedTarget as Node | null;
-    // Check both light DOM and shadow DOM for focus containment
-    const containsFocus =
-      nextTarget !== null &&
-      (this.contains(nextTarget) || this.shadowRoot?.contains(nextTarget));
-    if (containsFocus) return;
+    const path = event.composedPath?.() ?? [];
+    if (path.includes(this)) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
   }
@@ -242,10 +242,15 @@ export class FileSelectGroup extends LitElement {
           toggleable
           aria-haspopup="true"
           aria-expanded=${this.toolConfigMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
+          ?checked=${this.toolConfigMenuOpen}
           @click=${() => this.toggleMenu('toolConfig')}
         >
           <i class="codicon ${chevronClass}"></i>
+          ${when(
+            hasChecked,
+            () =>
+              html`<span class="dropdown-indicator" aria-hidden="true"></span>`,
+          )}
         </vscode-toolbar-button>
         <vscode-context-menu
           id="toolConfigOptions"
@@ -301,10 +306,15 @@ export class FileSelectGroup extends LitElement {
           toggleable
           aria-haspopup="true"
           aria-expanded=${this.autoExtractMenuOpen ? 'true' : 'false'}
-          ?checked=${hasChecked}
+          ?checked=${this.autoExtractMenuOpen}
           @click=${() => this.toggleMenu('autoExtract')}
         >
           <i class="codicon ${chevronClass}"></i>
+          ${when(
+            hasChecked,
+            () =>
+              html`<span class="dropdown-indicator" aria-hidden="true"></span>`,
+          )}
         </vscode-toolbar-button>
         <vscode-context-menu
           id="autoExtractOptions"
@@ -362,11 +372,12 @@ export class FileSelectGroup extends LitElement {
       (file) => html`
         <div class="file-item" data-path=${file}>
           <span class="file-name">${file}</span>
-          <span
+          <button
+            type="button"
             class="remove-button codicon codicon-trash"
-            role="button"
+            aria-label=${`Remove ${file}`}
             @click=${() => this.handleRemoveFile(file)}
-          ></span>
+          ></button>
         </div>
       `,
     )}`;
@@ -425,14 +436,15 @@ export class FileSelectGroup extends LitElement {
               title=${config.emptyTitle}
               @click=${this.handleEmptyFile}
             ></vscode-toolbar-button>
-            <span
+            <button
+              type="button"
               id=${toggleId}
               class="toggle-icon"
               title=${config.toggleTitle}
               @click=${this.handleToggleList}
             >
               <i class="codicon ${chevronClass}"></i>
-            </span>
+            </button>
             <vscode-toolbar-button
               id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
                 1,

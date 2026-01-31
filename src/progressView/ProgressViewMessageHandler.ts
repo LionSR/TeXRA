@@ -50,6 +50,7 @@ import {
 } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import { renderPrompt } from '@utils/prompt/promptUtils';
+import { deriveUseMultipleOutputs } from '@utils/config/deriveUseMultipleOutputs';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
@@ -277,6 +278,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
+    this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
     this.provider.updateWebview({ forceRebuild: true });
@@ -301,6 +303,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }
+    this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -450,6 +453,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const taskState = this.provider.state.getTaskState(data.stream);
     if (!taskState) return;
 
+    const view = this.getActiveView();
+    const postPolishError = (error?: string) => {
+      view?.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+        error,
+      });
+    };
+
     const fileContext = buildFileContextFromTaskState(taskState);
 
     await vscode.window.withProgress(
@@ -471,16 +482,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
 
           if (result.success) {
-            const view = this.getActiveView();
             view?.webview.postMessage({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
               text: result.text,
             });
           } else if (result.error) {
+            postPolishError(result.error);
             await vscode.window.showErrorMessage(result.error);
           }
         } catch (error) {
           const messageText = toErrorMessage(error);
+          postPolishError(messageText);
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
@@ -554,6 +566,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           output: false,
         };
 
+    const outputFiles = isWorkflow ? proposal.outputFiles ?? [] : [];
+    const useMultipleOutputs = deriveUseMultipleOutputs({
+      isToolUse: !isWorkflow,
+      outputFiles,
+      outputFilesActive: activeFiles.output,
+      previousUseMultipleOutputs: isWorkflow
+        ? proposal.useMultipleOutputs
+        : undefined,
+    });
+
     const agentConfig = AgentConfigSchema.parse({
       agent: proposal.agent,
       model: proposal.model,
@@ -568,8 +590,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         auxiliaryFiles: proposal.auxiliaryFiles,
         mediaFile: proposal.mediaFile,
         mediaFiles: proposal.mediaFiles,
-        outputFiles: proposal.outputFiles,
-        useMultipleOutputs: proposal.useMultipleOutputs,
+        outputFiles,
+        useMultipleOutputs,
         inputFilesActive: activeFiles.input,
         referenceFilesActive: activeFiles.reference,
         auxiliaryFilesActive: activeFiles.auxiliary,
@@ -682,12 +704,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
   ): Promise<void> {
     const { file, base } = data;
+    if (!base) {
+      await this.executeWithBaseFile(file, base, 'Compare original', () =>
+        Promise.resolve(),
+      );
+      return;
+    }
     const streamId = this.provider.state.activeStream;
     if (streamId && file) {
       try {
         const fileLocation = createExternalLocation(file);
         const content = await flexibleFS.read(fileLocation);
-        this.modelOutputBackups.set(file, { content, streamId });
+        const key = this.buildModelOutputBackupKey(streamId, file);
+        this.modelOutputBackups.set(key, { content, streamId });
       } catch {
         // Ignore backup errors
       }
@@ -713,19 +742,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { file, base, prev } = data;
     const previousFile = prev ?? base;
 
-    if (previousFile) {
-      await vscode.commands.executeCommand(
-        'texra.latexdiff',
-        undefined,
-        previousFile,
-        file,
-      );
+    if (!previousFile) {
+      return;
     }
+
+    await vscode.commands.executeCommand(
+      'texra.latexdiff',
+      undefined,
+      previousFile,
+      file,
+    );
 
     await vscode.commands.executeCommand(
       'texra.compare',
       pathToLocation(''), // inputFile unused
-      pathToLocation(previousFile || ''),
+      pathToLocation(previousFile),
       pathToLocation(file),
     );
   }
@@ -734,7 +765,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.ACCEPT_FILE>,
   ): Promise<void> {
     const { file, base } = data;
-    const backup = file ? this.modelOutputBackups.get(file) : null;
+    const streamId = this.provider.state.activeStream;
+    const backupKey =
+      streamId && file ? this.buildModelOutputBackupKey(streamId, file) : null;
+    const backup = backupKey ? this.modelOutputBackups.get(backupKey) : null;
     let currentContent: string | null = null;
 
     if (backup) {
@@ -775,7 +809,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     if (file) {
-      this.modelOutputBackups.delete(file);
+      if (backupKey) {
+        this.modelOutputBackups.delete(backupKey);
+      }
     }
   }
 
@@ -827,23 +863,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const view = this.getActiveView();
     if (!view) return;
 
-    try {
-      const { agentOptions, modelOptions, defaultMergeModel } =
-        await loadOptions();
-
-      view.webview.postMessage({
-        command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-        workflowAgentsData: agentOptions.workflow,
-        toolUseAgentsData: agentOptions.toolUse,
-        modelOptionsData: modelOptions,
-        defaultMergeModel,
-      });
-    } catch (error) {
+    const options = await loadOptions((error) => {
       this.logger.error(
         this.channel,
         `Failed to get followup options: ${toErrorMessage(error)}`,
       );
-    }
+    });
+    if (!options) return;
+
+    view.webview.postMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+      workflowAgentsData: options.agentOptions.workflow,
+      toolUseAgentsData: options.agentOptions.toolUse,
+      modelOptionsData: options.modelOptions,
+      defaultMergeModel: options.defaultMergeModel,
+    });
   }
 
   private async handleSetupFollowup(
@@ -938,6 +972,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
     await execute(file, base);
+  }
+
+  private buildModelOutputBackupKey(
+    streamId: StreamTabId,
+    file: string,
+  ): string {
+    return `${streamId}:${file}`;
+  }
+
+  private clearModelOutputBackups(streamId: StreamTabId): void {
+    const prefix = `${streamId}:`;
+    for (const key of this.modelOutputBackups.keys()) {
+      if (key.startsWith(prefix)) {
+        this.modelOutputBackups.delete(key);
+      }
+    }
   }
 
   private findOutputDirectory(
@@ -1193,11 +1243,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ]
       : originalConfig.outputFiles;
 
-    const useMultipleOutputs =
-      (attachAgentOutputs && outputFiles.length > 1) ||
-      originalConfig.useMultipleOutputs;
+    const useMultipleOutputs = deriveUseMultipleOutputs({
+      isToolUse: isChat,
+      outputFiles,
+      previousUseMultipleOutputs: originalConfig.useMultipleOutputs,
+      outputFilesActive: attachAgentOutputs,
+    });
 
-    const newConfig = {
+    const newConfig = AgentConfigSchema.parse({
       ...originalConfig,
       agent,
       model,
@@ -1208,7 +1261,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       referenceFiles: mergedReferenceFiles,
       instruction,
       agentCategory,
-    } as AgentConfig;
+    });
 
     if (isChat) {
       return { agentConfig: newConfig } as TaskState;

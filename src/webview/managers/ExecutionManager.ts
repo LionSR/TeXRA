@@ -1,18 +1,31 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+
+// Local imports - agent
 import type { AgentConfigInput } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+
+// Local imports - common
 import { validateExecutionRequest } from '@common/execution/executionRequests';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
+import { deriveUseMultipleOutputs } from '@utils/config/deriveUseMultipleOutputs';
 import { capitalize } from '@utils/text/stringUtils';
+
+// Third-party imports - types
 import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
@@ -83,6 +96,12 @@ export class ExecutionManager {
       : ToolConfigSchema.parse(message);
 
     // Schema provides defaults via .prefault(), we only override conditional fields
+    const useMultipleOutputs = deriveUseMultipleOutputs({
+      isToolUse,
+      outputFiles,
+      outputFilesActive: message.outputFilesActive,
+    });
+
     const request = {
       config: {
         ...message,
@@ -90,9 +109,7 @@ export class ExecutionManager {
           ? AgentCategory.ToolUse
           : AgentCategory.Workflow,
         outputFiles,
-        useMultipleOutputs:
-          !isToolUse &&
-          (Boolean(message.outputFilesActive) || outputFiles.length > 1),
+        useMultipleOutputs,
         toolConfig,
         mediaFile: mapMedia(message.mediaFile ?? null),
         mediaFiles: (message.mediaFiles ?? [])

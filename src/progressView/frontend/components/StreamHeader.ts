@@ -19,6 +19,7 @@ import {
   TOOLBAR_BUTTONS,
 } from '../constants';
 import { ProgressEvents } from '../events';
+import { findClosestInComposedPath } from '../utils';
 import type { StreamState } from '../store';
 
 // Local imports - shared schemas
@@ -44,6 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   [STREAM_STATUS.READY]: 'Ready',
   [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
   [STREAM_STATUS.RESUMING]: 'Resuming',
+  [STREAM_STATUS.INITIALIZING]: 'Initializing',
 };
 
 /**
@@ -95,6 +97,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ],
+  [STREAM_STATUS.INITIALIZING]: [ELEMENT_IDS.STOP_STREAM_BTN],
 };
 
 /** Buttons that depend on having an executionId */
@@ -433,9 +436,10 @@ export class StreamHeader extends LitElement {
   }
 
   private handleToolbarClick(event: MouseEvent) {
-    const target = event.target as Element | null;
-    if (!target) return;
-    const button = target.closest('[data-command]') as HTMLElement | null;
+    const button = findClosestInComposedPath<HTMLElement>(
+      event,
+      '[data-command]',
+    );
     if (!button || button.hasAttribute('disabled')) return;
 
     const command = button.dataset.command;

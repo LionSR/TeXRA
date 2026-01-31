@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 
 // Local imports - agent
-import { refresh, computeAgentOptionsData } from '@agent/index';
+import { refresh } from '@agent/index';
 
 // Local imports - common
 import {
@@ -14,10 +14,12 @@ import {
   MAIN_VIEW_COMMANDS,
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
+import { toErrorMessage } from '@common/errors';
+import { getFilterExtensions } from '@common/files/fileTypeUtils';
 
 // Local imports - frontend
 import { agentDirectories } from '@frontend/agents';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import { loadOptions } from '@frontend/agents/optionsLoader';
 import { watchConfig, getConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -148,7 +150,14 @@ export class MainViewProvider
     // Refresh the agent index to pick up configuration changes
     await refresh();
 
-    const optionsData = await computeAgentOptionsData();
+    const options = await loadOptions((error) => {
+      const message = toErrorMessage(error);
+      void vscode.window.showErrorMessage(
+        `Failed to refresh agent options: ${message}`,
+      );
+    });
+    if (!options) return;
+    const optionsData = options.agentOptions;
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
@@ -163,7 +172,15 @@ export class MainViewProvider
     if (!this._view) {
       return;
     }
-    const optionsData = await computeModelOptionsData();
+    await refresh();
+    const options = await loadOptions((error) => {
+      const message = toErrorMessage(error);
+      void vscode.window.showErrorMessage(
+        `Failed to refresh model options: ${message}`,
+      );
+    });
+    if (!options) return;
+    const optionsData = options.modelOptions;
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsData,
@@ -172,8 +189,15 @@ export class MainViewProvider
 
   private setupFileWatcher() {
     // Create a file system watcher for relevant file types
-    const filePattern =
-      '**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,heic,heif,webp,wav,mp3,m4a,aiff,aac,ogg,flac}';
+    const allExtensions = [
+      ...getFilterExtensions('input'),
+      ...getFilterExtensions('reference'),
+      ...getFilterExtensions('auxiliary'),
+      ...getFilterExtensions('media'),
+      ...getFilterExtensions('audio'),
+      ...getFilterExtensions('edited'),
+    ];
+    const filePattern = `**/*.{${[...new Set(allExtensions)].join(',')}}`;
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
 
     // Handle file changes

@@ -149,6 +149,7 @@ export class HistoryApp extends BaseWebviewApp {
       </header>
 
       <history-search-bar
+        .searchTerm=${this.searchTerm}
         .matchCount=${this.matchCount}
         @history-search-change=${this.handleSearchChange}
         @history-search-next=${() => this.handleSearchNavigate('next')}

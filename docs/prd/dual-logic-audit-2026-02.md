@@ -2,12 +2,12 @@
 
 ## Implementation Status
 
-| Item                          | Severity | Status   | Notes                                        |
-| ----------------------------- | -------- | -------- | -------------------------------------------- |
-| File watcher extensions       | HIGH     | Proposed | Active bug — .bib/.bbl/.sty not watched      |
-| useMultipleOutputs divergence | HIGH     | Proposed | Different algorithms in 3 code paths         |
-| MainView options refresh      | MEDIUM   | Proposed | loadOptions() exists but unused in providers |
-| Workflow proposal file lists  | MEDIUM   | Proposed | ~50 lines identical code in 2 components     |
+| Item                          | Severity | Status    | Notes                                         |
+| ----------------------------- | -------- | --------- | --------------------------------------------- |
+| File watcher extensions       | HIGH     | Completed | File watcher built from config extensions     |
+| useMultipleOutputs divergence | HIGH     | Completed | Single derivation helper + validation         |
+| MainView options refresh      | MEDIUM   | Completed | loadOptions() wired into providers/commands   |
+| Workflow proposal file lists  | MEDIUM   | Completed | Shared helper replaces duplicate render logic |
 
 ## Overview
 
@@ -231,3 +231,12 @@ Related completed PRDs (kept for reference):
 
 - `docs/prd/dual-logic-features.md` — ✅ Complete
 - `docs/prd/dual-logic-infrastructure.md` — ✅ Complete
+
+---
+
+## Progress Update (2026-02-01)
+
+- ✅ File watcher extensions now derive from config-backed lists.
+- ✅ `useMultipleOutputs` derivation unified across execution, follow-ups, and proposals.
+- ✅ MainView option refresh paths now use `loadOptions()` consistently.
+- ✅ Workflow proposal file list rendering consolidated into a shared helper.

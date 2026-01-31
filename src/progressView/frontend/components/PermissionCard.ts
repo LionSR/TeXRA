@@ -6,7 +6,6 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
 import { AGENT_CATEGORY } from '@shared/schemas';
-import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
@@ -18,6 +17,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
+import {
+  buildWorkflowFileLists,
+  renderWorkflowFilesList,
+} from './helpers/workflowFilesList';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -285,52 +288,13 @@ export class PermissionCard extends LitElement {
   private renderWorkflowFiles(
     data: WorkflowAgentProposalPermission,
   ): TemplateResult {
-    const combine = (single: string | null | undefined, arr: string[] = []) =>
-      [single, ...arr].filter((f): f is string => Boolean(f));
-
-    const fileLists = [
-      { label: 'Input', files: combine(data.inputFile, data.inputFiles) },
-      {
-        label: 'Reference',
-        files: combine(data.referenceFile, data.referenceFiles),
-      },
-      {
-        label: 'Auxiliary',
-        files: combine(data.auxiliaryFile, data.auxiliaryFiles),
-      },
-      { label: 'Media', files: combine(data.mediaFile, data.mediaFiles) },
-      { label: 'Output', files: data.outputFiles ?? [] },
-    ];
-
-    return html`${repeat(
-      fileLists,
-      ({ label }) => label,
-      ({ label, files }) => this.renderFileList(label, files),
-    )}`;
-  }
-
-  private renderFileList(
-    label: string,
-    files: string[],
-  ): TemplateResult | typeof nothing {
-    if (files.length === 0) return nothing;
-
-    return html`
-      <div class="file-list">
-        <span class="file-list-label">${label}:</span>
-        ${repeat(
-          files,
-          (file) => file,
-          (file, i) =>
-            html`${i > 0 ? ', ' : ''}<span
-                class="file-link"
-                title=${file}
-                @click=${() => this.openFile(file)}
-                >${getBasename(file)}</span
-              >`,
-        )}
-      </div>
-    `;
+    const fileLists = buildWorkflowFileLists(data);
+    return renderWorkflowFilesList(fileLists, {
+      listClassName: () => 'file-list',
+      labelClassName: 'file-list-label',
+      fileClassName: 'file-link',
+      onFileClick: (file) => this.openFile(file),
+    });
   }
 
   // ===========================================================================

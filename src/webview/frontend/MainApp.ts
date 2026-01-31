@@ -627,13 +627,13 @@ export class MainApp extends BaseWebviewApp {
     const listId = this.multipleListIdMap[message.command];
     if (!listId) return;
 
-    const existing = this.multiFiles[listId] ?? [];
-    const merged = this.mergeUnique(existing, files);
-
-    this.multiFiles = { ...this.multiFiles, [listId]: merged };
-    this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
+    this.multiFiles = { ...this.multiFiles, [listId]: files };
+    this.multiFilesVisible = {
+      ...this.multiFilesVisible,
+      [listId]: files.length > 0,
+    };
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive = true;
+      this.outputFilesActive = files.length > 0;
     }
     this.saveState();
   }
@@ -789,14 +789,14 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED
     >,
   ): void {
-    if (message.text.trim()) {
-      this.instruction = message.text;
-      this.isPolishing = false;
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: 'Instruction text has been polished!',
-      });
-      this.saveState();
-    }
+    this.isPolishing = false;
+    const polishedText = message.text.trim();
+    if (!polishedText) return;
+    this.instruction = message.text;
+    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
+      text: 'Instruction text has been polished!',
+    });
+    this.saveState();
   }
 
   private handleInstructionTextPolishError(
@@ -1059,6 +1059,10 @@ export class MainApp extends BaseWebviewApp {
     if (key in this.singleFiles) {
       this.singleFiles = { ...this.singleFiles, [key]: '' };
       this.saveState();
+      const command = FILE_SELECTED_COMMANDS[type as FileType];
+      if (command) {
+        postMessage(command, { filePath: '' });
+      }
     }
   }
 
@@ -1071,7 +1075,7 @@ export class MainApp extends BaseWebviewApp {
 
   private handleEmptyFiles(type: MultipleFileType): void {
     const listId = `${type}Files`;
-    this.multiFiles = { ...this.multiFiles, [listId]: [] };
+    this.updateMultiFiles(listId as keyof MultiFiles, []);
     this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: false };
     if (type === 'output') {
       this.outputFilesActive = false;
@@ -1114,6 +1118,7 @@ export class MainApp extends BaseWebviewApp {
         ...this.multiFilesVisible,
         outputFiles: false,
       };
+      this.updateMultiFiles('outputFiles', []);
     }
     this.saveState();
   }
