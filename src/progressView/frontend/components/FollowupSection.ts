@@ -27,12 +27,8 @@ import { STREAM_STATUS } from '@shared/schemas';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getRadioValue } from '../utils';
-import type { FollowupMode } from '../store';
-import type {
-  SetFollowupOptionsMessage,
-  AgentOptionData,
-  ModelOptionData,
-} from '@shared/schemas';
+import type { FollowupMode, FollowupOptionsState } from '../store';
+import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 /** Agent name used for merge mode (fixed, not user-selectable) */
 const MERGE_AGENT_NAME = 'merge';
@@ -48,15 +44,6 @@ export interface FollowupFormData {
   attachOutputs: boolean;
   initialQuestion: string;
 }
-
-/**
- * Followup options received from backend.
- * Derived from SetFollowupOptionsMessage schema (minus command field).
- */
-export type FollowupOptions = Omit<
-  SetFollowupOptionsMessage,
-  'command' | 'stream'
->;
 
 @customElement('followup-section')
 export class FollowupSection extends LitElement {
@@ -184,7 +171,7 @@ export class FollowupSection extends LitElement {
   @property({ type: Boolean }) hasOutputFiles: boolean = false;
 
   // Configuration props
-  @property({ type: Object }) options: FollowupOptions | null = null;
+  @property({ type: Object }) options: FollowupOptionsState | null = null;
   @property({ type: String }) mode: FollowupMode = 'chat';
   @property({ type: String }) streamModel: string | null = null;
 

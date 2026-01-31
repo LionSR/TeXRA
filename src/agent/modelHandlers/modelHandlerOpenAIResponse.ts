@@ -108,6 +108,10 @@ interface UploadedOpenAIResponseAttachment {
   isImage: boolean;
 }
 
+const RESPONSE_MESSAGE_OVERHEAD_TOKENS = 8;
+const RESPONSE_NON_TEXT_CONTENT_TOKENS = 1000;
+const RESPONSE_IMAGE_CONTENT_TOKENS = 2000;
+
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
@@ -834,6 +838,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Supports automatic conversation compaction when cumulative input tokens
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
+   *
+   * NOTE: This mutates params.max_output_tokens in place when reduction is needed.
    */
   private applyTokenHeuristics(
     params: ResponseCreateParamsBase,
@@ -844,6 +850,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const approximateNewTokens = this.calculateApproximateTokens(
         messages,
         systemPrompt,
+        params.tools,
       );
       const existingTokens = this.previousResponseId
         ? this.conversationState.cumulativeInputTokens
@@ -854,13 +861,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         `Approximate token count of message: ${estimatedTotalTokens}`,
       );
 
-      if (estimatedTotalTokens > this.config.contextWindow) {
+      const availableTokens = this.config.contextWindow - estimatedTotalTokens;
+      if (availableTokens < 0) {
         const errorMsg = `Approximate token count of message exceeds context window: ${estimatedTotalTokens} > ${this.config.contextWindow}`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
       }
 
-      const availableTokens = this.config.contextWindow - estimatedTotalTokens;
       const currentMax = params.max_output_tokens;
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
         const utilizationPercent =
@@ -871,12 +878,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
         params.max_output_tokens = reducedMaxTokens;
 
-        const isOverflow = availableTokens <= 0;
-        const detailsMsg = isOverflow
-          ? 'OpenAI Responses: max_output_tokens forced to 1 due to context overflow'
+        const noOutputBudget = availableTokens <= 0;
+        const detailsMsg = noOutputBudget
+          ? 'OpenAI Responses: no remaining tokens for output; max_output_tokens forced to 1'
           : 'OpenAI Responses: max_output_tokens reduced to fit context window';
-        const logMsg = isOverflow
-          ? `Approximate token count (${estimatedTotalTokens}) already exceeds context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
+        const logMsg = noOutputBudget
+          ? `Approximate token count (${estimatedTotalTokens}) leaves no room for output in context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
           : `Approximate token count (${estimatedTotalTokens}) + max_output_tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
 
         this.logger.logContextManagement(logMsg, {
@@ -899,16 +906,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
   }
 
+  /**
+   * Estimate tokens for response inputs and tool definitions using rough heuristics.
+   * Includes per-item overhead and conservative fixed costs for non-text content.
+   */
   private calculateApproximateTokens(
     messages: ResponseInputItem[],
     systemPrompt?: string,
+    tools?: ResponseCreateParamsBase['tools'],
   ): number {
     let total = 0;
     if (systemPrompt) {
       total += countTokens(systemPrompt);
+      total += RESPONSE_MESSAGE_OVERHEAD_TOKENS;
+    }
+
+    if (tools && tools.length > 0) {
+      for (const tool of tools) {
+        total += RESPONSE_MESSAGE_OVERHEAD_TOKENS;
+        total += countTokens(JSON.stringify(tool));
+      }
     }
 
     for (const message of messages) {
+      total += RESPONSE_MESSAGE_OVERHEAD_TOKENS;
       if (this.isMessageItem(message)) {
         const content = message.content;
         if (typeof content === 'string') {
@@ -925,12 +946,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               typeof text === 'string'
             ) {
               total += countTokens(text);
+            } else if (type === 'input_image') {
+              total += RESPONSE_IMAGE_CONTENT_TOKENS;
+            } else if (
+              type === 'input_file' ||
+              type === 'input_audio' ||
+              type === 'input_video'
+            ) {
+              total += RESPONSE_NON_TEXT_CONTENT_TOKENS;
             }
           }
         }
       }
 
-      if ((message as { type?: unknown }).type === 'function_call_output') {
+      const messageType = (message as { type?: unknown }).type;
+      if (messageType === 'function_call_output') {
         const output = (message as { output?: unknown }).output;
         if (typeof output === 'string') {
           total += countTokens(output);
@@ -938,11 +968,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           for (const part of output) {
             const type = (part as { type?: unknown }).type;
             const text = (part as { text?: unknown }).text;
-            if (type === 'input_text' && typeof text === 'string') {
+            if (
+              (type === 'input_text' || type === 'output_text') &&
+              typeof text === 'string'
+            ) {
               total += countTokens(text);
             }
           }
         }
+      } else if (messageType === 'function_call') {
+        const name = (message as { name?: unknown }).name;
+        const args = (message as { arguments?: unknown }).arguments;
+        if (typeof name === 'string') {
+          total += countTokens(name);
+        }
+        if (typeof args === 'string') {
+          total += countTokens(args);
+        }
+      } else if (
+        messageType === 'input_image' ||
+        messageType === 'input_file' ||
+        messageType === 'input_audio' ||
+        messageType === 'input_video'
+      ) {
+        total +=
+          messageType === 'input_image'
+            ? RESPONSE_IMAGE_CONTENT_TOKENS
+            : RESPONSE_NON_TEXT_CONTENT_TOKENS;
       }
     }
 

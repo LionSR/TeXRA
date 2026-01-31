@@ -118,6 +118,7 @@ export class TodoList extends LitElement {
       return nothing;
     }
 
+    const keyCounts = new Map<string, number>();
     return html`
       <vscode-collapsible
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
@@ -128,7 +129,16 @@ export class TodoList extends LitElement {
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
-            (_todo, index) => `${index}`,
+            (todo) => {
+              const baseKey = [
+                todo.content,
+                todo.status ?? TODO_STATUS.PENDING,
+                todo.activeForm ?? '',
+              ].join('|');
+              const count = (keyCounts.get(baseKey) ?? 0) + 1;
+              keyCounts.set(baseKey, count);
+              return `${baseKey}-${count}`;
+            },
             (todo) => this.renderTodo(todo),
           )}
         </div>
