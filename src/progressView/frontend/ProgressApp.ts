@@ -270,6 +270,8 @@ export class ProgressApp extends BaseWebviewApp {
       activeStream.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
+    // Use 'fallback' mode: workflow runs may not have selectedRunId set initially,
+    // but we still need a valid runId to render logs/panels (fixes M-11 in PRD round3)
     const runId = resolveRunId(streamState, { mode: 'fallback' });
     const followupOptions =
       this.appState.followupOptionsByStream.get(activeStream.name) ?? null;

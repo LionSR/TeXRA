@@ -892,19 +892,12 @@ export class RequestPanels extends LitElement {
     const lines = [
       details.message && `message: ${details.message}`,
       details.provider && `provider: ${details.provider}`,
-      details.statusCode !== undefined &&
-        details.statusCode !== null &&
-        `statusCode: ${details.statusCode}`,
+      details.statusCode != null && `statusCode: ${details.statusCode}`,
       details.statusText && `statusText: ${details.statusText}`,
-      details.isRelayError !== undefined &&
-        details.isRelayError !== null &&
-        `isRelayError: ${details.isRelayError}`,
-      details.retryable !== undefined &&
-        details.retryable !== null &&
-        `retryable: ${details.retryable}`,
+      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
+      details.retryable != null && `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody !== undefined &&
-        details.rawErrorBody !== null &&
+      details.rawErrorBody != null &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 

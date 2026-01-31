@@ -75,10 +75,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
-  private readonly modelOutputBackups = new Map<
-    string,
-    { content: string; streamId: StreamTabId }
-  >();
+  // Key format: `${streamId}:${file}` (see buildModelOutputBackupKey)
+  private readonly modelOutputBackups = new Map<string, { content: string }>();
 
   /**
    * Type-safe handler registry - handlers receive typed data.
@@ -566,7 +564,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           output: false,
         };
 
-    const outputFiles = isWorkflow ? proposal.outputFiles ?? [] : [];
+    const outputFiles = isWorkflow ? (proposal.outputFiles ?? []) : [];
     const useMultipleOutputs = deriveUseMultipleOutputs({
       isToolUse: !isWorkflow,
       outputFiles,
@@ -716,7 +714,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const fileLocation = createExternalLocation(file);
         const content = await flexibleFS.read(fileLocation);
         const key = this.buildModelOutputBackupKey(streamId, file);
-        this.modelOutputBackups.set(key, { content, streamId });
+        // Note: streamId is in the key, so no need to store it in the value
+        this.modelOutputBackups.set(key, { content });
       } catch {
         // Ignore backup errors
       }
@@ -803,7 +802,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
 
       await vscode.commands.executeCommand('texra.sendFollowUp', {
-        stream: backup.streamId,
+        stream: streamId,
         text: followUpText,
       });
     }
@@ -1250,8 +1249,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       outputFilesActive: attachAgentOutputs,
     });
 
+    // Spread originalConfig but explicitly omit instruction to avoid duplicate key
+    const { instruction: _originalInstruction, ...restConfig } = originalConfig;
     const newConfig = AgentConfigSchema.parse({
-      ...originalConfig,
+      ...restConfig,
       agent,
       model,
       inputFile: newInputFile,

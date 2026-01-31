@@ -568,6 +568,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 
 ## Progress Update (2026-02-01)
 
-- ✅ HIGH severity fixes implemented (H-1 through H-13).
+- ✅ HIGH severity fixes implemented (H-1 through H-12).
+- ⚠️ H-13 (KaTeX CSS in Shadow DOM) NOT IMPLEMENTED — KaTeX CSS imported globally but not adopted into Shadow DOM components via `adoptedStyleSheets`.
 - ✅ MEDIUM severity fixes implemented (M-1 through M-20).
 - ✅ LOW severity fixes implemented (L-1 through L-15).

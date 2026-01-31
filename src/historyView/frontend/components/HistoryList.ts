@@ -97,6 +97,8 @@ export class HistoryList extends LitElement {
   // === Internal search operations (called from willUpdate) ===
 
   private performClearSearch(): void {
+    // Increment version FIRST to invalidate any in-flight applySearchToItems()
+    // before clearing matchCounts (prevents stale results from being applied)
     this.searchVersion += 1;
     this.matchCounts = new Map();
     this.state?.setSearchIndex(-1);

@@ -196,10 +196,27 @@ export class FileSelectGroup extends LitElement {
   }
 
   private handleFocusOut(event: FocusEvent): void {
-    const path = event.composedPath?.() ?? [];
-    if (path.includes(this)) return;
+    // Check if focus is moving to an element within this component.
+    // We need to traverse shadow DOM boundaries because nested components (like
+    // vscode-context-menu) have their own shadow roots that aren't contained by ours.
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && this.containsAcrossShadowDOM(nextTarget)) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
+  }
+
+  /** Check if a node is a descendant, traversing up through shadow DOM hosts. */
+  private containsAcrossShadowDOM(node: Node | null): boolean {
+    while (node) {
+      if (this.contains(node)) return true;
+      const root = node.getRootNode();
+      if (root instanceof ShadowRoot) {
+        node = root.host;
+      } else {
+        break;
+      }
+    }
+    return false;
   }
 
   private renderFileOptions(): TemplateResult {
