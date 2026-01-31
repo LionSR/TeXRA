@@ -481,22 +481,7 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(streamId, (prev) => {
       const existingGroup = prev.taskGroups.find((group) => group.id === id);
       if (!existingGroup) {
-        // Defensive: backend can race UPDATE_TASK_GROUP before ADD_TASK_GROUP.
-        // Create a placeholder so the UI can reflect status updates until full
-        // task group metadata arrives.
-        return {
-          ...prev,
-          taskGroups: [
-            ...prev.taskGroups,
-            {
-              id,
-              name: id,
-              startTime: Date.now(),
-              status: status ?? STREAM_STATUS.RUNNING,
-              endTime,
-            },
-          ],
-        };
+        return prev;
       }
 
       return {
@@ -578,6 +563,7 @@ const handlers: HandlerRegistry = {
       ...prev,
       followUpText: data.text,
       polishedText: data.text,
+      polishRevision: (prev.polishRevision ?? 0) + 1,
       shouldFocusFollowUp: true,
     }));
   },
@@ -589,6 +575,7 @@ const handlers: HandlerRegistry = {
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
       polishedText: prev.followUpText ?? '',
+      polishRevision: (prev.polishRevision ?? 0) + 1,
       shouldFocusFollowUp: true,
     }));
   },
@@ -616,6 +603,7 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
     const { command: _command, stream, ...options } = data;
     if (!stream) {
+      console.warn('SET_FOLLOWUP_OPTIONS missing stream ID.', { data });
       return;
     }
 

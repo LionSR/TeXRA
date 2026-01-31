@@ -205,13 +205,26 @@ export class FileSelectGroup extends LitElement {
       return;
     }
 
-    const staysInComponent =
-      this.contains(nextTarget) ||
-      this.shadowRoot?.contains(nextTarget) ||
-      false;
+    const staysInComponent = this.isWithinComponent(nextTarget);
     if (staysInComponent) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
+  }
+
+  private isWithinComponent(target: Node): boolean {
+    if (this.contains(target) || this.shadowRoot?.contains(target)) {
+      return true;
+    }
+
+    let root = target.getRootNode();
+    while (root instanceof ShadowRoot) {
+      if (this.contains(root.host)) {
+        return true;
+      }
+      root = root.host.getRootNode();
+    }
+
+    return false;
   }
 
   private renderFileOptions(): TemplateResult {
