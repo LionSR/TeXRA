@@ -151,6 +151,19 @@ export class ModelHandlerOpenAI<
     return null;
   }
 
+  /**
+   * Returns the thinking parameter for models that support the thinking API.
+   * Used by Kimi K2.5 and DeepSeek models which use `thinking: {type: "enabled"|"disabled"}`.
+   *
+   * Override in subclasses to enable/disable thinking mode explicitly.
+   * @returns The thinking parameter object, or undefined to not send the parameter.
+   */
+  protected getThinkingParameter():
+    | { type: 'enabled' | 'disabled' }
+    | undefined {
+    return undefined;
+  }
+
   protected buildChatBaseParams(
     messages: ChatCompletionMessageParam[],
     temperature?: number,
@@ -178,6 +191,12 @@ export class ModelHandlerOpenAI<
       baseParams.reasoning_effort = this.validateReasoningEffort(
         reasoningEffort,
       ) as ChatCompletionRequestBase['reasoning_effort'];
+    }
+
+    // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
+    const thinking = this.getThinkingParameter();
+    if (thinking) {
+      (baseParams as Record<string, unknown>).thinking = thinking;
     }
 
     if (tools && tools.length > 0) {
