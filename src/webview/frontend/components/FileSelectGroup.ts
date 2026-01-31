@@ -205,7 +205,10 @@ export class FileSelectGroup extends LitElement {
       return;
     }
 
-    const staysInComponent = event.composedPath().includes(this);
+    const staysInComponent =
+      this.contains(nextTarget) ||
+      this.shadowRoot?.contains(nextTarget) ||
+      false;
     if (staysInComponent) return;
     this.autoExtractMenuOpen = false;
     this.toolConfigMenuOpen = false;
