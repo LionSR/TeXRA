@@ -108,6 +108,10 @@ interface UploadedOpenAIResponseAttachment {
   isImage: boolean;
 }
 
+// Conservative heuristic token estimates for non-text input content.
+const APPROX_IMAGE_TOKEN_ESTIMATE = 500;
+const APPROX_FILE_TOKEN_ESTIMATE = 1000;
+
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
@@ -188,7 +192,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ['completed', 'failed', 'cancelled', 'incomplete'];
 
   private previousResponseId: string | null = null;
-  private lastApproximateInputTokens: number | null = null;
 
   /**
    * Stores the ID of a background response that is currently being polled.
@@ -840,13 +843,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     params: ResponseCreateParamsBase,
     messages: ResponseInputItem[],
     systemPrompt?: string,
-  ): void {
+  ): number | null {
     try {
       const approximateInputTokens = this.calculateApproximateTokens(
         messages,
         systemPrompt,
       );
-      this.lastApproximateInputTokens = approximateInputTokens;
 
       this.logger.debug(
         `Approximate token count of response input: ${approximateInputTokens}`,
@@ -888,8 +890,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           details: detailsMsg,
         });
       }
+      return approximateInputTokens;
     } catch (err) {
-      this.lastApproximateInputTokens = null;
       if (isContextWindowError(err)) {
         throw err;
       }
@@ -897,6 +899,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
       );
     }
+    return null;
   }
 
   private calculateApproximateTokens(
@@ -904,24 +907,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     systemPrompt?: string,
   ): number {
     let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
+    let extraTokens = 0;
+
+    // gpt-tokenizer uses GPT-family tokenization. Counts are heuristic for
+    // non-GPT-compatible providers routed through OpenAI-compatible APIs.
 
     messages.forEach((message) => {
       if (this.isMessageItem(message)) {
-        const role = (message as { role?: string }).role ?? 'user';
+        const role = message.role ?? 'user';
         const content = this.getMessageContent(message);
         if (Array.isArray(content)) {
           content.forEach((part) => {
-            const type = (part as { type?: unknown }).type;
-            const text = (part as { text?: unknown }).text;
-            if (
-              typeof text === 'string' &&
-              (type === 'input_text' || type === 'output_text')
-            ) {
-              textToCount += `${role}: ${text}\n`;
-            } else if (type === 'input_image') {
-              textToCount += `${role}: [Image]\n`;
-            } else if (type === 'input_file') {
-              textToCount += `${role}: [File]\n`;
+            switch (part.type) {
+              case 'input_text':
+                if (typeof part.text === 'string') {
+                  textToCount += `${role}: ${part.text}\n`;
+                }
+                break;
+              case 'input_image':
+                extraTokens += APPROX_IMAGE_TOKEN_ESTIMATE;
+                break;
+              case 'input_file':
+                extraTokens += APPROX_FILE_TOKEN_ESTIMATE;
+                break;
+              default:
+                break;
             }
           });
         } else if (typeof content === 'string') {
@@ -930,31 +940,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         return;
       }
 
-      const itemType = (message as { type?: unknown }).type;
-      if (itemType === 'function_call_output') {
-        const output = (message as ResponseInputItem.FunctionCallOutput).output;
+      if (this.isFunctionCallOutputItem(message)) {
+        const { output } = message;
         if (typeof output === 'string') {
           textToCount += `tool: ${output}\n`;
         } else if (Array.isArray(output)) {
           output.forEach((part) => {
-            const type = (part as { type?: unknown }).type;
-            const text = (part as { text?: unknown }).text;
-            if (
-              typeof text === 'string' &&
-              (type === 'input_text' || type === 'output_text')
-            ) {
-              textToCount += `tool: ${text}\n`;
+            if (part.type === 'input_text' && typeof part.text === 'string') {
+              textToCount += `tool: ${part.text}\n`;
             }
           });
         }
         return;
       }
 
-      if (itemType === 'function_call') {
-        const { arguments: args, name } = message as {
-          arguments?: string;
-          name?: string;
-        };
+      if (this.isFunctionCallItem(message)) {
+        const { arguments: args, name } = message;
         if (args) {
           textToCount += `tool: ${args}\n`;
         } else if (name) {
@@ -963,7 +964,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     });
 
-    return countTokens(textToCount);
+    return countTokens(textToCount) + extraTokens;
   }
 
   async createResponse(
@@ -1040,7 +1041,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
-    this.applyTokenHeuristics(params, newMessages, systemPrompt);
+    const approximateInputTokens = this.applyTokenHeuristics(
+      params,
+      newMessages,
+      systemPrompt,
+    );
 
     if (useBackgroundResponses) {
       this.logger.debug(
@@ -1181,7 +1186,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (state.hasThinkingContent) {
           state.thinkingStream.finalize();
         }
-        const { text: finalText } = this.extractResponse(response, '');
+        const { text: finalText } = this.extractResponse(
+          response,
+          '',
+          approximateInputTokens,
+        );
         if (state.outputStream) state.outputStream.finalize(finalText);
 
         // Emit any web searches not yet emitted (fallback for edge cases)
@@ -1295,6 +1304,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   extractResponse(
     responseObject: Response,
     endTag: string,
+    approximateInputTokens: number | null,
   ): ExtractResponseResult {
     // Handle missing usage gracefully - OpenAI streaming may not always include it
     const hasUsage = Boolean(responseObject.usage);
@@ -1340,7 +1350,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (!hasUsage) {
-      const inputTokens = this.lastApproximateInputTokens ?? 0;
+      const inputTokens = approximateInputTokens ?? 0;
       const outputTokens = newResponse ? countTokens(newResponse) : 0;
       usage.input_tokens = inputTokens;
       usage.output_tokens = outputTokens;
@@ -1356,7 +1366,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
     }
-    this.lastApproximateInputTokens = null;
 
     const stopReason =
       responseObject.status === 'completed'
@@ -2166,6 +2175,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const content = (item as { content?: unknown }).content;
     return typeof content === 'string' || Array.isArray(content);
+  }
+
+  private isFunctionCallOutputItem(
+    item: ResponseInputItem,
+  ): item is ResponseInputItem.FunctionCallOutput {
+    return (
+      typeof item === 'object' &&
+      (item as { type?: unknown }).type === 'function_call_output'
+    );
+  }
+
+  private isFunctionCallItem(
+    item: ResponseInputItem,
+  ): item is ResponseFunctionToolCall {
+    return (
+      typeof item === 'object' &&
+      (item as { type?: unknown }).type === 'function_call'
+    );
   }
 
   /** Type guard for ResponseOutputMessage items from the SDK. */
