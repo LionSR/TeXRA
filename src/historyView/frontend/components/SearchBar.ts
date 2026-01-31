@@ -19,6 +19,7 @@ export class SearchBar extends LitElement {
   static override styles = [designTokens, codiconStyles, historyViewStyles];
 
   @property({ type: String }) matchCount = '';
+  @property({ type: String }) searchTerm = '';
 
   private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -66,6 +67,7 @@ export class SearchBar extends LitElement {
           class="search-input"
           type="search"
           placeholder="Search history items..."
+          .value=${this.searchTerm}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
         ></vscode-textfield>

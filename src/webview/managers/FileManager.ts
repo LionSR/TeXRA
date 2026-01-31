@@ -216,9 +216,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
-    if (message.files.length > 0) {
-      this.postMessage({ command: message.command, files: message.files });
-    }
+    this.postMessage({ command: message.command, files: message.files });
   }
 
   async handleSelectMultipleFiles(

@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -16,6 +17,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
   isPreviousResponseIdError,
 } from '@common/errors/sdkErrorUtils';
 
@@ -47,7 +49,11 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  HEURISTIC_TOKEN_BUFFER,
+  computeReducedMaxTokens,
+} from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -829,6 +835,120 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Supports automatic conversation compaction when cumulative input tokens
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
+  private applyTokenHeuristics(
+    params: ResponseCreateParamsBase,
+    messages: ResponseInputItem[],
+    systemPrompt?: string,
+  ): void {
+    try {
+      const approximateNewTokens = this.calculateApproximateTokens(
+        messages,
+        systemPrompt,
+      );
+      const existingTokens = this.previousResponseId
+        ? this.conversationState.cumulativeInputTokens
+        : 0;
+      const estimatedTotalTokens = approximateNewTokens + existingTokens;
+
+      this.logger.debug(
+        `Approximate token count of message: ${estimatedTotalTokens}`,
+      );
+
+      if (estimatedTotalTokens > this.config.contextWindow) {
+        const errorMsg = `Approximate token count of message exceeds context window: ${estimatedTotalTokens} > ${this.config.contextWindow}`;
+        this.logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const availableTokens = this.config.contextWindow - estimatedTotalTokens;
+      const currentMax = params.max_output_tokens;
+      if (typeof currentMax === 'number' && availableTokens < currentMax) {
+        const utilizationPercent =
+          (estimatedTotalTokens / this.config.contextWindow) * 100;
+        const reducedMaxTokens = computeReducedMaxTokens(
+          availableTokens,
+          HEURISTIC_TOKEN_BUFFER,
+        );
+        params.max_output_tokens = reducedMaxTokens;
+
+        const isOverflow = availableTokens <= 0;
+        const detailsMsg = isOverflow
+          ? 'OpenAI Responses: max_output_tokens forced to 1 due to context overflow'
+          : 'OpenAI Responses: max_output_tokens reduced to fit context window';
+        const logMsg = isOverflow
+          ? `Approximate token count (${estimatedTotalTokens}) already exceeds context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
+          : `Approximate token count (${estimatedTotalTokens}) + max_output_tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
+
+        this.logger.logContextManagement(logMsg, {
+          action: 'max_tokens_reduced',
+          tokensBefore: estimatedTotalTokens,
+          contextWindow: this.config.contextWindow,
+          utilizationBefore: utilizationPercent,
+          originalMaxTokens: currentMax,
+          reducedMaxTokens,
+          details: detailsMsg,
+        });
+      }
+    } catch (err) {
+      if (isContextWindowError(err)) {
+        throw err;
+      }
+      this.logger.warn(
+        `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+      );
+    }
+  }
+
+  private calculateApproximateTokens(
+    messages: ResponseInputItem[],
+    systemPrompt?: string,
+  ): number {
+    let total = 0;
+    if (systemPrompt) {
+      total += countTokens(systemPrompt);
+    }
+
+    for (const message of messages) {
+      if (this.isMessageItem(message)) {
+        const content = message.content;
+        if (typeof content === 'string') {
+          total += countTokens(content);
+          continue;
+        }
+
+        if (Array.isArray(content)) {
+          for (const part of content) {
+            const type = (part as { type?: unknown }).type;
+            const text = (part as { text?: unknown }).text;
+            if (
+              (type === 'input_text' || type === 'output_text') &&
+              typeof text === 'string'
+            ) {
+              total += countTokens(text);
+            }
+          }
+        }
+      }
+
+      if ((message as { type?: unknown }).type === 'function_call_output') {
+        const output = (message as { output?: unknown }).output;
+        if (typeof output === 'string') {
+          total += countTokens(output);
+        } else if (Array.isArray(output)) {
+          for (const part of output) {
+            const type = (part as { type?: unknown }).type;
+            const text = (part as { text?: unknown }).text;
+            if (type === 'input_text' && typeof text === 'string') {
+              total += countTokens(text);
+            }
+          }
+        }
+      }
+    }
+
+    return total;
+  }
+
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
@@ -964,6 +1084,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
       params.reasoning = reasoning;
     }
+
+    this.applyTokenHeuristics(params, newMessages, systemPrompt);
 
     // Wrap execution in try-catch to handle previousResponseId errors
     // When an error indicates the response ID is invalid, we clear it so

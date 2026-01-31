@@ -154,7 +154,8 @@ export class LatexdiffResults extends LitElement {
         >
           ${repeat(
             this.entries,
-            (entry) => `${entry.baseFile}-${entry.revisedFile}`,
+            (entry, index) =>
+              `${entry.runId ?? this.runId}-${entry.baseRound}-${entry.revisedRound}-${entry.baseFile}-${entry.revisedFile}-${index}`,
             (entry) => this.renderEntry(entry),
           )}
         </ul>

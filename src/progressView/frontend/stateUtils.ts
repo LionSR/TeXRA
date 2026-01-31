@@ -1,13 +1,5 @@
 // Shared imports
 import { sortStreams } from '@shared/streams/streamSort';
-import type {
-  InstructionUpdate,
-  LogMessageData,
-  OutputFileInfo,
-  StreamTabId,
-  StreamTabInfo,
-  TaskGroup,
-} from '@shared/schemas';
 
 // Local imports
 import {
@@ -18,6 +10,16 @@ import {
   type WorkflowStreamState,
 } from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
+
+// Shared imports - schemas
+import type {
+  InstructionUpdate,
+  LogMessageData,
+  OutputFileInfo,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+} from '@shared/schemas';
 
 /**
  * Updates a nested Record<runId, Record<round, T[]>> structure.
@@ -45,8 +47,8 @@ export function updateNestedRounds<T>(
   if (!rounds) return current;
 
   // Merge rounds into the run
-  const base = reset ? {} : current;
-  const existingRounds = base[runId] ?? {};
+  const base = reset ? { ...current } : current;
+  const existingRounds = reset ? {} : (base[runId] ?? {});
   return {
     ...base,
     [runId]: { ...existingRounds, ...rounds },

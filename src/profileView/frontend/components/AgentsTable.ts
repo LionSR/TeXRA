@@ -43,8 +43,9 @@ export class AgentsTable extends LitElement {
 
   private renderAgentRow(agent: RemoteAgent): TemplateResult {
     const visibilityArray = this.normalizeVisibility(agent.visibility);
-    const visibilityClass =
-      visibilityArray[0] === 'public' ? 'public' : 'custom';
+    const visibilityClass = visibilityArray.includes('public')
+      ? 'public'
+      : 'custom';
     const multiOutputClass = agent.supportsMultipleOutput
       ? 'supported'
       : 'not-supported';

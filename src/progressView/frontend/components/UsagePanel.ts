@@ -92,7 +92,9 @@ export class UsagePanel extends LitElement {
     const hasUsage =
       (this.usage?.inputTokens ?? 0) > 0 ||
       (this.usage?.outputTokens ?? 0) > 0 ||
-      (this.usage?.cost ?? 0) > 0;
+      (this.usage?.cost ?? 0) > 0 ||
+      (this.usage?.cacheReadInputTokens ?? 0) > 0 ||
+      (this.usage?.cacheCreationInputTokens ?? 0) > 0;
     const hasContext =
       (this.contextState?.contextWindow ?? 0) > 0 &&
       this.contextState?.utilizationPercent !== undefined;

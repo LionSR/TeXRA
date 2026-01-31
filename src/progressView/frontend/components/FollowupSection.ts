@@ -53,7 +53,10 @@ export interface FollowupFormData {
  * Followup options received from backend.
  * Derived from SetFollowupOptionsMessage schema (minus command field).
  */
-export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
+export type FollowupOptions = Omit<
+  SetFollowupOptionsMessage,
+  'command' | 'stream'
+>;
 
 @customElement('followup-section')
 export class FollowupSection extends LitElement {

@@ -118,6 +118,9 @@ export const toggleStyles = css`
     display: flex;
     align-items: center;
     height: var(--height-control);
+    background: none;
+    border: none;
+    font: inherit;
   }
 
   .file-select[data-expanded='true'] .optional-label,
@@ -170,6 +173,9 @@ export const multiFilesStyles = css`
     cursor: pointer;
     flex-shrink: 0;
     opacity: 0.7;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
   .remove-button:hover {
@@ -230,6 +236,15 @@ export const dropdownStyles = css`
 
   .dropdown-container .dropdown-menu vscode-checkbox:hover {
     background: var(--vscode-list-hoverBackground);
+  }
+
+  .dropdown-container .menu-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: var(--spacing-tiny);
+    background-color: var(--vscode-textLink-foreground);
   }
 `;
 

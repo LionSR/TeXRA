@@ -1,5 +1,11 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -58,6 +64,22 @@ export class RequestPanels extends LitElement {
 
   @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
   @state() private openDiffMenuKey: PermissionKey | null = null;
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (!changedProperties.has('permissions')) return;
+    const validKeys = new Set(
+      this.permissions.map((permission) => this.getPermissionKey(permission)),
+    );
+    const nextFeedback = new Set(
+      [...this.feedbackOpenKeys].filter((key) => validKeys.has(key)),
+    );
+    if (nextFeedback.size !== this.feedbackOpenKeys.size) {
+      this.feedbackOpenKeys = nextFeedback;
+    }
+    if (this.openDiffMenuKey && !validKeys.has(this.openDiffMenuKey)) {
+      this.openDiffMenuKey = null;
+    }
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -778,10 +800,12 @@ export class RequestPanels extends LitElement {
   };
 
   private handleMenuClick = (event: CustomEvent): void => {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    const menuItem = target.closest('vscode-context-menu-item');
+    const path = event.composedPath() as Element[];
+    const menuItem = path.find(
+      (item) =>
+        item instanceof HTMLElement &&
+        item.tagName === 'VSCODE-CONTEXT-MENU-ITEM',
+    ) as HTMLElement | undefined;
     if (!menuItem) return;
 
     const kind = menuItem.dataset.permissionKind as
@@ -907,12 +931,19 @@ export class RequestPanels extends LitElement {
     const lines = [
       details.message && `message: ${details.message}`,
       details.provider && `provider: ${details.provider}`,
-      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusCode !== undefined &&
+        details.statusCode !== null &&
+        `statusCode: ${details.statusCode}`,
       details.statusText && `statusText: ${details.statusText}`,
-      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
-      details.retryable != null && `retryable: ${details.retryable}`,
+      details.isRelayError !== undefined &&
+        details.isRelayError !== null &&
+        `isRelayError: ${details.isRelayError}`,
+      details.retryable !== undefined &&
+        details.retryable !== null &&
+        `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null &&
+      details.rawErrorBody !== undefined &&
+        details.rawErrorBody !== null &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 

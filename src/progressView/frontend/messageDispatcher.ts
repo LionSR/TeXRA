@@ -18,7 +18,6 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -83,7 +82,7 @@ function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
 ): void {
-  ctx.setPermissions([...ctx.getPermissions(), permission]);
+  ctx.setPermissions([permission, ...ctx.getPermissions()]);
 }
 
 function removePrompt(
@@ -121,13 +120,23 @@ function updateStreamInfo(
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
+      clearPendingLogUpdatesForStream(key);
     }
   }
 
   for (const stream of streams) {
     const backendState = backendStates?.[stream.name];
     if (backendState) {
-      nextStates.set(stream.name, { ...backendState, info: stream });
+      const existing = nextStates.get(stream.name);
+      const frontendOnlyFields =
+        existing && isToolUseState(existing)
+          ? { followUpText: existing.followUpText }
+          : {};
+      nextStates.set(stream.name, {
+        ...backendState,
+        ...frontendOnlyFields,
+        info: stream,
+      });
     } else {
       const existing =
         nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);
@@ -170,11 +179,26 @@ const handlers: HandlerRegistry = {
       data.streams,
       data.streamStates,
     );
+    const knownStreams = new Set(data.streams.map((stream) => stream.name));
+    const resolvedActiveStream =
+      activeStream && knownStreams.has(activeStream)
+        ? activeStream
+        : (data.streams.at(0)?.name ?? null);
+    const nextFollowupOptions = new Map();
+    for (const [
+      streamId,
+      options,
+    ] of updated.followupOptionsByStream.entries()) {
+      if (knownStreams.has(streamId)) {
+        nextFollowupOptions.set(streamId, options);
+      }
+    }
 
     ctx.setState(() => ({
       ...updated,
-      activeStreamId: activeStream || null,
+      activeStreamId: resolvedActiveStream,
       streamFilter: data.agentFilter,
+      followupOptionsByStream: nextFollowupOptions,
     }));
   },
 
@@ -184,6 +208,9 @@ const handlers: HandlerRegistry = {
 
     const nextStates = new Map(state.streamStates);
     nextStates.delete(streamId);
+
+    const nextFollowupOptions = new Map(state.followupOptionsByStream);
+    nextFollowupOptions.delete(streamId);
 
     const nextStreams = state.streams.filter((s) => s.name !== streamId);
     const nextActiveStreamId =
@@ -197,6 +224,7 @@ const handlers: HandlerRegistry = {
       streams: nextStreams,
       streamStates: nextStates,
       activeStreamId: nextActiveStreamId,
+      followupOptionsByStream: nextFollowupOptions,
     }));
   },
 
@@ -207,6 +235,7 @@ const handlers: HandlerRegistry = {
       streams: [],
       streamStates: new Map(),
       activeStreamId: null,
+      followupOptionsByStream: new Map(),
     }));
   },
 
@@ -253,6 +282,17 @@ const handlers: HandlerRegistry = {
       };
 
       if (isWorkflowState(prev)) {
+        if (isClear) {
+          return {
+            ...baseUpdate,
+            activeRunId: null,
+            selectedRunId: null,
+            runInstructions: {},
+            runUsage: {},
+            runFiles: {},
+            runMissingOutputs: {},
+          };
+        }
         return {
           ...baseUpdate,
           activeRunId: activeRunId ?? prev.activeRunId,
@@ -389,10 +429,13 @@ const handlers: HandlerRegistry = {
     const { stream, instruction, runId: providedRunId } = data;
     if (!stream) return;
 
+    if (!providedRunId) {
+      console.warn('Skipping instruction update without runId', data);
+      return;
+    }
+
     updateWorkflowState(ctx, stream, (prev) => {
-      // Use provided runId from backend if available, otherwise resolve from state
-      const runId =
-        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
+      const runId = providedRunId;
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
@@ -436,15 +479,27 @@ const handlers: HandlerRegistry = {
     const { streamId, id, status, endTime } = data.update;
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
-      taskGroups: prev.taskGroups.map((group) =>
-        group.id === id
-          ? {
-              ...group,
-              status: status ?? group.status,
-              endTime: endTime ?? group.endTime,
-            }
-          : group,
-      ),
+      taskGroups: prev.taskGroups.some((group) => group.id === id)
+        ? prev.taskGroups.map((group) =>
+            group.id === id
+              ? {
+                  ...group,
+                  status: status ?? group.status,
+                  endTime: endTime ?? group.endTime,
+                }
+              : group,
+          )
+        : [
+            ...prev.taskGroups,
+            {
+              id,
+              name: '',
+              status: status ?? 'running',
+              startTime: Date.now(),
+              endTime,
+              parentGroupId: undefined,
+            },
+          ],
     }));
   },
 
@@ -516,6 +571,18 @@ const handlers: HandlerRegistry = {
     }));
   },
 
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
+    const streamId = ctx.getState().activeStreamId;
+    if (!streamId) return;
+    if (data.error) {
+      console.warn(`Follow-up polish failed: ${data.error}`);
+    }
+    updateToolUseState(ctx, streamId, (prev) => ({
+      ...prev,
+      polishedText: null,
+    }));
+  },
+
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (data, ctx) => {
     const streamId = ctx.getState().activeStreamId;
     if (!streamId) return;
@@ -537,11 +604,16 @@ const handlers: HandlerRegistry = {
     setActiveStreamRecording(ctx, false),
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
-    const { command: _command, ...options } = data;
+    const { command: _command, stream, ...options } = data;
+    const streamId = stream ?? ctx.getState().activeStreamId;
+    if (!streamId) return;
 
     ctx.setState((prev) => ({
       ...prev,
-      followupOptions: options,
+      followupOptionsByStream: new Map(prev.followupOptionsByStream).set(
+        streamId,
+        options,
+      ),
     }));
   },
 };

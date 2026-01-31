@@ -4,7 +4,7 @@
 
 | Item                                     | Severity | Status     | Notes                                      |
 | ---------------------------------------- | -------- | ---------- | ------------------------------------------ |
-| OpenAI Response API no pre-flight check  | HIGH     | Proposed   | Can overflow context on first request      |
+| OpenAI Response API no pre-flight check  | HIGH     | Completed  | Added heuristic pre-flight estimate        |
 | Missing usage in streaming responses     | MEDIUM   | Proposed   | Defaults to 0, affects UI display          |
 | Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional but may be overly conservative |
 | OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`           |
@@ -145,12 +145,12 @@ All providers return accurate token counts from API responses:
 
 ## Summary
 
-| Issue           | Pre-flight              | Post-response | Action          |
-| --------------- | ----------------------- | ------------- | --------------- |
-| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix       |
-| OpenAI Response | **None**                | Accurate      | Consider adding |
-| Anthropic       | Exact API               | Accurate      | None needed     |
-| Google          | Exact API               | Accurate      | None needed     |
+| Issue           | Pre-flight              | Post-response | Action      |
+| --------------- | ----------------------- | ------------- | ----------- |
+| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix   |
+| OpenAI Response | Heuristic (buffered)    | Accurate      | Implemented |
+| Anthropic       | Exact API               | Accurate      | None needed |
+| Google          | Exact API               | Accurate      | None needed |
 
 ## Recommended Actions
 
@@ -162,3 +162,12 @@ All providers return accurate token counts from API responses:
    - Consider adding heuristic fallback if this causes user confusion
 
 3. **T3/T4 (LOW):** Document rationale, no code changes needed
+
+---
+
+## Progress Update (2026-02-01)
+
+- **T1 (HIGH):** Implemented heuristic pre-flight token estimation for OpenAI Responses with
+  max token adjustment.
+- **T2 (MEDIUM):** No change (warning + zero defaults retained).
+- **T3/T4 (LOW):** No change (documented behavior retained).

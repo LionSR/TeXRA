@@ -135,10 +135,12 @@ export class FollowUpInput extends LitElement {
     }
 
     // React to polishedText property change
-    if (changedProperties.has('polishedText') && this.polishedText !== null) {
+    if (changedProperties.has('polishedText')) {
       this.polishing = false;
-      this.updateValue(this.polishedText);
-      this.focusInput({ scrollIntoView: true });
+      if (this.polishedText !== null) {
+        this.updateValue(this.polishedText);
+        this.focusInput({ scrollIntoView: true });
+      }
     }
 
     // React to transcribedText property change
@@ -171,7 +173,7 @@ export class FollowUpInput extends LitElement {
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
   private handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.emitSend();
     }
@@ -274,6 +276,10 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
+    if (!this.value.trim()) {
+      this.polishing = false;
+      return;
+    }
     this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
   }

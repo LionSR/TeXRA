@@ -4,6 +4,7 @@
 
 // Third-party imports
 import { css } from 'lit';
+import katexStyles from 'katex/dist/katex.min.css?inline';
 
 // Shared styles
 import { animationStyles } from '@shared/styles/litStyles';
@@ -52,6 +53,9 @@ export const layoutStyles = css`
   }
 `;
 
+const katexStyleSheet = new CSSStyleSheet();
+katexStyleSheet.replaceSync(katexStyles);
+
 /**
  * Combined log styles - includes layout and all modular styles.
  * Use this for components that need the full set of log styles.
@@ -65,4 +69,5 @@ export const logStyles = [
   codeBlockStyles,
   toolUseStyles,
   markdownStyles,
+  katexStyleSheet,
 ];

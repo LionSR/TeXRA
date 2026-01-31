@@ -65,6 +65,7 @@ function buildStreamInfo(
     category !== AgentCategory.ToolUse && inputFile
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
+  const status = statuses?.get(id) as StreamTabInfo['status'];
 
   return {
     name: id,
@@ -80,7 +81,7 @@ function buildStreamInfo(
     lastTimestamp,
     inputFile,
     creationTimestamp,
-    status: statuses?.get(id),
+    status,
     executionId: state.getExecutionId(id),
   };
 }
