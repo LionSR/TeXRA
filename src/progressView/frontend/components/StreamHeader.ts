@@ -444,7 +444,6 @@ export class StreamHeader extends LitElement {
         (entry) =>
           entry instanceof HTMLElement && entry.hasAttribute('data-command'),
       ) as HTMLElement | undefined;
-    if (!button) return;
     if (!button || button.hasAttribute('disabled')) return;
 
     const command = button.dataset.command;

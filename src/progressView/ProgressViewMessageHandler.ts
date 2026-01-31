@@ -738,14 +738,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    if (previousFile) {
-      await vscode.commands.executeCommand(
-        'texra.latexdiff',
-        undefined,
-        previousFile,
-        file,
-      );
-    }
+    await vscode.commands.executeCommand(
+      'texra.latexdiff',
+      undefined,
+      previousFile,
+      file,
+    );
 
     await vscode.commands.executeCommand(
       'texra.compare',
