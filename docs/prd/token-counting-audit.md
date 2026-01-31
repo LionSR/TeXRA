@@ -162,3 +162,10 @@ All providers return accurate token counts from API responses:
    - Consider adding heuristic fallback if this causes user confusion
 
 3. **T3/T4 (LOW):** Document rationale, no code changes needed
+
+---
+
+## Progress Update (2026-01-31)
+
+- ✅ Added pre-flight token estimation for OpenAI Response API requests (Response mode).
+- ✅ Added heuristic usage fallback when streaming usage data is missing.
