@@ -481,6 +481,9 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(streamId, (prev) => {
       const existingGroup = prev.taskGroups.find((group) => group.id === id);
       if (!existingGroup) {
+        // Defensive: backend can race UPDATE_TASK_GROUP before ADD_TASK_GROUP.
+        // Create a placeholder so the UI can reflect status updates until full
+        // task group metadata arrives.
         return {
           ...prev,
           taskGroups: [
