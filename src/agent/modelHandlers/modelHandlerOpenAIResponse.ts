@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -16,6 +17,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
   isPreviousResponseIdError,
 } from '@common/errors/sdkErrorUtils';
 
@@ -47,7 +49,11 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  HEURISTIC_TOKEN_BUFFER,
+  computeReducedMaxTokens,
+} from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -182,6 +188,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ['completed', 'failed', 'cancelled', 'incomplete'];
 
   private previousResponseId: string | null = null;
+  private lastApproximateInputTokens: number | null = null;
 
   /**
    * Stores the ID of a background response that is currently being polled.
@@ -829,6 +836,136 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Supports automatic conversation compaction when cumulative input tokens
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
+  private applyTokenHeuristics(
+    params: ResponseCreateParamsBase,
+    messages: ResponseInputItem[],
+    systemPrompt?: string,
+  ): void {
+    try {
+      const approximateInputTokens = this.calculateApproximateTokens(
+        messages,
+        systemPrompt,
+      );
+      this.lastApproximateInputTokens = approximateInputTokens;
+
+      this.logger.debug(
+        `Approximate token count of response input: ${approximateInputTokens}`,
+      );
+
+      if (approximateInputTokens > this.config.contextWindow) {
+        const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
+        this.logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const availableTokens =
+        this.config.contextWindow - approximateInputTokens;
+      const currentMax = params.max_output_tokens;
+      if (typeof currentMax === 'number' && availableTokens < currentMax) {
+        const utilizationPercent =
+          (approximateInputTokens / this.config.contextWindow) * 100;
+        const reducedMaxTokens = computeReducedMaxTokens(
+          availableTokens,
+          HEURISTIC_TOKEN_BUFFER,
+        );
+        params.max_output_tokens = reducedMaxTokens;
+
+        const isOverflow = availableTokens <= 0;
+        const detailsMsg = isOverflow
+          ? 'OpenAI Response: max_output_tokens forced to 1 due to context overflow'
+          : 'OpenAI Response: max_output_tokens reduced to fit context window';
+        const logMsg = isOverflow
+          ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
+          : `Approximate token count (${approximateInputTokens}) + max_output_tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
+
+        this.logger.logContextManagement(logMsg, {
+          action: 'max_tokens_reduced',
+          tokensBefore: approximateInputTokens,
+          contextWindow: this.config.contextWindow,
+          utilizationBefore: utilizationPercent,
+          originalMaxTokens: currentMax,
+          reducedMaxTokens,
+          details: detailsMsg,
+        });
+      }
+    } catch (err) {
+      this.lastApproximateInputTokens = null;
+      if (isContextWindowError(err)) {
+        throw err;
+      }
+      this.logger.warn(
+        `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+      );
+    }
+  }
+
+  private calculateApproximateTokens(
+    messages: ResponseInputItem[],
+    systemPrompt?: string,
+  ): number {
+    let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
+
+    messages.forEach((message) => {
+      if (this.isMessageItem(message)) {
+        const role = (message as { role?: string }).role ?? 'user';
+        const content = this.getMessageContent(message);
+        if (Array.isArray(content)) {
+          content.forEach((part) => {
+            const type = (part as { type?: unknown }).type;
+            const text = (part as { text?: unknown }).text;
+            if (
+              typeof text === 'string' &&
+              (type === 'input_text' || type === 'output_text')
+            ) {
+              textToCount += `${role}: ${text}\n`;
+            } else if (type === 'input_image') {
+              textToCount += `${role}: [Image]\n`;
+            } else if (type === 'input_file') {
+              textToCount += `${role}: [File]\n`;
+            }
+          });
+        } else if (typeof content === 'string') {
+          textToCount += `${role}: ${content}\n`;
+        }
+        return;
+      }
+
+      const itemType = (message as { type?: unknown }).type;
+      if (itemType === 'function_call_output') {
+        const output = (message as ResponseInputItem.FunctionCallOutput).output;
+        if (typeof output === 'string') {
+          textToCount += `tool: ${output}\n`;
+        } else if (Array.isArray(output)) {
+          output.forEach((part) => {
+            const type = (part as { type?: unknown }).type;
+            const text = (part as { text?: unknown }).text;
+            if (
+              typeof text === 'string' &&
+              (type === 'input_text' || type === 'output_text')
+            ) {
+              textToCount += `tool: ${text}\n`;
+            }
+          });
+        }
+        return;
+      }
+
+      if (itemType === 'function_call') {
+        const { arguments: args, name } = message as {
+          arguments?: string;
+          name?: string;
+        };
+        if (args) {
+          textToCount += `tool: ${args}\n`;
+        } else if (name) {
+          textToCount += `tool: ${name}\n`;
+        }
+      }
+    });
+
+    return countTokens(textToCount);
+  }
+
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
@@ -903,6 +1040,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
+    this.applyTokenHeuristics(params, newMessages, systemPrompt);
 
     if (useBackgroundResponses) {
       this.logger.debug(
@@ -1159,6 +1297,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     endTag: string,
   ): ExtractResponseResult {
     // Handle missing usage gracefully - OpenAI streaming may not always include it
+    const hasUsage = Boolean(responseObject.usage);
     const usage: ResponseUsage = responseObject.usage ?? {
       input_tokens: 0,
       output_tokens: 0,
@@ -1199,6 +1338,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         newResponse = fallbackText;
       }
     }
+
+    if (!hasUsage) {
+      const inputTokens = this.lastApproximateInputTokens ?? 0;
+      const outputTokens = newResponse ? countTokens(newResponse) : 0;
+      usage.input_tokens = inputTokens;
+      usage.output_tokens = outputTokens;
+      usage.total_tokens = inputTokens + outputTokens;
+      this.logger.warn(
+        'Response usage missing; using heuristic token estimates.',
+        {
+          data: {
+            responseId: responseObject.id,
+            inputTokens,
+            outputTokens,
+          },
+        },
+      );
+    }
+    this.lastApproximateInputTokens = null;
 
     const stopReason =
       responseObject.status === 'completed'
