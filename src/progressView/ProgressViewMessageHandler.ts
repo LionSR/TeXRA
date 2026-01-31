@@ -806,10 +806,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private clearModelOutputBackups(streamId: StreamTabId): void {
     const prefix = `${streamId}:`;
-    for (const key of this.modelOutputBackups.keys()) {
-      if (key.startsWith(prefix)) {
-        this.modelOutputBackups.delete(key);
-      }
+    const keysToDelete = [...this.modelOutputBackups.keys()].filter((key) =>
+      key.startsWith(prefix),
+    );
+    for (const key of keysToDelete) {
+      this.modelOutputBackups.delete(key);
     }
   }
 

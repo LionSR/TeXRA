@@ -108,9 +108,10 @@ interface UploadedOpenAIResponseAttachment {
   isImage: boolean;
 }
 
-const RESPONSE_MESSAGE_OVERHEAD_TOKENS = 8;
-const RESPONSE_NON_TEXT_CONTENT_TOKENS = 1000;
-const RESPONSE_IMAGE_CONTENT_TOKENS = 2000;
+// Rough estimates for heuristic token counting (conservative on non-text payloads).
+const RESPONSE_MESSAGE_OVERHEAD_TOKENS = 8; // Role/content wrappers + item framing.
+const RESPONSE_NON_TEXT_CONTENT_TOKENS = 1000; // Files/audio/video payload overhead.
+const RESPONSE_IMAGE_CONTENT_TOKENS = 2000; // Images are typically larger than other files.
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -862,11 +863,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
 
       const availableTokens = this.config.contextWindow - estimatedTotalTokens;
-      if (availableTokens < 0) {
-        const errorMsg = `Approximate token count of message exceeds context window: ${estimatedTotalTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
 
       const currentMax = params.max_output_tokens;
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
@@ -879,11 +875,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         params.max_output_tokens = reducedMaxTokens;
 
         const noOutputBudget = availableTokens <= 0;
+        const overflow = availableTokens < 0;
         const detailsMsg = noOutputBudget
           ? 'OpenAI Responses: no remaining tokens for output; max_output_tokens forced to 1'
           : 'OpenAI Responses: max_output_tokens reduced to fit context window';
         const logMsg = noOutputBudget
-          ? `Approximate token count (${estimatedTotalTokens}) leaves no room for output in context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
+          ? `Approximate token count (${estimatedTotalTokens}) ${
+              overflow ? 'exceeds' : 'leaves no room in'
+            } context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
           : `Approximate token count (${estimatedTotalTokens}) + max_output_tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
 
         this.logger.logContextManagement(logMsg, {
@@ -909,6 +908,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * Estimate tokens for response inputs and tool definitions using rough heuristics.
    * Includes per-item overhead and conservative fixed costs for non-text content.
+   * This remains a heuristic and does not capture all protocol framing tokens.
    */
   private calculateApproximateTokens(
     messages: ResponseInputItem[],
@@ -916,15 +916,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     tools?: ResponseCreateParamsBase['tools'],
   ): number {
     let total = 0;
+
+    const addTextTokens = (value: unknown): void => {
+      if (typeof value === 'string') {
+        total += countTokens(value);
+      }
+    };
+
+    const addContentPartTokens = (part: unknown): void => {
+      const type = (part as { type?: unknown }).type;
+      const text = (part as { text?: unknown }).text;
+      if (
+        (type === 'input_text' || type === 'output_text') &&
+        typeof text === 'string'
+      ) {
+        total += countTokens(text);
+        return;
+      }
+
+      if (type === 'input_image') {
+        total += RESPONSE_IMAGE_CONTENT_TOKENS;
+        return;
+      }
+
+      if (
+        type === 'input_file' ||
+        type === 'input_audio' ||
+        type === 'input_video'
+      ) {
+        total += RESPONSE_NON_TEXT_CONTENT_TOKENS;
+      }
+    };
+
     if (systemPrompt) {
-      total += countTokens(systemPrompt);
+      addTextTokens(systemPrompt);
       total += RESPONSE_MESSAGE_OVERHEAD_TOKENS;
     }
 
     if (tools && tools.length > 0) {
       for (const tool of tools) {
         total += RESPONSE_MESSAGE_OVERHEAD_TOKENS;
-        total += countTokens(JSON.stringify(tool));
+        // Tool definitions can be large; include a conservative JSON size estimate.
+        addTextTokens(JSON.stringify(tool));
       }
     }
 
@@ -933,28 +966,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (this.isMessageItem(message)) {
         const content = message.content;
         if (typeof content === 'string') {
-          total += countTokens(content);
+          addTextTokens(content);
           continue;
         }
 
         if (Array.isArray(content)) {
           for (const part of content) {
-            const type = (part as { type?: unknown }).type;
-            const text = (part as { text?: unknown }).text;
-            if (
-              (type === 'input_text' || type === 'output_text') &&
-              typeof text === 'string'
-            ) {
-              total += countTokens(text);
-            } else if (type === 'input_image') {
-              total += RESPONSE_IMAGE_CONTENT_TOKENS;
-            } else if (
-              type === 'input_file' ||
-              type === 'input_audio' ||
-              type === 'input_video'
-            ) {
-              total += RESPONSE_NON_TEXT_CONTENT_TOKENS;
-            }
+            addContentPartTokens(part);
           }
         }
       }
@@ -963,28 +981,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (messageType === 'function_call_output') {
         const output = (message as { output?: unknown }).output;
         if (typeof output === 'string') {
-          total += countTokens(output);
+          addTextTokens(output);
         } else if (Array.isArray(output)) {
           for (const part of output) {
-            const type = (part as { type?: unknown }).type;
-            const text = (part as { text?: unknown }).text;
-            if (
-              (type === 'input_text' || type === 'output_text') &&
-              typeof text === 'string'
-            ) {
-              total += countTokens(text);
-            }
+            addContentPartTokens(part);
           }
         }
       } else if (messageType === 'function_call') {
         const name = (message as { name?: unknown }).name;
         const args = (message as { arguments?: unknown }).arguments;
-        if (typeof name === 'string') {
-          total += countTokens(name);
-        }
-        if (typeof args === 'string') {
-          total += countTokens(args);
-        }
+        addTextTokens(name);
+        addTextTokens(args);
       } else if (
         messageType === 'input_image' ||
         messageType === 'input_file' ||
