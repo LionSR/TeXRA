@@ -6,6 +6,7 @@ import {
   type StreamStatus,
   type StreamTabId,
   type TaskGroup,
+  type UpdateTaskGroupPayload,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -21,7 +22,6 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-import type { EventHandlerContext } from './EventHandlerContext';
 import { withEventErrorHandling } from './errorHandling';
 import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerLogEventHandlers } from './LogEventHandlers';
@@ -29,6 +29,7 @@ import { registerOutputEventHandlers } from './OutputEventHandlers';
 import { registerTodoEventHandlers } from './TodoEventHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { registerUsageEventHandlers } from './UsageEventHandlers';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 export type { UICallbacks };
 
@@ -36,6 +37,10 @@ export type { UICallbacks };
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
+  private readonly pendingTaskGroupUpdates = new Map<
+    StreamTabId,
+    Map<string, UpdateTaskGroupPayload>
+  >();
   private readonly ctx: EventHandlerContext;
 
   constructor(
@@ -178,6 +183,7 @@ export class ProgressEventHandler {
       async () => {
         const { streamId, ...group } = data;
         const { id, parentGroupId } = group;
+        const pendingUpdates = this.pendingTaskGroupUpdates.get(streamId);
 
         const hasStream = this.state.streamTabs.has(streamId);
         const addGroupPromise = this.state.taskGroups.addGroup(
@@ -204,6 +210,21 @@ export class ProgressEventHandler {
         }
 
         await addGroupPromise;
+
+        const pendingUpdate = pendingUpdates?.get(id);
+        if (pendingUpdate) {
+          await this.state.taskGroups.updateGroup(pendingUpdate);
+          if (
+            this.webviewUpdater.isAvailable() &&
+            streamId === this.state.activeStream
+          ) {
+            this.webviewUpdater.updateTaskGroup(pendingUpdate);
+          }
+          pendingUpdates?.delete(id);
+          if (pendingUpdates && pendingUpdates.size === 0) {
+            this.pendingTaskGroupUpdates.delete(streamId);
+          }
+        }
       },
     );
   };
@@ -215,6 +236,20 @@ export class ProgressEventHandler {
       'TaskGroup',
       'failed to handle updateTaskGroup',
       async () => {
+        const streamGroups = this.state.taskGroups.getStreamGroups(
+          data.streamId,
+        );
+        if (!streamGroups.has(data.id)) {
+          const pendingUpdates =
+            this.pendingTaskGroupUpdates.get(data.streamId) ?? new Map();
+          pendingUpdates.set(data.id, data);
+          this.pendingTaskGroupUpdates.set(data.streamId, pendingUpdates);
+          this.logger.debug(
+            `Queued task group update before group was added (stream=${data.streamId}, group=${data.id})`,
+          );
+          return;
+        }
+
         await this.state.taskGroups.updateGroup(data);
 
         const isActive = data.streamId === this.state.activeStream;
@@ -441,10 +476,12 @@ export class ProgressEventHandler {
 
   clearPendingTaskGroups(streamId: StreamTabId): void {
     this.pendingTaskGroups.delete(streamId);
+    this.pendingTaskGroupUpdates.delete(streamId);
   }
 
   clearAllPendingTaskGroups(): void {
     this.pendingTaskGroups.clear();
+    this.pendingTaskGroupUpdates.clear();
   }
 
   resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {

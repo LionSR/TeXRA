@@ -19,6 +19,7 @@ import {
   TOOLBAR_BUTTONS,
 } from '../constants';
 import { ProgressEvents } from '../events';
+import { getComposedPathElement } from '../utils';
 import type { StreamState } from '../store';
 
 // Local imports - shared schemas
@@ -438,12 +439,7 @@ export class StreamHeader extends LitElement {
   }
 
   private handleToolbarClick(event: MouseEvent) {
-    const button = event
-      .composedPath()
-      .find(
-        (entry) =>
-          entry instanceof HTMLElement && entry.hasAttribute('data-command'),
-      ) as HTMLElement | undefined;
+    const button = getComposedPathElement<HTMLElement>(event, '[data-command]');
     if (!button || button.hasAttribute('disabled')) return;
 
     const command = button.dataset.command;
