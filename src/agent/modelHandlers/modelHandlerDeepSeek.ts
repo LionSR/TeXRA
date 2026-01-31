@@ -63,8 +63,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return text;
   }
 
-  protected createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return new BaseReasoningStreamAggregator();
+  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
+    // Only create aggregator when reasoning is enabled
+    return this.capabilities.supportsReasoning
+      ? new BaseReasoningStreamAggregator()
+      : null;
   }
 
   /**
@@ -214,5 +217,28 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       mergeConsecutiveRoles: true,
       convertContentToString: true,
     };
+  }
+
+  /**
+   * DeepSeek supports thinking mode via:
+   * - model="deepseek-reasoner" (thinking enabled by default)
+   * - model="deepseek-chat" with thinking: {"type": "enabled"}
+   */
+  protected override getThinkingParameter():
+    | { type: 'enabled' | 'disabled' }
+    | undefined {
+    const { fullName } = this.config;
+    // deepseek-chat has thinking OFF by default, enable if supportsReasoning
+    if (fullName === 'deepseek-chat' && this.capabilities.supportsReasoning) {
+      return { type: 'enabled' };
+    }
+    // deepseek-reasoner has thinking ON by default, disable if !supportsReasoning
+    if (
+      fullName === 'deepseek-reasoner' &&
+      !this.capabilities.supportsReasoning
+    ) {
+      return { type: 'disabled' };
+    }
+    return undefined;
   }
 }
