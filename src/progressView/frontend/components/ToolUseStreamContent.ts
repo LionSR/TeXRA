@@ -155,6 +155,7 @@ export class ToolUseStreamContent extends LitElement {
         .queuedMessages=${currentState.queuedFollowUps}
         .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
         .polishedText=${currentState.polishedText ?? null}
+        .polishError=${currentState.polishError ?? null}
         .transcribedText=${currentState.transcribedText ?? null}
         .recording=${currentState.recording ?? false}
         @focus-complete=${this.handleFocusComplete}

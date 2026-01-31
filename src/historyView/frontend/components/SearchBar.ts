@@ -6,6 +6,7 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles } from '@shared/styles';
@@ -19,6 +20,7 @@ export class SearchBar extends LitElement {
   static override styles = [designTokens, codiconStyles, historyViewStyles];
 
   @property({ type: String }) matchCount = '';
+  @property({ type: String }) searchTerm = '';
 
   private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -66,6 +68,7 @@ export class SearchBar extends LitElement {
           class="search-input"
           type="search"
           placeholder="Search history items..."
+          .value=${live(this.searchTerm)}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
         ></vscode-textfield>

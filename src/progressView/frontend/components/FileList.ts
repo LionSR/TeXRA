@@ -212,7 +212,7 @@ export class FileList extends LitElement {
     if (!this.showRoundHeaders) {
       return html`${repeat(
         files,
-        (file) => file.location?.absolutePath ?? '',
+        (file) => `${round}-${file.location?.absolutePath ?? ''}`,
         (file) => this.renderFileItem(file),
       )}`;
     }
@@ -226,7 +226,7 @@ export class FileList extends LitElement {
         <div class="round-content">
           ${repeat(
             files,
-            (file) => file.location?.absolutePath ?? '',
+            (file) => `${round}-${file.location?.absolutePath ?? ''}`,
             (file) => this.renderFileItem(file),
           )}
         </div>
@@ -284,12 +284,12 @@ export class FileList extends LitElement {
    * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-command (all needed data is on this element)
-    const actionEl = target.closest('[data-command]');
-    if (!(actionEl instanceof HTMLElement)) return;
+    const path = event.composedPath?.() ?? [];
+    const actionEl = path.find(
+      (entry) =>
+        entry instanceof HTMLElement && entry.matches('[data-command]'),
+    ) as HTMLElement | undefined;
+    if (!actionEl) return;
 
     const { command, file, base, prev } = actionEl.dataset;
     if (!command || !file) return;

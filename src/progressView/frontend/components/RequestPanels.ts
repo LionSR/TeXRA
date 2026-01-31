@@ -1,5 +1,11 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -25,7 +31,6 @@ import {
 } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 
@@ -36,6 +41,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { ProgressEvents } from '../events';
 
 // Local imports - progress view component types
+import {
+  buildWorkflowFileLists,
+  renderWorkflowFilesList,
+} from './helpers/workflowFilesList';
 import type { PermissionState } from './PermissionCard';
 
 const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
@@ -73,6 +82,23 @@ export class RequestPanels extends LitElement {
     document.removeEventListener('click', this.handleOutsideClick, true);
     document.removeEventListener('keydown', this.handleGlobalKeydown);
     super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('permissions')) {
+      const validKeys = new Set(
+        this.permissions.map((permission) => this.getPermissionKey(permission)),
+      );
+      if (this.openDiffMenuKey && !validKeys.has(this.openDiffMenuKey)) {
+        this.openDiffMenuKey = null;
+      }
+      const nextFeedbackKeys = new Set(
+        [...this.feedbackOpenKeys].filter((key) => validKeys.has(key)),
+      );
+      if (nextFeedbackKeys.size !== this.feedbackOpenKeys.size) {
+        this.feedbackOpenKeys = nextFeedbackKeys;
+      }
+    }
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -495,58 +521,14 @@ export class RequestPanels extends LitElement {
   private renderProposalFiles(
     permission: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const combine = (single: string | null | undefined, arr: string[] = []) =>
-      [single, ...arr].filter((f): f is string => Boolean(f));
-
-    const fileLists = [
-      {
-        label: 'Input',
-        files: combine(permission.inputFile, permission.inputFiles),
-      },
-      {
-        label: 'Reference',
-        files: combine(permission.referenceFile, permission.referenceFiles),
-      },
-      {
-        label: 'Auxiliary',
-        files: combine(permission.auxiliaryFile, permission.auxiliaryFiles),
-      },
-      {
-        label: 'Media',
-        files: combine(permission.mediaFile, permission.mediaFiles),
-      },
-      { label: 'Output', files: permission.outputFiles ?? [] },
-    ];
-
-    return html`${repeat(
-      fileLists,
-      ({ label }) => label,
-      ({ label, files }) => this.renderProposalFileList(label, files),
-    )}`;
-  }
-
-  private renderProposalFileList(
-    label: string,
-    files: string[],
-  ): TemplateResult | typeof nothing {
-    if (files.length === 0) return nothing;
-
-    return html`
-      <div class="workflow-proposal__${label.toLowerCase()}-files">
-        <span class="workflow-proposal__file-label">${label}:</span>
-        ${repeat(
-          files,
-          (file) => file,
-          (file, i) =>
-            html`${i > 0 ? ', ' : ''}<span
-                class="workflow-proposal__file-name"
-                title=${file}
-                @click=${() => this.openFile(file)}
-                >${getBasename(file)}</span
-              >`,
-        )}
-      </div>
-    `;
+    const fileLists = buildWorkflowFileLists(permission);
+    return renderWorkflowFilesList(fileLists, {
+      getContainerClass: (label) =>
+        `workflow-proposal__${label.toLowerCase()}-files`,
+      labelClass: 'workflow-proposal__file-label',
+      fileClass: 'workflow-proposal__file-name',
+      onFileClick: (file) => this.openFile(file),
+    });
   }
 
   private renderFeedbackSection(
@@ -778,10 +760,12 @@ export class RequestPanels extends LitElement {
   };
 
   private handleMenuClick = (event: CustomEvent): void => {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    const menuItem = target.closest('vscode-context-menu-item');
+    const path = event.composedPath?.() ?? [];
+    const menuItem = path.find(
+      (entry) =>
+        entry instanceof HTMLElement &&
+        entry.matches('vscode-context-menu-item'),
+    ) as HTMLElement | undefined;
     if (!menuItem) return;
 
     const kind = menuItem.dataset.permissionKind as
@@ -907,12 +891,19 @@ export class RequestPanels extends LitElement {
     const lines = [
       details.message && `message: ${details.message}`,
       details.provider && `provider: ${details.provider}`,
-      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusCode !== undefined &&
+        details.statusCode !== null &&
+        `statusCode: ${details.statusCode}`,
       details.statusText && `statusText: ${details.statusText}`,
-      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
-      details.retryable != null && `retryable: ${details.retryable}`,
+      details.isRelayError !== undefined &&
+        details.isRelayError !== null &&
+        `isRelayError: ${details.isRelayError}`,
+      details.retryable !== undefined &&
+        details.retryable !== null &&
+        `retryable: ${details.retryable}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null &&
+      details.rawErrorBody !== undefined &&
+        details.rawErrorBody !== null &&
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 

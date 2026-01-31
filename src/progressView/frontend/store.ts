@@ -27,7 +27,10 @@ export type { ContextState };
 export type { StreamSort };
 
 /** Followup options derived from schema (minus command field) */
-export type FollowupOptionsState = Omit<SetFollowupOptionsMessage, 'command'>;
+export type FollowupOptionsState = Omit<
+  SetFollowupOptionsMessage,
+  'command' | 'stream'
+>;
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
@@ -35,7 +38,7 @@ export interface ProgressState {
   streamFilter: StreamFilter;
   streamSort: StreamSort;
   streamStates: Map<StreamTabId, StreamState>;
-  followupOptions: FollowupOptionsState | null;
+  followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
 export function createInitialState(): ProgressState {
@@ -45,7 +48,7 @@ export function createInitialState(): ProgressState {
     streamFilter: 'all',
     streamSort: 'time',
     streamStates: new Map(),
-    followupOptions: null,
+    followupOptionsByStream: new Map(),
   };
 }
 

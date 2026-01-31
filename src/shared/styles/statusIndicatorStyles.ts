@@ -56,6 +56,14 @@ export const statusIndicatorStyles: CSSResult = css`
     opacity: var(--opacity-disabled, 0.5);
   }
 
+  .status-indicator.is-initializing,
+  .tab-status.is-initializing {
+    background-color: var(--vscode-descriptionForeground);
+    box-shadow: 0 0 4px var(--vscode-descriptionForeground);
+    opacity: 1;
+    animation: pulse-scale 1.8s infinite;
+  }
+
   .status-text {
     font-size: var(--font-size-sm, 12px);
     text-transform: capitalize;
@@ -76,5 +84,9 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-text.is-waiting,
   .status-text.is-resuming {
     color: var(--vscode-textLink-foreground);
+  }
+
+  .status-text.is-initializing {
+    color: var(--vscode-descriptionForeground);
   }
 `;

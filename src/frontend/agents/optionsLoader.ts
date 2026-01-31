@@ -1,5 +1,5 @@
 // Local imports - agent options
-import { computeAgentOptionsData } from '@agent/index';
+import { computeAgentOptionsData, refresh } from '@agent/index';
 
 // Local imports - model options
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -13,20 +13,37 @@ export interface OptionsPayload {
   defaultMergeModel: string;
 }
 
-export async function loadOptions(): Promise<OptionsPayload> {
-  const [modelOptions, agentOptions] = await Promise.all([
-    computeModelOptionsData(),
-    computeAgentOptionsData(),
-  ]);
+export interface LoadOptionsParams {
+  refreshAgents?: boolean;
+  onError?: (error: unknown) => void;
+}
 
-  const defaultMergeModel = getConfig<string>(
-    'texra.merge.defaultModel',
-    'gemini3f',
-  );
+export async function loadOptions(
+  params: LoadOptionsParams = {},
+): Promise<OptionsPayload | null> {
+  const { refreshAgents = true, onError } = params;
 
-  return {
-    agentOptions,
-    modelOptions,
-    defaultMergeModel,
-  };
+  try {
+    if (refreshAgents) {
+      await refresh();
+    }
+    const [modelOptions, agentOptions] = await Promise.all([
+      computeModelOptionsData(),
+      computeAgentOptionsData(),
+    ]);
+
+    const defaultMergeModel = getConfig<string>(
+      'texra.merge.defaultModel',
+      'gemini3f',
+    );
+
+    return {
+      agentOptions,
+      modelOptions,
+      defaultMergeModel,
+    };
+  } catch (error) {
+    onError?.(error);
+    return null;
+  }
 }

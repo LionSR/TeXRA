@@ -627,13 +627,12 @@ export class MainApp extends BaseWebviewApp {
     const listId = this.multipleListIdMap[message.command];
     if (!listId) return;
 
-    const existing = this.multiFiles[listId] ?? [];
-    const merged = this.mergeUnique(existing, files);
-
-    this.multiFiles = { ...this.multiFiles, [listId]: merged };
-    this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
+    this.multiFiles = { ...this.multiFiles, [listId]: files };
+    if (files.length > 0) {
+      this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: true };
+    }
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive = true;
+      this.outputFilesActive = files.length > 0;
     }
     this.saveState();
   }
@@ -789,9 +788,9 @@ export class MainApp extends BaseWebviewApp {
       typeof MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED
     >,
   ): void {
+    this.isPolishing = false;
     if (message.text.trim()) {
       this.instruction = message.text;
-      this.isPolishing = false;
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Instruction text has been polished!',
       });
@@ -1060,6 +1059,10 @@ export class MainApp extends BaseWebviewApp {
       this.singleFiles = { ...this.singleFiles, [key]: '' };
       this.saveState();
     }
+    const command = FILE_SELECTED_COMMANDS[type];
+    if (command) {
+      postMessage(command, { filePath: '' });
+    }
   }
 
   private handleRefreshEditedFiles(): void {
@@ -1071,12 +1074,11 @@ export class MainApp extends BaseWebviewApp {
 
   private handleEmptyFiles(type: MultipleFileType): void {
     const listId = `${type}Files`;
-    this.multiFiles = { ...this.multiFiles, [listId]: [] };
+    this.updateMultiFiles(listId as keyof MultiFiles, []);
     this.multiFilesVisible = { ...this.multiFilesVisible, [listId]: false };
     if (type === 'output') {
       this.outputFilesActive = false;
     }
-    this.saveState();
   }
 
   private handleRefreshFiles(type: FileType): void {
@@ -1109,7 +1111,7 @@ export class MainApp extends BaseWebviewApp {
     this.sessionType = parsed;
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive = false;
-      this.multiFiles = { ...this.multiFiles, outputFiles: [] };
+      this.updateMultiFiles('outputFiles', []);
       this.multiFilesVisible = {
         ...this.multiFilesVisible,
         outputFiles: false,

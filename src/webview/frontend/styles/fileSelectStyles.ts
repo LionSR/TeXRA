@@ -113,11 +113,14 @@ export const toggleStyles = css`
     user-select: none;
     margin: 0;
     position: relative;
+    background: none;
+    border: none;
     padding: 0 var(--spacing-tiny);
     color: var(--text-color);
     display: flex;
     align-items: center;
     height: var(--height-control);
+    font: inherit;
   }
 
   .file-select[data-expanded='true'] .optional-label,
@@ -170,6 +173,9 @@ export const multiFilesStyles = css`
     cursor: pointer;
     flex-shrink: 0;
     opacity: 0.7;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
   .remove-button:hover {
@@ -193,6 +199,20 @@ export const dropdownStyles = css`
 
   .dropdown-container vscode-toolbar-button {
     flex-shrink: 0;
+    position: relative;
+  }
+
+  .dropdown-container vscode-toolbar-button.has-options::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vscode-button-background);
+    box-shadow: 0 0 0 1px
+      var(--vscode-button-foreground, var(--vscode-foreground));
   }
 
   .dropdown-container .dropdown-menu {

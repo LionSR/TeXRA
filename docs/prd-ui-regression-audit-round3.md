@@ -9,6 +9,7 @@
 ## Overview
 
 This PRD consolidates **all Round 3 UI and logic regressions** from the following source documents:
+
 - `prd-ui-regression-audit-round3-1.md` (key collisions, IME, accessibility)
 - `prd-ui-regression-audit-round3-2.md` (backend sync issues)
 - `prd-ui-regression-audit-round3-3.md` (INITIALIZING status, schema validation)
@@ -18,11 +19,11 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 
 ### Summary by Severity
 
-| Severity | Count | Primary Areas |
-|----------|-------|---------------|
-| **HIGH** | 10    | Backend sync, data loss, button availability |
-| **MEDIUM** | 20  | State leaks, UX regressions, filter issues |
-| **LOW** | 15    | Key collisions, accessibility gaps, styling |
+| Severity   | Count | Primary Areas                                |
+| ---------- | ----- | -------------------------------------------- |
+| **HIGH**   | 10    | Backend sync, data loss, button availability |
+| **MEDIUM** | 20    | State leaks, UX regressions, filter issues   |
+| **LOW**    | 15    | Key collisions, accessibility gaps, styling  |
 
 ---
 
@@ -152,7 +153,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
     left: 0;
     z-index: 100;
     min-width: 150px;
-    display: block;  /* <-- ADD THIS */
+    display: block; /* <-- ADD THIS */
   }
   ```
 
@@ -361,6 +362,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 - **Code Evidence:** vscode-context-menu source shows `this._wrapperEl.focus()` on show.
   FileSelectGroup's `handleFocusOut` only checks `this.contains()` and `this.shadowRoot?.contains()`.
 - **Fix:** Use `event.composedPath()` to check containment across shadow DOM boundaries:
+
   ```typescript
   private handleFocusOut(event: FocusEvent): void {
     const nextTarget = event.relatedTarget as Node | null;
@@ -436,20 +438,24 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 ## Implementation Priority
 
 ### Phase 1: Critical Data Integrity (HIGH)
+
 1. H-1, H-2, H-3, H-6 – Backend sync issues (fix together)
 2. H-4, H-5 – Run reset/clear data loss
 3. H-7, H-8 – INITIALIZING status + sort crash
 
 ### Phase 2: UX Blocking Issues (HIGH)
+
 4. H-9 – Follow-up options leak
 5. H-10, H-11 – Shadow DOM issues (dropdown, target.closest)
 
 ### Phase 3: State Management (MEDIUM)
+
 6. M-4 through M-15 – Various state issues
 7. M-16, M-17, M-18 – INITIALIZING styling + schema validation
 8. M-19, M-20 – Search input + schema validation
 
 ### Phase 4: Polish (LOW)
+
 9. L-1 through L-15 – Key collisions, accessibility, styling
 
 ---
@@ -457,35 +463,43 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 ## Source File Mapping
 
 | Merged ID | Original Source | Original ID |
-|-----------|-----------------|-------------|
-| H-1 | round3-2/4 | M1 |
-| H-2 | round3-2/4 | M2 |
-| H-3 | round3-2/4 | M5 |
-| H-4 | round3-2/4 | P1 |
-| H-5 | round3-2/4 | P2 |
-| H-6 | round3-2/4 | M8 |
-| H-7 | round3-3 | P3 |
-| H-8 | round3-3 | P5 |
-| H-9 | round3-3 | P6 |
-| H-10 | round3-1 | P11 (NEW) |
-| H-11 | original round3 | P5-P10 |
-| M-1 | round3-2/4 | M3 |
-| M-2 | round3-2/4 | M4 |
-| M-3 | round3-1/2/4 | M1/M7 |
-| M-4 | round3-1 | P1 |
-| M-5 | round3-1 | P2 |
-| M-6 | round3-1 | P3 |
-| M-7 | round3-1 | P5 |
-| M-8 | round3-1 | P10 |
-| M-9 | round3-2/4 | P3 |
-| M-10 | round3-2/3/4 | P4/P7 |
-| M-11 | round3-2/4 | P5 |
-| M-12 | round3-2/4 | P6 |
-| M-13 | round3-2/4 | P7 |
-| M-14 | round3-2/4 | P8 |
-| M-15 | round3-2/4 | P10 |
-| M-16 | round3-3 | P1 |
-| M-17 | round3-3 | P2 |
-| M-18 | round3-3 | P4 |
-| M-19 | round3-1 | H1 |
-| M-20 | round3-3 | S1 |
+| --------- | --------------- | ----------- |
+| H-1       | round3-2/4      | M1          |
+| H-2       | round3-2/4      | M2          |
+| H-3       | round3-2/4      | M5          |
+| H-4       | round3-2/4      | P1          |
+| H-5       | round3-2/4      | P2          |
+| H-6       | round3-2/4      | M8          |
+| H-7       | round3-3        | P3          |
+| H-8       | round3-3        | P5          |
+| H-9       | round3-3        | P6          |
+| H-10      | round3-1        | P11 (NEW)   |
+| H-11      | original round3 | P5-P10      |
+| M-1       | round3-2/4      | M3          |
+| M-2       | round3-2/4      | M4          |
+| M-3       | round3-1/2/4    | M1/M7       |
+| M-4       | round3-1        | P1          |
+| M-5       | round3-1        | P2          |
+| M-6       | round3-1        | P3          |
+| M-7       | round3-1        | P5          |
+| M-8       | round3-1        | P10         |
+| M-9       | round3-2/4      | P3          |
+| M-10      | round3-2/3/4    | P4/P7       |
+| M-11      | round3-2/4      | P5          |
+| M-12      | round3-2/4      | P6          |
+| M-13      | round3-2/4      | P7          |
+| M-14      | round3-2/4      | P8          |
+| M-15      | round3-2/4      | P10         |
+| M-16      | round3-3        | P1          |
+| M-17      | round3-3        | P2          |
+| M-18      | round3-3        | P4          |
+| M-19      | round3-1        | H1          |
+| M-20      | round3-3        | S1          |
+
+---
+
+## Progress Update (2026-02-01)
+
+- ✅ All HIGH severity fixes (H-1 through H-11) implemented.
+- ✅ All MEDIUM severity fixes (M-1 through M-20) implemented.
+- ✅ All LOW severity fixes (L-1 through L-15) implemented.

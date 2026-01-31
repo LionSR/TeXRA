@@ -33,7 +33,7 @@ import type { StreamFilter, StreamSort } from '../store';
 import type { StreamTabInfo } from '@shared/schemas';
 
 /** Format status string for display (capitalize first letter) */
-function formatStatusLabel(status: string): string {
+function formatStatusLabel(status?: string | null): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '';
 }
 
@@ -92,6 +92,14 @@ export class StreamTabs extends LitElement {
       .agent-filter-group vscode-radio {
         min-width: auto;
         flex: 0 0 auto;
+      }
+
+      .sort-btn.active::part(control) {
+        background-color: var(
+          --vscode-button-secondaryBackground,
+          var(--vscode-button-background)
+        );
+        color: var(--vscode-button-foreground);
       }
 
       .tab-container {
@@ -272,11 +280,15 @@ export class StreamTabs extends LitElement {
               (btn) => html`
                 <vscode-toolbar-button
                   id=${btn.id}
-                  class="sort-btn"
+                  class=${classMap({
+                    'sort-btn': true,
+                    active: this.sort === btn.sort,
+                  })}
                   icon=${btn.icon}
                   label=${btn.title}
                   title=${btn.title}
                   data-sort=${btn.sort}
+                  aria-pressed=${this.sort === btn.sort ? 'true' : 'false'}
                 ></vscode-toolbar-button>
               `,
             )}
@@ -368,12 +380,11 @@ export class StreamTabs extends LitElement {
   }
 
   private handleTabClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-stream and data-action (unified delegation)
-    const actionElement = target.closest('[data-stream][data-action]');
-    if (!(actionElement instanceof HTMLElement)) return;
+    const actionElement = this.getActionElement(
+      event.composedPath?.() ?? [],
+      '[data-stream][data-action]',
+    );
+    if (!actionElement) return;
 
     const { stream: streamId, action } = actionElement.dataset;
     if (!streamId) return;
@@ -397,12 +408,11 @@ export class StreamTabs extends LitElement {
   }
 
   private handleSortClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-sort attribute (unified delegation)
-    const button = target.closest('[data-sort]');
-    if (!(button instanceof HTMLElement) || !button.dataset.sort) return;
+    const button = this.getActionElement(
+      event.composedPath?.() ?? [],
+      '[data-sort]',
+    );
+    if (!button || !button.dataset.sort) return;
 
     this.dispatchEvent(
       ProgressEvents.sortChange({ sort: button.dataset.sort as StreamSort }),
@@ -411,6 +421,17 @@ export class StreamTabs extends LitElement {
 
   private handleDeleteAll(): void {
     this.dispatchEvent(ProgressEvents.deleteAll());
+  }
+
+  private getActionElement(
+    path: EventTarget[],
+    selector: string,
+  ): HTMLElement | null {
+    for (const entry of path) {
+      if (!(entry instanceof HTMLElement)) continue;
+      if (entry.matches(selector)) return entry;
+    }
+    return null;
   }
 
   private buildTooltip(info: StreamTabInfo): string {
@@ -427,7 +448,7 @@ export class StreamTabs extends LitElement {
       : mainLine;
   }
 
-  private normalizeStatus(status?: string): string {
+  private normalizeStatus(status?: string | null): string {
     return status ?? STREAM_STATUS.READY;
   }
 }

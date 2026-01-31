@@ -4,6 +4,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+import { deriveUseMultipleOutputs } from '@shared/utils/useMultipleOutputs';
 import type { AgentConfigInput } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { validateExecutionRequest } from '@common/execution/executionRequests';
@@ -90,9 +91,12 @@ export class ExecutionManager {
           ? AgentCategory.ToolUse
           : AgentCategory.Workflow,
         outputFiles,
-        useMultipleOutputs:
-          !isToolUse &&
-          (Boolean(message.outputFilesActive) || outputFiles.length > 1),
+        useMultipleOutputs: deriveUseMultipleOutputs({
+          isToolUse,
+          outputFiles,
+          outputFilesActive: message.outputFilesActive,
+          useMultipleOutputs: message.useMultipleOutputs,
+        }),
         toolConfig,
         mediaFile: mapMedia(message.mediaFile ?? null),
         mediaFiles: (message.mediaFiles ?? [])

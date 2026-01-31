@@ -13,12 +13,12 @@
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
+  STREAM_STATUS,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { resolveRunId } from '@shared/streams/runSelection';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view
@@ -83,7 +83,7 @@ function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
 ): void {
-  ctx.setPermissions([...ctx.getPermissions(), permission]);
+  ctx.setPermissions([permission, ...ctx.getPermissions()]);
 }
 
 function removePrompt(
@@ -121,6 +121,7 @@ function updateStreamInfo(
   for (const key of nextStates.keys()) {
     if (!knownStreams.has(key)) {
       nextStates.delete(key);
+      clearPendingLogUpdatesForStream(key);
     }
   }
 
@@ -170,10 +171,17 @@ const handlers: HandlerRegistry = {
       data.streams,
       data.streamStates,
     );
+    const candidateActive = activeStream || updated.activeStreamId;
+    const hasCandidate = candidateActive
+      ? updated.streams.some((stream) => stream.name === candidateActive)
+      : false;
+    const nextActiveStreamId = hasCandidate
+      ? candidateActive
+      : (updated.streams[0]?.name ?? null);
 
     ctx.setState(() => ({
       ...updated,
-      activeStreamId: activeStream || null,
+      activeStreamId: nextActiveStreamId,
       streamFilter: data.agentFilter,
     }));
   },
@@ -255,19 +263,28 @@ const handlers: HandlerRegistry = {
       if (isWorkflowState(prev)) {
         return {
           ...baseUpdate,
-          activeRunId: activeRunId ?? prev.activeRunId,
-          runInstructions: runInstructions
-            ? { ...prev.runInstructions, ...runInstructions }
-            : prev.runInstructions,
-          runUsage: runUsage
-            ? { ...prev.runUsage, ...runUsage }
-            : prev.runUsage,
-          runFiles: runFiles
-            ? { ...prev.runFiles, ...runFiles }
-            : prev.runFiles,
-          runMissingOutputs: runMissingOutputs
-            ? { ...prev.runMissingOutputs, ...runMissingOutputs }
-            : prev.runMissingOutputs,
+          activeRunId: isClear ? null : (activeRunId ?? prev.activeRunId),
+          selectedRunId: isClear ? null : prev.selectedRunId,
+          runInstructions: isClear
+            ? {}
+            : runInstructions
+              ? { ...prev.runInstructions, ...runInstructions }
+              : prev.runInstructions,
+          runUsage: isClear
+            ? {}
+            : runUsage
+              ? { ...prev.runUsage, ...runUsage }
+              : prev.runUsage,
+          runFiles: isClear
+            ? {}
+            : runFiles
+              ? { ...prev.runFiles, ...runFiles }
+              : prev.runFiles,
+          runMissingOutputs: isClear
+            ? {}
+            : runMissingOutputs
+              ? { ...prev.runMissingOutputs, ...runMissingOutputs }
+              : prev.runMissingOutputs,
         };
       }
 
@@ -388,11 +405,13 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
     const { stream, instruction, runId: providedRunId } = data;
     if (!stream) return;
+    if (providedRunId === null || providedRunId === undefined) {
+      console.warn('[ProgressView] UPDATE_INSTRUCTION missing runId.');
+      return;
+    }
 
     updateWorkflowState(ctx, stream, (prev) => {
-      // Use provided runId from backend if available, otherwise resolve from state
-      const runId =
-        providedRunId ?? resolveRunId(prev, { mode: 'fallback' }) ?? 'default';
+      const runId = providedRunId;
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
@@ -436,15 +455,26 @@ const handlers: HandlerRegistry = {
     const { streamId, id, status, endTime } = data.update;
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
-      taskGroups: prev.taskGroups.map((group) =>
-        group.id === id
-          ? {
-              ...group,
-              status: status ?? group.status,
-              endTime: endTime ?? group.endTime,
-            }
-          : group,
-      ),
+      taskGroups: prev.taskGroups.some((group) => group.id === id)
+        ? prev.taskGroups.map((group) =>
+            group.id === id
+              ? {
+                  ...group,
+                  status: status ?? group.status,
+                  endTime: endTime ?? group.endTime,
+                }
+              : group,
+          )
+        : [
+            ...prev.taskGroups,
+            {
+              id,
+              name: id,
+              startTime: endTime ?? Date.now(),
+              status: status ?? STREAM_STATUS.RUNNING,
+              endTime,
+            },
+          ],
     }));
   },
 
@@ -512,7 +542,18 @@ const handlers: HandlerRegistry = {
       ...prev,
       followUpText: data.text,
       polishedText: data.text,
+      polishError: null,
       shouldFocusFollowUp: true,
+    }));
+  },
+
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
+    const streamId = ctx.getState().activeStreamId;
+    if (!streamId) return;
+
+    updateToolUseState(ctx, streamId, (prev) => ({
+      ...prev,
+      polishError: data.error ?? 'Polish failed.',
     }));
   },
 
@@ -523,6 +564,7 @@ const handlers: HandlerRegistry = {
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
       transcribedText: data.text,
+      polishError: null,
       shouldFocusFollowUp: true,
     }));
   },
@@ -537,12 +579,15 @@ const handlers: HandlerRegistry = {
     setActiveStreamRecording(ctx, false),
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
-    const { command: _command, ...options } = data;
+    const { command: _command, stream, ...options } = data;
+    const streamId = stream ?? ctx.getState().activeStreamId;
+    if (!streamId) return;
 
-    ctx.setState((prev) => ({
-      ...prev,
-      followupOptions: options,
-    }));
+    ctx.setState((prev) => {
+      const next = new Map(prev.followupOptionsByStream);
+      next.set(streamId, options);
+      return { ...prev, followupOptionsByStream: next };
+    });
   },
 };
 

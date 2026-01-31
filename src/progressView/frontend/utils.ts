@@ -12,8 +12,12 @@ export type VSCodeValueElement = HTMLElement & { value?: string };
  * Prefers the clicked radio element's value, falls back to group value.
  */
 export function getRadioValue<T extends string>(event: Event): T | null {
-  const target = event.target as Element | null;
-  const radio = target?.closest('vscode-radio');
+  const path = event.composedPath?.() ?? [];
+  const radio = path.find(
+    (entry) =>
+      entry instanceof HTMLElement &&
+      entry.tagName.toLowerCase() === 'vscode-radio',
+  ) as HTMLElement | undefined;
   const radioGroup = event.currentTarget as VSCodeValueElement | null;
   const value = radio?.getAttribute('value') || radioGroup?.value;
   return (value as T) || null;

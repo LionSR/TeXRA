@@ -412,10 +412,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(undefined, webviewView);
     try {
-      const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
-        loadOptions(),
+      const [options, authStatus] = await Promise.all([
+        loadOptions({
+          onError: (error) => {
+            this.logger.error(
+              this.channel,
+              `Failed to load main view options: ${toErrorMessage(error)}`,
+            );
+          },
+        }),
         getAuthStatus(),
       ]);
+      if (!options) return;
+      const { modelOptions, agentOptions } = options;
 
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
