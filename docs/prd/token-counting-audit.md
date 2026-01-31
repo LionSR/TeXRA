@@ -2,12 +2,12 @@
 
 ## Implementation Status
 
-| Item | Severity | Status | Notes |
-|------|----------|--------|-------|
-| OpenAI Response API no pre-flight check | HIGH | Proposed | Can overflow context on first request |
-| Missing usage in streaming responses | MEDIUM | Proposed | Defaults to 0, affects UI display |
-| Safety buffer inconsistency (5000 vs 10) | LOW | Documented | Intentional but may be overly conservative |
-| OpenAI Chat heuristic counting | LOW | Won't Fix | Best effort with `gpt-tokenizer` |
+| Item                                     | Severity | Status     | Notes                                      |
+| ---------------------------------------- | -------- | ---------- | ------------------------------------------ |
+| OpenAI Response API no pre-flight check  | HIGH     | Proposed   | Can overflow context on first request      |
+| Missing usage in streaming responses     | MEDIUM   | Proposed   | Defaults to 0, affects UI display          |
+| Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional but may be overly conservative |
+| OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`           |
 
 ## Overview
 
@@ -21,12 +21,12 @@ and edge cases have issues.
 
 All providers return accurate token counts from API responses:
 
-| Provider | Input Tokens | Output Tokens | Source |
-|----------|-------------|---------------|--------|
-| OpenAI Chat | `usage.prompt_tokens` | `usage.completion_tokens` | API response |
-| OpenAI Response | `usage.input_tokens` | `usage.output_tokens` | API response |
-| Anthropic | `usage.input_tokens` | `usage.output_tokens` | API response |
-| Google | `usageMetadata.promptTokenCount` | `usageMetadata.candidatesTokenCount` | API response |
+| Provider        | Input Tokens                     | Output Tokens                        | Source       |
+| --------------- | -------------------------------- | ------------------------------------ | ------------ |
+| OpenAI Chat     | `usage.prompt_tokens`            | `usage.completion_tokens`            | API response |
+| OpenAI Response | `usage.input_tokens`             | `usage.output_tokens`                | API response |
+| Anthropic       | `usage.input_tokens`             | `usage.output_tokens`                | API response |
+| Google          | `usageMetadata.promptTokenCount` | `usageMetadata.candidatesTokenCount` | API response |
 
 **Conclusion:** No action needed for post-response counting.
 
@@ -75,7 +75,9 @@ All providers return accurate token counts from API responses:
     // ...
   };
   if (!responseObject.usage) {
-    this.logger.warn('Response missing usage information - token counts will show as 0');
+    this.logger.warn(
+      'Response missing usage information - token counts will show as 0',
+    );
   }
   ```
 - **External Reference:** https://github.com/openai/openai-agents-python/issues/1179
@@ -97,13 +99,21 @@ All providers return accurate token counts from API responses:
   buffer (5000 tokens) compensates for estimation errors. Providers with exact counting
   use a minimal buffer (10 tokens).
 - **Code Evidence:**
+
   ```typescript
   // OpenAI Chat - large buffer for heuristic inaccuracy
-  const reducedMaxTokens = computeReducedMaxTokens(availableTokens, HEURISTIC_TOKEN_BUFFER);
+  const reducedMaxTokens = computeReducedMaxTokens(
+    availableTokens,
+    HEURISTIC_TOKEN_BUFFER,
+  );
 
   // Anthropic/Google - small buffer for exact counting
-  const reducedMaxTokens = computeReducedMaxTokens(availableTokens, TOKEN_SAFETY_BUFFER);
+  const reducedMaxTokens = computeReducedMaxTokens(
+    availableTokens,
+    TOKEN_SAFETY_BUFFER,
+  );
   ```
+
 - **Assessment:** This is intentional and documented. The 5000-token buffer may be overly
   conservative but provides safety margin. Consider reducing to 1000-2000 if testing shows
   it's too aggressive.
@@ -135,12 +145,12 @@ All providers return accurate token counts from API responses:
 
 ## Summary
 
-| Issue | Pre-flight | Post-response | Action |
-|-------|-----------|---------------|--------|
-| OpenAI Chat | Heuristic (5000 buffer) | Accurate | Won't fix |
-| OpenAI Response | **None** | Accurate | Consider adding |
-| Anthropic | Exact API | Accurate | None needed |
-| Google | Exact API | Accurate | None needed |
+| Issue           | Pre-flight              | Post-response | Action          |
+| --------------- | ----------------------- | ------------- | --------------- |
+| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix       |
+| OpenAI Response | **None**                | Accurate      | Consider adding |
+| Anthropic       | Exact API               | Accurate      | None needed     |
+| Google          | Exact API               | Accurate      | None needed     |
 
 ## Recommended Actions
 
