@@ -27,7 +27,6 @@ import {
   type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
-  type StreamTabId,
 } from '@shared/schemas';
 import {
   getExecutionStore,
@@ -192,7 +191,6 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
     userVarChannels,
     checkInterruption,
-    setAbortController,
     getUsageRecorder = () => async () => {},
     usageMonitor,
   } = input;
