@@ -109,6 +109,7 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean }) shouldFocus = false;
   @property({ type: String }) polishedText: string | null = null;
   @property({ type: String }) transcribedText: string | null = null;
+  @property({ type: Number }) polishErrorId = 0;
   @property({ type: Boolean }) recording = false;
 
   @state() private polishing = false;
@@ -141,6 +142,10 @@ export class FollowUpInput extends LitElement {
         this.updateValue(this.polishedText);
         this.focusInput({ scrollIntoView: true });
       }
+    }
+
+    if (changedProperties.has('polishErrorId')) {
+      this.polishing = false;
     }
 
     // React to transcribedText property change

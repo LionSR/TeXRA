@@ -580,6 +580,7 @@ const handlers: HandlerRegistry = {
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
       polishedText: null,
+      polishErrorId: (prev.polishErrorId ?? 0) + 1,
     }));
   },
 

@@ -49,6 +49,7 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   shouldFocusFollowUp: z.boolean().prefault(false),
   polishedText: z.string().nullable().prefault(null),
   transcribedText: z.string().nullable().prefault(null),
+  polishErrorId: z.int().prefault(0),
   recording: z.boolean().prefault(false),
 });
 

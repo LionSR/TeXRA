@@ -156,6 +156,7 @@ export class ToolUseStreamContent extends LitElement {
         .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
         .polishedText=${currentState.polishedText ?? null}
         .transcribedText=${currentState.transcribedText ?? null}
+        .polishErrorId=${currentState.polishErrorId ?? 0}
         .recording=${currentState.recording ?? false}
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
