@@ -2,12 +2,12 @@
 
 ## Implementation Status
 
-| Item                                     | Severity | Status     | Notes                                      |
-| ---------------------------------------- | -------- | ---------- | ------------------------------------------ |
-| OpenAI Response API no pre-flight check  | HIGH     | Proposed   | Can overflow context on first request      |
-| Missing usage in streaming responses     | MEDIUM   | Proposed   | Defaults to 0, affects UI display          |
-| Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional but may be overly conservative |
-| OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`           |
+| Item                                     | Severity | Status     | Notes                                                       |
+| ---------------------------------------- | -------- | ---------- | ----------------------------------------------------------- |
+| OpenAI Response API no pre-flight check  | HIGH     | **FIXED**  | Native API via `/responses/input_tokens`                    |
+| Missing usage in streaming responses     | MEDIUM   | Documented | Defaults to 0, affects UI display (acceptable degradation)  |
+| Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional; OpenAI Response now uses 10 (exact counting)   |
+| OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`                            |
 
 ## Overview
 
@@ -145,12 +145,12 @@ All providers return accurate token counts from API responses:
 
 ## Summary
 
-| Issue           | Pre-flight              | Post-response | Action          |
-| --------------- | ----------------------- | ------------- | --------------- |
-| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix       |
-| OpenAI Response | **None**                | Accurate      | Consider adding |
-| Anthropic       | Exact API               | Accurate      | None needed     |
-| Google          | Exact API               | Accurate      | None needed     |
+| Issue           | Pre-flight              | Post-response | Action      |
+| --------------- | ----------------------- | ------------- | ----------- |
+| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix   |
+| OpenAI Response | **Exact API**           | Accurate      | ✅ Complete |
+| Anthropic       | Exact API               | Accurate      | None needed |
+| Google          | Exact API               | Accurate      | None needed |
 
 ## Recommended Actions
 
@@ -169,3 +169,12 @@ All providers return accurate token counts from API responses:
 
 - ✅ Added pre-flight token estimation for OpenAI Response API requests (Response mode).
 - ✅ Added heuristic usage fallback when streaming usage data is missing.
+
+## Progress Update (2026-02-01)
+
+- ✅ **Replaced heuristic with native token counting** for OpenAI Response API
+  - Uses `/responses/input_tokens` endpoint for exact counts
+  - Removed heuristic code from Response handler (Chat handler still uses `gpt-tokenizer`)
+  - Aligned with Anthropic/Google handlers (all now use exact counting)
+  - Handler property `supportsNativeTokenCounting` controls the feature
+  - Safety buffer reduced from 5000 (heuristic) to 10 (exact counting)
