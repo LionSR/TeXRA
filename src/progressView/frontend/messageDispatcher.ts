@@ -13,9 +13,11 @@
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
+  TOOL_USE_FRONTEND_ONLY_KEYS,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
+  type ToolUseStreamState,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -110,6 +112,25 @@ function setActiveStreamRecording(
   updateToolUseState(ctx, streamId, (prev) => ({ ...prev, recording }));
 }
 
+/**
+ * Extract frontend-only fields from an existing ToolUseStreamState.
+ * Uses schema-defined TOOL_USE_FRONTEND_ONLY_KEYS for compile-time safety.
+ * Returns empty object if the state is not a ToolUseStreamState.
+ */
+function extractFrontendOnlyFields(
+  existing: StreamState | undefined,
+): Partial<ToolUseStreamState> {
+  if (!existing || !isToolUseState(existing)) return {};
+  const result: Partial<ToolUseStreamState> = {};
+  for (const key of TOOL_USE_FRONTEND_ONLY_KEYS) {
+    if (key in existing) {
+      // Type-safe assignment using indexed access
+      (result as Record<string, unknown>)[key] = existing[key];
+    }
+  }
+  return result;
+}
+
 function updateStreamInfo(
   state: ProgressState,
   streams: StreamTabInfo[],
@@ -129,22 +150,17 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      const frontendOnlyFields =
-        existing && isToolUseState(existing)
-          ? {
-              followUpText: existing.followUpText,
-              polishedText: existing.polishedText,
-              polishRevision: existing.polishRevision,
-              transcribedText: existing.transcribedText,
-              recording: existing.recording,
-              shouldFocusFollowUp: existing.shouldFocusFollowUp,
-            }
-          : {};
-      nextStates.set(stream.name, {
-        ...backendState,
-        ...frontendOnlyFields,
-        info: stream,
-      });
+      // Only preserve frontend-only fields for ToolUse streams
+      if (isToolUseState(backendState)) {
+        const frontendOnlyFields = extractFrontendOnlyFields(existing);
+        nextStates.set(stream.name, {
+          ...backendState,
+          ...frontendOnlyFields,
+          info: stream,
+        });
+      } else {
+        nextStates.set(stream.name, { ...backendState, info: stream });
+      }
     } else {
       const existing =
         nextStates.get(stream.name) ?? createStreamState(stream.agentCategory);

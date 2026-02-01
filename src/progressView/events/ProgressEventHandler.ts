@@ -21,6 +21,7 @@ import {
 } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { streamEventQueue } from '@eventBus/StreamEventQueue';
 
 import { withEventErrorHandling } from './errorHandling';
 import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
@@ -37,12 +38,6 @@ export type { UICallbacks };
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
-  /**
-   * Tracks group IDs with pending updates that arrived before addTaskGroup.
-   * After addTaskGroup completes, we fetch current state from backend (single
-   * source of truth) and send to webview - no need to queue individual updates.
-   */
-  private readonly pendingTaskGroupUpdates = new Map<StreamTabId, Set<string>>();
   private readonly ctx: EventHandlerContext;
 
   constructor(
@@ -179,100 +174,63 @@ export class ProgressEventHandler {
   private handleAddTaskGroup = (
     data: ProgressEventPayloads['addTaskGroup'],
   ): void => {
-    withEventErrorHandling(
-      'TaskGroup',
-      'failed to handle addTaskGroup',
-      async () => {
-        const { streamId, ...group } = data;
-        const { id, parentGroupId } = group;
-        const pendingIds = this.pendingTaskGroupUpdates.get(streamId);
-
-        const hasStream = this.state.streamTabs.has(streamId);
-        const addGroupPromise = this.state.taskGroups.addGroup(
-          streamId,
-          id,
-          group,
-        );
-
-        if (!parentGroupId) {
-          this.state.setActiveRunId(streamId, id);
-        }
-
-        if (!hasStream) {
-          await this.initializeStreamForTaskGroup(streamId);
-        }
-
-        if (
-          this.webviewUpdater.isAvailable() &&
-          streamId === this.state.activeStream
-        ) {
-          this.webviewUpdater.addTaskGroup(streamId, group);
-        } else {
-          this.bufferTaskGroupForReplay(streamId, group);
-        }
-
-        await addGroupPromise;
-
-        // If updates arrived before add completed, send current state from backend
-        if (pendingIds?.has(id)) {
-          pendingIds.delete(id);
-          if (pendingIds.size === 0) {
-            this.pendingTaskGroupUpdates.delete(streamId);
-          }
-
-          // Backend state is source of truth - fetch and send current state
-          const currentGroup = this.state.taskGroups
-            .getStreamGroups(streamId)
-            .get(id);
-          if (
-            currentGroup &&
-            this.webviewUpdater.isAvailable() &&
-            streamId === this.state.activeStream
-          ) {
-            this.webviewUpdater.updateTaskGroup({
-              streamId,
-              id,
-              status: currentGroup.status,
-              endTime: currentGroup.endTime,
-            });
-          }
-        }
-      },
+    withEventErrorHandling('TaskGroup', 'failed to handle addTaskGroup', () =>
+      streamEventQueue.enqueue(data.streamId, () =>
+        this.processAddTaskGroup(data),
+      ),
     );
   };
+
+  private async processAddTaskGroup(
+    data: ProgressEventPayloads['addTaskGroup'],
+  ): Promise<void> {
+    const { streamId, ...group } = data;
+    const { id, parentGroupId } = group;
+
+    const hasStream = this.state.streamTabs.has(streamId);
+    const addGroupPromise = this.state.taskGroups.addGroup(streamId, id, group);
+
+    if (!parentGroupId) {
+      this.state.setActiveRunId(streamId, id);
+    }
+
+    if (!hasStream) {
+      await this.initializeStreamForTaskGroup(streamId);
+    }
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      streamId === this.state.activeStream
+    ) {
+      this.webviewUpdater.addTaskGroup(streamId, group);
+    } else {
+      this.bufferTaskGroupForReplay(streamId, group);
+    }
+
+    await addGroupPromise;
+  }
 
   private handleUpdateTaskGroup = (
     data: ProgressEventPayloads['updateTaskGroup'],
   ): void => {
-    withEventErrorHandling(
-      'TaskGroup',
-      'failed to handle updateTaskGroup',
-      async () => {
-        const streamGroups = this.state.taskGroups.getStreamGroups(
-          data.streamId,
-        );
-        if (!streamGroups.has(data.id)) {
-          // Track that this group has pending updates - actual state will be
-          // fetched from backend (single source of truth) when addTaskGroup completes
-          const pendingIds =
-            this.pendingTaskGroupUpdates.get(data.streamId) ?? new Set();
-          pendingIds.add(data.id);
-          this.pendingTaskGroupUpdates.set(data.streamId, pendingIds);
-          this.logger.debug(
-            `Marked task group for refresh after add (stream=${data.streamId}, group=${data.id})`,
-          );
-          return;
-        }
-
-        await this.state.taskGroups.updateGroup(data);
-
-        const isActive = data.streamId === this.state.activeStream;
-        if (this.webviewUpdater.isAvailable() && isActive) {
-          this.webviewUpdater.updateTaskGroup(data);
-        }
-      },
+    withEventErrorHandling('TaskGroup', 'failed to handle updateTaskGroup', () =>
+      streamEventQueue.enqueue(data.streamId, () =>
+        this.processUpdateTaskGroup(data),
+      ),
     );
   };
+
+  private async processUpdateTaskGroup(
+    data: ProgressEventPayloads['updateTaskGroup'],
+  ): Promise<void> {
+    // Queue ensures addTaskGroup completes before updateTaskGroup runs
+    await this.state.taskGroups.updateGroup(data);
+
+    const isActive = data.streamId === this.state.activeStream;
+    if (this.webviewUpdater.isAvailable() && isActive) {
+      this.webviewUpdater.updateTaskGroup(data);
+    }
+  }
 
   private markAllRunningTasksAsCancelled = (): void => {
     for (const [stream, status] of StreamStatusService.entries()) {
@@ -490,12 +448,10 @@ export class ProgressEventHandler {
 
   clearPendingTaskGroups(streamId: StreamTabId): void {
     this.pendingTaskGroups.delete(streamId);
-    this.pendingTaskGroupUpdates.delete(streamId);
   }
 
   clearAllPendingTaskGroups(): void {
     this.pendingTaskGroups.clear();
-    this.pendingTaskGroupUpdates.clear();
   }
 
   resetRunningTasksToError(waitingStreams?: Set<StreamTabId>): StreamTabId[] {
