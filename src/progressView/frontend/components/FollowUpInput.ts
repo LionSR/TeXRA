@@ -15,7 +15,7 @@ import { live } from 'lit/directives/live.js';
 import { commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
-import { insertTextAtCursor } from '@shared/utils/textarea';
+import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
@@ -156,10 +156,7 @@ export class FollowUpInput extends LitElement {
         if (!this.isConnected) return;
         if (this.textAreaEl) {
           insertTextAtCursor(this.textAreaEl, capturedText);
-          // Read .value directly - vscode-textarea proxies .value to the host
-          const updatedValue =
-            (this.textAreaEl as { value?: string }).value ?? '';
-          this.updateValue(updatedValue);
+          this.updateValue(getTextareaValue(this.textAreaEl));
           this.focusInput({ scrollIntoView: true });
         }
       });
