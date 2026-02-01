@@ -682,24 +682,15 @@ export class RequestPanels extends LitElement {
     // Use composedPath to get the actual element inside shadow DOM
     if (event.key !== 'Enter' && event.key !== ' ') return;
 
-    const actionEl = this.getActionElement(event.composedPath());
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-action][data-permission-kind][data-permission-id]',
+    );
     if (!actionEl) return;
 
     event.preventDefault();
     actionEl.click();
   };
-
-  private getActionElement(path: EventTarget[]): HTMLElement | null {
-    for (const entry of path) {
-      if (!(entry instanceof HTMLElement)) continue;
-      if (
-        entry.matches('[data-action][data-permission-kind][data-permission-id]')
-      ) {
-        return entry;
-      }
-    }
-    return null;
-  }
 
   /**
    * Handle global keyboard shortcuts for permission actions.
