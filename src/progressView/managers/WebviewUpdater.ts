@@ -420,8 +420,8 @@ export class WebviewUpdater {
     );
     const streamNames = streams.map((info) => info.name);
 
-    // Delegate active stream resolution to state (single source of truth)
-    const activeStream = state.resolveActiveStream(streamNames);
+    // Delegate active stream validation to state (single source of truth)
+    const activeStream = state.ensureValidActiveStream(streamNames);
 
     if (!this.isAvailable()) {
       return activeStream;

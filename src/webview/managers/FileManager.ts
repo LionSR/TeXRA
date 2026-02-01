@@ -292,10 +292,29 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
 
-    const filePathToSelect = await this.resolveFilePathForType(
-      currentOpenFile,
-      fileType,
-    );
+    // Inline file path resolution (was resolveFilePathForType)
+    let filePathToSelect = currentOpenFile;
+    if (fileType === 'base') {
+      const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
+      if (derivedBaseFile) {
+        const baseExists = await WorkspaceFS.exists(derivedBaseFile);
+        if (baseExists) {
+          await this.handleRequestBaseFile({
+            command: 'requestBaseFile',
+            preserveBaseFile: true,
+          });
+          filePathToSelect = derivedBaseFile;
+        } else {
+          logger.info(
+            CHANNEL,
+            `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
+          );
+          vscode.window.showInformationMessage(
+            `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
+          );
+        }
+      }
+    }
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
@@ -339,38 +358,6 @@ export class FileManager extends BaseWebviewManager {
     });
 
     await this.maybeSelectCommitFromDiffFile(currentOpenFile);
-  }
-
-  private async resolveFilePathForType(
-    currentOpenFile: string,
-    fileType: string,
-  ): Promise<string> {
-    if (fileType !== 'base') {
-      return currentOpenFile;
-    }
-
-    const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
-    if (!derivedBaseFile) {
-      return currentOpenFile;
-    }
-
-    const baseExists = await WorkspaceFS.exists(derivedBaseFile);
-    if (!baseExists) {
-      logger.info(
-        CHANNEL,
-        `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
-      );
-      vscode.window.showInformationMessage(
-        `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
-      );
-      return currentOpenFile;
-    }
-
-    await this.handleRequestBaseFile({
-      command: 'requestBaseFile',
-      preserveBaseFile: true,
-    });
-    return derivedBaseFile;
   }
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
