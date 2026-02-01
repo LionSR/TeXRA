@@ -1,4 +1,4 @@
-export type TextareaTarget = HTMLElement | HTMLTextAreaElement | null;
+type TextareaTarget = HTMLElement | HTMLTextAreaElement | null;
 
 interface TextareaResolution {
   host: HTMLElement | null;
@@ -10,9 +10,15 @@ interface VscodeTextarea extends HTMLElement {
   wrappedElement?: HTMLTextAreaElement;
 }
 
-export function resolveTextareaTarget(
-  target: TextareaTarget,
-): TextareaResolution {
+/**
+ * Resolve a vscode-textarea element to its underlying HTMLTextAreaElement.
+ * This is an internal helper for insertTextAtCursor - selection operations
+ * (.selectionStart, .selectionEnd) are NOT proxied by vscode-textarea.
+ *
+ * For .value access, use the host element directly - vscode-textarea proxies .value.
+ * For .focus(), use the host element directly - it works on the vscode-textarea host.
+ */
+function resolveTextareaTarget(target: TextareaTarget): TextareaResolution {
   if (!target) {
     return { host: null, textarea: null };
   }

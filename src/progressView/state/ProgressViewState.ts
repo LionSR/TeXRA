@@ -134,11 +134,16 @@ export class ProgressViewState {
 
   /**
    * Ensure the active stream is valid within the given set of available streams.
-   * If current active stream is not available, picks the first available one.
+   * If current active stream is not available, picks the first available one
+   * and MUTATES the persisted activeStream preference.
+   *
    * Preserves current when availableStreams is empty to avoid clearing content
    * during temporary filter mismatches.
+   *
+   * Note: This method both reads AND writes state (command-query violation).
+   * Named "ensure" to be explicit about the mutation side effect.
    */
-  resolveActiveStream(availableStreams: StreamTabId[]): StreamTabId {
+  ensureValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const currentActive = this._prefs.get('activeStream');
 
     if (availableStreams.includes(currentActive)) {
