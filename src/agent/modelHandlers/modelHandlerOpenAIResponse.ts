@@ -2090,24 +2090,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return typeof content === 'string' || Array.isArray(content);
   }
 
-  private isFunctionCallOutputItem(
-    item: ResponseInputItem,
-  ): item is ResponseInputItem.FunctionCallOutput {
-    return (
-      typeof item === 'object' &&
-      (item as { type?: unknown }).type === 'function_call_output'
-    );
-  }
-
-  private isFunctionCallItem(
-    item: ResponseInputItem,
-  ): item is ResponseFunctionToolCall {
-    return (
-      typeof item === 'object' &&
-      (item as { type?: unknown }).type === 'function_call'
-    );
-  }
-
   /** Type guard for ResponseOutputMessage items from the SDK. */
   private isOutputMessage(
     item: ResponseOutputItem,
