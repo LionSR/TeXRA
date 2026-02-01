@@ -110,9 +110,11 @@ interface UploadedOpenAIResponseAttachment {
 
 // Conservative heuristic token estimates for non-text input content.
 // OpenAI vision inputs can cost 85-1105+ tokens depending on resolution/tile count,
-// so we bias upward to avoid context window overflow.
+// and large file attachments can expand to thousands of tokens, so we bias upward
+// to avoid context window overflow.
 const APPROX_IMAGE_TOKEN_ESTIMATE = 1100;
-const APPROX_FILE_TOKEN_ESTIMATE = 1200;
+const APPROX_FILE_TOKEN_ESTIMATE = 2000;
+const APPROX_MESSAGE_TOKEN_OVERHEAD = 4;
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -928,11 +930,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
     let extraTokens = 0;
 
-    // gpt-tokenizer uses GPT-family tokenization. Counts are heuristic for
+    // gpt-tokenizer uses GPT-2/3-era BPE. Counts are heuristic for
     // non-GPT-compatible providers routed through OpenAI-compatible APIs.
 
     messages.forEach((message) => {
       if (this.isMessageItem(message)) {
+        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
         const role = message.role ?? 'user';
         const content = this.getMessageContent(message);
         if (Array.isArray(content)) {
@@ -960,6 +963,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       if (this.isFunctionCallOutputItem(message)) {
+        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
         const { output } = message;
         if (typeof output === 'string') {
           textToCount += `tool: ${output}\n`;
@@ -974,6 +978,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       if (this.isFunctionCallItem(message)) {
+        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
         const { arguments: args, name } = message;
         if (args) {
           textToCount += `tool: ${args}\n`;
@@ -1372,7 +1377,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       usage.input_tokens = inputTokens;
       usage.output_tokens = outputTokens;
       usage.total_tokens = inputTokens + outputTokens;
-      if (approximateInputTokens == null) {
+      if (approximateInputTokens === null) {
         this.logger.warn(
           'Response usage missing and token estimation failed; defaulting input token count to 0.',
           {
@@ -1381,17 +1386,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
-      }
-      this.logger.warn(
-        'Response usage missing; using heuristic token estimates.',
-        {
-          data: {
-            responseId: responseObject.id,
-            inputTokens,
-            outputTokens,
+      } else {
+        this.logger.warn(
+          'Response usage missing; using heuristic token estimates.',
+          {
+            data: {
+              responseId: responseObject.id,
+              inputTokens,
+              outputTokens,
+            },
           },
-        },
-      );
+        );
+      }
     }
 
     const stopReason =
