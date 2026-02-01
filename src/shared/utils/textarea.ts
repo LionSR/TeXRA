@@ -43,6 +43,13 @@ function syncHostValue(host: HTMLElement | null, value: string): void {
   }
 }
 
+/** Get .value from a vscode-textarea or HTMLTextAreaElement. */
+export function getTextareaValue(
+  element: HTMLElement | null | undefined,
+): string {
+  return (element as VscodeTextarea | undefined)?.value ?? '';
+}
+
 export function insertTextAtCursor(target: TextareaTarget, text: string): void {
   const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea) return;
