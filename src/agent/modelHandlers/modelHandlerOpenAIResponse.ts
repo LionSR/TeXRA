@@ -356,8 +356,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     this.conversationState.sentMessages = effectiveMessagesCount;
 
-    // Set cumulative input tokens from actual usage (not additive - this IS the total)
-    // The response's input_tokens reflects the full context including server-side history
+    // Set cumulative input tokens from actual usage (not additive - this IS the total).
+    // The response's input_tokens reflects the full context including server-side history.
+    //
+    // Note: OpenAI's input_tokens is the TOTAL (includes cached tokens).
+    // Cached tokens are a subset reported in input_tokens_details.cached_tokens.
+    // This differs from Anthropic where input_tokens excludes cached tokens.
+    // For context window tracking, we want the total, which input_tokens provides.
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
@@ -938,7 +943,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let maxOutputTokens = this.config.maxOutputTokens;
 
     // Native token counting using OpenAI's /responses/input_tokens endpoint.
-    // This provides exact counts, aligning with Anthropic and Google handlers.
+    // This provides exact pre-flight counts, aligning with Anthropic and Google handlers.
+    //
+    // Two-layer protection against context overflow:
+    // 1. shouldCompact() uses cumulativeInputTokens (from PREVIOUS response) at 75% threshold
+    //    to proactively compact before trouble
+    // 2. This native count (CURRENT request) is the safety net at 100% threshold
+    //
+    // When previous_response_id is set, the API includes server-side history in the count.
     if (this.supportsNativeTokenCounting) {
       try {
         const tokenCount = await client.responses.inputTokens.count(
