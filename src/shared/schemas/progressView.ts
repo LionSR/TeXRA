@@ -262,11 +262,13 @@ export const ResolveAgentProposalMessageSchema = z.object({
 
 export const FollowUpTextPolishedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
+  stream: StreamTabIdSchema,
   text: z.string(),
 });
 
 export const FollowUpTextPolishErrorMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
+  stream: StreamTabIdSchema,
   error: z.string().optional(),
 });
 
