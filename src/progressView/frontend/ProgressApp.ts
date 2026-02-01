@@ -32,6 +32,7 @@ import {
   type ProgressState,
   type StreamState,
 } from './store';
+import { getFilteredStreams } from './stateUtils';
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -62,7 +63,6 @@ import {
   type FrontendEventHandlerContext,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-import { getFilteredStreams } from './stateUtils';
 
 // Local imports - progress view contexts
 import {
@@ -247,10 +247,10 @@ export class ProgressApp extends BaseWebviewApp {
 
   private getActiveStreamInfo(): StreamTabInfo | null {
     if (!this.appState.activeStreamId) return null;
+    const filtered = getFilteredStreams(this.appState);
     return (
-      this.appState.streams.find(
-        (stream) => stream.name === this.appState.activeStreamId,
-      ) ?? null
+      filtered.find((stream) => stream.name === this.appState.activeStreamId) ??
+      null
     );
   }
 

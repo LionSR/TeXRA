@@ -42,6 +42,10 @@ function createHandler(
 }
 
 describe('ModelHandlerOpenAIResponse token heuristics', () => {
+  const IMAGE_ESTIMATE = 1100;
+  const FILE_ESTIMATE = 2000;
+  const MESSAGE_OVERHEAD = 4;
+
   it('reduces max_output_tokens when heuristic buffer would overflow', () => {
     const prompt = 'hello '.repeat(120);
     const textToCount = `user: ${prompt}\n`;
@@ -89,5 +93,57 @@ describe('ModelHandlerOpenAIResponse token heuristics', () => {
 
     assert.equal(result.adjustedMaxOutputTokens, undefined);
     assert.equal(typeof result.approximateInputTokens, 'number');
+  });
+
+  it('adds conservative estimates for image and file inputs', () => {
+    const handler = createHandler(8000, 500);
+    const messages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'hello' },
+          { type: 'input_image', image_url: 'file://image.png' },
+          { type: 'input_file', file_id: 'file_123' },
+        ],
+      },
+    ];
+
+    const approx = (handler as any).calculateApproximateTokens(messages);
+    const expectedText = countTokens('user: hello\n');
+    const expected =
+      expectedText + IMAGE_ESTIMATE + FILE_ESTIMATE + MESSAGE_OVERHEAD;
+
+    assert.equal(approx, expected);
+  });
+
+  it('counts function call outputs with message overhead', () => {
+    const handler = createHandler(8000, 500);
+    const messages = [
+      {
+        type: 'function_call_output',
+        output: 'tool output',
+      },
+    ];
+
+    const approx = (handler as any).calculateApproximateTokens(messages);
+    const expected = countTokens('tool: tool output\n') + MESSAGE_OVERHEAD;
+
+    assert.equal(approx, expected);
+  });
+
+  it('returns null when token estimation throws', () => {
+    const handler = createHandler(8000, 500);
+    const original = (handler as any).calculateApproximateTokens;
+    (handler as any).calculateApproximateTokens = () => {
+      throw new Error('tokenizer failure');
+    };
+
+    const result = (handler as any).applyTokenHeuristics(500, []);
+
+    assert.equal(result.approximateInputTokens, null);
+    assert.equal(result.adjustedMaxOutputTokens, undefined);
+
+    (handler as any).calculateApproximateTokens = original;
   });
 });

@@ -198,7 +198,13 @@ export class FileSelectGroup extends LitElement {
   }
 
   private handleFocusOut(event: FocusEvent): void {
-    const nextTarget = event.relatedTarget as Node | null;
+    const root = this.getRootNode();
+    const activeElement =
+      root instanceof Document || root instanceof ShadowRoot
+        ? root.activeElement
+        : null;
+    const nextTarget = (event.relatedTarget ?? activeElement) as Node | null;
+
     if (nextTarget === null) {
       this.autoExtractMenuOpen = false;
       this.toolConfigMenuOpen = false;

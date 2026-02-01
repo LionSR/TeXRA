@@ -476,12 +476,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             const view = this.getActiveView();
             view?.webview.postMessage({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              stream: data.stream,
               text: result.text,
             });
           } else if (result.error) {
             await vscode.window.showErrorMessage(result.error);
             this.postToActiveView({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+              stream: data.stream,
               error: result.error,
             });
           }
@@ -492,6 +494,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
           this.postToActiveView({
             command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+            stream: data.stream,
             error: messageText,
           });
           this.logger.error(
