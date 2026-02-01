@@ -16,13 +16,17 @@ class StreamEventQueue {
    */
   async enqueue<T>(key: string, handler: () => Promise<T>): Promise<T> {
     const pending = this.queues.get(key) ?? Promise.resolve();
-    const next = pending.then(handler).finally(() => {
-      if (this.queues.get(key) === next) {
-        this.queues.delete(key);
-      }
-    });
-    // Store void promise to avoid retaining results
-    this.queues.set(key, next.then(() => {}));
+    const next = pending
+      .catch(() => {
+        // Ensure failures do not poison the queue for this key.
+      })
+      .then(handler)
+      .finally(() => {
+        if (this.queues.get(key) === next) {
+          this.queues.delete(key);
+        }
+      });
+    this.queues.set(key, next);
     return next;
   }
 }
