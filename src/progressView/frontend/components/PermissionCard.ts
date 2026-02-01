@@ -159,7 +159,7 @@ export class PermissionCard extends LitElement {
 
   @property({ type: Object }) permission: PermissionState | null = null;
   @state() private showFeedback = false;
-  @query('.feedback-input') private feedbackInput?: HTMLTextAreaElement;
+  @query('.feedback-input') private feedbackInput?: HTMLElement;
 
   protected willUpdate(changed: Map<string, unknown>): void {
     if (changed.has('permission')) {
@@ -274,10 +274,11 @@ export class PermissionCard extends LitElement {
     return html`
       <div class="feedback-section">
         <label class="feedback-label">Rejection feedback (optional):</label>
-        <textarea
+        <vscode-textarea
           class="feedback-input"
           placeholder="Why are you rejecting?"
-        ></textarea>
+          rows="2"
+        ></vscode-textarea>
       </div>
     `;
   }
@@ -424,7 +425,10 @@ export class PermissionCard extends LitElement {
     }
 
     // Second click: submit with feedback
-    const feedback = this.feedbackInput?.value?.trim() || undefined;
+    // Read .value directly - vscode-textarea proxies .value to the host
+    const feedbackValue =
+      (this.feedbackInput as { value?: string } | undefined)?.value ?? '';
+    const feedback = feedbackValue.trim() || undefined;
     this.emitAction(action, feedback);
     this.showFeedback = false;
   }

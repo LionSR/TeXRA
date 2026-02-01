@@ -15,10 +15,7 @@ import { live } from 'lit/directives/live.js';
 import { commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
-import {
-  insertTextAtCursor,
-  resolveTextareaTarget,
-} from '@shared/utils/textarea';
+import { insertTextAtCursor } from '@shared/utils/textarea';
 import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
@@ -158,12 +155,12 @@ export class FollowUpInput extends LitElement {
         // Guard against operating on disconnected component
         if (!this.isConnected) return;
         if (this.textAreaEl) {
-          const { textarea } = resolveTextareaTarget(this.textAreaEl);
-          if (textarea) {
-            insertTextAtCursor(textarea, capturedText);
-            this.updateValue(textarea.value);
-            this.focusInput({ scrollIntoView: true });
-          }
+          insertTextAtCursor(this.textAreaEl, capturedText);
+          // Read .value directly - vscode-textarea proxies .value to the host
+          const updatedValue =
+            (this.textAreaEl as { value?: string }).value ?? '';
+          this.updateValue(updatedValue);
+          this.focusInput({ scrollIntoView: true });
         }
       });
     }
@@ -259,12 +256,10 @@ export class FollowUpInput extends LitElement {
 
     if (!this.textAreaEl || !this.visible) return;
 
-    const { textarea } = resolveTextareaTarget(this.textAreaEl);
-    if (!textarea) return;
-
-    textarea.focus();
+    // Focus the host element directly - vscode-textarea handles focus properly
+    this.textAreaEl.focus();
     if (options.scrollIntoView) {
-      textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      this.textAreaEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
