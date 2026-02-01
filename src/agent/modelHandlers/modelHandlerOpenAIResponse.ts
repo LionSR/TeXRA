@@ -3,7 +3,6 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
-import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -51,7 +50,7 @@ import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  HEURISTIC_TOKEN_BUFFER,
+  TOKEN_SAFETY_BUFFER,
   computeReducedMaxTokens,
 } from './contextManagementConstants';
 import {
@@ -107,14 +106,6 @@ interface UploadedOpenAIResponseAttachment {
   fileId: string;
   isImage: boolean;
 }
-
-// Conservative heuristic token estimates for non-text input content.
-// OpenAI vision inputs can cost 85-1105+ tokens depending on resolution/tile count,
-// and large file attachments can expand to thousands of tokens, so we bias upward
-// to avoid context window overflow.
-const APPROX_IMAGE_TOKEN_ESTIMATE = 1100;
-const APPROX_FILE_TOKEN_ESTIMATE = 2000;
-const APPROX_MESSAGE_TOKEN_OVERHEAD = 4;
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -836,6 +827,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Whether this handler supports native token counting via API.
+   * When true, the handler will use OpenAI's /responses/input_tokens endpoint
+   * for exact token counts instead of heuristics.
+   */
+  protected get supportsNativeTokenCounting(): boolean {
+    return !this.isOpenRouterRoutingEnabled();
+  }
+
+  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
@@ -843,154 +843,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Supports automatic conversation compaction when cumulative input tokens
    * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
-  private applyTokenHeuristics(
-    maxOutputTokens: number | undefined,
-    messages: ResponseInputItem[],
-    systemPrompt?: string,
-  ): {
-    approximateInputTokens: number | null;
-    adjustedMaxOutputTokens?: number;
-  } {
-    try {
-      const approximateInputTokens = this.calculateApproximateTokens(
-        messages,
-        systemPrompt,
-      );
-
-      this.logger.debug(
-        `Approximate token count of response input: ${approximateInputTokens}`,
-      );
-
-      if (approximateInputTokens > this.config.contextWindow) {
-        const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      const availableTokens =
-        this.config.contextWindow - approximateInputTokens;
-      if (
-        typeof maxOutputTokens === 'number' &&
-        availableTokens < maxOutputTokens
-      ) {
-        const heuristicBuffer = this.getHeuristicTokenBuffer();
-        const utilizationPercent =
-          (approximateInputTokens / this.config.contextWindow) * 100;
-        const reducedMaxTokens = computeReducedMaxTokens(
-          availableTokens,
-          heuristicBuffer,
-        );
-
-        const isOverflow = availableTokens <= 0;
-        const detailsMsg = isOverflow
-          ? 'OpenAI Response: max_output_tokens forced to 1 due to context overflow'
-          : 'OpenAI Response: max_output_tokens reduced to fit context window';
-        const logMsg = isOverflow
-          ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing max_output_tokens to ${reducedMaxTokens} token.`
-          : `Approximate token count (${approximateInputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing max_output_tokens to ${reducedMaxTokens}.`;
-
-        this.logger.logContextManagement(logMsg, {
-          action: 'max_tokens_reduced',
-          tokensBefore: approximateInputTokens,
-          contextWindow: this.config.contextWindow,
-          utilizationBefore: utilizationPercent,
-          originalMaxTokens: maxOutputTokens,
-          reducedMaxTokens,
-          heuristicBuffer,
-          details: detailsMsg,
-        });
-        return {
-          approximateInputTokens,
-          adjustedMaxOutputTokens: reducedMaxTokens,
-        };
-      }
-      return { approximateInputTokens };
-    } catch (err) {
-      if (isContextWindowError(err)) {
-        throw err;
-      }
-      this.logger.warn(
-        `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-      );
-    }
-    return { approximateInputTokens: null };
-  }
-
-  private getHeuristicTokenBuffer(): number {
-    return Math.min(
-      HEURISTIC_TOKEN_BUFFER,
-      Math.max(200, Math.floor(this.config.contextWindow * 0.1)),
-    );
-  }
-
-  private calculateApproximateTokens(
-    messages: ResponseInputItem[],
-    systemPrompt?: string,
-  ): number {
-    let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
-    let extraTokens = 0;
-
-    // gpt-tokenizer uses GPT-2/3-era BPE. Counts are heuristic for
-    // non-GPT-compatible providers routed through OpenAI-compatible APIs.
-
-    messages.forEach((message) => {
-      if (this.isMessageItem(message)) {
-        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
-        const role = message.role ?? 'user';
-        const content = this.getMessageContent(message);
-        if (Array.isArray(content)) {
-          content.forEach((part) => {
-            switch (part.type) {
-              case 'input_text':
-                if (typeof part.text === 'string') {
-                  textToCount += `${role}: ${part.text}\n`;
-                }
-                break;
-              case 'input_image':
-                extraTokens += APPROX_IMAGE_TOKEN_ESTIMATE;
-                break;
-              case 'input_file':
-                extraTokens += APPROX_FILE_TOKEN_ESTIMATE;
-                break;
-              default:
-                break;
-            }
-          });
-        } else if (typeof content === 'string') {
-          textToCount += `${role}: ${content}\n`;
-        }
-        return;
-      }
-
-      if (this.isFunctionCallOutputItem(message)) {
-        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
-        const { output } = message;
-        if (typeof output === 'string') {
-          textToCount += `tool: ${output}\n`;
-        } else if (Array.isArray(output)) {
-          output.forEach((part) => {
-            if (part.type === 'input_text' && typeof part.text === 'string') {
-              textToCount += `tool: ${part.text}\n`;
-            }
-          });
-        }
-        return;
-      }
-
-      if (this.isFunctionCallItem(message)) {
-        extraTokens += APPROX_MESSAGE_TOKEN_OVERHEAD;
-        const { arguments: args, name } = message;
-        if (args) {
-          textToCount += `tool: ${args}\n`;
-        } else if (name) {
-          textToCount += `tool: ${name}\n`;
-        }
-      }
-    });
-
-    return countTokens(textToCount) + extraTokens;
-  }
-
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
@@ -1059,14 +911,88 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
-    const baseMaxOutputTokens = this.config.maxOutputTokens;
-    const { approximateInputTokens, adjustedMaxOutputTokens } =
-      this.applyTokenHeuristics(baseMaxOutputTokens, newMessages, systemPrompt);
-    const params: ResponseCreateParamsBase = {
+    // Build shared params used by both token counting and API call
+    const convertedTools =
+      tools && tools.length > 0
+        ? toOpenAIResponseTools(tools, {
+            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+          })
+        : undefined;
+
+    const reasoningEffort = this.capabilities.supportsReasoning
+      ? this.getEffectiveReasoningEffort()
+      : undefined;
+
+    const baseParams = {
       model: this.config.fullName,
       input: newMessages,
-      max_output_tokens: adjustedMaxOutputTokens ?? baseMaxOutputTokens,
+      ...(systemPrompt && { instructions: systemPrompt }),
+      ...(this.previousResponseId && {
+        previous_response_id: this.previousResponseId,
+      }),
+      ...(convertedTools?.length && { tools: convertedTools }),
+      ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+    };
+
+    let maxOutputTokens = this.config.maxOutputTokens;
+
+    // Native token counting using OpenAI's /responses/input_tokens endpoint.
+    // This provides exact counts, aligning with Anthropic and Google handlers.
+    if (this.supportsNativeTokenCounting) {
+      try {
+        const tokenCount = await client.responses.inputTokens.count(
+          baseParams,
+          signal ? { signal } : undefined,
+        );
+        const inputTokens = tokenCount.input_tokens;
+
+        this.logger.debug(`Token count of message: ${inputTokens}`);
+
+        if (inputTokens > this.config.contextWindow) {
+          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
+          this.logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+
+        const availableTokens = this.config.contextWindow - inputTokens;
+        if (availableTokens < maxOutputTokens) {
+          const reducedMaxTokens = computeReducedMaxTokens(
+            availableTokens,
+            TOKEN_SAFETY_BUFFER,
+          );
+          const utilizationPercent =
+            (inputTokens / this.config.contextWindow) * 100;
+
+          this.logger.logContextManagement(
+            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${reducedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: inputTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore: utilizationPercent,
+              originalMaxTokens: maxOutputTokens,
+              reducedMaxTokens,
+              details:
+                'OpenAI Response: max_output_tokens reduced to fit context window',
+            },
+          );
+          maxOutputTokens = reducedMaxTokens;
+        }
+      } catch (err) {
+        if (isContextWindowError(err)) throw err;
+        this.logger.warn(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        );
+      }
+    }
+
+    // Build API params, extending baseParams with call-specific options
+    const params: ResponseCreateParamsBase = {
+      ...baseParams,
+      max_output_tokens: maxOutputTokens,
       store: true,
+      ...(convertedTools?.length && { tool_choice: 'auto' as const }),
     };
 
     if (useBackgroundResponses) {
@@ -1086,27 +1012,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.temperature = temperature;
     }
 
-    if (this.previousResponseId) {
-      params.previous_response_id = this.previousResponseId;
-    }
-
-    if (systemPrompt) {
-      params.instructions = systemPrompt;
-    }
-
-    if (tools && tools.length > 0) {
-      const convertedTools = toOpenAIResponseTools(tools, {
-        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-        supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-      });
-      // Only set tools if there are any after filtering (deep research models
-      // strip unsupported function tools, potentially leaving an empty array)
-      if (convertedTools.length > 0) {
-        params.tools = convertedTools;
-        params.tool_choice = 'auto';
-      }
-    }
-
     // Include web search sources in response when native web search is enabled.
     // This is set outside the tools block because deep research models use
     // native web search even when no explicit tools are passed.
@@ -1114,20 +1019,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.include = ['web_search_call.action.sources'];
     }
 
+    // Extend reasoning with summary option for API call (not needed for token counting)
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 ||
         getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
-      const reasoning: Reasoning = {};
       if (includeSummary) {
-        reasoning.summary = 'auto';
+        params.reasoning = {
+          ...(params.reasoning as Reasoning),
+          summary: 'auto',
+        };
       }
-      const reasoningEffort = this.getEffectiveReasoningEffort();
-      if (reasoningEffort) {
-        reasoning.effort = reasoningEffort;
-      }
-      params.reasoning = reasoning;
     }
 
     // Wrap execution in try-catch to handle previousResponseId errors
@@ -1208,11 +1111,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (state.hasThinkingContent) {
           state.thinkingStream.finalize();
         }
-        const { text: finalText } = this.extractResponse(
-          response,
-          '',
-          approximateInputTokens,
-        );
+        const { text: finalText } = this.extractResponse(response, '');
         if (state.outputStream) state.outputStream.finalize(finalText);
 
         // Emit any web searches not yet emitted (fallback for edge cases)
@@ -1326,10 +1225,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   extractResponse(
     responseObject: Response,
     endTag: string,
-    approximateInputTokens: number | null,
   ): ExtractResponseResult {
     // Handle missing usage gracefully - OpenAI streaming may not always include it
-    const hasUsage = Boolean(responseObject.usage);
     const usage: ResponseUsage = responseObject.usage ?? {
       input_tokens: 0,
       output_tokens: 0,
@@ -1368,35 +1265,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const fallbackText = fallbackSegments.join('').trim();
       if (fallbackText) {
         newResponse = fallbackText;
-      }
-    }
-
-    if (!hasUsage) {
-      const inputTokens = approximateInputTokens ?? 0;
-      const outputTokens = newResponse ? countTokens(newResponse) : 0;
-      usage.input_tokens = inputTokens;
-      usage.output_tokens = outputTokens;
-      usage.total_tokens = inputTokens + outputTokens;
-      if (approximateInputTokens === null) {
-        this.logger.warn(
-          'Response usage missing and token estimation failed; defaulting input token count to 0.',
-          {
-            data: {
-              responseId: responseObject.id,
-            },
-          },
-        );
-      } else {
-        this.logger.warn(
-          'Response usage missing; using heuristic token estimates.',
-          {
-            data: {
-              responseId: responseObject.id,
-              inputTokens,
-              outputTokens,
-            },
-          },
-        );
       }
     }
 
