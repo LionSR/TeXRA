@@ -534,22 +534,34 @@ export class MainApp extends BaseWebviewApp {
     }
   }
 
+  /**
+   * Validates that the current selection exists in the new options.
+   * Returns the current value if valid, otherwise returns a fallback.
+   */
+  private validateOptionSelection<
+    T extends { value: string; disabled?: boolean },
+  >(options: T[], currentValue: string, preferEnabled = false): string {
+    const hasValue = options.some((opt) => opt.value === currentValue);
+    if (hasValue) return currentValue;
+
+    if (preferEnabled) {
+      const firstEnabled = options.find((opt) => !opt.disabled);
+      if (firstEnabled) return firstEnabled.value;
+    }
+    return options[0]?.value ?? '';
+  }
+
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
     if (!message.optionsData) return;
 
     this.modelOptions = message.optionsData;
-
-    // Validate selected model exists in new options
-    const hasModel = message.optionsData.some(
-      (opt) => opt.value === this.model,
+    this.model = this.validateOptionSelection(
+      message.optionsData,
+      this.model,
+      true,
     );
-    if (!hasModel) {
-      // Select first non-disabled model instead of clearing
-      const firstEnabled = message.optionsData.find((opt) => !opt.disabled);
-      this.model = firstEnabled?.value ?? message.optionsData[0]?.value ?? '';
-    }
   }
 
   private handleSetAgentOptions(
@@ -557,28 +569,20 @@ export class MainApp extends BaseWebviewApp {
   ): void {
     const optionsData = message.optionsData ?? {};
 
-    // Workflow agents
     if (optionsData.workflow) {
       this.workflowAgentOptions = optionsData.workflow;
-      // Validate selected workflow agent
-      const hasAgent = optionsData.workflow.some(
-        (opt) => opt.value === this.workflowAgent,
+      this.workflowAgent = this.validateOptionSelection(
+        optionsData.workflow,
+        this.workflowAgent,
       );
-      if (!hasAgent) {
-        this.workflowAgent = optionsData.workflow[0]?.value ?? '';
-      }
     }
 
-    // Tool-use agents
     if (optionsData.toolUse) {
       this.toolUseAgentOptions = optionsData.toolUse;
-      // Validate selected tool-use agent
-      const hasAgent = optionsData.toolUse.some(
-        (opt) => opt.value === this.toolUseAgent,
+      this.toolUseAgent = this.validateOptionSelection(
+        optionsData.toolUse,
+        this.toolUseAgent,
       );
-      if (!hasAgent) {
-        this.toolUseAgent = optionsData.toolUse[0]?.value ?? '';
-      }
     }
   }
 
@@ -586,7 +590,7 @@ export class MainApp extends BaseWebviewApp {
     message: SetSingleFileOptionsMessage,
   ): void {
     const files = message.files ?? [];
-    const targetId = this.singleSelectIdMap[message.command];
+    const targetId = this.extractFileKeyFromCommand(message.command);
     if (!targetId) return;
 
     this.fileOptions = { ...this.fileOptions, [targetId]: files };
@@ -616,7 +620,7 @@ export class MainApp extends BaseWebviewApp {
 
   private handleSingleFileSelected(message: SingleFileSelectedMessage): void {
     const value = message.filePath;
-    const key = this.singleSelectKeyMap[message.command];
+    const key = this.extractFileKeyFromCommand(message.command);
     if (!key) return;
     this.singleFiles = { ...this.singleFiles, [key]: value };
     this.saveState();
@@ -624,7 +628,9 @@ export class MainApp extends BaseWebviewApp {
 
   private handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
     const files = message.files ?? [];
-    const listId = this.multipleListIdMap[message.command];
+    const listId = this.extractFileKeyFromCommand(
+      message.command,
+    ) as keyof MultiFiles;
     if (!listId) return;
 
     this.multiFiles = { ...this.multiFiles, [listId]: files };
@@ -896,22 +902,21 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private restoreFileArrays(state: MainViewPersistedState): void {
-    const updatedFiles: Record<string, string[]> = { ...this.multiFiles };
-    const updatedVisibility: Record<string, boolean> = {
-      ...this.multiFilesVisible,
-    };
+    this.multiFiles = Object.fromEntries(
+      MULTIPLE_FILE_TYPES.map((type) => {
+        const key = `${type}Files` as keyof MultiFiles;
+        const files = state[key as keyof MainViewPersistedState];
+        return [key, Array.isArray(files) ? files : []];
+      }),
+    ) as MultiFiles;
 
-    MULTIPLE_FILE_TYPES.forEach((fileType) => {
-      const key = `${fileType}Files`;
-      const files = state[key as keyof MainViewPersistedState];
-      const visible =
-        state[`${key}Visible` as keyof MainViewPersistedState] ?? false;
-      updatedFiles[key] = Array.isArray(files) ? files : [];
-      updatedVisibility[key] = Boolean(visible);
-    });
-
-    this.multiFiles = updatedFiles as MultiFiles;
-    this.multiFilesVisible = updatedVisibility as MultiFilesVisible;
+    this.multiFilesVisible = Object.fromEntries(
+      MULTIPLE_FILE_TYPES.map((type) => {
+        const key = `${type}Files` as keyof MultiFilesVisible;
+        const visible = state[`${key}Visible` as keyof MainViewPersistedState];
+        return [key, Boolean(visible)];
+      }),
+    ) as MultiFilesVisible;
   }
 
   private clearForNewSession(): void {
@@ -953,32 +958,29 @@ export class MainApp extends BaseWebviewApp {
     this.saveState();
   }
 
-  private readonly singleSelectIdMap: Record<string, string> = {
-    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: 'inputFile',
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: 'referenceFile',
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: 'auxiliaryFile',
-    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: 'mediaFile',
-    [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: 'editedFile',
-  };
+  /**
+   * Extracts the file key from a command name.
+   * Patterns:
+   *   'setInputFile' -> 'inputFile'
+   *   'inputFileSelected' -> 'inputFile'
+   *   'setInputFiles' -> 'inputFiles'
+   */
+  private extractFileKeyFromCommand(command: string): string | undefined {
+    // Handle 'set*File' or 'set*Files' pattern
+    const setMatch = command.match(/^set(\w+)(Files?)$/);
+    if (setMatch) {
+      const [, name, suffix] = setMatch;
+      return name.charAt(0).toLowerCase() + name.slice(1) + suffix;
+    }
 
-  private readonly singleSelectKeyMap: Record<
-    string,
-    keyof typeof this.singleFiles
-  > = {
-    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: 'inputFile',
-    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: 'referenceFile',
-    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: 'auxiliaryFile',
-    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: 'mediaFile',
-    [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: 'editedFile',
-  };
+    // Handle '*FileSelected' pattern
+    const selectedMatch = command.match(/^(\w+File)Selected$/);
+    if (selectedMatch) {
+      return selectedMatch[1];
+    }
 
-  private readonly multipleListIdMap: Record<string, keyof MultiFiles> = {
-    [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: 'inputFiles',
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: 'referenceFiles',
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: 'auxiliaryFiles',
-    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: 'mediaFiles',
-    [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
-  };
+    return undefined;
+  }
 
   private toggleListVisibility(listId: keyof MultiFiles): void {
     const visible = !this.multiFilesVisible[listId];
@@ -996,11 +998,11 @@ export class MainApp extends BaseWebviewApp {
     const inputFile = this.singleFiles.inputFile;
     if (!inputFile) return;
 
-    const initialFiles = this.resolveInitialOutputFiles(inputFile);
+    const initialFiles = this.getInitialOutputFiles(inputFile);
     this.multiFiles = { ...this.multiFiles, outputFiles: initialFiles };
   }
 
-  private resolveInitialOutputFiles(inputFile: string): string[] {
+  private getInitialOutputFiles(inputFile: string): string[] {
     if (this.multiFiles.outputFiles.length > 0) {
       return this.multiFiles.outputFiles;
     }
@@ -1349,14 +1351,7 @@ export class MainApp extends BaseWebviewApp {
 
     const outputFiles = this.multiFiles.outputFiles ?? [];
     const useMultiple = this.outputFilesActive && outputFiles.length > 0;
-    const isPack = action === 'pack';
-    const command = useMultiple
-      ? isPack
-        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-        : MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
-      : isPack
-        ? MAIN_VIEW_COMMANDS.PACK_SINGLE
-        : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+    const command = this.getPackCleanCommand(action, useMultiple);
 
     postMessage(command, {
       inputFile: this.singleFiles.inputFile,
@@ -1373,6 +1368,20 @@ export class MainApp extends BaseWebviewApp {
       ? `${actionLabel}ing multiple files: ${[this.singleFiles.inputFile, ...outputFiles].join(', ')}`
       : `${actionLabel}ing single file: ${this.singleFiles.inputFile}`;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
+  }
+
+  private getPackCleanCommand(
+    action: 'pack' | 'clean',
+    useMultiple: boolean,
+  ): string {
+    if (action === 'pack') {
+      return useMultiple
+        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+        : MAIN_VIEW_COMMANDS.PACK_SINGLE;
+    }
+    return useMultiple
+      ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
+      : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
   }
 
   private handleLatexdiff(): void {
@@ -1749,28 +1758,9 @@ export class MainApp extends BaseWebviewApp {
       sessionType: this.sessionType,
       checkboxValues: this.checkboxValues,
       singleFiles: { ...this.singleFiles },
-      fileOptions: {
-        inputFile: this.fileOptions.inputFile ?? [],
-        referenceFile: this.fileOptions.referenceFile ?? [],
-        auxiliaryFile: this.fileOptions.auxiliaryFile ?? [],
-        mediaFile: this.fileOptions.mediaFile ?? [],
-        baseFile: this.fileOptions.baseFile ?? [],
-        editedFile: this.fileOptions.editedFile ?? [],
-      },
-      multiFiles: {
-        inputFiles: this.multiFiles.inputFiles ?? [],
-        referenceFiles: this.multiFiles.referenceFiles ?? [],
-        auxiliaryFiles: this.multiFiles.auxiliaryFiles ?? [],
-        mediaFiles: this.multiFiles.mediaFiles ?? [],
-        outputFiles: this.multiFiles.outputFiles ?? [],
-      },
-      multiFilesVisible: {
-        inputFiles: this.multiFilesVisible.inputFiles ?? false,
-        referenceFiles: this.multiFilesVisible.referenceFiles ?? false,
-        auxiliaryFiles: this.multiFilesVisible.auxiliaryFiles ?? false,
-        mediaFiles: this.multiFilesVisible.mediaFiles ?? false,
-        outputFiles: this.multiFilesVisible.outputFiles ?? false,
-      },
+      fileOptions: { ...this.fileOptions },
+      multiFiles: { ...this.multiFiles },
+      multiFilesVisible: { ...this.multiFilesVisible },
       outputFilesActive: this.outputFilesActive,
     };
   }

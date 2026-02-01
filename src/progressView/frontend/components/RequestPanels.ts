@@ -52,6 +52,58 @@ const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
 
 type PermissionKey = string;
 
+/** Section configuration for rendering permission groups */
+interface SectionConfig {
+  cssClass: string;
+  icon: string;
+  title: string;
+}
+
+const SECTION_CONFIGS: Record<string, SectionConfig> = {
+  approval: {
+    cssClass: 'approval-requests',
+    icon: 'diff',
+    title: 'Tool edit approval',
+  },
+  bash: {
+    cssClass: 'bash-approval-requests',
+    icon: 'terminal',
+    title: 'Command approval',
+  },
+  retry: {
+    cssClass: 'retry-requests',
+    icon: 'refresh',
+    title: 'Retry request',
+  },
+  proposal: {
+    cssClass: 'workflow-proposals',
+    icon: 'rocket',
+    title: 'Agent proposal',
+  },
+};
+
+/**
+ * Check if an element is a text-editable element, traversing shadow DOM as needed.
+ * Handles native inputs, contentEditable, and custom web components.
+ */
+function isTextInput(el: Element | null): boolean {
+  if (!el) return false;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+    return true;
+  if ((el as HTMLElement)?.isContentEditable) return true;
+
+  // Check custom element tags that contain text inputs
+  const tagName = el.tagName?.toLowerCase() ?? '';
+  if (tagName.includes('textarea') || tagName.includes('input')) return true;
+
+  // Recursively check shadow root for focused text inputs
+  const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot })?.shadowRoot;
+  if (shadowRoot?.activeElement) {
+    return isTextInput(shadowRoot.activeElement);
+  }
+  return false;
+}
+
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
   static override styles = [
@@ -134,92 +186,60 @@ export class RequestPanels extends LitElement {
   // Section renderers
   // ===========================================================================
 
-  private renderApprovalSection(
+  private renderSection(
+    config: SectionConfig,
     prompts: PermissionState[],
+    renderItem: (permission: PermissionState) => TemplateResult,
   ): TemplateResult | typeof nothing {
     if (prompts.length === 0) return nothing;
 
     return html`
-      <section class="approval-requests">
-        <div class="approval-requests__header">
-          <i class="codicon codicon-diff"></i>
-          <span>Tool edit approval</span>
+      <section class=${config.cssClass}>
+        <div class="${config.cssClass}__header">
+          <i class="codicon codicon-${config.icon}"></i>
+          <span>${config.title}</span>
         </div>
-        <div class="approval-requests__list">
+        <div class="${config.cssClass}__list">
           ${repeat(
             prompts,
             (permission) => this.getPermissionKey(permission),
-            (permission) => this.renderToolEditRequest(permission),
+            renderItem,
           )}
         </div>
       </section>
     `;
+  }
+
+  private renderApprovalSection(
+    prompts: PermissionState[],
+  ): TemplateResult | typeof nothing {
+    return this.renderSection(SECTION_CONFIGS.approval, prompts, (p) =>
+      this.renderToolEditRequest(p),
+    );
   }
 
   private renderBashSection(
     prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
-    if (prompts.length === 0) return nothing;
-
-    return html`
-      <section class="bash-approval-requests">
-        <div class="bash-approval-requests__header">
-          <i class="codicon codicon-terminal"></i>
-          <span>Command approval</span>
-        </div>
-        <div class="bash-approval-requests__list">
-          ${repeat(
-            prompts,
-            (permission) => this.getPermissionKey(permission),
-            (permission) => this.renderBashRequest(permission),
-          )}
-        </div>
-      </section>
-    `;
+    return this.renderSection(SECTION_CONFIGS.bash, prompts, (p) =>
+      this.renderBashRequest(p),
+    );
   }
 
   private renderRetrySection(
     prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
-    if (prompts.length === 0) return nothing;
-
-    return html`
-      <section class="retry-requests">
-        <div class="retry-requests__header">
-          <i class="codicon codicon-refresh"></i>
-          <span>Retry request</span>
-        </div>
-        <div class="retry-requests__list">
-          ${repeat(
-            prompts,
-            (permission) => this.getPermissionKey(permission),
-            (permission) => this.renderRetryRequest(permission),
-          )}
-        </div>
-      </section>
-    `;
+    return this.renderSection(SECTION_CONFIGS.retry, prompts, (p) =>
+      this.renderRetryRequest(p),
+    );
   }
 
   private renderProposalSection(
     prompts: PermissionState[],
   ): TemplateResult | typeof nothing {
-    if (prompts.length === 0) return nothing;
-
-    return html`
-      <section class="workflow-proposals">
-        <div class="workflow-proposals__header">
-          <i class="codicon codicon-rocket"></i>
-          <span>Agent proposal</span>
-        </div>
-        <div class="workflow-proposals__list">
-          ${repeat(
-            prompts,
-            (permission) => this.getPermissionKey(permission),
-            (permission) => this.renderProposalRequest(permission),
-          )}
-        </div>
-      </section>
-    `;
+    return this.renderSection(SECTION_CONFIGS.proposal, prompts, (p) =>
+      this.renderProposalRequest(p),
+    );
   }
 
   // ===========================================================================
@@ -637,7 +657,10 @@ export class RequestPanels extends LitElement {
 
   private handleActionClick = (event: MouseEvent): void => {
     // Use composedPath to get the actual clicked element inside shadow DOM
-    const actionEl = this.getActionElement(event.composedPath());
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-action][data-permission-kind][data-permission-id]',
+    );
     if (!actionEl) return;
 
     const action = actionEl.dataset.action;
@@ -698,33 +721,8 @@ export class RequestPanels extends LitElement {
    * Shortcuts: y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
-    // Don't intercept if typing in an input/textarea
-    // Must check both the document.activeElement AND shadowRoot focus
-    // because custom elements like vscode-textarea wrap native inputs
-    const activeEl = document.activeElement;
-
-    // Check if focus is in a text-editable element (handles Shadow DOM)
-    const isTextInput = (el: Element | null): boolean => {
-      if (!el) return false;
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
-        return true;
-      if ((el as HTMLElement)?.isContentEditable) return true;
-      // Check custom element tags that contain text inputs
-      const tagName = el.tagName?.toLowerCase() ?? '';
-      if (tagName.includes('textarea') || tagName.includes('input'))
-        return true;
-      // Check shadow root for focused text inputs
-      const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot })
-        ?.shadowRoot;
-      if (shadowRoot?.activeElement) {
-        return isTextInput(shadowRoot.activeElement);
-      }
-      return false;
-    };
-
-    if (isTextInput(activeEl)) {
-      return;
-    }
+    // Don't intercept if typing in an input/textarea (handles Shadow DOM)
+    if (isTextInput(document.activeElement)) return;
 
     // Don't intercept if modifier keys are pressed (except shift for some)
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -736,61 +734,85 @@ export class RequestPanels extends LitElement {
     const firstPermission = this.permissions[0];
     if (!firstPermission) return;
 
+    this.handleKeyboardShortcut(event, firstPermission);
+  };
+
+  /** Process keyboard shortcuts for permission actions */
+  private handleKeyboardShortcut(
+    event: KeyboardEvent,
+    permission: PermissionState,
+  ): void {
     const key = event.key.toLowerCase();
 
-    // Map keyboard shortcuts to actions
     switch (key) {
-      case 'y': // Approve
+      case 'y':
         event.preventDefault();
-        this.emitAction(firstPermission, 'approve');
+        this.emitAction(permission, 'approve');
         break;
-      case 'n': // Reject
+
+      case 'n':
         event.preventDefault();
-        if (FEEDBACK_KINDS.has(firstPermission.kind)) {
-          const permKey = this.getPermissionKey(firstPermission);
-          if (!this.feedbackOpenKeys.has(permKey)) {
-            this.openFeedback(permKey);
-          } else {
-            const feedback = this.getFeedbackValue(permKey);
-            this.closeFeedback(permKey);
-            this.emitAction(firstPermission, 'reject', feedback);
-          }
-        } else {
-          this.emitAction(firstPermission, 'reject');
-        }
+        this.handleRejectShortcut(permission);
         break;
-      case 'd': // Diff (for tool edit)
-        if (firstPermission.kind === PERMISSION_KIND.TOOL_EDIT) {
+
+      case 'd':
+        if (permission.kind === PERMISSION_KIND.TOOL_EDIT) {
           event.preventDefault();
-          this.emitAction(firstPermission, 'openDiff');
+          this.emitAction(permission, 'openDiff');
         }
         break;
-      case 'r': // Retry
-        if (firstPermission.kind === PERMISSION_KIND.RETRY) {
+
+      case 'r':
+        if (permission.kind === PERMISSION_KIND.RETRY) {
           event.preventDefault();
-          this.emitAction(firstPermission, 'retry');
+          this.emitAction(permission, 'retry');
         }
         break;
-      case 's': // Setup (for proposals)
-        if (firstPermission.kind === PERMISSION_KIND.PROPOSAL) {
+
+      case 's':
+        if (permission.kind === PERMISSION_KIND.PROPOSAL) {
           event.preventDefault();
-          this.emitAction(firstPermission, 'setup');
+          this.emitAction(permission, 'setup');
         }
         break;
-      case 'escape': // Dismiss/cancel
+
+      case 'escape':
         event.preventDefault();
-        if (firstPermission.kind === PERMISSION_KIND.RETRY) {
-          this.emitAction(firstPermission, 'cancel');
-        } else {
-          // Close feedback if open, otherwise reject
-          const permKey = this.getPermissionKey(firstPermission);
-          if (this.feedbackOpenKeys.has(permKey)) {
-            this.closeFeedback(permKey);
-          }
-        }
+        this.handleEscapeShortcut(permission);
         break;
     }
-  };
+  }
+
+  /** Handle 'n' key for reject with feedback support */
+  private handleRejectShortcut(permission: PermissionState): void {
+    if (!FEEDBACK_KINDS.has(permission.kind)) {
+      this.emitAction(permission, 'reject');
+      return;
+    }
+
+    const permKey = this.getPermissionKey(permission);
+    if (!this.feedbackOpenKeys.has(permKey)) {
+      this.openFeedback(permKey);
+    } else {
+      const feedback = this.getFeedbackValue(permKey);
+      this.closeFeedback(permKey);
+      this.emitAction(permission, 'reject', feedback);
+    }
+  }
+
+  /** Handle Escape key for dismiss/cancel */
+  private handleEscapeShortcut(permission: PermissionState): void {
+    if (permission.kind === PERMISSION_KIND.RETRY) {
+      this.emitAction(permission, 'cancel');
+      return;
+    }
+
+    // Close feedback if open
+    const permKey = this.getPermissionKey(permission);
+    if (this.feedbackOpenKeys.has(permKey)) {
+      this.closeFeedback(permKey);
+    }
+  }
 
   private handleMenuClick = (event: CustomEvent): void => {
     const menuItem = getComposedPathElement<HTMLElement>(
