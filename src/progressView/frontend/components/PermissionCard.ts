@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
+import { getTextareaValue } from '@shared/utils/textarea';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
 import { designTokens } from '@shared/styles/litStyles';
@@ -425,10 +426,7 @@ export class PermissionCard extends LitElement {
     }
 
     // Second click: submit with feedback
-    // Read .value directly - vscode-textarea proxies .value to the host
-    const feedbackValue =
-      (this.feedbackInput as { value?: string } | undefined)?.value ?? '';
-    const feedback = feedbackValue.trim() || undefined;
+    const feedback = getTextareaValue(this.feedbackInput).trim() || undefined;
     this.emitAction(action, feedback);
     this.showFeedback = false;
   }
