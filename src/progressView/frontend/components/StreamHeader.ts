@@ -12,12 +12,7 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - progress view constants
-import {
-  COMMANDS,
-  ELEMENT_IDS,
-  STREAM_STATUS,
-  TOOLBAR_BUTTONS,
-} from '../constants';
+import { ELEMENT_IDS, STREAM_STATUS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 import type { StreamState } from '../store';
@@ -313,7 +308,7 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
 
-    const status = this.resolveStatus();
+    const status = this.getCurrentStatus();
     const statusLabel = this.getStatusLabel(status);
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
@@ -352,7 +347,7 @@ export class StreamHeader extends LitElement {
                 toolbarButtons as ToolbarButton[],
                 (btn) => btn.id,
                 (btn) => {
-                  const { disabled, hidden } = this.resolveButtonState(
+                  const { disabled, hidden } = this.getButtonState(
                     btn.id,
                     status,
                     hasExecutionId,
@@ -389,14 +384,8 @@ export class StreamHeader extends LitElement {
   }
 
   private renderRunSelector(): TemplateResult | typeof nothing {
-    // Note: this.stream is guaranteed to exist when this method is called
-    // since render() only calls it when stream is truthy
-    const isWorkflow = this.stream!.agentCategory === 'workflow';
-    if (!isWorkflow) {
-      return nothing;
-    }
-    const hasRuns = this.runs.length > 0;
-    if (!hasRuns) {
+    // Only show run selector for workflow streams with runs
+    if (this.stream?.agentCategory !== 'workflow' || this.runs.length === 0) {
       return nothing;
     }
 
@@ -417,7 +406,7 @@ export class StreamHeader extends LitElement {
     `;
   }
 
-  private resolveStatus(): string {
+  private getCurrentStatus(): string {
     return (
       this.streamState?.status || this.stream?.status || STREAM_STATUS.READY
     );
@@ -427,7 +416,7 @@ export class StreamHeader extends LitElement {
     return STATUS_LABELS[status] ?? status;
   }
 
-  private resolveButtonState(
+  private getButtonState(
     buttonId: string,
     status: string,
     hasExecutionId: boolean,

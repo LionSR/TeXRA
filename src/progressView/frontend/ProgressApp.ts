@@ -18,7 +18,7 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { resolveRunId } from '@shared/streams/runSelection';
+import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { StreamSortSchema } from '@shared/streams/streamSort';
 
 // Local imports - webview commands
@@ -40,8 +40,6 @@ const ProgressViewPrefsSchema = z.object({
   streamSort: StreamSortSchema.catch('time'),
 });
 
-type ProgressViewPreferences = z.infer<typeof ProgressViewPrefsSchema>;
-
 // Local imports - event handlers
 import {
   handleDeleteAll,
@@ -60,7 +58,6 @@ import {
   handleStreamSwitch,
   handleToolbarCommand,
   sendFollowupCommand,
-  type FrontendEventHandlerContext,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
 
@@ -71,6 +68,7 @@ import {
   streamStateContext,
   type StreamContextValue,
 } from './contexts/streamContexts';
+import type { FrontendEventHandlerContext } from './eventHandlers';
 
 // Local imports - progress view message handlers
 import type { MessageHandlerContext } from './messageDispatcher';
@@ -144,6 +142,9 @@ export class ProgressApp extends BaseWebviewApp {
   private toolUseContentRef = createRef<ToolUseStreamContent>();
   private workflowContentRef = createRef<WorkflowStreamContent>();
 
+  // Cached event handler context - recreated when needed via getter
+  private eventHandlerContext: FrontendEventHandlerContext | null = null;
+
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
     'progressViewPrefs',
@@ -166,7 +167,9 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected override willUpdate(changed: Map<string, unknown>): void {
+    // Invalidate cached context when state changes
     if (changed.has('appState') || changed.has('permissions')) {
+      this.eventHandlerContext = null;
       this.updateStreamContext();
     }
   }
@@ -268,7 +271,7 @@ export class ProgressApp extends BaseWebviewApp {
       activeStream.agentCategory,
     );
     const isToolUse = isToolUseState(streamState);
-    const runId = resolveRunId(streamState, { mode: 'fallback' });
+    const runId = getEffectiveRunId(streamState, { mode: 'fallback' });
 
     this.streamContextValue = {
       streamInfo: activeStream,
@@ -298,17 +301,24 @@ export class ProgressApp extends BaseWebviewApp {
     this.appState = { ...this.appState, streamStates: nextStates };
   }
 
-  private createEventHandlerContext(): FrontendEventHandlerContext {
-    return {
-      getState: () => this.appState,
-      setState: (updater) => {
-        this.appState = updater(this.appState);
-      },
-      setStreamState: (streamId, updater) =>
-        this.setStreamState(streamId, updater),
-      getFollowUpRef: () => this.getFollowUpRef(),
-      savePrefs: (prefs) => this.prefsManager.update(prefs),
-    };
+  /**
+   * Get the event handler context, creating it lazily.
+   * Context is invalidated on state changes via willUpdate.
+   */
+  private getEventHandlerContext(): FrontendEventHandlerContext {
+    if (!this.eventHandlerContext) {
+      this.eventHandlerContext = {
+        getState: () => this.appState,
+        setState: (updater) => {
+          this.appState = updater(this.appState);
+        },
+        setStreamState: (streamId, updater) =>
+          this.setStreamState(streamId, updater),
+        getFollowUpRef: () => this.getFollowUpRef(),
+        savePrefs: (prefs) => this.prefsManager.update(prefs),
+      };
+    }
+    return this.eventHandlerContext;
   }
 
   /**
@@ -321,7 +331,7 @@ export class ProgressApp extends BaseWebviewApp {
 
   private createMessageHandlerContext(): MessageHandlerContext {
     return {
-      ...this.createEventHandlerContext(),
+      ...this.getEventHandlerContext(),
       getPermissions: () => this.permissions,
       setPermissions: (permissions) => {
         this.permissions = permissions;
@@ -330,81 +340,57 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   // Event handler wrappers - delegate to extracted handlers
-  private onStreamSwitch(e: CustomEvent): void {
-    handleStreamSwitch(e);
-  }
+  private onStreamSwitch = (e: CustomEvent): void => handleStreamSwitch(e);
+  private onStreamDelete = (e: CustomEvent): void => handleStreamDelete(e);
+  private onDeleteAll = (): void => handleDeleteAll();
+  private onFileAction = (e: CustomEvent): void => handleFileAction(e);
+  private onPermissionAction = (e: CustomEvent): void =>
+    handlePermissionAction(e);
 
-  private onStreamDelete(e: CustomEvent): void {
-    handleStreamDelete(e);
-  }
+  // Event handlers requiring context
+  private onFilterChange = (e: CustomEvent): void =>
+    handleFilterChange(e, this.getEventHandlerContext());
 
-  private onFilterChange(e: CustomEvent): void {
-    handleFilterChange(e, this.createEventHandlerContext());
-  }
+  private onSortChange = (e: CustomEvent): void =>
+    handleSortChange(e, this.getEventHandlerContext());
 
-  private onSortChange(e: CustomEvent): void {
-    handleSortChange(e, this.createEventHandlerContext());
-  }
+  private onToolbarCommand = (e: CustomEvent): void =>
+    handleToolbarCommand(e, this.getEventHandlerContext());
 
-  private onDeleteAll(): void {
-    handleDeleteAll();
-  }
+  private onRunSelected = (e: CustomEvent): void =>
+    handleRunSelected(e, this.getEventHandlerContext());
 
-  private onToolbarCommand(e: CustomEvent): void {
-    handleToolbarCommand(e, this.createEventHandlerContext());
-  }
+  private onFollowUpChange = (e: CustomEvent): void =>
+    handleFollowUpChange(e, this.getEventHandlerContext());
 
-  private onRunSelected(e: CustomEvent): void {
-    handleRunSelected(e, this.createEventHandlerContext());
-  }
+  private onFollowUpSend = (): void =>
+    handleFollowUpSend(this.getEventHandlerContext());
 
-  private onFileAction(e: CustomEvent): void {
-    handleFileAction(e);
-  }
+  private onFollowUpPolish = (): void =>
+    handleFollowUpPolish(this.getEventHandlerContext());
 
-  private onFollowUpChange(e: CustomEvent): void {
-    handleFollowUpChange(e, this.createEventHandlerContext());
-  }
+  private onFollowUpClear = (): void =>
+    handleFollowUpClear(this.getEventHandlerContext());
 
-  private onFollowUpSend(): void {
-    handleFollowUpSend(this.createEventHandlerContext());
-  }
+  private onFollowupRequestOptions = (): void =>
+    handleFollowupRequestOptions(this.getEventHandlerContext());
 
-  private onFollowUpPolish(): void {
-    handleFollowUpPolish(this.createEventHandlerContext());
-  }
+  private onFollowupModeChange = (e: CustomEvent): void =>
+    handleFollowupModeChange(e, this.getEventHandlerContext());
 
-  private onFollowUpClear(): void {
-    handleFollowUpClear(this.createEventHandlerContext());
-  }
-
-  private onFollowupRequestOptions(): void {
-    handleFollowupRequestOptions(this.createEventHandlerContext());
-  }
-
-  private onFollowupModeChange(e: CustomEvent): void {
-    handleFollowupModeChange(e, this.createEventHandlerContext());
-  }
-
-  private onFollowupSetup(e: CustomEvent): void {
+  private onFollowupSetup = (e: CustomEvent): void =>
     sendFollowupCommand(
       PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
       e,
-      this.createEventHandlerContext(),
+      this.getEventHandlerContext(),
     );
-  }
 
-  private onFollowupRun(e: CustomEvent): void {
+  private onFollowupRun = (e: CustomEvent): void =>
     sendFollowupCommand(
       PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
       e,
-      this.createEventHandlerContext(),
+      this.getEventHandlerContext(),
     );
-  }
-
-  private onPermissionAction(e: CustomEvent): void {
-    handlePermissionAction(e);
-  }
 
   /**
    * Reset focus/polish/transcription triggers after they've been consumed.

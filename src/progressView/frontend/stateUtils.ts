@@ -1,5 +1,12 @@
 // Shared imports
 import { sortStreams } from '@shared/streams/streamSort';
+import {
+  isToolUseState,
+  isWorkflowState,
+  type ProgressState,
+  type ToolUseStreamState,
+  type WorkflowStreamState,
+} from './store';
 import type {
   InstructionUpdate,
   LogMessageData,
@@ -10,13 +17,6 @@ import type {
 } from '@shared/schemas';
 
 // Local imports
-import {
-  isToolUseState,
-  isWorkflowState,
-  type ProgressState,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-} from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 
 /**

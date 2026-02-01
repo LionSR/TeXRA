@@ -22,21 +22,29 @@ function getLatestRootRunId(taskGroups: TaskGroup[]): string | null {
 }
 
 /**
- * Resolve run ID for a stream, optionally falling back to latest root group.
+ * Get the explicit run ID from a workflow state, if any.
+ * Returns the selected run ID, falling back to active run ID.
  */
-export function resolveRunId(
+function getExplicitRunId(streamState: StreamState): string | null {
+  if (!isWorkflowState(streamState)) return null;
+  return streamState.selectedRunId ?? streamState.activeRunId ?? null;
+}
+
+/**
+ * Get the effective run ID for a stream.
+ *
+ * In 'strict' mode, returns only explicitly selected/active run IDs (or null).
+ * In 'fallback' mode, falls back to the latest root group when no explicit selection exists.
+ */
+export function getEffectiveRunId(
   streamState: StreamState,
   options: { mode: RunSelectionMode },
 ): string | null {
-  if (isWorkflowState(streamState)) {
-    const explicit =
-      streamState.selectedRunId ?? streamState.activeRunId ?? null;
-    if (explicit || options.mode === 'strict') {
-      return explicit;
-    }
-  } else if (options.mode === 'strict') {
-    return null;
+  const explicit = getExplicitRunId(streamState);
+
+  if (options.mode === 'strict') {
+    return explicit;
   }
 
-  return getLatestRootRunId(streamState.taskGroups);
+  return explicit ?? getLatestRootRunId(streamState.taskGroups);
 }
