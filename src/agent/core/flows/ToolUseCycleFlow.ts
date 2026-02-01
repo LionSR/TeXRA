@@ -547,19 +547,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  /**
-   * Returns the array of tool calls to execute.
-   * Returns empty array if should skip (no tools, stopped, or interrupted).
-   */
+  /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     const toolCalls = shared.toolCalls ?? [];
 
-    // Skip if no tool calls or already stopped
     if (shared.shouldStop || toolCalls.length === 0) {
       return [];
     }
 
-    // Check for interruption before starting batch execution
     if (this.services.checkInterruption()) {
       shared.shouldStop = true;
       return [];
@@ -568,14 +563,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     return toolCalls;
   }
 
-  /**
-   * Execute a single tool call. Called sequentially for each tool in the batch.
-   * Checks for interruption before each execution to allow cancellation mid-batch.
-   */
+  /** Execute a single tool call, returning null if interrupted. */
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
-    // Check for interruption before each tool call (replaces old for-loop check)
     if (this.services.checkInterruption()) {
-      return null; // Signal to skip remaining tools
+      return null;
     }
 
     const services = this.services;
@@ -589,45 +580,54 @@ class ToolUseDispatchNode<C> extends BatchNode<
     );
   }
 
-  /**
-   * Execute a single tool call and return the result with metadata.
-   */
+  /** Invoke a tool with error handling, returning an error result if the tool is missing. */
+  private async invokeToolSafely(
+    call: SdkToolCall,
+    tool: { call(input: unknown): Promise<ToolResult> } | undefined,
+    parsedInput: unknown,
+    options: ToolUseCycleOptions<C>,
+    tracker: FileInteractionState,
+    todoState: TodoState,
+  ): Promise<ToolResult> {
+    if (!tool) {
+      return { error: `Unknown tool ${call.name}`, isError: true };
+    }
+
+    try {
+      return await withToolFileInteractionContext(
+        {
+          tracker,
+          todoState,
+          streamId: options.logger.streamId,
+          executionId: options.executionId,
+          toolCallId: call.callId,
+        },
+        () => tool.call(parsedInput),
+      );
+    } catch (err) {
+      const { message, diagnostics } = normalizeToolCallError(call.name, err);
+      return { error: message, isError: true, diagnostics };
+    }
+  }
+
+  /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
   ): Promise<ToolExecutionResult> {
-    const tool = options.toolRegistry.get(call.name);
-    let result: ToolResult;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
+    const tool = options.toolRegistry.get(call.name);
 
-    if (!tool) {
-      result = {
-        error: `Unknown tool ${call.name}`,
-        isError: true,
-      };
-    } else {
-      try {
-        result = await withToolFileInteractionContext(
-          {
-            tracker,
-            todoState,
-            streamId: options.logger.streamId,
-            executionId: options.executionId,
-            toolCallId: call.callId,
-          },
-          () => tool.call(parsedInput),
-        );
-      } catch (err) {
-        const { message, diagnostics } = normalizeToolCallError(call.name, err);
-        result = {
-          error: message,
-          isError: true,
-          diagnostics,
-        };
-      }
-    }
+    const result = await this.invokeToolSafely(
+      call,
+      tool,
+      parsedInput,
+      options,
+      tracker,
+      todoState,
+    );
 
     const trackedEdits = tracker.recordEdits(result.edits);
     if (!result.lineChanges && trackedEdits.lineChanges) {
@@ -697,13 +697,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     }
   }
 
-  /**
-   * Process all tool execution results and create follow-up messages.
-   *
-   * @param shared - Mutable shared state
-   * @param toolCalls - Array of tool calls from prep()
-   * @param execResults - Array of execution results from exec() calls (null if interrupted)
-   */
+  /** Process tool execution results and create follow-up messages. */
   async post(
     shared: ToolUseCycleShared,
     _toolCalls: SdkToolCall[],
@@ -712,17 +706,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const services = this.services;
     const { workspace } = services;
 
-    // Filter out null results (interrupted tool calls)
     const completedResults = execResults.filter(
       (r): r is ToolExecutionResult => r !== null,
     );
 
-    // If interrupted mid-batch, mark as stopped
     if (completedResults.length < execResults.length) {
       shared.shouldStop = true;
     }
 
-    // If no tools were executed (skipped or interrupted), complete the flow
     if (completedResults.length === 0) {
       return FlowTransition.COMPLETE;
     }
