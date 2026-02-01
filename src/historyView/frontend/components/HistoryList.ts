@@ -213,7 +213,7 @@ export class HistoryList extends LitElement {
     }
   > {
     // @queryAll returns NodeList, not Array - convert for .map() support
-    return Array.from(this.historyItemElements ?? []);
+    return [...(this.historyItemElements ?? [])];
   }
 
   private handleToggle(
