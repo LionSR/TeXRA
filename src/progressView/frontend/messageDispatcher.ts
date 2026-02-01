@@ -400,7 +400,9 @@ const handlers: HandlerRegistry = {
     ctx.setStreamState(streamId, (prev) => ({
       ...prev,
       status: data.status,
-      ...(data.status === 'waiting' && { shouldFocusFollowUp: true }),
+      ...(data.status === STREAM_STATUS.WAITING && {
+        shouldFocusFollowUp: true,
+      }),
     }));
   },
 
@@ -413,7 +415,7 @@ const handlers: HandlerRegistry = {
       ...prev,
       status,
       ...(isActiveStream &&
-        status === 'waiting' && { shouldFocusFollowUp: true }),
+        status === STREAM_STATUS.WAITING && { shouldFocusFollowUp: true }),
     }));
 
     ctx.setState(() => ({

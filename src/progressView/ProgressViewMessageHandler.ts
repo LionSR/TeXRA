@@ -75,8 +75,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 > {
   private readonly recordingManager: RecordingManager;
   private readonly modelOutputBackups = new Map<
-    string,
-    { content: string; streamId: StreamTabId }
+    StreamTabId,
+    Map<string, { content: string; streamId: StreamTabId }>
   >();
 
   /**
@@ -480,23 +480,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
               text: result.text,
             });
           } else if (result.error) {
-            await vscode.window.showErrorMessage(result.error);
             this.postToActiveView({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
               stream: data.stream,
               error: result.error,
             });
+            await vscode.window.showErrorMessage(result.error);
           }
         } catch (error) {
           const messageText = toErrorMessage(error);
-          await vscode.window.showErrorMessage(
-            `Error polishing follow-up: ${messageText}`,
-          );
           this.postToActiveView({
             command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
             stream: data.stream,
             error: messageText,
           });
+          await vscode.window.showErrorMessage(
+            `Error polishing follow-up: ${messageText}`,
+          );
           this.logger.error(
             this.channel,
             `Error polishing follow-up: ${messageText}`,
@@ -705,10 +705,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           try {
             const fileLocation = createExternalLocation(targetFile);
             const content = await flexibleFS.read(fileLocation);
-            this.modelOutputBackups.set(
-              this.getModelOutputBackupKey(streamId, targetFile),
-              { content, streamId },
-            );
+            const streamBackups =
+              this.modelOutputBackups.get(streamId) ?? new Map();
+            streamBackups.set(targetFile, { content, streamId });
+            this.modelOutputBackups.set(streamId, streamBackups);
           } catch {
             // Ignore backup errors
           }
@@ -761,9 +761,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const { file, base } = data;
     const streamId = this.provider.state.activeStream;
-    const backupKey =
-      file && streamId ? this.getModelOutputBackupKey(streamId, file) : null;
-    const backup = backupKey ? this.modelOutputBackups.get(backupKey) : null;
+    const backup =
+      file && streamId
+        ? this.modelOutputBackups.get(streamId)?.get(file)
+        : null;
     let currentContent: string | null = null;
 
     if (backup) {
@@ -804,25 +805,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     if (file) {
-      if (backupKey) {
-        this.modelOutputBackups.delete(backupKey);
+      if (streamId) {
+        const streamBackups = this.modelOutputBackups.get(streamId);
+        if (streamBackups) {
+          streamBackups.delete(file);
+          if (streamBackups.size === 0) {
+            this.modelOutputBackups.delete(streamId);
+          }
+        }
       }
     }
   }
 
-  private getModelOutputBackupKey(streamId: StreamTabId, file: string): string {
-    return `${streamId}:${file}`;
-  }
-
   private clearModelOutputBackups(streamId: StreamTabId): void {
-    const prefix = `${streamId}:`;
-    // Collect keys first to avoid mutating Map during iteration
-    const keysToDelete = [...this.modelOutputBackups.keys()].filter((k) =>
-      k.startsWith(prefix),
-    );
-    for (const key of keysToDelete) {
-      this.modelOutputBackups.delete(key);
-    }
+    this.modelOutputBackups.delete(streamId);
   }
 
   private async handleMergeFile(
