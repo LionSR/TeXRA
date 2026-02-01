@@ -7,7 +7,11 @@
  * Events for the same stream are queued and processed sequentially.
  * Events for different streams run in parallel.
  */
-class StreamEventQueue {
+
+// Local imports - logging
+import * as logger from '@logger/logUtils';
+
+export class StreamEventQueue {
   private queues = new Map<string, Promise<void>>();
 
   /**
@@ -17,8 +21,11 @@ class StreamEventQueue {
   async enqueue<T>(key: string, handler: () => Promise<T>): Promise<T> {
     const pending = this.queues.get(key) ?? Promise.resolve();
     const next = pending
-      .catch(() => {
+      .catch((error) => {
         // Ensure failures do not poison the queue for this key.
+        logger.warn('TeXRA', '[StreamEventQueue] Handler failed.', {
+          data: { key, error },
+        });
       })
       .then(handler)
       .finally(() => {
