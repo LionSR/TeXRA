@@ -209,21 +209,28 @@ export class ProgressEventHandler {
           this.bufferTaskGroupForReplay(streamId, group);
         }
 
-        await addGroupPromise;
+        try {
+          await addGroupPromise;
 
-        const pendingUpdate = pendingUpdates?.get(id);
-        if (pendingUpdate) {
-          await this.state.taskGroups.updateGroup(pendingUpdate);
-          if (
-            this.webviewUpdater.isAvailable() &&
-            streamId === this.state.activeStream
-          ) {
-            this.webviewUpdater.updateTaskGroup(pendingUpdate);
+          const pendingUpdate = pendingUpdates?.get(id);
+          if (pendingUpdate) {
+            await this.state.taskGroups.updateGroup(pendingUpdate);
+            if (
+              this.webviewUpdater.isAvailable() &&
+              streamId === this.state.activeStream
+            ) {
+              this.webviewUpdater.updateTaskGroup(pendingUpdate);
+            }
+            pendingUpdates?.delete(id);
+            if (pendingUpdates && pendingUpdates.size === 0) {
+              this.pendingTaskGroupUpdates.delete(streamId);
+            }
           }
-          pendingUpdates?.delete(id);
-          if (pendingUpdates && pendingUpdates.size === 0) {
+        } catch (error) {
+          if (pendingUpdates?.delete(id) && pendingUpdates.size === 0) {
             this.pendingTaskGroupUpdates.delete(streamId);
           }
+          throw error;
         }
       },
     );

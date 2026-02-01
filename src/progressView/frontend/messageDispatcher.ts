@@ -131,7 +131,14 @@ function updateStreamInfo(
       const existing = nextStates.get(stream.name);
       const frontendOnlyFields =
         existing && isToolUseState(existing)
-          ? { followUpText: existing.followUpText }
+          ? {
+              followUpText: existing.followUpText,
+              polishedText: existing.polishedText,
+              polishRevision: existing.polishRevision,
+              transcribedText: existing.transcribedText,
+              recording: existing.recording,
+              shouldFocusFollowUp: existing.shouldFocusFollowUp,
+            }
           : {};
       nextStates.set(stream.name, {
         ...backendState,
@@ -556,8 +563,7 @@ const handlers: HandlerRegistry = {
 
   // Follow-up and recording
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
+    const streamId = data.stream;
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
@@ -569,8 +575,7 @@ const handlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
-    const streamId = ctx.getState().activeStreamId;
-    if (!streamId) return;
+    const streamId = data.stream;
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
