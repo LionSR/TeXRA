@@ -19,6 +19,7 @@ import {
   type StreamTabInfo,
   type ToolUseStreamState,
 } from '@shared/schemas';
+import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
@@ -85,6 +86,7 @@ function addPermission(
   ctx: MessageHandlerContext,
   permission: PermissionState,
 ): void {
+  // Prepend newest permissions so keyboard shortcuts target the latest request.
   ctx.setPermissions([permission, ...ctx.getPermissions()]);
 }
 
@@ -453,15 +455,16 @@ const handlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
     const { stream, instruction, runId: providedRunId } = data;
     if (!stream) return;
-    if (!providedRunId) {
-      console.warn(
-        '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
-      );
-      return;
-    }
 
     updateWorkflowState(ctx, stream, (prev) => {
-      const runId = providedRunId;
+      const runId =
+        providedRunId ?? getEffectiveRunId(prev, { mode: 'fallback' });
+      if (!runId) {
+        console.warn(
+          '[ProgressView] UPDATE_INSTRUCTION missing runId; skipping update.',
+        );
+        return prev;
+      }
       const { [runId]: _, ...rest } = prev.runInstructions;
       return {
         ...prev,
