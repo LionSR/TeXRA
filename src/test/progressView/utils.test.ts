@@ -23,7 +23,7 @@ describe('getComposedPathElement', () => {
       const span = dom.window.document.querySelector('span') as HTMLElement;
       const event = {
         composedPath: () => [span, button],
-      } as Event;
+      } as unknown as Event;
 
       const result = getComposedPathElement<HTMLElement>(
         event,
@@ -48,7 +48,7 @@ describe('getComposedPathElement', () => {
       const span = dom.window.document.querySelector('span') as HTMLElement;
       const event = {
         composedPath: () => [span],
-      } as Event;
+      } as unknown as Event;
 
       const result = getComposedPathElement<HTMLElement>(
         event,
