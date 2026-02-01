@@ -222,12 +222,16 @@ export class FileSelectGroup extends LitElement {
       return true;
     }
 
+    // Traverse shadow DOM hierarchy with max depth guard
+    const MAX_SHADOW_DEPTH = 20;
     let root = target.getRootNode();
-    while (root instanceof ShadowRoot) {
+    let depth = 0;
+    while (root instanceof ShadowRoot && depth < MAX_SHADOW_DEPTH) {
       if (this.contains(root.host)) {
         return true;
       }
       root = root.host.getRootNode();
+      depth++;
     }
 
     return false;
