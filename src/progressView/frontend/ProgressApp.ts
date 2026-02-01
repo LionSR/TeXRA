@@ -165,13 +165,24 @@ export class ProgressApp extends BaseWebviewApp {
 
   protected override willUpdate(changed: Map<string, unknown>): void {
     if (changed.has('appState') || changed.has('permissions')) {
+      const previousState = changed.get('appState') as
+        | ProgressState
+        | undefined;
+      const activeStreamId = this.appState.activeStreamId;
+      const previousActiveStreamId = previousState?.activeStreamId ?? null;
       // Only update stream context if active stream or its state changed
-      const newStreamState = this.appState.activeStreamId
-        ? this.appState.streamStates.get(this.appState.activeStreamId)
+      const newStreamState = activeStreamId
+        ? this.appState.streamStates.get(activeStreamId)
         : null;
+      const followupOptionsChanged =
+        !!activeStreamId &&
+        previousState?.followupOptionsByStream.get(activeStreamId) !==
+          this.appState.followupOptionsByStream.get(activeStreamId);
       if (
         this.streamContextValue.streamState !== newStreamState ||
-        changed.has('permissions')
+        changed.has('permissions') ||
+        activeStreamId !== previousActiveStreamId ||
+        followupOptionsChanged
       ) {
         this.updateStreamContext();
       }
