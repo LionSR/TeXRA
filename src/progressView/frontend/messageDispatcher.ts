@@ -564,6 +564,8 @@ const handlers: HandlerRegistry = {
   // Follow-up and recording
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (data, ctx) => {
     const streamId = data.stream;
+    // Guard: ignore late-arriving messages for deleted streams
+    if (!ctx.getState().streamStates.has(streamId)) return;
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
@@ -576,6 +578,8 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR]: (data, ctx) => {
     const streamId = data.stream;
+    // Guard: ignore late-arriving messages for deleted streams
+    if (!ctx.getState().streamStates.has(streamId)) return;
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
@@ -611,6 +615,8 @@ const handlers: HandlerRegistry = {
       console.warn('SET_FOLLOWUP_OPTIONS missing stream ID.', { data });
       return;
     }
+    // Guard: ignore late-arriving messages for deleted streams
+    if (!ctx.getState().streamStates.has(stream)) return;
 
     ctx.setState((prev) => ({
       ...prev,
