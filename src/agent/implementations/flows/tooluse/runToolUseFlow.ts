@@ -49,9 +49,14 @@ export interface RunToolUseFlowResult {
   status: EndGroupStatus;
 }
 
-/** Runtime context for tool-use flow execution. */
+/**
+ * Runtime context for tool-use flow execution (implements IInterruptible).
+ * The `session` field provides direct access for follow-up operations,
+ * avoiding the need to traverse through services for common operations.
+ */
 export interface ToolUseFlowContext<C = unknown> {
   services: ToolUseServices<C>;
+  /** Direct accessor for follow-up operations (also available via services.session). */
   session: ToolUseSessionLifecycle;
   interrupt(): void;
   dispose(): void;
@@ -104,7 +109,7 @@ export async function runToolUseFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
-  // Declare shared outside try block so it's accessible in finally for cleanup decisions
+  // Shared state is declared outside try block for access in finally (cleanup decision based on userCancelledRetry)
   const shared: ToolUseRunShared = {
     conversation: [],
     shouldSkipCycle: false,
