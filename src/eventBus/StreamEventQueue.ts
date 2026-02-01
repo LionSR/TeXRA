@@ -12,7 +12,7 @@
 import * as logger from '@logger/logUtils';
 
 export class StreamEventQueue {
-  private queues = new Map<string, Promise<void>>();
+  private queues = new Map<string, Promise<unknown>>();
 
   /**
    * Enqueue an async operation for a given key (e.g., streamId).
