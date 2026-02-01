@@ -81,6 +81,9 @@ import {
   FILE_UPDATE_COMMANDS,
   FILE_REFRESH_COMMANDS,
   FILE_SELECTED_COMMANDS,
+  SINGLE_FILE_COMMAND_TO_KEY,
+  FILE_SELECTED_COMMAND_TO_KEY,
+  MULTI_FILE_COMMAND_TO_KEY,
   PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
@@ -574,6 +577,7 @@ export class MainApp extends BaseWebviewApp {
       this.workflowAgent = this.validateOptionSelection(
         optionsData.workflow,
         this.workflowAgent,
+        true, // preferEnabled: avoid selecting disabled agents
       );
     }
 
@@ -582,6 +586,7 @@ export class MainApp extends BaseWebviewApp {
       this.toolUseAgent = this.validateOptionSelection(
         optionsData.toolUse,
         this.toolUseAgent,
+        true, // preferEnabled: avoid selecting disabled agents
       );
     }
   }
@@ -959,27 +964,15 @@ export class MainApp extends BaseWebviewApp {
   }
 
   /**
-   * Extracts the file key from a command name.
-   * Patterns:
-   *   'setInputFile' -> 'inputFile'
-   *   'inputFileSelected' -> 'inputFile'
-   *   'setInputFiles' -> 'inputFiles'
+   * Extracts the file key from a command name using explicit maps.
+   * Compile-time verifiable - no regex parsing needed.
    */
   private extractFileKeyFromCommand(command: string): string | undefined {
-    // Handle 'set*File' or 'set*Files' pattern
-    const setMatch = command.match(/^set(\w+)(Files?)$/);
-    if (setMatch) {
-      const [, name, suffix] = setMatch;
-      return name.charAt(0).toLowerCase() + name.slice(1) + suffix;
-    }
-
-    // Handle '*FileSelected' pattern
-    const selectedMatch = command.match(/^(\w+File)Selected$/);
-    if (selectedMatch) {
-      return selectedMatch[1];
-    }
-
-    return undefined;
+    return (
+      SINGLE_FILE_COMMAND_TO_KEY[command] ??
+      FILE_SELECTED_COMMAND_TO_KEY[command] ??
+      MULTI_FILE_COMMAND_TO_KEY[command]
+    );
   }
 
   private toggleListVisibility(listId: keyof MultiFiles): void {
