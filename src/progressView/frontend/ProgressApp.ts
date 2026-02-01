@@ -142,9 +142,6 @@ export class ProgressApp extends BaseWebviewApp {
   private toolUseContentRef = createRef<ToolUseStreamContent>();
   private workflowContentRef = createRef<WorkflowStreamContent>();
 
-  // Cached event handler context - recreated when needed via getter
-  private eventHandlerContext: FrontendEventHandlerContext | null = null;
-
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
     'progressViewPrefs',
@@ -167,10 +164,17 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   protected override willUpdate(changed: Map<string, unknown>): void {
-    // Invalidate cached context when state changes
     if (changed.has('appState') || changed.has('permissions')) {
-      this.eventHandlerContext = null;
-      this.updateStreamContext();
+      // Only update stream context if active stream or its state changed
+      const newStreamState = this.appState.activeStreamId
+        ? this.appState.streamStates.get(this.appState.activeStreamId)
+        : null;
+      if (
+        this.streamContextValue.streamState !== newStreamState ||
+        changed.has('permissions')
+      ) {
+        this.updateStreamContext();
+      }
     }
   }
 
@@ -302,23 +306,20 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   /**
-   * Get the event handler context, creating it lazily.
-   * Context is invalidated on state changes via willUpdate.
+   * Get the event handler context.
+   * Always returns fresh context - closures capture current state via getters.
    */
   private getEventHandlerContext(): FrontendEventHandlerContext {
-    if (!this.eventHandlerContext) {
-      this.eventHandlerContext = {
-        getState: () => this.appState,
-        setState: (updater) => {
-          this.appState = updater(this.appState);
-        },
-        setStreamState: (streamId, updater) =>
-          this.setStreamState(streamId, updater),
-        getFollowUpRef: () => this.getFollowUpRef(),
-        savePrefs: (prefs) => this.prefsManager.update(prefs),
-      };
-    }
-    return this.eventHandlerContext;
+    return {
+      getState: () => this.appState,
+      setState: (updater) => {
+        this.appState = updater(this.appState);
+      },
+      setStreamState: (streamId, updater) =>
+        this.setStreamState(streamId, updater),
+      getFollowUpRef: () => this.getFollowUpRef(),
+      savePrefs: (prefs) => this.prefsManager.update(prefs),
+    };
   }
 
   /**

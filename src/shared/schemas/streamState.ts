@@ -55,6 +55,22 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 
+/**
+ * Frontend-only fields in ToolUseStreamState that should be preserved
+ * when backend state updates arrive.
+ *
+ * Using `satisfies` ensures compile-time safety: adding a field to the type
+ * without updating this array causes a TypeScript error.
+ */
+export const TOOL_USE_FRONTEND_ONLY_KEYS = [
+  'followUpText',
+  'polishedText',
+  'polishRevision',
+  'transcribedText',
+  'recording',
+  'shouldFocusFollowUp',
+] as const satisfies readonly (keyof ToolUseStreamState)[];
+
 // Workflow Stream State
 
 const RunScopedRecord = <T extends z.ZodType>(valueSchema: T) =>
