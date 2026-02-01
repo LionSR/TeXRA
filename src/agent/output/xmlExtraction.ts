@@ -10,14 +10,13 @@ import {
   type FileLocation,
   type StorageKey,
 } from '@shared/schemas';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import type { AgentLogStage } from '@logger/AgentLogger';
 
 import {
   OutputFileProcessor,
   type ProcessingContext,
 } from './OutputFileProcessor';
-import type { XmlOutputManager } from './XmlOutputManager';
 import {
   ensureRoundData,
   getStorageKey,
@@ -25,12 +24,14 @@ import {
   type OutputState,
   type OutputDependencies,
 } from './outputState';
+import type { XmlOutputManager } from './XmlOutputManager';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 /** Waits for run workspace preparation to complete. */
+// This function is very strange?... need to consider if in the future there are cleaner ways to do this.
 async function prepareRunWorkspaceIfNeeded(
   state: OutputState,
   deps: OutputDependencies,
