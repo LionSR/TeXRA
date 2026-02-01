@@ -37,10 +37,12 @@ export type { UICallbacks };
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private readonly pendingTaskGroups = new Map<StreamTabId, TaskGroup[]>();
-  private readonly pendingTaskGroupUpdates = new Map<
-    StreamTabId,
-    Map<string, UpdateTaskGroupPayload>
-  >();
+  /**
+   * Tracks group IDs with pending updates that arrived before addTaskGroup.
+   * After addTaskGroup completes, we fetch current state from backend (single
+   * source of truth) and send to webview - no need to queue individual updates.
+   */
+  private readonly pendingTaskGroupUpdates = new Map<StreamTabId, Set<string>>();
   private readonly ctx: EventHandlerContext;
 
   constructor(
@@ -183,7 +185,7 @@ export class ProgressEventHandler {
       async () => {
         const { streamId, ...group } = data;
         const { id, parentGroupId } = group;
-        const pendingUpdates = this.pendingTaskGroupUpdates.get(streamId);
+        const pendingIds = this.pendingTaskGroupUpdates.get(streamId);
 
         const hasStream = this.state.streamTabs.has(streamId);
         const addGroupPromise = this.state.taskGroups.addGroup(
@@ -209,28 +211,31 @@ export class ProgressEventHandler {
           this.bufferTaskGroupForReplay(streamId, group);
         }
 
-        try {
-          await addGroupPromise;
+        await addGroupPromise;
 
-          const pendingUpdate = pendingUpdates?.get(id);
-          if (pendingUpdate) {
-            await this.state.taskGroups.updateGroup(pendingUpdate);
-            if (
-              this.webviewUpdater.isAvailable() &&
-              streamId === this.state.activeStream
-            ) {
-              this.webviewUpdater.updateTaskGroup(pendingUpdate);
-            }
-            pendingUpdates?.delete(id);
-            if (pendingUpdates && pendingUpdates.size === 0) {
-              this.pendingTaskGroupUpdates.delete(streamId);
-            }
-          }
-        } catch (error) {
-          if (pendingUpdates?.delete(id) && pendingUpdates.size === 0) {
+        // If updates arrived before add completed, send current state from backend
+        if (pendingIds?.has(id)) {
+          pendingIds.delete(id);
+          if (pendingIds.size === 0) {
             this.pendingTaskGroupUpdates.delete(streamId);
           }
-          throw error;
+
+          // Backend state is source of truth - fetch and send current state
+          const currentGroup = this.state.taskGroups
+            .getStreamGroups(streamId)
+            .get(id);
+          if (
+            currentGroup &&
+            this.webviewUpdater.isAvailable() &&
+            streamId === this.state.activeStream
+          ) {
+            this.webviewUpdater.updateTaskGroup({
+              streamId,
+              id,
+              status: currentGroup.status,
+              endTime: currentGroup.endTime,
+            });
+          }
         }
       },
     );
@@ -247,12 +252,14 @@ export class ProgressEventHandler {
           data.streamId,
         );
         if (!streamGroups.has(data.id)) {
-          const pendingUpdates =
-            this.pendingTaskGroupUpdates.get(data.streamId) ?? new Map();
-          pendingUpdates.set(data.id, data);
-          this.pendingTaskGroupUpdates.set(data.streamId, pendingUpdates);
+          // Track that this group has pending updates - actual state will be
+          // fetched from backend (single source of truth) when addTaskGroup completes
+          const pendingIds =
+            this.pendingTaskGroupUpdates.get(data.streamId) ?? new Set();
+          pendingIds.add(data.id);
+          this.pendingTaskGroupUpdates.set(data.streamId, pendingIds);
           this.logger.debug(
-            `Queued task group update before group was added (stream=${data.streamId}, group=${data.id})`,
+            `Marked task group for refresh after add (stream=${data.streamId}, group=${data.id})`,
           );
           return;
         }
