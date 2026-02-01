@@ -15,7 +15,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 - `prd-ui-regression-audit-round3-3.md` (INITIALIZING status, schema validation)
 - `prd-ui-regression-audit-round3-4.md` (duplicate of round3-2, now removed)
 
-> **Status: ✅ VERIFIED (2026-01-31)** – All issues confirmed via code review
+> **Status: ✅ COMPLETE (2026-02-01)** – All issues fixed including PR review findings
 
 ### Summary by Severity
 
@@ -566,6 +566,168 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 
 ---
 
-## Progress Update (2026-01-31)
+## Progress Update
+
+### 2026-02-01
+
+- ✅ Fixed all PR review findings (H-NEW-1, H-NEW-2, M-NEW-1, M-NEW-2)
+- ✅ Created `StreamEventQueue` utility for per-stream event serialization
+- ✅ Added compile-time safe frontend-only field extraction via `TOOL_USE_FRONTEND_ONLY_KEYS`
+- ✅ Removed aggressive context caching in ProgressApp
+- ✅ Fixed Map mutation during iteration pattern
+
+### 2026-01-31
 
 - ✅ Implemented fixes for all HIGH, MEDIUM, and LOW severity items listed in this PRD.
+
+---
+
+## Additional PR Review Findings (2026-02-01)
+
+### PR Comment Analysis Results
+
+The following PR comments were analyzed for validity:
+
+#### Confirmed Issues (All Fixed 2026-02-01)
+
+##### H-NEW-1: Race condition in pendingTaskGroupUpdates — ✅ FIXED
+
+**File:** `src/progressView/events/ProgressEventHandler.ts`
+
+**Issue:** When `updateTaskGroup` arrives before `addTaskGroup` completes, the handler marks the group ID as pending but does NOT apply the update to backend state (skips `updateGroup()` call). When `addTaskGroup` later completes and fetches "current state from backend", the intermediate updates (status, endTime) were never applied.
+
+**Current code flow:**
+1. `updateTaskGroup` event arrives
+2. Group doesn't exist in `streamGroups.has(data.id)`
+3. We mark ID as pending but skip `this.state.taskGroups.updateGroup(data)`
+4. `addTaskGroup` completes, fetches current state - but state was never updated!
+
+**Recommendation:** Queue the actual update payloads (not just IDs) and replay them after `addTaskGroup` completes:
+```typescript
+// Change from Set<string> to Map<string, UpdateTaskGroupPayload[]>
+private readonly pendingTaskGroupUpdates = new Map<StreamTabId, Map<string, UpdateTaskGroupPayload[]>>();
+```
+
+##### H-NEW-2: Frontend-Only State Preservation is Fragile — ✅ FIXED
+
+**File:** `src/progressView/frontend/messageDispatcher.ts`
+
+```typescript
+const frontendOnlyFields = existing && isToolUseState(existing)
+  ? { followUpText: existing.followUpText, polishedText: existing.polishedText, ... }
+  : {};
+```
+
+**Issue:** Manually preserving frontend-only fields during backend merges is error-prone — any new frontend field must be added to this list. Missing a field causes silent data loss.
+
+**Recommendation:** Consider:
+1. Maintain a separate `frontendState` map keyed by streamId
+2. Use a TypeScript type with explicit "frontend-only" fields and create a helper function
+3. Use a reducer pattern with explicit merge strategies
+
+##### M-NEW-1: Aggressive Context Invalidation — ✅ FIXED
+
+**File:** `src/progressView/frontend/ProgressApp.ts`
+
+```typescript
+if (changed.has('appState') || changed.has('permissions')) {
+  this.eventHandlerContext = null;
+}
+```
+
+**Issue:** Every `appState` mutation invalidates the event handler context, even when the relevant parts haven't changed. Since `appState` changes on every log entry/usage update, this creates unnecessary object churn.
+
+**Recommendation:** Only invalidate when stream structure changes:
+```typescript
+if (changed.has('appState')) {
+  const prev = changed.get('appState') as ProgressState | undefined;
+  if (prev?.streams !== this.appState.streams ||
+      prev?.activeStreamId !== this.appState.activeStreamId) {
+    this.eventHandlerContext = null;
+  }
+}
+```
+
+##### M-NEW-2: Map Mutation During Iteration — ✅ FIXED
+
+**File:** `src/progressView/ProgressViewMessageHandler.ts` (clearModelOutputBackups)
+
+```typescript
+for (const key of this.modelOutputBackups.keys()) {
+  if (key.startsWith(prefix)) {
+    this.modelOutputBackups.delete(key);
+  }
+}
+```
+
+**Issue:** Deleting from a Map while iterating over its keys is technically safe in JavaScript (the iterator creates a snapshot), but it's a code smell and can be confusing.
+
+**Recommendation:** Use the standard pattern:
+```typescript
+const keysToDelete = [...this.modelOutputBackups.keys()].filter(k => k.startsWith(prefix));
+keysToDelete.forEach(k => this.modelOutputBackups.delete(k));
+```
+
+#### False Positives (No Action Required)
+
+| Comment | Reason |
+|---------|--------|
+| H2: isContextWindowError may not catch manually thrown Error | Error message contains "exceeds context window" which matches `CONTEXT_WINDOW_PATTERNS` |
+| M1: Permission prepend ordering | Intentional UX design - code comments say "most recent/urgent" |
+| M2: Multi-file update changed from merge to overwrite | Intentional - `SET_*_FILES` are file picker responses, replace is correct |
+| M3: updateNestedRounds reset semantics changed | Explicitly tested behavior in `utils.test.ts` - partial reset is intentional |
+| M4: saveState shallow spread may persist undefined | Schema uses `.prefault([])` and restore code uses `?? []` |
+
+---
+
+## Action Items Summary
+
+### Must Fix (Blocking)
+
+1. ~~**H-NEW-1: pendingTaskGroupUpdates race condition** - Queue actual payloads, not just IDs~~
+   - ✅ **FIXED (2026-02-01)**: Implemented per-stream event queue (`StreamEventQueue`) that serializes task group events. Events for the same stream run sequentially, eliminating the race condition entirely. Removed `pendingTaskGroupUpdates` as it's no longer needed.
+
+### Should Fix (Non-blocking)
+
+2. ~~**H-NEW-2: Frontend-only state preservation** - Add type safety or refactor to separate map~~
+   - ✅ **FIXED (2026-02-01)**: Added `TOOL_USE_FRONTEND_ONLY_KEYS` const array with `satisfies` check in `streamState.ts`. Uses compile-time validation—adding a field to the type without updating the array causes a TypeScript error.
+
+3. ~~**M-NEW-1: Context invalidation** - Add targeted invalidation check~~
+   - ✅ **FIXED (2026-02-01)**: Removed context caching in `ProgressApp.ts`. Event handler context closures capture state lazily, so caching was unnecessary. Added granular check in `willUpdate()` to only call `updateStreamContext()` when active stream's state actually changed.
+
+4. ~~**M-NEW-2: Map mutation pattern** - Use standard collect-then-delete pattern~~
+   - ✅ **FIXED (2026-02-01)**: Updated `clearModelOutputBackups()` in `ProgressViewMessageHandler.ts` to collect keys first, then delete.
+
+---
+
+## Implementation Details (2026-02-01)
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/eventBus/StreamEventQueue.ts` | **NEW** - Per-stream event queue for serializing async operations |
+| `src/progressView/events/ProgressEventHandler.ts` | Use queue for task group events, removed `pendingTaskGroupUpdates` |
+| `src/shared/schemas/streamState.ts` | Added `TOOL_USE_FRONTEND_ONLY_KEYS` with `satisfies` check |
+| `src/progressView/frontend/messageDispatcher.ts` | Use schema-based field extraction via `extractFrontendOnlyFields()` |
+| `src/progressView/frontend/ProgressApp.ts` | Removed context caching, added granular dependency check |
+| `src/progressView/ProgressViewMessageHandler.ts` | Fixed Map mutation with collect-then-delete pattern |
+
+### Architecture Notes
+
+**StreamEventQueue Pattern:**
+```typescript
+// Events for same stream serialize; different streams run parallel
+streamEventQueue.enqueue(streamId, () => processAddTaskGroup(data));
+streamEventQueue.enqueue(streamId, () => processUpdateTaskGroup(data));
+// updateTaskGroup waits for addTaskGroup to complete
+```
+
+**Schema-Based Frontend Field Extraction:**
+```typescript
+export const TOOL_USE_FRONTEND_ONLY_KEYS = [
+  'followUpText', 'polishedText', 'polishRevision',
+  'transcribedText', 'recording', 'shouldFocusFollowUp',
+] as const satisfies readonly (keyof ToolUseStreamState)[];
+// Adding new frontend-only field to type without updating array → TypeScript error
+```
