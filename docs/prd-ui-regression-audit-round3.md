@@ -597,12 +597,14 @@ The following PR comments were analyzed for validity:
 **Issue:** When `updateTaskGroup` arrives before `addTaskGroup` completes, the handler marks the group ID as pending but does NOT apply the update to backend state (skips `updateGroup()` call). When `addTaskGroup` later completes and fetches "current state from backend", the intermediate updates (status, endTime) were never applied.
 
 **Current code flow:**
+
 1. `updateTaskGroup` event arrives
 2. Group doesn't exist in `streamGroups.has(data.id)`
 3. We mark ID as pending but skip `this.state.taskGroups.updateGroup(data)`
 4. `addTaskGroup` completes, fetches current state - but state was never updated!
 
 **Recommendation:** Queue the actual update payloads (not just IDs) and replay them after `addTaskGroup` completes:
+
 ```typescript
 // Change from Set<string> to Map<string, UpdateTaskGroupPayload[]>
 private readonly pendingTaskGroupUpdates = new Map<StreamTabId, Map<string, UpdateTaskGroupPayload[]>>();
@@ -621,6 +623,7 @@ const frontendOnlyFields = existing && isToolUseState(existing)
 **Issue:** Manually preserving frontend-only fields during backend merges is error-prone — any new frontend field must be added to this list. Missing a field causes silent data loss.
 
 **Recommendation:** Consider:
+
 1. Maintain a separate `frontendState` map keyed by streamId
 2. Use a TypeScript type with explicit "frontend-only" fields and create a helper function
 3. Use a reducer pattern with explicit merge strategies
@@ -638,11 +641,14 @@ if (changed.has('appState') || changed.has('permissions')) {
 **Issue:** Every `appState` mutation invalidates the event handler context, even when the relevant parts haven't changed. Since `appState` changes on every log entry/usage update, this creates unnecessary object churn.
 
 **Recommendation:** Only invalidate when stream structure changes:
+
 ```typescript
 if (changed.has('appState')) {
   const prev = changed.get('appState') as ProgressState | undefined;
-  if (prev?.streams !== this.appState.streams ||
-      prev?.activeStreamId !== this.appState.activeStreamId) {
+  if (
+    prev?.streams !== this.appState.streams ||
+    prev?.activeStreamId !== this.appState.activeStreamId
+  ) {
     this.eventHandlerContext = null;
   }
 }
@@ -663,20 +669,23 @@ for (const key of this.modelOutputBackups.keys()) {
 **Issue:** Deleting from a Map while iterating over its keys is technically safe in JavaScript (the iterator creates a snapshot), but it's a code smell and can be confusing.
 
 **Recommendation:** Use the standard pattern:
+
 ```typescript
-const keysToDelete = [...this.modelOutputBackups.keys()].filter(k => k.startsWith(prefix));
-keysToDelete.forEach(k => this.modelOutputBackups.delete(k));
+const keysToDelete = [...this.modelOutputBackups.keys()].filter((k) =>
+  k.startsWith(prefix),
+);
+keysToDelete.forEach((k) => this.modelOutputBackups.delete(k));
 ```
 
 #### False Positives (No Action Required)
 
-| Comment | Reason |
-|---------|--------|
+| Comment                                                      | Reason                                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
 | H2: isContextWindowError may not catch manually thrown Error | Error message contains "exceeds context window" which matches `CONTEXT_WINDOW_PATTERNS` |
-| M1: Permission prepend ordering | Intentional UX design - code comments say "most recent/urgent" |
-| M2: Multi-file update changed from merge to overwrite | Intentional - `SET_*_FILES` are file picker responses, replace is correct |
-| M3: updateNestedRounds reset semantics changed | Explicitly tested behavior in `utils.test.ts` - partial reset is intentional |
-| M4: saveState shallow spread may persist undefined | Schema uses `.prefault([])` and restore code uses `?? []` |
+| M1: Permission prepend ordering                              | Intentional UX design - code comments say "most recent/urgent"                          |
+| M2: Multi-file update changed from merge to overwrite        | Intentional - `SET_*_FILES` are file picker responses, replace is correct               |
+| M3: updateNestedRounds reset semantics changed               | Explicitly tested behavior in `utils.test.ts` - partial reset is intentional            |
+| M4: saveState shallow spread may persist undefined           | Schema uses `.prefault([])` and restore code uses `?? []`                               |
 
 ---
 
@@ -704,18 +713,19 @@ keysToDelete.forEach(k => this.modelOutputBackups.delete(k));
 
 ### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/eventBus/StreamEventQueue.ts` | **NEW** - Per-stream event queue for serializing async operations |
-| `src/progressView/events/ProgressEventHandler.ts` | Use queue for task group events, removed `pendingTaskGroupUpdates` |
-| `src/shared/schemas/streamState.ts` | Added `TOOL_USE_FRONTEND_ONLY_KEYS` with `satisfies` check |
-| `src/progressView/frontend/messageDispatcher.ts` | Use schema-based field extraction via `extractFrontendOnlyFields()` |
-| `src/progressView/frontend/ProgressApp.ts` | Removed context caching, added granular dependency check |
-| `src/progressView/ProgressViewMessageHandler.ts` | Fixed Map mutation with collect-then-delete pattern |
+| File                                              | Change                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/eventBus/StreamEventQueue.ts`                | **NEW** - Per-stream event queue for serializing async operations   |
+| `src/progressView/events/ProgressEventHandler.ts` | Use queue for task group events, removed `pendingTaskGroupUpdates`  |
+| `src/shared/schemas/streamState.ts`               | Added `TOOL_USE_FRONTEND_ONLY_KEYS` with `satisfies` check          |
+| `src/progressView/frontend/messageDispatcher.ts`  | Use schema-based field extraction via `extractFrontendOnlyFields()` |
+| `src/progressView/frontend/ProgressApp.ts`        | Removed context caching, added granular dependency check            |
+| `src/progressView/ProgressViewMessageHandler.ts`  | Fixed Map mutation with collect-then-delete pattern                 |
 
 ### Architecture Notes
 
 **StreamEventQueue Pattern:**
+
 ```typescript
 // Events for same stream serialize; different streams run parallel
 streamEventQueue.enqueue(streamId, () => processAddTaskGroup(data));
@@ -724,10 +734,15 @@ streamEventQueue.enqueue(streamId, () => processUpdateTaskGroup(data));
 ```
 
 **Schema-Based Frontend Field Extraction:**
+
 ```typescript
 export const TOOL_USE_FRONTEND_ONLY_KEYS = [
-  'followUpText', 'polishedText', 'polishRevision',
-  'transcribedText', 'recording', 'shouldFocusFollowUp',
+  'followUpText',
+  'polishedText',
+  'polishRevision',
+  'transcribedText',
+  'recording',
+  'shouldFocusFollowUp',
 ] as const satisfies readonly (keyof ToolUseStreamState)[];
 // Adding new frontend-only field to type without updating array → TypeScript error
 ```
