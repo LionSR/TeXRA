@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.8] - 2026-02-02
+
+### Features
+
+- Added **Kimi K2.5 models** with thinking and temperature support, and **DeepSeek thinking parameter**.
+- Added **accurate token counting** for OpenAI Response API, replacing heuristic estimates.
+- Added **syntax highlighting** in bash command approval prompts.
+
+### Bug Fixes
+
+- Fixed token usage stats not displaying for tool-use agents in progress view.
+- Fixed display math `\[...\]` inline rendering rule.
+
+### Improvements
+
+- Large-scale internal refactoring of webview components, agent core, flows, state persistence, and token counting for improved maintainability.
+- Updated dependencies including llm-zoo bump to 1.0.3.
+
 ## [0.35.7] - 2026-01-24
 
 ### Features
