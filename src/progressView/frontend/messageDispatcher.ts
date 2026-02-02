@@ -514,31 +514,37 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    // Backend sends accumulated total per run. For tool-use (single session),
-    // this IS the session total. For workflow, it's one run's total.
-    // Both handlers have internal type guards - only matching one updates.
-    updateToolUseState(ctx, stream, (prev) => ({
-      ...prev,
-      sessionUsage: usage,
-    }));
-    updateWorkflowState(ctx, stream, (prev) => ({
-      ...prev,
-      runUsage: { ...prev.runUsage, [runId]: usage },
-    }));
+    // Backend sends accumulated total per run.
+    if (isToolUseStream(ctx, stream)) {
+      // Tool-use: this IS the session total (single session)
+      updateToolUseState(ctx, stream, (prev) => ({
+        ...prev,
+        sessionUsage: usage,
+      }));
+    } else {
+      // Workflow: store per-run usage
+      updateWorkflowState(ctx, stream, (prev) => ({
+        ...prev,
+        runUsage: { ...prev.runUsage, [runId]: usage },
+      }));
+    }
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
     const { stream, usage } = data;
-    // Tool-use: sum all runs into sessionUsage. Workflow: store per-run map.
-    // Both handlers have internal type guards - only matching one updates.
-    updateToolUseState(ctx, stream, (prev) => ({
-      ...prev,
-      sessionUsage: sumUsageStats(usage),
-    }));
-    updateWorkflowState(ctx, stream, (prev) => ({
-      ...prev,
-      runUsage: usage,
-    }));
+    if (isToolUseStream(ctx, stream)) {
+      // Tool-use: sum all runs into sessionUsage
+      updateToolUseState(ctx, stream, (prev) => ({
+        ...prev,
+        sessionUsage: sumUsageStats(usage),
+      }));
+    } else {
+      // Workflow: store full per-run map
+      updateWorkflowState(ctx, stream, (prev) => ({
+        ...prev,
+        runUsage: usage,
+      }));
+    }
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE]: (data, ctx) => {
