@@ -12,7 +12,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
-import { commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
@@ -28,6 +28,7 @@ import './QueuedFollowUps';
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
   static override styles = [
+    designTokens,
     commonViewStyles,
     css`
       :host {

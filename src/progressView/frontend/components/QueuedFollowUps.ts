@@ -5,7 +5,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
@@ -16,6 +16,7 @@ const MAX_MESSAGE_LENGTH = 200;
 @customElement('queued-follow-ups')
 export class QueuedFollowUps extends LitElement {
   static override styles = [
+    designTokens,
     codiconIconClasses,
     css`
       :host {

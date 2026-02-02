@@ -11,7 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared utils
@@ -58,6 +58,7 @@ export type FollowupOptions = Omit<SetFollowupOptionsMessage, 'command'>;
 @customElement('followup-section')
 export class FollowupSection extends LitElement {
   static override styles = [
+    designTokens,
     codiconIconClasses,
     css`
       :host {
