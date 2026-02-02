@@ -128,22 +128,12 @@ export const logEntryStyles = css`
     font-weight: 500;
   }
 
-  /* Toggle icon for collapsible details */
-  .toggle-icon {
-    transition: transform 0.2s ease;
-    display: inline-block;
-  }
-
-  details[open] > summary .toggle-icon {
-    transform: rotate(90deg);
-  }
+  /* Note: .toggle-icon and .details-summary base styles are in commonViewStyles */
 
   /* File list details styling */
   .file-list-details {
     margin: var(--spacing-small) 0;
   }
-
-  /* Note: .details-summary base styles are in commonViewStyles */
 
   .banner-content-copy {
     min-width: 0;
