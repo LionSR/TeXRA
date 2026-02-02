@@ -75,8 +75,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 > {
   private readonly recordingManager: RecordingManager;
   private readonly modelOutputBackups = new Map<
-    string,
-    { content: string; streamId: StreamTabId }
+    StreamTabId,
+    Map<string, { content: string; streamId: StreamTabId }>
   >();
 
   /**
@@ -178,8 +178,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenMemoryView(),
 
       // Followup task
-      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: () =>
-        this.handleGetFollowupOptions(),
+      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: (data) =>
+        this.handleGetFollowupOptions(data),
       [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]: (data) =>
         this.handleSetupFollowup(data),
       [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: (data) =>
@@ -277,6 +277,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.provider.eventHandler.clearPendingTaskGroups(streamId);
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
+    this.clearModelOutputBackups(streamId);
     await this.provider.state.clearStream(streamId);
     // Force rebuild since we deleted a stream
     this.provider.updateWebview({ forceRebuild: true });
@@ -301,6 +302,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     for (const streamId of this.provider.state.streamTabs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
     }
+    this.modelOutputBackups.clear();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
@@ -474,13 +476,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             const view = this.getActiveView();
             view?.webview.postMessage({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              stream: data.stream,
               text: result.text,
             });
           } else if (result.error) {
+            this.postToActiveView({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+              stream: data.stream,
+              error: result.error,
+            });
             await vscode.window.showErrorMessage(result.error);
           }
         } catch (error) {
           const messageText = toErrorMessage(error);
+          this.postToActiveView({
+            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR,
+            stream: data.stream,
+            error: messageText,
+          });
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
@@ -682,28 +695,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
   ): Promise<void> {
     const { file, base } = data;
-    const streamId = this.provider.state.activeStream;
-    if (streamId && file) {
-      try {
-        const fileLocation = createExternalLocation(file);
-        const content = await flexibleFS.read(fileLocation);
-        this.modelOutputBackups.set(file, { content, streamId });
-      } catch {
-        // Ignore backup errors
-      }
-    }
-
     await this.executeWithBaseFile(
       file,
       base,
       'Compare original',
-      (targetFile, baseFile) =>
-        vscode.commands.executeCommand(
+      async (targetFile, baseFile) => {
+        const streamId = this.provider.state.activeStream;
+        if (streamId && targetFile) {
+          try {
+            const fileLocation = createExternalLocation(targetFile);
+            const content = await flexibleFS.read(fileLocation);
+            const streamBackups =
+              this.modelOutputBackups.get(streamId) ?? new Map();
+            streamBackups.set(targetFile, { content, streamId });
+            this.modelOutputBackups.set(streamId, streamBackups);
+          } catch {
+            // Ignore backup errors
+          }
+        }
+
+        await vscode.commands.executeCommand(
           'texra.compare',
           pathToLocation(''), // inputFile unused
           pathToLocation(baseFile),
           pathToLocation(targetFile),
-        ),
+        );
+      },
     );
   }
 
@@ -713,19 +730,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { file, base, prev } = data;
     const previousFile = prev ?? base;
 
-    if (previousFile) {
-      await vscode.commands.executeCommand(
-        'texra.latexdiff',
-        undefined,
-        previousFile,
-        file,
+    if (!previousFile) {
+      this.logger.warn(
+        this.channel,
+        'Compare previous requested without base',
+        {
+          data: { file },
+        },
       );
+      return;
     }
+
+    await vscode.commands.executeCommand(
+      'texra.latexdiff',
+      undefined,
+      previousFile,
+      file,
+    );
 
     await vscode.commands.executeCommand(
       'texra.compare',
       pathToLocation(''), // inputFile unused
-      pathToLocation(previousFile || ''),
+      pathToLocation(previousFile),
       pathToLocation(file),
     );
   }
@@ -734,7 +760,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.ACCEPT_FILE>,
   ): Promise<void> {
     const { file, base } = data;
-    const backup = file ? this.modelOutputBackups.get(file) : null;
+    const streamId = this.provider.state.activeStream;
+    const backup =
+      file && streamId
+        ? this.modelOutputBackups.get(streamId)?.get(file)
+        : null;
     let currentContent: string | null = null;
 
     if (backup) {
@@ -775,8 +805,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     if (file) {
-      this.modelOutputBackups.delete(file);
+      if (streamId) {
+        const streamBackups = this.modelOutputBackups.get(streamId);
+        if (streamBackups) {
+          streamBackups.delete(file);
+          if (streamBackups.size === 0) {
+            this.modelOutputBackups.delete(streamId);
+          }
+        }
+      }
     }
+  }
+
+  private clearModelOutputBackups(streamId: StreamTabId): void {
+    this.modelOutputBackups.delete(streamId);
   }
 
   private async handleMergeFile(
@@ -823,7 +865,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Followup task handlers
   // ============================================================
 
-  private async handleGetFollowupOptions(): Promise<void> {
+  private async handleGetFollowupOptions(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS>,
+  ): Promise<void> {
     const view = this.getActiveView();
     if (!view) return;
 
@@ -833,6 +877,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       view.webview.postMessage({
         command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+        stream: data.stream,
         workflowAgentsData: agentOptions.workflow,
         toolUseAgentsData: agentOptions.toolUse,
         modelOptionsData: modelOptions,
@@ -888,7 +933,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     // Collect all output files from declared config and generated paths
-    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
+    const declaredOutputs = taskState.agentConfig.outputFiles;
     const allFiles = [...declaredOutputs, ...generatedPaths].filter(Boolean);
     const outputFiles = [...new Set(allFiles)];
 
@@ -1179,7 +1224,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       : AgentCategory.Workflow;
 
     const mergedReferenceFiles = [
-      ...(originalConfig.referenceFiles ?? []),
+      ...originalConfig.referenceFiles,
       ...outputsAsReference,
     ];
 

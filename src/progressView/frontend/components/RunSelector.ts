@@ -3,30 +3,35 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Local imports - shared styles
+import { designTokens } from '@shared/styles';
+
 // Local imports - progress view
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
 import { getDateTimeFormatter } from '../formatters/timestampUtils';
 import { ProgressEvents } from '../events';
 
 @customElement('run-selector')
 export class RunSelector extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      min-width: 180px;
-      max-width: 260px;
-      flex-shrink: 0;
-    }
+  static override styles = [
+    designTokens,
+    css`
+      :host {
+        display: block;
+        min-width: 180px;
+        max-width: 260px;
+        flex-shrink: 0;
+      }
 
-    :host([hidden]) {
-      display: none;
-    }
+      :host([hidden]) {
+        display: none;
+      }
 
-    /* Constrain dropdown listbox height to prevent viewport overflow */
-    vscode-single-select::part(listbox) {
-      max-height: var(--height-large);
-    }
-  `;
+      /* Constrain dropdown listbox height to prevent viewport overflow */
+      vscode-single-select::part(listbox) {
+        max-height: var(--height-large);
+      }
+    `,
+  ];
 
   @property({ type: Array }) runs: Array<{
     id: string;

@@ -12,13 +12,10 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
 // Local imports - shared styles
-import { commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
-import {
-  insertTextAtCursor,
-  resolveTextareaTarget,
-} from '@shared/utils/textarea';
+import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import { RecordingButtonController } from '@shared/controllers';
 
 // Local imports - progress view constants
@@ -31,6 +28,7 @@ import './QueuedFollowUps';
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
   static override styles = [
+    designTokens,
     commonViewStyles,
     css`
       :host {
@@ -108,6 +106,7 @@ export class FollowUpInput extends LitElement {
   // Reactive properties for Lit-native patterns (Phase 9e)
   @property({ type: Boolean }) shouldFocus = false;
   @property({ type: String }) polishedText: string | null = null;
+  @property({ type: Number }) polishRevision = 0;
   @property({ type: String }) transcribedText: string | null = null;
   @property({ type: Boolean }) recording = false;
 
@@ -141,6 +140,10 @@ export class FollowUpInput extends LitElement {
       this.focusInput({ scrollIntoView: true });
     }
 
+    if (changedProperties.has('polishRevision')) {
+      this.polishing = false;
+    }
+
     // React to transcribedText property change
     if (
       changedProperties.has('transcribedText') &&
@@ -153,12 +156,9 @@ export class FollowUpInput extends LitElement {
         // Guard against operating on disconnected component
         if (!this.isConnected) return;
         if (this.textAreaEl) {
-          const { textarea } = resolveTextareaTarget(this.textAreaEl);
-          if (textarea) {
-            insertTextAtCursor(textarea, capturedText);
-            this.updateValue(textarea.value);
-            this.focusInput({ scrollIntoView: true });
-          }
+          insertTextAtCursor(this.textAreaEl, capturedText);
+          this.updateValue(getTextareaValue(this.textAreaEl));
+          this.focusInput({ scrollIntoView: true });
         }
       });
     }
@@ -171,7 +171,7 @@ export class FollowUpInput extends LitElement {
 
   /** Handle keyboard events on the textarea - Lit-native pattern */
   private handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.emitSend();
     }
@@ -254,12 +254,10 @@ export class FollowUpInput extends LitElement {
 
     if (!this.textAreaEl || !this.visible) return;
 
-    const { textarea } = resolveTextareaTarget(this.textAreaEl);
-    if (!textarea) return;
-
-    textarea.focus();
+    // Focus the host element directly - vscode-textarea handles focus properly
+    this.textAreaEl.focus();
     if (options.scrollIntoView) {
-      textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      this.textAreaEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
@@ -274,6 +272,9 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
+    if (!this.value.trim()) {
+      return;
+    }
     this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
   }

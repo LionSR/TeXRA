@@ -7,7 +7,11 @@ import { sortStreams } from '@shared/streams/streamSort';
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import type {
+  AgentCategoryFilter,
+  StreamStatus,
+  StreamTabInfo,
+} from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -39,7 +43,7 @@ function matchesFilter(
 function buildStreamInfo(
   state: ProgressViewState,
   id: string,
-  statuses: Map<string, string> | undefined,
+  statuses: Map<string, StreamStatus> | undefined,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
   const taskState = state.getTaskState(id);
@@ -90,7 +94,7 @@ function buildStreamInfo(
  */
 export function buildStreamInfos(
   state: ProgressViewState,
-  statuses?: Map<string, string>,
+  statuses?: Map<string, StreamStatus>,
   filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs

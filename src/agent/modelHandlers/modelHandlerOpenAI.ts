@@ -974,6 +974,8 @@ export class ModelHandlerOpenAI<
       };
     }
 
+    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens).
+    // Cached tokens are a subset, unlike Anthropic where input_tokens excludes cached.
     const inputTokens = rawUsage.prompt_tokens ?? 0;
     // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
     const cachedTokens =
