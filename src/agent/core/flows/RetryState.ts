@@ -110,7 +110,11 @@ export abstract class RetryableInvocationNode<
           services.setAbortController(activeController);
           services.logger.debug('Token refreshed, retrying immediately');
           try {
-            return await operation(activeController.signal);
+            const result = await operation(activeController.signal);
+            // Refresh succeeded and request worked — reset flag so future
+            // expirations (in long-running conversations) can trigger refresh again.
+            this._hasAttemptedTokenRefresh = false;
+            return result;
           } catch (retryErr) {
             const retryFormatted = formatProviderHttpError(retryErr);
             if (
@@ -160,6 +164,18 @@ export abstract class RetryableInvocationNode<
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
+    // If we already refreshed the token and still got 401, don't offer retry —
+    // the session is fundamentally invalid and retrying will loop forever.
+    if (this._persistent401Error) {
+      const formatted = formatProviderHttpError(error);
+      if (formatted.isRelayError && formatted.statusCode === 401) {
+        this.services.logger.info(
+          'Relay 401 persists after token refresh — session invalid, not retryable. Please sign in again.',
+        );
+        return false;
+      }
+    }
+
     const result = await this.handleManualRetryPrompt(error);
 
     if (result.userCancelled) {
