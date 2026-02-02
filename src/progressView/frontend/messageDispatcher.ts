@@ -16,6 +16,7 @@ import {
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
+  type TokenUsageStats,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -38,6 +39,37 @@ import {
 } from './store';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 import type { PermissionState } from './components/PermissionCard';
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/** Sum multiple usage stats into a single total. */
+function sumUsageStats(
+  usageMap: Record<string, TokenUsageStats>,
+): TokenUsageStats | null {
+  const values = Object.values(usageMap);
+  if (values.length === 0) return null;
+
+  return values.reduce(
+    (acc, u) => ({
+      inputTokens: acc.inputTokens + u.inputTokens,
+      outputTokens: acc.outputTokens + u.outputTokens,
+      cost: acc.cost + u.cost,
+      cacheReadInputTokens:
+        (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens:
+        (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+    }),
+    {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    },
+  );
+}
 
 // ============================================================
 // Types
@@ -320,29 +352,10 @@ const handlers: HandlerRegistry = {
         };
       }
 
-      // Tool-use streams: compute sessionUsage from runUsage (sum all values)
+      // Tool-use streams: compute sessionUsage from runUsage (sum all runs)
       if (isToolUseState(prev) && runUsage) {
-        const usageValues = Object.values(runUsage);
-        if (usageValues.length > 0) {
-          const sessionUsage = usageValues.reduce(
-            (acc, u) => ({
-              inputTokens: acc.inputTokens + u.inputTokens,
-              outputTokens: acc.outputTokens + u.outputTokens,
-              cost: acc.cost + u.cost,
-              cacheReadInputTokens:
-                (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
-              cacheCreationInputTokens:
-                (acc.cacheCreationInputTokens ?? 0) +
-                (u.cacheCreationInputTokens ?? 0),
-            }),
-            {
-              inputTokens: 0,
-              outputTokens: 0,
-              cost: 0,
-              cacheReadInputTokens: 0,
-              cacheCreationInputTokens: 0,
-            },
-          );
+        const sessionUsage = sumUsageStats(runUsage);
+        if (sessionUsage) {
           return { ...baseUpdate, sessionUsage };
         }
       }
@@ -496,8 +509,9 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
-    // Try both handlers - internal type guards ensure only the matching one updates.
-    // This handles cases where stream state is created on-demand by setStreamState.
+    // Backend sends accumulated total per run. For tool-use (single session),
+    // this IS the session total. For workflow, it's one run's total.
+    // Both handlers have internal type guards - only matching one updates.
     updateToolUseState(ctx, stream, (prev) => ({
       ...prev,
       sessionUsage: usage,
@@ -510,11 +524,11 @@ const handlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_USAGE]: (data, ctx) => {
     const { stream, usage } = data;
-    // Try both handlers - internal type guards ensure only the matching one updates.
-    const firstUsage = Object.values(usage)[0] ?? null;
+    // Tool-use: sum all runs into sessionUsage. Workflow: store per-run map.
+    // Both handlers have internal type guards - only matching one updates.
     updateToolUseState(ctx, stream, (prev) => ({
       ...prev,
-      sessionUsage: firstUsage,
+      sessionUsage: sumUsageStats(usage),
     }));
     updateWorkflowState(ctx, stream, (prev) => ({
       ...prev,
