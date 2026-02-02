@@ -218,15 +218,13 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  .bash-approval-request__command code {
-    display: block;
-    padding: var(--spacing-medium);
-    background: var(--vscode-textCodeBlock-background);
-    border-radius: var(--border-radius);
-    color: var(--vscode-terminal-foreground);
+  .bash-approval-request__command .code-block {
+    border-left: 3px solid var(--vscode-terminal-ansiYellow);
+  }
+
+  .bash-approval-request__command .code-block pre {
     white-space: pre-wrap;
     word-break: break-word;
-    overflow-x: auto;
   }
 
   .bash-approval-request__actions vscode-toolbar-button {
