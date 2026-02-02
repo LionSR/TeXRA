@@ -523,7 +523,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
-    // Prepare options for the API call
+    // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
@@ -701,6 +701,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.ensureBeta(options, FILES_API_BETA);
     }
 
+    // Phase 4: EXECUTE - Make the API call
     let response: BetaMessage;
 
     if (useStreaming) {

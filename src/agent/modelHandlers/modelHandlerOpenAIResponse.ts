@@ -965,6 +965,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? this.getEffectiveReasoningEffort()
       : undefined;
 
+    // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
       model: this.config.fullName,
       input: newMessages,
@@ -1028,7 +1029,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    // Build API params, extending baseParams with call-specific options
+    // Phase 4: EXECUTE - Build final params and make the API call
     const params: ResponseCreateParamsBase = {
       ...baseParams,
       max_output_tokens: maxOutputTokens,
