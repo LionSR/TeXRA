@@ -161,7 +161,8 @@ function deriveConfig(
   } else {
     requestCount = 0;
   }
-  const totalRounds = Math.max(setting.rounds, requestCount);
+  // Use fallback to handle edge cases where schema defaults may not apply
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
     useScratchpad,
