@@ -26,44 +26,39 @@ export class UserMessage extends LitElement {
       }
 
       .user-message-container {
-        display: flex;
-        justify-content: flex-end;
         margin: var(--spacing-small) 0;
-        padding-right: var(--spacing-tiny);
       }
 
       .user-message {
-        background-color: var(--vscode-editor-selectionBackground);
-        border-left: var(--border-thick) solid var(--color-text-link);
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--spacing-small);
         max-width: 85%;
-        margin-left: var(--spacing-xlarge);
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: var(--radius-small);
       }
 
       .user-message-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--spacing-tiny);
         margin-bottom: var(--spacing-tiny);
-        font-size: var(--font-size-sm);
+        font-size: var(--font-size-xs);
+        color: var(--vscode-descriptionForeground);
       }
 
       .user-message-icon {
-        color: var(--color-text-link);
-        font-size: var(--font-size-sm);
+        font-size: var(--font-size-xs);
       }
 
       .user-message-content {
         color: var(--vscode-foreground);
         white-space: pre-wrap;
         word-wrap: break-word;
-        line-height: 1.4;
+        line-height: 1.5;
+        font-size: var(--font-size-sm);
       }
 
       .user-message-timestamp {
-        font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
-        opacity: var(--opacity-subtle);
+        font-size: var(--font-size-xs);
       }
     `,
   ];
