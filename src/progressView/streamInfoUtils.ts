@@ -56,8 +56,10 @@ function buildStreamInfo(
   if (category === null) return null;
 
   // Extract timestamps directly (avoids copying entire messages array)
+  // Use hints.creationTimestamp as fallback for newly created streams without messages
   const lastTimestamp = state.streamTabs.getLastTimestamp(id);
-  const creationTimestamp = state.streamTabs.getFirstTimestamp(id);
+  const creationTimestamp =
+    state.streamTabs.getFirstTimestamp(id) ?? hints.creationTimestamp;
 
   // Agent and file info (with fallbacks to hints)
   const inputFile = config?.inputFile ?? '';
