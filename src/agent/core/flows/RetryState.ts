@@ -127,6 +127,12 @@ export abstract class RetryableInvocationNode<
             }
             throw retryErr;
           }
+        } else {
+          services.logger.debug(
+            'Token refresh failed, skipping auto-retries',
+          );
+          this._persistent401Error =
+            err instanceof Error ? err : new Error(String(err));
         }
       }
       throw err;
