@@ -463,44 +463,46 @@ export class MainApp extends BaseWebviewApp {
   }
 
   private restorePersistedState(): void {
+    // State is parsed through MainViewPersistedStateSchema which provides all defaults.
+    // No manual fallbacks needed - schema handles missing/invalid values.
     const state = this.stateManager.getState();
 
     this.sessionType = state.sessionType;
-    this.workflowAgent = state.workflowAgent || this.workflowAgent;
-    this.toolUseAgent = state.toolUseAgent || this.toolUseAgent;
-    this.model = state.model || this.model;
-    this.commit = state.commit || this.commit;
-    this.instruction = state.instruction || '';
+    this.workflowAgent = state.workflowAgent;
+    this.toolUseAgent = state.toolUseAgent;
+    this.model = state.model;
+    this.commit = state.commit;
+    this.instruction = state.instruction;
     this.singleFiles = {
-      inputFile: state.inputFile || '',
-      referenceFile: state.referenceFile || '',
-      auxiliaryFile: state.auxiliaryFile || '',
-      mediaFile: state.mediaFile || '',
-      editedFile: state.editedFile || '',
-      baseFile: state.baseFile || '',
+      inputFile: state.inputFile,
+      referenceFile: state.referenceFile,
+      auxiliaryFile: state.auxiliaryFile,
+      mediaFile: state.mediaFile,
+      editedFile: state.editedFile,
+      baseFile: state.baseFile,
     };
     this.multiFiles = {
-      inputFiles: state.inputFiles ?? [],
-      referenceFiles: state.referenceFiles ?? [],
-      auxiliaryFiles: state.auxiliaryFiles ?? [],
-      mediaFiles: state.mediaFiles ?? [],
-      outputFiles: state.outputFiles ?? [],
+      inputFiles: state.inputFiles,
+      referenceFiles: state.referenceFiles,
+      auxiliaryFiles: state.auxiliaryFiles,
+      mediaFiles: state.mediaFiles,
+      outputFiles: state.outputFiles,
     };
     this.multiFilesVisible = {
-      inputFiles: state.inputFilesVisible ?? false,
-      referenceFiles: state.referenceFilesVisible ?? false,
-      auxiliaryFiles: state.auxiliaryFilesVisible ?? false,
-      mediaFiles: state.mediaFilesVisible ?? false,
-      outputFiles: state.outputFilesVisible ?? false,
+      inputFiles: state.inputFilesVisible,
+      referenceFiles: state.referenceFilesVisible,
+      auxiliaryFiles: state.auxiliaryFilesVisible,
+      mediaFiles: state.mediaFilesVisible,
+      outputFiles: state.outputFilesVisible,
     };
-    this.outputFilesActive = state.outputFilesActive ?? false;
-    this.latexdiffsVisible = state.latexdiffsVisible ?? false;
+    this.outputFilesActive = state.outputFilesActive;
+    this.latexdiffsVisible = state.latexdiffsVisible;
     this.checkboxValues = {
-      autoExtractFigure: state.autoExtractFigure ?? false,
-      autoExtractTikzFigure: state.autoExtractTikzFigure ?? false,
-      autoCompileInputPdf: state.autoCompileInputPdf ?? false,
-      attachTeXCount: state.attachTeXCount ?? false,
-      attachDiagnostics: state.attachDiagnostics ?? false,
+      autoExtractFigure: state.autoExtractFigure,
+      autoExtractTikzFigure: state.autoExtractTikzFigure,
+      autoCompileInputPdf: state.autoCompileInputPdf,
+      attachTeXCount: state.attachTeXCount,
+      attachDiagnostics: state.attachDiagnostics,
     };
   }
 
