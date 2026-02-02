@@ -9,9 +9,21 @@ import * as logger from '@logger/logUtils';
 import { COMMON_COMMANDS } from './commands';
 import type { z } from 'zod';
 
+/** Type guard to check if a message has a command field */
+function isCommandMessage(
+  message: unknown,
+): message is { command: string; [key: string]: unknown } {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'command' in message &&
+    typeof (message as Record<string, unknown>).command === 'string'
+  );
+}
+
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
-> = (message: any, webviewView: T) => Promise<void> | void;
+> = (message: unknown, webviewView: T) => Promise<void> | void;
 
 /**
  * Configuration options for BaseViewMessageHandler.
@@ -38,7 +50,7 @@ export interface MessageHandlerOptions {
 export abstract class BaseViewMessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > {
-  protected readonly logger: any;
+  protected readonly logger: typeof logger;
   protected readonly channel: string;
   protected readonly handlers: Record<string, MessageHandler<T>>;
   private readonly _options: MessageHandlerOptions;
@@ -76,21 +88,46 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Subclasses must implement this to provide their specific handlers
+   * Clear the tracked active view (when tracking is enabled).
    */
-  protected abstract createHandlers(): Record<string, MessageHandler<T>>;
+  public clearActiveView(): void {
+    if (this._options.trackActiveView) {
+      this._activeView = undefined;
+    }
+  }
+
+  /**
+   * Track the active webview reference for custom handlers.
+   */
+  protected async withActiveView(
+    webviewView: T,
+    handler: () => Promise<void> | void,
+  ): Promise<void> {
+    if (this._options.trackActiveView) {
+      this._activeView = webviewView;
+    }
+    await handler();
+  }
+
+  /**
+   * Provide command handlers for legacy dispatch pattern.
+   * Schema-driven handlers can skip this (default returns empty).
+   */
+  protected createHandlers(): Record<string, MessageHandler<T>> {
+    return {};
+  }
 
   /**
    * Standard message handling with consistent error handling and logging.
    * When trackActiveView is enabled, automatically updates the active view reference.
    */
-  public async handleMessage(message: any, webviewView: T): Promise<void> {
+  public async handleMessage(message: unknown, webviewView: T): Promise<void> {
     // Track active view when option is enabled
     if (this._options.trackActiveView) {
       this._activeView = webviewView;
     }
 
-    if (!message?.command) {
+    if (!isCommandMessage(message)) {
       this.logger.warn(
         this.channel,
         `Received message without command. Message: ${JSON.stringify(message)}`,
@@ -125,7 +162,10 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common theme handling
    */
-  protected async handleTheme(message: any, webviewView: T): Promise<void> {
+  protected async handleTheme(
+    message: { theme?: string },
+    webviewView: T,
+  ): Promise<void> {
     if (!message?.theme) {
       this.logger.warn(this.channel, 'Invalid theme message', {
         data: message,
@@ -142,7 +182,10 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common debug mode handling
    */
-  protected async handleDebugMode(message: any, webviewView: T): Promise<void> {
+  protected async handleDebugMode(
+    message: { debugMode?: boolean },
+    webviewView: T,
+  ): Promise<void> {
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
       debugMode: message.debugMode,

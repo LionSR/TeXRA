@@ -1,8 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
-import type { ZodIssue } from 'zod';
 
 // Local imports - core flow primitives
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow } from '@agent/node';
 import {
@@ -21,7 +21,6 @@ import {
 } from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
-import { toErrorMessage } from '@common/errors';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
@@ -32,10 +31,10 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import {
@@ -51,7 +50,6 @@ import { formatContent } from '@utils/text/xmlUtils';
 import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,
-  type RetryState,
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
@@ -86,14 +84,9 @@ function parseToolInput(
   }
 }
 
-/** Check if an error has Zod-like issues array (duck typing). */
-function hasZodIssues(error: unknown): error is { issues: ZodIssue[] } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'issues' in error &&
-    Array.isArray((error as { issues?: unknown }).issues)
-  );
+/** Type guard for Zod validation errors. */
+function isZodError(error: unknown): error is z.ZodError {
+  return error instanceof z.ZodError;
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
@@ -101,7 +94,7 @@ function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!hasZodIssues(error)) {
+  if (!isZodError(error)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
@@ -196,16 +189,15 @@ class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleServices<C>
 > {
   async prep(
-    shared: ToolUseCycleShared,
+    _shared: ToolUseCycleShared,
   ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
     const interrupted = this.services.checkInterruption();
 
     // Check for queued follow-ups to inject before the model call
     let queuedFollowUp: string | null = null;
-    const session = this.services.session;
-    if (session?.hasQueuedFollowUp()) {
+    if (this.services.session?.hasQueuedFollowUp()) {
       // Drain without waiting (we know there's something)
-      queuedFollowUp = await session.waitForFollowUp(() => false);
+      queuedFollowUp = await this.services.session.waitForFollowUp(() => false);
     }
 
     return { interrupted, queuedFollowUp };
@@ -296,7 +288,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       const response = await services.modelHandler.createResponse({
         client: services.client,
         messages: prepRes.messages,
-        temperature: services.setting.temperature ?? 0,
+        temperature: services.setting.temperature,
         signal,
         tools: services.setting.tools as ToolDefinition[] | undefined,
       });
@@ -319,17 +311,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const services = this.services;
-
-    const successRes = handleInvocationResult(
-      execRes,
-      shared,
-      { lastError: shared.lastError },
-      {
-        logger: services.logger,
-        operationName: this.getOperationName(),
-      },
-    );
+    const successRes = handleInvocationResult(execRes, shared, shared, {
+      logger: this.services.logger,
+      operationName: this.getOperationName(),
+    });
 
     if (!successRes) {
       return FlowTransition.COMPLETE;
@@ -339,13 +324,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     shared.response = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
-    const { modelName, agentName } = services;
     await maybeSaveDebugObject({
       object: successRes.response,
       objectType: 'response',
-      context: getDebugContext(services, {
-        modelName,
-        isRemote: isRemoteAgent(agentName),
+      context: getDebugContext(this.services, {
+        modelName: this.services.modelName,
+        isRemote: isRemoteAgent(this.services.agentName),
       }),
       fileOptions: {
         continuationCount: shared.cycleIndex,
@@ -369,17 +353,14 @@ type ToolUseProcessExecResult =
       serverToolContentBlocks?: ServerToolContentBlock[];
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
-      responseTimeMs?: number;
     };
 
-/** Schema for ToolUseProcessNode prep result - captures shared state snapshot for exec. */
-const ToolUseProcessPrepResultSchema = z.object({
-  shouldStop: z.boolean(),
-  response: z.unknown().optional(),
-  responseTimeMs: z.number().optional(),
-});
-
-type ToolUseProcessPrepResult = z.infer<typeof ToolUseProcessPrepResultSchema>;
+/** Prep result for ToolUseProcessNode - captures shared state snapshot for exec. */
+interface ToolUseProcessPrepResult {
+  shouldStop: boolean;
+  response?: unknown;
+  responseTimeMs?: number;
+}
 
 /** Processes the model response to extract tool calls and usage data. */
 class ToolUseProcessNode<C> extends BaseNode<
@@ -474,17 +455,12 @@ class ToolUseProcessNode<C> extends BaseNode<
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,
       normalizedUsage,
-      responseTimeMs: prepRes.responseTimeMs,
     };
   }
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: {
-      shouldStop: boolean;
-      response?: unknown;
-      responseTimeMs?: number;
-    },
+    _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;
@@ -498,8 +474,8 @@ class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    if (execRes.responseTimeMs !== undefined) {
-      shared.cycleResponseTimeMs += execRes.responseTimeMs;
+    if (shared.responseTimeMs !== undefined) {
+      shared.cycleResponseTimeMs += shared.responseTimeMs;
     }
     if (execRes.normalizedUsage) {
       shared.cycleNormalizedUsage = execRes.normalizedUsage;
@@ -571,19 +547,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  /**
-   * Returns the array of tool calls to execute.
-   * Returns empty array if should skip (no tools, stopped, or interrupted).
-   */
+  /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     const toolCalls = shared.toolCalls ?? [];
 
-    // Skip if no tool calls or already stopped
     if (shared.shouldStop || toolCalls.length === 0) {
       return [];
     }
 
-    // Check for interruption before starting batch execution
     if (this.services.checkInterruption()) {
       shared.shouldStop = true;
       return [];
@@ -592,14 +563,10 @@ class ToolUseDispatchNode<C> extends BatchNode<
     return toolCalls;
   }
 
-  /**
-   * Execute a single tool call. Called sequentially for each tool in the batch.
-   * Checks for interruption before each execution to allow cancellation mid-batch.
-   */
+  /** Execute a single tool call, returning null if interrupted. */
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
-    // Check for interruption before each tool call (replaces old for-loop check)
     if (this.services.checkInterruption()) {
-      return null; // Signal to skip remaining tools
+      return null;
     }
 
     const services = this.services;
@@ -613,45 +580,54 @@ class ToolUseDispatchNode<C> extends BatchNode<
     );
   }
 
-  /**
-   * Execute a single tool call and return the result with metadata.
-   */
+  /** Invoke a tool with error handling, returning an error result if the tool is missing. */
+  private async invokeToolSafely(
+    call: SdkToolCall,
+    tool: { call(input: unknown): Promise<ToolResult> } | undefined,
+    parsedInput: unknown,
+    options: ToolUseCycleOptions<C>,
+    tracker: FileInteractionState,
+    todoState: TodoState,
+  ): Promise<ToolResult> {
+    if (!tool) {
+      return { error: `Unknown tool ${call.name}`, isError: true };
+    }
+
+    try {
+      return await withToolFileInteractionContext(
+        {
+          tracker,
+          todoState,
+          streamId: options.logger.streamId,
+          executionId: options.executionId,
+          toolCallId: call.callId,
+        },
+        () => tool.call(parsedInput),
+      );
+    } catch (err) {
+      const { message, diagnostics } = normalizeToolCallError(call.name, err);
+      return { error: message, isError: true, diagnostics };
+    }
+  }
+
+  /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
     todoState: TodoState,
   ): Promise<ToolExecutionResult> {
-    const tool = options.toolRegistry.get(call.name);
-    let result: ToolResult;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
+    const tool = options.toolRegistry.get(call.name);
 
-    if (!tool) {
-      result = {
-        error: `Unknown tool ${call.name}`,
-        isError: true,
-      };
-    } else {
-      try {
-        result = await withToolFileInteractionContext(
-          {
-            tracker,
-            todoState,
-            streamId: options.logger.streamId,
-            executionId: options.executionId,
-            toolCallId: call.callId,
-          },
-          () => tool.call(parsedInput),
-        );
-      } catch (err) {
-        const { message, diagnostics } = normalizeToolCallError(call.name, err);
-        result = {
-          error: message,
-          isError: true,
-          diagnostics,
-        };
-      }
-    }
+    const result = await this.invokeToolSafely(
+      call,
+      tool,
+      parsedInput,
+      options,
+      tracker,
+      todoState,
+    );
 
     const trackedEdits = tracker.recordEdits(result.edits);
     if (!result.lineChanges && trackedEdits.lineChanges) {
@@ -721,32 +697,23 @@ class ToolUseDispatchNode<C> extends BatchNode<
     }
   }
 
-  /**
-   * Process all tool execution results and create follow-up messages.
-   *
-   * @param shared - Mutable shared state
-   * @param toolCalls - Array of tool calls from prep()
-   * @param execResults - Array of execution results from exec() calls (null if interrupted)
-   */
+  /** Process tool execution results and create follow-up messages. */
   async post(
     shared: ToolUseCycleShared,
-    toolCalls: SdkToolCall[],
+    _toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
     const services = this.services;
     const { workspace } = services;
 
-    // Filter out null results (interrupted tool calls)
     const completedResults = execResults.filter(
       (r): r is ToolExecutionResult => r !== null,
     );
 
-    // If interrupted mid-batch, mark as stopped
     if (completedResults.length < execResults.length) {
       shared.shouldStop = true;
     }
 
-    // If no tools were executed (skipped or interrupted), complete the flow
     if (completedResults.length === 0) {
       return FlowTransition.COMPLETE;
     }

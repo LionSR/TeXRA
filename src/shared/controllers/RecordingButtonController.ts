@@ -1,0 +1,104 @@
+// Third-party imports
+import { postMessage } from '@shared/vscode';
+import type { ReactiveController, ReactiveControllerHost } from 'lit';
+
+// Local imports
+
+export interface RecordingButtonConfig {
+  startCommand: string;
+  stopCommand: string;
+  startTitle?: string;
+  stopTitle?: string;
+  startIcon?: string;
+  stopIcon?: string;
+  recordingClass?: string;
+}
+
+/**
+ * Computed state for recording button (used in templates).
+ */
+export interface RecordingButtonState {
+  /** Current icon name (without codicon- prefix) */
+  icon: string;
+  /** Current title/tooltip text */
+  title: string;
+  /** Whether currently recording */
+  recording: boolean;
+  /** CSS class for recording state (e.g., 'recording') */
+  recordingClass: string;
+}
+
+/**
+ * Lit reactive controller for managing a recording toggle button.
+ *
+ * Exposes computed state that the host component can use in templates:
+ * ```typescript
+ * // In host component
+ * render() {
+ *   const { icon, title, recording, recordingClass } = this.recordingController.state;
+ *   return html`
+ *     <vscode-toolbar-button
+ *       icon=${icon}
+ *       label=${title}
+ *       title=${title}
+ *       class=${classMap({ [recordingClass]: recording })}
+ *       @click=${this.recordingController.handleClick}
+ *     ></vscode-toolbar-button>
+ *   `;
+ * }
+ * ```
+ */
+export class RecordingButtonController implements ReactiveController {
+  private _recording = false;
+
+  constructor(
+    private readonly host: ReactiveControllerHost,
+    private readonly config: RecordingButtonConfig,
+  ) {
+    this.host.addController(this);
+  }
+
+  // Required by ReactiveController interface - no initialization needed
+  hostConnected(): void {
+    // No-op: controller state managed via setRecording()
+  }
+
+  /**
+   * Get computed state for use in templates (Lit-native approach).
+   * The host component should use these values in its template bindings.
+   */
+  get state(): RecordingButtonState {
+    const recording = this._recording;
+    const icon = recording
+      ? (this.config.stopIcon ?? 'stop-circle')
+      : (this.config.startIcon ?? 'mic');
+    const title = recording
+      ? (this.config.stopTitle ?? 'Stop recording')
+      : (this.config.startTitle ?? 'Record with microphone');
+    return {
+      icon,
+      title,
+      recording,
+      recordingClass: this.config.recordingClass ?? 'recording',
+    };
+  }
+
+  /**
+   * Handle button click - toggles recording state and sends command.
+   * Bind this to the button's @click handler in templates.
+   */
+  handleClick = (): void => {
+    const nextState = !this._recording;
+    postMessage(nextState ? this.config.startCommand : this.config.stopCommand);
+  };
+
+  /**
+   * Update recording state and trigger host re-render.
+   */
+  setRecording(recording: boolean): void {
+    if (this._recording !== recording) {
+      this._recording = recording;
+      this.host.requestUpdate();
+    }
+  }
+}

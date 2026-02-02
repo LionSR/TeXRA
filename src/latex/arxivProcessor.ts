@@ -42,18 +42,10 @@ export class ArxivSourceProcessor {
     const isGzip = contentType.includes('gzip') || contentType.includes('gz');
     const isTex = contentType.includes('tex') || contentType.includes('plain');
 
-    if (isTar && isGzip) {
-      return '.tar.gz';
-    }
-    if (isTar) {
-      return '.tar';
-    }
-    if (isGzip) {
-      return '.gz';
-    }
-    if (isTex) {
-      return '.tex';
-    }
+    if (isTar && isGzip) return '.tar.gz';
+    if (isTar) return '.tar';
+    if (isGzip) return '.gz';
+    if (isTex) return '.tex';
     return '';
   }
 

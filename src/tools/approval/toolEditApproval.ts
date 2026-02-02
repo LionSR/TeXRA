@@ -1,7 +1,7 @@
-// Third-party imports
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+
 import {
   diff_match_patch,
   DIFF_DELETE,
@@ -9,28 +9,23 @@ import {
   DIFF_INSERT,
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
-import * as difflib from 'difflib';
 
-// Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { type ToolResult, type LineChanges } from '@tools/result';
+import { type LineChanges, type ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { countLines } from '@utils/text/stringUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
-// Local file imports
+import { rejectPendingEntries } from './bashApproval';
 import {
   type LatexPreviewEntry,
   previewProposedLatex,
   runLatexdiff,
 } from './latexPreview';
-import { rejectPendingEntries } from './bashApproval';
+import type { StreamTabId } from '@shared/schemas';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -61,7 +56,6 @@ interface PendingApprovalEntry extends LatexPreviewEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-/** All valid approval actions for tool edit prompts */
 export const TOOL_EDIT_APPROVAL_ACTIONS = [
   'approve',
   'reject',
@@ -86,12 +80,11 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
-/** Per-stream YOLO mode state tracking (single source of truth) */
 const approvalsBypassedByStream = new Map<StreamTabId, boolean>();
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
-function notifyProgressViewApprovalBypassState(streamId: StreamTabId): void {
+function notifyApprovalBypassState(streamId: StreamTabId): void {
   if (!initialized) {
     return;
   }
@@ -139,7 +132,7 @@ export function setToolEditApprovalSessionBypass(
   enabled: boolean,
 ): void {
   approvalsBypassedByStream.set(streamId, enabled);
-  notifyProgressViewApprovalBypassState(streamId);
+  notifyApprovalBypassState(streamId);
 }
 
 export function toggleToolEditApprovalSessionBypass(
@@ -151,7 +144,6 @@ export function toggleToolEditApprovalSessionBypass(
   return newState;
 }
 
-/** Check if YOLO mode is enabled for a specific stream */
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return approvalsBypassedByStream.get(streamId) ?? false;
 }
@@ -206,7 +198,7 @@ async function showProgressViewApprovalPrompt(
   await safeExecuteCommand('texra.showProgressView');
   const streamId = request.streamId;
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
-  bus.emit('showToolEditApprovalPrompt', {
+  bus.emit('showToolEditPermission', {
     requestId,
     path: request.path,
     relativePath,
@@ -220,7 +212,7 @@ async function showProgressViewApprovalPrompt(
 }
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
-  bus.emit('resolveToolEditApprovalPrompt', { requestId });
+  bus.emit('resolveToolEditPermission', { requestId });
 }
 
 function createSemanticDiffs(
@@ -280,38 +272,22 @@ function firstChangedLine(original: string, proposed: string): number | null {
   return 0;
 }
 
-interface ComputeUserPatchOptions {
-  contextLines?: number;
-}
-
 function computeUserPatch(
-  path: string,
   suggestedContent: string,
   appliedContent: string,
-  options?: ComputeUserPatchOptions,
 ): string | undefined {
   if (suggestedContent === appliedContent) {
     return undefined;
   }
 
-  const diffOptions: Record<string, unknown> = {
-    fromfile: `${path} (proposed)`,
-    tofile: `${path} (final)`,
-    lineterm: '',
-  };
+  const dmp = new diff_match_patch();
+  const patches = dmp.patch_make(suggestedContent, appliedContent);
 
-  const contextLines = options?.contextLines ?? 3;
-  if (Number.isInteger(contextLines)) {
-    diffOptions.n = contextLines;
+  if (patches.length === 0) {
+    return undefined;
   }
 
-  const diffLines = difflib.unifiedDiff(
-    suggestedContent.split('\n'),
-    appliedContent.split('\n'),
-    diffOptions,
-  );
-
-  return diffLines.length ? diffLines.join('\n') : undefined;
+  return dmp.patch_toText(patches);
 }
 
 async function revealFirstChange(
@@ -506,11 +482,7 @@ async function nativeRequestApproval(
         : await fs
             .readFile(proposedUri.fsPath, 'utf8')
             .catch(() => proposedContent);
-      const userPatch = computeUserPatch(
-        request.path,
-        proposedContent,
-        appliedContent,
-      );
+      const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
         appliedContent,
@@ -592,7 +564,7 @@ function finalizeApprovalResult(
   const appliedContent = result.appliedContent ?? request.proposedContent;
   const userPatch =
     result.userPatch ??
-    computeUserPatch(request.path, request.proposedContent, appliedContent);
+    computeUserPatch(request.proposedContent, appliedContent);
 
   return {
     ...result,
@@ -611,23 +583,12 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-/**
- * Render a human-readable, line-numbered unified diff for user adjustments.
- * Uses difflib to compute a unified diff between the suggested and applied
- * contents, including hunk headers with line ranges.
- */
 export function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
   appliedContent: string,
-  options?: { contextLines?: number },
 ): string | undefined {
-  const diffBody = computeUserPatch(
-    path,
-    suggestedContent,
-    appliedContent,
-    options,
-  );
+  const diffBody = computeUserPatch(suggestedContent, appliedContent);
 
   if (!diffBody) {
     return undefined;
@@ -716,10 +677,9 @@ export async function handleProgressViewToolEditApprovalAction(
     }
 
     case 'reject': {
-      const userMessage = payload.feedback?.trim();
       entry.settle({
         accepted: false,
-        userMessage: userMessage || undefined,
+        userMessage: payload.feedback?.trim() || undefined,
       });
       break;
     }
@@ -732,20 +692,12 @@ export function buildApprovalRejectedResult(
   userMessage?: string,
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
-  // Always mark rejections as errors so logs, status, and tests reflect failure,
-  // while still forwarding any user feedback as explicit instruction for the model.
   const feedback = userMessage?.trim();
-  const result: ToolResult = {
-    // Use output to ensure the rejection message is always shown to the model.
-    // formatToolResultAsText prioritizes output over error/summary.
+  return {
     output: baseMessage,
     summary: baseMessage,
     error: baseMessage,
     isError: true,
     ...(feedback ? { userInstruction: feedback } : {}),
   };
-
-  // No file attachments for user feedback; treated purely as guidance via fields.
-
-  return result;
 }

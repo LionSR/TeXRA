@@ -5,7 +5,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - filesystem
-import { AbsoluteFS } from './absoluteFS';
 import { RelativeFS } from './relativeFS';
 
 export class WorkspaceFS extends RelativeFS {
@@ -33,14 +32,6 @@ export class WorkspaceFS extends RelativeFS {
     return vscode.workspace.asRelativePath(filePath, false);
   }
 
-  public static async existsAndNonTrivial(target: string): Promise<boolean> {
-    return (await this.exists(target)) && (await this.read(target)).length > 15;
-  }
-
-  public static async readFileBytes(target: string): Promise<Buffer> {
-    return AbsoluteFS.readBytes(this.fullPath(target));
-  }
-
   /**
    * Convert a file path to an absolute path.
    * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
@@ -49,5 +40,3 @@ export class WorkspaceFS extends RelativeFS {
     return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
   }
 }
-
-export default WorkspaceFS;

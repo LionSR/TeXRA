@@ -8,13 +8,22 @@ import { REFRESH_THRESHOLD_MS } from '@utils/config';
 const CHANNEL = 'DiffRefresh';
 logger.initialize(CHANNEL);
 
+interface DiffInfo {
+  left: vscode.Uri;
+  right: vscode.Uri;
+  title: string;
+}
+
 let disposables: vscode.Disposable[] = [];
-let diffInfo:
-  | { left: vscode.Uri; right: vscode.Uri; title: string }
-  | undefined;
+let diffInfo: DiffInfo | undefined;
 let lastRefresh = 0;
 
-function refreshDiff() {
+function clearDisposables(): void {
+  disposables.forEach((d) => d.dispose());
+  disposables = [];
+}
+
+function refreshDiff(): void {
   if (!diffInfo) {
     return;
   }
@@ -36,18 +45,15 @@ export function registerDiffRefresh(
   left: vscode.Uri,
   right: vscode.Uri,
   title: string,
-) {
+): void {
+  clearDisposables();
   diffInfo = { left, right, title };
-  disposables.forEach((d) => d.dispose());
-  disposables = [];
-
   disposables.push(vscode.window.onDidChangeTextEditorViewColumn(refreshDiff));
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
 }
 
-export function disposeDiffRefresh() {
-  disposables.forEach((d) => d.dispose());
-  disposables = [];
+export function disposeDiffRefresh(): void {
+  clearDisposables();
   diffInfo = undefined;
   logger.debug(CHANNEL, 'Disposed diff refresh listeners');
 }

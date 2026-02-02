@@ -11,13 +11,13 @@
 
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import {
   ExecutionIdSchema,
   type StreamTabId,
   type ExecutionId,
-} from '@agent/types/IdentifierTypes';
+} from '@shared/schemas';
+import { getExecutionStore } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import type { FlowRecord } from '@agent/node/persisted-flow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
@@ -57,23 +57,14 @@ const WorkflowResumeDataSchema = z.object({
   executionId: ExecutionIdSchema,
 });
 
-/**
- * Discriminated union schema for session resume data.
- * Uses z.discriminatedUnion for O(1) lookup and better error messages.
- */
-export const SessionResumeDataSchema = z.discriminatedUnion('type', [
-  ToolUseResumeDataSchema,
-  WorkflowResumeDataSchema,
-]);
-
 /** Resume data for tool-use sessions - derived from schema. */
-export type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
+type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
 
 /** Resume data for workflow sessions - derived from schema. */
-export type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
+type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
 
-/** Discriminated union of session resume data - derived from schema. */
-export type SessionResumeData = z.infer<typeof SessionResumeDataSchema>;
+/** Discriminated union of session resume data. */
+export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
 // =============================================================================
 // Schema for Tool-Use Flow Record Validation

@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
-import type { FileOpResult } from '@agent/types/ResultTypes';
+import type { FileOpResult } from '@agent/types';
 import { parseWithErrorDisplay } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
@@ -21,45 +21,42 @@ logger.initialize(CHANNEL);
 
 const RequiredString = z.string().min(1);
 
-/** For cleanSingle/cleanMultiple - all fields required */
+/** Base params shared by all clean commands */
 const CleanParamsSchema = z.object({
   inputFile: RequiredString,
   agent: RequiredString,
   model: RequiredString,
 });
 
-/** For clean command - matches handlePack pattern */
-const CleanConfigSchema = z
-  .object({
-    inputFile: RequiredString,
-    agent: RequiredString,
-    model: RequiredString,
-    outputFiles: z.array(z.string()).prefault([]),
-    useMultipleOutputs: z.boolean().optional(),
-    streamId: z.string().optional(),
-    skipProgressViewClear: z.boolean().optional(),
-  })
-  .transform((c) => ({
-    ...c,
-    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
-  }));
+/** Extended config for main clean command */
+const CleanConfigSchema = CleanParamsSchema.extend({
+  outputFiles: z.array(z.string()).prefault([]),
+  useMultipleOutputs: z.boolean().optional(),
+  streamId: z.string().optional(),
+  skipProgressViewClear: z.boolean().optional(),
+}).transform((c) => ({
+  ...c,
+  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
+}));
 
 // --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
-  const isError =
-    result.status === 'missingParams' || result.status === 'error';
-  const messages: Record<FileOpResult['status'], string> = {
-    success: `Cleanup complete for ${inputFile}`,
-    noFiles: `No files found to clean for ${inputFile}`,
-    missingParams: 'Missing required parameters for clean',
-    error: `Error during cleanup: ${result.error}`,
-  };
-  const text = messages[result.status];
-  if (isError) {
-    vscode.window.showErrorMessage(text);
-  } else {
-    vscode.window.showInformationMessage(text);
+  switch (result.status) {
+    case 'success':
+      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to clean for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for clean');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      break;
   }
 }
 

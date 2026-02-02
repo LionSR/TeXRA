@@ -1,9 +1,20 @@
-// Local imports - model utilities
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+// Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
+
+// Local imports - auth
+import { getServerSideKeyService } from '@auth/serverKeys';
+
+// Local imports - frontend
+import { ApiProvider, SecretManager } from '@frontend/secretManager';
+
+// Local imports - model types
 import type { ModelConfig } from '@model/ModelConfig';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
+
+// Local imports - shared schemas
+import type { ModelOptionData } from '@shared/schemas';
 
 /**
  * Get the list of visible models from user configuration.
@@ -34,16 +45,24 @@ export function resolveVisibleModel(model: string): string {
   return visibleModels[0];
 }
 
+/** Context window formatting thresholds */
+const MILLION = 1_000_000;
+const THOUSAND = 1_000;
+
 /** Format context window number for display. */
-function formatContext(context: number): string {
-  if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`;
-  if (context >= 1000) return `${Math.round(context / 1000)}K`;
+function formatContext(context: number | undefined): string | undefined {
+  if (context === undefined) return undefined;
+  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
+  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
   return context.toString();
 }
 
 /** Format cost values for display. */
-function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (inputPrice === undefined || outputPrice === undefined) return '';
+function formatCost(
+  inputPrice: number | undefined,
+  outputPrice: number | undefined,
+): string | undefined {
+  if (inputPrice === undefined || outputPrice === undefined) return undefined;
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
@@ -105,20 +124,37 @@ async function isModelAvailable(
 }
 
 /**
- * Compute model <vscode-option> tags based on available API keys.
- * Models missing a required key receive data-requires-key="true" so the
- * webview can handle API key setup prompts and display a red ✗ indicator.
- *
- * Server-side key access is tier-based:
- * - Ultra tier: All models available via relay (if provider enabled)
- * - Max tier: Only specific cheaper models available via relay (configured remotely)
- * - Free tier: Must bring own API keys
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
+ * Build typed model option data for a single model.
  */
-export async function computeModelOptions(): Promise<string> {
+async function buildModelOptionData(
+  model: string,
+  ctx: ModelAvailabilityContext,
+): Promise<ModelOptionData> {
+  const config = MODEL_CONFIGS[model];
+  if (!config) {
+    return { value: model, label: model };
+  }
+
+  const available = await isModelAvailable(model, config, ctx);
+  const contextStr = formatContext(config.contextWindow);
+  const costStr = formatCost(config.inputPrice, config.outputPrice);
+
+  return {
+    value: model,
+    label: model,
+    provider: config.provider,
+    context: contextStr,
+    cost: costStr,
+    requiresKey: !available,
+    disabled: !available,
+  };
+}
+
+/**
+ * Compute typed model options data for Lit-native rendering.
+ * Returns structured data instead of HTML strings.
+ */
+export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   const models = getVisibleModels();
 
   // Prime caches for availability checks
@@ -135,45 +171,7 @@ export async function computeModelOptions(): Promise<string> {
     serverSideKeyService,
   };
 
-  const optionTags = await Promise.all(
-    models.map((model) => buildModelOption(model, availabilityCtx)),
+  return Promise.all(
+    models.map((model) => buildModelOptionData(model, availabilityCtx)),
   );
-
-  return optionTags.join('\n');
-}
-
-/** Build a single model option tag. */
-async function buildModelOption(
-  model: string,
-  ctx: ModelAvailabilityContext,
-): Promise<string> {
-  const config = MODEL_CONFIGS[model];
-  if (!config) {
-    return `<vscode-option value="${model}">${model}</vscode-option>`;
-  }
-
-  const available = await isModelAvailable(model, config, ctx);
-  const contextStr = config.contextWindow
-    ? formatContext(config.contextWindow)
-    : '';
-  const costStr = formatCost(config.inputPrice, config.outputPrice);
-
-  // Build description attribute from context and cost info
-  const descParts: string[] = [];
-  if (contextStr) descParts.push(`Context: ${contextStr}`);
-  if (costStr) descParts.push(`Cost (in/out per 1M): ${costStr}`);
-  const description =
-    descParts.length > 0 ? `description="${descParts.join(' | ')}"` : '';
-
-  const attrs = [
-    `value="${model}"`,
-    !available &&
-      'data-requires-key="true" class="disabled-option disabled-model"',
-    config.provider && `data-provider="${config.provider}"`,
-    contextStr && `data-context="${contextStr}"`,
-    costStr && `data-cost="${costStr}"`,
-    description,
-  ].filter(Boolean);
-
-  return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
 }

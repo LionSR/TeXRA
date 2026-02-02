@@ -8,7 +8,7 @@
 
 // Local imports - agent
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Common interface for anything that can be interrupted.
@@ -31,16 +31,10 @@ export interface IInterruptible {
   interrupt(): void;
 }
 
-// Unified registry for all interruptible executions
 const registry = new Map<StreamTabId, IInterruptible>();
-
-// ============================================================================
-// Core Registry Operations
-// ============================================================================
 
 /**
  * Register an interruptible execution by stream ID.
- * Used by both flow contexts and agent classes.
  */
 export function registerInterruptible(
   streamTabId: StreamTabId,
@@ -65,9 +59,15 @@ export function getInterruptible(
   return registry.get(streamTabId);
 }
 
-// ============================================================================
-// Tool-Use Flow Context (Type-Specific Access)
-// ============================================================================
+/**
+ * Type guard: ToolUseFlowContext has a session with appendFollowUp method.
+ */
+function isToolUseFlowContext(
+  entry: IInterruptible | undefined,
+): entry is ToolUseFlowContext<unknown> {
+  const session = (entry as ToolUseFlowContext<unknown> | undefined)?.session;
+  return session !== undefined && typeof session.appendFollowUp === 'function';
+}
 
 /**
  * Get a tool-use flow context by stream ID.
@@ -75,19 +75,10 @@ export function getInterruptible(
  */
 export function getToolUseFlowContext(
   streamTabId: StreamTabId,
-): ToolUseFlowContext<any> | undefined {
+): ToolUseFlowContext<unknown> | undefined {
   const entry = registry.get(streamTabId);
-  // Type guard: ToolUseFlowContext has a session with appendFollowUp method
-  const session = (entry as ToolUseFlowContext<any> | undefined)?.session;
-  if (session && typeof session.appendFollowUp === 'function') {
-    return entry as ToolUseFlowContext<any>;
-  }
-  return undefined;
+  return isToolUseFlowContext(entry) ? entry : undefined;
 }
-
-// ============================================================================
-// Cleanup
-// ============================================================================
 
 /**
  * Remove registry entries for streams that no longer have an active session.

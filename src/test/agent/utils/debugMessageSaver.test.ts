@@ -3,12 +3,12 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import * as configModule from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import type { ExecutionId } from '@shared/schemas';
 
 describe('maybeSaveDebugObject', () => {
   type StorageFsMutable = {

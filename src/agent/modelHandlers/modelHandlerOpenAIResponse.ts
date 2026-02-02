@@ -7,9 +7,7 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentCategory, hasEndTag } from '@agent/core/AgentDataclass';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
+import { hasEndTag, type AgentSetting } from '@agent/core/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -18,6 +16,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
   isPreviousResponseIdError,
 } from '@common/errors/sdkErrorUtils';
 
@@ -66,6 +65,7 @@ import type {
   CreateResponseOptions,
   ExtractResponseResult,
   OpenAIResponseToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -137,20 +137,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return true;
   }
 
-  constructor(config: ModelConfig) {
-    super(config);
-  }
-
   /**
    * Override streaming config to disable streaming when background mode is enabled.
    * Background responses use polling for completed results, incompatible with streaming.
-   * @returns false if background mode is enabled, otherwise delegates to base
    */
   public override getStreamingConfig(): boolean {
-    if (this.isBackgroundModeActive()) {
-      return false;
-    }
-    return super.getStreamingConfig();
+    return !this.isBackgroundModeActive() && super.getStreamingConfig();
   }
 
   /**
@@ -172,16 +164,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Determines if background mode should be enabled for this request.
    * Background mode is only supported for GPT 5 series models when running
    * workflow agents (CoT or Direct), not tool-use agents.
-   * @returns true if background mode is eligible for this model and agent type
    */
   private isBackgroundModeEligible(): boolean {
     const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
-    if (!isGpt5) {
-      return false;
-    }
-
-    // Background mode is only eligible for Workflow agents
-    return this.getAgentCategory() === AgentCategory.Workflow;
+    return isGpt5 && this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
@@ -363,8 +349,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     this.conversationState.sentMessages = effectiveMessagesCount;
 
-    // Set cumulative input tokens from actual usage (not additive - this IS the total)
-    // The response's input_tokens reflects the full context including server-side history
+    // Set cumulative input tokens from actual usage (not additive - this IS the total).
+    // The response's input_tokens reflects the full context including server-side history.
+    //
+    // Note: OpenAI's input_tokens is the TOTAL (includes cached tokens).
+    // Cached tokens are a subset reported in input_tokens_details.cached_tokens.
+    // This differs from Anthropic where input_tokens excludes cached tokens.
+    // For context window tracking, we want the total, which input_tokens provides.
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
@@ -834,6 +825,58 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Whether this handler supports native token counting via API.
+   * When true, the handler will use OpenAI's /responses/input_tokens endpoint
+   * for exact token counts instead of heuristics.
+   */
+  protected get supportsNativeTokenCounting(): boolean {
+    return !this.isOpenRouterRoutingEnabled();
+  }
+
+  /**
+   * Whether this handler supports native token counting.
+   * Maps to supportsNativeTokenCounting for consistency with other handlers.
+   */
+  override get supportsTokenCounting(): boolean {
+    return this.supportsNativeTokenCounting;
+  }
+
+  /**
+   * Estimates token count using OpenAI's native /responses/input_tokens endpoint.
+   * This provides exact pre-flight token counts for the Responses API.
+   *
+   * @param messages The messages to count tokens for.
+   * @param options Token counting options including client and signal.
+   * @returns Promise resolving to the total token count.
+   * @see https://platform.openai.com/docs/api-reference/responses/input-tokens
+   */
+  override async estimateTokenCount(
+    messages: ResponseInputItem[],
+    options?: TokenCountOptions<OpenAI>,
+  ): Promise<number> {
+    if (!this.supportsNativeTokenCounting) {
+      throw new Error(
+        'Token counting not available when routing through OpenRouter',
+      );
+    }
+
+    const client = options?.client ?? (await this.getClient());
+    const tokenCount = await client.responses.inputTokens.count(
+      {
+        model: this.config.fullName,
+        input: messages,
+        ...(this.previousResponseId && {
+          previous_response_id: this.previousResponseId,
+        }),
+      },
+      options?.signal ? { signal: options.signal } : undefined,
+    );
+
+    this.logger.debug(`Token count of message: ${tokenCount.input_tokens}`);
+    return tokenCount.input_tokens;
+  }
+
+  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
@@ -909,11 +952,89 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
-    const params: ResponseCreateParamsBase = {
+    // Build shared params used by both token counting and API call
+    const convertedTools =
+      tools && tools.length > 0
+        ? toOpenAIResponseTools(tools, {
+            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+          })
+        : undefined;
+
+    const reasoningEffort = this.capabilities.supportsReasoning
+      ? this.getEffectiveReasoningEffort()
+      : undefined;
+
+    // Phase 1: BUILD - Construct provider-specific request parameters
+    const baseParams = {
       model: this.config.fullName,
       input: newMessages,
-      max_output_tokens: this.config.maxOutputTokens,
+      ...(systemPrompt && { instructions: systemPrompt }),
+      ...(this.previousResponseId && {
+        previous_response_id: this.previousResponseId,
+      }),
+      ...(convertedTools?.length && { tools: convertedTools }),
+      ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+    };
+
+    let maxOutputTokens = this.config.maxOutputTokens;
+
+    // Phase 2: COUNT - Estimate input tokens using built params
+    // Phase 3: VALIDATE - Adjust max_output_tokens if needed
+    //
+    // Two-layer protection against context overflow:
+    // 1. shouldCompact() uses cumulativeInputTokens (from PREVIOUS response) at 75% threshold
+    //    to proactively compact before trouble
+    // 2. This native count (CURRENT request) is the safety net at 100% threshold
+    //
+    // When previous_response_id is set, the API includes server-side history in the count.
+    if (this.supportsTokenCounting) {
+      try {
+        // Reuse built params for token counting (build once principle)
+        const inputTokens = await this.estimateTokenCount(baseParams.input, {
+          client,
+          signal,
+        });
+
+        // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
+        const validation = this.validateTokenLimits(
+          inputTokens,
+          maxOutputTokens,
+          this.config.contextWindow,
+        );
+
+        if (validation.adjustedMaxTokens !== maxOutputTokens) {
+          this.logger.logContextManagement(
+            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: inputTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore:
+                validation.utilizationPercent ??
+                (inputTokens / this.config.contextWindow) * 100,
+              originalMaxTokens: maxOutputTokens,
+              reducedMaxTokens: validation.adjustedMaxTokens,
+              details:
+                'OpenAI Response: max_output_tokens reduced to fit context window',
+            },
+          );
+          maxOutputTokens = validation.adjustedMaxTokens;
+        }
+      } catch (err) {
+        if (isContextWindowError(err)) throw err;
+        this.logger.warn(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        );
+      }
+    }
+
+    // Phase 4: EXECUTE - Build final params and make the API call
+    const params: ResponseCreateParamsBase = {
+      ...baseParams,
+      max_output_tokens: maxOutputTokens,
       store: true,
+      ...(convertedTools?.length && { tool_choice: 'auto' as const }),
     };
 
     if (useBackgroundResponses) {
@@ -933,27 +1054,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.temperature = temperature;
     }
 
-    if (this.previousResponseId) {
-      params.previous_response_id = this.previousResponseId;
-    }
-
-    if (systemPrompt) {
-      params.instructions = systemPrompt;
-    }
-
-    if (tools && tools.length > 0) {
-      const convertedTools = toOpenAIResponseTools(tools, {
-        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-        supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-      });
-      // Only set tools if there are any after filtering (deep research models
-      // strip unsupported function tools, potentially leaving an empty array)
-      if (convertedTools.length > 0) {
-        params.tools = convertedTools;
-        params.tool_choice = 'auto';
-      }
-    }
-
     // Include web search sources in response when native web search is enabled.
     // This is set outside the tools block because deep research models use
     // native web search even when no explicit tools are passed.
@@ -961,20 +1061,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.include = ['web_search_call.action.sources'];
     }
 
+    // Extend reasoning with summary option for API call (not needed for token counting)
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 ||
         getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
-      const reasoning: Reasoning = {};
       if (includeSummary) {
-        reasoning.summary = 'auto';
+        params.reasoning = {
+          ...(params.reasoning as Reasoning),
+          summary: 'auto',
+        };
       }
-      const reasoningEffort = this.getEffectiveReasoningEffort();
-      if (reasoningEffort) {
-        reasoning.effort = reasoningEffort;
-      }
-      params.reasoning = reasoning;
     }
 
     // Wrap execution in try-catch to handle previousResponseId errors
@@ -1050,7 +1148,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           }
         }
 
-        const response = await stream.finalResponse();
+        let response = await stream.finalResponse();
+
+        // If the stream ended before the response completed (e.g., relay timeout
+        // during slow GPT-5 requests), poll until it finishes instead of silently
+        // returning an incomplete response.
+        if (this.isBackgroundPending(response)) {
+          this.logger.warn(
+            `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
+          );
+          response = await this.waitForBackgroundCompletion(
+            client,
+            response,
+            signal,
+          );
+        }
+
         // Finalize any remaining thinking content (only if there's actual content)
         if (state.hasThinkingContent) {
           state.thinkingStream.finalize();
@@ -1294,10 +1407,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Models with prefill support do not require additional continuation messages. */
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.defaultAddContinueWithPrefill();
   }
@@ -1313,11 +1424,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
-  private async waitForBackgroundCompletion(
+  private async waitForBackgroundCompletion<T extends Response>(
     client: OpenAI,
-    initialResponse: Response,
+    initialResponse: T,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<T> {
     if (!initialResponse.id) {
       return initialResponse;
     }
@@ -1393,11 +1504,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       const requestOptions = signal ? { signal } : undefined;
       try {
-        current = await client.responses.retrieve(
+        // Cast is safe: retrieve returns the same response structure, just without parsed output typing
+        current = (await client.responses.retrieve(
           responseId,
           undefined,
           requestOptions,
-        );
+        )) as T;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled during retrieve - clear pending ID
@@ -1486,10 +1598,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Adds continuation instructions for models without prefill support. */
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -1565,13 +1675,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
-    const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
-      state,
       workspaceState,
       agentSetting,
-      agentConfig,
     );
 
     endTurn = false;

@@ -56,8 +56,8 @@ export type {
   OpenAIResponseUsage,
 };
 
-/** Base interface for common response usage metrics across all model providers. */
-export interface ResponseUsageBase {
+/** Base interface for common response usage metrics. Internal only. */
+interface ResponseUsageBase {
   totalInputTokens: number;
   totalOutputTokens: number;
   percentageCached: number;

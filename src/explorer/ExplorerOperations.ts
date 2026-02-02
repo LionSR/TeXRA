@@ -6,8 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - explorer
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import { agentDirectories } from '@frontend/agents';
-import { validateYamlAndPromptAdd } from '@frontend/agents';
+import { agentDirectories, validateYamlAndPromptAdd } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
@@ -51,13 +50,8 @@ logger.initialize(CHANNEL);
 export class ExplorerOperations {
   private builtInAgentsPath = '';
   private builtInToolUsePath = '';
-  private editingItem: FileItem | undefined;
 
-  constructor(
-    _workspaceRoot: string | undefined,
-    _context: vscode.ExtensionContext | undefined,
-    private refresh: () => void,
-  ) {
+  constructor(private refresh: () => void) {
     void this.loadBuiltInPaths();
   }
 
@@ -66,9 +60,9 @@ export class ExplorerOperations {
    */
   private isBuiltInPath(targetPath: string): boolean {
     return (
-      (Boolean(this.builtInAgentsPath) &&
+      (!!this.builtInAgentsPath &&
         targetPath.startsWith(this.builtInAgentsPath)) ||
-      (Boolean(this.builtInToolUsePath) &&
+      (!!this.builtInToolUsePath &&
         targetPath.startsWith(this.builtInToolUsePath))
     );
   }
@@ -90,18 +84,12 @@ export class ExplorerOperations {
   }
 
   private resolveCustomPath(targetPath: string, customBase: string): string {
-    if (!this.isBuiltInPath(targetPath)) {
-      return targetPath;
-    }
+    if (!this.isBuiltInPath(targetPath)) return targetPath;
 
-    const isBuiltInToolUse =
-      !!this.builtInToolUsePath &&
-      targetPath.startsWith(this.builtInToolUsePath);
-    const base = isBuiltInToolUse
-      ? this.builtInToolUsePath
-      : this.builtInAgentsPath;
-    const relativePath = path.relative(base, targetPath);
-    return path.join(customBase, relativePath);
+    const isToolUse =
+      this.builtInToolUsePath && targetPath.startsWith(this.builtInToolUsePath);
+    const base = isToolUse ? this.builtInToolUsePath : this.builtInAgentsPath;
+    return path.join(customBase, path.relative(base, targetPath));
   }
 
   async open(uri: vscode.Uri) {
@@ -184,8 +172,6 @@ export class ExplorerOperations {
       );
 
       newItem.editing = true;
-      this.editingItem = newItem;
-
       this.refresh();
 
       await this.rename(newItem);
@@ -199,10 +185,7 @@ export class ExplorerOperations {
   }
 
   async rename(item: FileItem) {
-    if (!item) {
-      return;
-    }
-
+    if (!item) return;
     if (item.isBuiltIn) {
       vscode.window.showWarningMessage(
         'Built-in agent files cannot be renamed. Create a custom copy instead.',
@@ -210,7 +193,6 @@ export class ExplorerOperations {
       return;
     }
 
-    this.editingItem = item;
     item.editing = true;
     this.refresh();
 
@@ -272,16 +254,12 @@ export class ExplorerOperations {
       await vscode.window.showTextDocument(doc);
     }
 
-    this.editingItem = undefined;
     item.editing = false;
     this.refresh();
   }
 
   async delete(item: FileItem) {
-    if (!item) {
-      return;
-    }
-
+    if (!item) return;
     if (item.isBuiltIn) {
       vscode.window.showWarningMessage(
         'Built-in agent files cannot be deleted. Create a custom copy if you need to modify them.',
@@ -291,42 +269,36 @@ export class ExplorerOperations {
 
     const isFolder =
       item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
-    const confirmMessage = `Are you sure you want to delete ${isFolder ? 'folder' : 'file'} "${item.label}"?`;
-    const confirmButton = 'Delete';
+    const itemType = isFolder ? 'folder' : 'file';
+    const confirmMessage = `Are you sure you want to delete ${itemType} "${item.label}"?`;
 
     const choice = await vscode.window.showWarningMessage(
       confirmMessage,
       { modal: true },
-      confirmButton,
+      'Delete',
     );
 
-    if (choice === confirmButton) {
-      try {
-        if (isFolder) {
-          await AbsoluteFS.delete(item.resourceUri.fsPath, {
-            recursive: true,
-          });
-        } else {
-          await AbsoluteFS.delete(item.resourceUri.fsPath);
-        }
-        logger.info(
-          CHANNEL,
-          `Successfully deleted ${isFolder ? 'folder' : 'file'}: ${item.resourceUri.fsPath}`,
-        );
-      } catch (err) {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          `Failed to delete ${isFolder ? 'folder' : 'file'}`,
-          err,
-        );
-      }
+    if (choice !== 'Delete') return;
+
+    try {
+      await AbsoluteFS.delete(item.resourceUri.fsPath, {
+        recursive: isFolder,
+      });
+      logger.info(
+        CHANNEL,
+        `Successfully deleted ${itemType}: ${item.resourceUri.fsPath}`,
+      );
+    } catch (err) {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        `Failed to delete ${itemType}`,
+        err,
+      );
     }
   }
 
   async addToList(item: FileItem) {
-    if (!item) {
-      return;
-    }
+    if (!item) return;
 
     if (path.extname(item.resourceUri.fsPath).toLowerCase() !== '.yaml') {
       vscode.window.showInformationMessage(

@@ -1,7 +1,12 @@
 // Local imports
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import { StorageRecordSchema } from '@shared/schemas';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 
-export interface StateStorage {
+/**
+ * Storage interface matching vscode.Memento API.
+ * Used by PersistentMapManager for workspace state persistence.
+ */
+export interface MementoStorage {
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   update<T>(key: string, value: T): Thenable<void>;
@@ -13,10 +18,10 @@ export interface StateStorage {
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
-  protected readonly storage: StateStorage;
+  protected readonly storage: MementoStorage;
   protected readonly storageKey: WorkspaceStateKey;
 
-  constructor(storageKey: WorkspaceStateKey, storage?: StateStorage) {
+  constructor(storageKey: WorkspaceStateKey, storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
     if (!resolvedStorage) {
       throw new Error('workspace state manager is not initialized');
@@ -59,6 +64,19 @@ export abstract class PersistentMapManager<K extends string, V> {
     return this.items.has(key);
   }
 
+  /**
+   * Get or create an entry with lazy initialization.
+   * Returns existing value or creates new one using factory function.
+   */
+  protected getOrCreate(key: K, factory: () => V): V {
+    let value = this.items.get(key);
+    if (!value) {
+      value = factory();
+      this.items.set(key, value);
+    }
+    return value;
+  }
+
   /** Get all keys */
   keys(): K[] {
     return [...this.items.keys()];
@@ -81,16 +99,25 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
-      this.storageKey,
-      {},
-    );
-
-    if (Object.keys(saved).length > 0) {
-      await this.populateFromRecord(saved);
+    const record = this.loadRecord();
+    if (Object.keys(record).length > 0) {
+      await this.populateFromRecord(record);
     } else {
       this.items.clear();
     }
+  }
+
+  /** Load record from storage with null/invalid fallback */
+  private loadRecord(): Record<string, unknown> {
+    const stored = this.storage.get(this.storageKey);
+    const result = StorageRecordSchema.safeParse(stored);
+    if (!result.success) {
+      console.warn(
+        `[PersistentMapManager] Invalid storage data for ${this.storageKey}, resetting.`,
+      );
+      return {};
+    }
+    return result.data;
   }
 
   /** Save current state to persistence */

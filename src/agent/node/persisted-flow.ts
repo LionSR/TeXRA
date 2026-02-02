@@ -1,9 +1,9 @@
 // Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
 // Enhanced to use ExecutionKVStore as first-citizen interface
 
-import type { ExecutionKVStore } from '@agent/storage';
+import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
-import { BaseNode, Flow, type Action } from './index';
+import { BaseNode, Flow, type Action } from '.';
 
 interface NodeRecord {
   action?: string;
@@ -69,10 +69,8 @@ export class PersistedFlow<
   }
 
   /**
-   * Serialize shared state for storage using structuredClone.
-   * Shared state must be plain JSON (no class instances).
-   *
-   * Note: Cast is safe because structuredClone produces plain JSON.
+   * Deep clone shared state for storage.
+   * Shared state should be serializable (no class instances, functions, or symbols).
    */
   protected serializeShared(shared: S): Record<string, unknown> {
     return structuredClone(shared) as Record<string, unknown>;
@@ -134,7 +132,7 @@ export class PersistedFlow<
       throw new Error('Missing shared state in flow record');
     }
 
-    cursor.setParams(params as any);
+    cursor.setParams(params);
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
 
@@ -175,7 +173,7 @@ export class PersistedFlow<
 
   async getShared(): Promise<S | undefined> {
     const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
-    return (flow?.shared as S) ?? undefined;
+    return flow?.shared as S | undefined;
   }
 
   async setShared(newShared: S): Promise<void> {

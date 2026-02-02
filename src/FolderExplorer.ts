@@ -1,15 +1,11 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Internal imports
 import { agentDirectories } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
-// Local file imports
 import { FileItem } from './explorer/FileItem';
 
 const CHANNEL = 'Webview';
@@ -22,41 +18,24 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   readonly onDidChangeTreeData: vscode.Event<FileItem | undefined | void> =
     this._onDidChangeTreeData.event;
 
-  private builtInAgentsPath = '';
-  private builtInToolUsePath = '';
+  private builtInPathsPromise: Promise<{
+    builtInAgentsPath: string;
+    builtInToolUsePath: string;
+  }>;
 
-  constructor(
-    _workspaceRoot: string | undefined,
-    _context?: vscode.ExtensionContext,
-  ) {
-    void this.loadBuiltInPaths();
+  constructor() {
+    this.builtInPathsPromise = this.loadBuiltInPaths();
   }
 
-  private async loadBuiltInPaths(): Promise<void> {
+  private async loadBuiltInPaths(): Promise<{
+    builtInAgentsPath: string;
+    builtInToolUsePath: string;
+  }> {
     const [builtInAgentsPath, builtInToolUsePath] = await Promise.all([
       agentDirectories.builtIn(),
       agentDirectories.builtInToolUse(),
     ]);
-    this.builtInAgentsPath = builtInAgentsPath;
-    this.builtInToolUsePath = builtInToolUsePath;
-  }
-
-  private async ensureBuiltInPaths(): Promise<{
-    builtInAgentsPath: string;
-    builtInToolUsePath: string;
-  }> {
-    if (this.builtInAgentsPath && this.builtInToolUsePath) {
-      return {
-        builtInAgentsPath: this.builtInAgentsPath,
-        builtInToolUsePath: this.builtInToolUsePath,
-      };
-    }
-
-    await this.loadBuiltInPaths();
-    return {
-      builtInAgentsPath: this.builtInAgentsPath,
-      builtInToolUsePath: this.builtInToolUsePath,
-    };
+    return { builtInAgentsPath, builtInToolUsePath };
   }
 
   refresh(): void {
@@ -82,23 +61,20 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         return this.getFilesInDirectory(element.resourceUri.fsPath);
       }
 
-      const items: FileItem[] = [];
       const { builtInAgentsPath, builtInToolUsePath } =
-        await this.ensureBuiltInPaths();
-      items.push(
+        await this.builtInPathsPromise;
+      const items: FileItem[] = [
         new FileItem(
           'Built-in Agents',
           vscode.Uri.file(builtInAgentsPath),
           vscode.TreeItemCollapsibleState.Collapsed,
         ),
-      );
-      items.push(
         new FileItem(
           'Tool Use Agents',
           vscode.Uri.file(builtInToolUsePath),
           vscode.TreeItemCollapsibleState.Collapsed,
         ),
-      );
+      ];
 
       const customPath = await agentDirectories.custom();
       if (customPath) {
@@ -121,8 +97,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private async getFilesInDirectory(dirPath: string): Promise<FileItem[]> {
     try {
       const dirEntries = await AbsoluteFS.readDir(dirPath);
-      const items: FileItem[] = [];
+      const { builtInAgentsPath, builtInToolUsePath } =
+        await this.builtInPathsPromise;
 
+      const items: FileItem[] = [];
       for (const [name, type] of dirEntries) {
         if (name.startsWith('.')) {
           continue;
@@ -130,50 +108,36 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
         const resourceUri = vscode.Uri.file(path.join(dirPath, name));
         const isBuiltIn =
-          (this.builtInAgentsPath &&
-            resourceUri.fsPath.startsWith(this.builtInAgentsPath)) ||
-          (this.builtInToolUsePath &&
-            resourceUri.fsPath.startsWith(this.builtInToolUsePath));
+          resourceUri.fsPath.startsWith(builtInAgentsPath) ||
+          resourceUri.fsPath.startsWith(builtInToolUsePath);
+        const isDirectory = type === vscode.FileType.Directory;
 
-        if (type === vscode.FileType.Directory) {
-          items.push(
-            new FileItem(
-              name,
-              resourceUri,
-              vscode.TreeItemCollapsibleState.Collapsed,
-              undefined,
-              !!isBuiltIn,
-            ),
-          );
-        } else {
-          items.push(
-            new FileItem(
-              name,
-              resourceUri,
-              vscode.TreeItemCollapsibleState.None,
-              {
-                command: 'texra.folderExplorer.openFile',
-                title: 'Open File',
-                arguments: [resourceUri],
-              },
-              !!isBuiltIn,
-            ),
-          );
-        }
+        items.push(
+          new FileItem(
+            name,
+            resourceUri,
+            isDirectory
+              ? vscode.TreeItemCollapsibleState.Collapsed
+              : vscode.TreeItemCollapsibleState.None,
+            isDirectory
+              ? undefined
+              : {
+                  command: 'texra.folderExplorer.openFile',
+                  title: 'Open File',
+                  arguments: [resourceUri],
+                },
+            isBuiltIn,
+          ),
+        );
       }
 
-      // Sort: folders first, then alphabetically by label
       return items.sort((a, b) => {
         const aIsFolder =
           a.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
         const bIsFolder =
           b.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
-        if (aIsFolder !== bIsFolder) {
-          return bIsFolder ? 1 : -1;
-        }
-        const aLabel = String(a.label ?? '');
-        const bLabel = String(b.label ?? '');
-        return aLabel.localeCompare(bLabel);
+        if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+        return String(a.label ?? '').localeCompare(String(b.label ?? ''));
       });
     } catch (err) {
       logger.error(CHANNEL, `Error reading directory: ${err}`);

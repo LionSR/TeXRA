@@ -4,13 +4,11 @@ import * as path from 'path';
 // Third-party imports
 import * as nunjucks from 'nunjucks';
 
-// Local imports - agent
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-
-// Local imports - log
+// Local imports
 import * as logger from '@logger/logUtils';
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
@@ -42,10 +40,7 @@ export async function getXmlFormatFromFiles(
  * @returns Comma-separated string of file paths
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
-  if (!files || files.length === 0) {
-    return '';
-  }
-  return files.filter((f) => f.trim() !== '').join(', ');
+  return files?.filter((f) => f.trim() !== '').join(', ') ?? '';
 }
 
 async function resolveValue(value: unknown): Promise<unknown> {

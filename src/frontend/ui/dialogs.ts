@@ -20,14 +20,18 @@ export interface FileDialogOptions {
   defaultUri?: vscode.Uri | null;
 }
 
-function getDefaultUri(currentFile: string): vscode.Uri | null {
+function computeDefaultUri(options: FileDialogOptions): vscode.Uri | null {
+  if (options.defaultUri !== undefined) {
+    return options.defaultUri;
+  }
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspacePath) {
     return null;
   }
-  return currentFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFile)))
-    : vscode.Uri.file(workspacePath);
+  const basePath = options.currentFile
+    ? path.dirname(path.join(workspacePath, options.currentFile))
+    : workspacePath;
+  return vscode.Uri.file(basePath);
 }
 
 /**
@@ -36,8 +40,7 @@ function getDefaultUri(currentFile: string): vscode.Uri | null {
 export async function selectFiles(
   options: FileDialogOptions,
 ): Promise<string[] | null> {
-  const defaultUri =
-    options.defaultUri ?? getDefaultUri(options.currentFile ?? '');
+  const defaultUri = computeDefaultUri(options);
   if (!defaultUri) {
     vscode.window.showErrorMessage('No workspace folder open');
     return null;
@@ -52,9 +55,10 @@ export async function selectFiles(
     filters: options.filters,
   });
 
-  return fileUris && fileUris.length > 0
-    ? fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))
-    : null;
+  if (!fileUris || fileUris.length === 0) {
+    return null;
+  }
+  return fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath));
 }
 
 /**
@@ -81,17 +85,12 @@ export interface FileSelectionResult {
 export async function selectFileFromWorkspace(
   options: FileDialogOptions,
 ): Promise<FileSelectionResult | null> {
-  if (!WorkspaceFS.getPath()) {
-    vscode.window.showErrorMessage('No workspace folder open');
-    return null;
-  }
-
+  // selectFile handles workspace check internally via computeDefaultUri
   const relativePath = await selectFile(options);
+  if (!relativePath) return null;
 
-  if (!relativePath) {
-    return null;
-  }
-
-  const absolutePath = WorkspaceFS.fullPath(relativePath);
-  return { relativePath, absolutePath };
+  return {
+    relativePath,
+    absolutePath: WorkspaceFS.fullPath(relativePath),
+  };
 }

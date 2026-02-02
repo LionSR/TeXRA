@@ -12,12 +12,12 @@ export type Action = string;
  *
  * Type parameters:
  * - S: Shared state type (mutable, flows through nodes)
- * - P: Params type (per-execution, can vary per batch item)
+ * - P: Params type (per-execution parameters)
  * - Svc: Services type (immutable dependencies, set once)
  *
  * Architecture:
  * - shared: Mutable state passed through prep/post
- * - _params: Per-execution parameters (merged in batch flows)
+ * - _params: Per-execution parameters
  * - _services: Immutable dependencies (propagated by Flow)
  */
 class BaseNode<
@@ -39,23 +39,23 @@ class BaseNode<
   protected async _exec(prepRes: unknown): Promise<unknown> {
     return await this.exec(prepRes);
   }
-  async prep(shared: S): Promise<unknown> {
-    return undefined;
+  async prep(_shared: S): Promise<unknown> {
+    return;
   }
-  async exec(prepRes: unknown): Promise<unknown> {
-    return undefined;
+  async exec(_prepRes: unknown): Promise<unknown> {
+    return;
   }
   async post(
-    shared: S,
-    prepRes: unknown,
-    execRes: unknown,
+    _shared: S,
+    _prepRes: unknown,
+    _execRes: unknown,
   ): Promise<Action | undefined> {
-    return undefined;
+    return;
   }
   async _run(shared: S): Promise<Action | undefined> {
-    const p = await this.prep(shared),
-      e = await this._exec(p);
-    return await this.post(shared, p, e);
+    const prepRes = await this.prep(shared);
+    const execRes = await this._exec(prepRes);
+    return await this.post(shared, prepRes, execRes);
   }
   async run(shared: S): Promise<Action | undefined> {
     if (this._successors.size > 0)
@@ -81,12 +81,12 @@ class BaseNode<
     return this;
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
-    const nextAction = action ?? 'default',
-      next = this._successors.get(nextAction);
-    if (!next && this._successors.size > 0)
+    const next = this._successors.get(action);
+    if (!next && this._successors.size > 0) {
       console.warn(
-        `Flow ends: '${nextAction}' not found in [${[...this._successors.keys()]}]`,
+        `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
       );
+    }
     return next;
   }
   clone(): this {
@@ -286,48 +286,4 @@ class Flow<
     throw new Error("Flow can't exec.");
   }
 }
-class BatchFlow<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-  NP extends NonIterableObject[] = NonIterableObject[],
-> extends Flow<S, P, Svc> {
-  async _run(shared: S): Promise<Action | undefined> {
-    const batchParams = await this.prep(shared);
-    for (const bp of batchParams) {
-      const mergedParams = { ...this._params, ...bp };
-      await this._orchestrate(shared, mergedParams);
-    }
-    return await this.post(shared, batchParams, undefined);
-  }
-  async prep(shared: S): Promise<NP> {
-    const empty: readonly NonIterableObject[] = [];
-    return empty as NP;
-  }
-}
-class ParallelBatchFlow<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-  NP extends NonIterableObject[] = NonIterableObject[],
-> extends BatchFlow<S, P, Svc, NP> {
-  async _run(shared: S): Promise<Action | undefined> {
-    const batchParams = await this.prep(shared);
-    await Promise.all(
-      batchParams.map((bp) => {
-        const mergedParams = { ...this._params, ...bp };
-        return this._orchestrate(shared, mergedParams);
-      }),
-    );
-    return await this.post(shared, batchParams, undefined);
-  }
-}
-export {
-  BaseNode,
-  Node,
-  BatchNode,
-  ParallelBatchNode,
-  Flow,
-  BatchFlow,
-  ParallelBatchFlow,
-};
+export { BaseNode, Node, BatchNode, ParallelBatchNode, Flow };

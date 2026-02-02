@@ -1,29 +1,25 @@
-/**
- * Agent execution module - Flow-First Architecture.
- *
- * This module provides direct flow execution without agent class instantiation.
- * Flows run directly, bypassing the agent class hierarchy entirely.
- *
- * Entry points:
- * - executeAgent: Execute a new agent run
- * - resumeToolUseFromSnapshot: Resume a paused tool-use session from snapshot
- * - executeMergeAgent: Execute the merge agent (flow-first with custom file naming)
- */
-
-// Standard library imports
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 
-// Third-party imports
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
-// Local imports - flows (primary execution path)
-
-// Local imports - agent components (types only - no agent class instantiation)
-import type { IModelHandler } from '@agent/modelHandlers';
-import { resolveAgent, isRemoteAgent, getAgent } from '@agent/index';
-import type { ResolvedAgent } from '@agent/index';
+import {
+  STREAM_STATUS,
+  END_GROUP_STATUS,
+  type EndGroupStatus,
+  type StreamTabId,
+  type ExecutionId,
+  type StorageKey,
+} from '@shared/schemas';
+import {
+  resolveAgent,
+  isRemoteAgent,
+  getAgent,
+  type ResolvedAgent,
+} from '@agent/index';
+import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
 import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
@@ -31,7 +27,7 @@ import {
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import type { AgentCore } from '@agent/implementations/flows/common';
+import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -40,8 +36,6 @@ import {
 import {
   AgentCategory,
   isWorkflowSetting,
-  type AgentSetting,
-  type AgentPrompt,
   type AgentWorkflowSetting,
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
@@ -54,92 +48,69 @@ import {
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-} from '@agent/types/IdentifierTypes';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import type { AgentLogStage } from '@logger/AgentLogger';
-import { AgentLogger } from '@logger/AgentLogger';
-import { AgentUsageReporter } from '@logger/AgentUsageReporter';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import {
+  AgentLogger,
+  AgentUsageReporter,
+  getStreamTabId,
+  type AgentLogStage,
+} from '@logger/index';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
-import { createInterruptManager } from './InterruptManager';
+import { createInterruptCallbacks } from './InterruptManager';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
-// ============================================================================
-// Types
-// ============================================================================
-
 /**
- * Resolution output after agent loading and initialization.
- *
- * Extends AgentCore with resolution-specific fields:
- * - usageMonitor: For tracking token usage
- * - storageKey: For file organization
- * - parentStage: For logging hierarchy
+ * Creates a usage recorder callback for flows.
+ * Wraps UsageMonitor.recordUsage with the appropriate run kind.
  */
+function createUsageRecorder(
+  usageMonitor: UsageMonitor,
+  runKind: 'workflow' | 'tool-use',
+): () => (run: Parameters<UsageMonitor['recordUsage']>[0]) => Promise<void> {
+  return () => (run) => usageMonitor.recordUsage(run, { runKind });
+}
+
 interface ResolvedAgentBase extends AgentCore {
   usageMonitor: UsageMonitor;
-  /** Storage key for file organization (computed once, immutable). */
   storageKey: StorageKey;
-  /** Parent stage for flow execution. Round stages are children of this. */
   parentStage: AgentLogStage;
 }
 
-// ============================================================================
-// Early Stream ID Computation (Race Condition Prevention)
-// ============================================================================
-
-/**
- * Compute a preliminary stream ID from config parameters BEFORE expensive resolution.
- * Used for early duplicate detection to prevent race conditions.
- *
- * This mirrors the logic in getStreamTabId() but uses the agent registry cache
- * to get agentCategory synchronously, avoiding the need for YAML loading.
- */
 function computePreliminaryStreamId(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
 ): StreamTabId {
-  const { agent, model, inputFile, useMultipleOutputs } = configPayload;
-
-  if (!agent || !model) {
+  if (!configPayload.agent || !configPayload.model) {
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  // Get agent category from registry cache (fast synchronous lookup)
-  const agentEntry = getAgent(agent);
+  const agentEntry = getAgent(configPayload.agent);
   const agentCategory = agentEntry?.category ?? AgentCategory.Workflow;
 
-  // Delegate to canonical implementation
-  return getStreamTabId(agent, model, inputFile ?? '', {
-    agentCategory,
-    executionId,
-    useMultipleOutputs,
-  });
+  return getStreamTabId(
+    configPayload.agent,
+    configPayload.model,
+    configPayload.inputFile ?? '',
+    {
+      agentCategory,
+      executionId,
+      useMultipleOutputs: configPayload.useMultipleOutputs,
+    },
+  );
 }
-
-// ============================================================================
-// Agent Resolution & Preparation
-// ============================================================================
 
 export async function getAgentPath(
   agentIdentifier: string,
@@ -175,18 +146,10 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
   throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
-// ============================================================================
-// Agent Resolution
-// ============================================================================
-
 interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
 }
 
-/**
- * Resolve agent and create base dependencies for flow execution.
- * Emits setActiveStream BEFORE stage creation for correct progress board ordering.
- */
 async function resolveAgentBase(
   configPayload: AgentConfigPayload,
   providedExecutionId?: ExecutionId,
@@ -195,7 +158,6 @@ async function resolveAgentBase(
   const executionId: ExecutionId =
     providedExecutionId ?? (randomUUID() as ExecutionId);
 
-  // Load and validate agent
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
@@ -211,10 +173,8 @@ async function resolveAgentBase(
     resolution.entry.source,
   );
 
-  // Validate model
   await validateAndGetModelConfig(fullConfig.model);
 
-  // Build final config (only enable multiple outputs if agent supports it)
   const useMultipleOutputs =
     fullConfig.useMultipleOutputs &&
     isWorkflowSetting(setting) &&
@@ -225,10 +185,8 @@ async function resolveAgentBase(
     agentCategory: setting.agentCategory,
   };
 
-  // Create model handler
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
 
-  // Compute stream ID
   const streamId =
     options?.streamTabIdOverride ??
     getStreamTabId(config.agent, fullConfig.model, config.inputFile, {
@@ -237,7 +195,6 @@ async function resolveAgentBase(
       useMultipleOutputs,
     });
 
-  // Create logger and configure model handler
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
     agentLogger,
@@ -247,7 +204,6 @@ async function resolveAgentBase(
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
-  // Emit stream event before stage creation (prevents race condition)
   bus.emit('setActiveStream', {
     streamId,
     agentCategory: setting.agentCategory,
@@ -255,13 +211,11 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  // Create parent stage and compute storage key (immutable after this point)
   const parentStage = await agentLogger.stage(`Run: ${config.agent}`);
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
     : (executionId as StorageKey);
 
-  // Build user variables (workflow agents wrap in Init stage for grouping)
   const agentPath = path.dirname(resolution.definitionPath);
   const buildVars = () =>
     buildUserVars(
@@ -280,14 +234,13 @@ async function resolveAgentBase(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await (await parentStage.stage('Init')).run(buildVars);
+      : await parentStage.stage('Init').then((s) => s.run(buildVars));
 
   const userVarChannels: UserVariableChannels = {
-    input: Object.freeze({ ...baseVars }),
+    input: Object.freeze(baseVars),
     transient: { ...baseVars },
   };
 
-  // Create usage monitor
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
     { logger: agentLogger, usageReporter, storageKey, streamId },
@@ -315,10 +268,6 @@ async function resolveAgentBase(
   };
 }
 
-// ============================================================================
-// Flow Execution Helpers
-// ============================================================================
-
 const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_STATUS.INITIALIZING]: 'already launching',
   [STREAM_STATUS.RESUMING]: 'resuming',
@@ -326,10 +275,6 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_STATUS.WAITING]: 'waiting for retry',
 };
 
-/**
- * Acquire stream for execution or throw if already in use.
- * Must be called before expensive resolution to prevent race conditions.
- */
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   taskType: string = 'Task',
@@ -343,6 +288,11 @@ function acquireStreamOrThrow(
   );
 }
 
+function isApiKeyError(err: unknown): boolean {
+  const msg = toErrorMessage(err);
+  return msg.includes('Missing API key') || msg.includes('API key not found');
+}
+
 async function runFlowWithLifecycle(
   ctx: ResolvedAgentBase,
   streamId: StreamTabId,
@@ -354,74 +304,61 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(flowStatus);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
-      StreamStatusService.set(
-        streamId,
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-      );
+      const status =
+        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+      StreamStatusService.set(streamId, status);
     }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (err) {
+    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
+
+    // Log error BEFORE ending the group so it gets the correct groupId
+    await ctx.logger.logError(errorMsg, err, {
+      operation: `execute ${agentName}`,
+    });
+
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
-    // Handle flow error inline
-    const rawMsg = toErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
-
-    // Show appropriate notification based on error type
-    if (
-      rawMsg.includes('Missing API key') ||
-      rawMsg.includes('API key not found')
-    ) {
+    if (isApiKeyError(err)) {
       await showApiKeyErrorNotification();
     } else {
       vscode.window.showErrorMessage(errorMsg);
     }
 
-    // Log error directly without creating a new visible group
-    // (error is already captured in parentStage with ERROR status)
-    await ctx.logger.logError(errorMsg, err, {
-      operation: `execute ${agentName}`,
-    });
-
     throw new Error(errorMsg);
   }
 }
 
-// ============================================================================
-// UI and Error Handling
-// ============================================================================
+function getOutputInfo(config: AgentConfig): string {
+  const { outputFiles = [], useMultipleOutputs } = config;
+  if (useMultipleOutputs && outputFiles.length > 1) {
+    return `to ${outputFiles.length} files`;
+  }
+  const firstOutput = outputFiles[0];
+  return firstOutput ? `to ${path.basename(firstOutput)}` : '';
+}
 
-/** Show notification when progress view isn't visible. */
-function showAgentNotification(config: AgentConfig): void {
+async function showAgentNotification(config: AgentConfig): Promise<void> {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
-  const outputFiles = config.outputFiles ?? [];
+  const outputInfo = getOutputInfo(config);
 
-  let outputInfo = '';
-  if (config.useMultipleOutputs && outputFiles.length > 1) {
-    outputInfo = `to ${outputFiles.length} files`;
-  } else if (outputFiles[0]) {
-    outputInfo = `to ${path.basename(outputFiles[0])}`;
+  const selection = await vscode.window.showInformationMessage(
+    `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+    {
+      modal: false,
+      detail:
+        'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+    },
+    'Show ProgressBoard',
+  );
+  if (selection) {
+    await vscode.commands.executeCommand('texra.showProgressView');
   }
-
-  void vscode.window
-    .showInformationMessage(
-      `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-      {
-        modal: false,
-        detail:
-          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-      },
-      'Show ProgressBoard',
-    )
-    .then(
-      (sel) => sel && vscode.commands.executeCommand('texra.showProgressView'),
-    );
 }
 
-/** Show API key error notification with action buttons. */
 async function showApiKeyErrorNotification(): Promise<void> {
   await showInstructionWithSuppress(
     'missingApiKey',
@@ -441,16 +378,6 @@ async function showApiKeyErrorNotification(): Promise<void> {
   );
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
-/**
- * Execute an agent with the given configuration.
- *
- * This function runs flows directly without instantiating agent classes.
- * For resuming paused tool-use sessions, use resumeToolUseFromSnapshot instead.
- */
 export async function executeAgent(
   configPayload: AgentConfigPayload,
   executionId?: ExecutionId,
@@ -459,23 +386,17 @@ export async function executeAgent(
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  // Early acquisition to prevent race conditions.
-  // Compute preliminary stream ID and atomically acquire before expensive resolution.
   const preliminaryStreamId = computePreliminaryStreamId(
     configPayload,
     executionId,
   );
   acquireStreamOrThrow(preliminaryStreamId);
 
-  // Resolve agent and prepare base context
-  // Wrapped in try-catch to display agent loading errors to users
   let ctx: ResolvedAgentBase;
   try {
     ctx = await resolveAgentBase(configPayload, executionId);
   } catch (err) {
-    // Release acquisition on resolution failure
     StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    // Show error to user unless it's a ZodError (handled by executeCommand.ts)
     if (!(err instanceof ZodError)) {
       void vscode.window.showErrorMessage(toErrorMessage(err));
     }
@@ -485,8 +406,6 @@ export async function executeAgent(
   const { setting, streamId, config } = ctx;
   const agentName = config.agent;
 
-  // Handle stream ID mismatch when useMultipleOutputs was corrected based on agent support.
-  // Release the preliminary stream and acquire the correct one.
   if (streamId !== preliminaryStreamId) {
     logger.debug(
       `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${streamId}. ` +
@@ -496,7 +415,6 @@ export async function executeAgent(
     try {
       acquireStreamOrThrow(streamId);
     } catch (err) {
-      // Clean up parentStage if reacquisition fails (resolved stream already in use)
       ctx.parentStage.end(END_GROUP_STATUS.ERROR);
       throw err;
     }
@@ -507,7 +425,6 @@ export async function executeAgent(
 
     const runStorage = getRunStorageService();
 
-    // Set stream status to running
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
     logger.info(`Starting task execution for ${streamId}`);
@@ -519,7 +436,6 @@ export async function executeAgent(
       `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
     );
 
-    // Try to show progress view
     if (!runStorage.isViewVisible()) {
       await vscode.commands.executeCommand('texra.showProgressView');
     }
@@ -532,7 +448,6 @@ export async function executeAgent(
       taskState: agentConfigToTaskState(config),
     });
 
-    // Log multi-output warning
     const { outputFiles, useMultipleOutputs } = config;
     if (
       Array.isArray(outputFiles) &&
@@ -544,20 +459,21 @@ export async function executeAgent(
       );
     }
 
-    // Execute the appropriate flow based on agent type
     const taskStage = await logger.stage(`Task: ${agentName}@${config.model}`);
     return taskStage.run(async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
-      const interruptManager = createInterruptManager();
+      const interruptCallbacks = createInterruptCallbacks();
+
+      const flowContext = {
+        ...ctx,
+        ...interruptCallbacks,
+      };
 
       if (setting.agentCategory === AgentCategory.ToolUse) {
-        // Tool-use flow execution
         const result = await runToolUseFlow({
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: () => (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+          ...flowContext,
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
@@ -565,13 +481,9 @@ export async function executeAgent(
         return result.status;
       }
 
-      // Reflection flow execution (direct/CoT/workflow)
-      // Pass parentStage so r0, r1 become children of it
       const result = await runReflectionFlow({
-        ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: () => (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+        ...flowContext,
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         parentStage: ctx.parentStage,
       });
@@ -580,18 +492,11 @@ export async function executeAgent(
   });
 }
 
-/**
- * Execute the merge agent for file merging operations.
- *
- * Uses flow-first execution with a custom output file location getter
- * for merge-specific file naming conventions.
- */
 export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  // Early acquisition to prevent race conditions
   const preliminaryStreamId = computePreliminaryStreamId({
     agent: 'merge',
     model,
@@ -599,8 +504,6 @@ export async function executeMergeAgent(
   });
   acquireStreamOrThrow(preliminaryStreamId, 'Merge task');
 
-  // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
-  // Use finally for cleanup since we just re-throw without transformation
   let ctx: ResolvedAgentBase;
   let resolutionSucceeded = false;
   try {
@@ -626,9 +529,6 @@ export async function executeMergeAgent(
     return taskStage.run(async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      const interruptManager = createInterruptManager();
-
-      // Create merge-specific output file location getter
       const fileService = new TaskRunFileService(executionId);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
         inputFile,
@@ -636,42 +536,23 @@ export async function executeMergeAgent(
         fileService,
       );
 
-      // Run reflection flow with custom file naming
-      // Pass parentStage so r0, r1 become children of it
       const result = await runReflectionFlow({
         ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: () => (run) =>
-          ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+        ...createInterruptCallbacks(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
         parentStage: ctx.parentStage,
       });
-
       return result.status;
     });
   });
 }
 
-// ============================================================================
-// Tool-Use Session Resume (Flow-First)
-// ============================================================================
-
-/**
- * Resume a tool-use session from a snapshot using flow-first execution.
- *
- * This replaces the legacy agent-based resume and provides access to the
- * session interface for appending follow-up messages before execution.
- *
- * @param snapshot - The snapshot to resume from
- * @param setupSession - Optional callback to configure the session before running
- *                       (e.g., append follow-up messages)
- */
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  // Resolve agent base with snapshot's stream ID for correct UI state
   const ctx = await resolveAgentBase(
     snapshot.agentConfig,
     snapshot.executionId,
@@ -679,16 +560,18 @@ export async function resumeToolUseFromSnapshot(
       streamTabIdOverride: snapshot.streamId,
     },
   );
-  const { setting, streamId, config } = ctx;
+  const { setting, streamId } = ctx;
 
-  // Validate agent category
   if (setting.agentCategory !== AgentCategory.ToolUse) {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
   }
 
-  const interruptManager = createInterruptManager();
+  const flowContext = {
+    ...ctx,
+    ...createInterruptCallbacks(),
+  };
 
   await runFlowWithLifecycle(
     ctx,
@@ -697,21 +580,18 @@ export async function resumeToolUseFromSnapshot(
     async () => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
 
-      // Run the flow with resume snapshot
       const result = await runToolUseFlow(
         {
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: () => (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+          ...flowContext,
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         },
+        undefined, // use default tool registry
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
-
       return result.status;
     },
   );

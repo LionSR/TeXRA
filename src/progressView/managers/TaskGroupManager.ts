@@ -1,20 +1,21 @@
-// Local imports - identifiers and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Internal imports
+import {
+  STREAM_STATUS,
+  TaskGroupSchema,
+  type StreamTabId,
+  type TaskGroup,
+  type UpdateTaskGroupPayload,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskGroup } from '@logger/LogTypes';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import {
-  mapToRecord,
-  recordToMap,
-} from '@progressView/persistence/serializationUtils';
-import type { UpdateTaskGroupPayload } from '@eventBus/schemas';
+import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+
+/** Schema for deserializing persisted task groups */
+const TaskGroupsMapSchema = createRecordToMapSchema(TaskGroupSchema);
 
 /**
  * Manages task groups collection with persistence.
@@ -26,24 +27,18 @@ export class TaskGroupManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.TASK_GROUPS, storage);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
-  /**
-   * Add a task group to a stream
-   */
+  /** Add a task group to a stream */
   async addGroup(
     stream: StreamTabId,
     groupId: string,
     group: TaskGroup,
   ): Promise<void> {
-    if (!this.has(stream)) {
-      this.items.set(stream, new Map());
-    }
-
-    const streamGroups = this.get(stream)!;
+    const streamGroups = this.getOrCreate(stream, () => new Map());
     streamGroups.set(groupId, { ...group });
     await this.save();
   }
@@ -52,35 +47,27 @@ export class TaskGroupManager extends PersistentMapManager<
    * Update an existing task group.
    * Uses UpdateTaskGroupPayload from event bus schema as single source of truth.
    */
-  async updateGroup({
-    streamId,
-    id,
-    status,
-    endTime,
-  }: UpdateTaskGroupPayload): Promise<void> {
-    const streamGroups = this.get(streamId);
+  async updateGroup(payload: UpdateTaskGroupPayload): Promise<void> {
+    const streamGroups = this.get(payload.streamId);
     if (!streamGroups) {
       this.logger.warn(
-        `Cannot update group ${id}: stream ${streamId} not found`,
+        `Cannot update group ${payload.id}: stream ${payload.streamId} not found`,
       );
       return;
     }
 
-    const group = streamGroups.get(id);
+    const group = streamGroups.get(payload.id);
     if (!group) {
       this.logger.warn(
-        `Cannot update group ${id}: group not found in stream ${streamId}`,
+        `Cannot update group ${payload.id}: group not found in stream ${payload.streamId}`,
       );
       return;
     }
 
-    // Apply updates - only include endTime if explicitly provided
-    const updated: TaskGroup = {
-      ...group,
-      status,
-      ...(endTime !== undefined && { endTime }),
-    };
-    streamGroups.set(id, updated);
+    group.status = payload.status;
+    if (payload.endTime !== undefined) {
+      group.endTime = payload.endTime;
+    }
     await this.save();
   }
 
@@ -137,11 +124,11 @@ export class TaskGroupManager extends PersistentMapManager<
     return mapToRecord(value);
   }
 
-  /** Normalize loaded groups */
+  /** Normalize loaded groups with schema validation */
   protected override deserialize(
     data: unknown,
     _key: StreamTabId,
   ): Map<string, TaskGroup> {
-    return recordToMap<TaskGroup>(data);
+    return TaskGroupsMapSchema.parse(data);
   }
 }

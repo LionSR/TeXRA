@@ -1,46 +1,39 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports - shared schemas
+import { sortStreams } from '@shared/streams/streamSort';
+
 // Local imports - progress view
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
+import type {
+  AgentCategoryFilter,
+  StreamStatus,
+  StreamTabInfo,
+} from '@shared/schemas';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from './types';
-
-const sortComparators: Record<
-  string,
-  (a: StreamTabInfo, b: StreamTabInfo) => number
-> = {
-  time: (a, b) =>
-    (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
-    (a.lastTimestamp ?? a.creationTimestamp ?? 0),
-  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
-};
 
 /**
  * Check if a session category matches the given filter.
- * Returns the category to use (defaulting to Workflow) or null if filtered out.
+ * Returns the resolved category (defaulting to Workflow) or null if filtered out.
  */
 function matchesFilter(
   category: AgentCategory | undefined,
   filter: AgentCategoryFilter,
 ): AgentCategory | null {
+  const resolved = category ?? AgentCategory.Workflow;
+
   if (filter === 'all') {
-    return category ?? AgentCategory.Workflow;
+    return resolved;
   }
 
-  if (!category) {
-    return null;
-  }
-
-  const expectedCategory =
+  const expected =
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 
-  return category === expectedCategory ? category : null;
+  return resolved === expected ? resolved : null;
 }
 
 /**
@@ -50,7 +43,7 @@ function matchesFilter(
 function buildStreamInfo(
   state: ProgressViewState,
   id: string,
-  statuses: Map<string, string> | undefined,
+  statuses: Map<string, StreamStatus> | undefined,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
   const taskState = state.getTaskState(id);
@@ -63,18 +56,19 @@ function buildStreamInfo(
   if (category === null) return null;
 
   // Extract timestamps directly (avoids copying entire messages array)
+  // Use hints.creationTimestamp as fallback for newly created streams without messages
   const lastTimestamp = state.streamTabs.getLastTimestamp(id);
-  const creationTimestamp = state.streamTabs.getFirstTimestamp(id);
+  const creationTimestamp =
+    state.streamTabs.getFirstTimestamp(id) ?? hints.creationTimestamp;
 
   // Agent and file info (with fallbacks to hints)
   const inputFile = config?.inputFile ?? '';
   const rawAgentName = config?.agent ?? id.split('@')[0];
   const agentName = getCleanAgentName(rawAgentName);
-  const isToolAgent = category === AgentCategory.ToolUse;
 
-  // Build display label
+  // Build display label (workflow agents show input file, tool-use agents don't)
   const label =
-    !isToolAgent && inputFile
+    category !== AgentCategory.ToolUse && inputFile
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
 
@@ -84,7 +78,6 @@ function buildStreamInfo(
     model: config?.model,
     agent: config?.agent,
     agentCategory: category,
-    uiTraits: { agentCategory: category, isToolAgent },
     hasMultipleOutputs:
       config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
     isRemote: taskState
@@ -103,7 +96,7 @@ function buildStreamInfo(
  */
 export function buildStreamInfos(
   state: ProgressViewState,
-  statuses?: Map<string, string>,
+  statuses?: Map<string, StreamStatus>,
   filter: AgentCategoryFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs
@@ -111,10 +104,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, statuses, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  const comparator = sortComparators[state.streamSortOrder];
-  if (comparator) {
-    infos.sort(comparator);
-  }
-
-  return infos;
+  return sortStreams(infos, state.streamSortOrder);
 }

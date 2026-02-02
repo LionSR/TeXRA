@@ -1,39 +1,15 @@
 /**
- * ToolUseFlowContext - Types and utilities for tool-use flow services.
- *
- * The flow context is created inline in runToolUseFlow.ts - no factory function.
- * This module provides the type definitions and tool resolution utility.
+ * Tool resolution utilities for tool-use flow.
  */
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import type { ToolDefinition } from '@model';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-
-/** Configuration for creating tool-use flow services. */
-export interface ToolUseFlowContextInit<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
-  setting: AgentToolUseSetting;
-  toolRegistry?: IToolRegistry;
-  resumeSnapshot?: ToolUseSessionSnapshot | null;
-  onFollowUpConsumed?: () => void;
-}
-
-// ============================================================================
-// Tool Resolution
-// ============================================================================
-
 /**
  * Resolve tool definitions from agent settings, validating against registry.
- * Optionally injects the memory tool if enabled in user settings.
- *
- * @param tools - Tool configuration from agent settings
- * @param registry - Tool registry to resolve tools from
- * @param logger - Logger for warnings about missing tools
+ * Auto-injects the memory tool if enabled in user settings.
  */
 export function resolveTools(
   tools: AgentToolUseSetting['tools'],

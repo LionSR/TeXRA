@@ -14,11 +14,11 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { FileListEntry } from '@logger/messageTypes';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@utils/files/varsUtils';
+import type { FileListEntry } from '@shared/schemas';
 
 /**
  * User variables for prompt rendering
@@ -156,6 +156,9 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
   );
 }
 
+/** Categories used for building file vars (excludes MEDIA which is display-only) */
+const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED'];
+
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
@@ -163,41 +166,32 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  const allInputFiles = getCategoryFiles(agentConfig, 'INPUT');
-  const allReferenceFiles = getCategoryFiles(agentConfig, 'REFERENCE');
-  const allAuxiliaryFiles = getCategoryFiles(agentConfig, 'AUXILIARY');
-  const allMediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
-
-  // Log file categories being loaded (processed sequentially to preserve UI display order)
-  // Skip for tool-use agents as they don't need this UI feedback
+  // Log file categories being loaded (skip for tool-use agents)
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     await logFileCategoriesWithExistence(logger, [
-      ['Input Files', allInputFiles],
-      ['Reference Files', allReferenceFiles],
-      ['Auxiliary Files', allAuxiliaryFiles],
-      ['Media Files', allMediaFiles],
+      ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
+      ['Reference Files', getCategoryFiles(agentConfig, 'REFERENCE')],
+      ['Auxiliary Files', getCategoryFiles(agentConfig, 'AUXILIARY')],
+      ['Media Files', getCategoryFiles(agentConfig, 'MEDIA')],
     ]);
   }
 
-  // Build single file vars for each category
-  for (const prefix of ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED']) {
+  // Build file vars for each category
+  for (const prefix of FILE_VAR_CATEGORIES) {
     const cat = FILE_CATEGORIES[prefix];
     const filePath = agentConfig[cat.single] as string | null | undefined;
+    const rawAdditionalFiles =
+      (agentConfig[cat.multiple] as string[] | undefined) ?? [];
+    const additionalFiles = rawAdditionalFiles.filter(Boolean);
+    const allFiles = getCategoryFiles(agentConfig, prefix);
+
+    // Single file vars
     userVars[`${prefix}_FILE`] = filePath ?? null;
     userVars[`${prefix}_CONTENT`] = filePath
       ? await WorkspaceFS.read(filePath)
       : null;
-  }
 
-  // Build collection vars for each category using the centralized config
-  for (const prefix of ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED']) {
-    const cat = FILE_CATEGORIES[prefix];
-    const rawAdditionalFiles =
-      (agentConfig[cat.multiple] as string[] | undefined) ?? [];
-    // Filter empty strings to prevent file read errors
-    const additionalFiles = rawAdditionalFiles.filter(Boolean);
-    const allFiles = getCategoryFiles(agentConfig, prefix);
-
+    // Collection vars
     userVars[`ADDITIONAL_${prefix}S`] =
       additionalFiles.length > 0
         ? await getXmlFormatFromFiles(additionalFiles)
@@ -389,32 +383,28 @@ export function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): UserVars {
-  const shouldSaveInputPrompt = getConfig<boolean>(
-    'texra.debug.saveInputPrompt',
-    false,
-  );
   const flags: UserVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: shouldSaveInputPrompt,
+    PRINT_INPUT_PROMPT: getConfig<boolean>(
+      'texra.debug.saveInputPrompt',
+      false,
+    ),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
   };
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     const { userRequest } = agentPrompt;
-    let requestArray: string[];
-    if (Array.isArray(userRequest)) {
-      requestArray = userRequest;
-    } else if (userRequest) {
-      requestArray = [userRequest];
-    } else {
-      requestArray = [];
-    }
+    const requestCount = Array.isArray(userRequest)
+      ? userRequest.length
+      : userRequest
+        ? 1
+        : 0;
     const configuredRounds =
       'rounds' in agentSetting ? agentSetting.rounds : undefined;
-    flags.ROUNDS = Math.max(configuredRounds ?? 2, requestArray.length);
+    flags.ROUNDS = Math.max(configuredRounds ?? 2, requestCount);
   }
 
   return flags;
