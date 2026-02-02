@@ -270,9 +270,12 @@ export class ProgressApp extends BaseWebviewApp {
   }
 
   private updateStreamContext(): void {
+    const filteredStreams = getFilteredStreams(this.appState);
+    const hasStreams = filteredStreams.length > 0;
     const activeStream = this.getActiveStreamInfo();
+
     if (!activeStream) {
-      this.streamContextValue = EMPTY_STREAM_CONTEXT;
+      this.streamContextValue = { ...EMPTY_STREAM_CONTEXT, hasStreams };
       this.permissionsContextValue = this.permissions;
       return;
     }
@@ -292,6 +295,7 @@ export class ProgressApp extends BaseWebviewApp {
       followupOptions:
         this.appState.followupOptionsByStream.get(activeStream.name) ?? null,
       isToolUse,
+      hasStreams,
     };
     this.permissionsContextValue = this.permissions;
   }

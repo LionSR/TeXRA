@@ -24,6 +24,8 @@ export interface StreamContextValue {
   followupOptions: FollowupOptionsState | null;
   /** Pre-computed stream type flag - true for tool-use, false for workflow */
   isToolUse: boolean;
+  /** Whether there are any streams in the current filter (for placeholder logic) */
+  hasStreams: boolean;
 }
 
 /** Default empty stream context value. */
@@ -33,6 +35,7 @@ export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   runId: null,
   followupOptions: null,
   isToolUse: false,
+  hasStreams: false,
 };
 
 export const streamStateContext = createContext<StreamContextValue>(
