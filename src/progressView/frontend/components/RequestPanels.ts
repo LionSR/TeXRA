@@ -34,6 +34,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - shared utilities
+import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { postMessage } from '@shared/vscode';
@@ -138,6 +139,13 @@ export class RequestPanels extends LitElement {
     if (this.openDiffMenuKey && !activeKeys.has(this.openDiffMenuKey)) {
       this.openDiffMenuKey = null;
     }
+  }
+
+  protected override updated(): void {
+    // Workaround for vscode-context-menu slot rendering
+    this.shadowRoot
+      ?.querySelectorAll('.diff-dropdown-menu')
+      .forEach(ensureContextMenuUsesSlot);
   }
 
   override connectedCallback(): void {
