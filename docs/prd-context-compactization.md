@@ -102,7 +102,7 @@ Instead, the approach is:
 1. When `shouldCompact()` returns true and no native strategy is available:
 2. Send the full message history to a **compactor model** with a structured summarization prompt
 3. The compactor returns the summary inside a `<conversation-summary>` XML tag
-4. **Replace the system prompt**: parse the summary from the XML tag and append it to the original system prompt
+4. **Replace the system prompt**: parse the summary using the existing `extractTextFromTag()` utility (`src/utils/text/xmlExtraction.ts:55`) and append it to the original system prompt. This is the same extraction pattern already used for `<revised>`, `<scratchpad>`, and `<document>` tags throughout the agent output pipeline.
 5. **Drop all old messages** -- the summary in the system prompt is now the sole representation of prior context
 6. The model receives: `[system prompt + summary]` + `[only the current user message]`
 7. Record compaction metadata (tokens before/after, summary text)
