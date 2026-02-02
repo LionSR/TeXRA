@@ -1285,12 +1285,6 @@
         "icon": "$(account)"
       },
       {
-        "command": "texra.auth.accountMenu",
-        "title": "Account",
-        "category": "TeXRA",
-        "icon": "$(account)"
-      },
-      {
         "command": "texra.testTextEditor",
         "title": "Test Text Editor Tool",
         "category": "TeXRA",
@@ -1331,7 +1325,7 @@
       },
       {
         "command": "texra.showMemory",
-        "title": "Show Agent Memory",
+        "title": "Show Memory",
         "category": "TeXRA",
         "icon": "$(database)"
       },
@@ -1355,10 +1349,16 @@
         "icon": "$(multiple-windows)"
       },
       {
-        "command": "texra.showMemory",
-        "title": "Show Memory",
+        "command": "texra.showDashboard",
+        "title": "Show Dashboard",
         "category": "TeXRA",
-        "icon": "$(database)"
+        "icon": "$(settings)"
+      },
+      {
+        "command": "texra.showSettingsView",
+        "title": "Show Dashboard",
+        "category": "TeXRA",
+        "icon": "$(settings)"
       }
     ],
     "walkthroughs": [
@@ -1523,29 +1523,14 @@
           "group": "navigation@3"
         },
         {
-          "command": "texra.openSettings",
+          "command": "texra.showDashboard",
           "when": "view == texra.progressView",
           "group": "navigation@4"
         },
         {
-          "command": "texra.showAgentHistory",
-          "when": "view == texra.progressView",
-          "group": "navigation@5"
-        },
-        {
-          "command": "texra.showMemory",
-          "when": "view == texra.progressView",
-          "group": "navigation@6"
-        },
-        {
-          "command": "texra.auth.accountMenu",
-          "when": "view == texra.progressView",
-          "group": "navigation@7"
-        },
-        {
           "command": "texra.openProgressViewInTab",
           "when": "view == texra.progressView",
-          "group": "navigation@8"
+          "group": "navigation@7"
         },
         {
           "command": "texra.folderExplorer.newFile",
@@ -1568,24 +1553,9 @@
           "group": "navigation@0"
         },
         {
-          "command": "texra.openSettings",
+          "command": "texra.showDashboard",
           "when": "view == texra.mainView",
           "group": "navigation@1"
-        },
-        {
-          "command": "texra.showAgentHistory",
-          "when": "view == texra.mainView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "texra.showMemory",
-          "when": "view == texra.mainView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "texra.auth.accountMenu",
-          "when": "view == texra.mainView",
-          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -1649,8 +1619,8 @@
     "esbuild:ext": "node esbuild.config.mjs",
     "esbuild:ext:watch": "node esbuild.config.mjs --watch",
     "esbuild:ext:prod": "node esbuild.config.mjs --production",
-    "vite:webviews": "for v in progressView memoryView historyView profileView webview; do VITE_WEBVIEW=$v vite build; done",
-    "vite:webviews:dev": "for v in progressView memoryView historyView profileView webview; do VITE_WEBVIEW=$v vite build --mode development; done",
+    "vite:webviews": "for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build; done",
+    "vite:webviews:dev": "for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build --mode development; done",
     "vite:webviews:watch": "VITE_WEBVIEW=progressView vite build --watch --mode development",
     "typecheck": "tsc --noEmit",
     "compile:fast": "npm run esbuild:ext && npm run vite:webviews:dev",
