@@ -8,6 +8,13 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
+/** Response from Kimi's token estimation API */
+interface KimiTokenEstimateResponse {
+  data: {
+    total_tokens: number;
+  };
+}
+
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  * Kimi K2 Thinking models return reasoning_content automatically when streaming.
@@ -15,6 +22,12 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
  * Kimi K2.5 has thinking enabled by default on the Moonshot API.
  * For non-thinking variants (supportsReasoning: false), we must explicitly
  * send `thinking: { type: 'disabled' }` to turn off thinking mode.
+ *
+ * Supports thinking mode with tool calls. When thinking mode is enabled:
+ * - The model outputs reasoning_content along with tool_calls
+ * - The reasoning_content must be included in assistant messages during tool-use cycles
+ *
+ * @see https://platform.moonshot.cn/docs/guide/reasoning-model
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
   protected override get usageProvider(): NormalizedUsage['provider'] {
@@ -52,6 +65,13 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return undefined;
   }
 
+  /**
+   * Kimi thinking models require reasoning_content in tool-use follow-up messages.
+   */
+  protected override shouldIncludeReasoningInToolCalls(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
   protected override buildChatBaseParams(
     messages: ChatCompletionMessageParam[],
     _temperature?: number,
@@ -73,5 +93,50 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       endTag,
       tools,
     );
+  }
+
+  /**
+   * Whether this handler supports native token counting.
+   * Kimi provides a token estimation API for accurate pre-flight counts.
+   */
+  override get supportsTokenCounting(): boolean {
+    return true;
+  }
+
+  /**
+   * Estimates token count using Kimi's native token counting API.
+   * This provides accurate token counts for Moonshot models.
+   *
+   * @param messages The messages to count tokens for.
+   * @returns Promise resolving to the total token count.
+   * @see https://platform.moonshot.cn/docs/api/tokenization
+   */
+  override async estimateTokenCount(
+    messages: ChatCompletionMessageParam[],
+  ): Promise<number> {
+    const apiKey = await this.getApiKey();
+    const baseUrl = this.getBaseUrl() ?? 'https://api.moonshot.ai/v1';
+
+    const response = await fetch(`${baseUrl}/tokenizers/estimate-token-count`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.config.fullName,
+        messages,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Kimi token estimation failed (${response.status}): ${errorText}`,
+      );
+    }
+
+    const result = (await response.json()) as KimiTokenEstimateResponse;
+    return result.data.total_tokens;
   }
 }

@@ -1755,7 +1755,6 @@
     "fast-xml-parser": "^5.3.4",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.0",
-    "gpt-tokenizer": "^3.4.0",
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
     "http-status-codes": "^2.3.0",
