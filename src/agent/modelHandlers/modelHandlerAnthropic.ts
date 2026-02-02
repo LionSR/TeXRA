@@ -764,6 +764,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
+    // Anthropic's input_tokens excludes cached tokens (unlike OpenAI where it's the total).
+    // Per SDK docs: "Total input tokens is the summation of input_tokens,
+    // cache_creation_input_tokens, and cache_read_input_tokens."
     const totalInputTokens =
       response.usage.input_tokens +
       (response.usage.cache_read_input_tokens ?? 0) +

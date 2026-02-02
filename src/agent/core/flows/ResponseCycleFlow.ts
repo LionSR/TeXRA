@@ -237,18 +237,11 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     return 'Model invocation';
   }
 
-  /**
-   * Check if background mode is active via the model handler.
-   * This enables the base class to enforce minimum retry count for background jobs.
-   */
+  /** Check if background mode is active (enables minimum retry count). */
   protected override isBackgroundModeActive(): boolean {
     return this.services.modelHandler.isBackgroundModeActive();
   }
 
-  /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: exec() should only use prepRes, not shared.
-   */
   async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -279,7 +272,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.setting.temperature || 0.0,
+          temperature: services.setting.temperature,
           systemPrompt: prepRes.systemPrompt,
           endTag: services.setting.endTag,
           signal,
@@ -297,10 +290,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     });
   }
 
-  /**
-   * Called by PocketFlow Node when retryPrompt returns false.
-   * Uses base class getFallbackResult() for shared logic.
-   */
   async execFallback(
     _prepRes: InvocationPrepResult,
     error: Error,
@@ -559,7 +548,7 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     if (result.normalizedUsage) {
-      round.setNormalizedUsage(result.normalizedUsage);
+      round.normalizedUsage = result.normalizedUsage;
     }
 
     if (result.updatedLastResponse !== undefined) {
@@ -586,6 +575,8 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     const outputLocation = shared.outputLocation!;
+    const connector = result.bestConnector ?? '';
+
     await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
 
     if (!shared.outputExists) {
@@ -601,7 +592,7 @@ class ResponseProcessNode<C> extends BaseNode<
       );
       await flexibleFS.appendFile(
         outputLocation,
-        (result.bestConnector ?? '') + result.processedResponse,
+        connector + result.processedResponse,
       );
     }
 
@@ -624,8 +615,6 @@ class ResponseProcessNode<C> extends BaseNode<
     logger.debug(
       `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
-
-    const connector = result.bestConnector ?? '';
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.updateMessageContentWithPrefill(
@@ -657,23 +646,15 @@ class ResponseProcessNode<C> extends BaseNode<
  * Finalizes the response cycle by recording round statistics.
  * All flow exit paths route through this node to ensure proper cleanup.
  *
- * PocketFlow pattern:
- * - Single finalization point in the flow graph
- * - No guard flags needed (graph ensures single execution)
- */
-/**
- * Finalizes the response cycle by recording round statistics.
- * All flow exit paths route through this node to ensure proper cleanup.
+ * PocketFlow pattern: Single finalization point in the flow graph.
+ * No guard flags needed (graph ensures single execution).
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  /**
-   * Finalize the round by recording stats and invoking callback.
-   * Side effects in exec() are appropriate here since finalization IS the purpose.
-   */
+  /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
     const { round, run, onRoundFinalized } = this.services;
     run.recordRound(round);

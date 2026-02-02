@@ -2,12 +2,12 @@
 
 ## Implementation Status
 
-| Item                                     | Severity | Status     | Notes                                      |
-| ---------------------------------------- | -------- | ---------- | ------------------------------------------ |
-| OpenAI Response API no pre-flight check  | HIGH     | Proposed   | Can overflow context on first request      |
-| Missing usage in streaming responses     | MEDIUM   | Proposed   | Defaults to 0, affects UI display          |
-| Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional but may be overly conservative |
-| OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`           |
+| Item                                     | Severity | Status     | Notes                                                      |
+| ---------------------------------------- | -------- | ---------- | ---------------------------------------------------------- |
+| OpenAI Response API no pre-flight check  | HIGH     | **FIXED**  | Native API via `/responses/input_tokens`                   |
+| Missing usage in streaming responses     | MEDIUM   | Documented | Defaults to 0, affects UI display (acceptable degradation) |
+| Safety buffer inconsistency (5000 vs 10) | LOW      | Documented | Intentional; OpenAI Response now uses 10 (exact counting)  |
+| OpenAI Chat heuristic counting           | LOW      | Won't Fix  | Best effort with `gpt-tokenizer`                           |
 
 ## Overview
 
@@ -34,27 +34,24 @@ All providers return accurate token counts from API responses:
 
 ## Issues
 
-### T1) OpenAI Response API has no pre-flight token counting (HIGH)
+### T1) OpenAI Response API has no pre-flight token counting (HIGH) — FIXED
 
 - **Area:** Model Handlers
 - **Type:** Logic gap
 - **Impact:** High (can overflow context on first request if prior conversation + new message > context window)
 - **Location:** `src/agent/modelHandlers/modelHandlerOpenAIResponse.ts`
-- **Root cause:** Unlike other providers, the Response API handler does NOT check token
-  counts before sending a request. It only checks `cumulativeInputTokens` AFTER receiving
-  a response to decide if compaction is needed.
-- **Code Evidence:**
-  - `modelHandlerOpenAI.ts` calls `this.applyTokenHeuristics()` during request prep
-  - `modelHandlerOpenAIResponse.ts` has no equivalent pre-flight check
-  - `shouldCompact()` at line 424 only checks after response: `cumulativeInputTokens > threshold`
-- **Comparison:**
-  - Anthropic: Calls `client.beta.messages.countTokens()` BEFORE creating message
-  - Google: Calls `client.models.countTokens()` BEFORE creating message
-  - OpenAI Response: No pre-flight check
-- **Fix Options:**
-  1. Add heuristic pre-flight check using `gpt-tokenizer` (same as OpenAI Chat)
-  2. Use a larger safety buffer to account for estimation uncertainty
-  3. Accept risk since compaction handles overflow after first response
+- **Status:** ✅ **FIXED** — Now uses native `/responses/input_tokens` endpoint
+- **Solution:**
+  - Added native token counting via `client.responses.inputTokens.count()`
+  - Handler property `supportsNativeTokenCounting` controls the feature (disabled for OpenRouter)
+  - Uses shared `baseParams` between token counting and API call to avoid duplication
+  - Aligns with Anthropic (`client.beta.messages.countTokens()`) and Google (`client.models.countTokens()`)
+- **Two-layer protection:**
+  1. `shouldCompact()` uses `cumulativeInputTokens` (from PREVIOUS response) at 75% threshold for proactive compaction
+  2. Native token counting (CURRENT request) is the safety net at 100% threshold
+- **Error handling:**
+  - Context window violations are thrown (hard fail)
+  - API errors are logged and proceed without adjustment (soft fail)
 
 ### T2) Streaming responses may have missing usage data (MEDIUM)
 
@@ -145,20 +142,35 @@ All providers return accurate token counts from API responses:
 
 ## Summary
 
-| Issue           | Pre-flight              | Post-response | Action          |
-| --------------- | ----------------------- | ------------- | --------------- |
-| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix       |
-| OpenAI Response | **None**                | Accurate      | Consider adding |
-| Anthropic       | Exact API               | Accurate      | None needed     |
-| Google          | Exact API               | Accurate      | None needed     |
+| Issue           | Pre-flight              | Post-response | Action      |
+| --------------- | ----------------------- | ------------- | ----------- |
+| OpenAI Chat     | Heuristic (5000 buffer) | Accurate      | Won't fix   |
+| OpenAI Response | **Exact API**           | Accurate      | ✅ Complete |
+| Anthropic       | Exact API               | Accurate      | None needed |
+| Google          | Exact API               | Accurate      | None needed |
 
 ## Recommended Actions
 
-1. **T1 (HIGH):** Add pre-flight token estimation to OpenAI Response API handler
-   - Use same `gpt-tokenizer` approach as OpenAI Chat
-   - Apply similar safety buffer
+1. ~~**T1 (HIGH):** Add pre-flight token estimation to OpenAI Response API handler~~
+   - ✅ **COMPLETE** — Uses native `/responses/input_tokens` endpoint (better than heuristic)
 
 2. **T2 (MEDIUM):** Current handling is acceptable (logs warning, defaults to 0)
    - Consider adding heuristic fallback if this causes user confusion
 
 3. **T3/T4 (LOW):** Document rationale, no code changes needed
+
+---
+
+## Progress Update (2026-01-31)
+
+- ✅ Added pre-flight token estimation for OpenAI Response API requests (Response mode).
+- ✅ Added heuristic usage fallback when streaming usage data is missing.
+
+## Progress Update (2026-02-01)
+
+- ✅ **Replaced heuristic with native token counting** for OpenAI Response API
+  - Uses `/responses/input_tokens` endpoint for exact counts
+  - Removed heuristic code from Response handler (Chat handler still uses `gpt-tokenizer`)
+  - Aligned with Anthropic/Google handlers (all now use exact counting)
+  - Handler property `supportsNativeTokenCounting` controls the feature
+  - Safety buffer reduced from 5000 (heuristic) to 10 (exact counting)

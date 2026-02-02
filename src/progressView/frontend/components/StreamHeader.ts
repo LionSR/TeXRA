@@ -6,19 +6,18 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { animationStyles, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  animationStyles,
+  commonViewStyles,
+} from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
 // Local imports - progress view constants
-import {
-  COMMANDS,
-  ELEMENT_IDS,
-  STREAM_STATUS,
-  TOOLBAR_BUTTONS,
-} from '../constants';
+import { ELEMENT_IDS, STREAM_STATUS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
+import { getComposedPathElement } from '../utils';
 import type { StreamState } from '../store';
 
 // Local imports - shared schemas
@@ -44,6 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
   [STREAM_STATUS.READY]: 'Ready',
   [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
   [STREAM_STATUS.RESUMING]: 'Resuming',
+  [STREAM_STATUS.INITIALIZING]: 'Initializing',
 };
 
 /**
@@ -51,6 +51,10 @@ const STATUS_LABELS: Record<string, string> = {
  * Maps status to array of button IDs that should be enabled.
  */
 const ENABLED_BUTTONS_BY_STATUS: Record<string, string[]> = {
+  [STREAM_STATUS.INITIALIZING]: [
+    ELEMENT_IDS.STOP_STREAM_BTN,
+    ELEMENT_IDS.CLEAN_STREAM_BTN,
+  ],
   [STREAM_STATUS.RUNNING]: [
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
@@ -106,6 +110,7 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   static override styles = [
+    designTokens,
     animationStyles,
     commonViewStyles,
     codiconIconClasses,
@@ -307,7 +312,7 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
 
-    const status = this.resolveStatus();
+    const status = this.getCurrentStatus();
     const statusLabel = this.getStatusLabel(status);
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
@@ -346,7 +351,7 @@ export class StreamHeader extends LitElement {
                 toolbarButtons as ToolbarButton[],
                 (btn) => btn.id,
                 (btn) => {
-                  const { disabled, hidden } = this.resolveButtonState(
+                  const { disabled, hidden } = this.getButtonState(
                     btn.id,
                     status,
                     hasExecutionId,
@@ -383,14 +388,8 @@ export class StreamHeader extends LitElement {
   }
 
   private renderRunSelector(): TemplateResult | typeof nothing {
-    // Note: this.stream is guaranteed to exist when this method is called
-    // since render() only calls it when stream is truthy
-    const isWorkflow = this.stream!.agentCategory === 'workflow';
-    if (!isWorkflow) {
-      return nothing;
-    }
-    const hasRuns = this.runs.length > 0;
-    if (!hasRuns) {
+    // Only show run selector for workflow streams with runs
+    if (this.stream?.agentCategory !== 'workflow' || this.runs.length === 0) {
       return nothing;
     }
 
@@ -411,7 +410,7 @@ export class StreamHeader extends LitElement {
     `;
   }
 
-  private resolveStatus(): string {
+  private getCurrentStatus(): string {
     return (
       this.streamState?.status || this.stream?.status || STREAM_STATUS.READY
     );
@@ -421,7 +420,7 @@ export class StreamHeader extends LitElement {
     return STATUS_LABELS[status] ?? status;
   }
 
-  private resolveButtonState(
+  private getButtonState(
     buttonId: string,
     status: string,
     hasExecutionId: boolean,
@@ -433,9 +432,7 @@ export class StreamHeader extends LitElement {
   }
 
   private handleToolbarClick(event: MouseEvent) {
-    const target = event.target as Element | null;
-    if (!target) return;
-    const button = target.closest('[data-command]') as HTMLElement | null;
+    const button = getComposedPathElement<HTMLElement>(event, '[data-command]');
     if (!button || button.hasAttribute('disabled')) return;
 
     const command = button.dataset.command;

@@ -12,7 +12,7 @@ import {
   type ProfileViewInboundMessage,
   type RemoteAgent,
 } from '@shared/schemas/profileViewMessages';
-import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
+import { getAgentsBySource, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 import { BaseViewMessageHandler, PROFILE_VIEW_COMMANDS } from '@common/webview';
@@ -118,15 +118,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
 
     // Fetch remote agents - RLS filters based on user's permissions
     await loadAgents();
-    const remoteAgents: RemoteAgent[] = getAgentsBySource(
-      'remote' as AgentSource,
-    ).map((entry) => ({
-      name: entry.name,
-      description: entry.description || '',
-      visibility: entry.visibility || ['public'],
-      category: entry.category || AgentCategory.Workflow,
-      supportsMultipleOutput: Boolean(entry.multiplePath),
-    }));
+    const remoteAgents: RemoteAgent[] = getAgentsBySource('remote').map(
+      (entry) => ({
+        name: entry.name,
+        description: entry.description ?? '',
+        visibility: entry.visibility ?? ['public'],
+        category: entry.category,
+        supportsMultipleOutput: Boolean(entry.multiplePath),
+      }),
+    );
 
     // Get model access settings from the service (caches already primed)
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
@@ -148,8 +148,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
       authenticated: true,
       user: {
-        email: user?.email || 'N/A',
-        id: user?.id || '',
+        email: user?.email ?? 'N/A',
+        id: user?.id ?? '',
       },
       tier: authContext.tier,
       permissions: authContext.permissions,

@@ -404,13 +404,12 @@ export class WebviewUpdater {
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
    *
-   * Note: This method delegates active stream resolution to ProgressViewState,
-   * which is the single source of truth. The WebviewUpdater only reads state
-   * and sends messages - it never mutates state.
+   * Note: This method computes valid active stream via ProgressViewState
+   * (single source of truth) and explicitly persists if changed.
    */
   updateAll(
     state: ProgressViewState,
-    statuses?: Map<string, string>,
+    statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
     const streams = buildStreamInfos(
@@ -420,8 +419,11 @@ export class WebviewUpdater {
     );
     const streamNames = streams.map((info) => info.name);
 
-    // Delegate active stream resolution to state (single source of truth)
-    const activeStream = state.resolveActiveStream(streamNames);
+    // Compute valid active stream (pure query) and persist if changed
+    const activeStream = state.pickValidActiveStream(streamNames);
+    if (activeStream !== state.activeStream) {
+      state.activeStream = activeStream;
+    }
 
     if (!this.isAvailable()) {
       return activeStream;

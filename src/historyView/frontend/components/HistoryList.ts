@@ -50,6 +50,8 @@ export class HistoryList extends LitElement {
   /** Match counts per item, keyed by item.id - used to compute highlighted index */
   @state() private matchCounts: Map<string, number> = new Map();
 
+  @state() private searchVersion = 0;
+
   @queryAll('history-item')
   private historyItemElements!: Array<
     HTMLElement & {
@@ -89,13 +91,15 @@ export class HistoryList extends LitElement {
   protected updated(changedProps: Map<string, unknown>): void {
     // Re-apply search when items change (e.g., new history loaded)
     if (changedProps.has('items') && this.searchTerm) {
-      void this.applySearchToItems(this.searchTerm);
+      const version = ++this.searchVersion;
+      void this.applySearchToItems(this.searchTerm, version);
     }
   }
 
   // === Internal search operations (called from willUpdate) ===
 
   private performClearSearch(): void {
+    this.searchVersion += 1;
     this.matchCounts = new Map();
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
@@ -104,6 +108,7 @@ export class HistoryList extends LitElement {
   }
 
   private performSearch(term: string): void {
+    const version = ++this.searchVersion;
     if (!term) {
       this.state?.setSearchIndex(-1);
       this.state?.setTotalMatches(0);
@@ -111,7 +116,7 @@ export class HistoryList extends LitElement {
       this.updateMatchCount();
       return;
     }
-    void this.applySearchToItems(term);
+    void this.applySearchToItems(term, version);
   }
 
   private performNavigate(direction: 'next' | 'prev'): void {
@@ -160,13 +165,19 @@ export class HistoryList extends LitElement {
     return null;
   }
 
-  private async applySearchToItems(term: string): Promise<void> {
+  private async applySearchToItems(
+    term: string,
+    version: number,
+  ): Promise<void> {
     const historyItems = this.getHistoryItems();
     const counts = await Promise.all(
       historyItems.map(
         (item) => item.applySearch?.(term) ?? Promise.resolve(0),
       ),
     );
+    if (version !== this.searchVersion) {
+      return;
+    }
 
     // Store match counts per item for computing highlighted indices
     const newMatchCounts = new Map<string, number>();
@@ -202,7 +213,7 @@ export class HistoryList extends LitElement {
     }
   > {
     // @queryAll returns NodeList, not Array - convert for .map() support
-    return Array.from(this.historyItemElements ?? []);
+    return [...(this.historyItemElements ?? [])];
   }
 
   private handleToggle(

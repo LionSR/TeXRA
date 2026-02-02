@@ -20,8 +20,8 @@ import {
 } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { streamEventQueue } from '@eventBus/StreamEventQueue';
 
-import type { EventHandlerContext } from './EventHandlerContext';
 import { withEventErrorHandling } from './errorHandling';
 import { registerFollowUpEventHandlers } from './FollowUpEventHandlers';
 import { registerLogEventHandlers } from './LogEventHandlers';
@@ -29,6 +29,7 @@ import { registerOutputEventHandlers } from './OutputEventHandlers';
 import { registerTodoEventHandlers } from './TodoEventHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { registerUsageEventHandlers } from './UsageEventHandlers';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 export type { UICallbacks };
 
@@ -172,41 +173,41 @@ export class ProgressEventHandler {
   private handleAddTaskGroup = (
     data: ProgressEventPayloads['addTaskGroup'],
   ): void => {
-    withEventErrorHandling(
-      'TaskGroup',
-      'failed to handle addTaskGroup',
-      async () => {
-        const { streamId, ...group } = data;
-        const { id, parentGroupId } = group;
-
-        const hasStream = this.state.streamTabs.has(streamId);
-        const addGroupPromise = this.state.taskGroups.addGroup(
-          streamId,
-          id,
-          group,
-        );
-
-        if (!parentGroupId) {
-          this.state.setActiveRunId(streamId, id);
-        }
-
-        if (!hasStream) {
-          await this.initializeStreamForTaskGroup(streamId);
-        }
-
-        if (
-          this.webviewUpdater.isAvailable() &&
-          streamId === this.state.activeStream
-        ) {
-          this.webviewUpdater.addTaskGroup(streamId, group);
-        } else {
-          this.bufferTaskGroupForReplay(streamId, group);
-        }
-
-        await addGroupPromise;
-      },
+    withEventErrorHandling('TaskGroup', 'failed to handle addTaskGroup', () =>
+      streamEventQueue.enqueue(data.streamId, () =>
+        this.processAddTaskGroup(data),
+      ),
     );
   };
+
+  private async processAddTaskGroup(
+    data: ProgressEventPayloads['addTaskGroup'],
+  ): Promise<void> {
+    const { streamId, ...group } = data;
+    const { id, parentGroupId } = group;
+
+    const hasStream = this.state.streamTabs.has(streamId);
+    const addGroupPromise = this.state.taskGroups.addGroup(streamId, id, group);
+
+    if (!parentGroupId) {
+      this.state.setActiveRunId(streamId, id);
+    }
+
+    if (!hasStream) {
+      await this.initializeStreamForTaskGroup(streamId);
+    }
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      streamId === this.state.activeStream
+    ) {
+      this.webviewUpdater.addTaskGroup(streamId, group);
+    } else {
+      this.bufferTaskGroupForReplay(streamId, group);
+    }
+
+    await addGroupPromise;
+  }
 
   private handleUpdateTaskGroup = (
     data: ProgressEventPayloads['updateTaskGroup'],
@@ -214,16 +215,33 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'TaskGroup',
       'failed to handle updateTaskGroup',
-      async () => {
-        await this.state.taskGroups.updateGroup(data);
-
-        const isActive = data.streamId === this.state.activeStream;
-        if (this.webviewUpdater.isAvailable() && isActive) {
-          this.webviewUpdater.updateTaskGroup(data);
-        }
-      },
+      () =>
+        streamEventQueue.enqueue(data.streamId, () =>
+          this.processUpdateTaskGroup(data),
+        ),
     );
   };
+
+  private async processUpdateTaskGroup(
+    data: ProgressEventPayloads['updateTaskGroup'],
+  ): Promise<void> {
+    const groups = this.state.taskGroups.getStreamGroups(data.streamId);
+    if (!groups.has(data.id)) {
+      // StreamEventQueue serializes events per stream, so addTaskGroup always
+      // completes before updateTaskGroup. If we hit this, there's a bug.
+      this.logger.warn(
+        `updateTaskGroup for unknown group ${data.id} in stream ${data.streamId}`,
+      );
+      return;
+    }
+
+    await this.state.taskGroups.updateGroup(data);
+
+    const isActive = data.streamId === this.state.activeStream;
+    if (this.webviewUpdater.isAvailable() && isActive) {
+      this.webviewUpdater.updateTaskGroup(data);
+    }
+  }
 
   private markAllRunningTasksAsCancelled = (): void => {
     for (const [stream, status] of StreamStatusService.entries()) {
@@ -306,7 +324,6 @@ export class ProgressEventHandler {
     ) as Record<string, TokenUsageStats>;
     const contextState = this.state.getContextState(stream);
     const todos = this.state.getTodos(stream) ?? [];
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
 
     this.pendingTaskGroups.delete(stream);
 
@@ -345,10 +362,6 @@ export class ProgressEventHandler {
     if (clearInstruction) {
       this.webviewUpdater.updateInstruction('', null);
     }
-  }
-
-  getStreamStatus(streamId: StreamTabId): StreamStatus | undefined {
-    return StreamStatusService.get(streamId);
   }
 
   setStreamStatus(

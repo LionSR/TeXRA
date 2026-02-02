@@ -46,15 +46,6 @@ export const ELEMENT_IDS = {
   LOGIN_BANNER: 'loginBanner',
 } as const;
 
-export const AGENT_SELECT_IDS = {
-  [SESSION_TYPES.WORKFLOW]: ELEMENT_IDS.WORKFLOW_AGENT_SELECT,
-  [SESSION_TYPES.TOOL_USE]: ELEMENT_IDS.TOOL_USE_AGENT_SELECT,
-} as const;
-
-export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
-
-export const SESSION_TYPE_VALUES = new Set(Object.values(SESSION_TYPES));
-
 export function parseSessionType(
   sessionType: string | null | undefined,
 ): SessionType | undefined {

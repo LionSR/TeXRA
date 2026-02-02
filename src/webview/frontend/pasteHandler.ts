@@ -2,10 +2,7 @@
 import { nanoid } from 'nanoid';
 
 // Local imports - shared utilities
-import {
-  resolveTextareaTarget,
-  insertTextAtCursor,
-} from '@shared/utils/textarea';
+import { insertTextAtCursor } from '@shared/utils/textarea';
 import { postMessage } from '@shared/vscode';
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 
@@ -93,8 +90,6 @@ export async function handleImagePaste(
   event: ClipboardEvent,
   target: HTMLElement,
 ): Promise<boolean> {
-  const { textarea } = resolveTextareaTarget(target);
-  const activeTextarea = textarea ?? (target as HTMLTextAreaElement);
   /* eslint-disable unicorn/prefer-spread -- DataTransferItemList lacks iterator typing. */
   const items = event.clipboardData
     ? Array.from(event.clipboardData.items)
@@ -136,7 +131,8 @@ export async function handleImagePaste(
   });
 
   if (insertText) {
-    insertTextAtCursor(activeTextarea, insertText);
+    // insertTextAtCursor handles vscode-textarea resolution internally
+    insertTextAtCursor(target, insertText);
   }
 
   return true;

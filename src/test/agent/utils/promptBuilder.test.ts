@@ -15,7 +15,7 @@ describe('PromptBuilder', () => {
     agentCategory: AgentCategory.Workflow,
     documentTag: 'document',
     endTag: '</document>',
-    temperature: 0,
+    temperature: 1,
     isRewrite: true,
     rounds: 2,
     prefills: [],
@@ -26,7 +26,8 @@ describe('PromptBuilder', () => {
     isMultipleOutput: false,
     filePatternsContain: [],
     tools: [],
-  } as AgentWorkflowSetting;
+    xmlStructureMode: 'scratchpadOnly',
+  };
 
   it('uses array-based userRequest entries for reflections', async () => {
     const prompt: AgentPrompt = {

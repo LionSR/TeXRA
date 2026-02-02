@@ -7,13 +7,13 @@
 
 import { diff_match_patch } from 'diff-match-patch';
 
-import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import type { DiffStats } from '@agent/types/DiffTypes';
 import { flexibleFS, getComparablePath } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRound, type OutputState } from './outputState';
+import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import type { RoundFileMapping } from './types';
 
 // ============================================================================

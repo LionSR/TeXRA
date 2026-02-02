@@ -4,11 +4,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - progress view constants
 import { COMMANDS, ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
+import { getComposedPathElement } from '../utils';
 
 // Local imports - shared schemas
 import type { OutputFileInfo } from '@shared/schemas';
@@ -34,6 +35,7 @@ function parsePath(path: string): ParsedPath {
 @customElement('file-list')
 export class FileList extends LitElement {
   static override styles = [
+    designTokens,
     commonViewStyles,
     css`
       :host {
@@ -212,7 +214,7 @@ export class FileList extends LitElement {
     if (!this.showRoundHeaders) {
       return html`${repeat(
         files,
-        (file) => file.location?.absolutePath ?? '',
+        (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
         (file) => this.renderFileItem(file),
       )}`;
     }
@@ -226,7 +228,7 @@ export class FileList extends LitElement {
         <div class="round-content">
           ${repeat(
             files,
-            (file) => file.location?.absolutePath ?? '',
+            (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
             (file) => this.renderFileItem(file),
           )}
         </div>
@@ -284,11 +286,10 @@ export class FileList extends LitElement {
    * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-command (all needed data is on this element)
-    const actionEl = target.closest('[data-command]');
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-command]',
+    );
     if (!(actionEl instanceof HTMLElement)) return;
 
     const { command, file, base, prev } = actionEl.dataset;

@@ -272,15 +272,9 @@ function firstChangedLine(original: string, proposed: string): number | null {
   return 0;
 }
 
-interface ComputeUserPatchOptions {
-  contextLines?: number;
-}
-
 function computeUserPatch(
-  _path: string,
   suggestedContent: string,
   appliedContent: string,
-  _options?: ComputeUserPatchOptions,
 ): string | undefined {
   if (suggestedContent === appliedContent) {
     return undefined;
@@ -488,11 +482,7 @@ async function nativeRequestApproval(
         : await fs
             .readFile(proposedUri.fsPath, 'utf8')
             .catch(() => proposedContent);
-      const userPatch = computeUserPatch(
-        request.path,
-        proposedContent,
-        appliedContent,
-      );
+      const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
         appliedContent,
@@ -574,7 +564,7 @@ function finalizeApprovalResult(
   const appliedContent = result.appliedContent ?? request.proposedContent;
   const userPatch =
     result.userPatch ??
-    computeUserPatch(request.path, request.proposedContent, appliedContent);
+    computeUserPatch(request.proposedContent, appliedContent);
 
   return {
     ...result,
@@ -597,14 +587,8 @@ export function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
   appliedContent: string,
-  options?: { contextLines?: number },
 ): string | undefined {
-  const diffBody = computeUserPatch(
-    path,
-    suggestedContent,
-    appliedContent,
-    options,
-  );
+  const diffBody = computeUserPatch(suggestedContent, appliedContent);
 
   if (!diffBody) {
     return undefined;

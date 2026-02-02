@@ -27,8 +27,8 @@ export interface RetryState {
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getModelRetryMaxAttempts() ?? 0;
-  const backoffMs = getModelRetryBackoffMs() ?? 1000;
+  const maxAutoAttempts = getModelRetryMaxAttempts();
+  const backoffMs = getModelRetryBackoffMs();
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),

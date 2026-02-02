@@ -6,8 +6,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { animationStyles, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  animationStyles,
+  commonViewStyles,
+} from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 
@@ -26,7 +29,7 @@ import {
   STREAM_STATUS,
 } from '../constants';
 import { ProgressEvents } from '../events';
-import { getRadioValue } from '../utils';
+import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
 
 // Local imports - shared schemas
@@ -40,6 +43,7 @@ function formatStatusLabel(status: string): string {
 @customElement('stream-tabs')
 export class StreamTabs extends LitElement {
   static override styles = [
+    designTokens,
     animationStyles,
     commonViewStyles,
     codiconIconClasses,
@@ -202,6 +206,10 @@ export class StreamTabs extends LitElement {
         color: var(--vscode-errorForeground);
       }
 
+      .sort-btn.active::part(control) {
+        background-color: var(--vscode-toolbar-hoverBackground);
+      }
+
       .log-placeholder {
         text-align: center;
         color: var(--color-text-secondary);
@@ -272,11 +280,15 @@ export class StreamTabs extends LitElement {
               (btn) => html`
                 <vscode-toolbar-button
                   id=${btn.id}
-                  class="sort-btn"
                   icon=${btn.icon}
                   label=${btn.title}
                   title=${btn.title}
                   data-sort=${btn.sort}
+                  aria-pressed=${this.sort === btn.sort ? 'true' : 'false'}
+                  class=${classMap({
+                    'sort-btn': true,
+                    active: this.sort === btn.sort,
+                  })}
                 ></vscode-toolbar-button>
               `,
             )}
@@ -368,11 +380,10 @@ export class StreamTabs extends LitElement {
   }
 
   private handleTabClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-stream and data-action (unified delegation)
-    const actionElement = target.closest('[data-stream][data-action]');
+    const actionElement = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-stream][data-action]',
+    );
     if (!(actionElement instanceof HTMLElement)) return;
 
     const { stream: streamId, action } = actionElement.dataset;
@@ -397,11 +408,7 @@ export class StreamTabs extends LitElement {
   }
 
   private handleSortClick(event: MouseEvent): void {
-    const target = event.target as Element | null;
-    if (!target) return;
-
-    // Find element with data-sort attribute (unified delegation)
-    const button = target.closest('[data-sort]');
+    const button = getComposedPathElement<HTMLElement>(event, '[data-sort]');
     if (!(button instanceof HTMLElement) || !button.dataset.sort) return;
 
     this.dispatchEvent(
@@ -427,7 +434,7 @@ export class StreamTabs extends LitElement {
       : mainLine;
   }
 
-  private normalizeStatus(status?: string): string {
+  private normalizeStatus(status?: string | null): string {
     return status ?? STREAM_STATUS.READY;
   }
 }
