@@ -19,12 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Major **Lit-native migration**: converted webview components to declarative Lit patterns with Shadow DOM, schema-driven dispatch, reactive properties, and design tokens.
-- Refactored **agent core, flows, and runtime** with simplified types, removed factory indirection, and streamlined service access.
-- Consolidated **state persistence** with unified PersistedState class replacing scattered storage patterns.
-- Consolidated **usage stats handling** with `sumUsageStats` helper and phased token counting architecture.
-- Simplified tool-use flow input types, tool registry, and output handler modules.
-- Removed dead code, redundant abstractions, and unnecessary re-exports across the codebase.
+- Large-scale internal refactoring of webview components, agent core, flows, state persistence, and token counting for improved maintainability.
 - Updated dependencies including llm-zoo bump to 1.0.3.
 
 ## [0.35.7] - 2026-01-24
