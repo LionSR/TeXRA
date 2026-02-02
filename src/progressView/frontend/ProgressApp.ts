@@ -86,7 +86,6 @@ import './components/ContextManagement';
 import type { FollowUpInput } from './components/FollowUpInput';
 import type { PermissionState } from './components/PermissionCard';
 import type { ToolUseStreamContent } from './components/ToolUseStreamContent';
-import type { WorkflowStreamContent } from './components/WorkflowStreamContent';
 
 @customElement('progress-app')
 export class ProgressApp extends BaseWebviewApp {
@@ -138,9 +137,8 @@ export class ProgressApp extends BaseWebviewApp {
   @state()
   private permissionsContextValue: PermissionState[] = [];
 
-  // Container refs for accessing child component methods (FollowUpInput)
+  // Container ref for accessing child component methods (FollowUpInput)
   private toolUseContentRef = createRef<ToolUseStreamContent>();
-  private workflowContentRef = createRef<WorkflowStreamContent>();
 
   private prefsManager = new PersistedState(
     createWebviewStorage(vscode),
@@ -244,7 +242,6 @@ export class ProgressApp extends BaseWebviewApp {
     // Workflow stream (default for non-tool-use)
     return html`
       <workflow-stream-content
-        ${ref(this.workflowContentRef)}
         @toolbar-command=${this.onToolbarCommand}
         @permission-action=${this.onPermissionAction}
         @run-selected=${this.onRunSelected}

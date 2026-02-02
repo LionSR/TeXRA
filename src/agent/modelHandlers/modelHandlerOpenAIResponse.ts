@@ -140,10 +140,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return true;
   }
 
-  constructor(config: ModelConfig) {
-    super(config);
-  }
-
   /**
    * Override streaming config to disable streaming when background mode is enabled.
    * Background responses use polling for completed results, incompatible with streaming.
