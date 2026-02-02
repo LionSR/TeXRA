@@ -413,9 +413,10 @@ const handlers: HandlerRegistry = {
       return { ...prev, status };
     });
 
-    ctx.setState(() => ({
-      ...state,
-      streams: state.streams.map((item) =>
+    // Use updater function to get fresh state after setStreamState
+    ctx.setState((prev) => ({
+      ...prev,
+      streams: prev.streams.map((item) =>
         item.name === stream
           ? {
               ...item,
