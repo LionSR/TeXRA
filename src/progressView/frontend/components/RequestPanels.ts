@@ -19,6 +19,9 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 
+// Local imports - progress view styles
+import { codeBlockStyles } from '../styles/codeBlockStyles';
+
 // Local imports - shared schemas
 import {
   AGENT_CATEGORY,
@@ -40,6 +43,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
+import { buildCodeBlock } from '../formatters/htmlBuilders';
 import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view component types
@@ -110,6 +114,7 @@ export class RequestPanels extends LitElement {
     designTokens,
     commonViewStyles,
     codiconIconClasses,
+    codeBlockStyles,
     requestPanelStyles,
   ];
 
@@ -365,7 +370,7 @@ export class RequestPanels extends LitElement {
       <div class="bash-approval-request">
         <div class="bash-approval-request__details">
           <div class="bash-approval-request__command">
-            <code>${data.command ?? ''}</code>
+            ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
           </div>
         </div>
         <vscode-toolbar-container class="bash-approval-request__actions">
