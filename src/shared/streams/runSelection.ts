@@ -27,7 +27,7 @@ function getLatestRootRunId(taskGroups: TaskGroup[]): string | null {
  */
 function getExplicitRunId(streamState: StreamState): string | null {
   if (!isWorkflowState(streamState)) return null;
-  return streamState.selectedRunId ?? streamState.activeRunId ?? null;
+  return streamState.ui.selectedRunId ?? streamState.activeRunId ?? null;
 }
 
 /**

@@ -151,13 +151,13 @@ export class ToolUseStreamContent extends LitElement {
       <follow-up-input
         ${ref(this.followUpRef)}
         .visible=${true}
-        .value=${currentState.followUpText}
+        .value=${currentState.ui.followUpText}
         .queuedMessages=${currentState.queuedFollowUps}
-        .shouldFocus=${currentState.shouldFocusFollowUp ?? false}
-        .polishedText=${currentState.polishedText ?? null}
-        .polishRevision=${currentState.polishRevision ?? 0}
-        .transcribedText=${currentState.transcribedText ?? null}
-        .recording=${currentState.recording ?? false}
+        .shouldFocus=${currentState.ui.shouldFocusFollowUp ?? false}
+        .polishedText=${currentState.ui.polishedText ?? null}
+        .polishRevision=${currentState.ui.polishRevision ?? 0}
+        .transcribedText=${currentState.ui.transcribedText ?? null}
+        .recording=${currentState.ui.recording ?? false}
         @focus-complete=${this.handleFocusComplete}
       ></follow-up-input>
     `;
