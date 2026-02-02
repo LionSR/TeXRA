@@ -93,10 +93,11 @@ Instead, the approach is:
 
 1. When `shouldCompact()` returns true and no native strategy is available:
 2. Send the full message history to a **compactor model** with a structured summarization prompt
-3. **Append the summary to the system prompt** as a `<conversation-summary>` section
-4. **Drop old messages**, keeping only the most recent N turns (configurable, default: last 2 user/assistant pairs)
-5. The model now receives: `[system prompt + summary] + [recent messages only]`
-6. Record compaction metadata (tokens before/after, summary text)
+3. The compactor returns the summary inside a `<conversation-summary>` XML tag
+4. **Replace the system prompt**: parse the summary from the XML tag and append it to the original system prompt
+5. **Drop all old messages** -- the summary in the system prompt is now the sole representation of prior context
+6. The model receives: `[system prompt + summary]` + `[only the current user message]`
+7. Record compaction metadata (tokens before/after, summary text)
 
 **Why the system prompt?**
 - All providers support system prompts uniformly
@@ -155,7 +156,8 @@ public async compactIfNeeded(
   // 1. Check threshold via estimateTokenCount()
   // 2. If native strategy exists (Anthropic/OpenAI Responses), defer to it (no-op here)
   // 3. Otherwise: send messages to compactor model → get summary
-  // 4. Return { systemPrompt: systemPrompt + summary, messages: recentOnly, metadata }
+  // 4. Return { systemPrompt: systemPrompt + summary, messages: [], metadata }
+  //    All old messages are dropped; only the current user message will be appended by the caller
 }
 ```
 
@@ -192,14 +194,16 @@ After compaction:
 
 Maintain two representations:
 
-1. **Full history** (`allMessages`): Append-only. Used for UI display and for generating the next compaction summary (so repeated compactions don't lose information through summarization-of-summaries).
-2. **Active messages** (`activeMessages`): The truncated recent messages actually sent to the model alongside the enriched system prompt.
+1. **Full history** (`allMessages`): Append-only. Never sent to the primary model after compaction. Used for:
+   - UI display (so the user can still scroll through the full conversation)
+   - Generating the next compaction summary (avoids lossy summarization-of-summaries)
+2. **Active messages**: Empty after compaction. Only the current user message is sent alongside the enriched system prompt.
 
 On each compaction:
 - `allMessages` remains unchanged (append-only)
-- `activeMessages` is replaced with only the last N turns
-- The system prompt gains/updates a `<conversation-summary>` block
-- On subsequent compactions, the compactor model receives `allMessages` (not `activeMessages`), so it always works from the full history
+- All prior messages are dropped from the API call
+- The system prompt gains/updates a `<conversation-summary>` block parsed from the compactor's XML output
+- On subsequent compactions, the compactor model receives `allMessages` (the full history), so it always works from ground truth
 
 ### 4.7 Automatic vs Manual Trigger
 
