@@ -7,7 +7,6 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
     />
-    <link rel="stylesheet" href="${tokensStyleUri}" />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <style nonce="${nonce}">
       @font-face {
@@ -17,7 +16,7 @@
       }
 
       body {
-        padding: var(--spacing-medium);
+        padding: 8px;
       }
     </style>
     <link
