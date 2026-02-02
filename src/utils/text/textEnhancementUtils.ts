@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent runtime
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { getSdkErrorMessage } from '@common/errors';
@@ -12,7 +13,6 @@ import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { getConfig } from '@utils/config';
 import { isNonEmptyString } from '@utils/core';
 
@@ -64,32 +64,32 @@ export function buildFileContextFromTaskState(
   if (agentConfig.agent) {
     context.agent = agentConfig.agent;
   }
-  if (isNonEmptyString(agentConfig.inputFile)) {
-    context.inputFile = agentConfig.inputFile;
+
+  // Add single file fields if they have non-empty values
+  const singleFields = [
+    'inputFile',
+    'referenceFile',
+    'auxiliaryFile',
+    'mediaFile',
+  ] as const;
+  for (const field of singleFields) {
+    if (isNonEmptyString(agentConfig[field])) {
+      context[field] = agentConfig[field];
+    }
   }
-  if (agentConfig.inputFiles.length > 0) {
-    context.inputFiles = agentConfig.inputFiles;
-  }
-  if (isNonEmptyString(agentConfig.referenceFile)) {
-    context.referenceFile = agentConfig.referenceFile;
-  }
-  if (agentConfig.referenceFiles.length > 0) {
-    context.referenceFiles = agentConfig.referenceFiles;
-  }
-  if (isNonEmptyString(agentConfig.auxiliaryFile)) {
-    context.auxiliaryFile = agentConfig.auxiliaryFile;
-  }
-  if (agentConfig.auxiliaryFiles.length > 0) {
-    context.auxiliaryFiles = agentConfig.auxiliaryFiles;
-  }
-  if (isNonEmptyString(agentConfig.mediaFile)) {
-    context.mediaFile = agentConfig.mediaFile;
-  }
-  if (agentConfig.mediaFiles.length > 0) {
-    context.mediaFiles = agentConfig.mediaFiles;
-  }
-  if (agentConfig.outputFiles.length > 0) {
-    context.outputFiles = agentConfig.outputFiles;
+
+  // Add array fields if they have elements
+  const arrayFields = [
+    'inputFiles',
+    'referenceFiles',
+    'auxiliaryFiles',
+    'mediaFiles',
+    'outputFiles',
+  ] as const;
+  for (const field of arrayFields) {
+    if (agentConfig[field].length > 0) {
+      context[field] = agentConfig[field];
+    }
   }
 
   return context;

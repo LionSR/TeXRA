@@ -1,8 +1,8 @@
 /**
  * Agent core barrel export.
  *
- * Exports commonly used types, enums, and classes.
- * For less common exports, import directly from the specific file.
+ * Exports commonly used types and schemas from the agent core module.
+ * For internal implementation details, import directly from the specific file.
  */
 
 // Most commonly used - enums and category types
@@ -13,9 +13,8 @@ export type {
   AgentWorkflowSetting,
 } from './AgentDataclass';
 
-// Config types
-export type { AgentConfig } from './AgentConfig';
-export type { ToolConfig } from './ToolConfig';
+// Config types and schemas
+export { AgentConfigSchema, type AgentConfig } from './AgentConfig';
 
 // State classes - commonly instantiated
 export { AgentWorkspaceState } from './AgentWorkspaceState';

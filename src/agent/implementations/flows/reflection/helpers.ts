@@ -1,8 +1,8 @@
 /** Shared helper functions for ReflectionFlow nodes. */
 
-import type { RoundOutput } from '@agent/output';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { FileLocation, TaskRunFileService } from '@utils/files';
+import type { RoundOutput } from '@shared/schemas';
 
 /** Get files to process for a round (input files for round 0, previous outputs otherwise). */
 export function getFilesForRound(

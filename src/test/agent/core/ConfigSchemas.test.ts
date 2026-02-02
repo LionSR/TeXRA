@@ -2,9 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
+import { ToolConfigSchema } from '@shared/schemas/toolConfig';
+
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { ToolConfigSchema } from '@agent/core/ToolConfig';
 
 describe('ToolConfigSchema', () => {
   it('ignores unknown toolConfig keys', () => {

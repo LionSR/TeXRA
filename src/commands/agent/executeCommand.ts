@@ -6,18 +6,18 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { formatZodError } from '@common/errors';
-import { AgentHistoryManager } from '@common/history';
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 
 // --- Command ---
 
-export function registerExecuteCommand(context: vscode.ExtensionContext) {
+export function registerExecuteCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.execute', runExecuteCommand),
   );

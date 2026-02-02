@@ -8,20 +8,6 @@ export {
 export { settingsCommands, registerSettingsCommands } from './settingsCommands';
 export { registerTestCommands } from './testCommands';
 export { registerTextEditorCommands } from './textEditorCommands';
-export {
-  walkthroughCommands,
-  registerWalkthroughCommands,
-} from './walkthroughCommands';
-export {
-  xmlCommands,
-  handleParseXml,
-  handleValidateAndFixXml,
-  registerXmlCommands,
-} from './xmlCommands';
-export {
-  yamlCommands,
-  handleTestAgentLoading,
-  handleLoadSpecificAgent,
-  handleParseYaml,
-  registerYamlCommands,
-} from './yamlCommands';
+export { registerWalkthroughCommands } from './walkthroughCommands';
+export { xmlCommands, registerXmlCommands } from './xmlCommands';
+export { yamlCommands, registerYamlCommands } from './yamlCommands';

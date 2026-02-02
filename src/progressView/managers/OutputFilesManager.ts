@@ -1,21 +1,19 @@
-// Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - progress view
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-// Internal imports
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
   type OutputFileInfo,
-} from '@agent/output/types';
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import {
   RoundKeySchema,
@@ -27,7 +25,8 @@ import {
   tripleNestedMapToRecord,
 } from '@progressView/persistence/serializationUtils';
 
-// --- Zod Schemas for Output Files ---
+/** Schema for storage records with null/invalid fallback to empty object */
+const StorageRecordSchema = z.record(z.string(), z.unknown()).catch({});
 
 /** Schema for missing output paths (string arrays per round) */
 const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
@@ -78,15 +77,13 @@ export class OutputFilesManager extends PersistentMapManager<
   private missingOutputsLoadPromise: Promise<void> | null = null;
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /**
-   * Get or create a nested map entry.
-   */
-  private getOrCreate<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
+  /** Get or create a nested map entry */
+  private getOrCreateNested<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
     let inner = map.get(key);
     if (!inner) {
       inner = factory();
@@ -108,8 +105,16 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
     // storageKey is already branded - use directly, no normalization needed
-    const streamRuns = this.getOrCreate(this.items, stream, () => new Map());
-    const runRounds = this.getOrCreate(streamRuns, storageKey, () => new Map());
+    const streamRuns = this.getOrCreateNested(
+      this.items,
+      stream,
+      () => new Map(),
+    );
+    const runRounds = this.getOrCreateNested(
+      streamRuns,
+      storageKey,
+      () => new Map(),
+    );
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);
@@ -147,12 +152,12 @@ export class OutputFilesManager extends PersistentMapManager<
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
     // storageKey is already branded - use directly, no normalization needed
-    const streamMissing = this.getOrCreate(
+    const streamMissing = this.getOrCreateNested(
       this._missingOutputs,
       stream,
       () => new Map(),
     );
-    const runMissing = this.getOrCreate(
+    const runMissing = this.getOrCreateNested(
       streamMissing,
       storageKey,
       () => new Map(),
@@ -288,11 +293,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
-    const saved = this.storage.get<Record<string, unknown>>(
-      WorkspaceStateKey.MISSING_OUTPUTS,
-      {},
-    );
-
+    const saved = this.loadStorageRecord(WorkspaceStateKey.MISSING_OUTPUTS);
     if (Object.keys(saved).length > 0) {
       this._missingOutputs = this.deserializeMissingOutputs(saved);
       return;
@@ -352,10 +353,7 @@ export class OutputFilesManager extends PersistentMapManager<
     }
 
     const legacyKey = `${WorkspaceStateKey.MISSING_OUTPUTS}.${workspacePath}`;
-    const legacy = this.storage.get<{
-      [key: string]: { [key: number]: string[] };
-    }>(legacyKey, {});
-
+    const legacy = this.loadStorageRecord(legacyKey);
     if (Object.keys(legacy).length === 0) {
       return false;
     }
@@ -366,13 +364,20 @@ export class OutputFilesManager extends PersistentMapManager<
     > = {};
 
     for (const [stream, rounds] of Object.entries(legacy)) {
-      converted[stream] = { [normalizeRunId(null)]: rounds };
+      converted[stream] = {
+        [normalizeRunId(null)]: rounds as { [key: number]: string[] },
+      };
     }
 
     this._missingOutputs = this.deserializeMissingOutputs(converted);
     await this.saveMissingOutputs();
     await this.storage.update(legacyKey, undefined as never);
     return true;
+  }
+
+  /** Load record from storage with null/invalid fallback */
+  private loadStorageRecord(key: string): Record<string, unknown> {
+    return StorageRecordSchema.parse(this.storage.get(key));
   }
 
   protected override serialize(
@@ -385,7 +390,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
-    _streamId: StreamTabId,
+    _key: StreamTabId,
   ): Promise<Map<string, Map<number, OutputFileInfo[]>>> {
     return OutputFilesDataSchema.parse(data);
   }

@@ -1,23 +1,12 @@
-/**
- * Log event handlers for progress view.
- *
- * Handles log message events: addLogMessage, updateLogMessage.
- */
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { withEventErrorHandling } from './errorHandling';
-import {
-  canUpdateWebview,
-  isWebviewAvailable,
-  type EventHandlerContext,
-} from './EventHandlerContext';
 
-/**
- * Register log event handlers on the event bus.
- */
+import { withEventErrorHandling } from './errorHandling';
+import type { EventHandlerContext } from './EventHandlerContext';
+
 export function registerLogEventHandlers(
   bus: ProgressEventBusLike,
   ctx: EventHandlerContext,
@@ -43,7 +32,7 @@ function handleAddLogMessage(
     async () => {
       const isNew = await ctx.state.streamTabs.addMessage(streamId, logMessage);
       // Send to webview if available (regardless of active stream - messages persist)
-      if (isNew && isWebviewAvailable(ctx)) {
+      if (isNew && ctx.webviewUpdater.isAvailable()) {
         ctx.webviewUpdater.appendLogMessage(streamId, logMessage);
       }
     },
@@ -77,7 +66,8 @@ function handleUpdateLogMessage(
         updates,
       );
 
-      if (updated && canUpdateWebview(ctx, streamId)) {
+      const isActive = streamId === ctx.state.activeStream;
+      if (updated && ctx.webviewUpdater.isAvailable() && isActive) {
         ctx.webviewUpdater.updateLogMessage(streamId, {
           ...existing,
           ...updates,

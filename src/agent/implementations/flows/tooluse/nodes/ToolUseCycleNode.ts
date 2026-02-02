@@ -12,7 +12,6 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -22,6 +21,7 @@ import {
   assertPreparedShared,
 } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
+import type { TodoItem } from '@shared/schemas';
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -31,25 +31,32 @@ export class ToolUseCycleNode<C> extends Node<
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     assertPreparedShared(shared);
 
-    const { stateSlices } = shared;
     return {
       shouldSkip: shared.shouldSkipCycle,
       conversation: shared.conversation,
-      runState: AgentRunState.fromSnapshot(stateSlices.runStateSnapshot),
+      runState: AgentRunState.fromSnapshot(shared.stateSlices.runStateSnapshot),
       workspaceState: AgentWorkspaceState.fromSnapshot(
-        stateSlices.workspaceSnapshot,
+        shared.stateSlices.workspaceSnapshot,
       ),
-      userChannels: stateSlices.userChannels,
+      userChannels: shared.stateSlices.userChannels,
     };
   }
 
   async exec(prepRes: CyclePrepResult): Promise<CycleExecResult> {
+    const {
+      streamId,
+      setting,
+      resolvedTools,
+      modelHandler,
+      getUsageRecorder,
+      config,
+    } = this.services;
+
     if (prepRes.shouldSkip) {
-      const recoveredTodos = prepRes.workspaceState.todos.todos;
-      if (recoveredTodos.length > 0) {
+      if (prepRes.workspaceState.todos.todos.length > 0) {
         bus.emit('updateTodos', {
-          streamId: this.services.streamId,
-          todos: recoveredTodos,
+          streamId,
+          todos: prepRes.workspaceState.todos.todos,
         });
       }
       return { kind: 'skipped' };
@@ -70,24 +77,21 @@ export class ToolUseCycleNode<C> extends Node<
       cycleNormalizedUsage: undefined,
     };
 
-    const services = this.services;
     const flow = createToolUseCycleFlow<C>();
     flow.setServices({
-      ...services,
-      setting: { ...services.setting, tools: services.resolvedTools },
-      client: await services.modelHandler.getClient(),
+      ...this.services,
+      setting: { ...setting, tools: resolvedTools },
+      client: await modelHandler.getClient(),
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundFinalized: services.getUsageRecorder(),
-      modelName: services.config.model,
-      agentName: services.config.agent,
-      session: services.session,
-      onFollowUpConsumed: services.onFollowUpConsumed,
+      onRoundFinalized: getUsageRecorder(),
+      modelName: config.model,
+      agentName: config.agent,
     });
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
-        streamId: this.services.streamId,
+        streamId,
         todos,
       });
     });

@@ -73,5 +73,3 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     // ===== Debtable one-offs =====
   },
 };
-
-export default LATEX_DOCUMENT_REPLACEMENTS;

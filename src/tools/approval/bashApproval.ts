@@ -1,17 +1,11 @@
-// Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Local imports - tools
-import type { ToolResult } from '@tools/result';
-
-// Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import type { ToolResult } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Local file imports - shared YOLO state (cleanup handled by toolEditApproval.ts)
 import { isApprovalBypassedForStream } from './toolEditApproval';
+import type { StreamTabId } from '@shared/schemas';
 
 export interface BashApprovalRequest {
   command: string;
@@ -25,19 +19,16 @@ export interface BashApprovalResult {
 
 export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
-/** All valid approval actions for bash prompts */
 export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
-/** Common interface for pending approval entries that can be rejected */
 export interface RejectablePendingEntry {
   streamId?: StreamTabId;
   isSettled: () => boolean;
   settle: (result: { accepted: false }) => void;
 }
 
-/** Reject all pending entries in a map, optionally filtered by streamId */
 export function rejectPendingEntries<T extends RejectablePendingEntry>(
   entries: Iterable<T>,
   streamId?: StreamTabId,
@@ -50,7 +41,6 @@ export function rejectPendingEntries<T extends RejectablePendingEntry>(
   }
 }
 
-// Approval queue state (pendingApprovals self-cleans via finally block)
 let queue: Promise<void> = Promise.resolve();
 let approvalCounter = 0;
 const pendingApprovals = new Map<
@@ -71,7 +61,6 @@ export async function requestBashApproval(
   const context = getCurrentToolFileInteractionContext();
   const streamId = request.streamId ?? context?.streamId;
 
-  // Skip if globally disabled or YOLO mode active
   if (
     !approvalsEnabled ||
     (streamId && isApprovalBypassedForStream(streamId))
@@ -79,7 +68,6 @@ export async function requestBashApproval(
     return { accepted: true };
   }
 
-  // Enqueue to serialize approval prompts
   const operation = queue.then(() => showApprovalPrompt(request, streamId));
   queue = operation.then(
     () => {},
@@ -92,7 +80,6 @@ async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId?: StreamTabId,
 ): Promise<BashApprovalResult> {
-  // Re-check YOLO mode: user may have enabled it while this request was queued
   if (streamId && isApprovalBypassedForStream(streamId)) {
     return { accepted: true };
   }
@@ -115,16 +102,16 @@ async function showApprovalPrompt(
       });
 
       void safeExecuteCommand('texra.showProgressView');
-      bus.emit('showBashApprovalPrompt', {
+      bus.emit('showBashPermission', {
         requestId,
         command: request.command,
-        allowBypass: true, // YOLO already checked in requestBashApproval
+        allowBypass: true,
         streamId: streamId ?? '',
       });
     });
   } finally {
     pendingApprovals.delete(requestId);
-    bus.emit('resolveBashApprovalPrompt', { requestId });
+    bus.emit('resolveBashPermission', { requestId });
   }
 }
 
@@ -161,11 +148,12 @@ export function buildBashApprovalRejectedResult(
 ): ToolResult {
   const preview = command.length > 60 ? `${command.slice(0, 57)}…` : command;
   const message = `User rejected bash command: ${preview}`;
+  const feedback = userMessage?.trim();
   return {
     output: message,
     summary: message,
     error: message,
     isError: true,
-    ...(userMessage?.trim() ? { userInstruction: userMessage.trim() } : {}),
+    ...(feedback ? { userInstruction: feedback } : {}),
   };
 }

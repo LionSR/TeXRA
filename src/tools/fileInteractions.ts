@@ -14,14 +14,9 @@ export function requireFileReadForEdit(
   exists: boolean,
 ): ToolResult | null {
   const context = getCurrentToolFileInteractionContext();
-  if (!context || !exists) {
+  if (!context || !exists || context.tracker.hasRead(path)) {
     return null;
   }
-
-  if (context.tracker.hasRead(path)) {
-    return null;
-  }
-
   return {
     summary: `Read ${path} before editing`,
     output:

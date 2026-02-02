@@ -150,5 +150,3 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     return patterns;
   })(),
 };
-
-export default EQUATION_REPLACEMENTS;

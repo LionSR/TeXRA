@@ -23,8 +23,8 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
-import { defineTool } from '@tools/core/define';
 import { pluralize } from '@tools/utils';
+import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import { getZoteroPort } from './bbtClient';

@@ -1,10 +1,9 @@
 // Type imports
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-// Internal imports
 import {
   FileInteractionState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export interface ToolFileInteractionContext {
   streamId?: StreamTabId;

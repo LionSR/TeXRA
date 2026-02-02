@@ -17,11 +17,9 @@ export {
 } from './xmlCdata';
 
 // Re-export from conversion module
-// Note: convertLatexToMarkdown, convertHtmlToMarkdown, convertWithPandoc are internal helpers
 export { OutputFormat, formatContent } from './xmlConversion';
 
 // Re-export from extraction module
-// Note: extractLatexFromMarkdown, extractLatexBetweenDocumentClass, filterTagsFromText are internal
 export {
   DOCUMENT_NAME_REGEX,
   extractTextFromTag,

@@ -15,10 +15,36 @@ When updating CHANGELOG.md:
 1. **Install dependencies**: run `npm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
-   - Build the extension bundle with `npm run compile` to ensure the webpack build succeeds.
+   - Build the extension bundle with `npm run compile:fast` (recommended) or `npm run compile`.
    - Lint TypeScript sources with `npm run lint`.
-   - Execute `npm test` to run the VS Code test suite when possible.
-3. Commit only when `npm run lint` completes without errors. If tests fail due to environment issues, note this in the PR.
+   - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
+3. Commit only when `npm run lint` completes without errors.
+
+### Build systems: Vite vs Webpack
+
+The project has two build systems with different trade-offs:
+
+| Build                             | Type checking | Speed          | Use case        |
+| --------------------------------- | ------------- | -------------- | --------------- |
+| **Vite/esbuild** (`compile:fast`) | No            | Fast (10-100x) | Quick iteration |
+| **Webpack** (`compile`)           | Yes           | Slow           | Full validation |
+
+**Why Vite doesn't catch type errors**: Vite uses esbuild for TypeScript transpilation, which only strips types without checking them. It treats TypeScript as "JavaScript with type annotations to remove."
+
+**Safe build scripts** run `tsc --noEmit` before building to catch type errors:
+
+| Script                 | Description              |
+| ---------------------- | ------------------------ |
+| `npm run typecheck`    | Standalone type checking |
+| `npm run compile:safe` | typecheck + compile:fast |
+| `npm run package:safe` | typecheck + package:fast |
+| `npm run build:safe`   | typecheck + build:fast   |
+
+**Recommended workflow**:
+
+- Use `compile:fast` during development for speed
+- Use `compile:safe` before committing to catch type errors
+- CI should always run `typecheck` or use safe variants
 
 ## Commit messages
 
@@ -243,7 +269,7 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
   - `FlowTransition.CONTINUE` - loop back to flow entry
   - `FlowTransition.FINALIZE` - exit flow after finalization
   - `FlowTransition.COMPLETE` - return control to caller
-- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Use constants `NODE_NO_RETRY` and `NODE_NO_WAIT` for node configuration.
+- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Override `maxRetries` and `retryDelay` getters for retry configuration.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
 
 See `docs/pocketflow/` for full framework documentation.

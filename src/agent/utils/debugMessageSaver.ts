@@ -1,15 +1,12 @@
 // Utility for saving debug objects (messages/responses) during debugging
 import * as path from 'path';
 
-// Local imports - agent
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import type { ExecutionId } from '@shared/schemas';
 
 /**
  * Context information for the debug save operation
@@ -47,7 +44,7 @@ export type DebugObjectType = 'messages' | 'response';
  */
 export interface SaveDebugParams {
   /** The object to save (messages array or response object) */
-  object: ProviderMessage[] | any;
+  object: unknown;
   /** Type of object for file naming */
   objectType: DebugObjectType;
   /** Execution context */

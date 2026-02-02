@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - log
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
@@ -77,21 +77,6 @@ export class LaTeXdiffService {
     return { success: false, message };
   }
 
-  private logDiffMultipleError(
-    context: string,
-    err: unknown,
-  ): LaTeXdiffMultipleResult {
-    const message = formatError(context, err);
-    logger.error(this.channel, message, {
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
-    return {
-      success: false,
-      results: { success: [], failed: [] },
-      message,
-    };
-  }
-
   async runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
@@ -100,21 +85,19 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; subtype?: string },
   ): Promise<LaTeXdiffResult> {
-    let diffFileName = '';
-    let outputPath = '';
     try {
-      // Extract absolute paths for file operations
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
 
-      // Validate inputs
       if (!inputFile) {
         logger.warn(this.channel, 'Input file is empty or undefined');
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await flexibleFS.exists(inputLocation);
-      const editedExists = await flexibleFS.exists(editedLocation);
+      const [inputExists, editedExists] = await Promise.all([
+        flexibleFS.exists(inputLocation),
+        flexibleFS.exists(editedLocation),
+      ]);
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -131,8 +114,8 @@ export class LaTeXdiffService {
         };
       }
 
-      diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
-      outputPath = path.join(path.dirname(inputFile), diffFileName);
+      const diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
+      const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       logger.debug(
         this.channel,
@@ -170,13 +153,12 @@ export class LaTeXdiffService {
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
-      const result = this.logDiffError('Error running LaTeX diff', err);
       logger.debug(
         this.channel,
         `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
-      return result;
+      return this.logDiffError('Error running LaTeX diff', err);
     }
   }
 
@@ -223,7 +205,7 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffMultipleResult> {
     try {
-      if (!inputLocations || inputLocations.length === 0) {
+      if (inputLocations.length === 0) {
         const message = 'No input files provided';
         logger.warn(this.channel, message);
         return {
@@ -275,7 +257,15 @@ export class LaTeXdiffService {
         message: summary,
       };
     } catch (err) {
-      return this.logDiffMultipleError('Error in runDiffVcMultiple', err);
+      const message = formatError('Error in runDiffVcMultiple', err);
+      logger.error(this.channel, message, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
+      return {
+        success: false,
+        results: { success: [], failed: [] },
+        message,
+      };
     }
   }
 

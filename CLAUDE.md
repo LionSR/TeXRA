@@ -12,25 +12,61 @@ TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assista
 # Install dependencies
 npm install
 
-# Development build with watch mode
-npm run watch
+# Development build (recommended - uses esbuild + Vite, much faster)
+npm run compile:fast
 
-# Production build
-npm run package
+# Development build with watch mode (recommended)
+npm run watch:fast
 
-# Build VSIX extension file
-npm run build
+# Production build (recommended - uses esbuild + Vite)
+npm run package:fast
+
+# Build VSIX extension file (recommended)
+npm run build:fast
 # Creates: releases/texra-{version}.vsix
-
-# Run all tests with linting
-npm test
 
 # Run linting only
 npm run lint
 
 # Format code with Prettier
 npm run format
+
+# NOTE: Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 ```
+
+### Fast Builds (Recommended)
+
+The project supports fast builds using esbuild (for the extension host) and Vite (for webviews):
+
+- `npm run compile:fast` - Development build
+- `npm run watch:fast` - Watch mode for development
+- `npm run package:fast` - Production build
+- `npm run build:fast` - Build VSIX extension file
+
+These commands are significantly faster and do not require increased memory allocation.
+
+**Important:** Fast builds do NOT perform TypeScript type checking (esbuild only strips types). To verify there are no type errors, run:
+
+```bash
+npm run typecheck
+```
+
+Alternatively, use `npm run compile:safe` which runs type checking before building.
+
+### Legacy Webpack Builds
+
+The original webpack-based commands are still available but require increased memory:
+
+```bash
+# Set for webpack builds
+export NODE_OPTIONS=--max-old-space-size=8192
+
+# Or prefix individual commands
+NODE_OPTIONS=--max-old-space-size=8192 npm run compile
+NODE_OPTIONS=--max-old-space-size=8192 npm run package
+```
+
+Without this, webpack may fail with "JavaScript heap out of memory" errors during production builds.
 
 ## Architecture Overview
 
@@ -243,7 +279,7 @@ Common aliases (full list in `tsconfig.json`):
 ## Release Process
 
 1. Update CHANGELOG.md with user-facing changes (Features, Bug Fixes, Improvements)
-2. Build: `npm run build`
+2. Build: `npm run build:fast`
 3. Create GitHub release with `gh release create`
 4. Publish: `vsce publish` and `ovsx publish`
 

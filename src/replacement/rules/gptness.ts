@@ -121,5 +121,3 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
     // pivotal: 'important',
   },
 };
-
-export default GPTNESS_REPLACEMENTS;

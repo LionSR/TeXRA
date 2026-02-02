@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
+import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
@@ -19,7 +20,6 @@ import {
   extractBasePaperMetadata,
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
-import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);

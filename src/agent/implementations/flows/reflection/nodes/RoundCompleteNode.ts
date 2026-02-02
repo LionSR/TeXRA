@@ -19,15 +19,15 @@ import type {
 // Types
 // ============================================================================
 
+/**
+ * Prep result carries shared reference for exec access.
+ * This avoids re-extracting fields that are already on shared.
+ */
 interface RoundCompletePrepInput {
-  currentRound: number;
-  totalRounds: number;
-  continueRounds: boolean;
+  shared: ReflectionFlowShared;
 }
 
-type RoundCompleteExecResult =
-  | { kind: 'continue' }
-  | { kind: 'finalize'; reason: string };
+type RoundCompleteExecResult = { kind: 'continue' } | { kind: 'finalize' };
 
 // ============================================================================
 // Node Implementation
@@ -39,45 +39,38 @@ export class RoundCompleteNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
-    return {
-      currentRound: shared.currentRound,
-      totalRounds: shared.totalRounds,
-      continueRounds: shared.continueRounds,
-    };
+    return { shared };
   }
 
   async exec(
     prepRes: RoundCompletePrepInput,
   ): Promise<RoundCompleteExecResult> {
-    const { checkInterruption, logger } = this.services;
-    const { currentRound, totalRounds, continueRounds } = prepRes;
+    const { logger } = this.services;
+    const { currentRound, totalRounds, continueRounds } = prepRes.shared;
 
     const nextRound = currentRound + 1;
-    // Display rounds as 1-indexed for user-friendly logging
-    const displayCurrent = currentRound + 1;
-    const displayNext = nextRound + 1;
 
     // Check for interruption
-    if (checkInterruption()) {
+    if (this.services.checkInterruption()) {
       logger.debug('Interruption requested - finalizing');
-      return { kind: 'finalize', reason: 'interrupted' };
+      return { kind: 'finalize' };
     }
 
     // Check if continue flag is false
     if (!continueRounds) {
       logger.debug('Continue flag is false - finalizing');
-      return { kind: 'finalize', reason: 'continue_false' };
+      return { kind: 'finalize' };
     }
 
     // Check if we've completed all rounds (single source of truth for bounds)
     if (isRoundAtOrBeyondLimit(nextRound, totalRounds)) {
       logger.debug(`Completed all ${totalRounds} rounds - finalizing`);
-      return { kind: 'finalize', reason: 'all_rounds_complete' };
+      return { kind: 'finalize' };
     }
 
-    // Continue to next round
+    // Continue to next round (display as 1-indexed for user-friendly logging)
     logger.debug(
-      `Round ${displayCurrent} complete, continuing to round ${displayNext}`,
+      `Round ${currentRound + 1} complete, continuing to round ${nextRound + 1}`,
     );
     return { kind: 'continue' };
   }

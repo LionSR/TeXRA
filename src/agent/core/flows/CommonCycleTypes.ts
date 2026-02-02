@@ -1,121 +1,46 @@
 /**
- * Common types shared across different flow cycles to reduce duplication
- * and provide consistent interfaces.
+ * Common types shared across cycle flows (ResponseCycleFlow, ToolUseCycleFlow).
  *
- * ## Schema-First Pattern
+ * Schema-First: `BaseCycleFieldsSchema` is the single source of truth for shared fields.
  *
- * This module provides `BaseCycleFieldsSchema` as the single source of truth
- * for fields common to all cycle flows (ResponseCycleFlow, ToolUseCycleFlow).
- * Specific flows extend this schema with their own fields.
- *
- * ## Architectural Note: PocketFlow Separation of Concerns
- *
- * Flow nodes follow PocketFlow's separation pattern:
- * - `prep(shared)` extracts data from shared state into a PrepResult
- * - `exec(prepRes)` performs compute using ONLY prepRes (no shared access)
- * - `post(shared, prepRes, execRes)` writes results back to shared
- *
- * This separation ensures:
- * 1. `exec()` is isolated and easier to test
- * 2. Retries don't have side effects on shared state
- * 3. Clear data flow through the node lifecycle
- *
- * Services (modelHandler, client, etc.) are accessed via `_params.services`,
- * which is the PocketFlow pattern for immutable configuration.
+ * PocketFlow Separation: prep() extracts data, exec() computes (no shared access),
+ * post() writes results. Services accessed via `this.services`.
  */
 
 import { z } from 'zod';
 
+import { RetryErrorInfoSchema } from '@shared/schemas';
 import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { RetryErrorInfoSchema } from '@common/errors/schemas';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { ExecutionId } from '@shared/schemas';
 
-// ============================================================================
-// Base Cycle Schema (Single Source of Truth)
-// ============================================================================
+// --- Base Cycle Schema (Single Source of Truth) ---
 
-/**
- * Base schema for fields common to ALL cycle flows.
- *
- * This is the SINGLE SOURCE OF TRUTH for shared cycle field definitions.
- * Both ResponseCycleFlow and ToolUseCycleFlow extend this schema.
- *
- * ## Field Categories
- *
- * Required fields (must be initialized before cycle runs):
- * - messages, shouldStop, endTurn
- *
- * Optional fields (populated during/after cycle execution):
- * - responseTimeMs, stopReason, lastError
- *
- * ## Usage
- *
- * Specific flows extend this with their own fields:
- * ```typescript
- * // ResponseCycleFlow adds output tracking:
- * const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
- *   outputExists: z.boolean(),
- *   outputLocation: AgentFileLocationSchema.nullable(),
- *   processedResponse: z.string().optional(),
- * });
- *
- * // ToolUseCycleFlow adds tool tracking:
- * const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
- *   toolCalls: z.array(SdkToolCallSchema).optional(),
- *   text: z.string().optional(),
- *   cycleIndex: z.number(),
- * });
- * ```
- */
+/** Base schema for fields common to all cycle flows. */
 export const BaseCycleFieldsSchema = z.object({
-  /** Messages being processed in this cycle */
   messages: z.array(ProviderMessageSchema),
-  /** Whether the cycle should stop processing */
   shouldStop: z.boolean(),
-  /**
-   * Whether the last cycle ended normally (model said end_turn).
-   *
-   * Used by callers to distinguish between:
-   * - Normal completion: shouldStop=true, endTurn=true
-   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
-   * - Failure: shouldStop=true, endTurn=false, lastError defined
-   */
+  /** Distinguishes: completion (true) vs cancellation/failure (false) */
   endTurn: z.boolean(),
-  /** Time taken for response in milliseconds */
   responseTimeMs: z.number().optional(),
-  /** Reason the model stopped generating (nullable to match ProviderStopReason) */
   stopReason: z.string().nullish(),
-  /** Last error info for retry handling */
   lastError: RetryErrorInfoSchema.optional(),
 });
 
-/** Base cycle fields derived from schema */
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
-/**
- * Unified debug context used across all cycle flows.
- * Provides consistent logging and execution tracking.
- *
- * NOTE: This type is NOT stored in shared state - it's derived from services
- * at each `maybeSaveDebugObject` call site using `getDebugContext()`.
- * This eliminates redundant storage of logger and executionId.
- */
-export interface CycleDebugContext {
+/** Internal debug context - use getDebugContext() to create. */
+interface CycleDebugContext {
   logger: AgentLogger;
   modelName?: string;
   executionId?: ExecutionId;
-  /** Whether this is a remote agent (don't save messages to avoid leaking prompts) */
   isRemote?: boolean;
 }
 
-/**
- * Derive CycleDebugContext from services at call site.
- * Eliminates redundant storage of logger/executionId in shared state.
- */
+/** Derive debug context from services at call site. */
 export function getDebugContext(
   services: { logger: AgentLogger; executionId?: ExecutionId },
   params: { modelName?: string; isRemote?: boolean },
@@ -128,23 +53,12 @@ export function getDebugContext(
   };
 }
 
-/**
- * Result type for nodes that can be skipped based on flow state.
- * Uses 'kind' discriminant for consistency with InvocationResult.
- */
+/** Result type for nodes that can be skipped based on flow state. */
 export type SkippableNodeResult<T> =
   | { kind: 'skipped' }
   | { kind: 'success'; value: T };
 
-/**
- * Reset cycle state to initial values.
- *
- * Resets base fields using BASE_CYCLE_RESET_VALUES, then resets additional
- * flow-specific fields to undefined.
- *
- * @param state - The state object to reset (must extend BaseCycleFields)
- * @param additionalFields - Field names to reset to undefined (flow-specific fields)
- */
+/** Reset cycle state to initial values, plus any flow-specific fields to undefined. */
 export function resetCycleState<T extends BaseCycleFields>(
   state: T,
   additionalFields: (keyof T)[] = [],
@@ -160,53 +74,29 @@ export function resetCycleState<T extends BaseCycleFields>(
   }
 }
 
-// ============================================================================
-// Shared Prep/Exec Types for Invocation Nodes
-// ============================================================================
+// --- Shared Prep/Exec Types for Invocation Nodes ---
 
-/**
- * Base prep result for model/tool invocation nodes.
- * Contains the minimum data needed to decide whether to invoke.
- */
+/** Base prep result for model/tool invocation nodes. */
 export interface BaseInvocationPrepResult {
-  /** Whether to skip invocation (flow is stopping) */
   shouldStop: boolean;
-  /** Messages to send to the model */
   messages: ProviderMessage[];
 }
 
-/**
- * Base success data returned from model/tool invocations.
- * Extended by specific flows with additional fields.
- */
+/** Base success data returned from model/tool invocations. */
 export interface BaseInvocationSuccessData {
-  /** Raw response from the model */
   response: unknown;
-  /** Time taken for the response in milliseconds */
   responseTimeMs?: number;
 }
 
-// ============================================================================
-// Cycle Result Interpretation
-// ============================================================================
+// --- Cycle Result Interpretation ---
 
-/**
- * Interpreted result from a cycle's shared state after flow completion.
- * Determines whether the cycle ended due to error, cancellation, or success.
- */
+/** Interpreted result from cycle completion: error, cancellation, or success. */
 export interface CycleCompletionResult {
-  /** True if the cycle stopped due to an error (not user cancellation). */
   failedWithError: boolean;
-  /** Error message if failedWithError is true. */
   errorMessage?: string;
-  /** True if the user cancelled the retry wait (should stop gracefully). */
   userCancelled: boolean;
 }
 
-/**
- * State needed to interpret cycle completion (flat pattern).
- * All cycle flows now use flat shared state with these fields at top level.
- */
 interface CycleCompletionInput {
   shouldStop: boolean;
   endTurn?: boolean;
@@ -214,18 +104,10 @@ interface CycleCompletionInput {
 }
 
 /**
- * Interprets cycle completion from shared state after flow execution.
- *
- * Determines if the cycle failed due to an error (not user cancellation):
- * - Error failure: shouldStop=true, lastError exists → failedWithError=true
- * - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
- * - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
- *
- * @param shared - The flat shared state with shouldStop, endTurn, and lastError
- * @returns Interpreted completion result
- *
- * @example
- * const completion = interpretCycleCompletion(shared);
+ * Interprets cycle completion from shared state:
+ * - Error: shouldStop + lastError → failedWithError
+ * - Cancelled: shouldStop + no lastError + no endTurn → userCancelled
+ * - Success: shouldStop + endTurn → neither
  */
 export function interpretCycleCompletion(
   shared: CycleCompletionInput,

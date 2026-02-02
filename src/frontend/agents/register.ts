@@ -1,19 +1,15 @@
 // Utilities for registering newly created agents
 
-// Local imports
+// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Internal imports - import directly to avoid circular dependency via barrel export
-import { getBaseName, getMultipleName } from '@agent/index/agentRegistry';
+// Local imports
+import { AgentCategory, type AgentWorkflowSetting } from '@agent/core';
+import { getBaseName, getMultipleName } from '@agent/index';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
-import {
-  AgentCategory,
-  type AgentSetting,
-  type AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
 
@@ -44,20 +40,12 @@ export function getAgentRegistrationSkipReason(
     return 'alreadyRegistered';
   }
 
-  if (variant.isMultipleOutput) {
-    if (
-      variant.baseAgentName &&
-      configuredAgents.includes(variant.baseAgentName)
-    ) {
-      return 'baseRegistered';
-    }
-  } else {
-    if (
-      variant.multipleAgentName &&
-      configuredAgents.includes(variant.multipleAgentName)
-    ) {
-      return 'multipleRegistered';
-    }
+  const relatedAgent = variant.isMultipleOutput
+    ? variant.baseAgentName
+    : variant.multipleAgentName;
+
+  if (relatedAgent && configuredAgents.includes(relatedAgent)) {
+    return variant.isMultipleOutput ? 'baseRegistered' : 'multipleRegistered';
   }
 
   return undefined;
@@ -108,6 +96,7 @@ export async function promptToAddAgentToConfig(
  *
  * @param filePath Absolute path to the YAML file
  * @param showInvalid Whether to warn when the YAML is invalid
+ * @param prompt Whether to prompt the user (false = auto-add)
  */
 export async function validateYamlAndPromptAdd(
   filePath: string,
@@ -140,16 +129,14 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const settings = validationResult.settings;
+  const { settings } = validationResult;
   const isWorkflow = settings.agentCategory !== AgentCategory.ToolUse;
   const workflowSettings = isWorkflow
     ? (settings as AgentWorkflowSetting)
     : undefined;
-  const defaultOutputs = settings.defaultOutputFiles ?? [];
-  const hasMultipleDefaults = defaultOutputs.length > 1;
-  const isMultipleOutput = Boolean(
-    workflowSettings?.isMultipleOutput ?? (isWorkflow && hasMultipleDefaults),
-  );
+  const hasMultipleDefaults = settings.defaultOutputFiles.length > 1;
+  const isMultipleOutput =
+    workflowSettings?.isMultipleOutput ?? (isWorkflow && hasMultipleDefaults);
 
   const metadata: AgentVariantMetadata = {
     isMultipleOutput,

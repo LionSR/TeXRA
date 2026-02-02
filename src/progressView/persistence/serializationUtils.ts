@@ -37,18 +37,6 @@ export function mapToRecord<K extends string | number, V>(
 }
 
 /**
- * Deserialize a plain Record object to a Map.
- * Handles null/undefined/non-object inputs gracefully by returning empty Map.
- * @example recordToMap({ a: 1 }) // Map([['a', 1]])
- */
-export function recordToMap<V>(data: unknown): Map<string, V> {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return new Map();
-  }
-  return new Map(Object.entries(data as Record<string, V>));
-}
-
-/**
  * Serialize a nested Map structure (outer → inner → value) to nested Records.
  * Used for run-scoped data like output files by round, usage stats.
  * @example nestedMapToRecord(new Map([['run1', new Map([[1, 'v']])]])) // { run1: { 1: 'v' } }
