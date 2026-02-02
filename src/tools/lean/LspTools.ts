@@ -416,7 +416,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
     return {
       summary: `${goalCount} goal${goalCount > 1 ? 's' : ''}`,
       output: data.rendered,
-      goalState: { goals: data.goals, count: goalCount, status: 'open' as const },
+      goalState: {
+        goals: data.goals,
+        count: goalCount,
+        status: 'open' as const,
+      },
     };
   }
 
