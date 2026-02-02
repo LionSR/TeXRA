@@ -22,7 +22,7 @@ export const AgentSettingBaseSchema = z.strictObject({
     .min(1, 'documentTag cannot be empty')
     .prefault('document'),
   endTag: z.string().prefault('</latex_document>'),
-  temperature: z.number().min(0).max(1).nullable().prefault(0.0),
+  temperature: z.number().min(0).max(1).prefault(1.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
   defaultOutputFiles: z.array(z.string()).prefault([]),
@@ -50,7 +50,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
-  xmlStructureMode: XmlStructureMode.optional(),
+  xmlStructureMode: XmlStructureMode.prefault('scratchpadOnly'),
 });
 
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
@@ -121,7 +121,7 @@ export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
 ): boolean {
-  const endTag = settings.endTag || `</${settings.documentTag}>`;
+  const endTag = settings.endTag;
   return endTag !== '' && fileContent.includes(endTag);
 }
 

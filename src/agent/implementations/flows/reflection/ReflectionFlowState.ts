@@ -79,8 +79,7 @@ export const ReflectionFlowStateSchema = z
     continueRounds: z.boolean(),
     endTurn: z.boolean(),
 
-    // Note: lastError is inherited from OptionalCycleFieldsSchema (via BaseCycleFieldsSchema).
-    // Used to distinguish failure from cancellation during resume.
+    // lastError from OptionalCycleFieldsSchema distinguishes failure from cancellation during resume.
   })
   .extend(OptionalCycleFieldsSchema.shape);
 

@@ -16,6 +16,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
   isPreviousResponseIdError,
 } from '@common/errors/sdkErrorUtils';
 
@@ -47,7 +48,11 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOKEN_SAFETY_BUFFER,
+  computeReducedMaxTokens,
+} from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -133,10 +138,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return true;
-  }
-
-  constructor(config: ModelConfig) {
-    super(config);
   }
 
   /**
@@ -351,8 +352,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     this.conversationState.sentMessages = effectiveMessagesCount;
 
-    // Set cumulative input tokens from actual usage (not additive - this IS the total)
-    // The response's input_tokens reflects the full context including server-side history
+    // Set cumulative input tokens from actual usage (not additive - this IS the total).
+    // The response's input_tokens reflects the full context including server-side history.
+    //
+    // Note: OpenAI's input_tokens is the TOTAL (includes cached tokens).
+    // Cached tokens are a subset reported in input_tokens_details.cached_tokens.
+    // This differs from Anthropic where input_tokens excludes cached tokens.
+    // For context window tracking, we want the total, which input_tokens provides.
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
@@ -822,6 +828,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Whether this handler supports native token counting via API.
+   * When true, the handler will use OpenAI's /responses/input_tokens endpoint
+   * for exact token counts instead of heuristics.
+   */
+  protected get supportsNativeTokenCounting(): boolean {
+    return !this.isOpenRouterRoutingEnabled();
+  }
+
+  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
@@ -897,11 +912,95 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
-    const params: ResponseCreateParamsBase = {
+    // Build shared params used by both token counting and API call
+    const convertedTools =
+      tools && tools.length > 0
+        ? toOpenAIResponseTools(tools, {
+            supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+            supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
+          })
+        : undefined;
+
+    const reasoningEffort = this.capabilities.supportsReasoning
+      ? this.getEffectiveReasoningEffort()
+      : undefined;
+
+    const baseParams = {
       model: this.config.fullName,
       input: newMessages,
-      max_output_tokens: this.config.maxOutputTokens,
+      ...(systemPrompt && { instructions: systemPrompt }),
+      ...(this.previousResponseId && {
+        previous_response_id: this.previousResponseId,
+      }),
+      ...(convertedTools?.length && { tools: convertedTools }),
+      ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+    };
+
+    let maxOutputTokens = this.config.maxOutputTokens;
+
+    // Native token counting using OpenAI's /responses/input_tokens endpoint.
+    // This provides exact pre-flight counts, aligning with Anthropic and Google handlers.
+    //
+    // Two-layer protection against context overflow:
+    // 1. shouldCompact() uses cumulativeInputTokens (from PREVIOUS response) at 75% threshold
+    //    to proactively compact before trouble
+    // 2. This native count (CURRENT request) is the safety net at 100% threshold
+    //
+    // When previous_response_id is set, the API includes server-side history in the count.
+    if (this.supportsNativeTokenCounting) {
+      try {
+        const tokenCount = await client.responses.inputTokens.count(
+          baseParams,
+          signal ? { signal } : undefined,
+        );
+        const inputTokens = tokenCount.input_tokens;
+
+        this.logger.debug(`Token count of message: ${inputTokens}`);
+
+        if (inputTokens > this.config.contextWindow) {
+          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
+          this.logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+
+        const availableTokens = this.config.contextWindow - inputTokens;
+        if (availableTokens < maxOutputTokens) {
+          const reducedMaxTokens = computeReducedMaxTokens(
+            availableTokens,
+            TOKEN_SAFETY_BUFFER,
+          );
+          const utilizationPercent =
+            (inputTokens / this.config.contextWindow) * 100;
+
+          this.logger.logContextManagement(
+            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${reducedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: inputTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore: utilizationPercent,
+              originalMaxTokens: maxOutputTokens,
+              reducedMaxTokens,
+              details:
+                'OpenAI Response: max_output_tokens reduced to fit context window',
+            },
+          );
+          maxOutputTokens = reducedMaxTokens;
+        }
+      } catch (err) {
+        if (isContextWindowError(err)) throw err;
+        this.logger.warn(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        );
+      }
+    }
+
+    // Build API params, extending baseParams with call-specific options
+    const params: ResponseCreateParamsBase = {
+      ...baseParams,
+      max_output_tokens: maxOutputTokens,
       store: true,
+      ...(convertedTools?.length && { tool_choice: 'auto' as const }),
     };
 
     if (useBackgroundResponses) {
@@ -921,27 +1020,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.temperature = temperature;
     }
 
-    if (this.previousResponseId) {
-      params.previous_response_id = this.previousResponseId;
-    }
-
-    if (systemPrompt) {
-      params.instructions = systemPrompt;
-    }
-
-    if (tools && tools.length > 0) {
-      const convertedTools = toOpenAIResponseTools(tools, {
-        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-        supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
-      });
-      // Only set tools if there are any after filtering (deep research models
-      // strip unsupported function tools, potentially leaving an empty array)
-      if (convertedTools.length > 0) {
-        params.tools = convertedTools;
-        params.tool_choice = 'auto';
-      }
-    }
-
     // Include web search sources in response when native web search is enabled.
     // This is set outside the tools block because deep research models use
     // native web search even when no explicit tools are passed.
@@ -949,20 +1027,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.include = ['web_search_call.action.sources'];
     }
 
+    // Extend reasoning with summary option for API call (not needed for token counting)
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 ||
         getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
-      const reasoning: Reasoning = {};
       if (includeSummary) {
-        reasoning.summary = 'auto';
+        params.reasoning = {
+          ...(params.reasoning as Reasoning),
+          summary: 'auto',
+        };
       }
-      const reasoningEffort = this.getEffectiveReasoningEffort();
-      if (reasoningEffort) {
-        reasoning.effort = reasoningEffort;
-      }
-      params.reasoning = reasoning;
     }
 
     // Wrap execution in try-catch to handle previousResponseId errors

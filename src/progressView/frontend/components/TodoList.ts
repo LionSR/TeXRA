@@ -5,8 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
-import { animationStyles } from '@shared/styles/litStyles';
+import { designTokens, animationStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
@@ -24,6 +23,7 @@ const STATUS_ICONS: Record<string, string> = {
 @customElement('todo-list')
 export class TodoList extends LitElement {
   static override styles = [
+    designTokens,
     codiconIconClasses,
     animationStyles,
     css`
@@ -128,7 +128,7 @@ export class TodoList extends LitElement {
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
-            (todo) => `${todo.content}-${todo.status}`,
+            (todo, index) => `${index}-${todo.content}-${todo.status}`,
             (todo) => this.renderTodo(todo),
           )}
         </div>

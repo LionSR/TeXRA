@@ -27,7 +27,6 @@ import {
   type ExecutionStatus,
   type RoundOutput,
   type StorageKey,
-  type StreamTabId,
 } from '@shared/schemas';
 import {
   getExecutionStore,
@@ -131,10 +130,10 @@ function deriveConfig(
   totalRounds: number;
   outputExt: string;
 } {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+  const useScratchpad = setting.prefills.includes('<scratchpad>');
 
   // Determine if XML structure enforcement is needed
-  const xmlMode = setting.xmlStructureMode ?? 'scratchpadOnly';
+  const xmlMode = setting.xmlStructureMode;
   let shouldEnsureXmlStructure: boolean;
   switch (xmlMode) {
     case 'always':
@@ -162,7 +161,7 @@ function deriveConfig(
   } else {
     requestCount = 0;
   }
-  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
+  const totalRounds = Math.max(setting.rounds, requestCount);
 
   return {
     useScratchpad,
@@ -192,7 +191,6 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
     userVarChannels,
     checkInterruption,
-    setAbortController,
     getUsageRecorder = () => async () => {},
     usageMonitor,
   } = input;
@@ -247,7 +245,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Derive configuration values
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 

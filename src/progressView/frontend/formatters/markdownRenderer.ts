@@ -13,6 +13,16 @@ import hljs from '@shared/highlighting/hljs';
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
 
+// Add inline rule for \[...\] display math (texmath only defines it as block rule)
+// This must happen before renderer initialization
+texmath.rules.brackets.inline.push({
+  name: 'math_inline_display',
+  rex: /\\\[([\s\S]+?)\\\]/gy,
+  tmpl: '<section><eqn>$1</eqn></section>',
+  tag: '\\[',
+  displayMode: true,
+});
+
 let markdownRenderer: MarkdownIt | null = null;
 
 // LRU cache for rendered markdown (content hash → HTML)

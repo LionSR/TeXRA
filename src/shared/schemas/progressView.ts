@@ -262,7 +262,14 @@ export const ResolveAgentProposalMessageSchema = z.object({
 
 export const FollowUpTextPolishedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED),
+  stream: StreamTabIdSchema,
   text: z.string(),
+});
+
+export const FollowUpTextPolishErrorMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISH_ERROR),
+  stream: StreamTabIdSchema,
+  error: z.string().optional(),
 });
 
 export const FollowUpTextTranscribedMessageSchema = z.object({
@@ -284,6 +291,7 @@ export const ProgressRecordingErrorMessageSchema = z.object({
 
 export const SetFollowupOptionsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
+  stream: StreamTabIdSchema,
   workflowAgentsData: z.array(AgentOptionDataSchema).optional(),
   toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
   modelOptionsData: z.array(ModelOptionDataSchema).optional(),
@@ -333,6 +341,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     ShowAgentProposalMessageSchema,
     ResolveAgentProposalMessageSchema,
     FollowUpTextPolishedMessageSchema,
+    FollowUpTextPolishErrorMessageSchema,
     FollowUpTextTranscribedMessageSchema,
     ProgressRecordingStartedMessageSchema,
     ProgressRecordingStoppedMessageSchema,
@@ -414,6 +423,7 @@ const OpenMemoryViewMessageSchema = z.object({
 
 const GetFollowupOptionsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
+  stream: StreamTabIdSchema,
 });
 
 const StartRecordingMessageSchema = z.object({

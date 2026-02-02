@@ -114,7 +114,7 @@ export function handleRunSelected(
 
   ctx.setStreamState(streamId, (prev) => {
     if (!isWorkflowState(prev)) return prev;
-    return { ...prev, selectedRunId: runId };
+    return { ...prev, ui: { ...prev.ui, selectedRunId: runId } };
   });
 }
 
@@ -138,7 +138,7 @@ export function handleFollowUpChange(
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, followUpText: value };
+    return { ...prev, ui: { ...prev.ui, followUpText: value } };
   });
 }
 
@@ -155,7 +155,7 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   );
   if (!isToolUseState(streamState)) return;
 
-  const text = streamState.followUpText?.trim() ?? '';
+  const text = streamState.ui.followUpText?.trim() ?? '';
   if (!text) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
@@ -164,7 +164,7 @@ export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
   });
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, followUpText: '' };
+    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
   });
 }
 
@@ -181,7 +181,7 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
   );
   if (!isToolUseState(streamState)) return;
 
-  const text = streamState.followUpText?.trim() ?? '';
+  const text = streamState.ui.followUpText?.trim() ?? '';
   if (!text) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
@@ -195,7 +195,7 @@ export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   if (!streamId) return;
   ctx.setStreamState(streamId, (prev) => {
     if (!isToolUseState(prev)) return prev;
-    return { ...prev, followUpText: '' };
+    return { ...prev, ui: { ...prev.ui, followUpText: '' } };
   });
 }
 
