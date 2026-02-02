@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.8] - 2026-02-02
+
+### Features
+
+- Added **Kimi K2.5 models** with thinking parameter support and updated defaults.
+- Added **native token counting** for OpenAI Response API, replacing heuristic-based estimates.
+- Added **syntax highlighting** to bash command approval prompts.
+- Added **typecheck and safe build scripts** (`npm run typecheck`, `npm run compile:safe`).
+- Added **unified PersistedState** system for frontend and backend state persistence.
+
+### Bug Fixes
+
+- Fixed **relay authentication**: break infinite 401 loop when refreshed token is still rejected; skip auto-retries when token refresh fails.
+- Fixed **OpenAI Responses API**: poll for completion when stream ends with `in_progress` status.
+- Fixed **Kimi K2.5**: temperature handling and empty content errors.
+- Fixed **DeepSeek**: added thinking parameter support in model handlers.
+- Fixed progress view issues: token usage stats not displaying for tool-use agents, stream tabs not using full width in split layout, placeholder shown when no streams exist in current filter, and error messages appearing at top after reload.
+- Fixed session usage not restoring for tool-use streams on initial load, and usage updates not working for on-demand tool-use streams.
+- Fixed context menu slot content not rendering in VS Code webviews.
+- Fixed display math `\[...\]` inline rendering rule.
+- Fixed stream context not refreshing on followup updates.
+- Fixed Windows path compatibility issues.
+- Fixed race condition in stream status updates using updater function pattern.
+- Fixed HistoryView and ProfileView badge styling.
+
+### Improvements
+
+- Major **Lit-native migration**: converted webview components to declarative Lit patterns with Shadow DOM, schema-driven dispatch, reactive properties, and design tokens.
+- Refactored **agent core, flows, and runtime** with simplified types, removed factory indirection, and streamlined service access.
+- Consolidated **state persistence** with single PersistedState class replacing scattered storage patterns.
+- Consolidated **usage stats handling** with `sumUsageStats` helper and phased token counting architecture.
+- Simplified tool-use flow input types, tool registry, and output handler modules.
+- Removed dead code, redundant abstractions, and unnecessary re-exports across the codebase.
+- Updated dependencies including llm-zoo bump to 1.0.3.
+
 ## [0.35.7] - 2026-01-24
 
 ### Features
