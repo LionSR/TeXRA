@@ -1157,11 +1157,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.warn(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
-          response = (await this.waitForBackgroundCompletion(
+          response = await this.waitForBackgroundCompletion(
             client,
             response,
             signal,
-          )) as typeof response;
+          );
         }
 
         // Finalize any remaining thinking content (only if there's actual content)
@@ -1424,11 +1424,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
-  private async waitForBackgroundCompletion(
+  private async waitForBackgroundCompletion<T extends Response>(
     client: OpenAI,
-    initialResponse: Response,
+    initialResponse: T,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<T> {
     if (!initialResponse.id) {
       return initialResponse;
     }
@@ -1504,11 +1504,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       const requestOptions = signal ? { signal } : undefined;
       try {
-        current = await client.responses.retrieve(
+        // Cast is safe: retrieve returns the same response structure, just without parsed output typing
+        current = (await client.responses.retrieve(
           responseId,
           undefined,
           requestOptions,
-        );
+        )) as T;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled during retrieve - clear pending ID
