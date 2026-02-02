@@ -48,6 +48,24 @@ export const commonViewStyles: CSSResult = css`
     max-height: var(--height-max);
   }
 
+  /* Panel collapsible - consistent styling for collapsible panels */
+  .panel-collapsible {
+    border-top: var(--border-thin) solid var(--color-border);
+  }
+
+  .panel-collapsible::part(header) {
+    padding: var(--spacing-small) var(--spacing-medium);
+    background-color: var(
+      --vscode-sideBarSectionHeader-background,
+      transparent
+    );
+    color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+  }
+
+  .panel-collapsible::part(body) {
+    padding: 0 var(--spacing-small) var(--spacing-small);
+  }
+
   vscode-toolbar-container {
     display: flex;
     align-items: center;
