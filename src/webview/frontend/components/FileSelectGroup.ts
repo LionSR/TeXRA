@@ -16,6 +16,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
+import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
@@ -57,6 +58,12 @@ export class FileSelectGroup extends LitElement {
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
 
+  @query('#toolConfigOptions')
+  private toolConfigMenu?: HTMLElement;
+
+  @query('#autoExtractOptions')
+  private autoExtractMenu?: HTMLElement;
+
   private sortableController = new SortableController(
     this,
     () => this.fileListElement,
@@ -79,6 +86,10 @@ export class FileSelectGroup extends LitElement {
       this.sortableController.reinitialize();
     }
     this.wasExpanded = isExpanded;
+
+    // Workaround for vscode-context-menu slot rendering
+    ensureContextMenuUsesSlot(this.toolConfigMenu);
+    ensureContextMenuUsesSlot(this.autoExtractMenu);
   }
 
   private get listId(): string {
