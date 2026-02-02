@@ -9,7 +9,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - formatters
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
-import { getSharedLogEntryFormatter } from '../formatters';
+import { formatLogEntry } from '../formatters';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -31,10 +31,7 @@ export class LogEntry extends LitElement {
 
   override render(): TemplateResult {
     if (!this.message) return html``;
-    const formatter = getSharedLogEntryFormatter();
-    return formatter.formatTemplate(this.message, {
-      defaultOpen: this.defaultOpen,
-    });
+    return formatLogEntry(this.message, { defaultOpen: this.defaultOpen });
   }
 }
 
