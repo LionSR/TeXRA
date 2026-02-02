@@ -1,5 +1,4 @@
 // Third-party imports
-import { countTokens } from 'gpt-tokenizer';
 import OpenAI from 'openai';
 
 // Local imports - core utilities
@@ -65,10 +64,6 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
-import {
-  computeReducedMaxTokens,
-  HEURISTIC_TOKEN_BUFFER,
-} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
@@ -215,77 +210,7 @@ export class ModelHandlerOpenAI<
       baseParams.max_tokens = DEEPSEEK_OFFICIAL_API_MAX_TOKENS;
     }
 
-    this.applyTokenHeuristics(baseParams, messages, systemPrompt);
-
     return baseParams;
-  }
-
-  protected applyTokenHeuristics(
-    baseParams: ChatCompletionRequestBase,
-    messages: ChatCompletionMessageParam[],
-    systemPrompt?: string,
-  ): void {
-    try {
-      const approximateInputTokens = this._calculateApproximateTokens(
-        messages,
-        systemPrompt,
-      );
-
-      this.logger.debug(
-        `Approximate token count of message: ${approximateInputTokens}`,
-      );
-
-      if (approximateInputTokens > this.config.contextWindow) {
-        const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      const maxOutputKey: 'max_completion_tokens' | 'max_tokens' = this
-        .isOReasoningModel
-        ? 'max_completion_tokens'
-        : 'max_tokens';
-      const availableTokens =
-        this.config.contextWindow - approximateInputTokens;
-      const currentMax = baseParams[maxOutputKey];
-      if (typeof currentMax === 'number' && availableTokens < currentMax) {
-        const utilizationPercent =
-          (approximateInputTokens / this.config.contextWindow) * 100;
-        const reducedMaxTokens = computeReducedMaxTokens(
-          availableTokens,
-          HEURISTIC_TOKEN_BUFFER,
-        );
-        baseParams[maxOutputKey] = reducedMaxTokens;
-
-        const isOverflow = availableTokens <= 0;
-        const detailsMsg = isOverflow
-          ? `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`
-          : `OpenAI: ${maxOutputKey} reduced to fit context window`;
-        const logMsg = isOverflow
-          ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to ${reducedMaxTokens} token.`
-          : `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${reducedMaxTokens}.`;
-
-        this.logger.logContextManagement(logMsg, {
-          action: 'max_tokens_reduced',
-          tokensBefore: approximateInputTokens,
-          contextWindow: this.config.contextWindow,
-          utilizationBefore: utilizationPercent,
-          originalMaxTokens: currentMax,
-          reducedMaxTokens,
-          details: detailsMsg,
-        });
-      }
-    } catch (err) {
-      // Re-throw context window violations - these are intentional validation errors
-      // that should fail fast, not be swallowed by soft failure
-      if (isContextWindowError(err)) {
-        throw err;
-      }
-      // Soft failure for token counting errors - proceed without adjustment
-      this.logger.warn(
-        `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-      );
-    }
   }
 
   protected finalizeStreams(
@@ -462,6 +387,56 @@ export class ModelHandlerOpenAI<
       tools,
     );
 
+    // Phase 2: COUNT - Estimate input tokens if handler supports it
+    // Phase 3: VALIDATE - Adjust max_tokens if needed
+    if (this.supportsTokenCounting) {
+      try {
+        const inputTokens = await this.estimateTokenCount(messages, {
+          client,
+          systemPrompt,
+          signal,
+        });
+
+        // Validate and adjust max_tokens if needed (throws if context window exceeded)
+        const maxTokensKey = this.isOReasoningModel
+          ? 'max_completion_tokens'
+          : 'max_tokens';
+        const currentMaxTokens = (baseParams as Record<string, unknown>)[
+          maxTokensKey
+        ] as number;
+        const validation = this.validateTokenLimits(
+          inputTokens,
+          currentMaxTokens,
+          this.config.contextWindow,
+        );
+
+        if (validation.adjustedMaxTokens !== currentMaxTokens) {
+          this.logger.logContextManagement(
+            `Token count (${inputTokens}) + ${maxTokensKey} (${currentMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: inputTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore:
+                validation.utilizationPercent ??
+                (inputTokens / this.config.contextWindow) * 100,
+              originalMaxTokens: currentMaxTokens,
+              reducedMaxTokens: validation.adjustedMaxTokens,
+              details: `OpenAI: ${maxTokensKey} reduced to fit context window`,
+            },
+          );
+          (baseParams as Record<string, unknown>)[maxTokensKey] =
+            validation.adjustedMaxTokens;
+        }
+      } catch (err) {
+        if (isContextWindowError(err)) throw err;
+        this.logger.warn(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        );
+      }
+    }
+
+    // Phase 4: EXECUTE
     if (useStreaming) {
       return this.executeStreamingChat(client, baseParams, signal);
     }
@@ -1355,54 +1330,6 @@ export class ModelHandlerOpenAI<
       content: formatToolResultAsText(result, attachmentSummary),
     };
     return [callMsg, resultMsg];
-  }
-
-  /**
-   * Calculates the approximate number of tokens for a given set of messages and system prompt
-   * using gpt-tokenizer. This is an estimation and might not perfectly match OpenAI's
-   * internal counting, especially for multi-modal content.
-   *
-   * @param messages The array of message objects.
-   * @param systemPrompt Optional system prompt string.
-   * @returns The approximate number of tokens.
-   * @throws Error if token calculation fails.
-   */
-  private _calculateApproximateTokens(
-    messages: any[],
-    systemPrompt?: string,
-  ): number {
-    // Note: This is a simplified token count. A more accurate count would
-    // need to replicate OpenAI's specific chat message formatting rules.
-    // https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
-    // Errors propagate to caller which handles them appropriately.
-
-    // Combine system prompt and messages for counting
-    // TODO: This might not be perfectly accurate for multi-modal or structured messages.
-    // gpt-tokenizer's countTokens might need a ChatMessage structure similar to Anthropic's.
-    // For now, concatenate text content.
-    let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
-    messages.forEach((msg) => {
-      if (Array.isArray(msg.content)) {
-        msg.content.forEach((part: any) => {
-          if (part.type === 'text') {
-            textToCount += `${msg.role}: ${part.text}\n`;
-          }
-          // Basic handling for other types, might need refinement
-          else if (part.type === 'image_url') {
-            // Approximation: Count tokens for a placeholder text representation
-            textToCount += `${msg.role}: [Image]\n`;
-          } else if (part.type === 'input_audio') {
-            textToCount += `${msg.role}: [Audio]\n`;
-          }
-        });
-      } else if (typeof msg.content === 'string') {
-        textToCount += `${msg.role}: ${msg.content}\n`;
-      }
-    });
-    // Use the appropriate encoding based on the model, defaulting to cl100k_base
-    // Needs a mapping from model name to encoding or importing specific model tokenizers.
-    // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
-    return countTokens(textToCount); // Assuming cl100k_base default
   }
 
   // =========================================================================
