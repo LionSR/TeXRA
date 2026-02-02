@@ -76,10 +76,6 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { toGoogleTools } from './toolConversion';
-import {
-  computeReducedMaxTokens,
-  TOKEN_SAFETY_BUFFER,
-} from './contextManagementConstants';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -88,6 +84,7 @@ import type {
   CreateResponseOptions,
   ExtractResponseResult,
   GoogleToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 
 function isTextPart(part: Part): part is Part & { text: string } {
@@ -375,6 +372,57 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return this.googleClient;
   }
 
+  /**
+   * Whether this handler supports native token counting.
+   * Uses Google's countTokens endpoint for exact pre-flight counts.
+   */
+  override get supportsTokenCounting(): boolean {
+    return this.capabilities.supportsTokenCounting;
+  }
+
+  /**
+   * Estimates token count using Google's native countTokens API.
+   *
+   * @param messages - The Content array representing the conversation history
+   * @param options - Token counting options including client, systemPrompt, and lastMessageParts
+   * @returns Promise resolving to the total token count
+   */
+  override async estimateTokenCount(
+    messages: Content[],
+    options?: TokenCountOptions<GoogleGenAI> & {
+      /** Parts for the upcoming user message to include in count */
+      lastMessageParts?: Part[];
+    },
+  ): Promise<number> {
+    const client = options?.client ?? (await this.getClient());
+
+    // Build countContents: system + history + upcoming message
+    const countContents: Content[] = [];
+    if (options?.systemPrompt) {
+      countContents.push({
+        role: 'system',
+        parts: [createPartFromText(options.systemPrompt)],
+      });
+    }
+    countContents.push(...messages);
+
+    // Include the upcoming message if provided
+    if (options?.lastMessageParts && options.lastMessageParts.length > 0) {
+      countContents.push(createUserContent([...options.lastMessageParts]));
+    }
+
+    const responseTokenCount = await client.models.countTokens({
+      model: this.config.fullName,
+      contents: countContents,
+      config: { abortSignal: options?.signal },
+    });
+
+    const totalTokens = responseTokenCount.totalTokens ?? 0;
+    this.logger.debug(`Token count of message: ${totalTokens}`);
+
+    return totalTokens;
+  }
+
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
@@ -434,57 +482,42 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       ...(systemPrompt && { systemInstruction: systemPrompt }),
     };
 
-    if (this.capabilities.supportsTokenCounting) {
+    // Phase 2: COUNT - Estimate input tokens using built params
+    // Phase 3: VALIDATE - Adjust maxOutputTokens if needed
+    if (this.supportsTokenCounting) {
       try {
-        const countContents: Content[] = [];
-        if (systemPrompt) {
-          countContents.push({
-            role: 'system',
-            parts: [createPartFromText(systemPrompt)],
-          });
-        }
-        countContents.push(...history);
-        // The token count API expects the upcoming message as part of the
-        // history, so append the final user message that will be sent next.
-        countContents.push(createUserContent([...lastMessageParts]));
-
-        const responseTokenCount = await client.models.countTokens({
-          model: this.config.fullName,
-          contents: countContents,
-          config: { abortSignal: signal },
+        // Reuse built params for token counting (build once principle)
+        const totalTokens = await this.estimateTokenCount(history, {
+          client,
+          systemPrompt,
+          lastMessageParts,
+          signal,
         });
-        const totalTokens = responseTokenCount.totalTokens ?? 0;
-        this.logger.debug(`Token count of message: ${totalTokens}`);
-        if (totalTokens > this.config.contextWindow) {
-          this.logger.error(
-            `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
-          );
-          throw new Error(
-            `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
-          );
-        }
+
+        // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
-        const availableTokens = this.config.contextWindow - totalTokens;
-        if (availableTokens < originalMaxTokens) {
-          const reducedMaxTokens = computeReducedMaxTokens(
-            availableTokens,
-            TOKEN_SAFETY_BUFFER,
-          );
-          const utilizationPercent =
-            (totalTokens / this.config.contextWindow) * 100;
+        const validation = this.validateTokenLimits(
+          totalTokens,
+          originalMaxTokens,
+          this.config.contextWindow,
+        );
+
+        if (validation.adjustedMaxTokens !== originalMaxTokens) {
           this.logger.logContextManagement(
-            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
             {
               action: 'max_tokens_reduced',
               tokensBefore: totalTokens,
               contextWindow: this.config.contextWindow,
-              utilizationBefore: utilizationPercent,
+              utilizationBefore:
+                validation.utilizationPercent ??
+                (totalTokens / this.config.contextWindow) * 100,
               originalMaxTokens,
-              reducedMaxTokens,
+              reducedMaxTokens: validation.adjustedMaxTokens,
               details: 'Google: maxOutputTokens reduced to fit context window',
             },
           );
-          generationConfig.maxOutputTokens = reducedMaxTokens;
+          generationConfig.maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
         // Re-throw context window violations - these are intentional validation errors
@@ -493,7 +526,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           throw err;
         }
         // Soft failure for token counting API errors - proceed without adjustment
-        // Log warning to match OpenAI/Anthropic handler behavior for consistency
         this.logger.warn(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );

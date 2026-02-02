@@ -14,21 +14,10 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
 
 // Type imports
 import type { DeepSeekToolCall } from './types/IModelHandler';
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionAssistantMessageParam,
-} from 'openai/resources/chat/completions';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // DeepSeek usage format includes prompt_cache_hit_tokens which the base class
 // already handles via rawUsage.prompt_cache_hit_tokens in normalizeUsage().
-
-/**
- * Extended assistant message type with DeepSeek's reasoning_content field.
- * This is required for thinking mode with tool calls.
- */
-type DeepSeekAssistantMessage = ChatCompletionAssistantMessageParam & {
-  reasoning_content?: string;
-};
 
 /**
  * Handler for DeepSeek models using OpenAI-compatible API.
@@ -63,6 +52,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return text;
   }
 
+  /**
+   * DeepSeek thinking models require reasoning_content in tool-use follow-up messages.
+   */
+  protected override shouldIncludeReasoningInToolCalls(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
     // Only create aggregator when reasoning is enabled
     return this.capabilities.supportsReasoning
@@ -71,52 +67,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
-   * Builds an assistant message with tool calls and reasoning_content.
-   * Reads reasoning from workspaceState and clears it after use.
-   *
-   * This follows the same pattern as Anthropic/Google handlers:
-   * - processThinkingBlock() stores to workspaceState.reasoning
-   * - createToolUseFollowUpMessages() reads and clears via this method
-   */
-  private buildAssistantMessageWithReasoning(
-    toolCalls: ReturnType<typeof this.normalizeToolCall>[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): DeepSeekAssistantMessage {
-    const callMsg: DeepSeekAssistantMessage = {
-      role: 'assistant',
-      tool_calls: toolCalls,
-    };
-
-    // Include reasoning_content from workspaceState if available
-    const reasoningContent =
-      workspaceState?.reasoning.thinkingBlocks[0]?.thinking;
-    if (reasoningContent) {
-      callMsg.reasoning_content = reasoningContent;
-      // Clear after use (same pattern as Anthropic handler)
-      workspaceState?.resetReasoning();
-    }
-
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
-    }
-
-    return callMsg;
-  }
-
-  // processThinkingBlock is inherited from base class - it already stores
-  // reasoning to workspaceState.reasoning.thinkingBlocks
-
-  /**
    * Creates tool-use follow-up messages with reasoning_content support.
    *
    * For DeepSeek thinking mode, the assistant message must include
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
-   *
-   * Follows the same pattern as Anthropic handler:
-   * - Reads reasoning from workspaceState.reasoning.thinkingBlocks
-   * - Clears reasoning after including it in the message
    *
    * Attachments are ignored since DeepSeek doesn't support them.
    */
@@ -129,7 +84,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(call.raw);
-    const callMsg = this.buildAssistantMessageWithReasoning(
+    const callMsg = this.buildAssistantMessageWithToolCalls(
       [toolCall],
       workspaceState,
       text,
@@ -143,9 +98,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       content: formatToolResultAsText(result),
     };
 
-    // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
-    // with reasoning_content field that OpenAI's types don't know about
-    return [callMsg as ChatCompletionMessageParam, resultMsg];
+    return [callMsg, resultMsg];
   }
 
   /**
@@ -167,20 +120,14 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   async createBatchedToolUseFollowUpMessages(
     calls: DeepSeekToolCall[],
     results: ToolResultPayload[],
-    attachmentsPerCall: ToolFileAttachment[][],
+    _attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    // Validate input arrays (consistent with Google handler)
+    // Validate input arrays
     if (calls.length !== results.length) {
       throw new Error(
         `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
-      );
-    }
-
-    if (calls.length !== attachmentsPerCall.length) {
-      throw new Error(
-        `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${attachmentsPerCall.length} attachment arrays`,
       );
     }
 
@@ -191,14 +138,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Build assistant message with ALL tool calls and reasoning_content
     const toolCalls = calls.map((call) => this.normalizeToolCall(call.raw));
-    const callMsg = this.buildAssistantMessageWithReasoning(
+    const callMsg = this.buildAssistantMessageWithToolCalls(
       toolCalls,
       workspaceState,
       text,
     );
 
-    // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
-    // with reasoning_content field that OpenAI's types don't know about
     // Build tool result messages - use plain text instead of JSON to save tokens
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
@@ -206,7 +151,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       content: formatToolResultAsText(results[i]),
     }));
 
-    return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
+    return [callMsg, ...toolResultMessages];
   }
 
   /**

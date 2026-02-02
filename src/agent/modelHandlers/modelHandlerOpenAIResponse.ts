@@ -48,11 +48,7 @@ import {
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
-import {
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  TOKEN_SAFETY_BUFFER,
-  computeReducedMaxTokens,
-} from './contextManagementConstants';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -69,6 +65,7 @@ import type {
   CreateResponseOptions,
   ExtractResponseResult,
   OpenAIResponseToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -837,6 +834,49 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Whether this handler supports native token counting.
+   * Maps to supportsNativeTokenCounting for consistency with other handlers.
+   */
+  override get supportsTokenCounting(): boolean {
+    return this.supportsNativeTokenCounting;
+  }
+
+  /**
+   * Estimates token count using OpenAI's native /responses/input_tokens endpoint.
+   * This provides exact pre-flight token counts for the Responses API.
+   *
+   * @param messages The messages to count tokens for.
+   * @param options Token counting options including client and signal.
+   * @returns Promise resolving to the total token count.
+   * @see https://platform.openai.com/docs/api-reference/responses/input-tokens
+   */
+  override async estimateTokenCount(
+    messages: ResponseInputItem[],
+    options?: TokenCountOptions<OpenAI>,
+  ): Promise<number> {
+    if (!this.supportsNativeTokenCounting) {
+      throw new Error(
+        'Token counting not available when routing through OpenRouter',
+      );
+    }
+
+    const client = options?.client ?? (await this.getClient());
+    const tokenCount = await client.responses.inputTokens.count(
+      {
+        model: this.config.fullName,
+        input: messages,
+        ...(this.previousResponseId && {
+          previous_response_id: this.previousResponseId,
+        }),
+      },
+      options?.signal ? { signal: options.signal } : undefined,
+    );
+
+    this.logger.debug(`Token count of message: ${tokenCount.input_tokens}`);
+    return tokenCount.input_tokens;
+  }
+
+  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
@@ -938,8 +978,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let maxOutputTokens = this.config.maxOutputTokens;
 
-    // Native token counting using OpenAI's /responses/input_tokens endpoint.
-    // This provides exact pre-flight counts, aligning with Anthropic and Google handlers.
+    // Phase 2: COUNT - Estimate input tokens using built params
+    // Phase 3: VALIDATE - Adjust max_output_tokens if needed
     //
     // Two-layer protection against context overflow:
     // 1. shouldCompact() uses cumulativeInputTokens (from PREVIOUS response) at 75% threshold
@@ -947,45 +987,38 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // 2. This native count (CURRENT request) is the safety net at 100% threshold
     //
     // When previous_response_id is set, the API includes server-side history in the count.
-    if (this.supportsNativeTokenCounting) {
+    if (this.supportsTokenCounting) {
       try {
-        const tokenCount = await client.responses.inputTokens.count(
-          baseParams,
-          signal ? { signal } : undefined,
+        // Reuse built params for token counting (build once principle)
+        const inputTokens = await this.estimateTokenCount(baseParams.input, {
+          client,
+          signal,
+        });
+
+        // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
+        const validation = this.validateTokenLimits(
+          inputTokens,
+          maxOutputTokens,
+          this.config.contextWindow,
         );
-        const inputTokens = tokenCount.input_tokens;
 
-        this.logger.debug(`Token count of message: ${inputTokens}`);
-
-        if (inputTokens > this.config.contextWindow) {
-          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
-          this.logger.error(errMsg);
-          throw new Error(errMsg);
-        }
-
-        const availableTokens = this.config.contextWindow - inputTokens;
-        if (availableTokens < maxOutputTokens) {
-          const reducedMaxTokens = computeReducedMaxTokens(
-            availableTokens,
-            TOKEN_SAFETY_BUFFER,
-          );
-          const utilizationPercent =
-            (inputTokens / this.config.contextWindow) * 100;
-
+        if (validation.adjustedMaxTokens !== maxOutputTokens) {
           this.logger.logContextManagement(
-            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${reducedMaxTokens}.`,
+            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
             {
               action: 'max_tokens_reduced',
               tokensBefore: inputTokens,
               contextWindow: this.config.contextWindow,
-              utilizationBefore: utilizationPercent,
+              utilizationBefore:
+                validation.utilizationPercent ??
+                (inputTokens / this.config.contextWindow) * 100,
               originalMaxTokens: maxOutputTokens,
-              reducedMaxTokens,
+              reducedMaxTokens: validation.adjustedMaxTokens,
               details:
                 'OpenAI Response: max_output_tokens reduced to fit context window',
             },
           );
-          maxOutputTokens = reducedMaxTokens;
+          maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
         if (isContextWindowError(err)) throw err;

@@ -48,6 +48,10 @@ import {
   OPENAI_CHAT_FINISH,
   MCP_STOP,
 } from './types/StopReasonTypes';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -59,6 +63,8 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
   StopConditionsResult,
+  TokenCountOptions,
+  TokenValidationResult,
 } from './types/IModelHandler';
 import type {
   ServerToolExtractionResult,
@@ -802,4 +808,87 @@ export abstract class ModelHandler<
     messages: M[],
     mediaFiles: FileLocation[],
   ): Promise<void>;
+
+  // =========================================================================
+  // Token counting methods
+  // =========================================================================
+
+  /**
+   * Validates token limits and computes adjusted max_tokens if needed.
+   * Shared implementation used by handlers with native token counting.
+   *
+   * @param inputTokens - The counted input tokens
+   * @param maxTokens - The requested max output tokens
+   * @param contextWindow - The model's context window size
+   * @param tokenBuffer - Safety buffer to subtract (default: TOKEN_SAFETY_BUFFER)
+   * @returns Validation result with adjusted max tokens and utilization info
+   * @throws Error if input tokens exceed context window (hard failure)
+   */
+  protected validateTokenLimits(
+    inputTokens: number,
+    maxTokens: number,
+    contextWindow: number,
+    tokenBuffer: number = TOKEN_SAFETY_BUFFER,
+  ): TokenValidationResult {
+    // Hard fail if input already exceeds context window
+    if (inputTokens > contextWindow) {
+      throw new Error(
+        `Token count of message exceeds context window: ${inputTokens} > ${contextWindow}`,
+      );
+    }
+
+    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    const availableTokens = contextWindow - inputTokens;
+
+    if (availableTokens >= maxTokens) {
+      return {
+        adjustedMaxTokens: maxTokens,
+        inputTokens,
+        utilizationPercent,
+      };
+    }
+
+    const adjustedMaxTokens = computeReducedMaxTokens(
+      availableTokens,
+      tokenBuffer,
+    );
+
+    return {
+      adjustedMaxTokens,
+      inputTokens,
+      utilizationPercent,
+    };
+  }
+
+  /**
+   * Estimates the token count for a set of messages.
+   * Override in subclasses to use provider-specific token counting APIs.
+   *
+   * Providers with native token counting support:
+   * - Anthropic: client.messages.countTokens()
+   * - Google: client.models.countTokens()
+   * - OpenAI Response: client.responses.inputTokens.count()
+   * - Kimi/Moonshot: POST /v1/tokenizers/estimate-token-count
+   *
+   * @param messages - The messages to count tokens for.
+   * @param options - Optional additional parameters for token counting.
+   * @returns Promise resolving to the total token count.
+   * @throws Error if token counting is not supported by this provider.
+   */
+  async estimateTokenCount(
+    _messages: M[],
+    _options?: TokenCountOptions<C>,
+  ): Promise<number> {
+    throw new Error(
+      `Token counting not implemented for provider: ${this.config.provider}`,
+    );
+  }
+
+  /**
+   * Whether this handler supports native token counting via API.
+   * Override in subclasses that have token counting capability.
+   */
+  get supportsTokenCounting(): boolean {
+    return false;
+  }
 }
