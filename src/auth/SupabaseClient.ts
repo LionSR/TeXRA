@@ -15,7 +15,7 @@ import {
 
 /** Interface for auth provider to avoid circular imports. */
 interface AuthTokenProvider {
-  ensureFreshToken(): Promise<string | null>;
+  ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
 }
 
 /**
@@ -75,12 +75,13 @@ export class SupabaseClient {
   /**
    * Get the current user's access token from VS Code authentication.
    * Automatically refreshes the token if it's about to expire via the registered auth provider.
+   * @param forceRefresh - When true, forces a token refresh regardless of local expiry (e.g., after relay 401).
    */
-  static async getAccessToken(): Promise<string | null> {
+  static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
     try {
       // Use registered auth provider for proactive token refresh
       if (this.authProvider) {
-        const token = await this.authProvider.ensureFreshToken();
+        const token = await this.authProvider.ensureFreshToken(forceRefresh);
         if (token) {
           return token;
         }
