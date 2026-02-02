@@ -613,9 +613,15 @@ export class ModelHandlerOpenAI<
         );
       }
     }
-    roundContent.push({ type: 'text', text: userMessage });
+    // Only add text content if non-empty to avoid API "text content is empty" errors
+    if (userMessage) {
+      roundContent.push({ type: 'text', text: userMessage });
+    }
 
-    messages.push({ role, content: roundContent });
+    // Only push message if there's content (media or text)
+    if (roundContent.length > 0) {
+      messages.push({ role, content: roundContent });
+    }
     return messages;
   }
 
@@ -1269,22 +1275,73 @@ export class ModelHandlerOpenAI<
     return [{ type: 'text', text }];
   }
 
+  /**
+   * Whether to include reasoning_content in assistant messages for tool-use cycles.
+   * Override in subclasses (DeepSeek, Kimi) that require reasoning content preservation.
+   *
+   * When true, reasoning content from workspaceState.reasoning.thinkingBlocks
+   * will be included in the assistant message and cleared after use.
+   */
+  protected shouldIncludeReasoningInToolCalls(): boolean {
+    return false;
+  }
+
+  /**
+   * Builds an assistant message with tool calls and optional reasoning_content.
+   *
+   * For providers that support thinking mode with tool calls (DeepSeek, Kimi),
+   * reasoning_content must be included in the assistant message for the model
+   * to continue its reasoning chain across tool-use cycles.
+   *
+   * @param toolCalls - Normalized tool calls
+   * @param workspaceState - Workspace state containing reasoning blocks
+   * @param text - Optional text content
+   * @returns Assistant message with tool calls and optional reasoning_content
+   */
+  protected buildAssistantMessageWithToolCalls(
+    toolCalls: ChatCompletionMessageToolCall[],
+    workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): ChatCompletionAssistantMessageParam {
+    const callMsg: ChatCompletionAssistantMessageParam & {
+      reasoning_content?: string;
+    } = {
+      role: 'assistant',
+      tool_calls: toolCalls,
+    };
+
+    // Include reasoning_content if this provider requires it for tool-use cycles
+    if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
+      const reasoningContent =
+        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
+      if (reasoningContent) {
+        callMsg.reasoning_content = reasoningContent;
+        // Clear after use to prevent stale reasoning in subsequent calls
+        workspaceState.resetReasoning();
+      }
+    }
+
+    if (text) {
+      callMsg.content = this.formatAssistantContent(text);
+    }
+
+    return callMsg;
+  }
+
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: TCall,
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(call.raw);
-    const callMsg: ChatCompletionAssistantMessageParam = {
-      role: 'assistant',
-      tool_calls: [toolCall],
-    };
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
-    }
+    const callMsg = this.buildAssistantMessageWithToolCalls(
+      [toolCall],
+      workspaceState,
+      text,
+    );
 
     // Build tool result as plain text - JSON wastes tokens
     const attachmentSummary =
