@@ -539,10 +539,11 @@ export class ModelHandlerOpenAI<
       }
     }
 
-    // Create content list for the user message
-    const userMessageContent: ChatCompletionContentPart[] = [
-      { type: 'text', text: userPrefix },
-    ];
+    // Create content list for the user message (only add non-empty prefix)
+    const userMessageContent: ChatCompletionContentPart[] = [];
+    if (userPrefix) {
+      userMessageContent.push({ type: 'text', text: userPrefix });
+    }
 
     // Add media if provided
     if (
