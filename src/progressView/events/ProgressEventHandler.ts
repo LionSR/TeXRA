@@ -364,10 +364,6 @@ export class ProgressEventHandler {
     }
   }
 
-  getStreamStatus(streamId: StreamTabId): StreamStatus | undefined {
-    return StreamStatusService.get(streamId);
-  }
-
   setStreamStatus(
     streamId: StreamTabId,
     status: StreamStatus,
