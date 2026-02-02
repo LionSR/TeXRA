@@ -15,7 +15,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
-import { codiconStyles } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
@@ -32,6 +32,7 @@ import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [
+    designTokens,
     codiconStyles,
     ...fileSelectStyles,
     css`

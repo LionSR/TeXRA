@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared styles
-// Note: Design tokens from tokens.css are inherited into Shadow DOM via :root
+import { designTokens } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas
@@ -20,6 +20,7 @@ import type { ContextState } from '../store';
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
   static override styles = [
+    designTokens,
     codiconIconClasses,
     css`
       :host {

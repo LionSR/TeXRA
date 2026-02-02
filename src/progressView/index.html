@@ -7,7 +7,6 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} data:;"
     />
-    <link rel="stylesheet" href="${tokensStyleUri}" />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${progressStyleUri}" />
     <style nonce="${nonce}">
@@ -20,7 +19,7 @@
         padding: 0;
         display: flex;
         height: 100vh;
-        background-color: var(--background-color);
+        background-color: var(--vscode-sideBar-background);
       }
     </style>
     <link
