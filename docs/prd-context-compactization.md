@@ -76,11 +76,19 @@ Key takeaway: the **system prompt is the right place** for compacted context. Ra
 
 #### Strategy 3: Client-Side Summarization via System Prompt Injection (new -- fallback for all providers)
 
-This is the new capability, used when:
-- Provider is OpenAI Chat Completions (no native compaction)
-- Provider is Google GenAI (no native compaction)
-- Provider is any other handler without native support
-- User explicitly requests client-side compaction (override)
+This is the new capability. It covers all providers that lack a native compaction API:
+
+| Provider | Native Compaction | Needs Client-Side |
+|----------|------------------|-------------------|
+| Anthropic | Server-side clearing (`context_management`) | No (but available as optional override) |
+| OpenAI Responses API | `/responses/compact` endpoint | No (but available as optional override) |
+| OpenAI Chat Completions | None | **Yes** |
+| Google GenAI (Gemini) | None | **Yes** |
+| DeepSeek | None | **Yes** |
+| Kimi (Moonshot) | None | **Yes** |
+| Any future provider | None by default | **Yes** |
+
+This makes client-side summarization the **default compaction strategy** for the majority of providers. Only Anthropic and OpenAI Responses have native paths.
 
 **Core insight: inject the summary into the system prompt, not into messages.**
 
@@ -166,6 +174,9 @@ Each handler overrides `getCompactionStrategy()`:
 - `ModelHandlerOpenAIResponse` → returns `OpenAICompactStrategy` (existing behavior, no change)
 - `ModelHandlerOpenAI` → returns `null` → triggers system-prompt summarization
 - `ModelHandlerGoogleGenAI` → returns `null` → triggers system-prompt summarization
+- `ModelHandlerDeepSeek` → returns `null` → triggers system-prompt summarization
+- `ModelHandlerKimi` → returns `null` → triggers system-prompt summarization
+- Any new handler → returns `null` by default (safe fallback)
 
 **System prompt mutation flow:**
 
