@@ -46,6 +46,7 @@ export const StreamHintsSchema = z.object({
   agentCategory: z.enum(AgentCategory).optional(),
   isRemote: z.boolean().optional(),
   hasMultipleOutputs: z.boolean().optional(),
+  creationTimestamp: z.number().optional(),
 });
 
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
@@ -178,7 +179,14 @@ export class ProgressViewState {
 
   updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
     const state = this.getOrCreateSession(streamTabId);
-    state.hints = StreamHintsSchema.parse({ ...state.hints, ...hints });
+    // Auto-set creationTimestamp for new streams (first call to updateStreamHints)
+    const creationTimestamp =
+      state.hints.creationTimestamp ?? hints.creationTimestamp ?? Date.now();
+    state.hints = StreamHintsSchema.parse({
+      ...state.hints,
+      ...hints,
+      creationTimestamp,
+    });
   }
 
   getStreamHints(streamTabId: StreamTabId): StreamHints {
