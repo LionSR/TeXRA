@@ -26,12 +26,15 @@ export class UserMessage extends LitElement {
       }
 
       .user-message-container {
+        display: flex;
+        justify-content: flex-end;
         margin: var(--spacing-small) 0;
       }
 
       .user-message {
         padding: var(--spacing-small);
         max-width: 85%;
+        background-color: var(--vscode-editor-selectionBackground);
         border: 1px solid var(--vscode-panel-border);
         border-radius: var(--radius-small);
       }
