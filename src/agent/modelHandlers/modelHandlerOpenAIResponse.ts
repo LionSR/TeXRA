@@ -1148,7 +1148,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           }
         }
 
-        const response = await stream.finalResponse();
+        let response = await stream.finalResponse();
+
+        // If the stream ended before the response completed (e.g., relay timeout
+        // during slow GPT-5 requests), poll until it finishes instead of silently
+        // returning an incomplete response.
+        if (this.isBackgroundPending(response)) {
+          this.logger.warn(
+            `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
+          );
+          response = await this.waitForBackgroundCompletion(
+            client,
+            response,
+            signal,
+          );
+        }
+
         // Finalize any remaining thinking content (only if there's actual content)
         if (state.hasThinkingContent) {
           state.thinkingStream.finalize();
