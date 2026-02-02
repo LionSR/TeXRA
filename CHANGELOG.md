@@ -6,11 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Added **Kimi K2.5 models** with thinking parameter and temperature support.
-- Added **native token counting** for OpenAI Response API, replacing heuristic-based estimates.
-- Added **syntax highlighting** to bash command approval prompts.
-- Added **typecheck and safe build scripts** (`npm run typecheck`, `npm run compile:safe`).
-- Added **DeepSeek thinking parameter** support in model handlers.
+- Added **Kimi K2.5 models** with thinking and temperature support, and **DeepSeek thinking parameter**.
+- Added **accurate token counting** for OpenAI Response API, replacing heuristic estimates.
+- Added **syntax highlighting** in bash command approval prompts.
 
 ### Bug Fixes
 
