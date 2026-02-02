@@ -456,6 +456,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
+    // Phase 1: BUILD - Construct provider-specific request parameters
     const generationConfig: GenerateContentConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
@@ -532,6 +533,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
+    // Phase 4: EXECUTE - Make the API call
     const useStreaming = this.getStreamingConfig();
 
     try {
