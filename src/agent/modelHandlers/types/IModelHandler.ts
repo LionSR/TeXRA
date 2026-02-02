@@ -25,6 +25,33 @@ import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
 
 /**
+ * Options for token counting - all fields optional, handlers use what they need.
+ * @template C Provider-specific client type
+ */
+export interface TokenCountOptions<C = unknown> {
+  /** Pre-authenticated client (avoids re-auth) */
+  client?: C;
+  /** System prompt to include in count */
+  systemPrompt?: string;
+  /** Tool definitions to include in count */
+  tools?: unknown[];
+  /** For cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result from validating token limits against context window.
+ */
+export interface TokenValidationResult {
+  /** Adjusted max tokens to fit within context window */
+  adjustedMaxTokens: number;
+  /** Input token count used for validation */
+  inputTokens?: number;
+  /** Percentage of context window utilized */
+  utilizationPercent?: number;
+}
+
+/**
  * Options for creating a model response.
  * @template M - Provider-specific message type
  */

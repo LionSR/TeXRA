@@ -49,11 +49,7 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local file imports
-import {
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  computeReducedMaxTokens,
-  TOKEN_SAFETY_BUFFER,
-} from './contextManagementConstants';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 import { toAnthropicTools } from './toolConversion';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
@@ -81,6 +77,7 @@ import type {
   CreateResponseOptions,
   ExtractResponseResult,
   AnthropicToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
@@ -394,6 +391,103 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
+  /**
+   * Whether this handler supports native token counting via API.
+   * Uses Anthropic's countTokens endpoint for exact pre-flight counts.
+   */
+  override get supportsTokenCounting(): boolean {
+    return this.capabilities.supportsTokenCounting;
+  }
+
+  /**
+   * Estimates token count using Anthropic's native countTokens API.
+   *
+   * Note: countTokens does not support file-based document sources (file_id).
+   * Check `hasFileSource` before calling this method to avoid API errors.
+   *
+   * @param messages - The messages to count tokens for
+   * @param options - Token counting options including client, systemPrompt, tools, thinking, etc.
+   * @returns Promise resolving to the total token count
+   */
+  override async estimateTokenCount(
+    messages: MessageParam[],
+    options?: TokenCountOptions<Anthropic> & {
+      anthropicTools?: MessageCountTokensParams['tools'];
+      thinking?: MessageCountTokensParams['thinking'];
+      contextManagement?: BetaContextManagementConfig;
+      betas?: AnthropicBeta[];
+    },
+  ): Promise<number> {
+    const client = options?.client ?? (await this.getClient());
+
+    const countTokensParams: MessageCountTokensParams = {
+      model: this.config.fullName,
+      messages,
+      ...(options?.systemPrompt && { system: options.systemPrompt }),
+    };
+
+    // Include tools in token counting for accurate measurement.
+    // Tool schemas can be substantial and affect context utilization.
+    if (options?.anthropicTools && options.anthropicTools.length > 0) {
+      // Filter out memory tool as countTokens API doesn't support it yet
+      const countableTools = options.anthropicTools.filter(
+        (tool) => !('type' in tool && tool.type === 'memory_20250818'),
+      );
+      if (countableTools.length > 0) {
+        countTokensParams.tools = countableTools;
+      }
+    }
+
+    // If thinking is enabled, we need to pass it to countTokens as well
+    // to ensure consistency with the actual message creation.
+    // Without this, the API returns an error when messages contain thinking blocks.
+    if (options?.thinking) {
+      countTokensParams.thinking = options.thinking;
+    }
+
+    // Include context_management in token counting to get accurate
+    // post-clearing token counts. This is critical for:
+    // 1. Correctly adjusting max_tokens based on actual available context
+    // 2. Allowing both clearing strategies to work together
+    if (options?.contextManagement) {
+      countTokensParams.context_management = options.contextManagement;
+    }
+
+    // Strip betas that only apply to message creation (e.g., output length)
+    // while keeping context headers needed for accurate token counting.
+    const countTokenBetas = options?.betas?.filter(
+      (beta) => beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
+    );
+    if (countTokenBetas && countTokenBetas.length > 0) {
+      countTokensParams.betas = countTokenBetas;
+    }
+
+    const responseTokenCount =
+      await client.beta.messages.countTokens(countTokensParams);
+
+    // Log both original and post-clearing token counts if available
+    const contextMgmtResponse = (
+      responseTokenCount as typeof responseTokenCount & {
+        context_management?: CountTokensContextManagementResponse;
+      }
+    ).context_management;
+
+    if (contextMgmtResponse?.original_input_tokens) {
+      const clearedTokens =
+        contextMgmtResponse.original_input_tokens -
+        responseTokenCount.input_tokens;
+      this.logger.debug(
+        `Token count: ${responseTokenCount.input_tokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
+      );
+    } else {
+      this.logger.debug(
+        `Token count of message: ${responseTokenCount.input_tokens}`,
+      );
+    }
+
+    return responseTokenCount.input_tokens;
+  }
+
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
@@ -511,7 +605,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       thresholdPercent: compactionThresholdPercent,
     });
 
-    if (this.capabilities.supportsTokenCounting) {
+    // Phase 2: COUNT - Estimate input tokens using built params
+    // Phase 3: VALIDATE - Adjust max_tokens if needed
+    if (this.supportsTokenCounting) {
       if (documentAnalysis.hasFileSource) {
         this.logger.debug(
           'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
@@ -520,98 +616,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Token counting uses soft failure - if it fails, we proceed without adjustment
         // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
         try {
-          const countTokensParams: MessageCountTokensParams = {
-            model: this.config.fullName,
-            system: systemPrompt,
-            messages,
-          };
-
-          // Include tools in token counting for accurate measurement.
-          // Tool schemas can be substantial and affect context utilization.
-          // Filter out memory tool as countTokens API doesn't support it yet.
-          if (options.tools && options.tools.length > 0) {
-            const countableTools = options.tools.filter(
-              (tool) => !('type' in tool && tool.type === 'memory_20250818'),
-            );
-            if (countableTools.length > 0) {
-              countTokensParams.tools = countableTools;
-            }
-          }
-
-          // If thinking is enabled, we need to pass it to countTokens as well
-          // to ensure consistency with the actual message creation.
-          // Without this, the API returns an error when messages contain thinking blocks.
-          if (options.thinking) {
-            countTokensParams.thinking = options.thinking;
-          }
-
-          // Include context_management in token counting to get accurate
-          // post-clearing token counts. This is critical for:
-          // 1. Correctly adjusting max_tokens based on actual available context
-          // 2. Allowing both clearing strategies to work together
-          if (options.context_management) {
-            countTokensParams.context_management = options.context_management;
-          }
-
-          // Strip betas that only apply to message creation (e.g., output length)
-          // while keeping context headers needed for accurate token counting.
-          const countTokenBetas = options.betas?.filter(
-            (beta) =>
-              beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
-          );
-          if (countTokenBetas && countTokenBetas.length > 0) {
-            countTokensParams.betas = countTokenBetas;
-          }
-
-          const responseTokenCount =
-            await client.beta.messages.countTokens(countTokensParams);
-          const { input_tokens: inputTokens } = responseTokenCount;
+          // Reuse built params for token counting (build once principle)
+          const inputTokens = await this.estimateTokenCount(messages, {
+            client,
+            systemPrompt,
+            anthropicTools: options.tools,
+            thinking: options.thinking,
+            contextManagement: options.context_management ?? undefined,
+            betas: options.betas,
+          });
           measuredInputTokens = inputTokens;
 
-          // Log both original and post-clearing token counts if available
-          const contextMgmtResponse = (
-            responseTokenCount as typeof responseTokenCount & {
-              context_management?: CountTokensContextManagementResponse;
-            }
-          ).context_management;
-          if (contextMgmtResponse?.original_input_tokens) {
-            const clearedTokens =
-              contextMgmtResponse.original_input_tokens - inputTokens;
-            this.logger.debug(
-              `Token count: ${inputTokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
-            );
-          } else {
-            this.logger.debug(`Token count of message: ${inputTokens}`);
-          }
+          // Validate and adjust max_tokens if needed (throws if context window exceeded)
+          const validation = this.validateTokenLimits(
+            inputTokens,
+            options.max_tokens,
+            effectiveContextWindow,
+          );
 
-          if (inputTokens > effectiveContextWindow) {
-            const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
-            this.logger.error(errMsg);
-            throw new Error(errMsg);
-          }
-          const availableTokens = effectiveContextWindow - inputTokens;
-          if (availableTokens < options.max_tokens) {
+          if (validation.adjustedMaxTokens !== options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            const reducedMaxTokens = computeReducedMaxTokens(
-              availableTokens,
-              TOKEN_SAFETY_BUFFER,
-            );
-            const utilizationPercent =
-              (inputTokens / effectiveContextWindow) * 100;
             this.logger.logContextManagement(
-              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
               {
                 action: 'max_tokens_reduced',
                 tokensBefore: inputTokens,
                 contextWindow: effectiveContextWindow,
-                utilizationBefore: utilizationPercent,
+                utilizationBefore:
+                  validation.utilizationPercent ??
+                  (inputTokens / effectiveContextWindow) * 100,
                 originalMaxTokens,
-                reducedMaxTokens,
+                reducedMaxTokens: validation.adjustedMaxTokens,
                 details: 'Anthropic: max_tokens reduced to fit context window',
               },
             );
-            options.max_tokens = reducedMaxTokens;
+            options.max_tokens = validation.adjustedMaxTokens;
 
+            // Adjust thinking budget if reasoning is enabled and max_tokens was reduced
             if (
               this.capabilities.supportsReasoning &&
               options.thinking &&
@@ -632,7 +673,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
               }
             }
           }
-          // in the future we log this in firstInputTokens of the AgentRunState
         } catch (err) {
           // Re-throw context window violations - these are intentional validation errors
           // that should fail fast, not be swallowed by soft failure
