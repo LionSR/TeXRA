@@ -7,7 +7,7 @@
 | Anthropic: server-side only, no summarization | HIGH     | Proposed | Clears thinking/tool blocks but doesn't summarize  |
 | Google: no compaction at all                  | HIGH     | Proposed | Only reduces max_tokens, no context reduction       |
 | OpenAI Chat: heuristic counting, no compaction| HIGH     | Proposed | gpt-tokenizer approximation, no reduction           |
-| OpenAI Response: post-hoc encrypted compaction| MEDIUM   | Exists   | Uses `/responses/compact` endpoint                  |
+| OpenAI Response: native counting + compaction | MEDIUM   | Exists   | Uses `inputTokens.count()` + `/responses/compact`   |
 | No unified compaction strategy across handlers| HIGH     | Proposed | Each handler has different (or no) approach          |
 | Progress view: no compaction summary display  | MEDIUM   | Proposed | Events logged but no summary text shown              |
 | Session snapshots store full uncompacted history | LOW   | Proposed | Resume after compaction may re-inflate context       |
@@ -76,12 +76,28 @@ model handlers, with proper progress view feedback and session persistence suppo
 
 ### Per-Provider Token Counting and Compaction
 
-| Provider        | Pre-flight Count                  | Compaction Method              | Trigger                       | Limitation                              |
-| --------------- | --------------------------------- | ------------------------------ | ----------------------------- | --------------------------------------- |
-| Anthropic       | Exact API (`countTokens()` L621)  | Server-side clearing (beta)    | Configured threshold (75%)    | Only clears blocks, no summarization    |
-| OpenAI Response | Response usage (post-hoc)         | `/responses/compact` endpoint  | Cumulative tokens > threshold | Opaque encrypted output, no custom control |
-| OpenAI Chat     | Heuristic (`gpt-tokenizer` L1338) | None                           | N/A                           | Only reduces max_tokens; ~5K buffer     |
-| Google GenAI    | Exact API (`countTokens()` L450)  | None                           | N/A                           | Only reduces max_tokens                 |
+All model handlers now follow a unified **4-phase pattern** inside `createResponse()`:
+Build → Count → Validate → Execute (see `docs/prd-token-counting-refactor.md`). Token
+counting is separated from the API call, with centralized validation via
+`ModelHandler.validateTokenLimits()`.
+
+| Provider        | Count Phase (`estimateTokenCount`)           | Compaction Method              | Limitation                              |
+| --------------- | -------------------------------------------- | ------------------------------ | --------------------------------------- |
+| Anthropic       | Native API (`countTokens()`)                 | Server-side clearing (beta)    | Only clears blocks, no summarization    |
+| OpenAI Response | Native API (`responses.inputTokens.count()`) | `/responses/compact` endpoint  | Opaque encrypted output, no custom control |
+| OpenAI Chat     | Heuristic (`gpt-tokenizer`)                  | None                           | Only reduces max_tokens; ~5K buffer     |
+| Google GenAI    | Native API (`models.countTokens()`)          | None                           | Only reduces max_tokens                 |
+| Kimi            | Native API (via OpenAI Chat override)        | None                           | Only reduces max_tokens                 |
+
+**Key base handler infrastructure:**
+
+- `estimateTokenCount(messages, options?)` — overridable per provider; returns input
+  token count. Available to callers outside `createResponse()`.
+- `validateTokenLimits(inputTokens, maxTokens, contextWindow)` — centralized in
+  `ModelHandler.ts`; returns `TokenValidationResult` with `adjustedMaxTokens`,
+  `inputTokens`, `utilizationPercent`.
+- `supportsTokenCounting` getter — `true` for Anthropic, Google, OpenAI Response, Kimi;
+  `false` for OpenAI Chat (heuristic fallback).
 
 ### Existing ToolUseCycleFlow Timing
 
@@ -96,9 +112,10 @@ Understanding the exact call sequence is critical for placing compaction correct
                                                 ▼
 ┌─ ToolUseCallNode ─────────────────────────────────────────────┐
 │  exec():  modelHandler.createResponse(options) (L288-294)     │
-│           ├─ Pre-flight: token counting (provider-specific)   │
-│           ├─ API call: stream or create                       │
-│           └─ Return: response with raw usage                  │
+│           ├─ Phase 1 BUILD:  Construct request params          │
+│           ├─ Phase 2 COUNT:  estimateTokenCount() (if supported)│
+│           ├─ Phase 3 VALIDATE: validateTokenLimits()           │
+│           └─ Phase 4 EXECUTE: API call (stream or create)      │
 └───────────────────────────────────────────────┬───────────────┘
                                                 ▼
 ┌─ ToolUseProcessNode ──────────────────────────────────────────┐
@@ -118,9 +135,26 @@ Understanding the exact call sequence is critical for placing compaction correct
 ```
 
 **Key timing insight:** Actual token utilization (via `NormalizedUsage`) is only known
-AFTER `ProcessNode` completes. Pre-flight counting happens inside `CallNode.exec()` but
-is internal to the handler. The flow-level decision point for compaction must use the
+AFTER `ProcessNode` completes. The Count phase inside `createResponse()` runs pre-flight
+but is internal to the handler. The flow-level decision point for compaction must use the
 **previous cycle's** `NormalizedUsage`.
+
+**Alternative: use `estimateTokenCount()` directly.** Since `estimateTokenCount()` is
+now a public method on the base `ModelHandler`, `PrepNode` can call it directly on the
+current messages to get an exact pre-compaction token count — without entering
+`createResponse()`. This is more accurate than relying on the previous cycle's count
+(which doesn't account for new tool results added by `DispatchNode`). However, it costs
+an additional API call for providers with native counting. The trade-off:
+
+| Approach                        | Accuracy         | Cost                    |
+| ------------------------------- | ---------------- | ----------------------- |
+| Previous cycle's `NormalizedUsage` | Slightly stale   | Free (already computed) |
+| `estimateTokenCount()` in PrepNode | Exact (current)  | Extra API call per cycle |
+
+**Recommendation:** Use previous cycle's `NormalizedUsage` as the primary trigger. Only
+call `estimateTokenCount()` when utilization is near the threshold (e.g., 55–80%) to
+confirm whether compaction is actually needed. This avoids unnecessary API calls while
+preventing false negatives from stale counts.
 
 ### Existing Infrastructure
 
@@ -202,12 +236,13 @@ The decision is informed by when utilization data becomes available.
 
 **Where utilization is known:**
 
-| Source                  | When Available              | Accuracy    | Provider    |
-| ----------------------- | --------------------------- | ----------- | ----------- |
-| Previous `NormalizedUsage` | Start of next cycle (PrepNode) | Exact (post-hoc) | All     |
-| Pre-flight `countTokens()` | Inside `CallNode.exec()`   | Exact (pre-flight) | Anthropic, Google |
-| Heuristic estimation    | Inside `CallNode.exec()`    | Approximate | OpenAI Chat |
-| Response `usage` field  | After API returns           | Exact (post-hoc) | All       |
+| Source                         | When Available                  | Accuracy         | Provider                                |
+| ------------------------------ | ------------------------------- | ---------------- | --------------------------------------- |
+| Previous `NormalizedUsage`     | Start of next cycle (PrepNode)  | Exact (post-hoc) | All                                     |
+| `estimateTokenCount()` (public)| Callable from PrepNode          | Exact (pre-flight)| Anthropic, Google, OpenAI Response, Kimi|
+| Count phase (inside `createResponse`) | Inside `CallNode.exec()` | Exact (pre-flight)| Same as above                          |
+| Heuristic estimation           | Inside `CallNode.exec()`        | Approximate      | OpenAI Chat (gpt-tokenizer)             |
+| Response `usage` field         | After API returns               | Exact (post-hoc) | All                                     |
 
 **Decision: Compact at `ToolUsePrepNode`, triggered by previous cycle's `NormalizedUsage`.**
 
@@ -217,9 +252,11 @@ This is the correct integration point because:
    actual API response. By the time `PrepNode` runs for the next cycle, we have accurate
    `inputTokens` / `contextWindow` from the last call.
 
-2. **Pre-flight counting happens too late.** Token counting inside `CallNode.exec()` is
-   already inside the API call path. Compacting there would require aborting and restarting
-   the call, adding complexity and wasting the count request.
+2. **`estimateTokenCount()` is now publicly accessible.** The phased architecture
+   refactor exposes this method on the base `ModelHandler`. For providers with native
+   counting (Anthropic, Google, OpenAI Response, Kimi), `PrepNode` can call it directly
+   to get an exact current count before deciding to compact. This avoids the staleness
+   issue of relying on previous cycle counts when large tool results were added since.
 
 3. **Cycle boundary is natural.** `PrepNode` already handles follow-up injection (L229).
    Adding compaction here means messages are compacted before any new content is added,
@@ -228,6 +265,12 @@ This is the correct integration point because:
 4. **Retry safety.** Compaction at `PrepNode` means it runs once per cycle, not on retries.
    The `RetryableInvocationNode` pattern retries `CallNode.exec()` — if compaction were
    inside the call, it would re-run on each retry attempt.
+
+5. **Separate from `validateTokenLimits()`.** The centralized `validateTokenLimits()`
+   in the base `ModelHandler` handles max_tokens reduction as a safety net during the
+   Validate phase. Compaction is a higher-level concern that runs before entering
+   `createResponse()` at all — it reduces the message array itself rather than adjusting
+   output token budgets.
 
 **Concrete flow with compaction:**
 
@@ -238,15 +281,27 @@ ToolUsePrepNode.prep():
 
 ToolUsePrepNode.post():
   3. Read shared.cycleNormalizedUsage from previous cycle
-  4. Compute utilization = inputTokens / contextWindow
-  5. IF utilization > threshold:
+  4. Compute estimated utilization = inputTokens / contextWindow
+  5. IF utilization near threshold (55-80%):
+     a. Call modelHandler.estimateTokenCount(shared.messages) for exact count
+     b. Update utilization with exact count
+  6. IF utilization > compaction threshold:
      a. Invoke ContextCompactor on shared.messages
      b. Replace shared.messages with compacted result
      c. Log CONTEXT_MANAGEMENT event with summary
      d. Update shared.compactionMetadata
-  6. Inject follow-up messages into (possibly compacted) shared.messages (L229)
-  7. Reset cycle state
+  7. Inject follow-up messages into (possibly compacted) shared.messages (L229)
+  8. Reset cycle state
 ```
+
+**Interaction with handler phases:** Compaction in `PrepNode` runs BEFORE
+`createResponse()`. The handler's internal phases still execute normally on the
+(possibly compacted) messages:
+- **Build** constructs params from compacted messages
+- **Count** runs `estimateTokenCount()` on the already-compacted messages (redundant
+  with step 5a above, but serves as validation)
+- **Validate** calls `validateTokenLimits()` — should pass easily after compaction
+- **Execute** sends the compacted messages to the API
 
 **Exception:** Anthropic's server-side `context_management` and OpenAI Response's
 `/responses/compact` remain in their respective handlers as Tier 1 — they're provider
@@ -583,7 +638,9 @@ during tool-use sessions.
 ### Phase 2: ContextCompactor + Summarization (Tier 2/3)
 
 Build the provider-agnostic `ContextCompactor` class and integrate at `PrepNode` in
-`ToolUseCycleFlow`.
+`ToolUseCycleFlow`. Leverage the phased token counting architecture: use the public
+`estimateTokenCount()` method from `PrepNode` for exact pre-compaction counts, and let
+the handler's internal Validate phase (`validateTokenLimits()`) serve as a safety net.
 
 **New files:**
 - `src/agent/core/ContextCompactor.ts` — core compaction logic
@@ -591,7 +648,8 @@ Build the provider-agnostic `ContextCompactor` class and integrate at `PrepNode`
 
 **Files to modify:**
 - `src/agent/core/flows/ToolUseCycleFlow.ts` — add compaction step to `ToolUsePrepNode.post()`
-  after follow-up drain, before message injection; use previous cycle's `NormalizedUsage`
+  after follow-up drain, before message injection; call `estimateTokenCount()` when
+  utilization is near threshold for exact counts
 - `src/shared/schemas/contextManagement.ts` (in AgentLogger) — extend
   `ContextManagementData` with `summary` and `turnsSummarized` fields
 
