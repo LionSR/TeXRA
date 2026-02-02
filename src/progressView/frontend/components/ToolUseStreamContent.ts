@@ -145,6 +145,7 @@ export class ToolUseStreamContent extends LitElement {
       <log-list></log-list>
 
       <usage-panel
+        .usage=${currentState.sessionUsage ?? null}
         .contextState=${currentState.contextState ?? null}
       ></usage-panel>
 
