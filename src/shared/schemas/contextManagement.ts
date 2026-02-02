@@ -19,7 +19,6 @@ export const ContextManagementDataSchema = z.object({
   details: z.string().optional(),
   originalMaxTokens: z.number().positive().optional(),
   reducedMaxTokens: z.number().positive().optional(),
-  heuristicBuffer: z.number().nonnegative().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
