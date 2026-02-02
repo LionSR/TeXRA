@@ -12,6 +12,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
@@ -78,7 +79,10 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseCycleFlow<C>();
-    flow.setServices({
+    let flowServices: ToolUseCycleServices<C> & {
+      refreshClient: () => Promise<void>;
+    };
+    flowServices = {
       ...this.services,
       setting: { ...setting, tools: resolvedTools },
       client: await modelHandler.getClient(),
@@ -87,7 +91,13 @@ export class ToolUseCycleNode<C> extends Node<
       onRoundFinalized: getUsageRecorder(),
       modelName: config.model,
       agentName: config.agent,
-    });
+      refreshClient: async () => {
+        // Refresh client instance so retries pick up updated relay tokens.
+        const nextClient = await modelHandler.getClient();
+        (flowServices as { client: C }).client = nextClient;
+      },
+    };
+    flow.setServices(flowServices);
 
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
