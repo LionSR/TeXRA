@@ -123,14 +123,23 @@ function extractFrontendOnlyFields(
   existing: StreamState | undefined,
 ): Partial<ToolUseStreamState> {
   if (!existing || !isToolUseState(existing)) return {};
-  const result: Partial<ToolUseStreamState> = {};
-  for (const key of TOOL_USE_FRONTEND_ONLY_KEYS) {
-    if (key in existing) {
-      // Type-safe assignment using indexed access
-      (result as Record<string, unknown>)[key] = existing[key];
-    }
-  }
-  return result;
+  // Pick only the frontend-only fields from the existing state
+  const {
+    followUpText,
+    polishedText,
+    polishRevision,
+    transcribedText,
+    recording,
+    shouldFocusFollowUp,
+  } = existing;
+  return {
+    followUpText,
+    polishedText,
+    polishRevision,
+    transcribedText,
+    recording,
+    shouldFocusFollowUp,
+  };
 }
 
 function updateStreamInfo(
