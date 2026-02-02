@@ -98,7 +98,7 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
 };
 
 /** Format a log entry as a TemplateResult for direct Lit rendering. */
-function formatLogTemplate(
+export function formatLogEntry(
   logMessage: LogMessageData,
   options: FormatOptions = {},
 ): TemplateResult {
@@ -117,25 +117,4 @@ function formatLogTemplate(
   }
 
   return formatDefaultLogMessageTemplate(logMessage) ?? html``;
-}
-
-/**
- * LogEntryFormatter provides log entry formatting.
- * This class wraps the module-level formatting function for compatibility
- * with existing code that expects a class instance.
- */
-export class LogEntryFormatter {
-  formatTemplate(
-    logMessage: LogMessageData,
-    options: FormatOptions = {},
-  ): TemplateResult {
-    return formatLogTemplate(logMessage, options);
-  }
-}
-
-/** Shared formatter instance for use across the progress view. */
-const sharedLogEntryFormatter = new LogEntryFormatter();
-
-export function getSharedLogEntryFormatter(): LogEntryFormatter {
-  return sharedLogEntryFormatter;
 }
