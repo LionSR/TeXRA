@@ -15,7 +15,7 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 - `prd-ui-regression-audit-round3-3.md` (INITIALIZING status, schema validation)
 - `prd-ui-regression-audit-round3-4.md` (duplicate of round3-2, now removed)
 
-> **Status: ✅ COMPLETE (2026-02-01)** – All issues fixed including PR review findings
+> **Status: ✅ COMPLETE (2026-02-02)** – All issues fixed including architectural improvements
 
 ### Summary by Severity
 
@@ -568,6 +568,16 @@ This PRD consolidates **all Round 3 UI and logic regressions** from the followin
 
 ## Progress Update
 
+### 2026-02-02
+
+- ✅ **Architectural improvement:** Replaced `TOOL_USE_FRONTEND_ONLY_KEYS` pattern with nested `ui` property
+  - Frontend-only state now lives under `state.ui` for both `ToolUseStreamState` and `WorkflowStreamState`
+  - Eliminates fragile manual key lists; new UI fields are automatically preserved
+  - Added `ToolUseUIStateSchema` and `WorkflowUIStateSchema` with proper `.prefault()` defaults
+- ✅ Simplified `updateStreamInfo` from 21 lines to 11 lines using conditional spread
+- ✅ Fixed stale state closure bug in `UPDATE_STREAM_STATUS` handler
+- ✅ Updated `WorkflowStreamState.selectedRunId` to also use nested `ui` pattern
+
 ### 2026-02-01
 
 - ✅ Fixed all PR review findings (H-NEW-1, H-NEW-2, M-NEW-1, M-NEW-2)
@@ -610,23 +620,49 @@ The following PR comments were analyzed for validity:
 private readonly pendingTaskGroupUpdates = new Map<StreamTabId, Map<string, UpdateTaskGroupPayload[]>>();
 ```
 
-##### H-NEW-2: Frontend-Only State Preservation is Fragile — ✅ FIXED
+##### H-NEW-2: Frontend-Only State Preservation is Fragile — ✅ FIXED (Improved 2026-02-02)
 
-**File:** `src/progressView/frontend/messageDispatcher.ts`
+**File:** `src/progressView/frontend/messageDispatcher.ts`, `src/shared/schemas/streamState.ts`
+
+**Issue:** Manually preserving frontend-only fields during backend merges is error-prone — any new frontend field must be added to a list. Missing a field causes silent data loss.
+
+**Solution (2026-02-02):** Replaced the `TOOL_USE_FRONTEND_ONLY_KEYS` approach with a **nested `ui` property**:
 
 ```typescript
-const frontendOnlyFields = existing && isToolUseState(existing)
-  ? { followUpText: existing.followUpText, polishedText: existing.polishedText, ... }
-  : {};
+// Schema: Frontend-only fields nested under 'ui'
+export const ToolUseUIStateSchema = z.object({
+  followUpText: z.string().prefault(''),
+  polishedText: z.string().nullable().prefault(null),
+  polishRevision: z.int().prefault(0),
+  transcribedText: z.string().nullable().prefault(null),
+  recording: z.boolean().prefault(false),
+  shouldFocusFollowUp: z.boolean().prefault(false),
+});
+
+export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
+  kind: z.literal(AGENT_CATEGORY.TOOL_USE),
+  // Backend-owned fields at root
+  todos: z.array(TodoItemSchema).prefault([]),
+  queuedFollowUps: z.array(z.string()).prefault([]),
+  // Frontend-owned nested under ui
+  ui: ToolUseUIStateSchema.prefault({}),
+});
+
+// Update logic: Simply preserve ui property
+const preserveUI = existing && existing.kind === backendState.kind;
+nextStates.set(stream.name, {
+  ...backendState,
+  ...(preserveUI && { ui: existing.ui }),
+  info: stream,
+} as StreamState);
 ```
 
-**Issue:** Manually preserving frontend-only fields during backend merges is error-prone — any new frontend field must be added to this list. Missing a field causes silent data loss.
+**Benefits:**
 
-**Recommendation:** Consider:
-
-1. Maintain a separate `frontendState` map keyed by streamId
-2. Use a TypeScript type with explicit "frontend-only" fields and create a helper function
-3. Use a reducer pattern with explicit merge strategies
+- Clear ownership: `ui` property is frontend-only by convention
+- Type-safe: No manual key lists needed
+- Extensible: New UI fields automatically preserved
+- Also applied to `WorkflowStreamState.selectedRunId`
 
 ##### M-NEW-1: Aggressive Context Invalidation — ✅ FIXED
 
@@ -699,7 +735,8 @@ keysToDelete.forEach((k) => this.modelOutputBackups.delete(k));
 ### Should Fix (Non-blocking)
 
 2. ~~**H-NEW-2: Frontend-only state preservation** - Add type safety or refactor to separate map~~
-   - ✅ **FIXED (2026-02-01)**: Added `TOOL_USE_FRONTEND_ONLY_KEYS` const array with `satisfies` check in `streamState.ts`. Uses compile-time validation—adding a field to the type without updating the array causes a TypeScript error.
+   - ✅ **FIXED (2026-02-01)**: Added `TOOL_USE_FRONTEND_ONLY_KEYS` const array with `satisfies` check.
+   - ✅ **IMPROVED (2026-02-02)**: Replaced with nested `ui` property approach. Frontend-only state now lives under `state.ui`, eliminating manual key lists entirely. New UI fields are automatically preserved during backend updates.
 
 3. ~~**M-NEW-1: Context invalidation** - Add targeted invalidation check~~
    - ✅ **FIXED (2026-02-01)**: Removed context caching in `ProgressApp.ts`. Event handler context closures capture state lazily, so caching was unnecessary. Added granular check in `willUpdate()` to only call `updateStreamContext()` when active stream's state actually changed.
@@ -709,40 +746,69 @@ keysToDelete.forEach((k) => this.modelOutputBackups.delete(k));
 
 ---
 
-## Implementation Details (2026-02-01)
+## Implementation Details
 
-### Files Modified
+### 2026-02-02 Changes
 
-| File                                              | Change                                                              |
-| ------------------------------------------------- | ------------------------------------------------------------------- |
-| `src/eventBus/StreamEventQueue.ts`                | **NEW** - Per-stream event queue for serializing async operations   |
-| `src/progressView/events/ProgressEventHandler.ts` | Use queue for task group events, removed `pendingTaskGroupUpdates`  |
-| `src/shared/schemas/streamState.ts`               | Added `TOOL_USE_FRONTEND_ONLY_KEYS` with `satisfies` check          |
-| `src/progressView/frontend/messageDispatcher.ts`  | Use schema-based field extraction via `extractFrontendOnlyFields()` |
-| `src/progressView/frontend/ProgressApp.ts`        | Removed context caching, added granular dependency check            |
-| `src/progressView/ProgressViewMessageHandler.ts`  | Fixed Map mutation with collect-then-delete pattern                 |
+| File                                                           | Change                                                                |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `src/shared/schemas/streamState.ts`                            | Added `ToolUseUIStateSchema`, `WorkflowUIStateSchema`; nested UI      |
+| `src/progressView/frontend/messageDispatcher.ts`               | Simplified UI preservation; fixed stale state in UPDATE_STREAM_STATUS |
+| `src/progressView/frontend/eventHandlers.ts`                   | Updated to use `state.ui.xxx` pattern                                 |
+| `src/progressView/frontend/ProgressApp.ts`                     | Updated focus complete handler for nested UI                          |
+| `src/progressView/frontend/components/ToolUseStreamContent.ts` | Updated property bindings for nested UI                               |
+| `src/progressView/frontend/store.ts`                           | Export new UI state types                                             |
+| `src/shared/streams/runSelection.ts`                           | Use `state.ui.selectedRunId`                                          |
+
+### 2026-02-01 Changes
+
+| File                                              | Change                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| `src/eventBus/StreamEventQueue.ts`                | **NEW** - Per-stream event queue for serializing async operations  |
+| `src/progressView/events/ProgressEventHandler.ts` | Use queue for task group events, removed `pendingTaskGroupUpdates` |
+| `src/shared/schemas/streamState.ts`               | Added `TOOL_USE_FRONTEND_ONLY_KEYS` (superseded 2026-02-02)        |
+| `src/progressView/frontend/messageDispatcher.ts`  | Use schema-based field extraction (superseded 2026-02-02)          |
+| `src/progressView/frontend/ProgressApp.ts`        | Removed context caching, added granular dependency check           |
+| `src/progressView/ProgressViewMessageHandler.ts`  | Fixed Map mutation with collect-then-delete pattern                |
 
 ### Architecture Notes
 
-**StreamEventQueue Pattern:**
+**Nested UI State Pattern (2026-02-02):**
+
+```typescript
+// Schema: Frontend-only fields nested under 'ui'
+interface ToolUseStreamState {
+  kind: 'tool-use';
+  // Backend-owned (replaced on update)
+  todos: TodoItem[];
+  queuedFollowUps: string[];
+  // Frontend-owned (preserved on updates)
+  ui: ToolUseUIState;
+}
+
+interface ToolUseUIState {
+  followUpText: string;
+  polishedText: string | null;
+  polishRevision: number;
+  transcribedText: string | null;
+  recording: boolean;
+  shouldFocusFollowUp: boolean;
+}
+
+// Update logic: Simply preserve ui property when kinds match
+const preserveUI = existing && existing.kind === backendState.kind;
+nextStates.set(stream.name, {
+  ...backendState,
+  ...(preserveUI && { ui: existing.ui }),
+  info: stream,
+} as StreamState);
+```
+
+**StreamEventQueue Pattern (2026-02-01):**
 
 ```typescript
 // Events for same stream serialize; different streams run parallel
 streamEventQueue.enqueue(streamId, () => processAddTaskGroup(data));
 streamEventQueue.enqueue(streamId, () => processUpdateTaskGroup(data));
 // updateTaskGroup waits for addTaskGroup to complete
-```
-
-**Schema-Based Frontend Field Extraction:**
-
-```typescript
-export const TOOL_USE_FRONTEND_ONLY_KEYS = [
-  'followUpText',
-  'polishedText',
-  'polishRevision',
-  'transcribedText',
-  'recording',
-  'shouldFocusFollowUp',
-] as const satisfies readonly (keyof ToolUseStreamState)[];
-// Adding new frontend-only field to type without updating array → TypeScript error
 ```
