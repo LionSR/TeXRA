@@ -98,6 +98,6 @@ export const animationStyles: CSSResult = css`
   }
 
   .spin {
-    animation: spin 1s linear infinite;
+    animation: spin 2s linear infinite;
   }
 `;
