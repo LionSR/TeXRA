@@ -19,7 +19,9 @@ export {
   type FollowupMode,
   type StreamState,
   type ToolUseStreamState,
+  type ToolUseUIState,
   type WorkflowStreamState,
+  type WorkflowUIState,
 } from '@shared/schemas';
 
 export type StreamFilter = AgentCategoryFilter;

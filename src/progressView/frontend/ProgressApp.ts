@@ -416,9 +416,12 @@ export class ProgressApp extends BaseWebviewApp {
       if (prev.kind !== AGENT_CATEGORY.TOOL_USE) return prev;
       return {
         ...prev,
-        shouldFocusFollowUp: false,
-        polishedText: null,
-        transcribedText: null,
+        ui: {
+          ...prev.ui,
+          shouldFocusFollowUp: false,
+          polishedText: null,
+          transcribedText: null,
+        },
       };
     });
   }
