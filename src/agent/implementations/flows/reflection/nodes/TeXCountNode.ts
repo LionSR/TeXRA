@@ -8,19 +8,19 @@ import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
 import { getFilesForRound } from '../helpers';
-import type {
-  ReflectionFlowShared,
-  RoundContext,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
 } from '../ReflectionServices';
 
+/**
+ * Prep result carries shared reference and computed files.
+ * Files are computed once in prep() to avoid redundant calls.
+ */
 interface PrepInput {
+  shared: ReflectionFlowShared;
   files: FileLocation[];
-  attachTeXCount: boolean;
-  context: RoundContext | null;
 }
 
 export class TeXCountNode<C = unknown> extends Node<
@@ -31,19 +31,19 @@ export class TeXCountNode<C = unknown> extends Node<
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService } = this.services;
     return {
+      shared,
       files: getFilesForRound(
         shared.currentRound,
         shared.roundOutputs,
         config,
         fileService,
       ),
-      attachTeXCount: config.toolConfig.attachTeXCount,
-      context: shared.context,
     };
   }
 
   async exec(prepRes: PrepInput): Promise<string | null> {
-    if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
+    const { config } = this.services;
+    if (!config.toolConfig.attachTeXCount || prepRes.files.length === 0) {
       return null;
     }
     return getTeXCountStats(prepRes.files.map((f) => f.absolutePath));
@@ -53,18 +53,19 @@ export class TeXCountNode<C = unknown> extends Node<
     _prepRes: PrepInput,
     error: Error,
   ): Promise<string | null> {
-    this.services.logger.debug(`TeXCount skipped: ${error.message}`);
+    const { logger } = this.services;
+    logger.debug(`TeXCount skipped: ${error.message}`);
     return null;
   }
 
   async post(
-    shared: ReflectionFlowShared,
-    _prepRes: PrepInput,
+    _shared: ReflectionFlowShared,
+    prepRes: PrepInput,
     execRes: string | null,
   ): Promise<string | undefined> {
-    if (execRes && shared.context) {
+    if (execRes && prepRes.shared.context) {
       this.services.modelHandler.prependTextToUserMessage(
-        shared.context.messages,
+        prepRes.shared.context.messages,
         execRes,
       );
     }

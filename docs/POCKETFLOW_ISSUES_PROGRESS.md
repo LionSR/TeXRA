@@ -138,15 +138,13 @@ if (!shouldFinalize) {
 
 **File**: `src/agent/implementations/flows/ToolUseRunFlow.ts:67-70`
 
-**Problem**: ~7 session lifecycle methods called directly on agent instead of via hooks:
+**Problem**: ~5 session lifecycle methods called directly on agent instead of via hooks:
 
 - `waitForFollowUp()`
 - `applyFollowUp()`
 - `clearPersistedSnapshot()`
 - `checkInterruption()`
 - `hasQueuedFollowUp()`
-- `markRunning()`
-- `enterWaitingState()`
 
 **Analysis**: The code comment at lines 67-70 documents this as intentional:
 
@@ -154,7 +152,9 @@ if (!shouldFinalize) {
 > This follows PocketFlow's pattern where nodes interact with the domain object
 > (agent) directly for stateful operations."
 
-The `IToolUseFlowAgent` interface (added in Issue #6 fix) now formally documents this contract.
+The `IToolUseSession` interface now focuses only on follow-up queue operations. Stream status
+transitions (`WAITING`, `RUNNING`) are handled directly by flow nodes via `StreamStatusService`
+for explicit control flow visibility.
 
 **Consideration for future**: Interruption checks (`isInterruptionRequested()`) happen in multiple
 places across flows. Could potentially be centralized at a higher abstraction layer, but this

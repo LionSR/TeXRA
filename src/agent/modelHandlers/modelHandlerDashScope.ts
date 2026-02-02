@@ -1,5 +1,3 @@
-// (none needed)
-
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';

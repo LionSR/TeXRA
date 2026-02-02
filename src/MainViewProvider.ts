@@ -1,22 +1,24 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared schemas
+import { MainViewPersistedStateSchema } from '@shared/schemas';
+
 // Local imports - agent
-import { refresh, computeAgentOptions } from '@agent/index';
+import { refresh, computeAgentOptionsData } from '@agent/index';
 
 // Local imports - common
-import { BaseWebviewProvider } from '@common/webview';
-import { getSharedLocalResourceRoots } from '@common/webview';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { consumePendingState } from '@common/state';
-import { agentDirectories } from '@frontend/agents';
-import { computeModelOptions } from '@model/computeModelOptions';
 import {
-  watchConfig,
-  getConfig,
-  DEBOUNCE_OPTIONS_MS,
-  DEBOUNCE_STATE_SAVE_MS,
-} from '@utils/config';
+  BaseWebviewProvider,
+  getSharedLocalResourceRoots,
+  MAIN_VIEW_COMMANDS,
+} from '@common/webview';
+import { consumePendingState } from '@common/state';
+
+// Local imports - frontend
+import { agentDirectories } from '@frontend/agents';
+import { computeModelOptionsData } from '@model/computeModelOptions';
+import { watchConfig, getConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 import { getServerSideKeyService } from '@/auth/serverKeys';
@@ -33,7 +35,7 @@ export class MainViewProvider
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private agentWatcher: vscode.FileSystemWatcher | undefined;
+  private agentWatcher: vscode.Disposable | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
@@ -81,7 +83,7 @@ export class MainViewProvider
     // Watch for agent configuration changes - only refresh agent options
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.toolUseAgents'],
+      ['texra.agents', 'texra.toolUseAgents', 'texra.explorer.agentsDirectory'],
       this.debouncedRefreshAgentOptions,
     );
 
@@ -146,10 +148,10 @@ export class MainViewProvider
     // Refresh the agent index to pick up configuration changes
     await refresh();
 
-    const agentOptions = await computeAgentOptions();
+    const optionsData = await computeAgentOptionsData();
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      options: agentOptions,
+      optionsData,
     });
   }
 
@@ -161,10 +163,10 @@ export class MainViewProvider
     if (!this._view) {
       return;
     }
-    const modelOptions = await computeModelOptions();
+    const optionsData = await computeModelOptionsData();
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      options: modelOptions,
+      optionsData,
     });
   }
 
@@ -183,39 +185,12 @@ export class MainViewProvider
   }
 
   private setupAgentWatcher() {
-    // Watch for YAML changes in agent directories (custom agents)
-    // This refreshes the agent dropdown when agents are added/removed/modified
-    const agentPattern = '**/*.yaml';
-    this.agentWatcher = vscode.workspace.createFileSystemWatcher(agentPattern);
-
-    // Cache of agent directory paths for filtering
-    let agentDirPaths: string[] = [];
-
-    // Update cache (called directly for init, debounced for file changes)
-    const updateAgentDirs = async () => {
-      const dirs = await agentDirectories.getAllLocal();
-      agentDirPaths = dirs.map((d) => d.directory);
-    };
-
-    // Initialize cache immediately (not debounced)
-    void updateAgentDirs();
-
-    // Debounced refresh - updates dirs and options on file changes
-    const debouncedAgentFileRefresh = debounce(async () => {
-      await updateAgentDirs();
-      await this.refreshAgentOptions();
-    }, DEBOUNCE_STATE_SAVE_MS);
-
-    // Filter and debounce agent file changes
-    const onAgentFileChange = (uri: vscode.Uri) => {
-      if (agentDirPaths.some((dir) => uri.fsPath.startsWith(dir))) {
-        void debouncedAgentFileRefresh();
-      }
-    };
-
-    this.agentWatcher.onDidCreate(onAgentFileChange);
-    this.agentWatcher.onDidChange(onAgentFileChange);
-    this.agentWatcher.onDidDelete(onAgentFileChange);
+    this.agentWatcher = agentDirectories.watchAgentDirectories({
+      pattern: '**/*.yaml',
+      onEvent: () => {
+        this.debouncedRefreshAgentOptions();
+      },
+    });
 
     this.context.subscriptions.push(this.agentWatcher);
   }
@@ -263,14 +238,20 @@ export class MainViewProvider
     });
 
     // Check if there's state to restore (consume it from pending state)
-    const pendingData = consumePendingState();
-
-    if (pendingData) {
+    let pendingData = consumePendingState();
+    while (pendingData) {
+      const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
+      if (!parsed.success) {
+        console.warn('Invalid pending state restore payload', parsed.error);
+        pendingData = consumePendingState();
+        continue;
+      }
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: pendingData.state,
+        state: parsed.data,
         executeImmediately: pendingData.executeImmediately,
       });
+      pendingData = consumePendingState();
     }
   }
 }

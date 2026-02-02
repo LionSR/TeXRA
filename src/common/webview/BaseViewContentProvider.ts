@@ -1,34 +1,19 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
 import { toErrorMessage } from '@common/errors';
 import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
 
-/** Descriptor for a webview module resource. */
 export interface ModuleDescriptor {
   key: string;
   path: string;
 }
 
-/**
- * Base class for all webview content providers.
- * Eliminates code duplication and provides consistent patterns.
- */
 export abstract class BaseViewContentProvider {
-  protected readonly logger: any;
+  protected readonly logger: typeof logger;
   protected readonly channel: string;
   private readonly viewPath: string;
 
-  /**
-   * @param context - VS Code extension context
-   * @param viewName - Name of this view (used for logging)
-   * @param moduleDescriptors - Optional view-specific module descriptors.
-   *   If provided, getModuleUris() will automatically build URIs from these.
-   *   If not provided, subclasses must override getModuleUris().
-   * @param viewPath - Optional view folder path. Defaults to camelCase of viewName.
-   */
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
@@ -43,92 +28,51 @@ export abstract class BaseViewContentProvider {
     logger.initialize(this.channel);
   }
 
-  /**
-   * Returns the relative path to the view directory.
-   */
   protected getViewPath(): string {
     return this.viewPath;
   }
 
-  /**
-   * Returns view-specific module URIs. Default implementation uses
-   * moduleDescriptors passed to constructor. Subclasses can override
-   * for custom URI generation.
-   */
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return this.buildUriRecord(webview, this.moduleDescriptors);
+    return this.buildUriRecord(webview, this.moduleDescriptors, [
+      'src',
+      this.getViewPath(),
+    ]);
   }
 
-  /**
-   * Optional: Override to provide additional template variables
-   */
-  protected getTemplateVariables(): Record<string, any> {
+  protected getTemplateVariables(): Record<string, string | vscode.Uri> {
     return {};
   }
 
-  /** Shared module descriptors available to all views */
-  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [
-    { key: 'styleUri', path: 'styles/index.css' },
-    { key: 'scriptUri', path: 'script.js' },
-    { key: 'domHandlersUri', path: 'modules/domHandlers.js' },
-    { key: 'constantsUri', path: 'modules/constants.js' },
-    { key: 'messageHandlersUri', path: 'modules/messageHandlers.js' },
-  ];
-
-  /**
-   * Common method to get webview paths
-   */
-  protected getWebviewPath(filePath: string): vscode.Uri {
-    return vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'src',
-      this.getViewPath(),
-      filePath,
-    );
-  }
-
-  protected getWebviewUri(webview: vscode.Webview, path: string): vscode.Uri {
-    return webview.asWebviewUri(this.getWebviewPath(path));
-  }
-
-  protected getCommonUri(webview: vscode.Webview, path: string): vscode.Uri {
-    return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
-    );
-  }
-
-  protected getNodeModulesUri(
+  protected buildUri(
     webview: vscode.Webview,
-    path: string,
+    pathSegments: string[],
   ): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
+      vscode.Uri.joinPath(this.context.extensionUri, ...pathSegments),
     );
   }
 
-  /** Convert an array of descriptors into a URI record */
   protected buildUriRecord(
     webview: vscode.Webview,
     descriptors: readonly ModuleDescriptor[],
+    basePath: string[],
   ): Record<string, vscode.Uri> {
     return Object.fromEntries(
-      descriptors.map((d) => [d.key, this.getWebviewUri(webview, d.path)]),
+      descriptors.map(({ key, path }) => [
+        key,
+        this.buildUri(webview, [...basePath, path]),
+      ]),
     );
   }
 
-  /**
-   * Standard implementation that subclasses can override if needed
-   */
   public getHtmlContent(webview: vscode.Webview): string {
     try {
-      const htmlPath = this.getWebviewPath('index.html');
-      const commonUris = this.getCommonModuleUris(webview);
-      const sharedUris = this.buildUriRecord(
-        webview,
-        this.sharedModuleDescriptors,
+      const htmlPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'src',
+        this.getViewPath(),
+        'index.html',
       );
-      const specificUris = this.getModuleUris(webview);
-      const templateVariables = this.getTemplateVariables();
 
       this.logger.debug(
         this.channel,
@@ -136,10 +80,9 @@ export abstract class BaseViewContentProvider {
       );
 
       return buildWebviewHtml(webview, htmlPath, {
-        ...commonUris,
-        ...sharedUris,
-        ...specificUris,
-        ...templateVariables,
+        ...this.getCommonModuleUris(webview),
+        ...this.getModuleUris(webview),
+        ...this.getTemplateVariables(),
       });
     } catch (err) {
       this.logger.error(
@@ -150,43 +93,9 @@ export abstract class BaseViewContentProvider {
     }
   }
 
-  /** Common module descriptors from src/common */
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [
-      { key: 'commonStyleUri', path: 'styles/common.css' },
-      { key: 'webviewStateUri', path: 'modules/webviewState.js' },
-      { key: 'webviewContextUri', path: 'modules/webviewContext.js' },
-      { key: 'commandsUri', path: 'webview/commands.js' },
-      { key: 'webviewThemeHandlersUri', path: 'webview/themeHandlers.js' },
-      { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
-      {
-        key: 'recordingButtonManagerUri',
-        path: 'modules/RecordingButtonManager.js',
-      },
-      { key: 'textareaUtilsUri', path: 'modules/textareaUtils.js' },
-      { key: 'htmlEncodingUri', path: 'modules/htmlEncoding.js' },
-      { key: 'iconConstantsUri', path: 'modules/iconConstants.js' },
-      {
-        key: 'baseWebviewMessageHandlerUri',
-        path: 'modules/BaseWebviewMessageHandler.js',
-      },
-      { key: 'baseFileUtilsUri', path: 'modules/files/baseFileUtils.js' },
-      { key: 'domUtilsUri', path: 'modules/domUtils.js' },
-      { key: 'baseDomHandlerUri', path: 'modules/BaseDomHandler.js' },
-      { key: 'stringUtilsUri', path: 'modules/stringUtils.js' },
-      { key: 'pathUtilsUri', path: 'modules/pathUtils.js' },
-      { key: 'debounceUri', path: 'modules/debounce.js' },
-      { key: 'clipboardUtilsUri', path: 'modules/clipboardUtils.js' },
-      { key: 'dropdownUtilsUri', path: 'modules/dropdownUtils.js' },
-      { key: 'streamStatusUri', path: 'constants/streamStatus.js' },
-      { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
-      // Filename kept as agentTypes.js for import map compatibility in webviews
-      { key: 'agentCategoriesUri', path: 'constants/agentTypes.js' },
-      { key: 'toggleStateStoreUri', path: 'modules/ToggleStateStore.js' },
-      { key: 'streamScopedMapUri', path: 'modules/StreamScopedMap.js' },
-    ];
+    [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
-  /** Node module descriptors from node_modules */
   private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
       {
@@ -197,34 +106,19 @@ export abstract class BaseViewContentProvider {
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];
 
-  /** Build URI record using a resolver function */
-  private buildUrisWithResolver(
-    webview: vscode.Webview,
-    descriptors: readonly ModuleDescriptor[],
-    resolver: (webview: vscode.Webview, path: string) => vscode.Uri,
-  ): Record<string, vscode.Uri> {
-    return Object.fromEntries(
-      descriptors.map(({ key, path }) => [
-        key,
-        resolver.call(this, webview, path),
-      ]),
-    );
-  }
-
-  /** Common URIs used by all views (from src/common and node_modules) */
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return {
-      ...this.buildUrisWithResolver(
+      ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
-        this.getCommonUri,
+        ['src', 'common'],
       ),
-      ...this.buildUrisWithResolver(
+      ...this.buildUriRecord(
         webview,
         BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
-        this.getNodeModulesUri,
+        ['node_modules'],
       ),
     };
   }

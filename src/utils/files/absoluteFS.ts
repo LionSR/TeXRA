@@ -21,5 +21,3 @@ export class AbsoluteFS extends BaseFS {
     }
   }
 }
-
-export default AbsoluteFS;

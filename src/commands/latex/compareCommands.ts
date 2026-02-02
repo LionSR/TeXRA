@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { extractAgentSuffix } from '@agent/utils';
+import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
@@ -61,7 +61,9 @@ async function validateFilesExist(
 /**
  * Register comparison related commands
  */
-export function registerCompareCommands(context: vscode.ExtensionContext) {
+export function registerCompareCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.compare', handleCompare),
     vscode.commands.registerCommand('texra.acceptEdited', handleAcceptEdited),

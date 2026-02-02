@@ -8,7 +8,6 @@
  */
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local file imports - individual approval modules
 import {
@@ -21,6 +20,7 @@ import {
   _rejectAllPendingToolEditApprovals,
   _rejectPendingToolEditApprovalsForStream,
 } from './toolEditApproval';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Clean up all approval state for a deleted stream.

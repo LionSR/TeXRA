@@ -21,9 +21,6 @@ export const MAX_PREVIEW_LINES = 120;
 /** Maximum preview characters for memory view UI */
 export const MAX_PREVIEW_CHARS = 8000;
 
-/** Entries to skip when walking directories */
-export const SKIP_ENTRIES = ['.', 'node_modules'] as const;
-
 /**
  * Check if a directory entry should be skipped during traversal.
  */

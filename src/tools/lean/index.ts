@@ -5,13 +5,6 @@ export {
   LeanProjectTool,
   LeanInspectTool,
 } from './LspTools';
-export type {
-  LeanDiagnosticsInput,
-  LeanFileInput,
-  LeanProjectInput,
-  LeanInspectInput,
-} from './LspTools';
 
 // Web API tools
 export { LeanLoogleTool } from './LoogleTool';
-export type { LeanLoogleInput } from './LoogleTool';

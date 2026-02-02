@@ -15,7 +15,6 @@ import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 import { z } from 'zod';
-import { encode as encodeHtml } from 'he';
 
 import {
   AgentCategory,
@@ -27,6 +26,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import type { AgentOptionData } from '@shared/schemas';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -34,21 +34,6 @@ logger.initialize(CHANNEL);
 // =============================================================================
 // TYPES (AgentSource is now imported from @agent/core/AgentDataclass)
 // =============================================================================
-
-/**
- * Remote agent visibility levels.
- *
- * Visibility is an array of group names that can access the agent.
- * User can access the agent if their permissions overlap with visibility.
- *
- * Common values:
- * - ['public']: Available to all authenticated users
- * - ['researcher']: Requires 'researcher' in user's permissions
- * - ['math', 'cs']: Available to users with 'math' OR 'cs' permission
- *
- * New visibility levels can be added in the database without code changes.
- */
-export type RemoteVisibility = string[];
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.
@@ -63,7 +48,7 @@ export interface AgentEntry {
   description?: string;
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
-  visibility?: RemoteVisibility; // remote only
+  visibility?: string[]; // remote only: group names that can access the agent
 }
 
 /**
@@ -86,7 +71,19 @@ export interface ResolvedAgent {
 // =============================================================================
 
 /** Suffix for multiple-output agent variants. */
-export const MULTIPLE_SUFFIX = '_multiple';
+const MULTIPLE_SUFFIX = '_multiple';
+
+/** Source priority for lookups (higher priority first). */
+const LOOKUP_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+  'remote',
+];
+
+/** Default agents for dropdowns. */
+const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 // =============================================================================
 // STATE
@@ -121,18 +118,10 @@ export async function loadAgents(): Promise<void> {
 }
 
 /**
- * Check if the agent cache has been initialized.
- * Use this to avoid redundant loadAgents() calls.
- */
-export function isAgentCacheInitialized(): boolean {
-  return initialized;
-}
-
-/**
  * Ensure agents are loaded, without triggering a re-scan if already loaded.
  * Prefer this over loadAgents() when you just need to access the cache.
  */
-export async function ensureAgentsLoaded(): Promise<void> {
+async function ensureAgentsLoaded(): Promise<void> {
   if (initialized) {
     return;
   }
@@ -187,14 +176,6 @@ async function doLoad(): Promise<void> {
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
 }
-
-/** Source priority for lookups (higher priority first). */
-const LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-  'remote',
-];
 
 /**
  * Get an agent by identifier.
@@ -276,7 +257,7 @@ export function getWorkflowAgents(): AgentEntry[] {
 }
 
 /** Get all tool-use agents. */
-export function getToolUseAgents(): AgentEntry[] {
+function getToolUseAgents(): AgentEntry[] {
   return [...cache.values()].filter(
     (e) => e.category === AgentCategory.ToolUse,
   );
@@ -466,36 +447,23 @@ export function createKey(source: AgentSource, name: string): string {
   return `${source}:${name}`;
 }
 
-/** Parse source:name key. */
-export function parseKey(
-  key: string,
-): { source: AgentSource; name: string } | undefined {
-  const colonIdx = key.indexOf(':');
-  if (colonIdx === -1) return undefined;
-
-  const source = key.slice(0, colonIdx);
-  const name = key.slice(colonIdx + 1);
-
-  if (!AgentSource.safeParse(source).success) return undefined;
-  return { source: source as AgentSource, name };
-}
-
 /**
  * Extract the clean agent name from an identifier.
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
  */
 export function getCleanAgentName(agentIdentifier: string): string {
-  return parseKey(agentIdentifier)?.name ?? agentIdentifier;
+  const colonIdx = agentIdentifier.indexOf(':');
+  if (colonIdx === -1) return agentIdentifier;
+
+  const source = agentIdentifier.slice(0, colonIdx);
+  if (!AgentSource.safeParse(source).success) return agentIdentifier;
+
+  return agentIdentifier.slice(colonIdx + 1);
 }
 
 // =============================================================================
 // _MULTIPLE VARIANT HELPERS
 // =============================================================================
-
-/** Check if agent name is a _multiple variant. */
-export function isMultipleVariant(name: string): boolean {
-  return name.endsWith(MULTIPLE_SUFFIX);
-}
 
 /** Get base name (strips _multiple suffix if present). */
 export function getBaseName(name: string): string {
@@ -506,7 +474,7 @@ export function getBaseName(name: string): string {
 
 /** Get _multiple variant name (adds suffix if not present). */
 export function getMultipleName(name: string): string {
-  return isMultipleVariant(name) ? name : `${name}${MULTIPLE_SUFFIX}`;
+  return name.endsWith(MULTIPLE_SUFFIX) ? name : `${name}${MULTIPLE_SUFFIX}`;
 }
 
 // =============================================================================
@@ -520,30 +488,10 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
   return entry?.source === 'remote';
 }
 
-/** Check if source should show an indicator in UI. */
-export function shouldShowSourceIndicator(source: AgentSource): boolean {
-  return source === 'custom' || source === 'remote';
-}
-
 // =============================================================================
-// HTML OPTIONS BUILDER (for webview dropdowns)
+// VISIBLE AGENTS (for dropdowns)
 // =============================================================================
 
-export const DEFAULT_WORKFLOW_AGENT = 'correct';
-export const DEFAULT_TOOL_USE_AGENT = 'chat';
-
-export interface AgentOptionsPayload {
-  workflow: string;
-  toolUse: string;
-}
-
-/**
- * Build dropdown HTML options from cached agents.
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
- */
 /**
  * Get visible workflow agents (filtered and deduplicated).
  * Returns the same agents shown in the main webview dropdown.
@@ -562,24 +510,6 @@ export function getVisibleToolUseAgents(): AgentEntry[] {
   const entries = getToolUseAgents();
   const configured = new Set(getConfig<string[]>('texra.toolUseAgents', []));
   return deduplicateByName(filterVisible(entries, configured));
-}
-
-export function buildAgentOptions(): AgentOptionsPayload {
-  const visibleWorkflow = getVisibleWorkflowAgents();
-  const visibleToolUse = getVisibleToolUseAgents();
-
-  return {
-    workflow: renderOptions(
-      visibleWorkflow,
-      DEFAULT_WORKFLOW_AGENT,
-      'No workflow agents',
-    ),
-    toolUse: renderOptions(
-      visibleToolUse,
-      DEFAULT_TOOL_USE_AGENT,
-      'No tool-use agents',
-    ),
-  };
 }
 
 /**
@@ -631,82 +561,70 @@ function filterVisible(
   );
 }
 
-function renderOptions(
+// =============================================================================
+// TYPED OPTIONS BUILDER (Lit-native)
+// =============================================================================
+
+// AgentOptionData type is imported from @shared/schemas (single source of truth)
+
+interface AgentOptionsDataPayload {
+  workflow: AgentOptionData[];
+  toolUse: AgentOptionData[];
+}
+
+/**
+ * Convert AgentEntry to typed option data.
+ */
+function entryToOptionData(entry: AgentEntry): AgentOptionData {
+  const key = createKey(entry.source, entry.name);
+  return {
+    value: key,
+    label: entry.name,
+    isMultiple: Boolean(entry.multiplePath),
+    isToolUse: entry.category === AgentCategory.ToolUse,
+    isRemote: entry.source === 'remote',
+    isCustom: entry.source === 'custom',
+    description: entry.description,
+  };
+}
+
+/**
+ * Sort entries: default agent first, then alphabetically.
+ */
+function sortAgentEntries(
   entries: AgentEntry[],
   defaultName: string,
-  emptyMsg: string,
-): string {
-  if (entries.length === 0) {
-    return `<vscode-option value="">${emptyMsg}</vscode-option>`;
-  }
-
-  // Sort: default agent first (by reference), then alphabetically
+): AgentEntry[] {
   const defaultEntry = entries.find((e) => e.name === defaultName);
-  const sorted = [...entries].sort((a, b) => {
+  return [...entries].sort((a, b) => {
     if (a === defaultEntry) return -1;
     if (b === defaultEntry) return 1;
     return a.name.localeCompare(b.name);
   });
-
-  return sorted.map(renderOption).join('\n');
 }
 
-function renderOption(entry: AgentEntry): string {
-  const key = `${entry.source}:${entry.name}`;
-  const attrs = [
-    `value="${encodeHtml(key)}"`,
-    `data-label="${encodeHtml(entry.name)}"`,
-    `data-source="${encodeHtml(entry.source)}"`,
-    entry.multiplePath && 'data-multiple="true"',
-    entry.category === AgentCategory.ToolUse && 'data-tool-use="true"',
-    entry.source === 'remote' && 'data-remote="true"',
-    entry.source === 'custom' && 'data-custom="true"',
-    entry.description && `data-description="${encodeHtml(entry.description)}"`,
-  ].filter(Boolean);
+/**
+ * Build typed agent options data for Lit-native rendering.
+ */
+function buildAgentOptionsData(): AgentOptionsDataPayload {
+  const visibleWorkflow = getVisibleWorkflowAgents();
+  const visibleToolUse = getVisibleToolUseAgents();
 
-  return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;
+  return {
+    workflow: sortAgentEntries(visibleWorkflow, DEFAULT_WORKFLOW_AGENT).map(
+      entryToOptionData,
+    ),
+    toolUse: sortAgentEntries(visibleToolUse, DEFAULT_TOOL_USE_AGENT).map(
+      entryToOptionData,
+    ),
+  };
 }
 
 /**
  * Async version - ensures cache is loaded first.
- *
- * Note: Selection preservation is handled client-side via _markOptionAsSelected
- * in the webview, which uses DOMParser to add the 'selected' attribute based
- * on the current dropdown value before setting innerHTML.
+ * Returns typed data for Lit-native rendering.
  */
-export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
+export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
   await ensureAgentsLoaded();
-  return buildAgentOptions();
-}
-
-/** Build placeholder options from config when cache isn't ready. */
-function buildPlaceholderOptions(
-  configKey: string,
-  defaultAgent: string,
-): string {
-  const agents = getConfig<string[]>(configKey, []);
-  const names = agents.length > 0 ? agents : [defaultAgent];
-  return names
-    .map(
-      (name) =>
-        `<vscode-option value="${encodeHtml(name)}">${encodeHtml(name)}</vscode-option>`,
-    )
-    .join('\n');
-}
-
-/**
- * Sync version - returns placeholders from config if not loaded.
- */
-export function computeAgentOptionsSync(): AgentOptionsPayload {
-  if (initialized) {
-    return buildAgentOptions();
-  }
-
-  return {
-    workflow: buildPlaceholderOptions('texra.agents', DEFAULT_WORKFLOW_AGENT),
-    toolUse: buildPlaceholderOptions(
-      'texra.toolUseAgents',
-      DEFAULT_TOOL_USE_AGENT,
-    ),
-  };
+  return buildAgentOptionsData();
 }

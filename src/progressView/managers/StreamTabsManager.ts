@@ -1,14 +1,18 @@
-// Local imports - shared state and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Internal imports
+import {
+  LogMessageDataSchema,
+  type LogMessageData,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { createArraySchema } from '@progressView/persistence/schemaUtils';
+
+/** Schema for deserializing persisted log messages */
+const LogMessagesSchema = createArraySchema(LogMessageDataSchema);
 
 /**
  * Manages stream tabs collection with persistence.
@@ -21,7 +25,7 @@ export class StreamTabsManager extends PersistentMapManager<
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
 
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage);
     this.logger = new AgentLogger('StreamTabsManager');
   }
@@ -124,12 +128,7 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
-    let messages = this.items.get(stream);
-    if (!messages) {
-      messages = [];
-      this.items.set(stream, messages);
-    }
-    return messages;
+    return this.getOrCreate(stream, () => []);
   }
 
   /**
@@ -142,14 +141,11 @@ export class StreamTabsManager extends PersistentMapManager<
     }
   }
 
-  /** Normalize loaded messages with shallow copies for independence */
+  /** Normalize loaded messages with schema validation */
   protected override deserialize(
     data: unknown,
     _key: StreamTabId,
   ): LogMessageData[] {
-    if (!Array.isArray(data)) {
-      return [];
-    }
-    return data.map((entry) => ({ ...entry })) as LogMessageData[];
+    return LogMessagesSchema.parse(data);
   }
 }

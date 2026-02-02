@@ -23,7 +23,7 @@ import {
   TodoItemSchema,
   type TodoItem,
   type TodoStatus,
-} from '@eventBus/schemas';
+} from '@shared/schemas';
 
 /** Configuration for displaying todo status - icon and label for each status */
 const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {

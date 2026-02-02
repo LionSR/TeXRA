@@ -1,33 +1,29 @@
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Type imports
-import type { OutputFileInfo } from '@agent/output/types';
-import type { AgentCategoryFilter } from '@agent/types/AgentStreamTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
-import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { TaskState } from '@logger/TaskState';
-import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
-
-/** Message payload sent to webview */
-interface WebviewMessage {
-  command: string;
-  [key: string]: unknown;
-}
-
-// Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import { COMMANDS } from '@progressView/modules/constants.js';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from '@eventBus/types';
-import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
+  AgentCategoryFilter,
+  AgentProposalPermission,
+  BashPermission,
+  ContextState,
+  InstructionUpdate,
+  LogMessageData,
+  OutputFileInfo,
+  ProgressViewOutboundMessage,
+  RetryPermission,
+  StreamState,
+  StreamStatus,
+  StreamTabId,
+  StreamTabInfo,
+  TaskGroup,
+  TodoItem,
+  TokenUsageStats,
+  ToolEditPermission,
+  UpdateTaskGroupPayload,
+} from '@shared/schemas';
 
 /**
  * Extra content to include with log updates.
@@ -49,11 +45,7 @@ export interface LogContentExtras {
   /** Missing outputs by run ID and round (batched with initial render) */
   runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
-  contextState?: {
-    inputTokens: number;
-    contextWindow: number;
-    utilizationPercent: number;
-  };
+  contextState?: ContextState;
 }
 
 /**
@@ -65,8 +57,11 @@ export interface LogContentExtras {
 export class WebviewUpdater {
   constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
 
-  /** Helper to send messages to all registered webviews */
-  private sendMessage(message: WebviewMessage): void {
+  /**
+   * Helper to send typed messages to all registered webviews.
+   * Uses ProgressViewOutboundMessage union type for compile-time safety.
+   */
+  private sendMessage(message: ProgressViewOutboundMessage): void {
     for (const webview of this.getWebviews()) {
       if (webview) {
         webview.postMessage(message);
@@ -93,18 +88,21 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update stream tabs in the webview
+   * Update stream tabs in the webview.
+   * Optionally includes full stream states - backend is source of truth.
    */
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
     agentFilter: AgentCategoryFilter,
+    streamStates?: Record<StreamTabId, StreamState>,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STREAMS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
       agentFilter,
+      streamStates,
     });
   }
 
@@ -131,7 +129,7 @@ export class WebviewUpdater {
     action: 'render' | 'clear' = 'render',
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_LOGS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOGS,
       stream: streamId,
       messages,
       groups,
@@ -145,7 +143,7 @@ export class WebviewUpdater {
    */
   appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
     this.sendMessage({
-      command: COMMANDS.APPEND_LOG,
+      command: PROGRESS_VIEW_COMMANDS.APPEND_LOG,
       stream,
       logMessage,
     });
@@ -156,7 +154,7 @@ export class WebviewUpdater {
    */
   updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_LOG,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_LOG,
       stream,
       logMessage,
     });
@@ -174,7 +172,7 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_FILES,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
       stream,
       ...payload,
     });
@@ -192,22 +190,22 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
       stream,
       ...payload,
     });
   }
 
-  showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
+  showToolEditPermission(permission: ToolEditPermission): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: prompt,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
+      request: permission,
     });
   }
 
-  resolveToolEditApprovalPrompt(requestId: string): void {
+  resolveToolEditPermission(requestId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
       requestId,
     });
   }
@@ -217,50 +215,50 @@ export class WebviewUpdater {
     bypassActive: boolean,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       stream,
       bypassActive,
     });
   }
 
-  showBashApprovalPrompt(prompt: BashApprovalPrompt): void {
+  showBashPermission(permission: BashPermission): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_BASH_APPROVAL,
-      request: prompt,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_BASH_APPROVAL,
+      request: permission,
     });
   }
 
-  resolveBashApprovalPrompt(requestId: string): void {
+  resolveBashPermission(requestId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_BASH_APPROVAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_BASH_APPROVAL,
       requestId,
     });
   }
 
-  showRetryRequest(request: RetryRequestPrompt): void {
+  showRetryRequest(request: RetryPermission): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_RETRY_REQUEST,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_RETRY_REQUEST,
       request,
     });
   }
 
   resolveRetryRequest(streamId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_RETRY_REQUEST,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_RETRY_REQUEST,
       streamId,
     });
   }
 
-  showAgentProposal(proposal: AgentProposalPrompt): void {
+  showAgentProposal(proposal: AgentProposalPermission): void {
     this.sendMessage({
-      command: COMMANDS.SHOW_AGENT_PROPOSAL,
+      command: PROGRESS_VIEW_COMMANDS.SHOW_AGENT_PROPOSAL,
       proposal,
     });
   }
 
   resolveAgentProposal(proposalId: string): void {
     this.sendMessage({
-      command: COMMANDS.RESOLVE_AGENT_PROPOSAL,
+      command: PROGRESS_VIEW_COMMANDS.RESOLVE_AGENT_PROPOSAL,
       proposalId,
     });
   }
@@ -275,7 +273,7 @@ export class WebviewUpdater {
     usage: TokenUsageStats,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_RUN_USAGE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
       stream,
       runId,
       usage,
@@ -295,7 +293,7 @@ export class WebviewUpdater {
     },
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_CONTEXT_STATE,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_CONTEXT_STATE,
       stream,
       contextState,
     });
@@ -304,17 +302,20 @@ export class WebviewUpdater {
   /**
    * Update or clear instruction panel content.
    * Pass null for instruction to clear the panel.
+   * @param runId - When provided, frontend uses this directly instead of resolving from state.
    */
   updateInstruction(
     stream: StreamTabId | '',
     instruction: InstructionUpdate | null,
     agentCategory?: string,
+    runId?: string | null,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_INSTRUCTION,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
       agentCategory,
+      runId,
     });
   }
 
@@ -323,7 +324,7 @@ export class WebviewUpdater {
    */
   updateTheme(theme: 'dark' | 'light'): void {
     this.sendMessage({
-      command: COMMANDS.THEME_SET,
+      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
       theme,
     });
   }
@@ -333,7 +334,7 @@ export class WebviewUpdater {
    */
   updateStatus(status: StreamStatus): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STATUS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STATUS,
       status,
     });
   }
@@ -349,7 +350,7 @@ export class WebviewUpdater {
     lastTimestamp?: number,
   ): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_STREAM_STATUS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
       lastTimestamp,
@@ -361,7 +362,7 @@ export class WebviewUpdater {
    */
   addTaskGroup(stream: StreamTabId, group: TaskGroup): void {
     this.sendMessage({
-      command: COMMANDS.ADD_TASK_GROUP,
+      command: PROGRESS_VIEW_COMMANDS.ADD_TASK_GROUP,
       stream,
       group,
     });
@@ -372,7 +373,7 @@ export class WebviewUpdater {
    */
   updateTaskGroup(update: UpdateTaskGroupPayload): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TASK_GROUP,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TASK_GROUP,
       update,
     });
   }
@@ -382,7 +383,7 @@ export class WebviewUpdater {
    */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_TODOS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
       stream,
       todos,
     });
@@ -393,7 +394,7 @@ export class WebviewUpdater {
    */
   updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
     this.sendMessage({
-      command: COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
       stream,
       messages,
     });
@@ -403,13 +404,12 @@ export class WebviewUpdater {
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
    *
-   * Note: This method delegates active stream resolution to ProgressViewState,
-   * which is the single source of truth. The WebviewUpdater only reads state
-   * and sends messages - it never mutates state.
+   * Note: This method computes valid active stream via ProgressViewState
+   * (single source of truth) and explicitly persists if changed.
    */
   updateAll(
     state: ProgressViewState,
-    statuses?: Map<string, string>,
+    statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
     const streams = buildStreamInfos(
@@ -419,8 +419,11 @@ export class WebviewUpdater {
     );
     const streamNames = streams.map((info) => info.name);
 
-    // Delegate active stream resolution to state (single source of truth)
-    const activeStream = state.resolveActiveStream(streamNames);
+    // Compute valid active stream (pure query) and persist if changed
+    const activeStream = state.pickValidActiveStream(streamNames);
+    if (activeStream !== state.activeStream) {
+      state.activeStream = activeStream;
+    }
 
     if (!this.isAvailable()) {
       return activeStream;
@@ -430,7 +433,15 @@ export class WebviewUpdater {
       this.updateTheme(theme);
     }
 
-    this.updateStreams(streams, activeStream, state.agentCategoryFilter);
+    // Send stream states - backend is the source of truth
+    const streamStates = state.getAllStreamStates();
+
+    this.updateStreams(
+      streams,
+      activeStream,
+      state.agentCategoryFilter,
+      streamStates,
+    );
 
     return activeStream;
   }

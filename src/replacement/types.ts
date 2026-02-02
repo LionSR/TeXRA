@@ -1,6 +1,7 @@
 export type ReplacementFunction = (
   match: string,
-  ...args: (string | number | undefined)[]
+
+  ...args: any[]
 ) => string;
 
 export type ReplacementValue = string | ReplacementFunction;

@@ -25,7 +25,7 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 // ============================================================================
 
 /** Base result type - subclasses extend with specific actions */
-export interface BaseResult {
+interface BaseResult {
   action: string;
   feedback?: string;
 }
@@ -36,7 +36,6 @@ type RequestState<TResult> =
       status: 'pending';
       resolve: (result: TResult) => void;
       timeoutId?: NodeJS.Timeout;
-      id: string;
     }
   | { status: 'resolved' };
 
@@ -110,7 +109,6 @@ export abstract class BasePromiseCoordinator<
         status: 'pending',
         resolve,
         timeoutId,
-        id,
       });
 
       // Emit show event (cast needed for generic base class)

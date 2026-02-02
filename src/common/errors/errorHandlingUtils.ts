@@ -1,73 +1,14 @@
-/**
- * Utility functions for consistent error logging and formatting across the TeXRA extension.
- *
- * This module provides a standardized approach to error handling that:
- * - Ensures consistent error message formatting
- * - Centralizes logging logic
- * - Provides both silent logging and user-visible error display
- * - Handles various error types (Error objects, strings, primitives, etc.)
- *
- * ## Error Utility Guide
- *
- * | Function | Returns | Use Case |
- * |----------|---------|----------|
- * | `toErrorMessage(err)` | `string` (always) | Guaranteed string conversion for logging |
- * | `formatError(prefix, err)` | `string` | Combine prefix with error message |
- * | `logErrorMessage(...)` | `string` | Log and return formatted error |
- * | `showLoggedErrorMessage(...)` | `Promise<string>` | Log and show to user |
- *
- * For optional extraction or serialization, see `@utils/core/stringCore`:
- * - `extractErrorMessage(err)` - returns `string | undefined`
- * - `serializeError(err)` - converts Error to plain object
- *
- * @fileoverview Error handling utilities for consistent logging and user feedback
- * @author TeXRA.ai
- */
-
-// Third-party imports
 import * as vscode from 'vscode';
+
 import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
-// Local imports - logging
+/** Valid documentation identifiers for error messages. */
+export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
-/**
- * Valid documentation identifiers for error messages.
- * This ensures type safety when referencing documentation sections.
- */
-export type DocId =
-  | 'intelligent-merge'
-  | 'custom-agents'
-  | 'tool-integration'
-  | 'latex-diff';
-
-/** Maximum length for error details before truncation */
 const MAX_ERROR_LENGTH = 500;
 
-/**
- * Format an error with a prefix for logging or user messages.
- *
- * This is the core formatting function used by all other error handling utilities.
- * It handles various error types consistently:
- * - Error objects: uses the .message property
- * - Primitives (string, number, boolean, null, undefined): converts to string
- * - Objects and arrays: converts to string representation
- *
- * @param prefix - The error message prefix (e.g., "Failed to save file", "API request failed")
- * @param err - The error to format (can be Error object, string, or any other type)
- * @returns A formatted error message in the format "prefix: error_detail"
- *
- * @example
- * ```typescript
- * const error = new Error("File not found");
- * const formatted = formatError("Failed to read config", error);
- * // Returns: "Failed to read config: File not found"
- *
- * const stringError = "Invalid parameter";
- * const formatted2 = formatError("Validation failed", stringError);
- * // Returns: "Validation failed: Invalid parameter"
- * ```
- */
+/** Format an error with a prefix for logging or user messages. */
 export function formatError(prefix: string, err: unknown): string {
   const detail = toErrorMessage(err);
   if (detail.length > MAX_ERROR_LENGTH) {
@@ -76,14 +17,7 @@ export function formatError(prefix: string, err: unknown): string {
   return `${prefix}: ${detail}`;
 }
 
-/**
- * Normalize any thrown value into a user-friendly error message string.
- *
- * Unlike {@link formatError}, this helper only returns the detail portion of
- * the message, making it suitable for composing custom prefixes or structured
- * payloads. Centralizing the coercion keeps error messaging consistent across
- * flows and model handlers.
- */
+/** Normalize any thrown value into a user-friendly error message string. */
 export function toErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -91,24 +25,7 @@ export function toErrorMessage(err: unknown): string {
   return String(err);
 }
 
-/**
- * Format a Zod validation error into a human-readable string.
- *
- * Converts Zod's structured error issues into a comma-separated list
- * of field paths and messages, making validation errors easier to understand.
- *
- * @param error - The Zod error to format
- * @returns A formatted string describing the validation issues
- *
- * @example
- * ```typescript
- * const result = schema.safeParse(data);
- * if (!result.success) {
- *   const message = formatZodError(result.error);
- *   // Returns: "inputFile: Required, model: String must contain at least 1 character(s)"
- * }
- * ```
- */
+/** Format a Zod validation error into a human-readable string. */
 export function formatZodError(error: z.ZodError): string {
   return error.issues
     .map((i) =>
@@ -117,27 +34,7 @@ export function formatZodError(error: z.ZodError): string {
     .join(', ');
 }
 
-/**
- * Parse data with a Zod schema and show a user-friendly error if parsing fails.
- *
- * This consolidates the common pattern of:
- * 1. Parse with safeParse
- * 2. If failure, show a logged error message with formatted Zod errors
- * 3. Return null on failure, parsed data on success
- *
- * @param channel - The logger channel for the error message
- * @param schema - The Zod schema to parse against
- * @param data - The data to parse
- * @param context - Optional context for the error message (e.g., "config", "params")
- * @returns The parsed data if successful, null if validation failed
- *
- * @example
- * ```typescript
- * const result = await parseWithErrorDisplay(CHANNEL, ConfigSchema, config, 'config');
- * if (!result) return; // Validation failed, error already shown to user
- * // Use result safely here
- * ```
- */
+/** Parse data with a Zod schema and show a user-friendly error if parsing fails. */
 export async function parseWithErrorDisplay<T>(
   channel: string,
   schema: z.ZodType<T>,
@@ -156,68 +53,13 @@ export async function parseWithErrorDisplay<T>(
   return result.data;
 }
 
-/**
- * Check if an error represents a file-not-found condition.
- *
- * Handles both Node.js filesystem errors (ENOENT) and VS Code FileSystemError.
- * Use this to differentiate between expected "file doesn't exist" errors and
- * actual filesystem failures (permissions, disk issues, etc.).
- *
- * Note: This function imports vscode for FileSystemError checks. While this
- * creates a VS Code dependency, it's acceptable because:
- * 1. This module runs in VS Code extension context
- * 2. The Node.js ENOENT check provides fallback for non-VS Code errors
- * 3. Callers like ExecutionKVStore benefit from not importing vscode directly
- *
- * @param err - The error to check
- * @returns true if the error indicates the file was not found
- *
- * @example
- * ```typescript
- * try {
- *   await fs.unlink(filePath);
- * } catch (err) {
- *   if (isFileNotFoundError(err)) {
- *     // File already deleted, this is fine
- *   } else {
- *     logger.warn(CHANNEL, `Error deleting file: ${err}`);
- *   }
- * }
- * ```
- */
+/** Check if an error represents a file-not-found condition (ENOENT or VS Code FileNotFound). */
 export function isFileNotFoundError(err: unknown): boolean {
-  // VS Code FileSystemError
   if (err instanceof vscode.FileSystemError) return err.code === 'FileNotFound';
-  // Node.js filesystem errors (ENOENT)
   return (err as { code?: string })?.code === 'ENOENT';
 }
 
-/**
- * Log a formatted error message and return the formatted message.
- *
- * This function combines error formatting with logging. It:
- * 1. Formats the error using formatError()
- * 2. Logs the formatted message to the specified channel
- * 3. Returns the formatted message for further use
- *
- * Use this when you want to log an error but not display it to the user.
- *
- * @param channel - The logging channel to use (e.g., "FileSystem", "API", "Validation")
- * @param prefix - The error message prefix describing the operation that failed
- * @param err - The error to format and log
- * @returns The formatted error message that was logged
- *
- * @example
- * ```typescript
- * try {
- *   await fs.readFile(filePath);
- * } catch (err) {
- *   const message = logErrorMessage("FileSystem", "Failed to read config file", err);
- *   // Logs: "Failed to read config file: ENOENT: no such file or directory"
- *   // Returns the same message for further processing
- * }
- * ```
- */
+/** Log a formatted error message and return it. */
 export function logErrorMessage(
   channel: string,
   prefix: string,
@@ -228,36 +70,7 @@ export function logErrorMessage(
   return message;
 }
 
-/**
- * Log a formatted error message and display it to the user.
- *
- * This is the primary function for handling errors that should be shown to the user.
- * It combines all error handling steps:
- * 1. Formats the error using formatError()
- * 2. Logs the formatted message to the specified channel
- * 3. Displays the error message to the user via VS Code's error notification
- * 4. Returns the formatted message for further use
- *
- * Use this when an error occurs that the user should be notified about.
- *
- * @param channel - The logging channel to use (e.g., "FileSystem", "API", "Commands")
- * @param prefix - The error message prefix describing what operation failed
- * @param err - The error object, string, or other value to format and display
- * @returns A promise that resolves to the formatted error message that was displayed
- *
- * @example
- * ```typescript
- * try {
- *   const result = await apiCall();
- * } catch (err) {
- *   await showLoggedErrorMessage("API", "Failed to fetch user data", err);
- *   // This will:
- *   // 1. Log: "Failed to fetch user data: Network error"
- *   // 2. Show user popup: "Failed to fetch user data: Network error"
- *   // 3. Return: "Failed to fetch user data: Network error"
- * }
- * ```
- */
+/** Log a formatted error message and display it to the user. */
 export async function showLoggedErrorMessage(
   channel: string,
   prefix: string,
@@ -268,34 +81,7 @@ export async function showLoggedErrorMessage(
   return message;
 }
 
-/**
- * Log a pre-formatted message and display it to the user as an error.
- *
- * Use this function when you already have a complete, properly formatted error message
- * and don't need additional error object processing. This is useful for:
- * - Validation errors with custom messages
- * - Configuration errors
- * - Messages that don't originate from caught exceptions
- *
- * @param channel - The logging channel to use (e.g., "Validation", "Configuration")
- * @param message - The complete error message to log and display to the user
- * @returns A promise that resolves to the message that was displayed
- *
- * @example
- * ```typescript
- * // Validation error scenario
- * if (!inputFile || !agent || !model) {
- *   await showLoggedMessage("Validation", "Missing required parameters: inputFile, agent, and model must be provided");
- *   return;
- * }
- *
- * // Configuration error scenario
- * if (!workspacePath) {
- *   await showLoggedMessage("Configuration", "No workspace folder is currently open");
- *   return;
- * }
- * ```
- */
+/** Log a pre-formatted message and display it to the user as an error. */
 export async function showLoggedMessage(
   channel: string,
   message: string,
@@ -305,24 +91,7 @@ export async function showLoggedMessage(
   return message;
 }
 
-/**
- * Log a message and display it to the user as an information notification.
- *
- * This function is the success/info counterpart to `showLoggedMessage`. Use it for:
- * - Success messages that should be logged for telemetry
- * - Status updates that don't represent errors
- * - Completion notifications
- *
- * @param channel - The logging channel to use (e.g., "Commands", "FileSystem")
- * @param message - The message to log and display to the user
- * @returns A promise that resolves to the message that was displayed
- *
- * @example
- * ```typescript
- * await showLoggedInfoMessage("LaTeXCommands", "LaTeX file indented successfully");
- * // Logs at info level and shows information notification
- * ```
- */
+/** Log a message and display it to the user as an information notification. */
 export async function showLoggedInfoMessage(
   channel: string,
   message: string,
@@ -332,17 +101,7 @@ export async function showLoggedInfoMessage(
   return message;
 }
 
-/**
- * Log an error message, display it with a docs action and open the docs if selected.
- *
- * This helper keeps messaging consistent when providing quick access to
- * documentation for resolving the error.
- *
- * @param channel - The logging channel to use (e.g., "Configuration")
- * @param message - The error message to log and display
- * @param docId - Identifier for the documentation to open (must be a valid DocId)
- * @param actionLabel - Label for the docs action button (defaults to 'View Docs')
- */
+/** Log an error message, display it with a docs action, and open the docs if selected. */
 export async function showLoggedMessageWithDocs(
   channel: string,
   message: string,

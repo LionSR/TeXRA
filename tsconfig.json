@@ -3,12 +3,15 @@
     "module": "commonjs",
     "target": "ES2022",
     "lib": ["ES2023", "DOM"],
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "sourceMap": false,
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "~/*": ["src/*"],
+      "@shared/*": ["src/shared/*"],
       "@common/*": ["src/common/*"],
       "@webview/*": ["src/webview/*"],
       "@agent/*": ["src/agent/*"],
@@ -41,5 +44,11 @@
     // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
     // "noUnusedParameters": true,  /* Report errors on unused parameters. */
   },
-  "exclude": ["node_modules", "prototypes", "supabase"]
+  "exclude": [
+    "node_modules",
+    "prototypes",
+    "supabase",
+    "vite.config.ts",
+    "esbuild.config.mjs"
+  ]
 }

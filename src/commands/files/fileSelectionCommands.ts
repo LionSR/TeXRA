@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
 import { fileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
@@ -60,30 +60,61 @@ export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.selectInputFile', selectInputFile),
-    vscode.commands.registerCommand('texra.selectInputFiles', selectInputFiles),
     vscode.commands.registerCommand(
-      'texra.selectReferenceFiles',
+      FILE_SELECTION_COMMAND_IDS.selectInputFile,
+      selectInputFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectReferenceFile,
+      selectReferenceFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFile,
+      selectAuxiliaryFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectInputFiles,
+      selectInputFiles,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectReferenceFiles,
       selectReferenceFiles,
     ),
     vscode.commands.registerCommand(
-      'texra.selectAuxiliaryFiles',
+      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFiles,
       selectAuxiliaryFiles,
     ),
-    vscode.commands.registerCommand('texra.selectMediaFiles', selectMediaFiles),
-    vscode.commands.registerCommand('texra.selectMediaFile', selectMediaFile),
     vscode.commands.registerCommand(
-      'texra.selectOutputFiles',
+      FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
+      selectMediaFiles,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectMediaFile,
+      selectMediaFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
       selectOutputFiles,
     ),
-    vscode.commands.registerCommand('texra.selectEditedFile', selectEditedFile),
-    vscode.commands.registerCommand('texra.getCurrentFile', getCurrentFile),
-    vscode.commands.registerCommand('texra.selectBaseFile', selectBaseFile),
-    vscode.commands.registerCommand('texra.refreshInputFiles', () =>
-      fileLister.list('input'),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectEditedFile,
+      selectEditedFile,
     ),
-    vscode.commands.registerCommand('texra.refreshBaseFiles', () =>
-      fileLister.list('input'),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
+      getCurrentFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.selectBaseFile,
+      selectBaseFile,
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
+      () => fileLister.list('input'),
+    ),
+    vscode.commands.registerCommand(
+      FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
+      () => fileLister.list('input'),
     ),
   );
 }
@@ -92,9 +123,23 @@ const selectInputFile = createPicker({
   allowMany: false,
   openLabel: 'Select File',
   filters: () => ({
-    'Text files': getIncludedExtensions('input').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input'),
+  }),
+});
+
+const selectReferenceFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Ref File',
+  filters: () => ({
+    'Text files': getFilterExtensions('reference'),
+  }),
+});
+
+const selectAuxiliaryFile = createPicker({
+  allowMany: false,
+  openLabel: 'Select Auxiliary File',
+  filters: () => ({
+    'Text files': getFilterExtensions('auxiliary'),
   }),
 });
 
@@ -102,9 +147,7 @@ const selectInputFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('input', ['.txt', '.tex', '.md']).map(
-      (ext) => ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input', ['.txt', '.tex', '.md']),
   }),
 });
 
@@ -112,9 +155,7 @@ const selectReferenceFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Ref Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('reference').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('reference'),
   }),
 });
 
@@ -122,9 +163,7 @@ const selectAuxiliaryFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Auxiliary Files',
   filters: () => ({
-    'Text files': getIncludedExtensions('auxiliary').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('auxiliary'),
   }),
 });
 
@@ -132,12 +171,8 @@ const selectMediaFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Media',
   filters: () => ({
-    'Image files': getIncludedExtensions('media').map((ext) =>
-      ext.replace('.', ''),
-    ),
-    'Audio files': getIncludedExtensions('audio').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Image files': getFilterExtensions('media'),
+    'Audio files': getFilterExtensions('audio'),
   }),
 });
 
@@ -145,10 +180,8 @@ const selectMediaFile = createPicker({
   allowMany: false,
   openLabel: 'Select Media File',
   filters: () => ({
-    Images: getIncludedExtensions('media').map((ext) => ext.replace('.', '')),
-    'Audio files': getIncludedExtensions('audio').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    Images: getFilterExtensions('media'),
+    'Audio files': getFilterExtensions('audio'),
   }),
 });
 
@@ -166,31 +199,25 @@ const selectEditedFile = createPicker({
 
 async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)
-  const currentFile = vscode.window.activeTextEditor?.document;
-  if (currentFile && currentFile.uri.scheme === 'file') {
-    return WorkspaceFS.relativePath(currentFile.uri.fsPath);
+  const doc = vscode.window.activeTextEditor?.document;
+  if (doc?.uri.scheme === 'file') {
+    return WorkspaceFS.relativePath(doc.uri.fsPath);
   }
+
   // Fallback to active tab (for media files like images, PDFs)
-  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-  if (activeTab?.input) {
-    const input = activeTab.input;
-    if (
-      (input instanceof vscode.TabInputText ||
-        input instanceof vscode.TabInputCustom) &&
-      input.uri.scheme === 'file'
-    ) {
-      return WorkspaceFS.relativePath(input.uri.fsPath);
-    }
-  }
-  return null;
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  const isFileInput =
+    (input instanceof vscode.TabInputText ||
+      input instanceof vscode.TabInputCustom) &&
+    input.uri.scheme === 'file';
+
+  return isFileInput ? WorkspaceFS.relativePath(input.uri.fsPath) : null;
 }
 
 const selectBaseFile = createPicker({
   allowMany: false,
   openLabel: 'Select Base File',
   filters: () => ({
-    'Text files': getIncludedExtensions('input').map((ext) =>
-      ext.replace('.', ''),
-    ),
+    'Text files': getFilterExtensions('input'),
   }),
 });

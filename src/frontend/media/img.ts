@@ -38,43 +38,21 @@ function ensureTempDir(): void {
   }
 }
 
-/** Try to resolve a file path and return the absolute path when it exists. */
-async function resolveFileIfExists(filePath: string): Promise<string | null> {
+/** Resolve a file path and return the absolute path, or null if not found. */
+async function resolveFile(filePath: string): Promise<string | null> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
   const exists = await AbsoluteFS.exists(absolutePath);
-
   return exists ? absolutePath : null;
 }
 
-/** Resolve a file path and ensure it exists. */
-async function resolveExistingFile(
-  filePath: string,
-  resourceLabel: string = 'File',
-): Promise<string> {
-  const absolutePath = await resolveFileIfExists(filePath);
-
-  if (!absolutePath) {
-    throw new Error(`${resourceLabel} not found: ${filePath}`);
-  }
-
-  return absolutePath;
-}
-
 /** Load a PDF and return its page count. Expects an absolute path. */
-async function loadPdfPageCount(
-  absolutePath: string,
-  displayPath: string,
-): Promise<number> {
+async function loadPdfPageCount(absolutePath: string): Promise<number> {
   const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
   const pdfDoc = await PDFDocument.load(pdfBytes, {
     updateMetadata: false,
     ignoreEncryption: true,
   });
-
-  const pageCount = pdfDoc.getPageCount();
-
-  logger.debug(CHANNEL, `PDF page count for ${displayPath}: ${pageCount}`);
-  return pageCount;
+  return pdfDoc.getPageCount();
 }
 
 /**
@@ -114,15 +92,11 @@ async function selectImageTool(): Promise<'magick' | 'gm'> {
   throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
 }
 
-/**
- * Get the dimensions of an image file
- * @param imagePath Path to the image file
- * @returns Promise resolving to width and height
- */
+/** Get the dimensions of an image file using ImageMagick or GraphicsMagick. */
 async function getImageDimensions(
   imagePath: string,
+  tool: 'magick' | 'gm',
 ): Promise<{ width: number; height: number }> {
-  const tool = await selectImageTool();
   const identifyArgs = [tool, 'identify', '-format', '%w %h', imagePath];
   const result = await executeCommand(identifyArgs, { channel: CHANNEL });
   if (!result.success || !result.stdout) {
@@ -137,29 +111,27 @@ async function getImageDimensions(
       `Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`,
     );
   }
-
   return { width, height };
 }
 
-/**
- * Resize an image if it exceeds the maximum dimensions
- * @param imagePath Path to the image file
- * @returns Promise resolving to the path of the resized image (or original if no resize needed)
- */
+/** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
+  const tool = await selectImageTool();
   const maxDimension = getMaxImageDimension();
-  const { width, height } = await getImageDimensions(imagePath);
+  const { width, height } = await getImageDimensions(imagePath, tool);
+
   if (width <= maxDimension && height <= maxDimension) {
     return imagePath;
   }
+
   const ext = path.extname(imagePath);
   const tempPath = path.join(
     os.tmpdir(),
     `texra-resized-${crypto.randomUUID()}${ext}`,
   );
-  const tool = await selectImageTool();
-  // ImageMagick v7+: use direct form (magick input -resize ... output)
-  // GraphicsMagick: requires 'convert' subcommand (gm convert input -resize ... output)
+
+  // ImageMagick v7+: magick input -resize ... output
+  // GraphicsMagick: gm convert input -resize ... output
   const convertArgs = [
     tool,
     ...(tool === 'gm' ? ['convert'] : []),
@@ -172,6 +144,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   if (!result.success) {
     throw new Error(result.stderr || 'Failed to resize image');
   }
+
   logger.debug(
     CHANNEL,
     `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
@@ -179,15 +152,15 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   return tempPath;
 }
 
-/**
- * Convert an image file to a base64 encoded string
- * @param mediaPath Path to the image file (relative to workspace)
- * @returns Promise<string> Base64 encoded string of the image
- */
+/** Convert an image file to a base64 encoded string, resizing if needed. */
 export async function getBase64EncodedMedia(
   mediaPath: string,
 ): Promise<string> {
-  const absolutePath = await resolveExistingFile(mediaPath);
+  const absolutePath = await resolveFile(mediaPath);
+  if (!absolutePath) {
+    throw new Error(`File not found: ${mediaPath}`);
+  }
+
   const mimeType = getMimeType(absolutePath);
   let tempPath: string | null = null;
   let pathToRead = absolutePath;
@@ -203,17 +176,15 @@ export async function getBase64EncodedMedia(
 
     const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
     if (mediaBytes.length === 0) {
-      logger.warn(CHANNEL, `Skipping empty media file: ${mediaPath}`);
       throw new Error(`File is empty: ${mediaPath}`);
     }
-    const base64String = mediaBytes.toString('base64');
+
     logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
-    return base64String;
+    return mediaBytes.toString('base64');
   } finally {
     if (tempPath) {
       try {
         AbsoluteFS.deleteSync(tempPath);
-        logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
       } catch (err) {
         logger.warn(
           CHANNEL,
@@ -224,64 +195,46 @@ export async function getBase64EncodedMedia(
   }
 }
 
-/**
- * Get the number of pages in a PDF file using pdf-lib
- * @param pdfPath Path to the PDF file (can be relative to workspace)
- * @returns Promise<number> Number of pages in the PDF
- */
+/** Get the number of pages in a PDF file. Returns 0 if file not found or error. */
 export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
-    const absolutePath = await resolveFileIfExists(pdfPath);
-
+    const absolutePath = await resolveFile(pdfPath);
     if (!absolutePath) {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return 0;
     }
-
-    return await loadPdfPageCount(absolutePath, pdfPath);
+    return await loadPdfPageCount(absolutePath);
   } catch (err) {
     logger.error(CHANNEL, `Error counting PDF pages: ${toErrorMessage(err)}`);
     return 0;
   }
 }
 
-/**
- * Convert a single page of a PDF to a PNG image
- * @param pdfPath Path to the PDF file (relative to workspace)
- * @param pageNum Page number to convert (1-indexed)
- * @param quality Quality of the output PNG image (default: 300)
- * @param maxSize Maximum size of the output image (default: [1024, 1024])
- * @returns Promise<string> Base64 encoded PNG image
- */
+/** Convert a single page of a PDF to a base64 encoded PNG image. */
 export async function singlePagePdf2Png(
   pdfPath: string,
   pageNum: number = 1,
   quality: number = 300,
   maxSize: [number, number] = [1024, 1024],
 ): Promise<string> {
-  const tempFilePattern = `temp_${Date.now()}`;
-  let tempFilePath: string | undefined;
-
   try {
-    logger.debug(
-      CHANNEL,
-      `Starting singlePagePdf2Png for ${pdfPath}, page ${pageNum}`,
-    );
-
     // Check for GraphicsMagick/ImageMagick installation
-    const isImageMagickInstalled = await checkMultipleToolsInstalled(
+    const toolsInstalled = await checkMultipleToolsInstalled(
       ['magick', 'gm'],
       false,
     );
-    if (!isImageMagickInstalled.some(Boolean)) {
+    if (!toolsInstalled.some(Boolean)) {
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    const absolutePath = await resolveExistingFile(pdfPath, 'PDF file');
-    logger.debug(CHANNEL, `Full path to PDF: ${absolutePath}`);
+    const absolutePath = await resolveFile(pdfPath);
+    if (!absolutePath) {
+      throw new Error(`PDF file not found: ${pdfPath}`);
+    }
 
     ensureTempDir();
 
+    const tempFilePattern = `temp_${Date.now()}`;
     const options = {
       density: quality,
       width: maxSize[0],
@@ -291,50 +244,32 @@ export async function singlePagePdf2Png(
       saveFilename: path.parse(tempFilePattern).name,
       savePath: TEMP_DIR,
     };
-    logger.debug(CHANNEL, `pdf2pic options: ${JSON.stringify(options)}`);
 
     const convert = fromPath(absolutePath, options);
-    logger.debug(CHANNEL, `pdf2pic convert object created`);
-
     const result = await convert(pageNum);
-    logger.debug(CHANNEL, `pdf2pic convert result: ${JSON.stringify(result)}`);
 
-    // Update tempFilePath to match pdf2pic's naming convention
-    if (!result || !result.path) {
+    if (!result?.path) {
       throw new Error('PDF conversion failed: No output path returned');
     }
-    tempFilePath = result.path;
 
-    if (!AbsoluteFS.existsSync(tempFilePath)) {
+    if (!AbsoluteFS.existsSync(result.path)) {
       throw new Error(
         'Failed to convert PDF page to PNG: Output file not found',
       );
     }
 
-    // Read the generated PNG file and convert to base64
-    const imageBuffer = AbsoluteFS.readBytesSync(tempFilePath);
-    const base64String = imageBuffer.toString('base64');
-
+    const imageBuffer = AbsoluteFS.readBytesSync(result.path);
     logger.debug(
       CHANNEL,
       `Successfully converted page ${pageNum} of ${pdfPath} to PNG`,
     );
-    return base64String;
+    return imageBuffer.toString('base64');
   } finally {
-    // Always clean up all temporary files in the temporary directory
-    logger.debug(CHANNEL, `Cleaning up temporary files in ${TEMP_DIR}`);
     await cleanupTempFiles(TEMP_DIR, 'temp_');
   }
 }
 
-/**
- * Convert multiple pages of a PDF to PNG images
- * @param pdfPath Path to the PDF file (relative to workspace)
- * @param quality Quality of the output PNG images (default: 300)
- * @param maxSize Maximum size of the output images (default: [1024, 1024])
- * @param maxPages Maximum number of pages to convert (default: 100)
- * @returns Promise<string[]> Array of base64 encoded PNG images
- */
+/** Convert multiple pages of a PDF to base64 encoded PNG images. */
 export async function multiPagePdf2Png(
   pdfPath: string,
   quality: number = 300,
@@ -362,14 +297,7 @@ export async function multiPagePdf2Png(
   return base64Images;
 }
 
-/**
- * Process a PDF file and return base64 encoded PNG image(s)
- * @param pdfPath Path to the PDF file (relative to workspace)
- * @param maxPages Maximum number of pages to convert
- * @param quality Quality of the output PNG images
- * @param maxSize Maximum size of the output images
- * @returns Promise<string | string[] | null> Base64 encoded PNG image(s) or null if error
- */
+/** Process a PDF file and return base64 encoded PNG image(s). Returns null on error. */
 export async function processPdf2Png(
   pdfPath: string,
   maxPages?: number,
@@ -377,32 +305,29 @@ export async function processPdf2Png(
   maxSize?: [number, number],
 ): Promise<string | string[] | null> {
   try {
-    const absolutePath = await resolveFileIfExists(pdfPath);
-
+    const absolutePath = await resolveFile(pdfPath);
     if (!absolutePath) {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return null;
     }
 
-    const pageCount = await loadPdfPageCount(absolutePath, pdfPath);
+    const pageCount = await loadPdfPageCount(absolutePath);
     if (pageCount === 0) {
       return null;
     }
 
-    // Use default values if not provided
     const finalQuality = quality ?? 300;
     const finalMaxSize: [number, number] = maxSize ?? [1024, 1024];
 
     if (pageCount === 1) {
       return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);
-    } else {
-      return await multiPagePdf2Png(
-        pdfPath,
-        finalQuality,
-        finalMaxSize,
-        maxPages,
-      );
     }
+    return await multiPagePdf2Png(
+      pdfPath,
+      finalQuality,
+      finalMaxSize,
+      maxPages,
+    );
   } catch (err) {
     logger.error(CHANNEL, `Error processing PDF input: ${toErrorMessage(err)}`);
     return null;

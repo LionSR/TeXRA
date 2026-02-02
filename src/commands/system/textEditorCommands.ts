@@ -14,10 +14,16 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);
 
-export function registerTextEditorCommands(context: vscode.ExtensionContext) {
+export const textEditorCommands = {
+  testTextEditor: 'texra.testTextEditor',
+};
+
+export function registerTextEditorCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'texra.testTextEditor',
+      textEditorCommands.testTextEditor,
       handleTestTextEditor,
     ),
   );

@@ -25,15 +25,19 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
+import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
 logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
 
-/** Expand tabs to 4 spaces for consistent display */
-function expandTabs(content: string): string {
-  return content.replaceAll('\t', '    ');
+/** Rethrow ToolError as-is; wrap other errors with context message */
+function rethrowWithContext(error: unknown, context: string): never {
+  if (error instanceof ToolError) {
+    throw error;
+  }
+  throw new ToolError(`${context}: ${error}`);
 }
 
 /** Maps API type versions to their corresponding tool names */
@@ -81,10 +85,6 @@ export class TextEditorTool extends defineTool({
   // File history for undo operations
   private fileHistory: Map<string, string[]> = new Map();
 
-  /**
-   * Create a new TextEditorTool
-   * @param apiType - The type of text editor tool (based on Claude version)
-   */
   constructor(
     apiType:
       | 'text_editor_20250124'
@@ -97,9 +97,6 @@ export class TextEditorTool extends defineTool({
     this.name = name;
   }
 
-  /**
-   * Get the list of allowed commands for this API version.
-   */
   private getAllowedCommands(): string {
     if (this.apiType === 'text_editor_20250429') {
       return 'view, create, str_replace, insert';
@@ -107,57 +104,34 @@ export class TextEditorTool extends defineTool({
     return 'view, create, str_replace, insert, undo_edit';
   }
 
-  /**
-   * Execute the tool with the given arguments
-   * @param input - Tool call input parameters
-   */
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
     const { command, path: filePath } = input;
 
-    // Validate the path and command
     await this.validatePath(command, filePath);
 
-    // Execute the appropriate command
     switch (command) {
       case 'view':
         return this.view(filePath, input.view_range ?? undefined);
-      case 'create':
-        if (!input.file_text) {
-          throw new ToolError(
-            'Parameter `file_text` is required for command: create',
-          );
-        }
+      case 'create': {
+        const fileText = requireField(input.file_text, 'file_text', command);
         logger.info(CHANNEL, `create: ${filePath}`);
-        return this.create(filePath, input.file_text);
-      case 'str_replace':
-        if (!input.old_str) {
-          throw new ToolError(
-            'Parameter `old_str` is required for command: str_replace',
-          );
-        }
-        logger.info(
-          CHANNEL,
-          `str_replace: ${input.old_str} -> ${input.new_str}`,
+        return this.create(filePath, fileText);
+      }
+      case 'str_replace': {
+        const oldStr = requireField(input.old_str, 'old_str', command);
+        logger.info(CHANNEL, `str_replace: ${oldStr} -> ${input.new_str}`);
+        return this.strReplace(filePath, oldStr, input.new_str ?? '');
+      }
+      case 'insert': {
+        const insertLine = requireField(
+          input.insert_line,
+          'insert_line',
+          command,
         );
-        return this.strReplace(filePath, input.old_str, input.new_str ?? '');
-
-      case 'insert':
-        // eslint-disable-next-line eqeqeq
-        if (input.insert_line == null) {
-          throw new ToolError(
-            'Parameter `insert_line` is required for command: insert',
-          );
-        }
-        if (!input.new_str) {
-          throw new ToolError(
-            'Parameter `new_str` is required for command: insert',
-          );
-        }
-        logger.info(
-          CHANNEL,
-          `insert: ${input.insert_line} -> ${input.new_str}`,
-        );
-        return this.insert(filePath, input.insert_line, input.new_str);
+        const newStr = requireField(input.new_str, 'new_str', command);
+        logger.info(CHANNEL, `insert: ${insertLine} -> ${newStr}`);
+        return this.insert(filePath, insertLine, newStr);
+      }
       case 'undo_edit':
         // Claude 4 models don't support undo_edit command
         if (this.apiType === 'text_editor_20250429') {
@@ -174,17 +148,10 @@ export class TextEditorTool extends defineTool({
     }
   }
 
-  /**
-   * Validate the path and command combination
-   * @param command - The command to validate
-   * @param filePath - The path to validate
-   * @private
-   */
   private async validatePath(
     command: EditorCommand,
     filePath: string,
   ): Promise<void> {
-    // Check if the path exists (except for create command)
     const exists = await WorkspaceFS.exists(filePath);
 
     if (!exists && command !== 'create') {
@@ -200,36 +167,25 @@ export class TextEditorTool extends defineTool({
     }
 
     // Check if the path is a directory (only view command can be used on directories)
-    try {
-      if (exists) {
+    if (exists) {
+      try {
         const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
-
         if (stats.type === vscode.FileType.Directory && command !== 'view') {
           throw new ToolError(
             `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
           );
         }
+      } catch (error) {
+        rethrowWithContext(error, `Error validating path`);
       }
-    } catch (error) {
-      if (!(error instanceof ToolError)) {
-        throw new ToolError(`Error validating path: ${error}`);
-      }
-      throw error;
     }
   }
 
-  /**
-   * View a file or list directory contents
-   * @param filePath - Path to the file or directory
-   * @param viewRange - Optional range of lines to view (start, end)
-   * @private
-   */
   private async view(
     filePath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
     try {
-      // Check if the path is a directory
       const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
 
       if (stats.type === vscode.FileType.Directory) {
@@ -239,7 +195,6 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        // Get directory contents
         const dirContents = await WorkspaceFS.readDir(filePath);
         const formattedContents = dirContents
           .map(([fileName, fileType]) => {
@@ -255,14 +210,13 @@ export class TextEditorTool extends defineTool({
         };
       }
 
-      // Read file contents and expand tabs (consistent with str_replace)
+      // Expand tabs to 4 spaces for consistent display
       let fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
         '\t',
         '    ',
       );
       let initLine = 1;
 
-      // Handle view range if provided
       if (viewRange) {
         if (
           viewRange.length !== 2 ||
@@ -284,7 +238,6 @@ export class TextEditorTool extends defineTool({
           );
         }
 
-        // Validate endLine when specified (not -1)
         if (endLine !== -1) {
           if (endLine > numLines) {
             throw new ToolError(
@@ -303,7 +256,6 @@ export class TextEditorTool extends defineTool({
         fileContent = fileLines.slice(startLine - 1, sliceEnd).join('\n');
       }
 
-      // Record read only after successful validation
       recordToolFileRead(filePath);
 
       let summary: string;
@@ -319,19 +271,10 @@ export class TextEditorTool extends defineTool({
         output: this.makeOutput(fileContent, filePath, initLine),
       };
     } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
-      throw new ToolError(`Error viewing ${filePath}: ${error}`);
+      rethrowWithContext(error, `Error viewing ${filePath}`);
     }
   }
 
-  /**
-   * Create a new file with the given content
-   * @param filePath - Path to the file to create
-   * @param content - Content to write to the file
-   * @private
-   */
   private async create(filePath: string, content: string): Promise<ToolResult> {
     try {
       const proposedContent = isTexFile(filePath)
@@ -389,20 +332,12 @@ export class TextEditorTool extends defineTool({
     }
   }
 
-  /**
-   * Replace text in a file
-   * @param filePath - Path to the file
-   * @param oldStr - Text to replace
-   * @param newStr - New text to insert
-   * @private
-   */
   private async strReplace(
     filePath: string,
     oldStr: string,
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      // Read file content
       const exists = await WorkspaceFS.exists(filePath);
       const readGate = requireFileReadForEdit(filePath, exists);
       if (readGate) {
@@ -410,12 +345,11 @@ export class TextEditorTool extends defineTool({
       }
       const fileContent = await WorkspaceFS.read(filePath);
 
-      // Expand tabs in content and search string
-      const expandedFileContent = expandTabs(fileContent);
-      const expandedOldStr = expandTabs(oldStr);
-      const expandedNewStr = expandTabs(newStr);
+      // Expand tabs to 4 spaces for consistent display
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedOldStr = oldStr.replaceAll('\t', '    ');
+      const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      // Check for occurrences of oldStr
       const occurrences = expandedFileContent.split(expandedOldStr).length - 1;
 
       if (occurrences === 0) {
@@ -425,7 +359,6 @@ export class TextEditorTool extends defineTool({
       }
 
       if (occurrences > 1) {
-        // Find line numbers where oldStr occurs
         const lines = expandedFileContent.split(/\r?\n/);
         const lineNumbers = lines
           .map((line, index) =>
@@ -438,7 +371,6 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Perform replacement
       const newFileContent = expandedFileContent.replace(
         expandedOldStr,
         expandedNewStr,
@@ -470,11 +402,8 @@ export class TextEditorTool extends defineTool({
       }
       const finalContent = appliedContent;
 
-      // Record file as "read" after editing so subsequent edits don't require
-      // an explicit read again.
       recordToolFileRead(filePath);
 
-      // Create a snippet of the edited section
       const textBeforeReplacement =
         expandedFileContent.split(expandedOldStr)[0];
       const replacementLine =
@@ -486,7 +415,6 @@ export class TextEditorTool extends defineTool({
       const newFileLines = finalContent.split('\n');
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
-      // Prepare success message
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         newFileContent,
@@ -512,27 +440,16 @@ export class TextEditorTool extends defineTool({
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
-      throw new ToolError(`Error replacing text in ${filePath}: ${error}`);
+      rethrowWithContext(error, `Error replacing text in ${filePath}`);
     }
   }
 
-  /**
-   * Insert text at a specific line in a file
-   * @param filePath - Path to the file
-   * @param insertLine - Line number to insert before (1-indexed)
-   * @param newStr - Text to insert
-   * @private
-   */
   private async insert(
     filePath: string,
     insertLine: number,
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      // Read file content
       const exists = await WorkspaceFS.exists(filePath);
       const readGate = requireFileReadForEdit(filePath, exists);
       if (readGate) {
@@ -540,30 +457,25 @@ export class TextEditorTool extends defineTool({
       }
       const fileContent = await WorkspaceFS.read(filePath);
 
-      // Expand tabs in content and new string
-      const expandedFileContent = expandTabs(fileContent);
-      const expandedNewStr = expandTabs(newStr);
+      // Expand tabs to 4 spaces for consistent display
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedNewStr = newStr.replaceAll('\t', '    ');
 
-      // Split content into lines
       const fileLines = expandedFileContent.split(/\r?\n/);
       const numLines = fileLines.length;
 
-      // Validate insert line (1-indexed, like view_range)
       if (insertLine < 1 || insertLine > numLines + 1) {
         throw new ToolError(
           `Invalid \`insert_line\`: ${insertLine}. Should be in range [1, ${numLines + 1}] (1-indexed, insert after line N).`,
         );
       }
 
-      // Insert new text (convert 1-indexed to 0-indexed for slice)
       const newStrLines = expandedNewStr.split(/\r?\n/);
       const newFileLines = [
         ...fileLines.slice(0, insertLine - 1),
         ...newStrLines,
         ...fileLines.slice(insertLine - 1),
       ];
-
-      // Write new content to file
       const newFileContent = newFileLines.join('\n');
 
       const approval = await requestToolEditApproval({
@@ -592,11 +504,8 @@ export class TextEditorTool extends defineTool({
       }
       const finalContent = appliedContent;
 
-      // Record file as "read" after editing so subsequent edits don't require
-      // an explicit read again.
       recordToolFileRead(filePath);
 
-      // Prepare success message (insertLine is 1-indexed, convert to 0-indexed for slicing)
       const previewLines = finalContent.split('\n');
       const insertIndex = insertLine - 1;
       const snippetStart = Math.max(0, insertIndex - SNIPPET_LINES);
@@ -634,21 +543,12 @@ export class TextEditorTool extends defineTool({
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
-      throw new ToolError(`Error inserting text in ${filePath}: ${error}`);
+      rethrowWithContext(error, `Error inserting text in ${filePath}`);
     }
   }
 
-  /**
-   * Undo the last edit to a file
-   * @param filePath - Path to the file
-   * @private
-   */
   private async undoEdit(filePath: string): Promise<ToolResult> {
     try {
-      // Check if there's history for this file
       const history = this.fileHistory.get(filePath);
       if (!history || history.length === 0) {
         throw new ToolError(`No edit history found for ${filePath}.`);
@@ -660,7 +560,6 @@ export class TextEditorTool extends defineTool({
         return readGate;
       }
 
-      // Restore previous content
       const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
@@ -688,11 +587,8 @@ export class TextEditorTool extends defineTool({
       history.pop();
       const finalContent = appliedContent;
 
-      // Record file as "read" after undo so subsequent edits don't require
-      // an explicit read again.
       recordToolFileRead(filePath);
 
-      // If the history is now empty, delete the entry
       if (history.length === 0) {
         this.fileHistory.delete(filePath);
       }
@@ -714,19 +610,10 @@ export class TextEditorTool extends defineTool({
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
-      throw new ToolError(`Error undoing edit to ${filePath}: ${error}`);
+      rethrowWithContext(error, `Error undoing edit to ${filePath}`);
     }
   }
 
-  /**
-   * Add file content to history for undo operations
-   * @param filePath - Path to the file
-   * @param content - Content to add to history
-   * @private
-   */
   private addToHistory(filePath: string, content: string): void {
     if (!this.fileHistory.has(filePath)) {
       this.fileHistory.set(filePath, []);
@@ -734,19 +621,11 @@ export class TextEditorTool extends defineTool({
     this.fileHistory.get(filePath)!.push(content);
   }
 
-  /**
-   * Format output for CLI display
-   * @param content - Content to display
-   * @param fileDescriptor - Description of the file
-   * @param initLine - Initial line number
-   * @private
-   */
   private makeOutput(
     content: string,
     fileDescriptor: string,
     initLine: number = 1,
   ): string {
-    // Add line numbers to content
     const numberedLines = content
       .split('\n')
       .map((line, index) => {

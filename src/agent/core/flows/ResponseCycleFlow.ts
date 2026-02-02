@@ -2,6 +2,11 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
+import { MESSAGE_TYPES } from '@shared/schemas';
+import {
+  AgentFileLocationSchema,
+  type AgentFileLocation,
+} from '@shared/schemas';
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -15,19 +20,14 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { ProviderUsage } from '@agent/core/ResponseUsage';
 
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import {
-  RetryErrorInfoSchema,
-  type RetryErrorInfo,
-} from '@common/errors/schemas';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
-import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { getSystemPromptWithRules } from '@utils/prompt';
@@ -142,48 +142,39 @@ export function assertCycleFieldsPopulated<T extends object>(
 // intentionally visible to downstream nodes so that debug metadata and model
 // results accumulate over the course of the flow.
 
+/** Prep result for ResponsePrepNode - captures interruption status and initial state. */
+interface ResponsePrepResult {
+  interrupted: boolean;
+  exists: boolean;
+  systemPrompt?: string;
+}
+
 /**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
- *
- * Services accessed via `_params.services` (options flattened into services).
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  async prep(shared: ResponseCycleShared): Promise<{
-    interrupted: boolean;
-    exists: boolean;
-    systemPrompt?: string;
-    outputLocation: AgentFileLocation;
-  }> {
+  async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const outputLocation = shared.outputLocation!;
-    const exists = await flexibleFS.exists(outputLocation);
-    const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
+    const exists = await flexibleFS.exists(shared.outputLocation!);
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(prompt.systemPrompt, userVars);
+      : await getSystemPromptWithRules(prompt.systemPrompt, {
+          ...userVarChannels.input,
+          ...userVarChannels.transient,
+        });
 
-    return {
-      interrupted,
-      exists,
-      systemPrompt,
-      outputLocation,
-    };
+    return { interrupted, exists, systemPrompt };
   }
 
   async post(
     shared: ResponseCycleShared,
-    prepRes: {
-      interrupted: boolean;
-      exists: boolean;
-      systemPrompt?: string;
-      outputLocation: AgentFileLocation;
-    },
+    prepRes: ResponsePrepResult,
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       resetCycleState(shared, ['responseObject', 'processedResponse']);
@@ -194,7 +185,6 @@ class ResponsePrepNode<C> extends BaseNode<
     const { config, round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
-    shared.outputLocation = prepRes.outputLocation;
     resetCycleState(shared, ['responseObject', 'processedResponse']);
 
     await maybeSaveDebugObject({
@@ -207,7 +197,7 @@ class ResponsePrepNode<C> extends BaseNode<
       fileOptions: {
         continuationCount: round.continuationCount,
         baseName: 'response',
-        outputFile: prepRes.outputLocation.relativePath,
+        outputFile: shared.outputLocation!.relativePath,
       },
     });
 
@@ -236,7 +226,7 @@ interface InvocationPrepResult extends BaseInvocationPrepResult {
  * - default: Continue to next node on success
  * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
  *
- * Services accessed via `_params.services` (options flattened into services).
+ * Services accessed via `this.services` following PocketFlow service injection.
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared,
@@ -247,18 +237,11 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     return 'Model invocation';
   }
 
-  /**
-   * Check if background mode is active via the model handler.
-   * This enables the base class to enforce minimum retry count for background jobs.
-   */
+  /** Check if background mode is active (enables minimum retry count). */
   protected override isBackgroundModeActive(): boolean {
     return this.services.modelHandler.isBackgroundModeActive();
   }
 
-  /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: exec() should only use prepRes, not shared.
-   */
   async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -289,7 +272,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.setting.temperature || 0.0,
+          temperature: services.setting.temperature,
           systemPrompt: prepRes.systemPrompt,
           endTag: services.setting.endTag,
           signal,
@@ -307,10 +290,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     });
   }
 
-  /**
-   * Called by PocketFlow Node when retryPrompt returns false.
-   * Uses base class getFallbackResult() for shared logic.
-   */
   async execFallback(
     _prepRes: InvocationPrepResult,
     error: Error,
@@ -323,10 +302,8 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const { logger, config, round } = this.services;
-
     const successRes = handleInvocationResult(execRes, shared, shared, {
-      logger,
+      logger: this.services.logger,
       operationName: this.getOperationName(),
     });
 
@@ -341,11 +318,11 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       object: successRes.response,
       objectType: 'response',
       context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
+        modelName: this.services.config.model,
+        isRemote: isRemoteAgent(this.services.config.agent),
       }),
       fileOptions: {
-        continuationCount: round.continuationCount,
+        continuationCount: this.services.round.continuationCount,
         baseName: 'response',
         outputFile: shared.outputLocation!.relativePath,
       },
@@ -357,14 +334,14 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
 /**
  * Data extracted by prep() for response processing.
+ * Note: outputLocation and outputExists are accessed directly from shared
+ * in post() since they're only needed there.
  */
 interface ProcessPrepResult {
   shouldStop: boolean;
   responseObject: unknown;
   responseTimeMs?: number;
   messages: ProviderMessage[];
-  outputLocation: AgentFileLocation;
-  outputExists: boolean;
   lastResponse: string;
   accumulatedOutput: string;
 }
@@ -376,10 +353,9 @@ interface ProcessResult {
   bestConnector?: string;
   thinkingContent?: string | null;
   useStreaming: boolean;
-  responseUsage: any;
+  responseUsage: ProviderUsage;
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
-  responseTimeMs?: number;
   updatedLastResponse?: string;
   updatedAccumulatedOutput?: string;
 }
@@ -418,16 +394,14 @@ class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
-    const { workspace } = this.services;
+    const { assembly } = this.services.workspace;
     return {
       shouldStop: shared.shouldStop,
       responseObject: shared.responseObject,
       responseTimeMs: shared.responseTimeMs,
       messages: shared.messages,
-      outputLocation: shared.outputLocation!,
-      outputExists: shared.outputExists,
-      lastResponse: workspace.assembly.lastResponse,
-      accumulatedOutput: workspace.assembly.accumulatedOutput,
+      lastResponse: assembly.lastResponse,
+      accumulatedOutput: assembly.accumulatedOutput,
     };
   }
 
@@ -548,7 +522,6 @@ class ResponseProcessNode<C> extends BaseNode<
           responseUsage,
           normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
-          responseTimeMs: prepRes.responseTimeMs,
           updatedLastResponse,
           updatedAccumulatedOutput,
         },
@@ -570,12 +543,12 @@ class ResponseProcessNode<C> extends BaseNode<
 
     const result = execRes.value;
 
-    if (result.responseTimeMs !== undefined) {
-      round.addResponseTime(result.responseTimeMs);
+    if (shared.responseTimeMs !== undefined) {
+      round.addResponseTime(shared.responseTimeMs);
     }
 
     if (result.normalizedUsage) {
-      round.setNormalizedUsage(result.normalizedUsage);
+      round.normalizedUsage = result.normalizedUsage;
     }
 
     if (result.updatedLastResponse !== undefined) {
@@ -601,22 +574,25 @@ class ResponseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    await AbsoluteFS.ensureDir(dirname(prepRes.outputLocation.absolutePath));
+    const outputLocation = shared.outputLocation!;
+    const connector = result.bestConnector ?? '';
 
-    if (!prepRes.outputExists) {
-      logger.debug(`Creating new file: ${prepRes.outputLocation.absolutePath}`);
+    await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+
+    if (!shared.outputExists) {
+      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
       await AbsoluteFS.write(
-        prepRes.outputLocation.absolutePath,
+        outputLocation.absolutePath,
         result.processedResponse,
       );
       shared.outputExists = true;
     } else {
       logger.debug(
-        `Appending to existing file: ${prepRes.outputLocation.absolutePath}`,
+        `Appending to existing file: ${outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
-        prepRes.outputLocation,
-        (result.bestConnector ?? '') + result.processedResponse,
+        outputLocation,
+        connector + result.processedResponse,
       );
     }
 
@@ -639,8 +615,6 @@ class ResponseProcessNode<C> extends BaseNode<
     logger.debug(
       `Last ${K_SLICE} chars:\n${result.processedResponse.slice(-K_SLICE)}`,
     );
-
-    const connector = result.bestConnector ?? '';
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.updateMessageContentWithPrefill(
@@ -672,35 +646,21 @@ class ResponseProcessNode<C> extends BaseNode<
  * Finalizes the response cycle by recording round statistics.
  * All flow exit paths route through this node to ensure proper cleanup.
  *
- * PocketFlow pattern:
- * - Single finalization point in the flow graph
- * - No guard flags needed (graph ensures single execution)
+ * PocketFlow pattern: Single finalization point in the flow graph.
+ * No guard flags needed (graph ensures single execution).
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
-  async prep(_shared: ResponseCycleShared): Promise<void> {}
-
-  /**
-   * Finalize the round by recording stats and invoking callback.
-   * This is the single finalization point for ResponseCycleFlow.
-   */
-  async exec(_prepRes: void): Promise<void> {
+  /** Finalize the round by recording stats and invoking callback. */
+  async exec(): Promise<void> {
     const { round, run, onRoundFinalized } = this.services;
     run.recordRound(round);
     if (onRoundFinalized) {
       await onRoundFinalized(run);
     }
-  }
-
-  async post(
-    _shared: ResponseCycleShared,
-    _prepRes: void,
-    _execRes: void,
-  ): Promise<string | undefined> {
-    return undefined;
   }
 }
 
@@ -719,12 +679,11 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    const { checkInterruption } = this.services;
-
     const shouldSkip =
       shared.shouldStop || !shared.stopReason || !shared.processedResponse;
 
-    const interrupted = !shouldSkip && Boolean(await checkInterruption());
+    const interrupted =
+      !shouldSkip && Boolean(await this.services.checkInterruption());
 
     return {
       shouldSkip,
@@ -825,18 +784,14 @@ class ResponseContinuationNode<C> extends BaseNode<
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(
         shared.messages,
-        round,
         workspace,
         setting,
-        config,
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
         shared.messages,
-        round,
         workspace,
         setting,
-        config,
       );
     }
 

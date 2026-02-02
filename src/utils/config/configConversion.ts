@@ -12,11 +12,24 @@ import {
 // Local file imports
 import { FILE_TYPES, type FileType } from './constants';
 
+/** Check if a file type is active based on the config fields. */
+function isFileTypeActive(
+  config: Record<string, unknown>,
+  type: FileType,
+  useMultipleOutputs: boolean,
+): boolean {
+  const filesField = `${type}Files`;
+  const flagField = `${filesField}Active`;
+  const files = config[filesField];
+
+  if (Array.isArray(files) && files.length > 0) return true;
+  if (config[flagField]) return true;
+  if (type === 'output' && useMultipleOutputs) return true;
+  return false;
+}
+
 /**
  * Converts an AgentConfig object to a TaskState object.
- *
- * @param config The AgentConfig to convert
- * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
   switch (config.agentCategory) {
@@ -26,22 +39,18 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
         toolSessionState: {},
       };
     case AgentCategory.Workflow: {
-      // Build activeFiles inline - determines which file types are active
+      const configRecord = config as Record<string, unknown>;
+      const useMultipleOutputs = Boolean(configRecord.useMultipleOutputs);
       const activeFiles = {} as Record<FileType, boolean>;
-      const useMultipleOutputs = Boolean(
-        (config as { useMultipleOutputs?: boolean }).useMultipleOutputs,
-      );
+
       for (const type of FILE_TYPES) {
-        const filesField = `${type}Files`;
-        const flagField = `${filesField}Active`;
-        const multipleFlag = type === 'output' && useMultipleOutputs;
-        activeFiles[type] =
-          (Array.isArray((config as Record<string, unknown>)[filesField]) &&
-            ((config as Record<string, unknown>)[filesField] as unknown[])
-              .length > 0) ||
-          !!(config as Record<string, unknown>)[flagField] ||
-          multipleFlag;
+        activeFiles[type] = isFileTypeActive(
+          configRecord,
+          type,
+          useMultipleOutputs,
+        );
       }
+
       return {
         agentConfig: config as WorkflowTaskState['agentConfig'],
         activeFiles,

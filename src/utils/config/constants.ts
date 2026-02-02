@@ -1,4 +1,4 @@
-// Local imports - common
+// Local imports - common (direct import to avoid circular dependency via barrel)
 import { globalSM, GlobalStateKey } from '@common/state/stateManager';
 
 // Local imports - config utils
@@ -26,20 +26,6 @@ export const FILE_TYPES = [
 ] as const;
 
 export type FileType = (typeof FILE_TYPES)[number];
-export const SINGLE_FILE_FIELDS = FILE_TYPES.map((type) => `${type}File`);
-export const MULTIPLE_FILE_FIELDS = FILE_TYPES.map((type) => `${type}Files`);
-export const ACTIVE_FLAGS = FILE_TYPES.map((type) => `${type}FilesActive`);
-
-// Checkbox configuration fields
-export const AUTO_EXTRACT_FIELDS = [
-  'autoExtractFigure',
-  'autoExtractTikzFigure',
-  'autoCompileInputPdf',
-] as const;
-export const TOOL_CONFIG_FIELDS = [
-  'attachTeXCount',
-  'attachDiagnostics',
-] as const;
 
 // Length for preview slices of tool output and responses
 export const K_SLICE = 200;
@@ -49,14 +35,9 @@ export const MESSAGE_PREVIEW_LENGTH = 50;
 export const REPETITION_PREVIEW_LENGTH = 400;
 export const REPETITION_DETECTION_THRESHOLD = 1000;
 
-// for file preview
-export const MAX_PREVIEW_LENGTH = 1000;
-
 // Time constants
 export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
-export const DIFF_EDITOR_DELAY_MS = 100;
-export const WORD_WRAP_INIT_DELAY_MS = 200;
 export const DIFF_REGISTRATION_DELAY_MS = 300;
 export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
 export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
@@ -67,14 +48,9 @@ export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched)
 
-// Tool-use persistence defaults
-export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
-export const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
-
-// Retry defaults
-// Default to 1 automatic retry before showing manual retry dialog
-export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 1;
-export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
+// Tool-use persistence defaults (internal)
+const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
+const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
@@ -89,7 +65,6 @@ export function getToolUsePersistenceTtlHours(): number {
   );
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 1) {
-    // Log a warning when invalid configuration is detected
     logger.warn(
       CHANNEL,
       `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
@@ -114,16 +89,12 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
+/** Get the maximum number of automatic retry attempts for model calls. */
 export function getModelRetryMaxAttempts(): number {
-  return getConfig<number>(
-    'texra.model.retry.maxAttempts',
-    DEFAULT_MODEL_RETRY_MAX_ATTEMPTS,
-  );
+  return getConfig<number>('texra.model.retry.maxAttempts', 1);
 }
 
+/** Get the backoff delay in milliseconds between retry attempts. */
 export function getModelRetryBackoffMs(): number {
-  return getConfig<number>(
-    'texra.model.retry.backoffMs',
-    DEFAULT_MODEL_RETRY_BACKOFF_MS,
-  );
+  return getConfig<number>('texra.model.retry.backoffMs', 1000);
 }

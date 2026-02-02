@@ -11,7 +11,7 @@ import { StorageFS } from '@utils/files';
 // Local imports - tool core
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
-import { formatLinesWithNumbers } from '../utils';
+import { formatLinesWithNumbers, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -66,66 +66,40 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     switch (input.command) {
       case 'view':
         return this.view(
-          this.requirePath(input.path, input.command),
+          requireField(input.path, 'path', input.command),
           input.view_range ?? undefined,
         );
       case 'create':
         return this.create(
-          this.requirePath(input.path, input.command),
-          this.requireField(input.file_text, 'file_text', input.command),
+          requireField(input.path, 'path', input.command),
+          requireField(input.file_text, 'file_text', input.command),
         );
       case 'str_replace':
         return this.strReplace(
-          this.requirePath(input.path, input.command),
-          this.requireField(input.old_str, 'old_str', input.command),
-          this.requireField(input.new_str, 'new_str', input.command),
+          requireField(input.path, 'path', input.command),
+          requireField(input.old_str, 'old_str', input.command),
+          requireField(input.new_str, 'new_str', input.command),
         );
       case 'insert':
         return this.insert(
-          this.requirePath(input.path, input.command),
-          this.requireField(input.insert_line, 'insert_line', input.command),
-          this.requireField(
+          requireField(input.path, 'path', input.command),
+          requireField(input.insert_line, 'insert_line', input.command),
+          requireField(
             input.insert_text ?? input.new_str,
             'insert_text',
             input.command,
           ),
         );
       case 'delete':
-        return this.delete(this.requirePath(input.path, input.command));
+        return this.delete(requireField(input.path, 'path', input.command));
       case 'rename':
         return this.rename(
-          this.requireField(input.old_path, 'old_path', input.command),
-          this.requireField(input.new_path, 'new_path', input.command),
+          requireField(input.old_path, 'old_path', input.command),
+          requireField(input.new_path, 'new_path', input.command),
         );
       default:
         throw new ToolError(`Unrecognized command: ${input.command}`);
     }
-  }
-
-  private requirePath(
-    value: string | null | undefined,
-    command: string,
-  ): string {
-    if (!value) {
-      throw new ToolError(
-        `Parameter \`path\` is required for command: ${command}`,
-      );
-    }
-    return value;
-  }
-
-  private requireField<T>(
-    value: T | null | undefined,
-    name: string,
-    command: string,
-  ): T {
-    // eslint-disable-next-line eqeqeq -- use nullish check for tool inputs
-    if (value == null) {
-      throw new ToolError(
-        `Parameter \`${name}\` is required for command: ${command}`,
-      );
-    }
-    return value;
   }
 
   private resolveMemoryPath(inputPath: string): string {
@@ -138,20 +112,13 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     }
   }
 
-  /**
-   * Validates that the path exists and is a file (not a directory).
-   * Throws ToolError if validation fails.
-   */
   private async requireEditableFile(
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
     const exists = await StorageFS.exists(resolvedPath);
-    if (!exists) {
-      throw new ToolError(`Error: The path ${inputPath} does not exist`);
-    }
-    const isDir = await StorageFS.isDir(resolvedPath);
-    if (isDir) {
+    const isDir = exists && (await StorageFS.isDir(resolvedPath));
+    if (!exists || isDir) {
       throw new ToolError(`Error: The path ${inputPath} does not exist`);
     }
   }
@@ -168,6 +135,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     if (!exists) {
       if (resolvedPath === MEMORY_STORAGE_ROOT) {
         return {
+          summary: 'Viewed empty memory directory',
           output: `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
         };
       }
@@ -180,6 +148,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     if (stats.type === vscode.FileType.Directory) {
       const listing = await this.buildDirectoryListing(resolvedPath);
       return {
+        summary: `Listed directory: ${inputPath}`,
         output: [
           `Here're the files and directories up to 2 levels deep in ${inputPath}, excluding hidden items and node_modules:`,
           ...listing,
@@ -205,6 +174,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const numbered = formatLinesWithNumbers(selected, startIndex + 1);
 
     return {
+      summary: `Viewed file: ${inputPath}`,
       output: [
         `Here's the content of ${inputPath} with line numbers:`,
         ...numbered,
@@ -227,6 +197,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await StorageFS.write(resolvedPath, fileText);
 
     return {
+      summary: `Created memory file: ${inputPath}`,
       output: `File created successfully at: ${inputPath}`,
     };
   }
@@ -266,11 +237,8 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     const numbered = formatLinesWithNumbers(updatedLines);
 
     return {
-      output: [
-        'The memory file has been edited.',
-        `Here's the content of ${inputPath} with line numbers:`,
-        ...numbered,
-      ].join('\n'),
+      summary: `Replaced text in: ${inputPath}`,
+      output: `The memory file has been edited.\nHere's the content of ${inputPath} with line numbers:\n${numbered.join('\n')}`,
     };
   }
 
@@ -301,6 +269,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
     await StorageFS.write(resolvedPath, updatedLines.join('\n'));
 
     return {
+      summary: `Inserted text at line ${insertLine} in: ${inputPath}`,
       output: `The file ${inputPath} has been edited.`,
     };
   }
@@ -314,6 +283,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     await StorageFS.delete(resolvedPath, { recursive: true });
     return {
+      summary: `Deleted: ${inputPath}`,
       output: `Successfully deleted ${inputPath}`,
     };
   }
@@ -339,6 +309,7 @@ Paths must start with /memories. Use /memories to list files, /memories/file.md 
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
     return {
+      summary: `Renamed: ${oldPathInput} to ${newPathInput}`,
       output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
     };
   }

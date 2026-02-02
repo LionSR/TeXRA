@@ -1,19 +1,19 @@
-// Local imports - identifiers and logging
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Internal imports
+import {
+  InstructionUpdateSchema,
+  type InstructionUpdate,
+  type StorageKey,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Local imports - types
-import type { InstructionUpdate } from '@progressView/types';
 import {
   PersistentMapManager,
-  type StateStorage,
+  type MementoStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import {
-  mapToRecord,
-  recordToMap,
-} from '@progressView/persistence/serializationUtils';
+import { createRecordToMapSchema } from '@progressView/persistence/schemaUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+
+/** Schema for deserializing persisted instructions */
+const InstructionsMapSchema = createRecordToMapSchema(InstructionUpdateSchema);
 
 type InstructionMap = Map<string, InstructionUpdate>;
 
@@ -24,7 +24,7 @@ export class RunInstructionManager extends PersistentMapManager<
   StreamTabId,
   InstructionMap
 > {
-  constructor(storage?: StateStorage) {
+  constructor(storage?: MementoStorage) {
     super(WorkspaceStateKey.RUN_INSTRUCTIONS, storage);
   }
 
@@ -37,15 +37,19 @@ export class RunInstructionManager extends PersistentMapManager<
     storageKey: StorageKey,
     instruction: InstructionUpdate | null,
   ): Promise<void> {
-    const existing = this.items.get(stream) ?? new Map();
+    const existing = this.getOrCreate(stream, () => new Map());
 
-    if (!instruction) {
-      existing.delete(storageKey);
-    } else {
+    if (instruction) {
       existing.set(storageKey, instruction);
+    } else {
+      existing.delete(storageKey);
     }
 
-    this.setOrDeleteIfEmpty(stream, existing);
+    // Clean up empty map
+    if (existing.size === 0) {
+      this.items.delete(stream);
+    }
+
     await this.save();
   }
 
@@ -56,17 +60,11 @@ export class RunInstructionManager extends PersistentMapManager<
     }
 
     existing.delete(storageKey);
-    this.setOrDeleteIfEmpty(stream, existing);
-    await this.save();
-  }
-
-  /** Sets the map if non-empty, otherwise deletes the stream entry */
-  private setOrDeleteIfEmpty(stream: StreamTabId, map: InstructionMap): void {
-    if (map.size === 0) {
+    if (existing.size === 0) {
       this.items.delete(stream);
-    } else {
-      this.items.set(stream, map);
     }
+
+    await this.save();
   }
 
   async clearStream(stream: StreamTabId): Promise<void> {
@@ -86,8 +84,8 @@ export class RunInstructionManager extends PersistentMapManager<
 
   protected override deserialize(
     data: unknown,
-    _stream: StreamTabId,
+    _key: StreamTabId,
   ): InstructionMap {
-    return recordToMap<InstructionUpdate>(data);
+    return InstructionsMapSchema.parse(data);
   }
 }

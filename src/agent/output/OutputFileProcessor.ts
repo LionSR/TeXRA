@@ -1,15 +1,16 @@
 import * as path from 'path';
 
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
-  replaceInputCommands,
-  flexibleFS,
+  MESSAGE_TYPES,
   type FileLocation,
-} from '@utils/files';
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type StorageKey,
+} from '@shared/schemas';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import type { AgentLogger } from '@logger/AgentLogger';
+import { flexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
@@ -17,14 +18,12 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 
 import {
+  cleanupLatexBackups,
   indentLatexFile,
   indentLatexFiles,
-  cleanupLatexBackups,
 } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-import type { OutputFileInfo, OutputXmlSummary } from './types';
 
-/** Pattern to detect scratchpad XML tags in prefills */
 const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 
 export interface ProcessingContext {
@@ -45,76 +44,55 @@ export class OutputFileProcessor {
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
-    scope: AgentLogStage,
   ): Promise<void> {
-    const { logger, xmlManager, baseFiles } = this.ctx;
+    const { logger } = this.ctx;
 
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,
     );
 
     try {
-      const processedPairs = await xmlManager.processMultipleXmlOutputs(
-        outputLocation,
-        currRound,
-      );
+      const processedPairs =
+        await this.ctx.xmlManager.splitScratchpadMultipleOutputXml(
+          outputLocation,
+          this.ctx.agentSetting.documentTag,
+          currRound,
+        );
 
       if (processedPairs.length > 0) {
-        await indentLatexFiles(
-          processedPairs.map((p) => p.location),
-          logger,
-        );
+        const locations = processedPairs.map((p: OutputFileInfo) => p.location);
+        await indentLatexFiles(locations, logger);
         logger.debug(
-          `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
+          `Indented multiple output files: ${locations.map((l) => l.absolutePath).join(',')}`,
         );
 
-        if (baseFiles.length > 0) {
-          await replaceInputCommands(
-            baseFiles,
-            processedPairs.map((p) => p.location),
-            logger,
-          );
+        if (this.ctx.baseFiles.length > 0) {
+          await replaceInputCommands(this.ctx.baseFiles, locations, logger);
         }
         this.ctx.setRoundOutputs(currRound, processedPairs);
-        await this.captureXmlSummary(
-          currRound,
-          rawLocation,
-          processedPairs,
-          scope,
-        );
+        await this.captureXmlSummary(currRound, rawLocation, processedPairs);
         return;
       }
 
       logger.debug(
         `No processed files were generated from ${outputLocation.absolutePath}`,
       );
-      this.ctx.setRoundOutputs(currRound, []);
-      await cleanupLatexBackups(rawLocation, logger);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.handleEmptyOutput(currRound, rawLocation);
     } catch (err) {
-      await this.handleOutputProcessingError(
-        err,
-        currRound,
-        rawLocation,
-        scope,
-      );
+      logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
+      await this.handleEmptyOutput(currRound, rawLocation);
     }
   }
 
-  /** Handle errors during output processing with consistent cleanup. */
-  private async handleOutputProcessingError(
-    err: unknown,
-    currRound: number,
+  private async handleEmptyOutput(
+    round: number,
     rawLocation: FileLocation,
-    scope: AgentLogStage,
   ): Promise<void> {
-    this.ctx.logger.debug(
-      `Error processing output file: ${toErrorMessage(err)}`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
-    this.ctx.setRoundOutputs(currRound, []);
+    this.ctx.setRoundOutputs(round, []);
     await cleanupLatexBackups(rawLocation, this.ctx.logger);
-    await this.captureXmlSummary(currRound, rawLocation, [], scope);
+    await this.captureXmlSummary(round, rawLocation, []);
   }
 
   async processSingleOutput(
@@ -122,77 +100,50 @@ export class OutputFileProcessor {
     currRound: number,
     rawLocation: FileLocation,
     storageKey: StorageKey,
-    scope: AgentLogStage,
   ): Promise<void> {
-    const { agentSetting, logger, xmlManager, baseFiles, streamId } = this.ctx;
+    const { agentSetting, logger } = this.ctx;
 
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
     try {
-      const processedLocation = rawLocation ?? outputLocation;
-      let processed: OutputFileInfo = {
-        source: path.basename(outputLocation.absolutePath),
-        round: currRound,
-        location: processedLocation,
-        lineage: null,
-        diff: null,
-      };
+      const shouldProcessXml = this.shouldProcessXml(agentSetting);
+      const processed = shouldProcessXml
+        ? await this.ctx.xmlManager.processSingleXmlOutput(
+            outputLocation,
+            currRound,
+          )
+        : {
+            source: path.basename(outputLocation.absolutePath),
+            round: currRound,
+            location: rawLocation ?? outputLocation,
+            lineage: null,
+            diff: null,
+          };
 
-      // Determine XML processing based on xmlStructureMode setting
-      const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
-      let shouldProcessXml = false;
-      switch (xmlMode) {
-        case 'always':
-          shouldProcessXml = true;
-          break;
-        case 'scratchpadOnly': {
-          const hasDocumentTag = Boolean(agentSetting.documentTag);
-          const hasScratchpadPrefill =
-            agentSetting.prefills?.some((p) =>
-              SCRATCHPAD_TAG_PATTERN.test(p),
-            ) ?? false;
-          shouldProcessXml = hasDocumentTag || hasScratchpadPrefill;
-          break;
-        }
-        case 'never':
-          break;
-      }
-
-      if (shouldProcessXml) {
-        processed = await xmlManager.processSingleXmlOutput(
-          outputLocation,
-          currRound,
-        );
-      }
-
-      const processedFiles = processed.location.absolutePath ? [processed] : [];
-
-      if (processedFiles.length > 0) {
-        await indentLatexFile(processed.location, logger);
-        logger.debug(
-          `Indented single output file: ${processed.location.absolutePath}`,
-        );
-
-        if (baseFiles.length > 0) {
-          await replaceInputCommands(
-            baseFiles,
-            processedFiles.map((entry) => entry.location),
-            logger,
-          );
-        }
-      } else {
+      if (!processed.location.absolutePath) {
         logger.debug(
           `No processed file was generated from ${outputLocation.absolutePath}`,
         );
+        this.ctx.setRoundOutputs(currRound, []);
+        await this.captureXmlSummary(currRound, rawLocation, []);
+        return;
       }
-      this.ctx.setRoundOutputs(currRound, processedFiles);
 
-      await this.captureXmlSummary(
-        currRound,
-        rawLocation,
-        processedFiles,
-        scope,
+      await indentLatexFile(processed.location, logger);
+      logger.debug(
+        `Indented single output file: ${processed.location.absolutePath}`,
       );
+
+      if (this.ctx.baseFiles.length > 0) {
+        await replaceInputCommands(
+          this.ctx.baseFiles,
+          [processed.location],
+          logger,
+        );
+      }
+
+      this.ctx.setRoundOutputs(currRound, [processed]);
+      await this.captureXmlSummary(currRound, rawLocation, [processed]);
     } catch (err) {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
@@ -204,31 +155,20 @@ export class OutputFileProcessor {
       };
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
-        streamId: streamId,
+        streamId: this.ctx.streamId,
         storageKey,
         filesByRound: { [currRound]: [] },
       });
       this.ctx.setRoundOutputs(currRound, []);
-      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+      await this.captureXmlSummary(currRound, rawLocation, []);
     }
   }
 
-  async captureXmlSummary(
-    round: number,
-    rawOutput: FileLocation | null,
-    processed: OutputFileInfo[],
-    stage?: AgentLogStage,
-  ): Promise<void> {
-    const execute = () => this.buildXmlSummary(round, rawOutput, processed);
-    await (stage ? stage.within(execute) : execute());
-  }
-
-  private async buildXmlSummary(
+  private async captureXmlSummary(
     round: number,
     rawOutput: FileLocation | null,
     processed: OutputFileInfo[],
   ): Promise<void> {
-    const { agentSetting, logger } = this.ctx;
     const data = this.ctx.ensureRoundData(round);
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
@@ -249,7 +189,7 @@ export class OutputFileProcessor {
       const rawContent = await flexibleFS.read(rawOutput);
       const tagContents: Record<string, string | string[]> = {};
       const documents: string[] = [];
-      const documentTag = agentSetting.documentTag;
+      const documentTag = this.ctx.agentSetting.documentTag;
 
       const documentEntries = extractMultipleTextFromTag(
         rawContent,
@@ -257,7 +197,6 @@ export class OutputFileProcessor {
       );
       if (documentEntries.length > 0) {
         const trimmedDocuments = documentEntries.map((e) => e.content.trim());
-        // Store as single string if only one document, array otherwise
         if (trimmedDocuments.length === 1) {
           tagContents[documentTag] = trimmedDocuments[0];
         } else {
@@ -296,11 +235,29 @@ export class OutputFileProcessor {
         sourceLocation: rawOutput,
       };
     } catch (error) {
-      logger.debug(
+      this.ctx.logger.debug(
         `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
       data.xmlSummary = createEmptySummary();
+    }
+  }
+
+  private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
+    const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
+
+    switch (xmlMode) {
+      case 'always':
+        return true;
+      case 'scratchpadOnly': {
+        const hasDocumentTag = Boolean(agentSetting.documentTag);
+        const hasScratchpadPrefill =
+          agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
+          false;
+        return hasDocumentTag || hasScratchpadPrefill;
+      }
+      default:
+        return false;
     }
   }
 }
