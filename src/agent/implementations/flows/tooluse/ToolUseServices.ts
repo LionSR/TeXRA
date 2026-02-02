@@ -1,88 +1,40 @@
 /**
  * Service interfaces for tool-use flow.
  *
- * Following the PocketFlow pattern:
- * - Services are injected via flow.setServices()
- * - Nodes access services via this.services
- * - shared contains mutable runtime state only
+ * Extends BaseFlowContextInit with:
+ * - Narrowed setting type (AgentToolUseSetting)
+ * - Required getUsageRecorder (narrowed from optional)
+ * - Tool-use specific services (session, resolvedTools, toolRegistry, etc.)
  *
- * Architecture (refactored - no closure wrappers):
- * - Services pass context values directly (resolvedTools, snapshot, etc.)
- * - Nodes call helper functions directly with services context
- * - Eliminates closure indirection for cleaner call stacks
+ * Services are injected via flow.setServices() and accessed via this.services.
  */
 
-import type { AgentRunState } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
-import type { BaseFlowContextInit } from '../common/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  FlowParams,
+} from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
-/**
- * Result of preparing initial state for a tool-use session.
- *
- * Returns individual state slices directly instead of wrapping in AgentSharedStore.
- * This eliminates the convert→pass→convert overhead pattern.
- */
-export interface PrepareStateResult {
-  messages: ProviderMessage[];
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
-  shouldSkipCycle: boolean;
-}
-
-/**
- * Services for tool-use flow nodes.
- *
- * Extends BaseFlowContextInit directly with tool-use specific dependencies.
- * Nodes call helper functions directly with these context values (no closures).
- *
- * Refactored architecture:
- * - resolvedTools: Pre-resolved tool definitions (computed once at creation)
- * - snapshot: Resume snapshot for session recovery (null for fresh start)
- * - Nodes import and call helper functions directly
- *
- * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
- * Persistence is handled automatically by PersistedFlow after each node.
- */
+/** Services for tool-use flow nodes. Extends BaseFlowContextInit with tool-use specific dependencies. */
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
-  /** Narrow setting to tool-use specific type */
+  /** Narrowed from AgentSetting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
-
-  /** Registry of available tools */
-  readonly toolRegistry: IToolRegistry;
-
-  /** Session lifecycle for follow-ups and status management */
   readonly session: IToolUseSession;
-
-  /** Pre-resolved tool definitions (computed once at context creation) */
   readonly resolvedTools: ToolDefinition[];
-
-  /** Resume snapshot for session recovery (null for fresh start) */
+  /** Tool registry for looking up tools during execution. */
+  readonly toolRegistry: IToolRegistry;
+  /** Resume snapshot for session recovery (null for fresh start). */
   readonly snapshot: ToolUseSessionSnapshot | null;
-
-  /**
-   * Get usage recorder callback for tracking round statistics.
-   * Returns a callback that will be invoked when a round finalizes.
-   */
+  /** Narrowed from optional to required for tool-use flows */
   readonly getUsageRecorder: () => RoundFinalizedCallback;
-
-  /**
-   * Callback invoked when a queued follow-up message is consumed.
-   * Used to update the UI (clear the queued message display).
-   */
+  /** Callback invoked when a queued follow-up message is consumed (clears UI). */
   readonly onFollowUpConsumed?: () => void;
 }
 
-/**
- * Flow params type for tool-use flows.
- * Alias for base FlowParams - reserved for future use.
- */
-export type { FlowParams as ToolUseFlowParams } from '../common';
+/** Flow params type for tool-use flows. Alias for base FlowParams. */
+export type { FlowParams as ToolUseFlowParams };

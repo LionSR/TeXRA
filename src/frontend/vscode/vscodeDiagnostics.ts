@@ -11,10 +11,6 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'VscodeDiagnostics';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 /** Counts of diagnostics by severity level */
 export interface SeverityCounts {
   errors: number;
@@ -23,21 +19,46 @@ export interface SeverityCounts {
   hints: number;
 }
 
-// Re-export vscode types for convenience
 export { DiagnosticSeverity } from 'vscode';
-export type { Diagnostic } from 'vscode';
 
-// ============================================================================
-// Waiting
-// ============================================================================
+/** Unified severity metadata for labels, counting, and formatting */
+const SEVERITY_CONFIG: Record<
+  vscode.DiagnosticSeverity,
+  { label: string; countKey: keyof SeverityCounts; plural: string }
+> = {
+  [vscode.DiagnosticSeverity.Error]: {
+    label: 'error',
+    countKey: 'errors',
+    plural: 'errors',
+  },
+  [vscode.DiagnosticSeverity.Warning]: {
+    label: 'warning',
+    countKey: 'warnings',
+    plural: 'warnings',
+  },
+  [vscode.DiagnosticSeverity.Information]: {
+    label: 'info',
+    countKey: 'info',
+    plural: 'info',
+  },
+  [vscode.DiagnosticSeverity.Hint]: {
+    label: 'hint',
+    countKey: 'hints',
+    plural: 'hints',
+  },
+};
+
+/** Ordered keys for consistent formatting output */
+const COUNT_KEY_ORDER: Array<keyof SeverityCounts> = [
+  'errors',
+  'warnings',
+  'info',
+  'hints',
+];
 
 /**
  * Wait for diagnostics to change for a specific file.
  * Uses event subscription with timeout.
- *
- * @param uri - The file URI to watch for diagnostic changes
- * @param timeoutMs - Maximum time to wait (default 3000ms)
- * @returns Promise that resolves when diagnostics change or timeout
  */
 export async function waitForDiagnosticsChange(
   uri: vscode.Uri,
@@ -76,79 +97,43 @@ export async function waitForDiagnosticsChange(
   });
 }
 
-// ============================================================================
-// Counting
-// ============================================================================
-
-/** Map from severity number to label */
-const SEVERITY_LABELS: Record<vscode.DiagnosticSeverity, string> = {
-  [vscode.DiagnosticSeverity.Error]: 'error',
-  [vscode.DiagnosticSeverity.Warning]: 'warning',
-  [vscode.DiagnosticSeverity.Information]: 'info',
-  [vscode.DiagnosticSeverity.Hint]: 'hint',
-};
-
-/**
- * Get the string label for a severity level.
- */
+/** Get the string label for a severity level. */
 export function getSeverityLabel(severity: vscode.DiagnosticSeverity): string {
-  return SEVERITY_LABELS[severity] ?? 'unknown';
+  return SEVERITY_CONFIG[severity]?.label ?? 'unknown';
 }
 
-/** Map from severity to counts key */
-const SEVERITY_TO_COUNT_KEY: Record<
-  vscode.DiagnosticSeverity,
-  keyof SeverityCounts
-> = {
-  [vscode.DiagnosticSeverity.Error]: 'errors',
-  [vscode.DiagnosticSeverity.Warning]: 'warnings',
-  [vscode.DiagnosticSeverity.Information]: 'info',
-  [vscode.DiagnosticSeverity.Hint]: 'hints',
-};
-
-/**
- * Count diagnostics by severity level.
- */
+/** Count diagnostics by severity level. */
 export function countBySeverity(
   diagnostics: vscode.Diagnostic[],
 ): SeverityCounts {
   const counts: SeverityCounts = { errors: 0, warnings: 0, info: 0, hints: 0 };
 
   for (const d of diagnostics) {
-    const key = SEVERITY_TO_COUNT_KEY[d.severity];
-    if (key) counts[key]++;
+    const config = SEVERITY_CONFIG[d.severity];
+    if (config) counts[config.countKey]++;
   }
 
   return counts;
 }
-
-// ============================================================================
-// Formatting
-// ============================================================================
-
-/** Pluralization rules for severity counts */
-const COUNT_LABELS: Array<{
-  key: keyof SeverityCounts;
-  singular: string;
-  plural: string;
-}> = [
-  { key: 'errors', singular: 'error', plural: 'errors' },
-  { key: 'warnings', singular: 'warning', plural: 'warnings' },
-  { key: 'info', singular: 'info', plural: 'info' },
-  { key: 'hints', singular: 'hint', plural: 'hints' },
-];
 
 /**
  * Format severity counts as a human-readable summary string.
  * Example: "3 errors, 2 warnings, 1 hint"
  */
 export function formatCounts(counts: SeverityCounts): string {
-  const parts = COUNT_LABELS.filter(({ key }) => counts[key] > 0).map(
-    ({ key, singular, plural }) => {
-      const count = counts[key];
-      return `${count} ${count === 1 ? singular : plural}`;
-    },
-  );
+  const parts: string[] = [];
+
+  for (const key of COUNT_KEY_ORDER) {
+    const count = counts[key];
+    if (count > 0) {
+      const config = Object.values(SEVERITY_CONFIG).find(
+        (c) => c.countKey === key,
+      );
+      if (config) {
+        parts.push(`${count} ${count === 1 ? config.label : config.plural}`);
+      }
+    }
+  }
 
   return parts.length > 0 ? parts.join(', ') : 'No issues';
 }

@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
 import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { MODEL_CONFIGS } from 'llm-zoo';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
@@ -35,32 +35,27 @@ function resetRecordingState(): void {
   activeRecordingPath = null;
 }
 
-/**
- * Start recording audio from the microphone.
- * @param context Extension context for storage path access
- * @returns Promise with recording path or error
- */
+/** Resolve the sox executable path from config or auto-detection. */
+function resolveSoxPath(): string | null {
+  const configuredPath = getConfig<string>('texra.audio.soxPath', '');
+  if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
+    return configuredPath;
+  }
+  return findToolInCommonPaths('sox');
+}
+
+/** Start recording audio from the microphone. */
 export async function startRecording(
   context: vscode.ExtensionContext,
 ): Promise<{ success: boolean; recordingPath?: string; error?: string }> {
   try {
-    // Check if already recording
     if (activeRecordingProcess) {
-      return {
-        success: false,
-        error: 'Recording already in progress',
-      };
+      return { success: false, error: 'Recording already in progress' };
     }
 
-    // Determine sox path from configuration or auto-detection
-    const configuredPath = getConfig<string>('texra.audio.soxPath', '');
-    const soxPath =
-      configuredPath && AbsoluteFS.existsSync(configuredPath)
-        ? configuredPath
-        : findToolInCommonPaths('sox');
-    logger.info(CHANNEL, `Sox path found: ${soxPath}`);
-
+    const soxPath = resolveSoxPath();
     const soxInstalled = await checkToolInstalled('sox', false);
+
     if (!soxInstalled && !soxPath) {
       return {
         success: false,
@@ -70,27 +65,26 @@ export async function startRecording(
     if (!soxInstalled && soxPath) {
       logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
     }
-    // Initialize StorageFS with context if not already done
+
     StorageFS.initialize(context);
     await StorageFS.ensureDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
     const absPath = StorageFS.fullPath(relativePath);
 
-    // Start recording without duration limit
     const soxArgs = [
-      '--default-device', // Use default input device
-      '--no-show-progress', // Don't show progress
+      '--default-device',
+      '--no-show-progress',
       '--rate',
-      '16000', // Sample rate
+      '16000',
       '--channels',
-      '1', // Mono
+      '1',
       '--encoding',
       'signed-integer',
       '--bits',
-      '16', // 16-bit
+      '16',
       '--type',
-      'wav', // Output format
-      absPath, // Output file
+      'wav',
+      absPath,
     ];
 
     logger.info(
@@ -106,7 +100,6 @@ export async function startRecording(
     activeRecordingProcess = subprocess;
     activeRecordingPath = absPath;
 
-    // Handle the subprocess promise to prevent unhandled rejection
     subprocess
       .then((result) => {
         if (result.signal === 'SIGTERM') {
@@ -122,13 +115,11 @@ export async function startRecording(
         resetRecordingState();
       })
       .catch((error) => {
-        // This should not happen with reject: false, but handle it just in case
         logger.error(CHANNEL, `Sox process error: ${error.message}`);
         resetRecordingState();
       });
 
-    // Capture stderr for debugging
-    activeRecordingProcess.stderr?.on('data', (data: Buffer) => {
+    subprocess.stderr?.on('data', (data: Buffer) => {
       logger.debug(CHANNEL, `Sox stderr: ${data.toString()}`);
     });
 
@@ -143,51 +134,31 @@ export async function startRecording(
   }
 }
 
-/**
- * Stop the current recording and transcribe it.
- * @param context Extension context for storage path access
- * @returns Promise with transcribed text or error
- */
+/** Stop the current recording and transcribe it using OpenAI. */
 export async function stopRecordingAndTranscribe(
   context: vscode.ExtensionContext,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
     if (!activeRecordingProcess || !activeRecordingPath) {
-      return {
-        success: false,
-        text: '',
-        error: 'No active recording to stop',
-      };
+      return { success: false, text: '', error: 'No active recording to stop' };
     }
 
     const recordingPath = activeRecordingPath;
-
-    // Stop the recording process
     activeRecordingProcess.kill('SIGTERM');
     resetRecordingState();
 
-    // Wait a bit for the file to be properly written
+    // Wait for file to be written
     await delay(500);
 
-    // Check if the file exists and has content
     if (!AbsoluteFS.existsSync(recordingPath)) {
-      return {
-        success: false,
-        text: '',
-        error: 'Recording file not found',
-      };
+      return { success: false, text: '', error: 'Recording file not found' };
     }
 
     const stats = AbsoluteFS.statSync(recordingPath);
     if (stats.size === 0) {
-      return {
-        success: false,
-        text: '',
-        error: 'Recording file is empty',
-      };
+      return { success: false, text: '', error: 'Recording file is empty' };
     }
 
-    // Transcribe the audio using model handler for proxy support
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
     const client = await handler.getClient();
     const result = await client.audio.transcriptions.create({
@@ -196,8 +167,6 @@ export async function stopRecordingAndTranscribe(
       response_format: 'json',
     });
 
-    // Clean up old recordings
-    // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);
     await StorageFS.cleanupOldFiles(RECORDINGS_DIR, THREE_DAYS_MS);
 

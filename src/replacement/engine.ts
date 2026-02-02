@@ -61,25 +61,16 @@ export interface ReplacementEngine {
 class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured non-regex replacement rules.
-   *
-   * @param text The text to process.
-   * @returns The processed text with non-regex rules applied.
-   * @remarks Reads extension settings to determine enabled categories.
    */
   applyNonRegex(text: string): string {
-    let processed = applyReplacements(text, getAllReplacements()).trim();
-    if (shouldWrapCritiqueInAlign()) {
-      processed = wrapCritiqueInAlign(processed);
-    }
-    return processed;
+    const processed = applyReplacements(text, getAllReplacements()).trim();
+    return shouldWrapCritiqueInAlign()
+      ? wrapCritiqueInAlign(processed)
+      : processed;
   }
 
   /**
    * Apply all configured regex-based replacement rules.
-   *
-   * @param text The text to process.
-   * @returns The processed text with regex rules applied.
-   * @remarks Invalid patterns are logged by {@link applyReplacements}.
    */
   applyRegex(text: string): string {
     return applyReplacements(text, getAllReplacementsRegex()).trim();
@@ -87,17 +78,13 @@ class ReplacementEngineImpl implements ReplacementEngine {
 
   /**
    * Apply every replacement rule in the recommended order.
-   *
    * Non-regex replacements run before and after regex replacements to fix
    * artifacts they may introduce.
-   *
-   * @param text The text to process.
-   * @returns The fully processed text with non-regex and regex rules applied in sequence.
    */
   applyAll(text: string): string {
-    let processed = this.applyNonRegex(text);
-    processed = this.applyRegex(processed);
-    return this.applyNonRegex(processed);
+    const afterNonRegex = this.applyNonRegex(text);
+    const afterRegex = this.applyRegex(afterNonRegex);
+    return this.applyNonRegex(afterRegex);
   }
 }
 
@@ -186,8 +173,8 @@ export function getAllReplacements(): ReplacementCategory {
 
 /**
  * Get all regex replacement categories in order of application.
- * Filter by enabled categories from user configuration.
- * Also includes custom regex replacements from settings.
+ * Filters by enabled categories from user configuration and includes
+ * custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
   const enabledCategoryNames = getConfig(
@@ -207,26 +194,24 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
     {},
   );
 
-  // Filter predefined categories based on user configuration
-  let enabledCategories = REGEX_CATEGORIES.filter((category) =>
+  const enabledCategories = REGEX_CATEGORIES.filter((category) =>
     enabledCategoryNames.includes(category.name),
   );
 
-  // Add custom regex replacements as a separate category if any exist
-  if (Object.keys(customReplacements).length > 0) {
-    const customCategory: ReplacementCategory = {
+  if (Object.keys(customReplacements).length === 0) {
+    return enabledCategories;
+  }
+
+  return [
+    ...enabledCategories,
+    {
       name: 'custom_regex',
       description: 'Custom regex replacements from user settings',
       isRegex: true,
-      flags: 'g', // Default flags
+      flags: 'g',
       patterns: customReplacements,
-    };
-
-    // Add the custom category to the list
-    enabledCategories = [...enabledCategories, customCategory];
-  }
-
-  return enabledCategories;
+    },
+  ];
 }
 
 /**
@@ -243,40 +228,29 @@ export function getReplacementsByCategory(
 
 /**
  * Apply replacements to text, handling both regex and non-regex patterns.
- * @param text The text to process
- * @param replacements The replacements to apply
- * @param options Optional configuration options
- * @param options.processMathUnicode Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
- * @returns The processed text
  */
 export function applyReplacements(
   text: string,
   replacements: ReplacementCategory | ReplacementCategory[],
   options?: {
-    processMathUnicode?: boolean; // Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
+    /** Whether to apply Unicode-to-LaTeX within math environments (defaults to true) */
+    processMathUnicode?: boolean;
   },
 ): string {
-  // Apply Unicode replacements in math environments if requested
-  if (options?.processMathUnicode !== false) {
-    // Default to true if not specified
-    text = replaceMathUnicode(text);
-  }
+  // Apply Unicode replacements in math environments unless disabled
+  let result =
+    options?.processMathUnicode === false ? text : replaceMathUnicode(text);
 
-  // Convert single category to array for unified handling
-  const replacementArray = Array.isArray(replacements)
+  const categories = Array.isArray(replacements)
     ? replacements
     : [replacements];
 
-  // Process all replacements in order
-  for (const category of replacementArray) {
+  for (const category of categories) {
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
           const regex = new RegExp(pattern, category.flags);
-          text =
-            typeof repl === 'string'
-              ? text.replace(regex, repl)
-              : text.replace(regex, repl);
+          result = result.replace(regex, repl as string);
         } catch (regexErr) {
           logger.error(
             CHANNEL,
@@ -286,9 +260,8 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        // Non-regex patterns only use string replacements
         if (typeof newText === 'string') {
-          text = text.replaceAll(old, newText);
+          result = result.replaceAll(old, newText);
         } else {
           logger.debug(
             CHANNEL,
@@ -299,21 +272,18 @@ export function applyReplacements(
     }
   }
 
-  // Apply LaTeX quotes formatting
-  text = applyLatexQuotesFormatting(text);
+  result = applyLatexQuotesFormatting(result);
+  result = fixLatexQuoteIssues(result);
+  result = escapeTextttUnderscores(result);
 
-  // Cleanup common quote issues
-  text = fixLatexQuoteIssues(text);
-
-  // Escape underscores inside \texttt commands for LaTeX compatibility
-  text = escapeTextttUnderscores(text);
-
-  return text;
+  return result;
 }
 
 /**
  * Clean content using all replacement rules.
- * Applies non-regex, then regex rules, then conditional critique wrapping.
+ * @deprecated Use replacementEngine.applyAll() instead for the recommended order.
+ * This function applies non-regex, then regex, then critique wrapping.
+ * The engine's applyAll() method applies non-regex, regex, then non-regex again.
  */
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();

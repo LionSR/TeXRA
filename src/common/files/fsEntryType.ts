@@ -20,14 +20,12 @@
  * - SymbolicLink to file: 65 (64 | 1)
  * - SymbolicLink to directory: 66 (64 | 2)
  */
-export const FSEntryType = {
+const FSEntryType = {
   Unknown: 0,
   File: 1,
   Directory: 2,
   SymbolicLink: 64,
 } as const;
-
-export type FSEntryTypeValue = (typeof FSEntryType)[keyof typeof FSEntryType];
 
 /**
  * Check if a file system entry type represents a file (including symlinks to files).

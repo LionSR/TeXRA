@@ -1,8 +1,7 @@
 /**
  * Decouples agent runtime from ProgressView UI layer.
  */
-import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo, StreamTabId, StorageKey } from '@shared/schemas';
 
 /** Interface for run state access - implemented by ProgressViewProvider */
 export interface IRunStorageService {
@@ -30,9 +29,4 @@ export function setRunStorageService(s: IRunStorageService): void {
 /** Returns service or safe defaults if not registered */
 export function getRunStorageService(): IRunStorageService {
   return service ?? DEFAULT_SERVICE;
-}
-
-/** Reset to default state (for testing) */
-export function resetRunStorageService(): void {
-  service = null;
 }

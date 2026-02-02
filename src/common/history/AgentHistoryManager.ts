@@ -4,11 +4,11 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 // Type imports
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'AgentHistoryManager';
 

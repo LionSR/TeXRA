@@ -1,22 +1,8 @@
 /**
  * Tool-use flow module.
  *
- * Service interfaces and flow-first execution for tool-use agents.
- * The flow itself is in ToolUseRunFlow.ts (parent directory).
+ * Entry point: `runToolUseFlow()` runs flows directly with configuration.
  */
-
-export type {
-  ToolUseServices,
-  ToolUseFlowParams,
-  PrepareStateResult,
-} from './ToolUseServices';
-
-export { type ToolUseFlowContextInit } from './ToolUseFlowContext';
-
-export {
-  ToolUseSessionLifecycle,
-  type IToolUseSession,
-} from './ToolUseSessionLifecycle';
 
 export {
   runToolUseFlow,
@@ -26,11 +12,6 @@ export {
   type ToolUseFlowSetupCallback,
 } from './runToolUseFlow';
 
-// Node implementations (exported for testing and extensibility)
-export {
-  ToolUsePrepareNode,
-  ToolUseCycleNode,
-  ToolUseWaitNode,
-  type ToolUseRunShared,
-  type StateSlicesSnapshot,
-} from './nodes';
+export { type IToolUseSession } from './ToolUseSessionLifecycle';
+
+export { type ToolUseSessionSnapshot } from './ToolUseSessionTypes';

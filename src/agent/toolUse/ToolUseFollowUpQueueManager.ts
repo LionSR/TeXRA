@@ -5,11 +5,11 @@
  * follow-ups to active/resuming sessions.
  */
 
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { STREAM_STATUS } from '@shared/schemas';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { FollowUpQueue } from './FollowUpQueue';
+import type { StreamTabId } from '@shared/schemas';
 
 const logger = new AgentLogger('ToolUseFollowUpQueue');
 

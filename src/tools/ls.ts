@@ -49,6 +49,8 @@ function formatEntry(name: string, type: vscode.FileType): string {
   return `${label.padEnd(4, ' ')} ${name}${suffix}`;
 }
 
+const NO_ENTRIES_MESSAGE = '(no entries after applying ignore filters)';
+
 export class LsTool extends defineTool({
   name: 'ls',
   description:
@@ -58,7 +60,15 @@ export class LsTool extends defineTool({
   protected async execute(input: LsInput): Promise<ToolResult> {
     const { path: resolved, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
-    const summary = `Listing for ${display}`;
+    const header = `Listing for ${display}`;
+
+    const makeResult = (
+      content: string | string[] | null,
+      summary = header,
+    ): ToolResult => ({
+      summary,
+      output: formatToolOutput(header, content, NO_ENTRIES_MESSAGE),
+    });
 
     let stats: vscode.FileStat | undefined;
     try {
@@ -72,46 +82,24 @@ export class LsTool extends defineTool({
     }
 
     const ignoreMatchers = input.ignore.map(createGlobMatcher);
-    // Empty array.some() returns false, so no special case needed
     const matchesCustomIgnore = (entryPath: string): boolean =>
       ignoreMatchers.some((matcher) => matcher(entryPath));
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(resolved.relative);
       const fileName = relativePosix.split('/').at(-1) ?? relativePosix;
-      if (
+      const isIgnored =
         isDefaultHiddenName(fileName) ||
         gitignore.ignores(resolved.relative) ||
         matchesCustomIgnore(display) ||
-        matchesCustomIgnore(relativePosix)
-      ) {
-        return {
-          summary,
-          output: formatToolOutput(
-            `Listing for ${display}`,
-            null,
-            '(no entries after applying ignore filters)',
-          ),
-        };
-      }
-      return {
-        summary,
-        output: formatToolOutput(
-          `Listing for ${display}`,
-          formatEntry(display, vscode.FileType.File),
-        ),
-      };
+        matchesCustomIgnore(relativePosix);
+      return makeResult(
+        isIgnored ? null : formatEntry(display, vscode.FileType.File),
+      );
     }
 
     if (resolved.relative !== '.' && gitignore.ignores(resolved.relative)) {
-      return {
-        summary,
-        output: formatToolOutput(
-          `Listing for ${display}`,
-          null,
-          '(no entries after applying ignore filters)',
-        ),
-      };
+      return makeResult(null);
     }
 
     const entries = await WorkspaceFS.readDir(resolved.relative);
@@ -132,9 +120,9 @@ export class LsTool extends defineTool({
     const formatted = sorted.map(([name, type]) => formatEntry(name, type));
     const count = formatted.length;
 
-    return {
-      summary: `Listed ${count} ${pluralize(count, 'entry', 'entries')} in ${display}`,
-      output: formatToolOutput(`Listing for ${display}`, formatted),
-    };
+    return makeResult(
+      formatted,
+      `Listed ${count} ${pluralize(count, 'entry', 'entries')} in ${display}`,
+    );
   }
 }

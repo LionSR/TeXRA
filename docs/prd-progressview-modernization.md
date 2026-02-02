@@ -14,7 +14,7 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ### 2. Overengineered State Management
 
-- 7 places track "active" state (see Appendix)
+- 7 places track "active" state (see Appendix in Phase 1)
 - TaskGroup means "run" for Workflow, "turn" for ToolUse (semantic overloading)
 - 6 band-aid workarounds scattered across codebase
 
@@ -40,18 +40,264 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 | **ProfileView**  | 211           | 7          | None        | Low      |
 | **HistoryView**  | 160           | 7          | None        | Low      |
 
-## Goals
+---
 
-**Phase 1**: ProgressView — schema relocation + Lit UI
-**Phase 2**: Extract shared infrastructure (proven patterns from Phase 1)
-**Phase 3**: Migrate remaining webviews (MainView, HistoryView, ProfileView, MemoryView)
+## Build Requirements
+
+> **Important:** Due to growing codebase size and Lit component compilation, increased memory allocation is required.
+
+```bash
+# Required for compilation (prevents heap out of memory errors)
+NODE_OPTIONS=--max-old-space-size=8192 npm run compile
+
+# Or set in package.json scripts (recommended)
+"compile": "NODE_OPTIONS=--max-old-space-size=8192 webpack --mode production"
+```
+
+**Why:** Lit + TypeScript + Zod schema compilation creates significant memory pressure during webpack bundling, especially with 5 webview entry points.
+
+---
+
+## Goals & Phases
+
+| Phase       | Scope                                        | Status         | Doc                                                        |
+| ----------- | -------------------------------------------- | -------------- | ---------------------------------------------------------- |
+| **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
+| **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
+| **Phase 3** | ProgressView stabilization + native Lit      | ✅ Complete    | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete    | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
+| **Phase 5** | Regression fixes + Zod validation            | ✅ 99%         | [prd-progressview-phase5.md](./prd-progressview-phase5.md) |
+| **Phase 6** | Component extraction + performance           | ✅ Complete    | [prd-progressview-phase6.md](./prd-progressview-phase6.md) |
+| **Phase 7** | Zod-native types & MainApp decomposition     | ⬜ Not Started | [prd-mainview-phase7.md](./prd-mainview-phase7.md)         |
+| **Phase 8** | Lit-native improvements                      | ⬜ Not Started | [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)     |
+| **Phase 9** | Task group state, UI, and persistence        | ⬜ Not Started | [prd-taskgroup-phase9.md](./prd-taskgroup-phase9.md)       |
+
+\*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
+
+### Phase 3 Status Detail
+
+| Sub-Phase | Scope                      | Status                         |
+| --------- | -------------------------- | ------------------------------ |
+| 3a        | JS → TS shared utilities   | ✅ Complete                    |
+| 3b-1      | UI parity/stabilization    | ✅ Complete                    |
+| 3b-1.5/6  | CSS Shadow DOM migration   | ✅ Complete (11/13 components) |
+| 3b-2      | Utility conversion         | 🟡 In Progress (1 JS left)     |
+| 3b-3      | Formatter → TemplateResult | 🔶 Bridge pattern in use       |
+
+### Phase 4 Status Detail (2026-01-25)
+
+| Webview         | Status      | Shadow DOM | Zod Validation | Legacy JS  |
+| --------------- | ----------- | ---------- | -------------- | ---------- |
+| **MemoryView**  | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **HistoryView** | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **ProfileView** | ✅ Complete | ✅         | ✅             | ✅ Deleted |
+| **MainView**    | ✅ Migrated | ✅         | ❌ **Missing** | ✅ Deleted |
+
+**Note:** MainView requires Phase 5 work:
+
+- 2,737-line monolithic component needs extraction
+- 58 message types lack Zod validation
+- No shared message contract with backend
+
+### Phase 5: MainView Refactoring (New)
+
+| Task                              | Status | Impact                       |
+| --------------------------------- | ------ | ---------------------------- |
+| Extract FileSelectGroup component | ⬜     | -300 lines from MainApp      |
+| Extract BannerGroup components    | ⬜     | -150 lines from MainApp      |
+| Extract LatexDiffsSection         | ⬜     | -200 lines from MainApp      |
+| Create shared message schemas     | ⬜     | Type-safe frontend ↔ backend |
+| Add Zod validation to MainApp     | ⬜     | Security + type safety       |
+| Convert 37 inline arrows          | ⬜     | Performance                  |
+| Delete duplicate debug handler    | ⬜     | Code cleanup                 |
+
+---
 
 ## Non-Goals
 
 - Adding new features during migration
 - Changing EventBus architecture
-- Virtual scrolling (future optimization)
+- Virtual scrolling (incremental updates in Phase 5, virtual scrolling deferred)
 - CLI or web app support (but architecture doesn't preclude it)
+
+## Anti-Patterns to Eliminate
+
+The legacy codebase has accumulated sequential band-aid workarounds. **These must not be replicated:**
+
+| Pattern                 | Example                        | Problem                               |
+| ----------------------- | ------------------------------ | ------------------------------------- |
+| Render-state comparison | `lastRenderedStream`           | Duplicates state for change detection |
+| Pending ID buffers      | `_pendingActiveId`             | Two sources of truth, race conditions |
+| Resolver side effects   | `resolveActiveRunId()` mutates | Unexpected mutation in "getter"       |
+| Manual state wipes      | `_clearAgentCategoryState()`   | Shotgun surgery on mode switch        |
+| Global mutable maps     | `pendingLogUpdates`            | Memory leaks, race conditions         |
+| Scattered conditionals  | 18× `isToolUse` checks         | Logic spread across 1000+ lines       |
+| Save-blocking counters  | `blockSave()/unblockSave()`    | Easy to leak, manual batching         |
+
+**See [Phase 2 Anti-Patterns](./prd-progressview-phase2.md#anti-patterns-to-avoid) for detailed analysis and Lit solutions.**
+
+---
+
+## Eliminated Abstractions (Zod-First Architecture Wins)
+
+The migration to Zod schemas as the single source of truth eliminated **~200 lines** of redundant code. These abstractions existed because the old architecture lacked schema-first validation:
+
+### Data Flow: Before vs After
+
+```
+BEFORE (5 layers):
+  logMessage → normalizeStructuredContent() → NormalizedPayload
+            → normalizeFileListEntries() → NormalizedFileEntry[]
+            → buildFileListRender() → HTML
+
+AFTER (2 layers):
+  logMessage.data → FileListEntrySchema.safeParse()
+                  → buildFileListRender() (inline field computation) → HTML
+```
+
+### Removed Abstractions
+
+| Abstraction                        | What It Did                         | Why Redundant                                        |
+| ---------------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `NormalizedPayload`                | Wrapped `text` + `data` fields      | Direct access to `logMessage.data/text` is clearer   |
+| `normalizeStructuredContent()`     | Parsed JSON from text field         | Backend now uses `data` field for structured content |
+| `tryParseJson()`                   | Legacy text-as-JSON fallback        | Dead code path - backend sends proper `data`         |
+| `NormalizedFileEntry`              | Pre-computed `fileName`, `filePath` | Computed inline at render time                       |
+| `normalizeFileListData()`          | FileListEntry → NormalizedFileEntry | Schema validation + inline computation               |
+| `normalizeMissingOutputsPayload()` | Hand-rolled object extraction       | `MissingOutputsPayloadSchema.safeParse()`            |
+| `normalizeToolUseLog()`            | Nested field extraction             | `ToolUseLogSchema.safeParse()` + focused normalizer  |
+| `ensureLatexdiffArray()`           | Type guard wrapper                  | Inline `Array.isArray()`                             |
+| `extractTrimmedContent()`          | Wrapper around `.trim()`            | Inline `text.trim()`                                 |
+| Local `WebSearchPayload` type      | Duplicate type definition           | Import from `@shared/schemas`                        |
+| `MAX_HEIGHT` constant              | Unused height value (400)           | Never imported or referenced                         |
+| `AGENT_PROPOSAL_ACTIONS` constant  | `['approve', 'reject', 'setup']`    | Actions used inline, not via constant                |
+| `AGENT_PROPOSAL_CATEGORIES` const  | `{ WORKFLOW, TOOL_USE }`            | Categories defined in agent schemas                  |
+| `sortStreams()` export             | Exported but internal-only          | Made private (only used by `getFilteredStreams`)     |
+
+### Key Insight
+
+**Zod schemas eliminate the need for separate "normalizer" layers.** When the schema is the source of truth:
+
+- Validation returns typed data directly
+- `.prefault()` / `.default()` handle missing fields
+- `.transform()` handles computed fields when needed
+- Formatters receive validated, typed data - no intermediate types needed
+
+This is a fundamental architectural advantage that will compound as more webviews migrate.
+
+---
+
+## Shared Message Contracts (Frontend ↔ Backend)
+
+A critical architectural principle: **frontend and backend must share message type definitions**.
+
+### Current Problem
+
+Message types are implicitly defined in both places:
+
+```
+Backend (MainViewMessageHandler.ts)  → sends { command: 'SET_MODEL_OPTIONS', options: string }
+Frontend (MainApp.ts)                → expects { command: string, options?: unknown }
+                                       ↑ No validation, type casting only
+```
+
+This leads to:
+
+- Runtime errors when message shapes change
+- No compile-time guarantees
+- Duplicate type definitions
+- Security vulnerabilities (untrusted data from webview)
+
+### Target Architecture
+
+```
+src/shared/schemas/
+├── commands.ts                    # Command constants (single source)
+├── progressViewMessages.ts        # ProgressView message schemas ✅
+├── mainViewMessages.ts            # MainView message schemas (Phase 5)
+├── historyViewMessages.ts         # HistoryView message schemas ✅
+├── profileViewMessages.ts         # ProfileView message schemas ✅
+└── memoryViewMessages.ts          # MemoryView message schemas ✅
+```
+
+### Message Contract Pattern
+
+```typescript
+// src/shared/schemas/mainViewMessages.ts
+import { z } from 'zod';
+
+// 1. Define schema (single source of truth)
+export const SetModelOptionsSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
+  options: z.string(),
+});
+
+// 2. Derive types
+export type SetModelOptionsMessage = z.infer<typeof SetModelOptionsSchema>;
+
+// 3. Union of all messages
+export const MainViewMessageSchema = z.discriminatedUnion('command', [
+  SetModelOptionsSchema,
+  UpdateFilesSchema,
+  SetAgentConfigSchema,
+  // ... all 58 message types
+]);
+
+export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
+```
+
+**Backend usage:**
+
+```typescript
+// MainViewMessageHandler.ts
+import { SetModelOptionsMessage } from '@shared/schemas/mainViewMessages';
+
+private sendModelOptions(options: string): void {
+  const message: SetModelOptionsMessage = {
+    command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+    options,
+  };
+  this.postMessage(message);  // Type-checked at compile time
+}
+```
+
+**Frontend usage:**
+
+```typescript
+// MainApp.ts handlers
+import { MainViewMessageSchema } from '@shared/schemas/mainViewMessages';
+
+private handleMessage(event: MessageEvent): void {
+  const result = MainViewMessageSchema.safeParse(event.data);
+  if (!result.success) {
+    console.warn('Invalid message:', result.error);
+    return;
+  }
+  // result.data is now fully typed MainViewMessage
+  const handler = MESSAGE_HANDLERS[result.data.command];
+  if (handler) handler(result.data, this.context);
+}
+```
+
+### Benefits
+
+1. **Compile-time safety**: Backend send types must match frontend receive types
+2. **Runtime validation**: Zod catches malformed messages early
+3. **Single source of truth**: No duplicate type definitions
+4. **Documentation**: Schemas serve as API documentation
+5. **Refactoring confidence**: Change schema, see all affected code
+
+### Migration Status
+
+| Webview      | Shared Schemas | Backend Uses | Frontend Validates |
+| ------------ | -------------- | ------------ | ------------------ |
+| ProgressView | ✅             | ✅           | ✅                 |
+| MemoryView   | ✅             | ✅           | ✅                 |
+| HistoryView  | ✅             | ✅           | ✅                 |
+| ProfileView  | ✅             | ✅           | ✅                 |
+| **MainView** | ❌             | ❌           | ❌                 |
+
+**MainView is the only remaining webview without shared message contracts.**
 
 ---
 
@@ -80,36 +326,6 @@ src/shared/schemas/
 └── index.ts          → barrel export (only file that re-exports)
 ```
 
-### Current Schema Locations (To Be Relocated)
-
-| Current Location                       | Schemas                                                                                | New Location                                                    |
-| -------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `src/eventBus/schemas.ts`              | `TodoItemSchema`, `AddTaskGroupPayloadSchema`, `UpdateTaskGroupPayloadSchema`          | `src/shared/schemas/taskGroup.ts`, `src/shared/schemas/todo.ts` |
-| `src/eventBus/types.ts`                | `ToolEditApprovalPromptSchema`, `BashApprovalPromptSchema`, `RetryRequestPromptSchema` | `src/shared/schemas/prompts.ts`                                 |
-| `src/logger/LogTypes.ts`               | `TaskGroupSchema`, `LogMessageDataSchema`                                              | `src/shared/schemas/taskGroup.ts`, `src/shared/schemas/log.ts`  |
-| `src/logger/messageTypes.ts`           | `MessageTypeSchema`, `LogLevelSchema`                                                  | `src/shared/schemas/log.ts`                                     |
-| `src/agent/types/UsageTypes.ts`        | `TokenUsageStatsSchema`                                                                | `src/shared/schemas/usage.ts`                                   |
-| `src/agent/types/IdentifierTypes.ts`   | `StreamTabIdSchema`, `ExecutionIdSchema`                                               | `src/shared/schemas/identifiers.ts`                             |
-| `src/agent/output/types.ts`            | `OutputFileInfoSchema`, `FileLineageSchema`                                            | `src/shared/schemas/output.ts`                                  |
-| `src/common/constants/streamStatus.ts` | `StreamStatusSchema`, `TaskGroupStatusSchema`                                          | `src/shared/schemas/stream.ts`                                  |
-| `src/common/errors/schemas.ts`         | `ProviderErrorSchema`, `RetryErrorInfoSchema`                                          | `src/shared/schemas/errors.ts`                                  |
-| `src/progressView/types.ts`            | `StreamTabInfoSchema`, `StreamUITraitsSchema`                                          | `src/shared/schemas/stream.ts`                                  |
-
-### Requires Extraction (Node.js Dependency)
-
-| File                                | Issue                                               | Solution                                                    |
-| ----------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
-| `src/utils/files/taskRunStorage.ts` | Mixes schemas with Node.js utilities (`path`, `fs`) | Move `FileLocationSchema` to `src/shared/schemas/output.ts` |
-
-### Already Duplicated (Consolidate)
-
-| Location 1                                 | Location 2                       | Action                                           |
-| ------------------------------------------ | -------------------------------- | ------------------------------------------------ |
-| `src/common/webview/commands.ts`           | `src/common/webview/commands.js` | Keep `.ts`, delete `.js` (ES module dual-export) |
-| `src/logger/LogTypes.ts` (TaskGroupSchema) | `src/eventBus/schemas.ts`        | Consolidate in `src/shared/schemas/taskGroup.ts` |
-
-Note: `src/progressView/modules/constants.js` already imports from `@common/webview/commands.js` (not a duplicate).
-
 ### Dependency Direction (Avoid Cycles)
 
 Schemas must follow a strict dependency order to prevent circular imports:
@@ -129,754 +345,30 @@ commands.ts     → (standalone, constants only)
 
 **Rule**: Lower-level schemas cannot import from higher-level schemas.
 
-### Migration Strategy (Atomic Per-Schema)
-
-For each schema relocation, complete all steps in a **single commit** to avoid build breaks:
-
-```bash
-# Example: Relocating TaskGroupSchema
-
-# 1. Create schema in shared/
-# src/shared/schemas/taskGroup.ts
-
-# 2. Find all consumers
-grep -r "import.*TaskGroupSchema" src/
-
-# 3. Update all imports atomically
-# Change: import { TaskGroupSchema } from '@logger/LogTypes';
-# To:     import { TaskGroupSchema } from '@shared/schemas';
-
-# 4. Delete original definition from old file
-
-# 5. If old file is empty, delete it
-
-# 6. Single commit with all changes
-git add . && git commit -m "refactor: relocate TaskGroupSchema to shared/schemas"
-```
-
-**Critical**: Never leave the codebase in a state where a schema is defined in two places or where imports point to a deleted location.
-
 ---
 
-## Phase 1: ProgressView
-
-### Milestone 1: Type-Safe IPC
-
-#### Step 1.1: Create Shared Schema Directory
-
-Create `src/shared/schemas/` with consolidated schemas (single source of truth):
-
-```
-src/shared/schemas/
-├── identifiers.ts    # StreamTabIdSchema, ExecutionIdSchema
-├── stream.ts         # StreamStatusSchema, StreamTabInfoSchema
-├── taskGroup.ts      # TaskGroupSchema, TaskGroupStatusSchema
-├── log.ts            # LogMessageDataSchema, MessageTypeSchema, LogLevelSchema
-├── usage.ts          # TokenUsageStatsSchema
-├── output.ts         # OutputFileInfoSchema, FileLocationSchema
-├── prompts.ts        # ToolEditApprovalPromptSchema, BashApprovalPromptSchema, etc.
-├── todo.ts           # TodoItemSchema, TodoStatusSchema
-├── errors.ts         # ProviderErrorSchema, RetryErrorInfoSchema
-├── commands.ts       # All command constants (replaces duplicates)
-└── index.ts          # Single barrel export
-```
-
-**Example: `src/shared/schemas/identifiers.ts`**
-
-```typescript
-import { z } from 'zod';
-
-export const StreamTabIdSchema = z.string().min(1);
-export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
-
-export const ExecutionIdSchema = z.string().uuid();
-export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
-
-export const StorageKeySchema = z.union([
-  z.string().uuid(),
-  z.literal('__default__'),
-]);
-export type StorageKey = z.infer<typeof StorageKeySchema>;
-```
-
-**Example: `src/shared/schemas/output.ts`** (includes relocated FileLocationSchema)
-
-```typescript
-import { z } from 'zod';
-import { ExecutionIdSchema } from './identifiers';
-
-export const WorkspaceFileLocationSchema = z.object({
-  kind: z.literal('workspace'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
-});
-
-export const RunStorageFileLocationSchema = z.object({
-  kind: z.literal('runStorage'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
-  executionId: ExecutionIdSchema,
-});
-
-export const ExternalFileLocationSchema = z.object({
-  kind: z.literal('external'),
-  absolutePath: z.string(),
-});
-
-export const FileLocationSchema = z.discriminatedUnion('kind', [
-  WorkspaceFileLocationSchema,
-  RunStorageFileLocationSchema,
-  ExternalFileLocationSchema,
-]);
-
-export type FileLocation = z.infer<typeof FileLocationSchema>;
-
-export const OutputFileInfoSchema = z.object({
-  source: z.string(),
-  location: FileLocationSchema,
-  round: z.number().optional(),
-  // ... other fields
-});
-
-export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
-```
-
-#### Step 1.2: Update All Imports to Use Shared Directly
-
-**No re-exports for backward compatibility.** Update all imports to point to `@shared/schemas`:
-
-```typescript
-// BEFORE: Import from scattered locations
-import { TaskGroupSchema } from '@logger/LogTypes';
-import { StreamStatusSchema } from '@common/constants/streamStatus';
-import { FileLocationSchema } from '@utils/files/taskRunStorage';
-
-// AFTER: Import from single source
-import {
-  TaskGroupSchema,
-  StreamStatusSchema,
-  FileLocationSchema,
-} from '@shared/schemas';
-```
-
-**Migration approach:**
-
-1. Create schemas in `src/shared/schemas/`
-2. Find all imports of the old location (use grep/find-references)
-3. Update imports to `@shared/schemas`
-4. Delete the schema definition from the old file
-5. If old file is now empty, delete it
-
-**Example: `src/utils/files/taskRunStorage.ts`**
-
-```typescript
-// BEFORE: Schema + Node.js utilities mixed
-export const FileLocationSchema = z.discriminatedUnion(...);
-export function createRunStorageDir() { /* Node.js code */ }
-
-// AFTER: Only Node.js utilities remain
-import { FileLocationSchema } from '@shared/schemas';  // Use, don't define
-export function createRunStorageDir() { /* Node.js code */ }
-```
-
-This ensures:
-
-- **Single source of truth** - schema lives in ONE file
-- **No re-export chains** - imports go directly to source
-- **Clear ownership** - grep for schema name finds definition immediately
-- **Browser safety** - `src/shared/` has no Node.js dependencies
-
-#### Step 1.3: Add Message Validation
-
-Update `ProgressViewMessageHandler.ts` to validate incoming messages:
-
-```typescript
-import {
-  AddTaskGroupPayloadSchema,
-  UpdateTaskGroupPayloadSchema,
-  UpdateTodosPayloadSchema,
-  // ... other schemas
-} from './schemas';
-
-private handleMessage(message: { command: string; payload?: unknown }): void {
-  switch (message.command) {
-    case 'addTaskGroup': {
-      const result = AddTaskGroupPayloadSchema.safeParse(message.payload);
-      if (!result.success) {
-        console.error('[ProgressView] Invalid addTaskGroup:', result.error.issues);
-        return;
-      }
-      this.handleAddTaskGroup(result.data);
-      break;
-    }
-    case 'updateTaskGroup': {
-      const result = UpdateTaskGroupPayloadSchema.safeParse(message.payload);
-      if (!result.success) {
-        console.error('[ProgressView] Invalid updateTaskGroup:', result.error.issues);
-        return;
-      }
-      this.handleUpdateTaskGroup(result.data);
-      break;
-    }
-    // ... other cases
-  }
-}
-```
-
-#### Step 1.4: Delete Duplicates
-
-```
-DELETE: src/progressView/modules/commands.js (298 lines)
-DELETE: src/progressView/modules/constants/streamStatus.js
-UPDATE: All imports to use TypeScript sources
-```
-
-#### M1 Deliverables
-
-- All messages validated with existing Zod schemas
-- 600+ duplicate lines deleted
-- Frontend receives typed data
-- No UI changes, no new dependencies
-- Build passes, extension works
-
----
-
-### Milestone 2: Lit UI
-
-#### Why Lit
-
-| Vanilla JS Pain               | Lit Solution                                       |
-| ----------------------------- | -------------------------------------------------- |
-| 53 lines fragment batching    | `html\`${items.map(i => html\`...\`)}\``           |
-| `if (container)` null checks  | Reactive `@property` auto-renders                  |
-| 8 duplicate approval handlers | Single `<prompt-overlay kind="...">`               |
-| 18 `isToolUse` conditionals   | Separate `<workflow-view>` / `<conversation-view>` |
-| `classList.add/remove/toggle` | `class=${classMap({ active: this.isActive })}`     |
-| 7 "active" state locations    | Single reactive store                              |
-| Manual event wiring           | Declarative `@click=${this.handler}`               |
-
-#### Step 2.1: Add Dependencies
-
-```bash
-npm install lit
-```
-
-Update `tsconfig.json` (if not already set):
-
-```jsonc
-{
-  "compilerOptions": {
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-  },
-}
-```
-
-#### Step 2.2: Create Webpack Entry
-
-Add to `webpack.config.js`:
-
-```javascript
-const progressViewConfig = {
-  name: 'progressView',
-  entry: './src/progressView/frontend/index.ts',
-  output: {
-    path: path.resolve(__dirname, 'dist/progressView'),
-    filename: 'bundle.js',
-  },
-  target: 'web',
-  resolve: {
-    extensions: ['.ts', '.js'],
-    alias: {
-      // Same aliases as main config
-    },
-  },
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
-    ],
-  },
-};
-
-module.exports = [extensionConfig, progressViewConfig];
-```
-
-#### Step 2.3: Create Store
-
-Create `src/progressView/frontend/store.ts`:
-
-```typescript
-import { reactive } from '@lit-labs/preact-signals';
-import type {
-  StreamTabInfo,
-  TaskGroup,
-  TodoItem,
-  OutputFileInfo,
-  TokenUsageStats,
-} from '../schemas';
-
-export interface ProgressState {
-  // Stream state
-  activeStreamId: string | null;
-  streams: Map<string, StreamTabInfo>;
-
-  // Workflow data (per stream)
-  taskGroups: Map<string, Map<string, TaskGroup>>;
-  activeRunIds: Map<string, string>;
-  outputFiles: Map<string, OutputFileInfo[]>;
-  usageStats: Map<string, TokenUsageStats>;
-
-  // Conversation data (per stream)
-  todos: Map<string, TodoItem[]>;
-
-  // UI state
-  activePrompt: PromptState | null;
-  streamSortOrder: 'time' | 'agent' | 'inputFile';
-  streamFilter: 'all' | 'workflow' | 'toolUse';
-}
-
-export type PromptState =
-  | { kind: 'toolEdit'; data: ToolEditApprovalPrompt }
-  | { kind: 'bash'; data: BashApprovalPrompt }
-  | { kind: 'retry'; data: RetryRequestPrompt }
-  | { kind: 'proposal'; data: WorkflowAgentProposal | ToolUseAgentProposal };
-
-// Single source of truth
-export const state = reactive<ProgressState>({
-  activeStreamId: null,
-  streams: new Map(),
-  taskGroups: new Map(),
-  activeRunIds: new Map(),
-  outputFiles: new Map(),
-  usageStats: new Map(),
-  todos: new Map(),
-  activePrompt: null,
-  streamSortOrder: 'time',
-  streamFilter: 'all',
-});
-
-// Derived state helpers
-export function getActiveStream(): StreamTabInfo | undefined {
-  return state.activeStreamId
-    ? state.streams.get(state.activeStreamId)
-    : undefined;
-}
-
-export function isWorkflow(): boolean {
-  return getActiveStream()?.agentCategory === 'workflow';
-}
-
-export function getActiveRunId(): string | undefined {
-  return state.activeStreamId
-    ? state.activeRunIds.get(state.activeStreamId)
-    : undefined;
-}
-```
-
-#### Step 2.4: Build Components
-
-**Component Hierarchy:**
-
-```
-<progress-app>                    # Root component, message handler
-  ├── <stream-tabs>               # Tab bar with stream list
-  │
-  ├── <workflow-view>             # agentCategory === 'workflow'
-  │   ├── <run-selector>          # Dropdown to switch runs
-  │   ├── <instruction-panel>     # Shows run instruction
-  │   ├── <task-list>             # Hierarchical task groups
-  │   │   └── <task-group>        # Collapsible group with children
-  │   ├── <file-list>             # Output files with round headers
-  │   └── <workflow-toolbar>      # RUN_NEW, RESUME, DIFF, etc.
-  │
-  ├── <conversation-view>         # agentCategory === 'toolUse'
-  │   ├── <todo-list>             # Todo items
-  │   ├── <turn-list>             # Conversation turns
-  │   │   └── <turn-item>         # Single turn with tool calls
-  │   ├── <file-list>             # Output files (flat)
-  │   ├── <followup-input>        # Input for follow-up messages
-  │   └── <conversation-toolbar>  # STOP, RESTORE
-  │
-  └── <prompt-overlay>            # Modal for approvals/retry/proposal
-      ├── <tool-edit-prompt>
-      ├── <bash-prompt>
-      ├── <retry-prompt>
-      └── <proposal-prompt>
-```
-
-**Build Order:**
-
-| Step | Component                      | Lines (est.) | Eliminates               |
-| ---- | ------------------------------ | ------------ | ------------------------ |
-| 1    | `<progress-app>` shell         | ~100         | Entry point              |
-| 2    | `<stream-tabs>`                | ~150         | Tab management code      |
-| 3    | `<prompt-overlay>`             | ~200         | 8 duplicate handlers     |
-| 4    | `<workflow-view>`              | ~300         | Half of isToolUse checks |
-| 5    | `<conversation-view>`          | ~250         | Other half of isToolUse  |
-| 6    | `<task-list>` + `<task-group>` | ~200         | Fragment batching        |
-| 7    | `<file-list>`                  | ~150         | File rendering logic     |
-| 8    | Remaining small components     | ~200         | Cleanup                  |
-
-**Total: ~1,550 lines replacing ~3,700 lines**
-
-#### Step 2.5: Example Component
-
-`src/progressView/frontend/components/PromptOverlay.ts`:
-
-```typescript
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { when } from 'lit/directives/when.js';
-import type { PromptState } from '../store';
-
-@customElement('prompt-overlay')
-export class PromptOverlay extends LitElement {
-  static styles = css`
-    :host {
-      position: fixed;
-      inset: 0;
-      background: var(--vscode-editor-background, rgba(0, 0, 0, 0.5));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    :host([hidden]) {
-      display: none;
-    }
-
-    .prompt-card {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 16px;
-      max-width: 500px;
-      width: 90%;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 16px;
-    }
-  `;
-
-  @property({ type: Object }) prompt: PromptState | null = null;
-
-  render() {
-    if (!this.prompt) return null;
-
-    return html`
-      <div class="prompt-card">
-        ${when(this.prompt.kind === 'toolEdit', () => this._renderToolEdit())}
-        ${when(this.prompt.kind === 'bash', () => this._renderBash())}
-        ${when(this.prompt.kind === 'retry', () => this._renderRetry())}
-        ${when(this.prompt.kind === 'proposal', () => this._renderProposal())}
-      </div>
-    `;
-  }
-
-  private _renderToolEdit() {
-    const data = this.prompt!.data as ToolEditApprovalPrompt;
-    return html`
-      <h3>Tool Edit Approval</h3>
-      <p>Allow edit to <code>${data.filePath}</code>?</p>
-      <div class="actions">
-        <button @click=${() => this._respond('reject')}>Reject</button>
-        <button @click=${() => this._respond('approve')}>Approve</button>
-      </div>
-    `;
-  }
-
-  // ... similar for bash, retry, proposal
-
-  private _respond(action: string) {
-    this.dispatchEvent(
-      new CustomEvent('prompt-response', {
-        detail: { kind: this.prompt!.kind, action },
-        bubbles: true,
-      }),
-    );
-  }
-}
-```
-
-#### Step 2.6: Delete Legacy Code
-
-After all components working:
-
-```
-DELETE: src/progressView/modules/ (entire directory - 67+ files)
-UPDATE: src/progressView/index.html to load bundle.js
-```
-
-#### M2 Deliverables
-
-- Lit-based UI with reactive state
-- 18 `isToolUse` conditionals → 0 (separate components)
-- 7 state tracking locations → 1 (store.ts)
-- 8 approval handlers → 1 (`<prompt-overlay>`)
-- ~3,700 lines → ~1,550 lines
-- 67+ files deleted
-
----
-
-## Phase 2: Extract Shared Infrastructure
-
-**After ProgressView is stable**, extract patterns for other webviews.
-
-### Existing Infrastructure to Leverage
-
-Already exists in `src/common/`:
-
-| Existing                  | Location          | Lit Migration Path                      |
-| ------------------------- | ----------------- | --------------------------------------- |
-| `BaseViewContentProvider` | `common/webview/` | Keep for HTML shell generation          |
-| `BaseViewMessageHandler`  | `common/webview/` | Replace with `BaseWebviewApp` Lit class |
-| `BaseWebviewProvider`     | `common/webview/` | Keep, add Lit bundle loading            |
-| `domUtils.js`             | `common/modules/` | Delete after Lit migration              |
-| `templateUtils.js`        | `common/modules/` | Delete after Lit migration              |
-| `common.css`              | `common/styles/`  | Port design tokens to Lit CSS           |
-| `WebviewStateManager`     | `common/modules/` | Wrap in Lit reactive controller         |
-| `ToggleStateStore`        | `common/modules/` | Replace with Lit `@state`               |
-
-### What Gets Extracted from ProgressView
-
-| Pattern                | From ProgressView        | Shared Location                |
-| ---------------------- | ------------------------ | ------------------------------ |
-| Base Lit app class     | `ProgressApp.ts`         | `src/shared/BaseWebviewApp.ts` |
-| Common Lit components  | `<prompt-overlay>`, etc. | `src/shared/components/`       |
-| Reactive store pattern | `store.ts`               | `src/shared/createStore.ts`    |
-| VS Code API wrapper    | Message posting          | `src/shared/vscode.ts`         |
-| Design tokens          | CSS variables            | `src/shared/styles/tokens.css` |
-
-Note: Schemas already live in `src/shared/schemas/` from Phase 1 (single source of truth).
-
-### Shared Components (Proven in ProgressView)
-
-Only extract components **actually used** by multiple webviews:
-
-| Component           | ProgressView | MainView | Others |
-| ------------------- | ------------ | -------- | ------ |
-| `<texra-button>`    | ✓            | ✓        | ✓      |
-| `<texra-tabs>`      | ✓            | ✓        | -      |
-| `<texra-file-list>` | ✓            | ✓        | -      |
-| `<texra-toolbar>`   | ✓            | ✓        | -      |
-
-**Rule**: No component goes in `src/shared/` until it's used by 2+ webviews.
-
-### Directory Structure After Phase 2
-
-```
-src/
-├── shared/                      # Extracted from ProgressView
-│   ├── schemas/
-│   │   ├── index.ts            # Common schema re-exports
-│   │   ├── identifiers.ts      # StreamTabId, ExecutionId, etc.
-│   │   ├── status.ts           # StreamStatus, TaskGroupStatus
-│   │   └── errors.ts           # ProviderError, RetryErrorInfo
-│   ├── components/
-│   │   ├── Button.ts
-│   │   ├── Tabs.ts
-│   │   └── index.ts
-│   ├── BaseWebviewApp.ts       # Message handling base class
-│   └── vscode.ts               # VS Code API wrapper
-│
-├── progressView/
-│   ├── frontend/               # Lit components
-│   │   ├── index.ts
-│   │   ├── store.ts
-│   │   ├── ProgressApp.ts
-│   │   └── components/
-│   ├── schemas.ts              # Progress-specific + shared imports
-│   └── ProgressViewMessageHandler.ts
-│
-├── webview/                    # MainView (Phase 3)
-├── historyView/                # Phase 3
-├── profileView/                # Phase 3
-└── memoryView/                 # Phase 3
-```
-
----
-
-## Phase 3: Migrate Other Webviews
-
-### Migration Order
-
-| Order | Webview         | Effort    | Rationale                             |
-| ----- | --------------- | --------- | ------------------------------------- |
-| 1     | **HistoryView** | 2-3 days  | Simplest (160 lines), good validation |
-| 2     | **ProfileView** | 2-3 days  | Simple, mostly static display         |
-| 3     | **MemoryView**  | 3-4 days  | Has toggle state, moderate complexity |
-| 4     | **MainView**    | 1-2 weeks | Most complex after ProgressView       |
-
-### Per-Webview Migration Template
-
-For each webview:
-
-#### Step 1: Schema Setup
-
-```typescript
-// src/{viewName}/schemas.ts
-export * from '@shared/schemas'; // Common schemas
-// Add view-specific schemas if needed
-```
-
-#### Step 2: Create Lit App
-
-```typescript
-// src/{viewName}/frontend/index.ts
-import { LitElement, html } from 'lit';
-import { customElement } from 'lit/decorators.js';
-import '@shared/components';  // Shared components
-
-@customElement('{view-name}-app')
-export class {ViewName}App extends LitElement {
-  // ...
-}
-```
-
-#### Step 3: Add Webpack Entry
-
-```javascript
-// webpack.config.js
-const {viewName}Config = {
-  name: '{viewName}',
-  entry: './src/{viewName}/frontend/index.ts',
-  // ... same pattern as progressView
-};
-```
-
-#### Step 4: Delete Legacy
-
-```
-DELETE: src/{viewName}/modules/
-UPDATE: src/{viewName}/index.html
-```
-
-### HistoryView Migration (Example)
-
-**Current structure:**
-
-- `HistoryViewMessageHandler.ts`: 160 lines
-- `modules/`: 7 files (HistoryRenderer, SearchManager, etc.)
-
-**After migration:**
-
-```
-src/historyView/
-├── frontend/
-│   ├── index.ts
-│   ├── HistoryApp.ts          # ~200 lines total
-│   └── components/
-│       ├── HistoryList.ts
-│       └── SearchBar.ts
-├── schemas.ts                  # Re-exports + history-specific
-└── HistoryViewMessageHandler.ts
-```
-
-**Estimated: 2-3 days**
-
-### MainView Migration (Largest)
-
-**Current structure:**
-
-- `MainViewMessageHandler.ts`: 461 lines
-- `modules/`: 80+ files (FileSelect, RecordingManager, etc.)
-
-**Key challenges:**
-
-- Complex file selection UI
-- Multiple manager classes
-- Recording functionality
-
-**After migration:**
-
-```
-src/webview/
-├── frontend/
-│   ├── index.ts
-│   ├── MainApp.ts
-│   ├── store.ts
-│   └── components/
-│       ├── FileSelector/
-│       │   ├── FileSelector.ts
-│       │   ├── FileList.ts
-│       │   └── FileItem.ts
-│       ├── RecordingPanel.ts
-│       ├── InstructionBox.ts
-│       └── ActionButtons.ts
-├── schemas.ts
-└── MainViewMessageHandler.ts
-```
-
-**Estimated: 1-2 weeks**
-
----
-
-## Build Configuration
-
-### Final webpack.config.js
-
-```javascript
-const path = require('path');
-
-const baseWebviewConfig = {
-  target: 'web',
-  resolve: {
-    extensions: ['.ts', '.js'],
-    alias: {
-      '@shared': path.resolve(__dirname, 'src/shared'),
-      '@agent': path.resolve(__dirname, 'src/agent'),
-      '@common': path.resolve(__dirname, 'src/common'),
-      '@utils': path.resolve(__dirname, 'src/utils'),
-      '@eventBus': path.resolve(__dirname, 'src/eventBus'),
-      '@logger': path.resolve(__dirname, 'src/logger'),
-    },
-  },
-  module: {
-    rules: [{ test: /\.ts$/, use: 'ts-loader', exclude: /node_modules/ }],
-  },
-};
-
-const webviewConfigs = [
-  'progressView',
-  'webview',
-  'historyView',
-  'profileView',
-  'memoryView',
-].map((name) => ({
-  ...baseWebviewConfig,
-  name,
-  entry: `./src/${name}/frontend/index.ts`,
-  output: {
-    path: path.resolve(__dirname, `dist/${name}`),
-    filename: 'bundle.js',
-  },
-}));
-
-module.exports = [extensionConfig, ...webviewConfigs];
-```
-
-### tsconfig.json Updates
-
-```jsonc
-{
-  "compilerOptions": {
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-    "paths": {
-      "@shared/*": ["src/shared/*"],
-      // ... existing paths
-    },
-  },
-}
-```
+## Success Metrics
+
+### After Phase 1 (ProgressView)
+
+| Metric                   | Current    | After M1 | After M2 |
+| ------------------------ | ---------- | -------- | -------- |
+| Typed messages           | 0%         | 100%     | 100%     |
+| Duplicate schema code    | 600+ lines | 0        | 0        |
+| `isToolUse` conditionals | 18         | 18       | 0        |
+| State tracking locations | 7          | 7        | 1        |
+| Frontend lines           | ~3,700     | ~3,700   | ~2,300   |
+| Approval handlers        | 8          | 8        | 1        |
+| Files in modules/        | 67+        | 67+      | 0        |
+
+### After All Phases
+
+| Metric                       | Current | After  |
+| ---------------------------- | ------- | ------ |
+| Total webview JS files       | 168+    | ~40    |
+| Type coverage (all webviews) | ~10%    | 100%   |
+| Lit components               | 0       | ~50    |
+| Total lines (all frontends)  | ~6,000  | ~3,000 |
 
 ---
 
@@ -894,12 +386,6 @@ Schema validation may reject messages that currently "work" due to loose typing.
 
 **Mitigation**: M1 (type safety) is independently valuable. Escape hatch preserves M1 if M2 fails.
 
-### Medium: FileLocationSchema Extraction
-
-Separating schemas from Node.js utilities may break imports elsewhere.
-
-**Mitigation**: Atomic migration — update all imports in single commit (see Migration Strategy). No re-exports.
-
 ### Medium: Shared Component Scope Creep
 
 Tendency to over-extract into shared library.
@@ -911,96 +397,6 @@ Tendency to over-extract into shared library.
 Lit adds ~5KB gzipped per webview.
 
 **Mitigation**: Acceptable tradeoff for maintainability. Modern VS Code handles this fine.
-
----
-
-## Success Metrics
-
-### After Phase 1 (ProgressView)
-
-| Metric                   | Current    | After M1 | After M2 |
-| ------------------------ | ---------- | -------- | -------- |
-| Typed messages           | 0%         | 100%     | 100%     |
-| Duplicate schema code    | 600+ lines | 0        | 0        |
-| `isToolUse` conditionals | 18         | 18       | 0        |
-| State tracking locations | 7          | 7        | 1        |
-| Frontend lines           | ~3,700     | ~3,700   | ~1,550   |
-| Approval handlers        | 8          | 8        | 1        |
-| Files in modules/        | 67+        | 67+      | 0        |
-
-### After Phase 2 (Shared Infrastructure)
-
-| Metric            | Before | After        |
-| ----------------- | ------ | ------------ |
-| Shared components | 0      | 4-6          |
-| Shared schemas    | 0      | 1 index file |
-| Code reuse        | 0%     | ~30%         |
-
-### After Phase 3 (All Webviews)
-
-| Metric                       | Current | After  |
-| ---------------------------- | ------- | ------ |
-| Total webview JS files       | 168+    | ~40    |
-| Type coverage (all webviews) | ~10%    | 100%   |
-| Lit components               | 0       | ~50    |
-| Total lines (all frontends)  | ~6,000  | ~3,000 |
-
----
-
-## Timeline
-
-| Phase                     | Scope                          | Duration  |
-| ------------------------- | ------------------------------ | --------- |
-| **Phase 1: ProgressView** |                                |           |
-| M1: Type Safety           | Schema extraction + validation | 3-4 days  |
-| M2: Lit UI                | Components + store             | 1-2 weeks |
-| **Phase 2: Shared Infra** | Extract proven patterns        | 2-3 days  |
-| **Phase 3: Other Views**  |                                |           |
-| HistoryView               | Simplest migration             | 2-3 days  |
-| ProfileView               | Static display                 | 2-3 days  |
-| MemoryView                | Toggle state                   | 3-4 days  |
-| MainView                  | Most complex                   | 1-2 weeks |
-
-**Total: 5-7 weeks**
-
----
-
-## Appendix: Current Issues
-
-### Seven Places Track "Active" State
-
-| Location                                 | Tracks                         |
-| ---------------------------------------- | ------------------------------ |
-| Backend `_activeStream`                  | Current stream                 |
-| Backend `StreamSessionState.activeRunId` | Per-stream run                 |
-| Frontend `state.activeStream`            | Current stream                 |
-| Frontend `state.lastRenderedStream`      | Last rendered (band-aid)       |
-| Frontend `state.activeRunIds`            | Per-stream run                 |
-| Frontend `runSelector._pendingActiveId`  | UI selection buffer (band-aid) |
-| Frontend `streamStatuses`                | Lifecycle                      |
-
-### Band-Aid Workarounds
-
-1. `resolveActiveRunId()` - Iterates 4+ maps, called 9+ times per message
-2. `lastRenderedStream` - Detecting stream switches via render state comparison
-3. `_clearAgentCategoryState()` - Manual state wipe when switching workflow↔tooluse
-4. `RunScopedMap` resolver closure - Hidden `activeStream` dependency
-5. `_pendingActiveId` - Buffer for UI selection before backend confirms
-6. 18 `isToolUse` references - Conditional logic scattered everywhere
-
-### Imperative DOM Patterns
-
-1. **Fragment batching** (messageHandlers.js:632-684)
-   - 53 lines: `createDocumentFragment()` → nested loops → `appendChild()`
-
-2. **DOM queries during render**
-   - Pattern: `const el = getElementById(...); if (el) { el.innerHTML = ... }`
-
-3. **Approval handler duplication**
-   - 8 handlers: `showToolEditApproval`, `resolveToolEditApproval`, `showBashApproval`, `resolveBashApproval`, `showRetryRequest`, `resolveRetryRequest`, `showWorkflowProposal`, `resolveWorkflowProposal`
-
-4. **Manual class toggling**
-   - Pattern: `element.classList.add('active'); element.classList.remove('hidden');`
 
 ---
 

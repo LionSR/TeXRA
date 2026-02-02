@@ -15,7 +15,7 @@ import {
 
 /** Interface for auth provider to avoid circular imports. */
 interface AuthTokenProvider {
-  ensureFreshToken(): Promise<string | null>;
+  ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
 }
 
 /**
@@ -75,12 +75,13 @@ export class SupabaseClient {
   /**
    * Get the current user's access token from VS Code authentication.
    * Automatically refreshes the token if it's about to expire via the registered auth provider.
+   * @param forceRefresh - When true, forces a token refresh regardless of local expiry (e.g., after relay 401).
    */
-  static async getAccessToken(): Promise<string | null> {
+  static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
     try {
       // Use registered auth provider for proactive token refresh
       if (this.authProvider) {
-        const token = await this.authProvider.ensureFreshToken();
+        const token = await this.authProvider.ensureFreshToken(forceRefresh);
         if (token) {
           return token;
         }
@@ -163,15 +164,11 @@ export class SupabaseClient {
    */
   static async getUser(): Promise<User | null> {
     const token = await this.getAccessToken();
-    if (!token) {
-      return null;
-    }
+    if (!token) return null;
 
     try {
       const { data, error } = await this.getClient().auth.getUser(token);
-      if (error || !data.user) {
-        return null;
-      }
+      if (error || !data.user) return null;
       return data.user;
     } catch (error) {
       logger.error(
@@ -197,15 +194,10 @@ export class SupabaseClient {
    * Tier is reserved for future API key access levels.
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
-    const defaultContext: UserAuthContext = {
-      permissions: [],
-      tier: 'free',
-    };
+    const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
 
     const tokens = await this.getSessionTokens();
-    if (!tokens) {
-      return defaultContext;
-    }
+    if (!tokens) return defaultContext;
 
     try {
       const client = this.getClient();

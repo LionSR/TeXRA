@@ -9,9 +9,9 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { defineTool } from '@tools/core/define';
 import { ToolError } from '@tools/result';
 import { pluralize, requireNonEmptyString, wrapApiCall } from '@tools/utils';
+import { defineTool } from '@tools/core/define';
 
 // Local file imports
 import { CROSSREF_CONSTANTS } from './constants';

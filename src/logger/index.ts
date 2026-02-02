@@ -1,25 +1,10 @@
-/**
- * Logger module barrel exports.
- *
- * Exports commonly used logger types and utilities.
- * For less common exports, import directly from the specific file.
- */
-
-// Core logger class
 export { AgentLogger, type AgentLogStage } from './AgentLogger';
-
-// Log utility functions (namespace import pattern - very common)
+export { AgentUsageReporter } from './AgentUsageReporter';
 export * as logUtils from './logUtils';
-
-// Message types - commonly used constants
-export { MESSAGE_TYPES, type MessageType } from './messageTypes';
-
-// Task state - commonly used for type checking
+export { getStreamTabId } from './streamUtils';
 export {
-  type TaskState,
   isToolUseTaskState,
   isWorkflowTaskState,
+  type TaskState,
 } from './TaskState';
-
-// Usage logging service
 export { UsageLogService } from './UsageLogService';

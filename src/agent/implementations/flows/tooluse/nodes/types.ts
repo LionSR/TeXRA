@@ -1,7 +1,5 @@
 /**
  * Shared types for tool-use flow nodes.
- *
- * Contains state types, result types, and guards used across nodes.
  */
 import { z } from 'zod';
 
@@ -17,24 +15,13 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { InvocationResult } from '@agent/core/flows/RetryState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-// ============================================================================
-// State Types
-// ============================================================================
-
 export interface StateSlicesSnapshot {
   runStateSnapshot: AgentRunStateSnapshot;
   workspaceSnapshot: AgentWorkspaceSnapshot;
   userChannels: UserVariableChannels;
 }
 
-/**
- * Runtime shared state for tool-use flows.
- * Stored as serializable snapshots for PersistedFlow.
- *
- * Uses flat structure (like reflection) for consistent access patterns:
- * - shared.conversation (not shared.state.conversation)
- * - shared.stateSlices (not shared.state.stateSlices)
- */
+/** Runtime shared state for tool-use flows (flat structure for PersistedFlow). */
 export interface ToolUseRunShared {
   conversation: ProviderMessage[];
   shouldSkipCycle: boolean;
@@ -42,39 +29,31 @@ export interface ToolUseRunShared {
   userCancelledRetry?: boolean;
 }
 
-// ============================================================================
-// Result Types
-// ============================================================================
-
-export interface PrepareResult {
-  messages: ProviderMessage[];
+interface NodeResultStateBase {
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
+}
+
+/** Result from ToolUsePrepareNode. */
+export interface PrepareResult extends NodeResultStateBase {
+  messages: ProviderMessage[];
   shouldSkipCycle: boolean;
 }
 
-/**
- * Result type for tool-use cycle execution.
- * Uses InvocationResult as the single source of truth for result patterns.
- */
+/** Result from ToolUseCycleNode exec phase. */
 export type CycleExecResult = InvocationResult<{ messages: ProviderMessage[] }>;
 
+/** Result from ToolUseWaitNode exec phase. */
 export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
   | { kind: 'stop' };
 
-export interface CyclePrepResult {
-  shouldSkip: boolean;
+/** Result from ToolUseCycleNode prep phase. */
+export interface CyclePrepResult extends NodeResultStateBase {
   conversation: ProviderMessage[];
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
+  shouldSkip: boolean;
 }
-
-// ============================================================================
-// State Guards
-// ============================================================================
 
 export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
@@ -88,36 +67,23 @@ export function assertPreparedShared(
   }
 }
 
-// ============================================================================
-// State Migration (Legacy Support)
-// ============================================================================
-
-/**
- * Lightweight schema for detecting shared state format.
- * Uses looseObject to preserve all fields (stateSlices, shouldSkipCycle, etc.)
- * - only validates enough to detect format, not full content.
- */
+/** Lightweight schema for detecting shared state format. */
 const ConversationSchema = z.looseObject({
   conversation: z.array(z.unknown()),
 });
 
 /**
- * Migrate legacy shared state to current flat format.
- * Legacy: `{ state: { conversation, stateSlices, ... } }`
- * Current: `{ conversation, stateSlices, ... }` (flat)
- *
- * @returns Object with migrated data and whether migration occurred, or null if invalid
+ * Migrate legacy shared state (nested `{ state: {...} }`) to flat format.
+ * Returns null if the state is unparseable.
  */
 export function migrateSharedState(
   shared: unknown,
 ): { data: ToolUseRunShared; migrated: boolean } | null {
-  // Check if already flat format - return same reference (no migration needed)
   const flatResult = ConversationSchema.safeParse(shared);
   if (flatResult.success && !('state' in flatResult.data)) {
     return { data: shared as ToolUseRunShared, migrated: false };
   }
 
-  // Check if legacy format - extract and return nested state
   const obj = shared as Record<string, unknown>;
   if (obj && typeof obj === 'object' && 'state' in obj) {
     const legacyResult = ConversationSchema.safeParse(obj.state);

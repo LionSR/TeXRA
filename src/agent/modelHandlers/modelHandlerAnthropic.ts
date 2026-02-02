@@ -9,39 +9,13 @@ import {
   toFile,
 } from '@anthropic-ai/sdk';
 
-/** Supported image media types from SDK's Base64ImageSource definition */
-const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
-
-const isSupportedImageMediaType = (
-  mediaType: string,
-): mediaType is Base64ImageSource['media_type'] =>
-  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
-
-interface UploadedAnthropicAttachment {
-  attachment: ToolFileAttachment;
-  fileId: string;
-  blockType: 'image' | 'document';
-  base64Data?: string;
-  mediaType?: string;
-}
-
 // Local imports - agent
-
-// Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import {
-  AgentCategory,
   type AgentSetting,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
@@ -54,31 +28,37 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+// Local imports - common
 import {
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
 } from '@common/errors/sdkErrorUtils';
 
-// Internal imports
+// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
-// Type imports
+// Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
-// Internal imports
+// Local imports - utils
 import { getConfig } from '@utils/config';
-import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import { flexibleFS, type FileLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import {
-  computeCachePercentage,
-  nonZeroOrUndefined,
-} from './utils/usageNormalization';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
+import { toAnthropicTools } from './toolConversion';
+import { ANTHROPIC_STOP } from './types/StopReasonTypes';
+import {
+  extractAnthropicWebSearchResults,
+  isAnthropicServerToolContent,
+  type ServerToolExtractionResult,
+} from './types/ServerToolTypes';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
@@ -86,19 +66,10 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { ANTHROPIC_STOP } from './types/StopReasonTypes';
-import { toAnthropicTools } from './toolConversion';
 import {
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  computeReducedMaxTokens,
-  TOKEN_SAFETY_BUFFER,
-} from './contextManagementConstants';
-import {
-  extractAnthropicWebSearchResults,
-  isAnthropicServerToolContent,
-  type ServerToolExtractionResult,
-} from './types/ServerToolTypes';
-import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
+  computeCachePercentage,
+  nonZeroOrUndefined,
+} from './utils/usageNormalization';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -106,6 +77,7 @@ import type {
   CreateResponseOptions,
   ExtractResponseResult,
   AnthropicToolCall,
+  TokenCountOptions,
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
@@ -138,65 +110,36 @@ import type {
   WebSearchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-/**
- * Union type for thinking content blocks from Anthropic Beta API responses.
- * These blocks contain the model's internal reasoning process.
- * Uses Beta types since BetaMessage.content returns BetaContentBlock[].
- */
-type BetaThinkingContent = BetaThinkingBlock | BetaRedactedThinkingBlock;
+/** Supported image media types from SDK's Base64ImageSource definition */
+const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
 
-/**
- * Union type for thinking block params used in API requests.
- * Used when including thinking blocks in follow-up messages.
- */
-type AnthropicThinkingContentParam =
-  | ThinkingBlockParam
-  | RedactedThinkingBlockParam;
+const isSupportedImageMediaType = (
+  mediaType: string,
+): mediaType is Base64ImageSource['media_type'] =>
+  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
 
-/** Type guard for Anthropic thinking blocks in Beta API responses */
-const isBetaThinkingBlock = (
-  block: BetaContentBlock,
-): block is BetaThinkingBlock => block.type === 'thinking';
-
-/** Type guard for Anthropic redacted thinking blocks in Beta API responses */
-const isBetaRedactedThinkingBlock = (
-  block: BetaContentBlock,
-): block is BetaRedactedThinkingBlock => block.type === 'redacted_thinking';
-
-/** Type guard for thinking block params in message content */
-const isThinkingBlockParam = (
-  block: ContentBlockParam,
-): block is ThinkingBlockParam => block.type === 'thinking';
-
-/** Type guard for redacted thinking block params in message content */
-const isRedactedThinkingBlockParam = (
-  block: ContentBlockParam,
-): block is RedactedThinkingBlockParam => block.type === 'redacted_thinking';
+interface UploadedAnthropicAttachment {
+  attachment: ToolFileAttachment;
+  fileId: string;
+  blockType: 'image' | 'document';
+  base64Data?: string;
+  mediaType?: string;
+}
 
 /** Type guard for any thinking-related content block param */
 const isAnyThinkingBlockParam = (
   block: ContentBlockParam,
-): block is AnthropicThinkingContentParam =>
-  isThinkingBlockParam(block) || isRedactedThinkingBlockParam(block);
+): block is ThinkingBlockParam | RedactedThinkingBlockParam =>
+  block.type === 'thinking' || block.type === 'redacted_thinking';
 
 /** Type guard for tool use blocks in Beta API responses */
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
-
-/** Extract concatenated text from content blocks, optionally trimming each block */
-const extractTextFromContent = (
-  content: BetaContentBlock[] | undefined,
-  trim = false,
-): string => {
-  if (!content) return '';
-  return content
-    .filter(
-      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-        block.type === 'text',
-    )
-    .map((block) => (trim ? block.text.trim() : block.text))
-    .join('');
-};
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -304,7 +247,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Pass a block to set it as the cache target, or undefined/null to clear.
    */
   private updateCacheControlTarget(
-    block: CacheControlEligibleBlock | undefined | null,
+    block: CacheControlEligibleBlock | null | undefined,
   ): void {
     // Clear existing cache_control if switching to different block
     if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
@@ -338,7 +281,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     supportsReasoning,
     thresholdPercent,
   }: ContextManagementSetupOptions): void {
-    if (this.agentCategory !== AgentCategory.ToolUse) {
+    if (!this.isToolUseMode()) {
       return;
     }
 
@@ -431,7 +374,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
       this.updateCacheControlTarget(target);
-    } else if (Array.isArray(content) && content.length > 0) {
+    } else if (content?.length) {
       this.logger.debug(
         'No eligible content block available for Anthropic cache control marker',
       );
@@ -446,6 +389,103 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
+  }
+
+  /**
+   * Whether this handler supports native token counting via API.
+   * Uses Anthropic's countTokens endpoint for exact pre-flight counts.
+   */
+  override get supportsTokenCounting(): boolean {
+    return this.capabilities.supportsTokenCounting;
+  }
+
+  /**
+   * Estimates token count using Anthropic's native countTokens API.
+   *
+   * Note: countTokens does not support file-based document sources (file_id).
+   * Check `hasFileSource` before calling this method to avoid API errors.
+   *
+   * @param messages - The messages to count tokens for
+   * @param options - Token counting options including client, systemPrompt, tools, thinking, etc.
+   * @returns Promise resolving to the total token count
+   */
+  override async estimateTokenCount(
+    messages: MessageParam[],
+    options?: TokenCountOptions<Anthropic> & {
+      anthropicTools?: MessageCountTokensParams['tools'];
+      thinking?: MessageCountTokensParams['thinking'];
+      contextManagement?: BetaContextManagementConfig;
+      betas?: AnthropicBeta[];
+    },
+  ): Promise<number> {
+    const client = options?.client ?? (await this.getClient());
+
+    const countTokensParams: MessageCountTokensParams = {
+      model: this.config.fullName,
+      messages,
+      ...(options?.systemPrompt && { system: options.systemPrompt }),
+    };
+
+    // Include tools in token counting for accurate measurement.
+    // Tool schemas can be substantial and affect context utilization.
+    if (options?.anthropicTools && options.anthropicTools.length > 0) {
+      // Filter out memory tool as countTokens API doesn't support it yet
+      const countableTools = options.anthropicTools.filter(
+        (tool) => !('type' in tool && tool.type === 'memory_20250818'),
+      );
+      if (countableTools.length > 0) {
+        countTokensParams.tools = countableTools;
+      }
+    }
+
+    // If thinking is enabled, we need to pass it to countTokens as well
+    // to ensure consistency with the actual message creation.
+    // Without this, the API returns an error when messages contain thinking blocks.
+    if (options?.thinking) {
+      countTokensParams.thinking = options.thinking;
+    }
+
+    // Include context_management in token counting to get accurate
+    // post-clearing token counts. This is critical for:
+    // 1. Correctly adjusting max_tokens based on actual available context
+    // 2. Allowing both clearing strategies to work together
+    if (options?.contextManagement) {
+      countTokensParams.context_management = options.contextManagement;
+    }
+
+    // Strip betas that only apply to message creation (e.g., output length)
+    // while keeping context headers needed for accurate token counting.
+    const countTokenBetas = options?.betas?.filter(
+      (beta) => beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
+    );
+    if (countTokenBetas && countTokenBetas.length > 0) {
+      countTokensParams.betas = countTokenBetas;
+    }
+
+    const responseTokenCount =
+      await client.beta.messages.countTokens(countTokensParams);
+
+    // Log both original and post-clearing token counts if available
+    const contextMgmtResponse = (
+      responseTokenCount as typeof responseTokenCount & {
+        context_management?: CountTokensContextManagementResponse;
+      }
+    ).context_management;
+
+    if (contextMgmtResponse?.original_input_tokens) {
+      const clearedTokens =
+        contextMgmtResponse.original_input_tokens -
+        responseTokenCount.input_tokens;
+      this.logger.debug(
+        `Token count: ${responseTokenCount.input_tokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
+      );
+    } else {
+      this.logger.debug(
+        `Token count of message: ${responseTokenCount.input_tokens}`,
+      );
+    }
+
+    return responseTokenCount.input_tokens;
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
@@ -483,7 +523,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
-    // Prepare options for the API call
+    // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
@@ -517,7 +557,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Calculate thinking budget based on max_tokens constraint
       // budget_tokens must be less than max_tokens
       const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
-      const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
+      const defaultBudget = useStreaming ? 32768 : 4096; // streaming allows larger thinking budget
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
       options.thinking = {
@@ -540,8 +580,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
-      // Reset betas to only include the output beta for this specific model
-      options.betas = [SONNET_37_OUTPUT_BETA];
+      // Add the output beta while preserving existing betas (e.g., interleaved thinking, context management)
+      this.ensureBeta(options, SONNET_37_OUTPUT_BETA);
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -565,7 +605,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       thresholdPercent: compactionThresholdPercent,
     });
 
-    if (this.capabilities.supportsTokenCounting) {
+    // Phase 2: COUNT - Estimate input tokens using built params
+    // Phase 3: VALIDATE - Adjust max_tokens if needed
+    if (this.supportsTokenCounting) {
       if (documentAnalysis.hasFileSource) {
         this.logger.debug(
           'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
@@ -574,98 +616,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Token counting uses soft failure - if it fails, we proceed without adjustment
         // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
         try {
-          const countTokensParams: MessageCountTokensParams = {
-            model: this.config.fullName,
-            system: systemPrompt,
-            messages,
-          };
-
-          // Include tools in token counting for accurate measurement.
-          // Tool schemas can be substantial and affect context utilization.
-          // Filter out memory tool as countTokens API doesn't support it yet.
-          if (options.tools && options.tools.length > 0) {
-            const countableTools = options.tools.filter(
-              (tool) => !('type' in tool && tool.type === 'memory_20250818'),
-            );
-            if (countableTools.length > 0) {
-              countTokensParams.tools = countableTools;
-            }
-          }
-
-          // If thinking is enabled, we need to pass it to countTokens as well
-          // to ensure consistency with the actual message creation.
-          // Without this, the API returns an error when messages contain thinking blocks.
-          if (options.thinking) {
-            countTokensParams.thinking = options.thinking;
-          }
-
-          // Include context_management in token counting to get accurate
-          // post-clearing token counts. This is critical for:
-          // 1. Correctly adjusting max_tokens based on actual available context
-          // 2. Allowing both clearing strategies to work together
-          if (options.context_management) {
-            countTokensParams.context_management = options.context_management;
-          }
-
-          // Strip betas that only apply to message creation (e.g., output length)
-          // while keeping context headers needed for accurate token counting.
-          const countTokenBetas = options.betas?.filter(
-            (beta) =>
-              beta === CONTEXT_1M_BETA || beta === CONTEXT_MANAGEMENT_BETA,
-          );
-          if (countTokenBetas && countTokenBetas.length > 0) {
-            countTokensParams.betas = countTokenBetas;
-          }
-
-          const responseTokenCount =
-            await client.beta.messages.countTokens(countTokensParams);
-          const { input_tokens: inputTokens } = responseTokenCount;
+          // Reuse built params for token counting (build once principle)
+          const inputTokens = await this.estimateTokenCount(messages, {
+            client,
+            systemPrompt,
+            anthropicTools: options.tools,
+            thinking: options.thinking,
+            contextManagement: options.context_management ?? undefined,
+            betas: options.betas,
+          });
           measuredInputTokens = inputTokens;
 
-          // Log both original and post-clearing token counts if available
-          const contextMgmtResponse = (
-            responseTokenCount as typeof responseTokenCount & {
-              context_management?: CountTokensContextManagementResponse;
-            }
-          ).context_management;
-          if (contextMgmtResponse?.original_input_tokens) {
-            const clearedTokens =
-              contextMgmtResponse.original_input_tokens - inputTokens;
-            this.logger.debug(
-              `Token count: ${inputTokens} (after clearing ${clearedTokens} tokens from ${contextMgmtResponse.original_input_tokens})`,
-            );
-          } else {
-            this.logger.debug(`Token count of message: ${inputTokens}`);
-          }
+          // Validate and adjust max_tokens if needed (throws if context window exceeded)
+          const validation = this.validateTokenLimits(
+            inputTokens,
+            options.max_tokens,
+            effectiveContextWindow,
+          );
 
-          if (inputTokens > effectiveContextWindow) {
-            const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
-            this.logger.error(errMsg);
-            throw new Error(errMsg);
-          }
-          const availableTokens = effectiveContextWindow - inputTokens;
-          if (availableTokens < options.max_tokens) {
+          if (validation.adjustedMaxTokens !== options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            const reducedMaxTokens = computeReducedMaxTokens(
-              availableTokens,
-              TOKEN_SAFETY_BUFFER,
-            );
-            const utilizationPercent =
-              (inputTokens / effectiveContextWindow) * 100;
             this.logger.logContextManagement(
-              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
               {
                 action: 'max_tokens_reduced',
                 tokensBefore: inputTokens,
                 contextWindow: effectiveContextWindow,
-                utilizationBefore: utilizationPercent,
+                utilizationBefore:
+                  validation.utilizationPercent ??
+                  (inputTokens / effectiveContextWindow) * 100,
                 originalMaxTokens,
-                reducedMaxTokens,
+                reducedMaxTokens: validation.adjustedMaxTokens,
                 details: 'Anthropic: max_tokens reduced to fit context window',
               },
             );
-            options.max_tokens = reducedMaxTokens;
+            options.max_tokens = validation.adjustedMaxTokens;
 
+            // Adjust thinking budget if reasoning is enabled and max_tokens was reduced
             if (
               this.capabilities.supportsReasoning &&
               options.thinking &&
@@ -686,7 +673,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
               }
             }
           }
-          // in the future we log this in firstInputTokens of the AgentRunState
         } catch (err) {
           // Re-throw context window violations - these are intentional validation errors
           // that should fail fast, not be swallowed by soft failure
@@ -715,6 +701,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.ensureBeta(options, FILES_API_BETA);
     }
 
+    // Phase 4: EXECUTE - Make the API call
     let response: BetaMessage;
 
     if (useStreaming) {
@@ -818,6 +805,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
+    // Anthropic's input_tokens excludes cached tokens (unlike OpenAI where it's the total).
+    // Per SDK docs: "Total input tokens is the summation of input_tokens,
+    // cache_creation_input_tokens, and cache_read_input_tokens."
     const totalInputTokens =
       response.usage.input_tokens +
       (response.usage.cache_read_input_tokens ?? 0) +
@@ -1140,7 +1130,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add media if provided (images and native PDFs)
     if (mediaFiles && this.capabilities.supportsVision) {
-      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      const formattedMediaContent = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ContentBlockParam[];
       userMessageContent.push(...formattedMediaContent);
     }
 
@@ -1180,7 +1172,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.capabilities.supportsVision
     ) {
       try {
-        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+        const formattedMediaContent = (await this.createMediaMessage(
+          mediaFiles,
+        )) as ContentBlockParam[];
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.logError(
@@ -1348,7 +1342,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Extract base response
     const stopReason = responseObject.stop_reason;
-    let newResponse = extractTextFromContent(responseObject.content, true);
+    let newResponse = responseObject.content
+      .filter(
+        (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+          block.type === 'text',
+      )
+      .map((block) => block.text.trim())
+      .join('');
 
     // Add end tag if needed
     if (
@@ -1370,10 +1370,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
-    _stateRound: ConversationRoundState,
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     this.defaultAddContinueWithPrefill();
   }
@@ -1381,10 +1379,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
-    _stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    _agentConfig: AgentConfig,
   ): void {
     const userMessageContinuation = this.createContinuationPrompt(
       workspaceState,
@@ -1499,13 +1495,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = new ConversationRoundState(0);
       this.addContinueMessageWithoutPrefill(
         messages,
-        state,
         workspaceState,
         agentSetting,
-        agentConfig,
       );
 
       this.logger.debug(
@@ -1626,7 +1619,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.assignCacheControlToLatest(lastMessage.content);
       }
     }
-    return;
   }
 
   updateMessageContentWithoutPrefill(
@@ -1647,78 +1639,55 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    // Handle continuation after cutoff
+    // Handle continuation after cutoff - append to the previous assistant message
     if (this.containCutOffMessage(lastMessage.content)) {
-      this.handleCutoffContinuation(
-        messages,
-        secondLastMessage,
-        bestConnector,
-        newResponse,
+      this.logger.debug(
+        'Last message is a user message asking to continue after cutoff',
       );
+
+      if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
+        return;
+      }
+
+      if (Array.isArray(secondLastMessage.content)) {
+        const thinkingCount = secondLastMessage.content.filter(
+          isAnyThinkingBlockParam,
+        ).length;
+        if (thinkingCount > 0) {
+          this.logger.debug(
+            `Using ${thinkingCount} existing thinking blocks from previous message`,
+          );
+        }
+
+        secondLastMessage.content.push({
+          type: 'text',
+          text: bestConnector + newResponse,
+        } as ContentBlockParam);
+        this.assignCacheControlToLatest(secondLastMessage.content);
+      }
+
+      messages.pop();
       return;
     }
 
     // Handle new request - create a new assistant message
-    this.handleNewAssistantMessage(messages, workspaceState);
-  }
-
-  /** Handle continuation after a cutoff by appending to the previous assistant message. */
-  private handleCutoffContinuation(
-    messages: MessageParam[],
-    secondLastMessage: MessageParam | undefined,
-    bestConnector: string,
-    newResponse: string,
-  ): void {
-    this.logger.debug(
-      'Last message is a user message asking to continue after cutoff',
-    );
-
-    if (!secondLastMessage || secondLastMessage.role !== 'assistant') {
-      return;
-    }
-
-    // Log existing thinking blocks
-    if (Array.isArray(secondLastMessage.content)) {
-      const thinkingCount = secondLastMessage.content.filter(
-        isAnyThinkingBlockParam,
-      ).length;
-      if (thinkingCount > 0) {
-        this.logger.debug(
-          `Using ${thinkingCount} existing thinking blocks from previous message`,
-        );
-      }
-
-      // Append text content and update cache control
-      secondLastMessage.content.push({
-        type: 'text',
-        text: bestConnector + newResponse,
-      } as ContentBlockParam);
-      this.assignCacheControlToLatest(secondLastMessage.content);
-    }
-
-    // Remove the user continuation prompt
-    messages.pop();
-  }
-
-  /** Handle a new request by creating a fresh assistant message. */
-  private handleNewAssistantMessage(
-    messages: MessageParam[],
-    workspaceState: AgentWorkspaceState,
-  ): void {
     this.logger.debug('Creating new assistant message for fresh request');
     const content: ContentBlockParam[] = [];
 
-    // Include thinking blocks from workspaceState if available
     const thinkingBlocks = workspaceState.reasoning.thinkingBlocks;
     if (thinkingBlocks.length > 0) {
       this.logger.debug(
         `Adding ${thinkingBlocks.length} thinking blocks to new assistant message`,
       );
-      content.push(...(thinkingBlocks as AnthropicThinkingContentParam[]));
+      content.push(
+        ...(thinkingBlocks as (
+          | ThinkingBlockParam
+          | RedactedThinkingBlockParam
+        )[]),
+      );
       workspaceState.resetReasoning();
     }
 
-    // Add the text content
     content.push({
       type: 'text',
       text: workspaceState.assembly.accumulatedOutput,
@@ -1776,18 +1745,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return null;
     }
 
-    // Extract all thinking blocks from the response using SDK type guards
-    const thinkingBlocks: BetaThinkingContent[] = [];
+    // Extract all thinking blocks from the response
+    const thinkingBlocks: (BetaThinkingBlock | BetaRedactedThinkingBlock)[] =
+      [];
     let regularThinkingContent: string | null = null;
 
     if (responseObject.content && Array.isArray(responseObject.content)) {
       for (const item of responseObject.content) {
-        if (isBetaThinkingBlock(item) && item.thinking) {
+        if (item.type === 'thinking' && item.thinking) {
           thinkingBlocks.push(item);
           if (regularThinkingContent === null) {
             regularThinkingContent = item.thinking;
           }
-        } else if (isBetaRedactedThinkingBlock(item) && item.data) {
+        } else if (item.type === 'redacted_thinking' && item.data) {
           thinkingBlocks.push(item);
         }
       }
@@ -1921,8 +1891,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.reasoning.thinkingBlocks.length > 0
       ) {
         content.push(
-          ...(workspaceState.reasoning
-            .thinkingBlocks as AnthropicThinkingContentParam[]),
+          ...(workspaceState.reasoning.thinkingBlocks as (
+            | ThinkingBlockParam
+            | RedactedThinkingBlockParam
+          )[]),
         );
         workspaceState.resetReasoning();
       }
@@ -2117,7 +2089,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!lastUserMsg) return;
 
     try {
-      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      const formattedMedia = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ContentBlockParam[];
       if (typeof lastUserMsg.content === 'string') {
         lastUserMsg.content = [
           ...formattedMedia,

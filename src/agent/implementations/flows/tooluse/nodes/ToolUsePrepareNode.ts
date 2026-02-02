@@ -7,11 +7,15 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { type NodeExecResult } from '@agent/implementations/flows/common';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, PrepareResult } from './types';
+
+/** Result type for prepare node execution - success or error from execFallback. */
+type PrepareExecResult =
+  | { kind: 'success'; result: PrepareResult }
+  | { kind: 'error'; error: Error };
 
 export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
@@ -21,8 +25,7 @@ export class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: PrepareResult }> {
-    const { modelHandler, prompt, userVarChannels, logger, snapshot } =
-      this.services;
+    const { userVarChannels, logger, snapshot } = this.services;
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
@@ -49,7 +52,7 @@ export class ToolUsePrepareNode<C> extends Node<
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
-        prompt,
+        this.services.prompt,
         userVarChannels.transient,
         logger,
         { memoryEnabled },
@@ -65,7 +68,7 @@ export class ToolUsePrepareNode<C> extends Node<
     const systemMessage = systemPrompt
       ? `${systemPrompt}\n${instructionSuffix}`
       : instructionSuffix;
-    const messages = await modelHandler.initializeMessages(
+    const messages = await this.services.modelHandler.initializeMessages(
       userPrefix,
       userRequest,
       undefined,
@@ -87,20 +90,17 @@ export class ToolUsePrepareNode<C> extends Node<
   async execFallback(
     _prepRes: unknown,
     error: Error,
-  ): Promise<{ kind: 'error'; error: unknown }> {
+  ): Promise<{ kind: 'error'; error: Error }> {
     return { kind: 'error', error };
   }
 
   async post(
     shared: ToolUseRunShared,
     _prepRes: void,
-    execRes: NodeExecResult<PrepareResult>,
+    execRes: PrepareExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
-      if (execRes.error instanceof Error) {
-        throw execRes.error;
-      }
-      throw new Error(String(execRes.error));
+      throw execRes.error;
     }
 
     const {

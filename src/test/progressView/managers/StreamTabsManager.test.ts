@@ -4,10 +4,10 @@ import { strict as assert } from 'assert';
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
-import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 
 describe('StreamTabsManager', () => {
-  class InMemoryStateStorage implements StateStorage {
+  class InMemoryMementoStorage implements MementoStorage {
     private store = new Map<string, unknown>();
 
     get<T>(key: string, defaultValue?: T): T | undefined {
@@ -25,7 +25,7 @@ describe('StreamTabsManager', () => {
   }
 
   it('replaces duplicate message ids instead of appending', async () => {
-    const storage = new InMemoryStateStorage();
+    const storage = new InMemoryMementoStorage();
     const manager = new StreamTabsManager(storage);
     const streamId = 'stream:abc';
 

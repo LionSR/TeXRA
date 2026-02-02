@@ -1,34 +1,43 @@
 // Third-party imports
 import { FinishReason } from '@google/genai';
 
-// Local imports - agent components
+// Shared schemas
+import { MESSAGE_TYPES } from '@shared/schemas';
+
+// Local imports - auth
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
+
+// Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
-import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
-// Internal imports
+// Local imports - frontend
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - logger
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - model
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
   ReasoningEffort,
 } from '@model/ModelConfig';
-import type { ToolFileAttachment } from '@tools/result';
-import { getConfig } from '@utils/config';
 
-// Local file imports
+// Local imports - tools
+import type { ToolFileAttachment } from '@tools/result';
+
+// Local imports - utils
+import { getConfig, K_SLICE } from '@utils/config';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE } from '@utils/config';
+import { capitalize } from '@utils/text/stringUtils';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -39,6 +48,10 @@ import {
   OPENAI_CHAT_FINISH,
   MCP_STOP,
 } from './types/StopReasonTypes';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -50,6 +63,8 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
   StopConditionsResult,
+  TokenCountOptions,
+  TokenValidationResult,
 } from './types/IModelHandler';
 import type {
   ServerToolExtractionResult,
@@ -62,19 +77,6 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-
-/** Flags for token-based stop conditions. */
-interface TokenFlags {
-  continuationLimit: boolean;
-  inputTokenLimit: boolean;
-  maxOutputTokensExceeded: boolean;
-}
-
-/** Flags for markers indicating the end of a conversation. */
-interface MarkerFlags {
-  endTurn: boolean;
-  encounterDocumentTag: boolean;
-}
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -155,6 +157,22 @@ export abstract class ModelHandler<
    */
   public getAgentCategory(): AgentCategory | undefined {
     return this.agentCategory;
+  }
+
+  /**
+   * Returns true if the handler is operating in tool-use mode.
+   * Used to enable context management and other tool-use-specific behaviors.
+   */
+  protected isToolUseMode(): boolean {
+    return this.agentCategory === AgentCategory.ToolUse;
+  }
+
+  /**
+   * Returns true if the handler is operating in workflow mode.
+   * Used for workflow-specific behaviors like background mode eligibility.
+   */
+  protected isWorkflowMode(): boolean {
+    return this.agentCategory === AgentCategory.Workflow;
   }
 
   /**
@@ -347,49 +365,28 @@ export abstract class ModelHandler<
     });
   }
 
-  /** Checks if the model is from a specific provider. */
-  isProvider(provider: ModelProvider): boolean {
-    return this.config.provider === provider;
-  }
-
   /** Checks if the model is from Anthropic provider. */
   get isAnthropic(): boolean {
-    return this.isProvider(ModelProvider.ANTHROPIC);
+    return this.config.provider === ModelProvider.ANTHROPIC;
   }
 
   /** Checks if the model is from OpenAI provider. */
   get isOpenai(): boolean {
-    return this.isProvider(ModelProvider.OPENAI);
+    return this.config.provider === ModelProvider.OPENAI;
   }
 
   /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
-    return this.isProvider(ModelProvider.GOOGLE);
+    return this.config.provider === ModelProvider.GOOGLE;
   }
 
   /** Checks if the model is from DeepSeek provider. */
   get isDeepSeek(): boolean {
-    return this.isProvider(ModelProvider.DEEPSEEK);
+    return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
-  /** Provider to config suffix mapping for streaming settings */
-  private static readonly PROVIDER_STREAMING_SUFFIX: Record<
-    ModelProvider,
-    string
-  > = {
-    [ModelProvider.ANTHROPIC]: 'Anthropic',
-    [ModelProvider.OPENAI]: 'Openai',
-    [ModelProvider.GOOGLE]: 'Google',
-    [ModelProvider.DEEPSEEK]: 'Deepseek',
-    [ModelProvider.MOONSHOT]: 'Moonshot',
-    [ModelProvider.DASHSCOPE]: 'Dashscope',
-    [ModelProvider.COPILOT]: 'Copilot',
-    [ModelProvider.XAI]: 'Xai',
-    [ModelProvider.OTHERS]: '',
-  };
-
   /**
-   * Gets streaming configuration for the current model provider
+   * Gets streaming configuration for the current model provider.
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
@@ -405,9 +402,13 @@ export abstract class ModelHandler<
       );
     }
 
-    const suffix = ModelHandler.PROVIDER_STREAMING_SUFFIX[this.config.provider];
-    if (!suffix) return globalDefault;
+    // ModelProvider.OTHERS has no provider-specific streaming config
+    if (this.config.provider === ModelProvider.OTHERS) {
+      return globalDefault;
+    }
 
+    // Derive config key suffix from provider enum value (e.g., 'openai' -> 'Openai')
+    const suffix = capitalize(this.config.provider);
     return getConfig<boolean>(
       `texra.model.useStreaming${suffix}`,
       globalDefault,
@@ -488,47 +489,9 @@ export abstract class ModelHandler<
     return this.createMediaContent(entries);
   }
 
-  /** Calculates token-based stop flags. */
-  protected computeTokenFlags(
-    stateRound: ConversationRoundState,
-    stateGlobal: AgentRunState,
-  ): TokenFlags {
-    const totals = stateGlobal.usageAccumulator.getTotals();
-    const maxOutputTokens =
-      totals.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * totals.firstInputTokens
-        : Number.POSITIVE_INFINITY;
-
-    return {
-      continuationLimit: stateRound.continuationCount > this.continueLimit,
-      inputTokenLimit: totals.totalInputTokens > this.inputTokenLimit,
-      maxOutputTokensExceeded: totals.totalOutputTokens > maxOutputTokens,
-    };
-  }
-
-  /** Detects stop markers in model output. */
-  protected detectStopMarkers(
-    stopReason: ProviderStopReason,
-    response: string,
-    setting: AgentSetting,
-  ): MarkerFlags {
-    const endTurnReasons: ProviderStopReason[] = [
-      ANTHROPIC_STOP.END_TURN,
-      ANTHROPIC_STOP.STOP_SEQUENCE,
-      OPENAI_CHAT_FINISH.STOP,
-      FinishReason.STOP,
-      'STOP', // handle string form returned by some Google clients
-    ];
-
-    return {
-      endTurn: endTurnReasons.includes(stopReason ?? ''),
-      encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
-    };
-  }
-
   /**
    * Evaluates conversation stop conditions based on model response and state.
-   * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
+   * @returns Object with endTurn (should end current turn) and shouldStop (should stop conversation)
    */
   public checkStopConditions(
     stopReason: ProviderStopReason,
@@ -537,32 +500,49 @@ export abstract class ModelHandler<
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
   ): StopConditionsResult {
-    const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
-    const markerFlags = this.detectStopMarkers(
-      stopReason,
-      newResponse,
-      agentSetting,
+    // Compute token-based stop flags
+    const totals = stateGlobal.usageAccumulator.getTotals();
+    const maxOutputTokens =
+      totals.firstInputTokens > 0
+        ? this.maxOutputTokensFactor * totals.firstInputTokens
+        : Number.POSITIVE_INFINITY;
+    const continuationLimitExceeded =
+      stateRound.continuationCount > this.continueLimit;
+    const inputTokenLimitExceeded =
+      totals.totalInputTokens > this.inputTokenLimit;
+    const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
+
+    // Detect stop markers in model output
+    const endTurnReasons: ProviderStopReason[] = [
+      ANTHROPIC_STOP.END_TURN,
+      ANTHROPIC_STOP.STOP_SEQUENCE,
+      OPENAI_CHAT_FINISH.STOP,
+      FinishReason.STOP,
+      'STOP', // handle string form returned by some Google clients
+    ];
+    const endTurn = endTurnReasons.includes(stopReason ?? '');
+    const encounterDocumentTag = newResponse.includes(
+      `</${agentSetting.documentTag}>`,
     );
 
-    if (tokenFlags.maxOutputTokensExceeded) {
-      const totals = stateGlobal.usageAccumulator.getTotals();
+    if (maxOutputTokensExceeded) {
       this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens (total: ${totals.totalOutputTokens}, first input: ${totals.firstInputTokens})`,
       );
     }
 
     const shouldStop =
-      markerFlags.encounterDocumentTag ||
-      tokenFlags.continuationLimit ||
-      tokenFlags.inputTokenLimit;
+      encounterDocumentTag ||
+      continuationLimitExceeded ||
+      inputTokenLimitExceeded;
 
     if (shouldStop) {
       this.logger.debug(
-        `StopFlags: endTurn: ${markerFlags.endTurn} encounterDocumentTag: ${markerFlags.encounterDocumentTag} continuation_limit: ${tokenFlags.continuationLimit} inputTokenLimit: ${tokenFlags.inputTokenLimit} maxOutputTokens: ${tokenFlags.maxOutputTokensExceeded}`,
+        `StopFlags: endTurn: ${endTurn} encounterDocumentTag: ${encounterDocumentTag} continuation_limit: ${continuationLimitExceeded} inputTokenLimit: ${inputTokenLimitExceeded} maxOutputTokens: ${maxOutputTokensExceeded}`,
       );
     }
 
-    return { endTurn: markerFlags.endTurn, shouldStop };
+    return { endTurn, shouldStop };
   }
 
   public containCutOffMessage(
@@ -651,10 +631,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /**
@@ -663,10 +641,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
   ): void;
 
   /**
@@ -832,4 +808,87 @@ export abstract class ModelHandler<
     messages: M[],
     mediaFiles: FileLocation[],
   ): Promise<void>;
+
+  // =========================================================================
+  // Token counting methods
+  // =========================================================================
+
+  /**
+   * Validates token limits and computes adjusted max_tokens if needed.
+   * Shared implementation used by handlers with native token counting.
+   *
+   * @param inputTokens - The counted input tokens
+   * @param maxTokens - The requested max output tokens
+   * @param contextWindow - The model's context window size
+   * @param tokenBuffer - Safety buffer to subtract (default: TOKEN_SAFETY_BUFFER)
+   * @returns Validation result with adjusted max tokens and utilization info
+   * @throws Error if input tokens exceed context window (hard failure)
+   */
+  protected validateTokenLimits(
+    inputTokens: number,
+    maxTokens: number,
+    contextWindow: number,
+    tokenBuffer: number = TOKEN_SAFETY_BUFFER,
+  ): TokenValidationResult {
+    // Hard fail if input already exceeds context window
+    if (inputTokens > contextWindow) {
+      throw new Error(
+        `Token count of message exceeds context window: ${inputTokens} > ${contextWindow}`,
+      );
+    }
+
+    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    const availableTokens = contextWindow - inputTokens;
+
+    if (availableTokens >= maxTokens) {
+      return {
+        adjustedMaxTokens: maxTokens,
+        inputTokens,
+        utilizationPercent,
+      };
+    }
+
+    const adjustedMaxTokens = computeReducedMaxTokens(
+      availableTokens,
+      tokenBuffer,
+    );
+
+    return {
+      adjustedMaxTokens,
+      inputTokens,
+      utilizationPercent,
+    };
+  }
+
+  /**
+   * Estimates the token count for a set of messages.
+   * Override in subclasses to use provider-specific token counting APIs.
+   *
+   * Providers with native token counting support:
+   * - Anthropic: client.messages.countTokens()
+   * - Google: client.models.countTokens()
+   * - OpenAI Response: client.responses.inputTokens.count()
+   * - Kimi/Moonshot: POST /v1/tokenizers/estimate-token-count
+   *
+   * @param messages - The messages to count tokens for.
+   * @param options - Optional additional parameters for token counting.
+   * @returns Promise resolving to the total token count.
+   * @throws Error if token counting is not supported by this provider.
+   */
+  async estimateTokenCount(
+    _messages: M[],
+    _options?: TokenCountOptions<C>,
+  ): Promise<number> {
+    throw new Error(
+      `Token counting not implemented for provider: ${this.config.provider}`,
+    );
+  }
+
+  /**
+   * Whether this handler supports native token counting via API.
+   * Override in subclasses that have token counting capability.
+   */
+  get supportsTokenCounting(): boolean {
+    return false;
+  }
 }

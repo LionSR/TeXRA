@@ -38,5 +38,3 @@ export const EQUATION_MACRO_REPLACEMENTS: ReplacementCategory = {
     '^(\\s*)\\\\([a-z]+)(\\s*)$': expandEquationMacro,
   },
 };
-
-export default EQUATION_MACRO_REPLACEMENTS;

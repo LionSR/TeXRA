@@ -130,26 +130,21 @@ function formatFieldValue(value: unknown): string {
   if (value == null) {
     return '{}';
   }
-
   if (typeof value === 'number') {
     return value.toString();
   }
-
   if (typeof value === 'string') {
     return `{${value}}`;
   }
-
   if (typeof value === 'object') {
     const candidate = value as { type?: string; stringify?: () => string };
     if (typeof candidate.stringify === 'function') {
       const rendered = candidate.stringify();
-      if (candidate.type === 'quotedstringwrapper') {
-        return `"${rendered}"`;
-      }
-      return `{${rendered}}`;
+      return candidate.type === 'quotedstringwrapper'
+        ? `"${rendered}"`
+        : `{${rendered}}`;
     }
   }
-
   return `{${String(value)}}`;
 }
 
@@ -257,18 +252,12 @@ export function summarizeBibliographyEntries(
   entries: Map<string, string>,
   limit: number,
 ): string[] {
-  const values = [...entries.values()];
-  const limited = values.slice(0, limit);
-  const lines: string[] = [];
-
-  for (const entry of limited) {
-    lines.push(entry);
-    lines.push('');
+  const values = [...entries.values()].slice(0, limit);
+  if (values.length === 0) {
+    return [];
   }
-
-  if (lines.length > 0) {
-    lines.pop();
-  }
-
-  return lines;
+  // Join entries with empty lines between them
+  return values.flatMap((entry, i) =>
+    i < values.length - 1 ? [entry, ''] : [entry],
+  );
 }

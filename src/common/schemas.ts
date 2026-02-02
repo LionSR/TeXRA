@@ -10,31 +10,15 @@ import { z } from 'zod';
 // Stream Config
 // ============================================================================
 
-/** Configuration for identifying a stream by agent/model/file. */
-export interface StreamConfig {
-  agent: string;
-  model: string;
-  inputFile: string;
-}
-
-// ============================================================================
-// Listing Options Schema
-// ============================================================================
-
-/**
- * Options for file listing operations with sensible defaults.
- * Used by prepareFilters in listing.ts.
- */
-export const ListingOptionsSchema = z.object({
-  includeExtensions: z.array(z.string()).prefault([]),
-  excludeExtensions: z.array(z.string()).prefault([]),
-  excludeDirectories: z.array(z.string()).prefault([]),
-  excludeKeywords: z.array(z.string()).prefault([]),
-  excludeFiles: z.array(z.string()).prefault([]),
+/** Configuration for identifying a stream by agent/model/file. Schema is the single source of truth. */
+export const StreamConfigSchema = z.object({
+  agent: z.string(),
+  model: z.string(),
+  inputFile: z.string(),
 });
 
-/** Input type - all fields optional (for function parameters) */
-export type ListingOptions = z.input<typeof ListingOptionsSchema>;
+/** Derived type from schema. */
+export type StreamConfig = z.infer<typeof StreamConfigSchema>;
 
 // ============================================================================
 // LaTeX Compile Options Schema

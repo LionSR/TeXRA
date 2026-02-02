@@ -1,50 +1,142 @@
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { ToolDefinition } from '@model';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
+// Type imports
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+/** Response from Kimi's token estimation API */
+interface KimiTokenEstimateResponse {
+  data: {
+    total_tokens: number;
+  };
+}
+
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
+ * Kimi K2 Thinking models return reasoning_content automatically when streaming.
  *
- * Kimi K2 Thinking models automatically enable reasoning based on model name.
- * No explicit `thinking` parameter is needed - the API returns reasoning_content
- * automatically when streaming. The base class's executeStreamingChat handles
- * reasoning_content extraction via extractReasoningDelta.
+ * Kimi K2.5 has thinking enabled by default on the Moonshot API.
+ * For non-thinking variants (supportsReasoning: false), we must explicitly
+ * send `thinking: { type: 'disabled' }` to turn off thinking mode.
  *
- * Note: getBaseUrl() is NOT overridden here.
- * The base ModelHandler.getBaseUrl() correctly handles:
- * - Server-side keys: routes through relay
- * - Direct access: uses BASE_URLS[MOONSHOT] = 'https://api.moonshot.cn/v1'
+ * Supports thinking mode with tool calls. When thinking mode is enabled:
+ * - The model outputs reasoning_content along with tool_calls
+ * - The reasoning_content must be included in assistant messages during tool-use cycles
+ *
+ * @see https://platform.moonshot.cn/docs/guide/reasoning-model
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
   protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'kimi';
   }
 
-  /**
-   * Create streaming aggregator for thinking models.
-   * Uses BaseReasoningStreamAggregator to properly reconstruct responses
-   * with reasoning_content.
-   */
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
     return this.capabilities.supportsReasoning
       ? new BaseReasoningStreamAggregator()
       : null;
   }
 
-  /**
-   * Kimi requires string content format for messages.
-   * Uses the parent's normalization hook instead of overriding createResponse.
-   */
-  protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
+  protected override getMessageNormalizationOptions():
+    | NormalizeOpenAIMessageContentOptions
+    | undefined {
+    // Kimi K2.5 supports vision with standard OpenAI-style image_url format.
+    // Don't convert content to strings for vision models as it strips image parts.
+    if (this.capabilities.supportsVision) {
+      return undefined;
+    }
     return { convertContentToString: true };
   }
 
-  // Note: processThinkingBlock is inherited from ModelHandlerOpenAI which
-  // already handles reasoning_content extraction via extractReasoningFromMessage().
-  //
-  // Note: createMediaContent is inherited from ModelHandlerOpenAI which
-  // already handles images via buildStandardVisionParts() and logs
-  // appropriate warnings for unsupported media categories.
+  protected override getThinkingParameter():
+    | { type: 'enabled' | 'disabled' }
+    | undefined {
+    // Kimi K2.5 has thinking enabled by default on the Moonshot API.
+    // Explicitly disable it for non-thinking variants.
+    if (
+      this.config.fullName === 'kimi-k2.5' &&
+      !this.capabilities.supportsReasoning
+    ) {
+      return { type: 'disabled' };
+    }
+    return undefined;
+  }
+
+  /**
+   * Kimi thinking models require reasoning_content in tool-use follow-up messages.
+   */
+  protected override shouldIncludeReasoningInToolCalls(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
+  protected override buildChatBaseParams(
+    messages: ChatCompletionMessageParam[],
+    _temperature?: number,
+    systemPrompt?: string,
+    endTag?: string,
+    tools?: ToolDefinition[],
+  ) {
+    // Kimi K2.5 requires fixed temperature values:
+    // - thinking mode (supportsReasoning: true): temperature=1.0
+    // - non-thinking mode (supportsReasoning: false): temperature=0.6
+    let temperature = _temperature;
+    if (this.config.fullName.startsWith('kimi-k2.5')) {
+      temperature = this.capabilities.supportsReasoning ? 1 : 0.6;
+    }
+    return super.buildChatBaseParams(
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      tools,
+    );
+  }
+
+  /**
+   * Whether this handler supports native token counting.
+   * Kimi provides a token estimation API for accurate pre-flight counts.
+   */
+  override get supportsTokenCounting(): boolean {
+    return true;
+  }
+
+  /**
+   * Estimates token count using Kimi's native token counting API.
+   * This provides accurate token counts for Moonshot models.
+   *
+   * @param messages The messages to count tokens for.
+   * @returns Promise resolving to the total token count.
+   * @see https://platform.moonshot.cn/docs/api/tokenization
+   */
+  override async estimateTokenCount(
+    messages: ChatCompletionMessageParam[],
+  ): Promise<number> {
+    const apiKey = await this.getApiKey();
+    const baseUrl = this.getBaseUrl() ?? 'https://api.moonshot.ai/v1';
+
+    const response = await fetch(`${baseUrl}/tokenizers/estimate-token-count`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.config.fullName,
+        messages,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Kimi token estimation failed (${response.status}): ${errorText}`,
+      );
+    }
+
+    const result = (await response.json()) as KimiTokenEstimateResponse;
+    return result.data.total_tokens;
+  }
 }

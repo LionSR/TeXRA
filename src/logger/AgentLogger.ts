@@ -1,97 +1,26 @@
-// Third-party imports
 import { randomUUID } from 'crypto';
-import { z } from 'zod';
 
-// Local imports - events
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-
-// Internal imports
+import {
+  END_GROUP_STATUS,
+  MESSAGE_TYPES,
+  type ContextManagementData,
+  type EndGroupStatus,
+  type ErrorContext,
+  type ExtendedTokenUsageStats,
+  type FileListEntry,
+  type MessageType,
+} from '@shared/schemas';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
-import { type ErrorContext } from '@common/errors/schemas';
 import { delay } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Local imports - log
-import * as logger from './logUtils';
-import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
 import { getEmitFilter } from './filterUtils';
-
-// Type imports
-import type {
-  EndGroupStatus,
-  FileListEntry,
-  MessageType,
-} from './messageTypes';
+import * as logger from './logUtils';
 import type { LogOptions } from './logOptions';
-
-/**
- * Context management actions that can be logged.
- * - compaction: OpenAI conversation compaction
- * - clear_tool_uses: Anthropic server-side tool use clearing
- * - clear_thinking: Anthropic server-side thinking clearing
- * - truncation: Generic message/context truncation
- * - max_tokens_reduced: Max output tokens reduced due to context pressure
- */
-export const ContextManagementAction = z.enum([
-  'compaction',
-  'clear_tool_uses',
-  'clear_thinking',
-  'truncation',
-  'max_tokens_reduced',
-]);
-export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
-
-/**
- * Context management event data for logging compaction, truncation, etc.
- * Schema-first definition following project conventions (CLAUDE.md).
- */
-export const ContextManagementDataSchema = z.object({
-  /** Type of context management action */
-  action: ContextManagementAction,
-  /** Tokens before the action */
-  tokensBefore: z.number().nonnegative(),
-  /** Tokens after the action (if known) */
-  tokensAfter: z.number().nonnegative().optional(),
-  /** Context window size */
-  contextWindow: z.number().positive(),
-  /** Percentage of context utilized before action */
-  utilizationBefore: z.number().nonnegative(),
-  /** Percentage of context utilized after action (if known) */
-  utilizationAfter: z.number().nonnegative().optional(),
-  /** Provider-specific details */
-  details: z.string().optional(),
-  /** Original max tokens before reduction (for max_tokens_reduced action) */
-  originalMaxTokens: z.number().positive().optional(),
-  /** Reduced max tokens after adjustment (for max_tokens_reduced action) */
-  reducedMaxTokens: z.number().positive().optional(),
-});
-
-export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
-
-/**
- * Context state data for tracking current context utilization.
- * Emitted after token counting to update UI with current usage.
- */
-export const ContextStateDataSchema = z.object({
-  /** Current input tokens in the context */
-  inputTokens: z.number().nonnegative(),
-  /** Maximum context window size */
-  contextWindow: z.number().positive(),
-  /** Percentage of context utilized (0-100) */
-  utilizationPercent: z.number().nonnegative(),
-});
-
-export type ContextStateData = z.infer<typeof ContextStateDataSchema>;
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
-  /**
-   * When true, no progress-view group is created. The callback runs inside the
-   * currently active group (or without grouping) while still inheriting the
-   * logging context. Use this for instrumentation helpers that should not
-   * clutter the UI with nested groups.
-   */
   skip?: boolean;
   successStatus?: EndGroupStatus;
   errorStatus?: EndGroupStatus;
@@ -102,44 +31,11 @@ export interface AgentLoggerStageOptions extends LoggerScopeOptions {
   parent?: AgentLogStage;
 }
 
-/**
- * Represents a logical logging scope that can wrap asynchronous work and
- * create nested child stages.
- *
- * - {@link run} executes the provided callback and automatically finalizes the
- *   stage with a success or error status when the promise settles.
- * - {@link within} runs the callback without ending the stage, allowing the
- *   caller to perform additional work (or register nested stages) before
- *   explicitly calling {@link end}. If the callback throws, the stage remains
- *   active until the caller finalizes it via {@link end}. Prefer calling
- *   {@link run} unless you need to coordinate several steps inside the same
- *   stage and can guarantee cleanup in a `finally` block.
- * - {@link end} manually finalizes the stage; calling it multiple times is a
- *   no-op after the first invocation.
- * - {@link stage} spawns a nested stage that inherits the current context.
- */
 export interface AgentLogStage {
   readonly id?: string;
-  /**
-   * Runs work within the stage and automatically ends it once the promise
-   * resolves or rejects.
-   */
   run<T>(fn: () => Promise<T>): Promise<T>;
-  /**
-   * Executes work within the stage context without ending it. Useful when the
-   * caller wants to manually control completion across several async steps.
-   * Callers should typically wrap the invocation in a `try/finally` block that
-   * calls {@link end} to avoid leaking the stage when the callback rejects.
-   */
   within<T>(fn: () => Promise<T>): Promise<T>;
-  /**
-   * Explicitly finalizes the stage with the provided status. Safe to call
-   * multiple times; subsequent calls are ignored.
-   */
   end(status?: EndGroupStatus): void;
-  /**
-   * Creates a nested child stage beneath the current stage.
-   */
   stage(
     label: string,
     options?: AgentLoggerStageOptions,
@@ -175,14 +71,10 @@ class AgentLogStageHandle implements AgentLogStage {
   }
 
   async within<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.config.skip) {
-      if (this.config.parentGroupId) {
-        return this.logger.runWithGroup(this.config.parentGroupId, fn);
-      }
-      return this.logger.runWithinCurrentGroup(fn);
-    }
-
-    return this.logger.runWithGroup(this.config.id, fn);
+    const groupId = this.config.skip
+      ? this.config.parentGroupId
+      : this.config.id;
+    return this.logger.runWithGroup(groupId, fn);
   }
 
   async run<T>(fn: () => Promise<T>): Promise<T> {
@@ -217,23 +109,14 @@ export interface AgentLogStream {
   finalize(finalText?: string): string;
 }
 
-/**
- * Encapsulates logging functionality for agents with a dedicated channel.
- * Uses the updated consolidated logger system.
- */
 export class AgentLogger {
-  public readonly isAgentLogger: boolean;
-
   constructor(
-    /** The stream identifier used for routing log messages. */
     public readonly streamId: string,
-    isAgentLogger = false,
+    public readonly isAgentLogger = false,
   ) {
-    this.isAgentLogger = isAgentLogger;
-    logger.initialize(this.streamId, this.isAgentLogger);
+    logger.initialize(streamId, isAgentLogger);
   }
 
-  /** Internal helper to log at any level with consistent options handling. */
   private log(
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,
@@ -247,35 +130,22 @@ export class AgentLogger {
     });
   }
 
-  /** Log a debug message. Falls back to current group ID if not specified. */
   debug(message: string, options: LogOptions = {}): void {
     this.log('debug', message, options);
   }
 
-  /** Log an info message. Falls back to current group ID if not specified. */
   info(message: string, options: LogOptions = {}): void {
     this.log('info', message, options);
   }
 
-  /** Log a warning message. Falls back to current group ID if not specified. */
   warn(message: string, options: LogOptions = {}): void {
     this.log('warn', message, options);
   }
 
-  /** Log an error message. Falls back to current group ID if not specified. */
   error(message: string, options: LogOptions = {}): void {
     this.log('error', message, options);
   }
 
-  /**
-   * Log a structured error with consistent formatting.
-   * Single source of truth for ERROR message type logging.
-   *
-   * @param message - Human-readable error description
-   * @param err - The error object to format
-   * @param context - Optional context (operation, model)
-   * @param groupId - Optional group ID for progress view
-   */
   logError(
     message: string,
     err: unknown,
@@ -290,14 +160,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a progress status update.
-   * Single source of truth for PROGRESS_STATUS message type logging.
-   *
-   * @param message - Status message
-   * @param context - Optional context (operation, model)
-   * @param groupId - Optional group ID for progress view
-   */
   logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       groupId,
@@ -306,15 +168,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a structured error with pre-formatted error data.
-   * Use this when error data is already structured (e.g., RetryErrorInfo).
-   * For raw errors, use logError() instead.
-   *
-   * @param message - Human-readable error description
-   * @param errorData - Pre-structured error data
-   * @param groupId - Optional group ID for progress view
-   */
   logErrorData(message: string, errorData: unknown, groupId?: string): void {
     this.error(message, {
       groupId,
@@ -323,10 +176,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log an internal/system message (hidden in normal mode, shown in debug).
-   * Single source of truth for INTERNAL message type.
-   */
   logInternal(message: string, groupId?: string): void {
     this.info(message, {
       groupId,
@@ -334,10 +183,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log an internal debug message (hidden in normal mode, shown in debug).
-   * Single source of truth for INTERNAL message type at debug level.
-   */
   debugInternal(message: string, groupId?: string): void {
     this.debug(message, {
       groupId,
@@ -345,10 +190,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log scratchpad/thinking content.
-   * Single source of truth for SCRATCHPAD message type.
-   */
   logScratchpad(content: string, groupId?: string): void {
     this.info(content, {
       groupId,
@@ -356,14 +197,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log a context management event (compaction, context clearing, etc.).
-   * Single source of truth for CONTEXT_MANAGEMENT message type.
-   *
-   * @param message - Human-readable summary of the action
-   * @param data - Structured data about the context management action
-   * @param groupId - Optional group ID for progress view
-   */
   logContextManagement(
     message: string,
     data?: ContextManagementData,
@@ -376,64 +209,36 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log current context state (utilization percentage).
-   * Single source of truth for CONTEXT_STATE message type.
-   * Used to update UI with current context usage after token counting.
-   *
-   * @param inputTokens - Current input tokens in context
-   * @param contextWindow - Maximum context window size
-   * @param groupId - Optional group ID for progress view
-   */
   logContextState(
     inputTokens: number,
     contextWindow: number,
     groupId?: string,
   ): void {
     const utilizationPercent = (inputTokens / contextWindow) * 100;
-    const data: ContextStateData = {
-      inputTokens,
-      contextWindow,
-      utilizationPercent,
-    };
-    // Use info level to ensure message reaches progress view (debug is filtered)
-    // The CONTEXT_STATE message type triggers UI update without cluttering logs
     this.info(
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
         groupId,
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
-        data,
+        data: { inputTokens, contextWindow, utilizationPercent },
       },
     );
   }
 
-  /**
-   * Log a list of files that were processed.
-   * @param files - Array of FileListEntry objects conforming to FileListEntrySchema
-   */
   fileList(files: FileListEntry[], groupId?: string): void {
-    const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.logFileListData(summary, files, groupId);
+    this.info(`Loaded ${files.length} file${files.length === 1 ? '' : 's'}`, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: files,
+    });
   }
 
-  /**
-   * Log files being loaded for a specific category (input, reference, auxiliary, media).
-   * Creates a FILE_LIST entry with a descriptive category label.
-   * Empty arrays are handled gracefully (no-op).
-   */
   logFileCategory(
     category: string,
     files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
     groupId?: string,
   ): void {
-    if (files.length === 0) {
-      return;
-    }
-
-    // Use explicit === true check: only count files where existence was confirmed
-    const loadedCount = files.filter((f) => f.ok === true).length;
-    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
+    if (files.length === 0) return;
 
     const entries: FileListEntry[] = files.map((f) => ({
       path: f.path,
@@ -441,26 +246,14 @@ export class AgentLogger {
       source: category,
       sourceDisplay: category,
     }));
-
-    this.logFileListData(summary, entries, groupId);
-  }
-
-  /** Internal helper for FILE_LIST logging - shared by fileList and logFileCategory */
-  private logFileListData(
-    summary: string,
-    files: FileListEntry[],
-    groupId?: string,
-  ): void {
-    this.info(summary, {
+    const loadedCount = entries.filter((e) => e.ok).length;
+    this.info(`Loading ${category} (${loadedCount}/${files.length})`, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
-      data: files,
+      data: entries,
     });
   }
 
-  /**
-   * Log missing output information.
-   */
   missingOutputs(info: unknown, groupId?: string): void {
     const missing = (info as { missing?: unknown[] } | null)?.missing;
     const count = Array.isArray(missing) ? missing.length : 0;
@@ -471,71 +264,40 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Log latexdiff results.
-   */
   latexDiff(results: unknown[], groupId?: string): void {
-    const summary = `Latexdiff results: ${results.length}`;
-    this.info(summary, {
+    this.info(`Latexdiff results: ${results.length}`, {
       groupId,
       messageType: MESSAGE_TYPES.LATEXDIFF,
       data: results,
     });
   }
 
-  /**
-   * Log statistics information (only shown in debug mode).
-   */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
-    const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.info(summary, {
-      groupId,
-      messageType: MESSAGE_TYPES.STATISTICS,
-      data: stats,
-    });
+    this.info(
+      `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`,
+      {
+        groupId,
+        messageType: MESSAGE_TYPES.STATISTICS,
+        data: stats,
+      },
+    );
   }
 
-  /**
-   * Log a user follow-up message.
-   */
   userMessage(message: string, groupId?: string): void {
-    this.info(message, {
-      groupId,
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
+    this.info(message, { groupId, messageType: MESSAGE_TYPES.USER_MESSAGE });
   }
 
-  /**
-   * Log a tool use event for display in the progress view.
-   * Single source of truth for TOOL_USE message type.
-   */
   logToolUse(data: unknown, groupId?: string): void {
-    this.info('', {
-      groupId,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data,
-    });
+    this.info('', { groupId, messageType: MESSAGE_TYPES.TOOL_USE, data });
   }
 
-  /**
-   * Log a web search result for display in the progress view.
-   * Single source of truth for WEB_SEARCH message type.
-   */
   logWebSearch(data: unknown, groupId?: string): void {
-    this.info('', {
-      groupId,
-      messageType: MESSAGE_TYPES.WEB_SEARCH,
-      data,
-    });
+    this.info('', { groupId, messageType: MESSAGE_TYPES.WEB_SEARCH, data });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
-    if (!groupId) {
-      return undefined;
-    }
-
-    return fn(groupId);
+    return groupId ? fn(groupId) : undefined;
   }
 
   async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -562,13 +324,6 @@ export class AgentLogger {
     groupName: string,
     options: AgentLoggerStageOptions = {},
   ): Promise<AgentLogStage> {
-    return this.createStageHandle(groupName, options);
-  }
-
-  private async createStageHandle(
-    groupName: string,
-    options: AgentLoggerStageOptions | LoggerScopeOptions,
-  ): Promise<AgentLogStageHandle> {
     const {
       skip = false,
       successStatus = 'stopped',
@@ -576,25 +331,17 @@ export class AgentLogger {
       parentGroupId,
       id,
       parent,
-    } = options as AgentLoggerStageOptions;
+    } = options;
 
     const resolvedParent =
       parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
+    const groupId = skip
+      ? undefined
+      : await this.startGroup(groupName, id, resolvedParent);
 
-    if (skip) {
-      return new AgentLogStageHandle(this, {
-        id: undefined,
-        skip: true,
-        successStatus,
-        errorStatus,
-        parentGroupId: resolvedParent,
-      });
-    }
-
-    const groupId = await this.startGroup(groupName, id, resolvedParent);
     return new AgentLogStageHandle(this, {
       id: groupId,
-      skip: false,
+      skip,
       successStatus,
       errorStatus,
       parentGroupId: resolvedParent,
@@ -605,40 +352,41 @@ export class AgentLogger {
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const emitStreamId = this.streamId;
+    const streamId = this.streamId;
     const id = randomUUID();
-    let buffer = '';
-    let isFirstUpdate = true;
     const level = options.level ?? 'info';
-    const progressEnabled = options.progressViewEnabled ?? true;
     const groupId = options.groupId ?? this.resolveActiveGroupId();
+    const progressEnabled = options.progressViewEnabled ?? true;
 
-    // Apply filtering - get both shouldEmit and debugMode for verbose flag
-    // Matches VSCodeTransport.emitLogEvent() behavior for consistency
     const { shouldEmit, debugMode } = progressEnabled
       ? getEmitFilter({ level, messageType: type })
       : { shouldEmit: false, debugMode: false };
 
-    // Helper to emit log message (reduces duplication between append/finalize)
-    const emitMessage = (isNew: boolean, text: string): void => {
-      if (isNew) {
+    let buffer = '';
+    let messageCreated = false;
+
+    const emitMessage = (): void => {
+      if (!shouldEmit) return;
+
+      if (messageCreated) {
+        bus.emit('updateLogMessage', {
+          streamId,
+          logMessage: { id, text: buffer, groupId, messageType: type },
+        });
+      } else {
         bus.emit('addLogMessage', {
-          streamId: emitStreamId,
+          streamId,
           logMessage: {
             id,
-            text,
+            text: buffer,
             level,
             timestamp: Date.now(),
             groupId,
             messageType: type,
-            verbose: debugMode, // Now included for consistency with VSCodeTransport
+            verbose: debugMode,
           },
         });
-      } else {
-        bus.emit('updateLogMessage', {
-          streamId: emitStreamId,
-          logMessage: { id, text, groupId, messageType: type },
-        });
+        messageCreated = true;
       }
     };
 
@@ -646,18 +394,11 @@ export class AgentLogger {
       append: (text: string) => {
         if (!text) return;
         buffer += text;
-        if (!shouldEmit) return;
-
-        emitMessage(isFirstUpdate, buffer);
-        isFirstUpdate = false;
+        emitMessage();
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') buffer = finalText;
-
-        if (shouldEmit) {
-          emitMessage(isFirstUpdate, buffer);
-        }
-
+        emitMessage();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },

@@ -3,9 +3,9 @@ import axios from 'axios';
 import { z } from 'zod';
 
 // Internal imports
-import { defineTool } from '@tools/core/define';
 import { ToolResult } from '@tools/result';
 import { wrapApiCall } from '@tools/utils';
+import { defineTool } from '@tools/core/define';
 
 const WebSearchInputSchema = z.strictObject({
   query: z.string(),

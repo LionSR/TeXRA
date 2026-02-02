@@ -10,19 +10,19 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - common
-import { AgentHistoryManager } from '@common/history';
+import { AgentHistoryManager } from '@common/history/AgentHistoryManager';
 
 // Local imports - tools
-import { defineTool } from './core/define';
-import { ToolError, type ToolResult } from './result';
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { ToolError, type ToolResult } from './result';
+import { defineTool } from './core/define';
+import type { ExecutionId } from '@shared/schemas';
 
 // ============================================================================
 // Schema

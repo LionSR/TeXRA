@@ -30,7 +30,7 @@ The API keys are stored as Supabase secrets and the relay forwards requests to t
 cd /path/to/TeXRA
 supabase login
 supabase link --project-ref your-project-id
-supabase functions deploy relay
+supabase functions deploy relay --no-verify-jwt
 ```
 
 ### 2. Set API Key Secrets

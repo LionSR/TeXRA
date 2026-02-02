@@ -4,10 +4,6 @@
  * This is a standalone data structure with no dependencies on other
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
-
-/**
- * Promise-based queue for follow-up messages in a tool-use session.
- */
 export class FollowUpQueue {
   private readonly queued: string[] = [];
   private resolver: ((value: string | null) => void) | null = null;
