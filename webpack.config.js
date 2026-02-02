@@ -52,6 +52,7 @@ const webviewExternals = {
   '@shared/schemas/historyViewMessages': 'WebviewCommons',
   '@shared/schemas/memoryViewMessages': 'WebviewCommons',
   '@shared/schemas/profileViewMessages': 'WebviewCommons',
+  '@shared/schemas/settingsViewMessages': 'WebviewCommons',
   '@shared/schemas/mainView': 'WebviewCommons',
   '@shared/schemas/progressView': 'WebviewCommons',
   '@shared/schemas/stream': 'WebviewCommons',
@@ -152,6 +153,7 @@ const extensionConfig = {
       '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@memoryView': path.resolve(__dirname, 'src/memoryView'),
       '@profileView': path.resolve(__dirname, 'src/profileView'),
+      '@settingsView': path.resolve(__dirname, 'src/settingsView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
       '@tools': path.resolve(__dirname, 'src/tools'),
       '@types': path.resolve(__dirname, 'src/types'),
@@ -171,6 +173,9 @@ const extensionConfig = {
         use: [
           {
             loader: 'ts-loader',
+            options: {
+              transpileOnly: true, // Skip type checking for faster builds
+            },
           },
         ],
       },
@@ -230,6 +235,9 @@ const commonsConfig = {
         use: [
           {
             loader: 'ts-loader',
+            options: {
+              transpileOnly: true, // Skip type checking for faster builds
+            },
           },
         ],
       },
@@ -290,103 +298,102 @@ const commonsConfig = {
  * - Terser configured to preserve template literal structure
  * - Externals reference WebviewCommons for shared dependencies
  */
-const webviewConfigs = [
-  'progressView',
-  'memoryView',
-  'historyView',
-  'profileView',
-  'webview',
-].map((name) => ({
-  name,
-  target: 'web',
-  mode: 'none',
-  entry: `./src/${name}/frontend/index.ts`,
-  output: {
-    path: path.resolve(__dirname, `dist/${name}`),
-    filename: 'bundle.js',
-  },
-  externals: webviewExternals,
-  resolve: {
-    extensions: ['.ts', '.js'],
-    alias: extensionConfig.resolve.alias,
-  },
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        exclude: /node_modules/,
-        use: [
-          {
-            loader: 'ts-loader',
-          },
-        ],
-        // Note: sideEffects must NOT be set to false here - @customElement
-        // decorators have side effects (element registration). Tree shaking
-        // is handled via optimization.usedExports instead.
-      },
-      {
-        // CSS as string with ?inline suffix (for Lit css`` templates)
-        // Returns raw CSS text for use with unsafeCSS()
-        test: /\.css$/,
-        resourceQuery: /inline/,
-        type: 'asset/source',
-      },
-      {
-        // Side-effect CSS imports - inject into document head at runtime
-        // Used for: import 'katex/dist/katex.min.css', import './styles/index.css'
-        test: /\.css$/,
-        resourceQuery: { not: [/inline/] },
-        use: ['style-loader', 'css-loader'],
-      },
-      {
-        // Font files - emit to same folder as bundle
-        test: /\.(woff|woff2|ttf|eot)$/,
-        type: 'asset/resource',
-        generator: {
-          filename: '[name][ext]',
+const webviewConfigs = ['progressView', 'settingsView', 'webview'].map(
+  (name) => ({
+    name,
+    target: 'web',
+    mode: 'none',
+    entry: `./src/${name}/frontend/index.ts`,
+    output: {
+      path: path.resolve(__dirname, `dist/${name}`),
+      filename: 'bundle.js',
+    },
+    externals: webviewExternals,
+    resolve: {
+      extensions: ['.ts', '.js'],
+      alias: extensionConfig.resolve.alias,
+    },
+    module: {
+      rules: [
+        {
+          test: /\.ts$/,
+          exclude: /node_modules/,
+          use: [
+            {
+              loader: 'ts-loader',
+              options: {
+                transpileOnly: true, // Skip type checking for faster builds
+              },
+            },
+          ],
+          // Note: sideEffects must NOT be set to false here - @customElement
+          // decorators have side effects (element registration). Tree shaking
+          // is handled via optimization.usedExports instead.
         },
-      },
-    ],
-  },
-  plugins: [
-    // Enable Lit production mode (removes dev warnings and assertions)
-    new webpack.DefinePlugin({
-      'process.env.NODE_ENV': JSON.stringify(
-        process.env.NODE_ENV || 'production',
-      ),
-    }),
-  ],
-  devtool: 'nosources-source-map',
-  infrastructureLogging: {
-    level: 'log',
-  },
-  optimization: {
-    minimize: true,
-    // Enable tree shaking
-    usedExports: true,
-    minimizer: [
-      new TerserPlugin({
-        terserOptions: {
-          // Preserve template literal structure for Lit templates
-          ecma: 2020,
-          compress: {
-            // Don't inline functions (can break Lit's tagged template caching)
-            inline: 1,
-            // Keep class names for better debugging
-            keep_classnames: true,
-          },
-          mangle: {
-            // Don't mangle property names (Lit uses property reflection)
-            properties: false,
-          },
-          format: {
-            // Preserve comments for @customElement decorators if needed
-            comments: false,
+        {
+          // CSS as string with ?inline suffix (for Lit css`` templates)
+          // Returns raw CSS text for use with unsafeCSS()
+          test: /\.css$/,
+          resourceQuery: /inline/,
+          type: 'asset/source',
+        },
+        {
+          // Side-effect CSS imports - inject into document head at runtime
+          // Used for: import 'katex/dist/katex.min.css', import './styles/index.css'
+          test: /\.css$/,
+          resourceQuery: { not: [/inline/] },
+          use: ['style-loader', 'css-loader'],
+        },
+        {
+          // Font files - emit to same folder as bundle
+          test: /\.(woff|woff2|ttf|eot)$/,
+          type: 'asset/resource',
+          generator: {
+            filename: '[name][ext]',
           },
         },
+      ],
+    },
+    plugins: [
+      // Enable Lit production mode (removes dev warnings and assertions)
+      new webpack.DefinePlugin({
+        'process.env.NODE_ENV': JSON.stringify(
+          process.env.NODE_ENV || 'production',
+        ),
       }),
     ],
-  },
-}));
+    devtool: 'nosources-source-map',
+    infrastructureLogging: {
+      level: 'log',
+    },
+    optimization: {
+      minimize: true,
+      // Enable tree shaking
+      usedExports: true,
+      minimizer: [
+        new TerserPlugin({
+          terserOptions: {
+            // Preserve template literal structure for Lit templates
+            ecma: 2020,
+            compress: {
+              // Don't inline functions (can break Lit's tagged template caching)
+              inline: 1,
+              // Keep class names for better debugging
+              keep_classnames: true,
+            },
+            mangle: {
+              // Don't mangle property names (Lit uses property reflection)
+              properties: false,
+            },
+            format: {
+              // Preserve comments for @customElement decorators if needed
+              comments: false,
+            },
+          },
+        }),
+      ],
+    },
+  }),
+);
 
 module.exports = [extensionConfig, commonsConfig, ...webviewConfigs];
