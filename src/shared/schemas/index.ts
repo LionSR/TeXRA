@@ -34,6 +34,7 @@ export { ThemeSchema, type Theme } from './commonViewMessages';
 export * from './memoryViewMessages';
 export * from './historyViewMessages';
 export * from './profileViewMessages';
+export * from './settingsViewMessages';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './streamState';

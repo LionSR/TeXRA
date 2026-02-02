@@ -7,16 +7,23 @@ export type FormatOptions = {
   defaultOpen?: boolean;
 };
 
+/** Result of safeFormat - either success with value or failure with error. */
+export type SafeFormatResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
 /** Safely execute a formatting function with error handling. */
 export function safeFormat<T>(
   formatter: () => T,
   errorContext: string,
-): T | null {
+): SafeFormatResult<T> {
   try {
-    return formatter();
+    const value = formatter();
+    return { ok: true, value };
   } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
     console.error(`Error parsing ${errorContext}:`, e);
-    return null;
+    return { ok: false, error: errorMsg };
   }
 }
 
