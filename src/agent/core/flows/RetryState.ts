@@ -103,14 +103,18 @@ export abstract class RetryableInvocationNode<
       ) {
         this._hasAttemptedTokenRefresh = true;
         services.logger.debug('Relay 401, refreshing token before retry loop');
-        const refreshed = await SupabaseClient.getAccessToken();
+        const refreshed = await SupabaseClient.getAccessToken(true);
         if (refreshed) {
           activeController = new AbortController();
           this.signal = activeController.signal;
           services.setAbortController(activeController);
           services.logger.debug('Token refreshed, retrying immediately');
           try {
-            return await operation(activeController.signal);
+            const result = await operation(activeController.signal);
+            // Refresh succeeded and request worked — reset flag so future
+            // expirations (in long-running conversations) can trigger refresh again.
+            this._hasAttemptedTokenRefresh = false;
+            return result;
           } catch (retryErr) {
             const retryFormatted = formatProviderHttpError(retryErr);
             if (
