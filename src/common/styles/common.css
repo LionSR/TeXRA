@@ -1,6 +1,83 @@
 /**
- * Common CSS styles for TeXRA UI components
+ * Document-level styles for TeXRA webviews.
+ *
+ * Design tokens are defined at :root so they cascade into shadow DOM.
+ * This is the single source of truth for design tokens - Lit components
+ * inherit these via CSS custom property inheritance.
  */
+
+:root {
+  /* Text colors */
+  --color-text-secondary: var(--vscode-descriptionForeground);
+  --color-text-link: var(--vscode-textLink-foreground);
+  --color-text-link-active: var(--vscode-textLink-activeForeground);
+
+  /* Background colors */
+  --color-bg-secondary: var(--vscode-sideBar-background);
+
+  /* Border colors */
+  --color-border: var(--vscode-panel-border);
+
+  /* Status colors */
+  --color-success: var(--vscode-testing-iconPassed, #2ea043);
+  --color-error: var(--vscode-editorError-foreground, #f14c4c);
+  --color-warning: var(--vscode-editorWarning-foreground, #cca700);
+  --color-added: var(--vscode-charts-green, #4caf50);
+  --color-removed: var(--vscode-charts-red, #f44336);
+
+  /* Component aliases */
+  --background-color: var(--color-bg-secondary);
+  --text-color: var(--vscode-sideBar-foreground);
+  --button-hover-background: var(--vscode-button-hoverBackground);
+  --dropdown-border: var(--vscode-dropdown-border);
+
+  /* Typography */
+  --font-size: var(--vscode-font-size);
+  --font-family: var(--vscode-font-family);
+  --font-weight: var(--vscode-font-weight);
+  --font-size-lg: calc(var(--font-size) * 1.2);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-xs: calc(var(--font-size) * 0.8);
+  --font-size-icon: var(--font-size-lg);
+  --font-size-icon-sm: var(--font-size);
+
+  /* Spacing */
+  --spacing-tiny: 2px;
+  --spacing-small: 4px;
+  --spacing-medium: 8px;
+  --spacing-large: 12px;
+  --spacing-xlarge: 20px;
+
+  /* Border radius */
+  --border-radius-small: 2px;
+  --border-radius: 3px;
+  --border-radius-large: 6px;
+
+  /* Heights */
+  --height-control: 24px;
+  --height-button: 30px;
+  --height-small: 100px;
+  --height-medium: 200px;
+  --height-large: 300px;
+  --height-xlarge: 400px;
+  --height-max: 1000px;
+
+  /* Widths */
+  --width-icon: 16px;
+  --width-button-min: 80px;
+  --width-dropdown: 160px;
+
+  /* Borders */
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-thick: 3px;
+
+  /* Opacity levels */
+  --opacity-disabled: 0.5;
+  --opacity-subtle: 0.7;
+  --opacity-normal: 0.85;
+  --opacity-full: 1;
+}
 
 body {
   margin: 0;
@@ -10,210 +87,4 @@ body {
   color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   box-sizing: border-box;
-}
-
-.codicon {
-  font-family: codicon;
-  font-size: var(--font-size);
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-}
-
-vscode-toolbar-container {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  flex-wrap: nowrap;
-}
-
-vscode-toolbar-button {
-  flex-shrink: 0;
-}
-
-.clickable-link {
-  cursor: pointer;
-  color: var(--color-text-link);
-  text-decoration: none;
-}
-
-.clickable-link:hover {
-  color: var(--color-text-link-active);
-  text-decoration: underline;
-}
-
-.detail-section {
-  margin: var(--spacing-small) 0;
-}
-
-.detail-content {
-  padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
-}
-
-.detail-list {
-  list-style: none;
-  margin: 0;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-}
-
-.details-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  padding: var(--spacing-tiny) 0;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  opacity: var(--opacity-normal);
-}
-
-.details-summary:hover {
-  opacity: 1;
-}
-
-.details-summary::-webkit-details-marker {
-  display: none;
-}
-
-/* Toggle icon for collapsible details - applies to any summary */
-summary .toggle-icon {
-  opacity: var(--opacity-subtle);
-  font-size: var(--font-size-sm);
-  display: inline-block;
-}
-
-details[open] > summary .toggle-icon {
-  transform: rotate(90deg);
-}
-
-.view-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-xlarge);
-}
-
-.view-header h1,
-.view-header h2 {
-  margin: 0;
-}
-
-.view-header h1 {
-  color: var(--color-text-link);
-}
-
-.list-item {
-  border: var(--border-thin) solid var(--vscode-panelSection-border);
-  border-radius: var(--border-radius-large);
-  padding: var(--spacing-medium);
-  background-color: var(--vscode-editor-background);
-}
-
-.list-item:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.list-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.collapsible {
-  margin-top: var(--spacing-small);
-}
-
-.collapsible::part(body) {
-  max-height: var(--height-medium);
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.collapsible[open]::part(body) {
-  max-height: var(--height-max);
-}
-
-.text-secondary {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.empty-state {
-  text-align: center;
-  margin-top: calc(var(--spacing-xlarge) * 2);
-  color: var(--color-text-secondary);
-}
-
-.badge {
-  display: inline-block;
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: var(--border-radius);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-}
-
-.badge--small {
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: var(--border-radius-small);
-}
-
-@keyframes pulse-scale {
-  0% {
-    transform: scale(1);
-    opacity: var(--opacity-subtle);
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: var(--opacity-full);
-  }
-  100% {
-    transform: scale(1);
-    opacity: var(--opacity-subtle);
-  }
-}
-
-@keyframes pulse-fade {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.btn-secondary {
-  opacity: var(--opacity-normal);
-}
-
-.btn-secondary:hover {
-  opacity: var(--opacity-full);
-}
-
-[hidden] {
-  display: none !important;
-}
-
-/* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
-.agent-icon {
-  display: inline-block;
-  width: 1.2em;
-  text-align: center;
 }
