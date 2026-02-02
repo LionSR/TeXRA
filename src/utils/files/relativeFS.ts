@@ -50,5 +50,3 @@ export abstract class RelativeFS extends BaseFS {
     );
   }
 }
-
-export default RelativeFS;

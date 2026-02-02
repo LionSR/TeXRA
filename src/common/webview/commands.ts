@@ -9,7 +9,7 @@ export const COMMON_COMMANDS = {
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
   ERROR: 'error',
-};
+} as const;
 
 // Main view specific commands
 export const MAIN_VIEW_COMMANDS = {
@@ -150,7 +150,7 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Followup task (receives from progress view)
   SETUP_FOLLOWUP_TASK: 'setupFollowupTask',
-};
+} as const;
 
 // Progress view specific commands
 export const PROGRESS_VIEW_COMMANDS = {
@@ -214,6 +214,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',
   FOLLOW_UP_TEXT_POLISHED: 'followUpTextPolished',
+  FOLLOW_UP_TEXT_POLISH_ERROR: 'followUpTextPolishError',
   FOLLOW_UP_TEXT_TRANSCRIBED: 'followUpTextTranscribed',
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
@@ -248,7 +249,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_FOLLOWUP: 'runFollowup',
   GET_FOLLOWUP_OPTIONS: 'getFollowupOptions',
   SET_FOLLOWUP_OPTIONS: 'setFollowupOptions',
-};
+} as const;
 
 // History view specific commands
 export const HISTORY_VIEW_COMMANDS = {
@@ -260,7 +261,7 @@ export const HISTORY_VIEW_COMMANDS = {
   RERUN_AGENT: 'rerunAgent',
   RESTORE_AGENT: 'restoreAgent',
   DELETE_AGENT: 'deleteAgent',
-};
+} as const;
 
 // Profile view specific commands
 export const PROFILE_VIEW_COMMANDS = {
@@ -272,7 +273,7 @@ export const PROFILE_VIEW_COMMANDS = {
   SIGN_OUT: 'signOut',
   // API access mode toggle (Ultra tier)
   SET_API_ACCESS_MODE: 'setApiAccessMode',
-};
+} as const;
 
 // Memory view specific commands
 export const MEMORY_VIEW_COMMANDS = {
@@ -285,14 +286,4 @@ export const MEMORY_VIEW_COMMANDS = {
   GET_MEMORY_ENABLED: 'getMemoryEnabled',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
-};
-
-// Export all commands in a single object for convenience
-export const WEBVIEW_COMMANDS = {
-  COMMON: COMMON_COMMANDS,
-  MAIN_VIEW: MAIN_VIEW_COMMANDS,
-  PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
-  HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
-  PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
-  MEMORY_VIEW: MEMORY_VIEW_COMMANDS,
-};
+} as const;

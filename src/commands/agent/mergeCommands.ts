@@ -30,8 +30,9 @@ async function handleMerge(
     return;
   }
 
-  const modelToUse = model ?? getConfig('texra.merge.defaultModel', 'gemini3f');
-  const fileToUse = baseFile ?? inputFile;
-
-  await executeMergeAgent(modelToUse, fileToUse, editedFile);
+  await executeMergeAgent(
+    model ?? getConfig('texra.merge.defaultModel', 'gemini3f'),
+    baseFile ?? inputFile,
+    editedFile,
+  );
 }

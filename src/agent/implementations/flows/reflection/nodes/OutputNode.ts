@@ -3,14 +3,29 @@
  *
  * Processes output files, handles latexdiff, and finalizes round artifacts.
  * Non-critical operations can fail gracefully (logged as warnings).
+ *
+ * This node is responsible for:
+ * - Event emission (bus.emit('addOutputFiles', ...), bus.emit('updateMissingOutputs', ...))
+ * - File opening logic (openBuildDisplayIfTex)
+ * - Validation decisions (when to validate and how to handle results)
  */
 
 import { Node } from '@agent/node';
-import type { RoundOutput, RoundFileMapping } from '@agent/output';
+import type { RoundFileMapping } from '@agent/output/types';
+import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { hasRoundOutputs } from '@agent/output/outputState';
+import { extractFilesFromXml } from '@agent/output/xmlExtraction';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, getRoundOutput } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
+import { bus } from '@eventBus/ProgressEventBus';
+import type { RoundOutput } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
@@ -22,12 +37,13 @@ import type {
 // Types
 // ============================================================================
 
+/**
+ * Prep result carries shared reference and validated output location.
+ * Other fields are accessed directly from shared and services.
+ */
 interface OutputPrepInput {
-  currentRound: number;
+  shared: ReflectionFlowShared;
   outputLocation: AgentFileLocation;
-  endTurn: boolean;
-  baseFiles: FileLocation[]; // Can include external files
-  ensureXmlStructure: boolean;
 }
 
 // ============================================================================
@@ -60,33 +76,32 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
-    const { baseFiles, shouldEnsureXmlStructure } = this.services;
-    const { currentRound, outputLocation, endTurn } = shared;
-
-    if (!outputLocation) {
+    if (!shared.outputLocation) {
       throw new Error(
         'Output location not set - ResponseCycleNode must run first',
       );
     }
 
     return {
-      currentRound,
-      outputLocation,
-      endTurn,
-      baseFiles,
-      ensureXmlStructure: shouldEnsureXmlStructure,
+      shared,
+      outputLocation: shared.outputLocation,
     };
   }
 
   async exec(prepRes: OutputPrepInput): Promise<RoundOutput> {
-    const { outputHandler, setting, logger } = this.services;
     const {
-      currentRound,
-      outputLocation,
-      endTurn,
+      outputState,
+      outputDeps,
+      xmlManager,
+      diffManager,
+      setting,
+      logger,
       baseFiles,
-      ensureXmlStructure,
-    } = prepRes;
+      shouldEnsureXmlStructure: shouldEnsureXml,
+      streamId,
+    } = this.services;
+    const { shared, outputLocation } = prepRes;
+    const { currentRound, endTurn } = shared;
 
     // Calculate mapping once for both latexdiff and finalization
     let mapping: RoundFileMapping | undefined;
@@ -95,13 +110,13 @@ export class OutputNode<C = unknown> extends Node<
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      if (ensureXmlStructure) {
+      if (shouldEnsureXml) {
         await tryOperation(
           'XML structure',
           () =>
-            outputHandler.ensureXmlStructure(
+            xmlManager.ensureCorrectXmlStructure(
               outputLocation,
-              setting.documentTag ?? 'document',
+              setting.documentTag,
             ),
           logger,
         );
@@ -109,44 +124,103 @@ export class OutputNode<C = unknown> extends Node<
 
       await tryOperation(
         'Output processing',
-        () => outputHandler.processOutputFiles(outputLocation, currentRound),
+        () =>
+          extractFilesFromXml(
+            outputState,
+            outputDeps,
+            xmlManager,
+            outputLocation,
+            currentRound,
+          ),
         logger,
       );
 
-      if (outputHandler.hasRoundOutputs(currentRound)) {
-        // Calculate mapping ONCE - capture in const for type safety
-        const roundMapping = outputHandler.getRoundMapping(currentRound);
-        mapping = roundMapping;
+      if (hasRoundOutputs(outputState, currentRound)) {
+        mapping = traceFileLineage(outputState, baseFiles, currentRound);
 
         await tryOperation(
           'Latexdiff',
-          () => this.handleLatexdiff(currentRound, baseFiles, roundMapping),
+          () =>
+            this.handleLatexdiff(
+              currentRound,
+              baseFiles,
+              mapping!,
+              diffManager,
+            ),
           logger,
         );
       }
     }
 
-    await tryOperation(
-      'Round finalization',
-      () =>
-        outputHandler.finalizeRound(outputLocation, currentRound, {
-          endTurn,
-          mapping,
-        }),
-      logger,
+    // Summarize round and get data for event emission/file opening
+    const roundSummary = await summarizeRound(
+      outputState,
+      outputDeps,
+      outputLocation,
+      currentRound,
+      { endTurn, mapping },
     );
 
-    // Get round artifacts - this is critical, throw if it fails
-    return await outputHandler.getRoundArtifacts(currentRound);
+    // Emit addOutputFiles event
+    bus.emit('addOutputFiles', {
+      streamId,
+      storageKey: roundSummary.storageKey,
+      filesByRound: { [currentRound]: roundSummary.fileInfos },
+    });
+
+    // Open files that haven't been opened yet
+    for (const location of roundSummary.filesToOpen) {
+      await tryOperation(
+        `Open file ${location.absolutePath}`,
+        () => openBuildDisplayIfTex(location, { preserveFocus: true }),
+        logger,
+      );
+    }
+
+    // Validate expected outputs if turn ended
+    if (endTurn) {
+      await tryOperation(
+        'Validate expected outputs',
+        async () => {
+          const validationResult = await checkExpectedOutputs(
+            outputState,
+            outputDeps,
+            outputLocation,
+            currentRound,
+            roundSummary.stage,
+          );
+
+          // Emit updateMissingOutputs event
+          bus.emit('updateMissingOutputs', {
+            streamId,
+            storageKey: validationResult.storageKey,
+            filesByRound: { [currentRound]: validationResult.missing },
+          });
+
+          // Show instruction if there are missing outputs
+          if (validationResult.missing.length > 0) {
+            await showInstructionWithSuppress(
+              'missingOutputsInfo',
+              'Missing output files detected',
+            );
+          }
+        },
+        logger,
+      );
+    }
+
+    // Get round output - this is critical, throw if it fails
+    return await getRoundOutput(outputState, baseFiles, currentRound);
   }
 
   async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<RoundOutput> {
-    this.services.logger.warn(`Output processing failed: ${error.message}`);
+    const { logger } = this.services;
+    logger.warn(`Output processing failed: ${error.message}`);
     return {
-      round: prepRes.currentRound,
+      round: prepRes.shared.currentRound,
       rawOutput: null,
       outputs: [],
       xmlSummary: {
@@ -159,12 +233,12 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async post(
-    shared: ReflectionFlowShared,
-    _prepRes: OutputPrepInput,
+    _shared: ReflectionFlowShared,
+    prepRes: OutputPrepInput,
     execRes: RoundOutput,
   ): Promise<string | undefined> {
     // Store round output
-    shared.roundOutputs[shared.currentRound] = execRes;
+    prepRes.shared.roundOutputs[prepRes.shared.currentRound] = execRes;
 
     // Continue to RoundCompleteNode
     return FlowTransition.DEFAULT;
@@ -174,8 +248,9 @@ export class OutputNode<C = unknown> extends Node<
     currentRound: number,
     baseFiles: FileLocation[],
     mapping: RoundFileMapping,
+    diffManager: LatexDiffManager,
   ): Promise<void> {
-    const { outputHandler, logger } = this.services;
+    const { logger } = this.services;
 
     const existingBase = await Promise.all(
       baseFiles.map((f) => flexibleFS.exists(f)),
@@ -185,9 +260,6 @@ export class OutputNode<C = unknown> extends Node<
       return;
     }
 
-    await outputHandler.diffManager.handleLatexdiffofOutput(
-      currentRound,
-      mapping,
-    );
+    await diffManager.handleLatexdiffofOutput(currentRound, mapping);
   }
 }

@@ -1,8 +1,8 @@
 /* global suite, test */
 import * as assert from 'assert';
-import { getBasename } from '../../../common/modules/pathUtils.js';
+import { getBasename } from '@shared/utils/path';
 
-suite('pathUtils.js Test Suite', () => {
+suite('pathUtils Test Suite', () => {
   suite('getBasename', () => {
     test('should extract basename from Unix paths', () => {
       assert.strictEqual(getBasename('/home/user/file.txt'), 'file.txt');

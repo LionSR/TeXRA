@@ -13,12 +13,12 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@tools/result';
 
-// Local imports - model handlers
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
-
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+
+// Local imports - model handlers
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
@@ -166,10 +166,8 @@ export function describeAttachments(
   attachments: ToolFileAttachment[],
 ): string[] {
   return attachments.map((file) => {
-    const filePath = isNonEmptyString(file.path) ? file.path : 'attachment';
-    const mimeType = isNonEmptyString(file.mimeType)
-      ? file.mimeType
-      : DEFAULT_ATTACHMENT_MIME_TYPE;
+    const filePath = file.path || 'attachment';
+    const mimeType = file.mimeType || DEFAULT_ATTACHMENT_MIME_TYPE;
     return `- ${filePath} (${mimeType})`;
   });
 }
@@ -225,12 +223,15 @@ export function formatAttachmentSummaryFromNotes(
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {
-  if (attachment.bytes?.length) return Buffer.from(attachment.bytes);
-  if (attachment.base64Data?.length)
+  if (attachment.bytes?.length) {
+    return Buffer.from(attachment.bytes);
+  }
+  if (attachment.base64Data?.length) {
     return Buffer.from(attachment.base64Data, 'base64');
-  if (attachment.path?.length)
-    return WorkspaceFS.readFileBytes(attachment.path);
-
+  }
+  if (attachment.path?.length) {
+    return WorkspaceFS.readBytes(attachment.path);
+  }
   throw new Error('Attachment did not include bytes, base64 data, or a path.');
 }
 

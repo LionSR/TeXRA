@@ -1,6 +1,8 @@
 // Local imports - agent
-import type { AgentPrompt } from '@agent/core/AgentDataclass';
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type {
+  AgentPrompt,
+  AgentWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 
@@ -143,15 +145,12 @@ export class PromptBuilder {
 
   private getRoundTemplate(currRound: number): string | undefined {
     const normalizedRound = Math.max(0, currRound);
-
-    let requestArray: string[];
-    if (Array.isArray(this.agentPrompt.userRequest)) {
-      requestArray = this.agentPrompt.userRequest;
-    } else if (this.agentPrompt.userRequest) {
-      requestArray = [this.agentPrompt.userRequest];
-    } else {
-      requestArray = [];
-    }
+    const { userRequest } = this.agentPrompt;
+    const requestArray = Array.isArray(userRequest)
+      ? userRequest
+      : userRequest
+        ? [userRequest]
+        : [];
 
     const template = requestArray[normalizedRound];
     if (template !== undefined) {
@@ -174,16 +173,11 @@ export type InitialPrompts = Awaited<
   ReturnType<PromptBuilder['buildInitialPrompts']>
 >;
 
-export interface ToolUsePromptOptions {
-  /** Whether the memory tool is enabled for this session */
-  memoryEnabled?: boolean;
-}
-
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
-  options?: ToolUsePromptOptions,
+  options?: { memoryEnabled?: boolean },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,

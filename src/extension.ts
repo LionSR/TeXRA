@@ -6,13 +6,10 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { initializeStateManagers } from '@common/state/stateManager';
-import {
-  STREAM_STATUS,
-  isTerminalStatus,
-  type StreamStatus,
-} from '@common/constants/streamStatus';
+import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { toErrorMessage } from '@common/errors';
+import { initializeStateManagers } from '@common/state';
+import { isTerminalStatus } from '@common/constants/streamStatus';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
@@ -262,11 +259,9 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Register the folder explorer with context
-  const folderExplorer = new FolderExplorer(workspaceRoot, context);
-  const explorerOps = new ExplorerOperations(workspaceRoot, context, () =>
-    folderExplorer.refresh(),
-  );
+  // Register the folder explorer
+  const folderExplorer = new FolderExplorer();
+  const explorerOps = new ExplorerOperations(() => folderExplorer.refresh());
   const commandManager = new ExplorerCommands(context, explorerOps);
   commandManager.register();
   const watcherManager = new WatcherManager(context, () =>

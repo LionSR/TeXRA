@@ -44,14 +44,11 @@
  * - Set flags like continueRounds=false to request interruption
  */
 
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import type { ExecutionKVStore } from '@agent/storage';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  EXECUTION_STATUS,
-  type ExecutionStatus,
-} from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
-import type { ExecutionKVStore } from '@agent/storage';
 import { BaseNode } from './index';
 import { PersistedFlow } from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';

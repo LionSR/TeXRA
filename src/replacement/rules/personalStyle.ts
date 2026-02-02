@@ -9,7 +9,7 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
   patterns: {
     // ===== Spacing preferences =====
     // Consistent spacing for math mode and delimiters
-    '\\;': ' ',
+    // Note: '\\;' replacements are in latex_spacing category to avoid duplication
     ' \\, d\\': '~ d\\',
     ' \\,|': ' |',
     '|\\, ': '| ',
@@ -17,7 +17,6 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     '  \\, ': ' ',
     ' \\, ': ' ',
     '\\, \\,': ' \\,',
-    // '\\,': ' ',
 
     // ===== Hyphenation and compound term preferences =====
     // Physical Review style compound term formatting
@@ -73,5 +72,3 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     ' ~\\citet{': ' \\citet{',
   },
 };
-
-export default PERSONAL_STYLE_REPLACEMENTS;

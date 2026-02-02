@@ -52,18 +52,16 @@ export function computeReducedMaxTokens(
   availableTokens: number,
   tokenBuffer: number = TOKEN_SAFETY_BUFFER,
 ): number {
-  // If no space available, force to minimum (1 token)
   if (availableTokens <= 0) {
     return 1;
   }
 
-  // Apply buffer and enforce minimum
   const buffered = availableTokens - tokenBuffer;
 
-  // If buffered value is below minimum, use all available space (skip buffer)
+  // If buffered value is below minimum, skip buffer and use all available space
   if (buffered < MIN_COMPLETION_TOKENS) {
-    return Math.max(1, availableTokens);
+    return availableTokens;
   }
 
-  return Math.max(MIN_COMPLETION_TOKENS, buffered);
+  return buffered;
 }

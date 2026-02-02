@@ -8,10 +8,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { withEventErrorHandling } from './errorHandling';
-import {
-  isWebviewAvailable,
-  type EventHandlerContext,
-} from './EventHandlerContext';
+import type { EventHandlerContext } from './EventHandlerContext';
 
 /**
  * Register todo event handlers on the event bus.
@@ -33,7 +30,7 @@ function handleUpdateTodos(
   withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
     ctx.state.setTodos(streamId, todos);
     // Broadcast to webview - frontend decides which run to display
-    if (isWebviewAvailable(ctx)) {
+    if (ctx.webviewUpdater.isAvailable()) {
       ctx.webviewUpdater.updateTodos(streamId, todos);
     }
   });

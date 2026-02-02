@@ -1,0 +1,993 @@
+// Third-party imports
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { when } from 'lit/directives/when.js';
+
+// Local imports - shared styles
+import {
+  codiconIconClasses,
+  commonViewStyles,
+  designTokens,
+  requestPanelStyles,
+} from '@shared/styles';
+
+// Local imports - progress view styles
+import { codeBlockStyles } from '../styles/codeBlockStyles';
+
+// Local imports - shared schemas
+import {
+  AGENT_CATEGORY,
+  type AgentProposalPermission,
+  type BashPermission,
+  type ProviderErrorPartial,
+  type RetryPermission,
+  type ToolEditPermission,
+  type WorkflowAgentProposalPermission,
+} from '@shared/schemas';
+
+// Local imports - shared utilities
+import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
+import { getBasename } from '@shared/utils/path';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { postMessage } from '@shared/vscode';
+
+// Local imports - webview commands
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+import { buildCodeBlock } from '../formatters/htmlBuilders';
+import { getComposedPathElement } from '../utils';
+
+// Local imports - progress view component types
+import type { PermissionState } from './PermissionCard';
+
+const FEEDBACK_KINDS = new Set<PermissionState['kind']>([
+  PERMISSION_KIND.TOOL_EDIT,
+  PERMISSION_KIND.PROPOSAL,
+]);
+
+type PermissionKey = string;
+
+/** Section configuration for rendering permission groups */
+interface SectionConfig {
+  cssClass: string;
+  icon: string;
+  title: string;
+}
+
+const SECTION_CONFIGS: Record<string, SectionConfig> = {
+  approval: {
+    cssClass: 'approval-requests',
+    icon: 'diff',
+    title: 'Tool edit approval',
+  },
+  bash: {
+    cssClass: 'bash-approval-requests',
+    icon: 'terminal',
+    title: 'Command approval',
+  },
+  retry: {
+    cssClass: 'retry-requests',
+    icon: 'refresh',
+    title: 'Retry request',
+  },
+  proposal: {
+    cssClass: 'workflow-proposals',
+    icon: 'rocket',
+    title: 'Agent proposal',
+  },
+};
+
+/**
+ * Check if an element is a text-editable element, traversing shadow DOM as needed.
+ * Handles native inputs, contentEditable, and custom web components.
+ */
+function isTextInput(el: Element | null): boolean {
+  if (!el) return false;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+    return true;
+  if ((el as HTMLElement)?.isContentEditable) return true;
+
+  // Check custom element tags that contain text inputs
+  const tagName = el.tagName?.toLowerCase() ?? '';
+  if (tagName.includes('textarea') || tagName.includes('input')) return true;
+
+  // Recursively check shadow root for focused text inputs
+  const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot })?.shadowRoot;
+  if (shadowRoot?.activeElement) {
+    return isTextInput(shadowRoot.activeElement);
+  }
+  return false;
+}
+
+@customElement('request-panels')
+export class RequestPanels extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconIconClasses,
+    codeBlockStyles,
+    requestPanelStyles,
+  ];
+
+  @property({ type: Array }) permissions: PermissionState[] = [];
+
+  @state() private feedbackOpenKeys: Set<PermissionKey> = new Set();
+  @state() private openDiffMenuKey: PermissionKey | null = null;
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (!changedProperties.has('permissions')) {
+      return;
+    }
+
+    const activeKeys = new Set(
+      this.permissions.map((permission) => this.getPermissionKey(permission)),
+    );
+    const nextFeedbackKeys = new Set(
+      [...this.feedbackOpenKeys].filter((key) => activeKeys.has(key)),
+    );
+    this.feedbackOpenKeys = nextFeedbackKeys;
+    if (this.openDiffMenuKey && !activeKeys.has(this.openDiffMenuKey)) {
+      this.openDiffMenuKey = null;
+    }
+  }
+
+  protected override updated(): void {
+    // Workaround for vscode-context-menu slot rendering
+    this.shadowRoot
+      ?.querySelectorAll('.diff-dropdown-menu')
+      .forEach(ensureContextMenuUsesSlot);
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.addEventListener('click', this.handleActionClick);
+    this.addEventListener('keydown', this.handleKeydown);
+    document.addEventListener('click', this.handleOutsideClick, true);
+    document.addEventListener('keydown', this.handleGlobalKeydown);
+  }
+
+  override disconnectedCallback(): void {
+    this.removeEventListener('click', this.handleActionClick);
+    this.removeEventListener('keydown', this.handleKeydown);
+    document.removeEventListener('click', this.handleOutsideClick, true);
+    document.removeEventListener('keydown', this.handleGlobalKeydown);
+    super.disconnectedCallback();
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    const approvals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.TOOL_EDIT,
+    );
+    const bashApprovals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.BASH,
+    );
+    const retries = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.RETRY,
+    );
+    const proposals = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.PROPOSAL,
+    );
+
+    if (
+      approvals.length === 0 &&
+      bashApprovals.length === 0 &&
+      retries.length === 0 &&
+      proposals.length === 0
+    ) {
+      return nothing;
+    }
+
+    return html`
+      ${this.renderApprovalSection(approvals)}
+      ${this.renderBashSection(bashApprovals)}
+      ${this.renderRetrySection(retries)}
+      ${this.renderProposalSection(proposals)}
+    `;
+  }
+
+  // ===========================================================================
+  // Section renderers
+  // ===========================================================================
+
+  private renderSection(
+    config: SectionConfig,
+    prompts: PermissionState[],
+    renderItem: (permission: PermissionState) => TemplateResult,
+  ): TemplateResult | typeof nothing {
+    if (prompts.length === 0) return nothing;
+
+    return html`
+      <section class=${config.cssClass}>
+        <div class="${config.cssClass}__header">
+          <i class="codicon codicon-${config.icon}"></i>
+          <span>${config.title}</span>
+        </div>
+        <div class="${config.cssClass}__list">
+          ${repeat(
+            prompts,
+            (permission) => this.getPermissionKey(permission),
+            renderItem,
+          )}
+        </div>
+      </section>
+    `;
+  }
+
+  private renderApprovalSection(
+    prompts: PermissionState[],
+  ): TemplateResult | typeof nothing {
+    return this.renderSection(SECTION_CONFIGS.approval, prompts, (p) =>
+      this.renderToolEditRequest(p),
+    );
+  }
+
+  private renderBashSection(
+    prompts: PermissionState[],
+  ): TemplateResult | typeof nothing {
+    return this.renderSection(SECTION_CONFIGS.bash, prompts, (p) =>
+      this.renderBashRequest(p),
+    );
+  }
+
+  private renderRetrySection(
+    prompts: PermissionState[],
+  ): TemplateResult | typeof nothing {
+    return this.renderSection(SECTION_CONFIGS.retry, prompts, (p) =>
+      this.renderRetryRequest(p),
+    );
+  }
+
+  private renderProposalSection(
+    prompts: PermissionState[],
+  ): TemplateResult | typeof nothing {
+    return this.renderSection(SECTION_CONFIGS.proposal, prompts, (p) =>
+      this.renderProposalRequest(p),
+    );
+  }
+
+  // ===========================================================================
+  // Individual request renderers
+  // ===========================================================================
+
+  private renderToolEditRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as ToolEditPermission;
+    const key = this.getPermissionKey(permission);
+    const isFeedbackOpen = this.feedbackOpenKeys.has(key);
+    const diffMeta = this.renderToolEditDiffMeta(data);
+
+    return html`
+      <div
+        class=${classMap({
+          'approval-request': true,
+          'approval-request--feedback-active': isFeedbackOpen,
+        })}
+        data-permission-key=${key}
+      >
+        <div class="approval-request__details">
+          <div class="approval-request__path">
+            ${data.relativePath || data.path}
+          </div>
+          <div class="approval-request__meta">
+            ${data.sourceTool ? `Requested by ${data.sourceTool}` : ''}
+            ${data.sourceTool && diffMeta ? html`<span>•</span>` : nothing}
+            ${diffMeta}
+          </div>
+        </div>
+        <vscode-toolbar-container class="approval-request__actions">
+          ${this.renderToolEditDiffActions(permission)}
+          <vscode-toolbar-button
+            icon="check"
+            data-action="approve"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Approve"
+            title="Approve (y)"
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
+            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
+        ${this.renderFeedbackSection(
+          permission,
+          'approval-request__feedback',
+          'approval-request__feedback-input',
+          'Why are you rejecting?',
+        )}
+      </div>
+    `;
+  }
+
+  private renderToolEditDiffActions(
+    permission: PermissionState,
+  ): TemplateResult {
+    const data = permission.data as ToolEditPermission;
+    const key = this.getPermissionKey(permission);
+    const isMenuOpen = this.openDiffMenuKey === key;
+    const showDropdown = Boolean(data.isLatex);
+
+    return html`
+      <div class="diff-dropdown">
+        <vscode-toolbar-button
+          icon="diff"
+          class="diff-main-button"
+          data-action="openDiff"
+          data-permission-kind=${permission.kind}
+          data-permission-id=${this.getPermissionId(permission)}
+          label="Open diff"
+          title="Open diff (d)"
+          >Open diff</vscode-toolbar-button
+        >
+        ${showDropdown
+          ? html`
+              <vscode-toolbar-button
+                class="diff-dropdown-trigger"
+                aria-haspopup="true"
+                aria-expanded=${isMenuOpen ? 'true' : 'false'}
+                label="More diff actions"
+                title="More diff actions"
+                @click=${(event: MouseEvent) => this.toggleDiffMenu(event, key)}
+              >
+                <i class="codicon codicon-chevron-down"></i>
+              </vscode-toolbar-button>
+              <vscode-context-menu
+                class="diff-dropdown-menu"
+                ?show=${isMenuOpen}
+                @vsc-click=${this.handleMenuClick}
+              >
+                <vscode-context-menu-item
+                  value="previewProposed"
+                  data-permission-kind=${permission.kind}
+                  data-permission-id=${this.getPermissionId(permission)}
+                >
+                  Preview
+                </vscode-context-menu-item>
+                <vscode-context-menu-item
+                  value="showLatexdiff"
+                  data-permission-kind=${permission.kind}
+                  data-permission-id=${this.getPermissionId(permission)}
+                >
+                  LaTeXdiff
+                </vscode-context-menu-item>
+              </vscode-context-menu>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private renderBashRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as BashPermission;
+    return html`
+      <div class="bash-approval-request">
+        <div class="bash-approval-request__details">
+          <div class="bash-approval-request__command">
+            ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
+          </div>
+        </div>
+        <vscode-toolbar-container class="bash-approval-request__actions">
+          <vscode-toolbar-button
+            icon="check"
+            data-action="approve"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Approve"
+            title="Allow this command to execute (y)"
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon="close"
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Reject"
+            title="Reject this command (n)"
+            >Reject</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
+      </div>
+    `;
+  }
+
+  private renderRetryRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as RetryPermission;
+    const isRelay = data.errorDetails?.isRelayError === true;
+    const retryable = data.errorDetails?.retryable !== false;
+    const metaParts = [
+      data.model ? `Model: ${data.model}` : null,
+      isRelay ? 'Source: Relay' : null,
+      `Retryable: ${retryable ? 'Yes' : 'No'}`,
+    ].filter(Boolean);
+
+    const detailsText = this.formatRetryDetails(data.errorDetails);
+
+    return html`
+      <div
+        class=${classMap({
+          'retry-request': true,
+          'retry-request--relay': isRelay,
+        })}
+      >
+        <div class="retry-request__details">
+          <div class="retry-request__operation">
+            ${isRelay ? '[Relay] ' : ''}
+            ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
+          </div>
+          <div class="retry-request__meta">${metaParts.join(' \u2022 ')}</div>
+          ${when(
+            data.errorMessage,
+            () =>
+              html`<div class="retry-request__error">
+                ${data.errorMessage}
+              </div>`,
+          )}
+          ${detailsText
+            ? html`
+                <details class="retry-request__error-details">
+                  <summary class="retry-request__error-summary">
+                    <i class="codicon codicon-chevron-right toggle-icon"></i>
+                    Error details
+                  </summary>
+                  <div class="retry-request__error-body">${detailsText}</div>
+                </details>
+              `
+            : nothing}
+        </div>
+        <vscode-toolbar-container class="retry-request__actions">
+          <vscode-toolbar-button
+            icon="refresh"
+            data-action="retry"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Retry"
+            title="Retry (r)"
+            >Retry</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon="close"
+            data-action="dismiss"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Dismiss"
+            title="Dismiss (Esc)"
+            >Dismiss</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
+      </div>
+    `;
+  }
+
+  private renderProposalRequest(permission: PermissionState): TemplateResult {
+    const data = permission.data as AgentProposalPermission;
+    const key = this.getPermissionKey(permission);
+    const isFeedbackOpen = this.feedbackOpenKeys.has(key);
+    const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
+
+    return html`
+      <div
+        class=${classMap({
+          'workflow-proposal': true,
+          'workflow-proposal--feedback-active': isFeedbackOpen,
+        })}
+      >
+        <div class="workflow-proposal__details">
+          <div class="workflow-proposal__header-row">
+            <span
+              class=${classMap({
+                'workflow-proposal__category-badge': true,
+                'workflow-proposal__category-badge--workflow': isWorkflow,
+                'workflow-proposal__category-badge--tool-use': !isWorkflow,
+              })}
+            >
+              ${categoryLabel}
+            </span>
+            <span class="workflow-proposal__agent">${data.agent}</span>
+            <span class="workflow-proposal__model">${data.model}</span>
+          </div>
+          <div class="workflow-proposal__instruction">${data.instruction}</div>
+          ${isWorkflow
+            ? html`<div class="workflow-proposal__files">
+                ${this.renderProposalFiles(
+                  data as WorkflowAgentProposalPermission,
+                )}
+              </div>`
+            : nothing}
+        </div>
+        <vscode-toolbar-container class="workflow-proposal__actions">
+          <vscode-toolbar-button
+            icon="check"
+            data-action="approve"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Approve"
+            title="Approve (y)"
+            >Approve</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon=${isFeedbackOpen ? 'check' : 'close'}
+            data-action="reject"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label=${isFeedbackOpen ? 'Submit' : 'Reject'}
+            title=${isFeedbackOpen ? 'Submit rejection (n)' : 'Reject (n)'}
+            >${isFeedbackOpen ? 'Submit' : 'Reject'}</vscode-toolbar-button
+          >
+          <vscode-toolbar-button
+            icon="settings-gear"
+            data-action="setup"
+            data-permission-kind=${permission.kind}
+            data-permission-id=${this.getPermissionId(permission)}
+            label="Setup"
+            title="Setup (s)"
+            >Setup</vscode-toolbar-button
+          >
+        </vscode-toolbar-container>
+        ${this.renderFeedbackSection(
+          permission,
+          'workflow-proposal__feedback',
+          'workflow-proposal__feedback-input',
+          'Why are you rejecting?',
+        )}
+      </div>
+    `;
+  }
+
+  private renderProposalFiles(
+    permission: WorkflowAgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const combine = (single: string | null | undefined, arr: string[] = []) =>
+      [single, ...arr].filter((f): f is string => Boolean(f));
+
+    const fileLists = [
+      {
+        label: 'Input',
+        files: combine(permission.inputFile, permission.inputFiles),
+      },
+      {
+        label: 'Reference',
+        files: combine(permission.referenceFile, permission.referenceFiles),
+      },
+      {
+        label: 'Auxiliary',
+        files: combine(permission.auxiliaryFile, permission.auxiliaryFiles),
+      },
+      {
+        label: 'Media',
+        files: combine(permission.mediaFile, permission.mediaFiles),
+      },
+      { label: 'Output', files: permission.outputFiles ?? [] },
+    ];
+
+    return html`${repeat(
+      fileLists,
+      ({ label }) => label,
+      ({ label, files }) => this.renderProposalFileList(label, files),
+    )}`;
+  }
+
+  private renderProposalFileList(
+    label: string,
+    files: string[],
+  ): TemplateResult | typeof nothing {
+    if (files.length === 0) return nothing;
+
+    return html`
+      <div class="workflow-proposal__${label.toLowerCase()}-files">
+        <span class="workflow-proposal__file-label">${label}:</span>
+        ${repeat(
+          files,
+          (file) => file,
+          (file, i) =>
+            html`${i > 0 ? ', ' : ''}<span
+                class="workflow-proposal__file-name"
+                title=${file}
+                @click=${() => this.openFile(file)}
+                >${getBasename(file)}</span
+              >`,
+        )}
+      </div>
+    `;
+  }
+
+  private renderFeedbackSection(
+    permission: PermissionState,
+    containerClass: string,
+    inputClass: string,
+    placeholder: string,
+  ): TemplateResult | typeof nothing {
+    const key = this.getPermissionKey(permission);
+    if (
+      !this.feedbackOpenKeys.has(key) ||
+      !FEEDBACK_KINDS.has(permission.kind)
+    ) {
+      return nothing;
+    }
+
+    return html`
+      <div class=${containerClass}>
+        <vscode-textarea
+          class=${inputClass}
+          placeholder=${placeholder}
+          rows="3"
+          data-feedback-for=${key}
+        ></vscode-textarea>
+      </div>
+    `;
+  }
+
+  private renderToolEditDiffMeta(
+    request: ToolEditPermission,
+  ): TemplateResult | typeof nothing {
+    const toCount = (value: number | undefined): number => {
+      if (value === undefined || !Number.isFinite(value)) return 0;
+      return Math.max(0, value);
+    };
+    const added = toCount(request.addedLines);
+    const removed = toCount(request.removedLines);
+    const total = added + removed;
+    const lineLabel = total === 1 ? 'line' : 'lines';
+    const tooltip = this.buildDiffTooltip(added, removed, lineLabel);
+
+    return html`
+      <span class="approval-request__diff" title=${tooltip}>
+        ${when(
+          added > 0,
+          () =>
+            html`<span class="approval-request__diff-added">+${added}</span>`,
+        )}
+        ${when(
+          removed > 0,
+          () =>
+            html`<span class="approval-request__diff-removed"
+              >-${removed}</span
+            >`,
+        )}
+        <span class="approval-request__diff-label">${total} ${lineLabel}</span>
+      </span>
+    `;
+  }
+
+  // ===========================================================================
+  // Event handlers
+  // ===========================================================================
+
+  private handleActionClick = (event: MouseEvent): void => {
+    // Use composedPath to get the actual clicked element inside shadow DOM
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-action][data-permission-kind][data-permission-id]',
+    );
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+    const kind = actionEl.dataset.permissionKind as
+      | PermissionState['kind']
+      | undefined;
+    const permissionId = actionEl.dataset.permissionId;
+    if (!action || !kind || !permissionId) return;
+
+    const permission = this.permissions.find(
+      (item) =>
+        item.kind === kind && this.getPermissionId(item) === permissionId,
+    );
+    if (!permission) return;
+
+    const key = this.getPermissionKey(permission);
+    if (action === 'reject' && FEEDBACK_KINDS.has(kind)) {
+      if (!this.feedbackOpenKeys.has(key)) {
+        this.openFeedback(key);
+        return;
+      }
+
+      const feedback = this.getFeedbackValue(key);
+      this.closeFeedback(key);
+      this.emitAction(permission, action, feedback);
+      return;
+    }
+
+    if (action === 'dismiss') {
+      this.emitAction(permission, 'cancel');
+      return;
+    }
+
+    this.emitAction(permission, action);
+  };
+
+  /**
+   * Handle keydown events on focusable elements within the component.
+   * Allows Enter/Space to activate buttons.
+   */
+  private handleKeydown = (event: KeyboardEvent): void => {
+    // Use composedPath to get the actual element inside shadow DOM
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-action][data-permission-kind][data-permission-id]',
+    );
+    if (!actionEl) return;
+
+    event.preventDefault();
+    actionEl.click();
+  };
+
+  /**
+   * Handle global keyboard shortcuts for permission actions.
+   * Only active when permissions are visible and no text input is focused.
+   * Shortcuts: y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss
+   */
+  private handleGlobalKeydown = (event: KeyboardEvent): void => {
+    // Don't intercept if typing in an input/textarea (handles Shadow DOM)
+    if (isTextInput(document.activeElement)) return;
+
+    // Don't intercept if modifier keys are pressed (except shift for some)
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    // Only process if we have permissions
+    if (this.permissions.length === 0) return;
+
+    // Get the first permission to act on (most recent/urgent)
+    const firstPermission = this.permissions[0];
+    if (!firstPermission) return;
+
+    this.handleKeyboardShortcut(event, firstPermission);
+  };
+
+  /** Process keyboard shortcuts for permission actions */
+  private handleKeyboardShortcut(
+    event: KeyboardEvent,
+    permission: PermissionState,
+  ): void {
+    const key = event.key.toLowerCase();
+
+    switch (key) {
+      case 'y':
+        event.preventDefault();
+        this.emitAction(permission, 'approve');
+        break;
+
+      case 'n':
+        event.preventDefault();
+        this.handleRejectShortcut(permission);
+        break;
+
+      case 'd':
+        if (permission.kind === PERMISSION_KIND.TOOL_EDIT) {
+          event.preventDefault();
+          this.emitAction(permission, 'openDiff');
+        }
+        break;
+
+      case 'r':
+        if (permission.kind === PERMISSION_KIND.RETRY) {
+          event.preventDefault();
+          this.emitAction(permission, 'retry');
+        }
+        break;
+
+      case 's':
+        if (permission.kind === PERMISSION_KIND.PROPOSAL) {
+          event.preventDefault();
+          this.emitAction(permission, 'setup');
+        }
+        break;
+
+      case 'escape':
+        event.preventDefault();
+        this.handleEscapeShortcut(permission);
+        break;
+    }
+  }
+
+  /** Handle 'n' key for reject with feedback support */
+  private handleRejectShortcut(permission: PermissionState): void {
+    if (!FEEDBACK_KINDS.has(permission.kind)) {
+      this.emitAction(permission, 'reject');
+      return;
+    }
+
+    const permKey = this.getPermissionKey(permission);
+    if (!this.feedbackOpenKeys.has(permKey)) {
+      this.openFeedback(permKey);
+    } else {
+      const feedback = this.getFeedbackValue(permKey);
+      this.closeFeedback(permKey);
+      this.emitAction(permission, 'reject', feedback);
+    }
+  }
+
+  /** Handle Escape key for dismiss/cancel */
+  private handleEscapeShortcut(permission: PermissionState): void {
+    if (permission.kind === PERMISSION_KIND.RETRY) {
+      this.emitAction(permission, 'cancel');
+      return;
+    }
+
+    // Close feedback if open
+    const permKey = this.getPermissionKey(permission);
+    if (this.feedbackOpenKeys.has(permKey)) {
+      this.closeFeedback(permKey);
+    }
+  }
+
+  private handleMenuClick = (event: CustomEvent): void => {
+    const menuItem = getComposedPathElement<HTMLElement>(
+      event,
+      'vscode-context-menu-item',
+    );
+    if (!menuItem) return;
+
+    const kind = menuItem.dataset.permissionKind as
+      | PermissionState['kind']
+      | undefined;
+    const permissionId = menuItem.dataset.permissionId;
+    const action = event.detail?.value ?? menuItem.getAttribute('value') ?? '';
+    if (!kind || !permissionId || !action) return;
+
+    const permission = this.permissions.find(
+      (item) =>
+        item.kind === kind && this.getPermissionId(item) === permissionId,
+    );
+    if (!permission) return;
+
+    this.openDiffMenuKey = null;
+    this.emitAction(permission, action);
+  };
+
+  private handleOutsideClick = (event: MouseEvent): void => {
+    if (!this.openDiffMenuKey) return;
+
+    const path = event.composedPath?.() ?? [];
+    const clickedInside = path.some(
+      (node) =>
+        node instanceof Element &&
+        (node.classList.contains('diff-dropdown') ||
+          node.classList.contains('diff-dropdown-menu')),
+    );
+    if (!clickedInside) {
+      this.openDiffMenuKey = null;
+    }
+  };
+
+  private toggleDiffMenu(event: MouseEvent, key: PermissionKey): void {
+    event.stopPropagation();
+    this.openDiffMenuKey = this.openDiffMenuKey === key ? null : key;
+  }
+
+  private openFeedback(key: PermissionKey): void {
+    const next = new Set(this.feedbackOpenKeys);
+    next.add(key);
+    this.feedbackOpenKeys = next;
+
+    this.updateComplete.then(() => {
+      const input = this.renderRoot.querySelector<HTMLElement>(
+        `[data-feedback-for="${key}"]`,
+      );
+      input?.focus();
+    });
+  }
+
+  private closeFeedback(key: PermissionKey): void {
+    const next = new Set(this.feedbackOpenKeys);
+    next.delete(key);
+    this.feedbackOpenKeys = next;
+  }
+
+  private getFeedbackValue(key: PermissionKey): string | undefined {
+    const input = this.renderRoot.querySelector<HTMLElement>(
+      `[data-feedback-for="${key}"]`,
+    ) as HTMLElement & { value?: string };
+    const raw = input?.value ?? '';
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  // ===========================================================================
+  // Utilities
+  // ===========================================================================
+
+  private getPermissionId(permission: PermissionState): string {
+    switch (permission.kind) {
+      case PERMISSION_KIND.RETRY:
+        return permission.data.streamId;
+      case PERMISSION_KIND.PROPOSAL:
+        return permission.data.proposalId;
+      default:
+        return permission.data.requestId;
+    }
+  }
+
+  private getPermissionKey(permission: PermissionState): PermissionKey {
+    return `${permission.kind}:${this.getPermissionId(permission)}`;
+  }
+
+  private openFile(filePath: string): void {
+    postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
+  }
+
+  private emitAction(
+    permission: PermissionState,
+    action: string,
+    feedback?: string,
+  ): void {
+    this.dispatchEvent(
+      ProgressEvents.permissionAction({ permission, action, feedback }),
+    );
+  }
+
+  private buildDiffTooltip(
+    added: number,
+    removed: number,
+    lineLabel: string,
+  ): string {
+    if (added === 0 && removed === 0) {
+      return 'No line changes';
+    }
+    const parts: string[] = [];
+    if (added > 0) parts.push(`+${added}`);
+    if (removed > 0) parts.push(`-${removed}`);
+    return `${parts.join(' / ')} ${lineLabel} changed`;
+  }
+
+  private formatRetryDetails(
+    details: ProviderErrorPartial | undefined,
+  ): string | null {
+    if (!details) return null;
+
+    const formatBody = (body: unknown) =>
+      typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
+
+    const lines = [
+      details.message && `message: ${details.message}`,
+      details.provider && `provider: ${details.provider}`,
+      details.statusCode != null && `statusCode: ${details.statusCode}`,
+      details.statusText && `statusText: ${details.statusText}`,
+      details.isRelayError != null && `isRelayError: ${details.isRelayError}`,
+      details.retryable != null && `retryable: ${details.retryable}`,
+      details.requestId && `requestId: ${details.requestId}`,
+      details.rawErrorBody != null &&
+        `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
+    ].filter(Boolean);
+
+    if (details.streamDiagnostics) {
+      const diag = details.streamDiagnostics;
+      lines.push('--- Stream Diagnostics ---');
+      lines.push(`  thinkingChars: ${diag.thinkingChars}`);
+      lines.push(`  textChars: ${diag.textChars}`);
+      lines.push(`  toolInputChars: ${diag.toolInputChars}`);
+      lines.push(
+        `  blockTypesSeen: [${diag.blockTypesSeen?.join(', ') || ''}]`,
+      );
+      lines.push(`  eventsProcessed: ${diag.eventsProcessed}`);
+      lines.push(`  lastEventType: ${diag.lastEventType ?? 'null'}`);
+      lines.push(`  elapsedSecs: ${diag.elapsedSecs}`);
+      lines.push(`  secsSinceLastEvent: ${diag.secsSinceLastEvent}`);
+      lines.push(`  finalized: ${diag.finalized}`);
+    }
+
+    return lines.length > 0 ? lines.join('\n') : null;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'request-panels': RequestPanels;
+  }
+}

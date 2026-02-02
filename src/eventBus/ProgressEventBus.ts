@@ -1,29 +1,48 @@
-// Standard library imports
 import { EventEmitter } from 'events';
 
-// Type imports
-import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
-import type { ContextStateData } from '@logger/AgentLogger';
-import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
+import type { AgentCategory } from '@agent/core/AgentDataclass';
+import type { TaskState } from '@logger/TaskState';
 import type {
   AddTaskGroupPayload,
-  RunScopedPayload,
-  SetActiveStreamPayload,
-  SetTaskStatePayload,
+  AgentProposalPermission,
+  BashPermission,
+  ContextStateData,
+  ExecutionId,
+  LogMessageData,
+  LogMessageUpdate,
+  OutputFileInfo,
+  RetryPermission,
+  StorageKey,
+  StreamStatus,
+  StreamTabId,
+  TokenUsageStats,
+  ToolEditPermission,
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
-} from './schemas';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-  BashApprovalPrompt,
-  AgentProposalPrompt,
-} from './types';
+} from '@shared/schemas';
 
-// Maximum number of events to buffer when no listeners are registered
+/** Payload for events scoped to a specific run (stream + storage key). */
+interface RunScopedPayload {
+  streamId: StreamTabId;
+  storageKey: StorageKey;
+  executionId?: ExecutionId;
+}
+
+interface SetActiveStreamPayload {
+  streamId: StreamTabId | null;
+  agentCategory?: AgentCategory;
+  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  isRemote?: boolean;
+  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
+  hasMultipleOutputs?: boolean;
+}
+
+interface SetTaskStatePayload {
+  streamId: StreamTabId;
+  executionId?: ExecutionId;
+  taskState: TaskState;
+}
+
 const MAX_BUFFER_SIZE = 1000;
 
 export interface ProgressEventPayloads {
@@ -53,17 +72,17 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     contextState: ContextStateData;
   };
-  showRetryRequest: RetryRequestPrompt;
+  showRetryRequest: RetryPermission;
   resolveRetryRequest: { streamId: StreamTabId };
-  showToolEditApprovalPrompt: ToolEditApprovalPrompt;
-  resolveToolEditApprovalPrompt: { requestId: string };
+  showToolEditPermission: ToolEditPermission;
+  resolveToolEditPermission: { requestId: string };
   updateToolEditApprovalBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
-  showBashApprovalPrompt: BashApprovalPrompt;
-  resolveBashApprovalPrompt: { requestId: string };
-  showAgentProposal: AgentProposalPrompt;
+  showBashPermission: BashPermission;
+  resolveBashPermission: { requestId: string };
+  showAgentProposal: AgentProposalPermission;
   resolveAgentProposal: { proposalId: string };
   updateTodos: UpdateTodosPayload;
   updateQueuedFollowUps: { streamId: StreamTabId };

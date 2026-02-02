@@ -1,0 +1,97 @@
+/**
+ * Declarative task group item component.
+ * Renders a single group with header and content slot.
+ */
+
+// Third-party imports
+import { LitElement, html, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+
+// Local imports - side effect: register component
+import './TaskGroupHeader';
+
+// Local imports - shared styles
+import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+
+// Local imports - progress view constants
+import { GROUP_DOM_IDS } from '../constants';
+
+// Local imports - progress view styles
+import { logStyles } from '../styles/logStyles';
+
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
+// Local imports - shared schemas
+import type { TaskGroup } from '@shared/schemas';
+
+@customElement('task-group-item')
+export class TaskGroupItem extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconStyles,
+    ...logStyles,
+  ];
+
+  @property({ type: Object }) group!: TaskGroup;
+  @property({ type: Boolean }) expanded = true;
+
+  private handleToggle(event: Event): void {
+    const details = event.target as HTMLDetailsElement;
+    this.dispatchEvent(
+      ProgressEvents.groupToggle({
+        groupId: this.group.id,
+        expanded: details.open,
+      }),
+    );
+  }
+
+  override render(): TemplateResult {
+    const { group, expanded } = this;
+    const { id, parentGroupId, status } = group;
+    const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${id}`;
+    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${id}`;
+
+    // Root groups: simple container (no collapsible)
+    if (!parentGroupId) {
+      return html`
+        <div id=${detailsId} class="log-group log-run" data-run-id=${id}>
+          <div id=${contentId} class="log-group-content">
+            <slot></slot>
+          </div>
+        </div>
+      `;
+    }
+
+    // Child groups: collapsible details element
+    return html`
+      <details
+        id=${detailsId}
+        class="log-group"
+        ?open=${expanded}
+        @toggle=${this.handleToggle}
+      >
+        <summary
+          id="${GROUP_DOM_IDS.HEADER_PREFIX}${id}"
+          class=${classMap({
+            'log-group-header': true,
+            [`is-${status}`]: true,
+          })}
+        >
+          <task-group-header .group=${group}></task-group-header>
+        </summary>
+        <div id=${contentId} class="log-group-content">
+          <slot></slot>
+        </div>
+      </details>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'task-group-item': TaskGroupItem;
+  }
+}

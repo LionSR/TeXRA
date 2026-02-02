@@ -11,11 +11,6 @@ import { WorkspaceFS } from '@utils/files';
 /**
  * Open a file in VS Code editor, optionally positioning cursor at a line.
  * Reuses existing editor if file is already open.
- *
- * @param filePath - Path to the file (relative or absolute)
- * @param line - Optional 1-based line number to position cursor
- * @param column - Optional 1-based column number
- * @returns The absolute file path that was opened, or undefined on failure
  */
 export async function openFileInEditor(
   filePath: string,
@@ -24,25 +19,21 @@ export async function openFileInEditor(
 ): Promise<string | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-
-    // Check if file is already open in an editor
     const existingEditor = vscode.window.visibleTextEditors.find(
       (e) => e.document.uri.fsPath === uri.fsPath,
     );
 
     let editor: vscode.TextEditor;
     if (existingEditor) {
-      // Reuse existing editor
       editor = await vscode.window.showTextDocument(existingEditor.document, {
         viewColumn: existingEditor.viewColumn,
         preserveFocus: false,
       });
     } else {
-      // Open new editor
       const document = await vscode.workspace.openTextDocument(uri);
       editor = await vscode.window.showTextDocument(document, {
-        preserveFocus: false,
         preview: false,
+        preserveFocus: false,
       });
     }
 
@@ -67,10 +58,6 @@ export async function openFileInEditor(
 /**
  * Ensure a file is open in an editor, optionally saving if dirty.
  * Reuses existing editor if file is already open.
- *
- * @param filePath - Path to the file (relative or absolute)
- * @param options - Options for opening the file
- * @returns The editor and absolute path, or undefined on failure
  */
 export async function ensureFileOpen(
   filePath: string,
@@ -78,26 +65,24 @@ export async function ensureFileOpen(
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-
-    // Check if file is already open
     const existingEditor = vscode.window.visibleTextEditors.find(
       (e) => e.document.uri.fsPath === uri.fsPath,
     );
+    const preserveFocus = options.preserveFocus ?? !existingEditor;
 
     let editor: vscode.TextEditor;
-    if (existingEditor) {
+    if (existingEditor && preserveFocus) {
       editor = existingEditor;
-      if (!options.preserveFocus) {
-        editor = await vscode.window.showTextDocument(existingEditor.document, {
-          viewColumn: existingEditor.viewColumn,
-          preserveFocus: false,
-        });
-      }
+    } else if (existingEditor) {
+      editor = await vscode.window.showTextDocument(existingEditor.document, {
+        viewColumn: existingEditor.viewColumn,
+        preserveFocus,
+      });
     } else {
       const document = await vscode.workspace.openTextDocument(uri);
       editor = await vscode.window.showTextDocument(document, {
         preview: false,
-        preserveFocus: options.preserveFocus ?? true,
+        preserveFocus,
       });
     }
 

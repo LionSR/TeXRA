@@ -17,115 +17,157 @@ export {
   FENCED_LATEX_BLOCK_PATTERNS,
 } from './constants';
 
+// ============================================================================
+// Core factory functions for pattern generation
+// ============================================================================
+
+type PatternDict = { [key: string]: string };
+type PatternMapper<T> = (item: T) => [string, string][];
+
+/**
+ * Creates a pattern dictionary from items using a mapper function.
+ * This is the core abstraction for all pattern generators.
+ */
+function createPatterns<T>(items: T[], mapper: PatternMapper<T>): PatternDict {
+  return Object.fromEntries(items.flatMap(mapper));
+}
+
+/**
+ * Creates a pattern dictionary from a command map.
+ */
+function createPatternsFromMap(
+  commandMap: PatternDict,
+  mapper: (key: string, value: string) => [string, string][],
+): PatternDict {
+  return Object.fromEntries(
+    Object.entries(commandMap).flatMap(([k, v]) => mapper(k, v)),
+  );
+}
+
+// ============================================================================
+// Pattern mappers for common transformations
+// ============================================================================
+
+/**
+ * Maps commands to backslash fix patterns (\\\\cmd -> \\cmd)
+ */
+const backslashFixMapper: PatternMapper<string> = (cmd) => [
+  [`\\\\${cmd}`, `\\${cmd}`],
+];
+
+/**
+ * Maps environments to XML-to-LaTeX conversion patterns
+ */
+const xmlToLatexMapper: PatternMapper<string> = (env) => [
+  // XML to LaTeX
+  [`<${env}>`, `\\begin{${env}}`],
+  [`</${env}>`, `\\end{${env}}`],
+  // XML with begin to LaTeX
+  [`<begin{${env}}>`, `\\begin{${env}}`],
+  [`</begin{${env}}>`, `\\end{${env}}`],
+  // XML with end to LaTeX
+  [`<end{${env}}>`, `\\end{${env}}`],
+  [`</end{${env}}>`, `\\end{${env}}`],
+  // XML with braces to LaTeX
+  [`<${env}}`, `\\begin{${env}}`],
+  [`</${env}}`, `\\end{${env}}`],
+  [`</${env}\n`, `\\end{${env}}\n`],
+  [`</${env}}\n`, `\\end{${env}}\n`],
+  // XML begin tags incorrectly closed with leading slash
+  [`</begin{${env}}`, `\\begin{${env}}`],
+  [`</begin{${env}}\n`, `\\begin{${env}}\n`],
+  [`</begin{${env}`, `\\begin{${env}}`],
+  // LaTeX with incorrect XML ending
+  [`\\end{${env}>}`, `\\end{${env}}`],
+  [`\\end{${env}>`, `\\end{${env}}`],
+  // LaTeX with incorrect labels
+  [`\\begin{-${env}}`, `\\begin{${env}}`],
+  [`\\end{-${env}}`, `\\end{${env}}`],
+  // LaTeX with incorrect XML ending
+  [`\\begin${env}`, `\\begin{${env}}`],
+  [`\\end${env}`, `\\end{${env}}`],
+  // LaTeX with duplicated begin/end keywords
+  [`\\begin{begin{${env}}`, `\\begin{${env}}`],
+  [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
+  [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
+  [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
+  [`\\end{end{${env}}`, `\\end{${env}}`],
+  [`\\end{end{${env}}}`, `\\end{${env}}`],
+  [`\\end{\\end{${env}}`, `\\end{${env}}`],
+  [`\\end{\\end{${env}}}`, `\\end{${env}}`],
+];
+
+/**
+ * Maps tags to LaTeX-to-XML conversion patterns
+ */
+const latexToXmlMapper: PatternMapper<string> = (tag) => [
+  // LaTeX to XML
+  [`\\begin{${tag}}`, `<${tag}>`],
+  [`\\end{${tag}}`, `</${tag}>`],
+  // LaTeX with '>' at the end to XML
+  [`\\begin{${tag}>}`, `<${tag}>`],
+  [`\\begin{${tag}>`, `<${tag}>`],
+  [`\\end{${tag}>}`, `</${tag}>`],
+  [`\\end{${tag}>`, `</${tag}>`],
+];
+
+/**
+ * Maps environments to linebreak fix patterns
+ */
+const linebreakFixMapper: PatternMapper<string> = (env) => [
+  [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
+  [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
+  [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
+];
+
+// ============================================================================
+// Public generator functions
+// ============================================================================
+
 /**
  * Generates patterns for fixing extra backslashes in LaTeX commands
  * Example: \\\\alpha -> \\alpha
  */
-export function generateBackslashFixes(commands: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(commands.map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]));
+export function generateBackslashFixes(commands: string[]): PatternDict {
+  return createPatterns(commands, backslashFixMapper);
 }
 
 /**
  * Generates patterns for fixing extra backslashes in LaTeX commands
  * with automatic grouping by command type.
- *
- * Takes an object where keys are group names and values are arrays of commands.
- *
- * @example
- * generateGroupedBackslashFixes({
- *   greekLetters: ['alpha', 'beta', 'gamma'],
- *   mathOperators: ['sin', 'cos', 'tan']
- * });
  */
 export function generateGroupedBackslashFixes(commandGroups: {
   [groupName: string]: string[];
-}): { [key: string]: string } {
-  return Object.fromEntries(
-    Object.values(commandGroups)
-      .flat()
-      .map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]),
+}): PatternDict {
+  return createPatterns(
+    Object.values(commandGroups).flat(),
+    backslashFixMapper,
   );
 }
 
 /**
  * Generates patterns for converting XML tags to LaTeX environments and vice versa
  */
-export function generateXmlLatexConversions(environments: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    environments.flatMap((env) => [
-      // XML to LaTeX
-      [`<${env}>`, `\\begin{${env}}`],
-      [`</${env}>`, `\\end{${env}}`],
-      // XML with begin to LaTeX
-      [`<begin{${env}}>`, `\\begin{${env}}`],
-      [`</begin{${env}}>`, `\\end{${env}}`],
-      // XML with end to LaTeX
-      [`<end{${env}}>`, `\\end{${env}}`],
-      [`</end{${env}}>`, `\\end{${env}}`],
-      // XML with braces to LaTeX
-      [`<${env}}`, `\\begin{${env}}`],
-      [`</${env}}`, `\\end{${env}}`],
-      [`</${env}\n`, `\\end{${env}}\n`],
-      [`</${env}}\n`, `\\end{${env}}\n`],
-      // XML begin tags incorrectly closed with leading slash
-      [`</begin{${env}}`, `\\begin{${env}}`],
-      [`</begin{${env}}\n`, `\\begin{${env}}\n`],
-      [`</begin{${env}`, `\\begin{${env}}`],
-      // LaTeX with incorrect XML ending
-      [`\\end{${env}>}`, `\\end{${env}}`],
-      [`\\end{${env}>`, `\\end{${env}}`],
-      // LaTeX with incorrect labels
-      [`\\begin{-${env}}`, `\\begin{${env}}`],
-      [`\\end{-${env}}`, `\\end{${env}}`],
-      // LaTeX with incorrect XML ending
-      [`\\begin${env}`, `\\begin{${env}}`],
-      [`\\end${env}`, `\\end{${env}}`],
-      // LaTeX with duplicated begin/end keywords
-      [`\\begin{begin{${env}}`, `\\begin{${env}}`],
-      [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
-      [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
-      [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
-      [`\\end{end{${env}}`, `\\end{${env}}`],
-      [`\\end{end{${env}}}`, `\\end{${env}}`],
-      [`\\end{\\end{${env}}`, `\\end{${env}}`],
-      [`\\end{\\end{${env}}}`, `\\end{${env}}`],
-    ]),
-  );
+export function generateXmlLatexConversions(
+  environments: string[],
+): PatternDict {
+  return createPatterns(environments, xmlToLatexMapper);
 }
 
 /**
  * Generates patterns for converting LaTeX environments to XML tags
  */
-export function generateLatexToXmlConversions(tags: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    tags.flatMap((tag) => [
-      // LaTeX to XML
-      [`\\begin{${tag}}`, `<${tag}>`],
-      [`\\end{${tag}}`, `</${tag}>`],
-      // LaTeX with '>' at the end to XML
-      [`\\begin{${tag}>}`, `<${tag}>`],
-      [`\\begin{${tag}>`, `<${tag}>`],
-      [`\\end{${tag}>}`, `</${tag}>`],
-      [`\\end{${tag}>`, `</${tag}>`],
-    ]),
-  );
+export function generateLatexToXmlConversions(tags: string[]): PatternDict {
+  return createPatterns(tags, latexToXmlMapper);
 }
 
 /**
  * Generates patterns for braces fixes in environment names
  */
-export function generateEnvironmentBracesFixes(environments: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    environments.map((env) => [`{\\${env}}`, `{${env}}`]),
-  );
+export function generateEnvironmentBracesFixes(
+  environments: string[],
+): PatternDict {
+  return createPatterns(environments, (env) => [[`{\\${env}}`, `{${env}}`]]);
 }
 
 /**
@@ -134,14 +176,12 @@ export function generateEnvironmentBracesFixes(environments: string[]): {
 export function generateSectionSpacingFixes(
   environments: string[],
   sectionTypes: string[],
-): { [key: string]: string } {
-  return Object.fromEntries(
-    environments.flatMap((env) =>
-      sectionTypes.map((sectionType) => [
-        `\\end{${env}}\n\\${sectionType}`,
-        `\\end{${env}}\n\n\n\\${sectionType}`,
-      ]),
-    ),
+): PatternDict {
+  return createPatterns(environments, (env) =>
+    sectionTypes.map((sectionType) => [
+      `\\end{${env}}\n\\${sectionType}`,
+      `\\end{${env}}\n\n\n\\${sectionType}`,
+    ]),
   );
 }
 
@@ -149,81 +189,63 @@ export function generateSectionSpacingFixes(
  * Generates patterns that remove invalid section ending commands.
  * These commands (e.g., \end{section}) should never appear in LaTeX output.
  */
-export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    sectionTypes.flatMap((sectionType) =>
-      [
-        `\\end{${sectionType}}`,
-        `\\end{${sectionType}*}`,
-        `\\end {${sectionType}}`,
-        `\\end {${sectionType}*}`,
-        // Additional space variants
-        `\\end{ ${sectionType}}`,
-        `\\end{ ${sectionType}*}`,
-        `\\end{${sectionType} }`,
-        `\\end{${sectionType}* }`,
-        `\\end { ${sectionType} }`,
-        `\\end { ${sectionType}* }`,
-      ].map((ending) => [ending, '']),
-    ),
+export function generateInvalidSectionEndingFixes(
+  sectionTypes: string[],
+): PatternDict {
+  return createPatterns(sectionTypes, (sectionType) =>
+    [
+      `\\end{${sectionType}}`,
+      `\\end{${sectionType}*}`,
+      `\\end {${sectionType}}`,
+      `\\end {${sectionType}*}`,
+      `\\end{ ${sectionType}}`,
+      `\\end{ ${sectionType}*}`,
+      `\\end{${sectionType} }`,
+      `\\end{${sectionType}* }`,
+      `\\end { ${sectionType} }`,
+      `\\end { ${sectionType}* }`,
+    ].map((ending) => [ending, '']),
   );
 }
 
 /**
  * Generates patterns for non-breaking spaces in references
  */
-export function generateReferenceSpacing(referenceTypes: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    referenceTypes.flatMap((type) => {
-      const entries: [string, string][] = [
-        [`${type} \\ref{`, `${type}~\\ref{`],
-      ];
-      // Also handle capitalized versions
-      if (/^[a-z]/.test(type)) {
-        const capitalizedType = capitalize(type);
-        entries.push(
-          [`${capitalizedType} \\ref{`, `${capitalizedType}~\\ref{`],
-          [`${capitalizedType}\\ref{`, `${capitalizedType}~\\ref{`],
-        );
-      }
-      return entries;
-    }),
-  );
+export function generateReferenceSpacing(
+  referenceTypes: string[],
+): PatternDict {
+  return createPatterns(referenceTypes, (type) => {
+    const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
+    if (/^[a-z]/.test(type)) {
+      const capitalizedType = capitalize(type);
+      entries.push(
+        [`${capitalizedType} \\ref{`, `${capitalizedType}~\\ref{`],
+        [`${capitalizedType}\\ref{`, `${capitalizedType}~\\ref{`],
+      );
+    }
+    return entries;
+  });
 }
 
 /**
  * Generates patterns for linebreak fixes within environments
  */
-export function generateEnvironmentLinebreakFixes(environments: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    environments.flatMap((env) => [
-      [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
-      [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
-      [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
-    ]),
-  );
+export function generateEnvironmentLinebreakFixes(
+  environments: string[],
+): PatternDict {
+  return createPatterns(environments, linebreakFixMapper);
 }
 
 /**
  * Generate patterns for mapping math commands to shorter versions
  * Example: \\alpha -> \\al
  */
-export function generateMathCommandShortcuts(commandMap: {
-  [key: string]: string;
-}): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  for (const [fullCmd, shortCmd] of Object.entries(commandMap)) {
-    patterns[`\\${fullCmd}`] = `\\${shortCmd}`;
-  }
-
-  return patterns;
+export function generateMathCommandShortcuts(
+  commandMap: PatternDict,
+): PatternDict {
+  return createPatternsFromMap(commandMap, (fullCmd, shortCmd) => [
+    [`\\${fullCmd}`, `\\${shortCmd}`],
+  ]);
 }
 
 /**
@@ -234,14 +256,12 @@ export function generateDecoratedMathShortcuts(
   decorators: string[],
   symbols: string[],
   shortcutPrefix: string,
-): { [key: string]: string } {
-  return Object.fromEntries(
-    decorators.flatMap((decorator) =>
-      symbols.map((symbol) => [
-        `\\${decorator}{\\${symbol}}`,
-        `\\${shortcutPrefix}${symbol}`,
-      ]),
-    ),
+): PatternDict {
+  return createPatterns(decorators, (decorator) =>
+    symbols.map((symbol) => [
+      `\\${decorator}{\\${symbol}}`,
+      `\\${shortcutPrefix}${symbol}`,
+    ]),
   );
 }
 
@@ -252,13 +272,10 @@ export function generateMathFontShortcuts(
   letters: string[],
   fontCmd: string,
   shortcutPrefix: string,
-): { [key: string]: string } {
-  return Object.fromEntries(
-    letters.map((letter) => [
-      `\\${fontCmd}{${letter}}`,
-      `\\${shortcutPrefix}${letter}`,
-    ]),
-  );
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [`\\${fontCmd}{${letter}}`, `\\${shortcutPrefix}${letter}`],
+  ]);
 }
 
 /**
@@ -268,10 +285,10 @@ export function generateMathFontShortcuts(
 export function generateBoldBackslashFixes(
   prefix: string,
   letters: string[],
-): { [key: string]: string } {
-  return Object.fromEntries(
-    letters.map((letter) => [`\\\\${prefix}${letter}`, `\\${prefix}${letter}`]),
-  );
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [`\\\\${prefix}${letter}`, `\\${prefix}${letter}`],
+  ]);
 }
 
 /**
@@ -284,13 +301,10 @@ export function generateDecoratorShortcuts(
   decorator: string,
   letters: string[],
   prefix: string,
-): { [key: string]: string } {
-  return Object.fromEntries(
-    letters.map((letter) => [
-      `\\${decorator}{${letter}}`,
-      `\\${prefix}${letter}`,
-    ]),
-  );
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [`\\${decorator}{${letter}}`, `\\${prefix}${letter}`],
+  ]);
 }
 
 /**
@@ -305,19 +319,16 @@ export function generateNestedDecoratorShortcuts(
   letters: string[],
   outerPrefix: string,
   innerPrefix: string,
-): { [key: string]: string } {
-  return Object.fromEntries(
-    letters.map((letter) => {
-      // Handle uppercase/lowercase differences
-      const displayLetter = /^[A-Z]/.test(letter)
-        ? letter
-        : letter.toLowerCase();
-      return [
+): PatternDict {
+  return createPatterns(letters, (letter) => {
+    const displayLetter = /^[A-Z]/.test(letter) ? letter : letter.toLowerCase();
+    return [
+      [
         `\\${outerDecorator}{\\${innerCommand}{${displayLetter}}}`,
         `\\${outerPrefix}${innerPrefix}${displayLetter}`,
-      ];
-    }),
-  );
+      ],
+    ];
+  });
 }
 
 /**
@@ -327,10 +338,10 @@ export function generateNestedDecoratorShortcuts(
 export function generateVectorShortcuts(
   letters: string[],
   prefix: string = 'v',
-): { [key: string]: string } {
-  return Object.fromEntries(
-    letters.map((letter) => [`\\vec{${letter}}`, `\\${prefix}${letter}`]),
-  );
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [`\\vec{${letter}}`, `\\${prefix}${letter}`],
+  ]);
 }
 
 /**
@@ -341,18 +352,15 @@ export function generateLegacyTextCommandNormalization(
   terms: string[],
   targetCommand: string,
   variant?: string,
-): { [key: string]: string } {
+): PatternDict {
   const allVariants = ['rm', 'bf', 'cal'];
   const variantsToUse = variant ? [variant] : allVariants;
 
-  return Object.fromEntries(
-    variantsToUse.flatMap((v) =>
-      terms.flatMap((term) => [
-        [`{\\${v} ${term}}`, `\\${targetCommand}{${term}}`],
-        // Handle {\rm{X}} style
-        [`{\\${v}{${term}}}`, `\\${targetCommand}{${term}}`],
-      ]),
-    ),
+  return createPatterns(variantsToUse, (v) =>
+    terms.flatMap((term) => [
+      [`{\\${v} ${term}}`, `\\${targetCommand}{${term}}`],
+      [`{\\${v}{${term}}}`, `\\${targetCommand}{${term}}`],
+    ]),
   );
 }
 
@@ -360,17 +368,13 @@ export function generateLegacyTextCommandNormalization(
  * Generate patterns for arrow and relation shortcuts
  * Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
  */
-export function generateArrowRelationShortcuts(arrowMap: {
-  [key: string]: string;
-}): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  for (const [arrow, shortcut] of Object.entries(arrowMap)) {
-    patterns[`\\${arrow} `] = `\\${shortcut} `;
-    patterns[`\\${arrow}\\`] = `\\${shortcut}\\`;
-  }
-
-  return patterns;
+export function generateArrowRelationShortcuts(
+  arrowMap: PatternDict,
+): PatternDict {
+  return createPatternsFromMap(arrowMap, (arrow, shortcut) => [
+    [`\\${arrow} `, `\\${shortcut} `],
+    [`\\${arrow}\\`, `\\${shortcut}\\`],
+  ]);
 }
 
 /**
@@ -380,31 +384,20 @@ export function generateArrowRelationShortcuts(arrowMap: {
 export function generateDifferentialSpacing(
   variables: string[],
   spaceChar: string = '~',
-): { [key: string]: string } {
-  return Object.fromEntries(
-    variables.flatMap((variable) => [
-      // Handle ' d\x ' case - adding space at end
-      [` d\\${variable} `, ` d\\${variable}${spaceChar}`],
-      // Handle with comma
-      [`\\dd\\${variable}\\,`, `\\dd\\${variable}${spaceChar}`],
-      // Handle differential replacement
-      [`{d\\${variable}}`, `{\\dd\\${variable}}`],
-    ]),
-  );
+): PatternDict {
+  return createPatterns(variables, (variable) => [
+    [` d\\${variable} `, ` d\\${variable}${spaceChar}`],
+    [`\\dd\\${variable}\\,`, `\\dd\\${variable}${spaceChar}`],
+    [`{d\\${variable}}`, `{\\dd\\${variable}}`],
+  ]);
 }
 
 /**
  * Generate patterns for mapping commands with custom shortcuts
  * Examples: \partial -> \der, \nabla -> \na
  */
-export function generateCommandShortcuts(commandMap: {
-  [key: string]: string;
-}): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  for (const [command, shortcut] of Object.entries(commandMap)) {
-    patterns[`\\${command}`] = `\\${shortcut}`;
-  }
-
-  return patterns;
+export function generateCommandShortcuts(commandMap: PatternDict): PatternDict {
+  return createPatternsFromMap(commandMap, (command, shortcut) => [
+    [`\\${command}`, `\\${shortcut}`],
+  ]);
 }

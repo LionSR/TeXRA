@@ -2,20 +2,19 @@
  * Dedicated stream handler for Anthropic responses.
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
+// Third-party imports
 import { z } from 'zod';
-
+import {
+  MESSAGE_TYPES,
+  StreamDiagnosticsSchema,
+  type StreamDiagnostics,
+} from '@shared/schemas';
 import {
   extractDomain,
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
-import {
-  StreamDiagnosticsSchema,
-  type StreamDiagnostics,
-} from '@common/errors';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
-
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,
@@ -165,7 +164,7 @@ export class AnthropicStreamHandler {
       thinkingChars: this.diagnostics.thinkingChars,
       textChars: this.diagnostics.textChars,
       toolInputChars: this.diagnostics.toolInputChars,
-      blockTypesSeen: Array.from(this.diagnostics.blockTypesSeen),
+      blockTypesSeen: [...this.diagnostics.blockTypesSeen],
       eventsProcessed: this.diagnostics.eventsProcessed,
       lastEventType: this.diagnostics.lastEventType,
       elapsedSecs: Math.round((now - this.diagnostics.startTime) / 1000),
@@ -365,18 +364,13 @@ export class AnthropicStreamHandler {
    * Parses the search query from accumulated input JSON.
    */
   private parseSearchQuery(input: string | undefined): string {
-    if (!input) {
-      return '';
-    }
+    if (!input) return '';
 
     try {
       const parsed = JSON.parse(input) as { query?: string };
       return parsed.query ?? '';
-    } catch (error) {
+    } catch {
       // Partial JSON (common for streaming), try to extract query with regex
-      this.logger.debug(
-        `Anthropic search input JSON parse failed, using regex fallback: ${String(error)}`,
-      );
       const match = input.match(/"query"\s*:\s*"([^"]+)"/);
       return match?.[1] ?? '';
     }

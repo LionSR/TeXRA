@@ -8,22 +8,22 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
-import type {
-  ReflectionFlowShared,
-  RoundContext,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
 } from '../ReflectionServices';
 
+/**
+ * Prep result carries shared reference and computed values.
+ * - workspaceState: reconstructed from snapshot, modified in exec, saved in post
+ * - files/extraMediaFiles: computed once to avoid redundant calls
+ */
 interface PrepInput {
+  shared: ReflectionFlowShared;
   files: FileLocation[];
-  currentRound: number;
-  supportsVision: boolean;
   extraMediaFiles: FileLocation[];
   workspaceState: AgentWorkspaceState;
-  context: RoundContext | null;
 }
 
 export class MediaExtractionNode<C = unknown> extends Node<
@@ -33,7 +33,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, context } = shared;
+    const { currentRound, roundOutputs } = shared;
 
     const workspaceState = AgentWorkspaceState.fromSnapshot(
       shared.workspaceSnapshot,
@@ -44,29 +44,30 @@ export class MediaExtractionNode<C = unknown> extends Node<
       if (config.mediaFile) {
         extraMediaFiles.push(fileService.createLocation(config.mediaFile));
       }
-      for (const p of config.mediaFiles) {
-        extraMediaFiles.push(fileService.createLocation(p));
-      }
+      extraMediaFiles.push(
+        ...config.mediaFiles.map((p) => fileService.createLocation(p)),
+      );
     }
 
     return {
+      shared,
       files: getFilesForRound(currentRound, roundOutputs, config, fileService),
-      currentRound,
-      supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,
       workspaceState,
-      context,
     };
   }
 
   async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
-    if (!prepRes.supportsVision || prepRes.files.length === 0) {
+    const { modelHandler, latexMediaManager, config } = this.services;
+
+    if (
+      !modelHandler.capabilities.supportsVision ||
+      prepRes.files.length === 0
+    ) {
       return null;
     }
 
-    const { latexMediaManager, config } = this.services;
-
-    if (prepRes.currentRound === 0) {
+    if (prepRes.shared.currentRound === 0) {
       await latexMediaManager.processInputFiles(
         prepRes.files,
         prepRes.workspaceState,
@@ -90,20 +91,21 @@ export class MediaExtractionNode<C = unknown> extends Node<
     _prepRes: PrepInput,
     error: Error,
   ): Promise<FileLocation[] | null> {
-    this.services.logger.debug(`Media extraction skipped: ${error.message}`);
+    const { logger } = this.services;
+    logger.debug(`Media extraction skipped: ${error.message}`);
     return null;
   }
 
   async post(
-    shared: ReflectionFlowShared,
+    _shared: ReflectionFlowShared,
     prepRes: PrepInput,
     mediaFiles: FileLocation[] | null,
   ): Promise<string | undefined> {
-    shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
+    prepRes.shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
-    if (mediaFiles && mediaFiles.length > 0 && shared.context) {
+    if (mediaFiles && mediaFiles.length > 0 && prepRes.shared.context) {
       await this.services.modelHandler.addMediaToUserMessage(
-        shared.context.messages,
+        prepRes.shared.context.messages,
         mediaFiles,
       );
     }

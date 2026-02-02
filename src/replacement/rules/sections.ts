@@ -18,5 +18,3 @@ export const SECTION_REPLACEMENTS: ReplacementCategory = {
     return generateSectionSpacingFixes(environments, SECTION_TYPES.slice(0, 3));
   })(),
 };
-
-export default SECTION_REPLACEMENTS;

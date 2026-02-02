@@ -1,43 +1,29 @@
-// Standard library imports
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
-// Local imports - agent
+import {
+  type DiffResult,
+  MESSAGE_TYPES,
+  type OutputFileInfo,
+} from '@shared/schemas';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
-import { checkToolInstalled } from '@utils/system';
 import {
-  TaskRunFileService,
   flexibleFS,
+  TaskRunFileService,
   type FileLocation,
 } from '@utils/files';
-
-// Internal imports
+import { checkToolInstalled } from '@utils/system';
 import {
   getComparablePath,
   getFileDirectory,
 } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
+import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 
-// Local imports - types
-import type { OutputFileInfo, RoundFileMapping } from './types';
-import type { DiffResult } from './DiffResultSchemas';
-
-interface LatexDiffDependencies {
-  checkToolInstalled: typeof checkToolInstalled;
-  compileLatex2Pdf: typeof compileLatex2Pdf;
-  getConfig: typeof getConfig;
-}
-
-const defaultLatexDiffDependencies: LatexDiffDependencies = {
-  checkToolInstalled,
-  compileLatex2Pdf,
-  getConfig,
-};
+import type { RoundFileMapping } from './types';
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -49,22 +35,14 @@ export class LatexDiffManager {
     private readonly logger: AgentLogger,
     private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
-    private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(streamId);
   }
 
-  /**
-   * Resolve symlinks for latexdiff compatibility.
-   * (latexdiff may have issues with symlinks in some configurations)
-   */
   private resolveSymlinks(target: string): Promise<string> {
     return fs.realpath(target).catch(() => target);
   }
 
-  /**
-   * Get working directory for latexdiff - use file's directory so relative includes work.
-   */
   private async getWorkingDirectory(location: FileLocation): Promise<string> {
     const resolved = await this.resolveSymlinks(location.absolutePath);
     return path.dirname(resolved);
@@ -93,9 +71,6 @@ export class LatexDiffManager {
     });
   }
 
-  /**
-   * Get display label (basename) from FileLocation for UI/logging.
-   */
   private getDisplayLabel(location: FileLocation): string {
     return path.basename(getComparablePath(location));
   }
@@ -103,11 +78,7 @@ export class LatexDiffManager {
   private async ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!targetLocation) {
-      return;
-    }
-
-    if (!(await flexibleFS.exists(targetLocation))) {
+    if (!targetLocation || !(await flexibleFS.exists(targetLocation))) {
       return;
     }
 
@@ -126,14 +97,9 @@ export class LatexDiffManager {
     mapping: RoundFileMapping,
     stage?: AgentLogStage,
   ): Promise<void> {
+    const execute = () => this.performLatexdiffOperations(currRound, mapping);
     try {
-      if (stage) {
-        await stage.within(() =>
-          this.performLatexdiffOperations(currRound, mapping),
-        );
-      } else {
-        await this.performLatexdiffOperations(currRound, mapping);
-      }
+      await (stage ? stage.within(execute) : execute());
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${toErrorMessage(err)}`,
@@ -146,7 +112,7 @@ export class LatexDiffManager {
     currRound: number,
     mapping: RoundFileMapping,
   ): Promise<void> {
-    if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
+    if (!(await checkToolInstalled('latexdiff'))) {
       this.logger.warn(
         'Skipping latexdiff operations - latexdiff not installed',
       );
@@ -161,7 +127,6 @@ export class LatexDiffManager {
       return;
     }
 
-    // O(1) lookup map instead of O(n) find in loop
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
     );
@@ -175,7 +140,6 @@ export class LatexDiffManager {
 
     const aggregated: DiffResult[] = [];
 
-    // Round-based diffs (original → r0)
     if (this.agentSetting.isRewrite) {
       const basePairs = [...mapping.baseToOutput.entries()];
       this.logPairMatches(basePairs, 'base files to output files');
@@ -201,8 +165,7 @@ export class LatexDiffManager {
       }
     }
 
-    // Between-round diffs (r0 → r1)
-    const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
+    const generateBetweenRoundDiffs = getConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
@@ -344,7 +307,7 @@ export class LatexDiffManager {
       path.dirname(diffLocation.absolutePath),
       'build',
     );
-    await this.dependencies.compileLatex2Pdf(diffLocation, {
+    await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       compiler: 'latexmk',

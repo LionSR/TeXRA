@@ -1,23 +1,21 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports
 import { showLoggedErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 
-const CHANNEL = 'commandUtils';
-logger.initialize(CHANNEL);
+const DEFAULT_CHANNEL = 'commandUtils';
 
 /**
  * Execute a VS Code command and handle any errors.
- * @param channel Optional channel for logging errors
  * @param command Command identifier
  * @param args Arguments to pass to the command
+ * @param channel Channel for logging errors (defaults to 'commandUtils')
  */
 export async function safeExecuteCommand<T>(
   command: string,
-  args: any[] = [],
-  channel: string = CHANNEL,
+  args: unknown[] = [],
+  channel: string = DEFAULT_CHANNEL,
 ): Promise<T | undefined> {
   try {
     return await vscode.commands.executeCommand<T>(command, ...args);
@@ -33,11 +31,10 @@ export async function safeExecuteCommand<T>(
 
 /**
  * Get the main webview view instance.
- * @param channel Optional channel for logging errors
- * @returns The webview view or undefined if not available
+ * @param channel Channel for logging errors (defaults to 'commandUtils')
  */
 export async function getMainWebview(
-  channel: string = CHANNEL,
+  channel: string = DEFAULT_CHANNEL,
 ): Promise<vscode.WebviewView | undefined> {
   return safeExecuteCommand<vscode.WebviewView>(
     'texra.getWebviewView',

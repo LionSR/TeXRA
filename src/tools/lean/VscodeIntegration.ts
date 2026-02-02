@@ -5,7 +5,6 @@
  * language APIs and the Lean 4 extension's exported API.
  */
 
-import path from 'path';
 import * as vscode from 'vscode';
 import { Hover } from 'vscode-languageserver-protocol';
 
@@ -23,53 +22,35 @@ export interface PlainGoal {
   rendered: string;
 }
 
-// ============================================================================
-// ExtUri compatibility layer for Lean 4 extension
-// The Lean 4 extension uses custom ExtUri types instead of vscode.Uri.
-// We need to create compatible objects with the required methods.
-// ============================================================================
-
-/** Check if a file path is inside a folder */
-function isFileInFolder(file: string, folder: string): boolean {
-  const relative = path.relative(folder, file);
-  return (
-    relative.length > 0 &&
-    !relative.startsWith('..') &&
-    !path.isAbsolute(relative)
-  );
-}
-
-/** FileUri compatible with Lean 4 extension's ExtUri type */
-class FileUri {
-  scheme: 'file' = 'file';
+/**
+ * ExtUri-compatible object for Lean 4 extension.
+ * The Lean 4 extension expects objects with scheme, fsPath, and toString().
+ */
+function createExtUri(absolutePath: string): {
+  scheme: 'file';
   fsPath: string;
-
-  constructor(fsPath: string) {
-    this.fsPath = fsPath;
-  }
-
-  asUri(): vscode.Uri {
-    return vscode.Uri.file(this.fsPath);
-  }
-
-  isInFolder(folderUri: FileUri): boolean {
-    return isFileInFolder(this.fsPath, folderUri.fsPath);
-  }
-
-  toString(): string {
-    return this.asUri().toString();
-  }
+  toString: () => string;
+} {
+  const uri = vscode.Uri.file(absolutePath);
+  return {
+    scheme: 'file',
+    fsPath: absolutePath,
+    toString: () => uri.toString(),
+  };
 }
+
+/** URI type expected by Lean 4 extension API */
+type ExtUri = { scheme: 'file'; fsPath: string; toString: () => string };
 
 /** Lean 4 extension's client provider interface */
 interface LeanClient {
   isRunning(): boolean;
-  isInFolderManagedByThisClient(uri: FileUri): boolean;
+  isInFolderManagedByThisClient(uri: ExtUri): boolean;
   sendRequest(method: string, params: unknown): Promise<unknown>;
 }
 
 interface LeanClientProvider {
-  findClient(uri: FileUri): LeanClient | undefined;
+  findClient(uri: ExtUri): LeanClient | undefined;
 }
 
 interface Lean4EnabledFeatures {
@@ -189,6 +170,11 @@ export interface LspResult<T> {
   error?: string;
 }
 
+/** Create an error result */
+function errorResult<T>(error: string): LspResult<T> {
+  return { data: null, error };
+}
+
 async function sendPositionRequest<T>(
   filePath: string,
   line: number,
@@ -196,22 +182,13 @@ async function sendPositionRequest<T>(
   method: string,
 ): Promise<LspResult<T>> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
-  const fileUri = new FileUri(absolutePath);
-  const vscodeUri = fileUri.asUri();
+  const extUri = createExtUri(absolutePath);
+  const vscodeUri = vscode.Uri.file(absolutePath);
 
   // Get client provider
-  let clientProvider: LeanClientProvider;
-  try {
-    const provider = await getClientProvider();
-    if (!provider) {
-      return {
-        data: null,
-        error: 'Lean 4 extension not found or not activated',
-      };
-    }
-    clientProvider = provider;
-  } catch (e) {
-    return { data: null, error: `Failed to get Lean extension API: ${e}` };
+  const clientProvider = await getClientProvider().catch(() => null);
+  if (!clientProvider) {
+    return errorResult('Lean 4 extension not found or not activated');
   }
 
   // Open file in editor so LSP server has processed it
@@ -219,42 +196,39 @@ async function sendPositionRequest<T>(
     const document = await vscode.workspace.openTextDocument(vscodeUri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
   } catch (e) {
-    return { data: null, error: `Failed to open file ${absolutePath}: ${e}` };
+    return errorResult(`Failed to open file ${absolutePath}: ${e}`);
   }
 
-  // Find and validate Lean client using FileUri (required by Lean 4 extension)
+  // Find and validate Lean client
   let client: LeanClient | undefined;
   try {
-    client = clientProvider.findClient(fileUri);
-  } catch (e) {
-    return {
-      data: null,
-      error: `Lean extension error finding client for ${absolutePath}: ${e}. Is this file in a Lean project?`,
-    };
+    client = clientProvider.findClient(extUri);
+  } catch {
+    return errorResult(
+      `Error finding Lean client for ${absolutePath}. Is this file in a Lean project?`,
+    );
   }
   if (!client) {
-    return {
-      data: null,
-      error: `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
-    };
+    return errorResult(
+      `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
+    );
   }
   if (!client.isRunning()) {
-    return {
-      data: null,
-      error: 'Lean server not running. Try lean_project restart_server.',
-    };
+    return errorResult(
+      'Lean server not running. Try lean_project restart_server.',
+    );
   }
 
   // Send LSP request
   try {
     const params = {
-      textDocument: { uri: fileUri.toString() },
+      textDocument: { uri: extUri.toString() },
       position: { line, character: column },
     };
     const result = await client.sendRequest(method, params);
     return { data: result as T };
   } catch (e) {
-    return { data: null, error: `LSP request ${method} failed: ${e}` };
+    return errorResult(`LSP request ${method} failed: ${e}`);
   }
 }
 

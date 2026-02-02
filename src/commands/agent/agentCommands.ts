@@ -2,10 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { STREAM_STATUS } from '@shared/schemas';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import type { StreamTabId } from '@shared/schemas';
 
 export function registerAgentCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(

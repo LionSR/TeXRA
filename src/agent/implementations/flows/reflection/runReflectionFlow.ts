@@ -21,33 +21,41 @@
 
 import * as path from 'path';
 
-import type { RoundOutput, IOutputHandler } from '@agent/output';
-import { OutputHandler } from '@agent/output';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import {
+  EXECUTION_STATUS,
+  type EndGroupStatus,
+  type ExecutionStatus,
+  type RoundOutput,
+  type StorageKey,
+} from '@shared/schemas';
+import {
+  getExecutionStore,
+  type ExecutionKVStore,
+} from '@agent/storage/ExecutionKVStore';
+import {
+  createOutputState,
+  setActiveRun,
+  getOutputFilesByRound,
+  type OutputState,
+  type OutputDependencies,
+} from '@agent/output/outputState';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   registerInterruptible,
   unregisterInterruptible,
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
-import {
-  EXECUTION_STATUS,
-  executionToEndStatus,
-  type ExecutionStatus,
-} from '@common/constants/streamStatus';
+import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { AgentLogStage } from '@logger/AgentLogger';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
-
-import { PromptBuilder } from '@utils/prompt';
 import {
   TaskRunFileService,
   WorkspaceFS,
@@ -55,9 +63,14 @@ import {
   type AgentFileLocation,
   type WorkspaceFileLocation,
 } from '@utils/files';
+import { PromptBuilder } from '@utils/prompt';
 import { LatexMediaManager } from '@latex';
-import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 
+import {
+  toEndStatus,
+  ERROR_STATUS,
+  COMPLETED_STATUS,
+} from '../common/FlowLifecycle';
 import {
   createReflectionFlow,
   type ReflectionFlowShared,
@@ -107,60 +120,54 @@ export interface RunReflectionFlowResult {
 // Configuration Derivation
 // ============================================================================
 
-interface DerivedConfig {
-  useScratchpad: boolean;
-  shouldEnsureXmlStructure: boolean;
-  totalRounds: number;
-  outputExt: string;
-}
-
-/** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
-function shouldEnforceXmlStructure(
-  setting: AgentWorkflowSetting,
-  useScratchpad: boolean,
-): boolean {
-  const mode = setting.xmlStructureMode ?? 'scratchpadOnly';
-
-  switch (mode) {
-    case 'always':
-      return true;
-    case 'never':
-      return false;
-    case 'scratchpadOnly':
-      return useScratchpad;
-    default: {
-      const _exhaustive: never = mode;
-      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
-    }
-  }
-}
-
-/** Compute the total number of rounds: max(setting.rounds, userRequest.length) */
-function computeTotalRounds(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): number {
-  const { userRequest } = prompt;
-  let requestCount = 0;
-  if (Array.isArray(userRequest)) {
-    requestCount = userRequest.length;
-  } else if (userRequest) {
-    requestCount = 1;
-  }
-  return Math.max(setting.rounds ?? 2, requestCount);
-}
-
 /** Derive configuration values from settings and prompts. */
 function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
-): DerivedConfig {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+): {
+  useScratchpad: boolean;
+  shouldEnsureXmlStructure: boolean;
+  totalRounds: number;
+  outputExt: string;
+} {
+  const useScratchpad = setting.prefills.includes('<scratchpad>');
+
+  // Determine if XML structure enforcement is needed
+  const xmlMode = setting.xmlStructureMode;
+  let shouldEnsureXmlStructure: boolean;
+  switch (xmlMode) {
+    case 'always':
+      shouldEnsureXmlStructure = true;
+      break;
+    case 'never':
+      shouldEnsureXmlStructure = false;
+      break;
+    case 'scratchpadOnly':
+      shouldEnsureXmlStructure = useScratchpad;
+      break;
+    default: {
+      const _exhaustive: never = xmlMode;
+      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
+    }
+  }
+
+  // Compute total rounds: max(setting.rounds, userRequest count)
+  const { userRequest } = prompt;
+  let requestCount: number;
+  if (Array.isArray(userRequest)) {
+    requestCount = userRequest.length;
+  } else if (userRequest) {
+    requestCount = 1;
+  } else {
+    requestCount = 0;
+  }
+  // Use fallback to handle edge cases where schema defaults may not apply
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
     useScratchpad,
-    shouldEnsureXmlStructure: shouldEnforceXmlStructure(setting, useScratchpad),
-    totalRounds: computeTotalRounds(setting, prompt),
+    shouldEnsureXmlStructure,
+    totalRounds,
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
   };
 }
@@ -185,12 +192,11 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
     userVarChannels,
     checkInterruption,
-    setAbortController,
     getUsageRecorder = () => async () => {},
     usageMonitor,
   } = input;
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let status: EndGroupStatus = COMPLETED_STATUS;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
@@ -209,13 +215,26 @@ export async function runReflectionFlow<C = unknown>(
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 
-  const outputHandler: IOutputHandler = new OutputHandler(
-    setting,
-    config,
+  // Create output state and dependencies for utility functions
+  const outputState: OutputState = createOutputState();
+  const outputDeps: OutputDependencies = {
+    agentSetting: setting,
+    agentConfig: config,
     baseFiles,
     logger,
     fileService,
     executionId,
+    streamId,
+  };
+  // Create managers directly (no factory indirection)
+  const xmlManager = new XmlOutputManager(setting, config, logger, fileService);
+  const diffManager = new LatexDiffManager(
+    setting,
+    () => getOutputFilesByRound(outputState),
+    baseFiles,
+    logger,
+    streamId,
+    fileService,
   );
 
   const promptBuilder = new PromptBuilder(
@@ -227,7 +246,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Derive configuration values
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
@@ -260,8 +278,8 @@ export async function runReflectionFlow<C = unknown>(
     },
   };
 
-  // Set active run for output handler
-  outputHandler.setActiveRun(storageKey);
+  // Set active run for output state
+  setActiveRun(outputState, outputDeps, storageKey);
 
   try {
     // Register for interrupt handling
@@ -271,27 +289,16 @@ export async function runReflectionFlow<C = unknown>(
     const kv: ExecutionKVStore = getExecutionStore(executionId);
 
     // Try to restore full state from persisted flow (resume scenario)
-    let isResume = false;
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    const validated = flowRecord?.shared
+      ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
+      : null;
+    const isResume = validated?.success ?? false;
 
-    try {
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      if (flowRecord?.shared) {
-        // Validate and use persisted shared state directly
-        const validated = ReflectionFlowStateSchema.safeParse(
-          flowRecord.shared,
-        );
-        if (validated.success) {
-          shared = validated.data as ReflectionFlowShared;
-          isResume = true;
-          logger.debug(
-            `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
-          );
-        }
-      }
-    } catch (error) {
-      // Log parse failures to help diagnose resume issues
+    if (validated?.success) {
+      shared = validated.data as ReflectionFlowShared;
       logger.debug(
-        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
+        `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
       );
     }
 
@@ -349,13 +356,15 @@ export async function runReflectionFlow<C = unknown>(
     services = {
       ...input,
       getUsageRecorder,
-      outputHandler,
+      outputState,
+      outputDeps,
+      xmlManager,
+      diffManager,
       latexMediaManager,
       promptBuilder,
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      parentStage,
       baseFiles,
     };
     pf.setServices(services);
@@ -366,15 +375,15 @@ export async function runReflectionFlow<C = unknown>(
 
     await pf.run(shared);
     shared = await pf.getShared();
-    status = executionToEndStatus(flowResult.status) as EndGroupStatus;
+    status = toEndStatus(flowResult.status);
   } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
+    status = ERROR_STATUS;
     throw error;
   } finally {
     // Only delete flow record on successful completion
     // Keep it for interrupted/error flows to enable resume
-    // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
-    if (status === END_GROUP_STATUS.STOPPED) {
+    // Note: COMPLETED_STATUS means "completed" (not user-stopped)
+    if (status === COMPLETED_STATUS) {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);

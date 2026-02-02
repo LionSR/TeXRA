@@ -15,6 +15,12 @@ import { tikzPictureManager } from '@latex/TikzPictureManager';
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
+export const figureCommands = {
+  extractFigurePaths: 'texra.extractFigurePaths',
+  extractTikzFigures: 'texra.extractTikzFigures',
+  compileTikzFigures: 'texra.compileTikzFigures',
+};
+
 /** Simple pluralization helper */
 function pluralize(count: number, singular: string): string {
   return count === 1 ? singular : `${singular}s`;
@@ -36,18 +42,18 @@ async function runLaTeXCommand(
   }
 }
 
-export function registerFigureCommands(context: vscode.ExtensionContext) {
+export function registerFigureCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'texra.extractFigurePaths',
+      figureCommands.extractFigurePaths,
       handleExtractFigurePaths,
     ),
     vscode.commands.registerCommand(
-      'texra.extractTikzFigures',
+      figureCommands.extractTikzFigures,
       handleExtractTikzFigures,
     ),
     vscode.commands.registerCommand(
-      'texra.compileTikzFigures',
+      figureCommands.compileTikzFigures,
       handleCompileTikzFigures,
     ),
   );
