@@ -116,7 +116,7 @@ export class OutputNode<C = unknown> extends Node<
           () =>
             xmlManager.ensureCorrectXmlStructure(
               outputLocation,
-              setting.documentTag ?? 'document',
+              setting.documentTag,
             ),
           logger,
         );
