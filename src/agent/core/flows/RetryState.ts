@@ -103,7 +103,7 @@ export abstract class RetryableInvocationNode<
       ) {
         this._hasAttemptedTokenRefresh = true;
         services.logger.debug('Relay 401, refreshing token before retry loop');
-        const refreshed = await SupabaseClient.getAccessToken();
+        const refreshed = await SupabaseClient.getAccessToken(true);
         if (refreshed) {
           activeController = new AbortController();
           this.signal = activeController.signal;
@@ -164,18 +164,6 @@ export abstract class RetryableInvocationNode<
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
-    // If we already refreshed the token and still got 401, don't offer retry —
-    // the session is fundamentally invalid and retrying will loop forever.
-    if (this._persistent401Error) {
-      const formatted = formatProviderHttpError(error);
-      if (formatted.isRelayError && formatted.statusCode === 401) {
-        this.services.logger.info(
-          'Relay 401 persists after token refresh — session invalid, not retryable. Please sign in again.',
-        );
-        return false;
-      }
-    }
-
     const result = await this.handleManualRetryPrompt(error);
 
     if (result.userCancelled) {
