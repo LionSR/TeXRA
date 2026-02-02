@@ -32,7 +32,7 @@ register({
     '@housekeeping': ['housekeeping', path.join(srcDir, 'housekeeping')],
     '@housekeeping/*': ['housekeeping/*', path.join(srcDir, 'housekeeping/*')],
     '@progressView/*': ['progressView/*', path.join(srcDir, 'progressView/*')],
-    '@historyView/*': ['historyView/*', path.join(srcDir, 'historyView/*')],
+    '@settingsView/*': ['settingsView/*', path.join(srcDir, 'settingsView/*')],
     '@replacement/*': ['replacement/*', path.join(srcDir, 'replacement/*')],
     '@tools/*': ['tools/*', path.join(srcDir, 'tools/*')],
     '@types/*': ['types/*', path.join(srcDir, 'types/*')],

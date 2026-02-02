@@ -29,6 +29,24 @@ export const logEntryStyles = css`
     word-break: break-all;
   }
 
+  .log-line--render-error {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    margin: var(--spacing-small) 0;
+    background: var(--vscode-inputValidation-warningBackground);
+    border: 1px solid var(--vscode-inputValidation-warningBorder);
+    border-radius: var(--border-radius);
+    color: var(--color-warning);
+    font-style: italic;
+  }
+
+  .render-error-icon {
+    font-style: normal;
+    flex-shrink: 0;
+  }
+
   .log-entry-content {
     padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
     overflow: visible;
