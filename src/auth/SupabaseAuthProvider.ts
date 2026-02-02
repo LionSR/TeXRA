@@ -201,7 +201,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    *
    * @returns Fresh access token, or null if no session or refresh failed
    */
-  async ensureFreshToken(): Promise<string | null> {
+  async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
       const session = parseStoredSession(sessionData);
@@ -211,8 +211,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       const timeUntilExpiry = session.expiresAt - Date.now();
 
-      // Refresh proactively if token expires within threshold
-      if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
+      // Refresh proactively if token expires within threshold,
+      // or immediately if the caller knows the current token is invalid (relay 401).
+      if (forceRefresh || timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
         logger.info(
           'SupabaseAuthProvider',
           `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
@@ -221,12 +222,15 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         if (refreshed) {
           return refreshed.accessToken;
         }
-        // If token is already expired and refresh failed, return null
-        // to trigger VS Code auth fallback instead of returning expired token
-        if (timeUntilExpiry <= 0) {
+        // If token is already expired or caller explicitly requested refresh
+        // (e.g., relay rejected the current token), return null so the caller
+        // doesn't get back the same token the server already rejected.
+        if (forceRefresh || timeUntilExpiry <= 0) {
           logger.warn(
             'SupabaseAuthProvider',
-            'Token expired and refresh failed, returning null',
+            forceRefresh
+              ? 'Force refresh requested but refresh failed, returning null'
+              : 'Token expired and refresh failed, returning null',
           );
           return null;
         }
