@@ -108,14 +108,14 @@ export const commonViewStyles: CSSResult = css`
     display: none;
   }
 
-  .details-summary .toggle-icon {
+  /* Toggle icon for collapsible details - applies to any summary */
+  summary .toggle-icon {
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
-    transition: transform 0.2s ease;
     display: inline-block;
   }
 
-  details[open] > .details-summary .toggle-icon {
+  details[open] > summary .toggle-icon {
     transform: rotate(90deg);
   }
 

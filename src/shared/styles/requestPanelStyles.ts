@@ -281,15 +281,7 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-foreground);
   }
 
-  .retry-request__error-summary .toggle-icon {
-    transition: transform 0.2s ease;
-  }
-
-  .retry-request__error-details[open]
-    .retry-request__error-summary
-    .toggle-icon {
-    transform: rotate(90deg);
-  }
+  /* Note: .toggle-icon rotation handled by commonViewStyles */
 
   .retry-request__error-body {
     margin-top: var(--spacing-tiny);

@@ -251,7 +251,6 @@ export const profileViewStyles: CSSResult = css`
     padding: var(--spacing-tiny);
     transform: rotate(45deg);
     opacity: var(--opacity-subtle);
-    transition: transform 0.2s ease;
   }
 
   .model-access-info[open] .model-access-summary::after {
