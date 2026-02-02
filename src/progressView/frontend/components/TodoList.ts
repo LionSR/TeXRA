@@ -5,7 +5,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { designTokens, animationStyles, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  animationStyles,
+  commonViewStyles,
+} from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - shared schemas

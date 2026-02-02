@@ -197,6 +197,12 @@ async function showProgressViewApprovalPrompt(
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
   const streamId = request.streamId;
+
+  // Activate the stream that needs approval so user sees the prompt immediately
+  if (streamId) {
+    bus.emit('setActiveStream', { streamId });
+  }
+
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
   bus.emit('showToolEditPermission', {
     requestId,

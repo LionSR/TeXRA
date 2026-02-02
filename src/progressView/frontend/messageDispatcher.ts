@@ -254,11 +254,10 @@ const handlers: HandlerRegistry = {
     );
     const validStreamIds = new Set(data.streams.map((stream) => stream.name));
     const fallbackStreamId = data.streams.at(0)?.name ?? null;
-    const nextActiveStreamId = activeStream
-      ? validStreamIds.has(activeStream)
+    const nextActiveStreamId =
+      activeStream && validStreamIds.has(activeStream)
         ? activeStream
-        : fallbackStreamId
-      : fallbackStreamId;
+        : fallbackStreamId;
     const nextFollowupOptions = new Map(
       [...previousState.followupOptionsByStream].filter(([streamId]) =>
         validStreamIds.has(streamId),
