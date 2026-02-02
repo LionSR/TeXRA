@@ -13,11 +13,9 @@
 import {
   createStreamState,
   ProgressViewOutboundMessageSchema,
-  TOOL_USE_FRONTEND_ONLY_KEYS,
   type LogMessageData,
   type ProgressViewOutboundMessage,
   type StreamTabInfo,
-  type ToolUseStreamState,
 } from '@shared/schemas';
 import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -111,21 +109,10 @@ function setActiveStreamRecording(
 ): void {
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
-  updateToolUseState(ctx, streamId, (prev) => ({ ...prev, recording }));
-}
-
-/**
- * Extract frontend-only fields from an existing ToolUseStreamState.
- * Uses schema-defined TOOL_USE_FRONTEND_ONLY_KEYS for compile-time safety.
- * Returns empty object if the state is not a ToolUseStreamState.
- */
-function extractFrontendOnlyFields(
-  existing: StreamState | undefined,
-): Partial<ToolUseStreamState> {
-  if (!existing || !isToolUseState(existing)) return {};
-  return Object.fromEntries(
-    TOOL_USE_FRONTEND_ONLY_KEYS.map((key) => [key, existing[key]]),
-  ) as Partial<ToolUseStreamState>;
+  updateToolUseState(ctx, streamId, (prev) => ({
+    ...prev,
+    ui: { ...prev.ui, recording },
+  }));
 }
 
 function updateStreamInfo(
@@ -147,14 +134,24 @@ function updateStreamInfo(
     const backendState = backendStates?.[stream.name];
     if (backendState) {
       const existing = nextStates.get(stream.name);
-      // Only preserve frontend-only fields for ToolUse streams
-      if (isToolUseState(backendState)) {
-        const frontendOnlyFields = extractFrontendOnlyFields(existing);
-        nextStates.set(stream.name, {
-          ...backendState,
-          ...frontendOnlyFields,
-          info: stream,
-        });
+      // Preserve frontend-owned 'ui' property during backend state updates
+      // Only preserve when kinds match (ToolUse UI != Workflow UI)
+      if (existing && existing.kind === backendState.kind) {
+        if (isToolUseState(backendState) && isToolUseState(existing)) {
+          nextStates.set(stream.name, {
+            ...backendState,
+            ui: existing.ui,
+            info: stream,
+          });
+        } else if (isWorkflowState(backendState) && isWorkflowState(existing)) {
+          nextStates.set(stream.name, {
+            ...backendState,
+            ui: existing.ui,
+            info: stream,
+          });
+        } else {
+          nextStates.set(stream.name, { ...backendState, info: stream });
+        }
       } else {
         nextStates.set(stream.name, { ...backendState, info: stream });
       }
@@ -304,9 +301,12 @@ const handlers: HandlerRegistry = {
       if (isWorkflowState(prev)) {
         if (isClear) {
           return {
-            ...baseUpdate,
+            ...prev,
+            logs: processedMessages,
+            taskGroups: [],
+            contextState: contextState ?? prev.contextState,
             activeRunId: null,
-            selectedRunId: null,
+            ui: { ...prev.ui, selectedRunId: null },
             runInstructions: {},
             runUsage: {},
             runFiles: {},
@@ -314,7 +314,10 @@ const handlers: HandlerRegistry = {
           };
         }
         return {
-          ...baseUpdate,
+          ...prev,
+          logs: processedMessages,
+          taskGroups: groups ?? prev.taskGroups,
+          contextState: contextState ?? prev.contextState,
           activeRunId: activeRunId ?? prev.activeRunId,
           runInstructions: runInstructions
             ? { ...prev.runInstructions, ...runInstructions }
@@ -394,26 +397,35 @@ const handlers: HandlerRegistry = {
     const streamId = ctx.getState().activeStreamId;
     if (!streamId) return;
 
-    ctx.setStreamState(streamId, (prev) => ({
-      ...prev,
-      status: data.status,
-      ...(data.status === STREAM_STATUS.WAITING && {
-        shouldFocusFollowUp: true,
-      }),
-    }));
+    ctx.setStreamState(streamId, (prev) => {
+      const shouldFocus = data.status === STREAM_STATUS.WAITING;
+      if (isToolUseState(prev) && shouldFocus) {
+        return {
+          ...prev,
+          status: data.status,
+          ui: { ...prev.ui, shouldFocusFollowUp: true },
+        };
+      }
+      return { ...prev, status: data.status };
+    });
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data, ctx) => {
     const { stream, status, lastTimestamp } = data;
     const state = ctx.getState();
     const isActiveStream = stream === state.activeStreamId;
+    const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
 
-    ctx.setStreamState(stream, (prev) => ({
-      ...prev,
-      status,
-      ...(isActiveStream &&
-        status === STREAM_STATUS.WAITING && { shouldFocusFollowUp: true }),
-    }));
+    ctx.setStreamState(stream, (prev) => {
+      if (isToolUseState(prev) && shouldFocus) {
+        return {
+          ...prev,
+          status,
+          ui: { ...prev.ui, shouldFocusFollowUp: true },
+        };
+      }
+      return { ...prev, status };
+    });
 
     ctx.setState(() => ({
       ...state,
@@ -585,10 +597,13 @@ const handlers: HandlerRegistry = {
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
-      followUpText: data.text,
-      polishedText: data.text,
-      polishRevision: (prev.polishRevision ?? 0) + 1,
-      shouldFocusFollowUp: true,
+      ui: {
+        ...prev.ui,
+        followUpText: data.text,
+        polishedText: data.text,
+        polishRevision: (prev.ui.polishRevision ?? 0) + 1,
+        shouldFocusFollowUp: true,
+      },
     }));
   },
 
@@ -599,9 +614,12 @@ const handlers: HandlerRegistry = {
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
-      polishedText: prev.followUpText ?? '',
-      polishRevision: (prev.polishRevision ?? 0) + 1,
-      shouldFocusFollowUp: true,
+      ui: {
+        ...prev.ui,
+        polishedText: prev.ui.followUpText ?? '',
+        polishRevision: (prev.ui.polishRevision ?? 0) + 1,
+        shouldFocusFollowUp: true,
+      },
     }));
   },
 
@@ -611,8 +629,11 @@ const handlers: HandlerRegistry = {
 
     updateToolUseState(ctx, streamId, (prev) => ({
       ...prev,
-      transcribedText: data.text,
-      shouldFocusFollowUp: true,
+      ui: {
+        ...prev.ui,
+        transcribedText: data.text,
+        shouldFocusFollowUp: true,
+      },
     }));
   },
 
