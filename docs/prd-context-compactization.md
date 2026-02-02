@@ -35,10 +35,11 @@ The [neu-translator](https://github.com/neutree-ai/neu-translator) project uses 
 
 - **Dual message arrays**: `messages` (full history, immutable) and `activeMessages` (working set sent to model)
 - **Dedicated compactor model**: Uses a cheap/fast model (Gemini Flash Lite) to summarize
-- **Structured summary prompt**: Enforces sections (Primary Request, Key Concepts, Errors/Fixes, Pending Tasks, Current Work) to retain critical context
-- **Manual trigger**: Caller decides when to compact, not automatic
+- **Structured summary prompt** (`SYSTEM_COMPACT`): Enforces 8 sections -- primary request, key concepts, errors/resolutions, problem-solving, user messages, outstanding tasks, current work status, next steps. Requires `<analysis>` tags for chronological review before the summary.
+- **Compaction output replaces `activeMessages`** with a single assistant message containing the summary
+- **System prompt is rebuilt each call** via `SYSTEM_WORKFLOW` (incorporating memory + skills), so the model always gets fresh instructions alongside the compacted context
 
-Key takeaway: client-side summarization with a structured prompt is viable and provides full transparency.
+Key takeaway: the **system prompt is the right place** for compacted context. Rather than replacing conversation messages with a fake assistant message (which breaks tool-use chains and feels unnatural), the summary should be injected into the system prompt. The model then receives: `[enriched system prompt with summary] + [only the most recent messages]`. This is simpler, avoids broken message sequences, and works uniformly across all providers.
 
 ## 4. Proposed Design
 
@@ -73,7 +74,7 @@ Key takeaway: client-side summarization with a structured prompt is viable and p
 - No changes. Continue using `/responses/compact` endpoint.
 - Already well-integrated.
 
-#### Strategy 3: Client-Side Summarization (new -- fallback for all providers)
+#### Strategy 3: Client-Side Summarization via System Prompt Injection (new -- fallback for all providers)
 
 This is the new capability, used when:
 - Provider is OpenAI Chat Completions (no native compaction)
@@ -81,13 +82,28 @@ This is the new capability, used when:
 - Provider is any other handler without native support
 - User explicitly requests client-side compaction (override)
 
-**Implementation:**
+**Core insight: inject the summary into the system prompt, not into messages.**
+
+Replacing conversation messages with a fake assistant summary message is problematic:
+- Breaks tool-use call/result pairs (providers validate these sequences)
+- Creates an unnatural message history (assistant "remembering" things it didn't say)
+- Requires complex logic to decide which messages to keep vs. replace
+
+Instead, the approach is:
 
 1. When `shouldCompact()` returns true and no native strategy is available:
-2. Take current `messages` array
-3. Send to a designated **compactor model** (configurable, defaults to a cheap/fast model) with a structured summarization prompt
-4. Replace messages with: `[system_prompt, {role: "assistant", content: summary}]` + any pending user message
-5. Record compaction metadata (tokens before/after, what was summarized)
+2. Send the full message history to a **compactor model** with a structured summarization prompt
+3. **Append the summary to the system prompt** as a `<conversation-summary>` section
+4. **Drop old messages**, keeping only the most recent N turns (configurable, default: last 2 user/assistant pairs)
+5. The model now receives: `[system prompt + summary] + [recent messages only]`
+6. Record compaction metadata (tokens before/after, summary text)
+
+**Why the system prompt?**
+- All providers support system prompts uniformly
+- No message sequence validation issues
+- The model treats it as authoritative context (system > conversation history)
+- Easy to re-summarize: just replace the `<conversation-summary>` section on next compaction
+- Works identically across Anthropic, OpenAI, Google, and any future provider
 
 ### 4.3 Compactor Model Selection
 
@@ -127,34 +143,63 @@ The prompt should be defined in a dedicated file (`src/agent/modelHandlers/compa
 Extend `ModelHandler.ts`:
 
 ```typescript
-// New abstract-optional methods
+// New methods on ModelHandler base class
 protected getCompactionStrategy(): CompactionStrategy | null {
   return null; // Providers override if they have native support
 }
 
-public async compactIfNeeded(messages: Message[]): Promise<CompactionResult> {
-  // 1. Check threshold
-  // 2. Try native strategy first
-  // 3. Fall back to client-side summarization
-  // 4. Log compaction event
-  // 5. Return new messages + metadata
+public async compactIfNeeded(
+  systemPrompt: string,
+  messages: Message[]
+): Promise<CompactionResult> {
+  // 1. Check threshold via estimateTokenCount()
+  // 2. If native strategy exists (Anthropic/OpenAI Responses), defer to it (no-op here)
+  // 3. Otherwise: send messages to compactor model → get summary
+  // 4. Return { systemPrompt: systemPrompt + summary, messages: recentOnly, metadata }
 }
 ```
 
 Each handler overrides `getCompactionStrategy()`:
-- `ModelHandlerAnthropic` → returns `AnthropicClearingStrategy` (existing behavior, no change)
+- `ModelHandlerAnthropic` → returns `AnthropicClearingStrategy` (existing behavior, no change -- compaction handled server-side)
 - `ModelHandlerOpenAIResponse` → returns `OpenAICompactStrategy` (existing behavior, no change)
-- `ModelHandlerOpenAI` → returns `null` (uses client-side fallback)
-- `ModelHandlerGoogleGenAI` → returns `null` (uses client-side fallback)
+- `ModelHandlerOpenAI` → returns `null` → triggers system-prompt summarization
+- `ModelHandlerGoogleGenAI` → returns `null` → triggers system-prompt summarization
+
+**System prompt mutation flow:**
+
+```
+Original system prompt:
+  "You are a LaTeX research assistant..."
+
+After compaction:
+  "You are a LaTeX research assistant...
+
+  <conversation-summary>
+  ## Task Objective
+  User asked to rewrite Section 3 of their paper on quantum error correction...
+
+  ## Current State
+  Completed rewrite of 3.1 and 3.2. Working on 3.3 (stabilizer codes).
+  Last generated text: "The stabilizer formalism provides..."
+
+  ## Pending Work
+  - Complete section 3.3
+  - Add citations for [Gottesman1997] and [Knill2005]
+  </conversation-summary>"
+```
 
 ### 4.6 Message History Preservation
 
-Following neu-translator's pattern, maintain two representations:
+Maintain two representations:
 
-1. **Full history** (`allMessages`): Never modified. Used for display and re-compaction.
-2. **Active context** (`activeMessages`): Sent to the model. Replaced on compaction.
+1. **Full history** (`allMessages`): Append-only. Used for UI display and for generating the next compaction summary (so repeated compactions don't lose information through summarization-of-summaries).
+2. **Active messages** (`activeMessages`): The truncated recent messages actually sent to the model alongside the enriched system prompt.
 
-This is a change from current behavior where messages are mutated in place. The full history must be persisted to the agent execution state so it survives VS Code restarts.
+On each compaction:
+- `allMessages` remains unchanged (append-only)
+- `activeMessages` is replaced with only the last N turns
+- The system prompt gains/updates a `<conversation-summary>` block
+- On subsequent compactions, the compactor model receives `allMessages` (not `activeMessages`), so it always works from the full history
 
 ### 4.7 Automatic vs Manual Trigger
 
