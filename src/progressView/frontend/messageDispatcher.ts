@@ -320,6 +320,33 @@ const handlers: HandlerRegistry = {
         };
       }
 
+      // Tool-use streams: compute sessionUsage from runUsage (sum all values)
+      if (isToolUseState(prev) && runUsage) {
+        const usageValues = Object.values(runUsage);
+        if (usageValues.length > 0) {
+          const sessionUsage = usageValues.reduce(
+            (acc, u) => ({
+              inputTokens: acc.inputTokens + u.inputTokens,
+              outputTokens: acc.outputTokens + u.outputTokens,
+              cost: acc.cost + u.cost,
+              cacheReadInputTokens:
+                (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
+              cacheCreationInputTokens:
+                (acc.cacheCreationInputTokens ?? 0) +
+                (u.cacheCreationInputTokens ?? 0),
+            }),
+            {
+              inputTokens: 0,
+              outputTokens: 0,
+              cost: 0,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          );
+          return { ...baseUpdate, sessionUsage };
+        }
+      }
+
       return baseUpdate;
     });
   },
